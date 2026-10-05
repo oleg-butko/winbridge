@@ -41,15 +41,17 @@
 
 ## Этап 3 — готовый snapshot через VMware Shared Folders
 
-Статус 2026-10-05: начат [manifest/ready metadata contract и CLI preflight](snapshot-format.md). Публикация, импорт и их UI ещё не реализованы; workspace_import не объявляется реализованным.
+Статус 2026-10-05: [snapshot runtime](snapshot-format.md) реализован: Git commit/Stored ZIP/HGFS publication, durable import, shared project lease, pinned build и native UI. 44 Rust tests, реальные Unix/HGFS/WebSocket/build/cancel/crash/UI checks проходят. [Windows gate](windows-snapshot-validation.md) ожидается; этап не закрыт.
 
 - [x] Общие Rust/TypeScript DTO manifest/ready и bounded metadata preflight: Windows пути, case collisions, file/directory conflicts, hashes/size syntax и byte counts.
-- [ ] Выбор mapping `/mnt/hgfs/shared` ↔ `K:\VMs\shared` и отдельного Windows workspace root.
-- [ ] Capture точного commit SHA; затем поддержка immutable dirty snapshot с явной маркировкой.
-- [ ] Namespace, `.part`, manifest, ready marker, RPC import и локальный verified staging.
-- [ ] Windows path/size/hash validation; защитить от traversal, case collision, reserved names, junctions и неполной передачи.
-- [ ] Workspace lease: импорт и сборка одного поколения не пересекаются. Runtime configs и пользовательские данные сохраняются отдельно.
-- [ ] UI preview состава snapshot, bytes/files, progress и причины отказа, адреса обоих представлений shared folder.
+- [x] Выбор mapping `/mnt/hgfs/shared` ↔ `K:\VMs\shared` и отдельного Windows workspace root.
+- [x] Capture точного commit SHA из Git objects; dirty working tree исключён.
+- [ ] Immutable dirty snapshot с явной маркировкой — отдельное последующее расширение.
+- [x] Namespace, `.part`, manifest, ready marker, RPC import и локальный verified staging.
+- [x] Policy/actual-byte/link guards и Windows compile для path/size/hash/traversal/collision/reserved names/incomplete transfers.
+- [ ] Настоящий Windows runtime gate: import/build/cancel/NTFS junction и пять native UI наблюдений.
+- [x] Workspace lease: импорт и сборка одного поколения не пересекаются. Runtime configs и пользовательские данные сохраняются отдельно.
+- [x] UI preview состава snapshot, bytes/files, progress и причины отказа, адреса обоих представлений shared folder.
 
 Критерий: build запускается из verified Windows snapshot; потеря mount или обрыв записи не ведёт к сборке неполных исходников. Повтор import не создаёт другую задачу. Не изменяются файлы вне namespace/зарегистрированного workspace.
 
@@ -93,4 +95,4 @@
 
 ## Следующий конкретный шаг
 
-Следующий рабочий этап — этап 2: подключить Debian controller и Windows worker по локальному `ws://`, сохранив существующий command service, durable acceptance и native UI. Сначала определить реальные адреса доступной локальной пары; не менять VMware/firewall/mounts без отдельного разрешения. Snapshot import остаётся этапом 3. Повторять весь gate этапа 1 для проверки сохранения формы не требуется.
+Обновить fixed Windows runtime новым source archive, запустить `prepare-windows-snapshot.ps1` и пройти [Windows snapshot gate](windows-snapshot-validation.md). Controller config `.winbridge/controller-snapshot.local.json` и committed source fixture подготовлены отдельно от исходных настроек. Этапы 1/2 не повторять. После native gate и UI подтверждения закрыть этап 3 и перейти к сохранённому workflow этапа 4. Dirty source mode и performance extensions не выдавать за выполненные.

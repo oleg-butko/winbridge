@@ -9,7 +9,7 @@
   "delivery": {
     "adapter": "shared-folder",
     "root": "K:\\VMs\\shared",
-    "namespace": "winbridge"
+    "namespace": "WinBridge"
   },
   "stateDirectory": "K:\\WinBridge\\state",
   "projects": [

@@ -9,7 +9,7 @@
 - Собирающийся Rust workspace: общие DTO, core entry point и отдельные binaries controller/worker.
 - Worker CLI: config validation, serve, submit/get/list/output/cancel через local IPC. Controller CLI передаёт запросы по локальному ws:// и читает результаты worker.
 - Controller записывает адреса сетевой активности в JSONL с ротацией; блокировки по IP в текущей локальной разработке нет.
-- Этап 3 начат: общие snapshot manifest/ready DTO и CLI metadata preflight; публикация и импорт ещё впереди. [Формат](docs/snapshot-format.md).
+- Snapshot runtime: точный Git commit, verified HGFS package, durable import, общий project lease и explicit build из локального поколения. Native UI: manifest/mapping/progress/history/cancel. [Формат](docs/snapshot-format.md); [Windows gate ожидается](docs/windows-snapshot-validation.md).
 - SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
 - Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
 - User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.
@@ -17,7 +17,7 @@
 - Connected UI: форма команды, recent tasks, timeline, output/exit code, cancel и независимая свежесть соединения. Browser: явно помеченная демонстрация и просмотр сохранённого отчёта worker.
 - Архитектура, поэтапный roadmap, UX требования, ADR, примеры конфигурации и инструкции следующему агенту.
 
-**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Доставка snapshot, log tail и attention — следующие этапы. Browser сам команды не выполняет.
+**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Snapshot runtime проверен на Unix/HGFS и ожидает Windows gate; log tail и attention — следующие этапы. Browser сам команды не выполняет.
 
 ## Принятые решения
 
@@ -72,7 +72,7 @@ npm run build:ui
 npm run dev:ui
 ```
 
-UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка этапа 1: [сценарий](docs/windows-validation.md). Следующая проверка: [локальная сессия Debian ↔ Windows](docs/windows-session-validation.md). Её runtime по умолчанию — постоянный `K:\_proj-26\winbridge\runtime`, задаваемый локальным runtimeDirectory; повторная подготовка сохраняет configs, форму и journal. Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
+UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка этапа 1: [сценарий](docs/windows-validation.md). Этап 2: [локальная сессия Debian ↔ Windows](docs/windows-session-validation.md). Текущий gate: [snapshot/import/build](docs/windows-snapshot-validation.md). Её runtime по умолчанию — постоянный `K:\_proj-26\winbridge\runtime`, задаваемый локальным runtimeDirectory; повторная подготовка сохраняет configs, форму и journal. Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
 
 Реальные проверки Unix development adapter (сначала `cargo build --workspace --locked`):
 

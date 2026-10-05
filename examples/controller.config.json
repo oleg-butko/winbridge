@@ -10,7 +10,7 @@
   "delivery": {
     "adapter": "shared-folder",
     "root": "/mnt/hgfs/shared",
-    "namespace": "winbridge"
+    "namespace": "WinBridge"
   },
   "projects": [
     { "id": "netwatch", "sourceRoot": "/home/user1/netwatch", "sourceMode": "commit" }

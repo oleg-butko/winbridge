@@ -151,3 +151,30 @@ impl Drop for ManagedChild {
         let _ = self.child.wait();
     }
 }
+
+/// Check regular-file hard links on the real filesystem, including NTFS.
+pub fn require_single_link(path: &std::path::Path) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let file = std::fs::File::open(path)?;
+        let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if information.nNumberOfLinks != 1 {
+            return Err(io::Error::other("Hard-linked regular file refused"));
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if std::fs::symlink_metadata(path)?.nlink() != 1 {
+            return Err(io::Error::other("Hard-linked regular file refused"));
+        }
+    }
+    Ok(())
+}

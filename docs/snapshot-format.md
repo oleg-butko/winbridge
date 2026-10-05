@@ -1,45 +1,87 @@
-# Snapshot format — начало этапа 3
+# Snapshot format и runtime этапа 3
 
-Реализованы DTO, проверка metadata и CLI preflight. Публикация payload/ready, импорт, проверка bytes/links и UI import ещё не реализованы. `workspace_import` остаётся planned capability. [Windows gate этапа 2](windows-session-gate-2026-10-05.md) завершён отдельно и не доказывает доставку файлов.
+Реализованы capture commit → Stored ZIP → verified shared publication → durable worker import → explicit build из проверенного локального поколения. [Windows gate](windows-snapshot-validation.md) ещё требуется. Unix/HGFS/WebSocket проверки не закрывают Windows этап автоматически.
 
-Контракт определяется [protocol/snapshot.rs](../crates/protocol/src/snapshot.rs); TypeScript генерируется из него. Проверки без filesystem находятся в [core/snapshot.rs](../crates/core/src/snapshot.rs). Core не содержит HGFS путей. Producer и importer будут использовать одинаковые правила.
+Контракт: [protocol/snapshot.rs](../crates/protocol/src/snapshot.rs), pure metadata policy: [core/snapshot.rs](../crates/core/src/snapshot.rs), Git/filesystem adapter: [workspace-sync](../modules/workspace-sync/src/lib.rs). Core не содержит HGFS путей. TypeScript генерируется из Rust.
 
-## Раскладка и контракт
+## Раскладка и capture
 
-Shared mapping остаётся `/mnt/hgfs/shared` ↔ `K:\VMs\shared`. Namespace задаётся локальным config; при подключении текущей пары следует использовать существующий `WinBridge` с той же капитализацией на Debian. Delivery ID состоит из projectId/snapshotId, оба — 1–80 букв/цифр/dash/underscore без зарезервированных Windows имён. Абсолютный Windows путь в request не передаётся.
+Shared mapping `/mnt/hgfs/shared` ↔ `K:\VMs\shared`; `delivery.root`, `namespace` и optional `peerRoot` заданы локальными JSON. Namespace текущей пары — **WinBridge** с той же капитализацией на Debian. Source registry controller задаёт unique project ID, Git repository root и `sourceMode: commit`. Worker регистрирует отдельный local workspace.
 
 ```text
-<configured-shared-root>/<namespace>/deliveries/<projectId>/<snapshotId>/
-  payload.zip.part       незавершённая запись producer
-  payload.zip            файлы с относительными путями, без внешнего root prefix
-  manifest.json          schemaVersion/projectId/snapshotId/source/files/sizes/SHA-256
-  ready.json             IDs, SHA-256 manifest/payload и размер payload; публикуется последним
+<shared-root>/<namespace>/deliveries/<projectId>/<snapshotId>/
+  payload.zip.part         незавершённый payload
+  payload.zip              файлы с относительными путями, без root prefix
+  manifest.json.part       незавершённый manifest
+  manifest.json            exact JSON bytes, размеры и SHA-256
+  ready.json               IDs, SHA-256 manifest/payload и размер payload; последняя запись
+
+<local-workspace>/.winbridge/imports/<importId>/payload.zip
+<local-workspace>/.winbridge/imports/<importId>/source/       unbuildable staging
+<local-workspace>/snapshots/<snapshotId>/                    verified immutable source
+  .winbridge/manifest.json
+  .winbridge/verified.json
+<local-workspace>/build-cache/                              отдельно от исходников
 ```
 
-Первая source mode — git_commit с полным lowercase Git object hash (40 или 64 hex). Capture должен читать фиксированный commit, не меняющийся working tree. Immutable dirty snapshot — последующее расширение. Snapshot ID непрозрачный, для повторного импорта передаётся тот же ID; источник и manifest должны совпадать с сохранённой проверенной generation.
+Publisher resolves полный lowercase commit SHA (40/64 hex) и читает `ls-tree`/`cat-file` только этого commit с отключёнными Git replacement objects. Source root должен совпадать с repository root. Незакоммиченные файлы не читаются. Git symlinks/submodules и nonregular modes отклоняются. Snapshot ID publisher — `s-<full-SHA>`; ZIP Stored, timestamp 1980, regular/executable modes фиксированы. Повтор того же capture возвращает тот же verified package после сверки manifest и actual payload.
 
-Manifest задаёт размер/hash payload.zip и список regular files: canonical относительный UTF-8 path с `/`, bytes, SHA-256 и executable flag. Полный uncompressed byte count должен совпадать с суммой files. Тип ссылок отсутствует: producer обязан отклонить Git symlinks/submodules, importer — link/reparse/archive entries вместо regular files. Executable flag относится к исходному mode, не разрешает автоматический запуск файла.
+Публикация CreateNew не переписывает existing ready packages. В этой VM HGFS возвращает ENOENT при rename непустого каталога, поэтому используются отдельные `.part` files, readback hashes и per-file rename; `ready.json` остаётся барьером доступности. Частичная запись JSON ready отклоняется parser/hash checks. Interrupted publication остаётся для диагностики и не импортируется; automatic repair/cleanup не реализован. Не удалять чужие пакеты или содержимое shared root.
 
-Ready marker повторяет IDs, размер/hash payload и отдельно SHA-256 exact manifest bytes. Проверка agreement метаданных не вычисляет hashes: importer обязан проверить actual bytes перед публикацией локальной generation. Ready marker сам по себе не доказывает корректность пакета.
+Manifest задаёт source git_commit, IDs, размер/hash payload.zip и список canonical UTF-8 files: path, bytes, SHA-256, executable. Payload paths не могут включать внешний ZIP prefix. Ready повторяет IDs, размер/hash payload и SHA-256 **исходных manifest bytes**, без повторной сериализации. Ready не является доказательством корректности ZIP.
 
-## Metadata limits и отказы
+## Валидация и import
 
-- Manifest JSON — до 1 MiB, ready JSON — до 8 KiB; неизвестные поля/schema/modes отклоняются.
-- 1–10000 files; ZIP до 512 MiB, суммарный uncompressed content до 1 GiB. Arithmetic overflow отклоняется. Граница JSON размера дополнительно ограничивает реально достижимое число entries.
-- Relative path — до 1024 UTF-16 units, component до 255, depth до 64. Реальные filesystem/API ограничения дополнительно проверит importer.
-- Traversal, absolute/drive/UNC/device/ADS paths, backslash и dot components, trailing dots/spaces, NTFS reserved names/control characters запрещены.
-- Повтор file, case collisions файлов/каталогов и file/directory conflicts отклоняются в любом порядке. Unicode uppercase comparison консервативный; проверка actual Windows destination остаётся обязательной.
-- Git metadata, .winbridge, node_modules/target, environment files и .local.json исключены из source payload. Никаких runtime configs/SQLite/build caches в shared.
+- Manifest до 1 MiB, ready до 8 KiB, strict schema 1/known fields. 1–10000 files, ZIP до 512 MiB, content до 1 GiB, checked size sums.
+- Path до 1024 UTF-16 units, component до 255, depth до 64. Traversal, absolute/drive/UNC/device/ADS, backslash/dot components, trailing dots/spaces, reserved names/controls, duplicate/case/file-directory collisions отклоняются.
+- Git data, `.winbridge`, `node_modules`, `target`, `.env*` и `*.local.json` запрещены в payload. Snapshot не переносит runtime настройки, SQLite или caches.
+- Перед ZIP parser ограничены EOCD entry count и central directory bytes; ZIP64/multipart/compressed archives не поддерживаются в schema 1. ZIP должен содержать ровно files manifest, без дополнительных directory/link/special entries.
+- Worker копирует payload на локальный диск и проверяет bytes/hash, распаковывает только manifest paths с CreateNew, ограничивает декодируемые bytes, проверяет file hashes и итоговое дерево. Symlink, NTFS junction/reparse, special files и hard links отклоняются на actual filesystem.
+- Final source rename выполняется только на локальном fixed disk после verified marker. Interrupted staging не используется как cwd. Неожиданные дополнительные файлы в поколении тоже блокируют build; outputs/cache должны записываться отдельно.
 
-Изменение лимитов либо source selection должно быть явным и одинаковым у producer/importer. Metadata preflight не читает ZIP, не распаковывает files и не проверяет источник по filesystem.
+Импорт имеет собственный Import ID, submission и journal events. `import_snapshot` сохраняет accepted до ACK. Dedup scope — import/project/key, requestId может меняться; изменённый payload с тем же key отклоняется. Command keys и import keys имеют отдельные namespaces. Close UI/reconnect не запускает повторный import/build. UI preview возвращает до 100 files/page и честное `payloadVerified: false`.
 
-## Уже доступная проверка
+Import и command используют одну project mutation lease; queued порядок определяется accepted timestamps, при равенстве command принимается первым. Два поколения одного project тоже не импортируются/не собираются параллельно. Cancel/timeout проверяются на checkpoints каждого 64 KiB и перед публикацией. ACK отмены означает запрос; итог может быть succeeded, если generation уже опубликована. Отмена после publication не удаляет готовые источники.
+
+После crash running import сверяется с final local marker и actual source hashes. Полностью verified generation восстанавливает succeeded; incomplete import становится interrupted и требует нового explicit key. Queued сохраняется. Unknown external command остаётся indeterminate, без автоматического retry. Existing verified generation можно повторно проверить и использовать без shared/mount; другой manifest hash при том же ID отклоняется.
+
+`TaskSubmission.snapshotId` optional: без него сохраняется исходный command service проекта, с ним worker разрешает cwd/relative exe внутри verified generation и сохраняет snapshot/commit/manifest hash в TaskRecord при acceptance. Перед process launch под lease проверяются исходный accepted manifest hash и всё дерево, включая попытку заменить local marker вместе с файлами. `cwd` не является sandbox: доверенная команда выполняется с правами пользователя. Source verification защищает стабильность исходников, не изолирует arbitrary shell/arguments от ОС.
+
+## CLI и UI
 
 ```bash
-cargo build -p winbridge-controller --locked
-./target/debug/winbridge-controller --check-snapshot-manifest examples/snapshot-manifest.json
+./target/debug/winbridge-controller --config CONTROLLER.local.json publish PROJECT HEAD
+./target/debug/winbridge-controller --config CONTROLLER.local.json preview PROJECT s-<full-SHA>
+./target/debug/winbridge-controller --config CONTROLLER.local.json import IMPORT.json
+./target/debug/winbridge-controller --config CONTROLLER.local.json imports
+./target/debug/winbridge-controller --config CONTROLLER.local.json get-import IMPORT_ID
+./target/debug/winbridge-controller --config CONTROLLER.local.json cancel-import IMPORT_ID
 ```
 
-[Пример](../examples/snapshot-manifest.json) — только metadata fixture с условными hashes, не настоящий payload. CLI возвращает `validation: metadata_only`, `payloadVerified: false`, `imported: false`. Для этой команды controller listener/config и Windows worker не нужны; она читает не более 1 MiB + 1 byte входного файла.
+```json
+{
+  "protocolVersion": 1,
+  "requestId": "correlation-id",
+  "projectId": "snapshot-fixture",
+  "snapshotId": "s-full-commit-sha",
+  "manifestSha256": "64 lowercase hex characters from published ready",
+  "idempotencyKey": "one-logical-import",
+  "timeoutMs": 180000
+}
+```
 
-Следующий вертикальный сценарий: capture commit → pack/validate → shared staging/ready → worker verified local import с project mutation lease → UI preview/progress/result → build из проверенной generation. Уже работающие command task, cancel, durable acceptance и reconnect должны сохраниться.
+Worker CLI поддерживает те же import/preview/query/cancel операции через IPC. Handshake advertises workspace_import только при delivery config; controller проверяет capability до отправки import RPC. Info `snapshotImportAvailable` управляет native UI. Desktop показывает commit, manifest files/hashes, обе mapping стороны, local source path, phases, bytes/files, history/reasons и cancel; command form сохраняет optional snapshot ID. Сборка остаётся явной отдельной командой.
+
+`--check-snapshot-manifest PATH` остаётся metadata-only preflight для [условного примера](../examples/snapshot-manifest.json), не проверяет ZIP/hash/import. Browser demo не выполняет команды.
+
+## Journal migration и восстановление
+
+Schema 2 добавляет imports table к journal schema 1. Перед migration существующего versioned SQLite используется consistent `VACUUM INTO journal-v1-<timestamp>-<uuid>.sqlite`; FULL/WAL сохраняют accepted state. Новая пустая база не требует backup. При неудаче backup migration не начинается; future/unknown schema отклоняется. Backup filename печатается при запуске, повторная migration не создаёт новую копию.
+
+Для восстановления **остановить worker**, выбрать отдельный пустой локальный state directory, скопировать туда consistent backup как `journal.sqlite` и указать этот directory в локальном worker config. Не копировать открытые SQLite/WAL и не заменять active database; original state и backup сохранить. Для старого desktop Windows IPC использует instance ID; не запускать одновременно два worker одного instance. Новые imports отсутствуют в version 1 backup; команды сохраняют состояние на момент consistent snapshot. Автоматический возврат schema не выполняется.
+
+## Проверенные границы
+
+44 Rust tests, actual Unix builds, WebSocket/HGFS gate, active 64 MiB cancel, actual owned process crash/recovery и UI lost-ACK/dedup/manifest/mapping/selection checks проходят. Windows all-targets compile и PowerShell syntax также проверяются, но runtime gate отдельно. [Инструкция](windows-snapshot-validation.md).
+
+Dirty snapshots, chunk resume, incremental sync, cleanup/retention и benchmarks остаются следующими расширениями. Импорт не удаляет пользовательские файлы и не обновляет runtime/source generation in-place.

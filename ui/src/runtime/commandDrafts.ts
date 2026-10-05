@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { CommandDraft, DesktopDraftState } from "./contracts";
 
-export type CommandForm = Pick<CommandDraft, "recipeId" | "executable" | "argumentsJson" | "workingDirectory" | "timeoutSeconds">;
+export type CommandForm = Pick<CommandDraft, "snapshotId" | "recipeId" | "executable" | "argumentsJson" | "workingDirectory" | "timeoutSeconds">;
 export const emptyCommandForm: CommandForm = { recipeId: null, executable: "", argumentsJson: "[]", workingDirectory: ".", timeoutSeconds: "60" };
 
 export function loadCommandDrafts(): Promise<DesktopDraftState> {

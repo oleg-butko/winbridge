@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "runtimeDirectory": "K:\\_proj-26\\winbridge\\runtime",
+  "workspaceDirectory": "K:\\_proj-26\\winbridge\\workspaces\\snapshot-fixture",
+  "deliveryRoot": "K:\\VMs\\shared",
+  "namespace": "WinBridge",
+  "peerRoot": "/mnt/hgfs/shared",
+  "reportDirectory": "K:\\VMs\\shared\\WinBridge\\snapshot-validation"
+}

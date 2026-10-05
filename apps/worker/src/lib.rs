@@ -1,4 +1,5 @@
 //! Windows execution authority. The Unix runner is a development/test adapter.
+mod imports;
 mod network;
 pub mod store;
 use fs2::FileExt;
@@ -100,7 +101,7 @@ impl Worker {
                 error: None,
             }
         });
-        Ok(Arc::new(Self {
+        let worker = Arc::new(Self {
             config,
             generation: uuid::Uuid::new_v4().to_string(),
             store: Mutex::new(store),
@@ -108,7 +109,9 @@ impl Worker {
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
             _instance_lock: lock,
-        }))
+        });
+        worker.recover_imports()?;
+        Ok(worker)
     }
     fn store(&self) -> Result<std::sync::MutexGuard<'_, Store>> {
         self.store
@@ -137,12 +140,50 @@ impl Worker {
                     }
                     .into(),
                     projects: self.config.public_projects(),
+                    snapshot_import_available: self.config.delivery.is_some(),
                     controller_connection: self
                         .controller_connection
                         .lock()
                         .map_err(|_| "connection state lock poisoned")?
                         .clone(),
                 },
+            }),
+            LocalRequest::ImportSnapshot { request } => {
+                if self.stop.load(Ordering::Acquire) {
+                    return Err("Worker stopping; import not accepted".into());
+                }
+                let mut store = self.store()?;
+                if let Some(import) = store.existing_import(&request)? {
+                    return Ok(LocalResponse::Import {
+                        import: Box::new(import),
+                    });
+                }
+                winbridge_workspace_sync::validate_submission(&request)?;
+                let (shared, local) =
+                    self.import_paths(&request.project_id, &request.snapshot_id)?;
+                Ok(LocalResponse::Import {
+                    import: Box::new(store.accept_import(
+                        request,
+                        shared.to_string_lossy().into(),
+                        local.to_string_lossy().into(),
+                    )?),
+                })
+            }
+            LocalRequest::ListImports => Ok(LocalResponse::Imports {
+                imports: self.store()?.imports(true)?,
+            }),
+            LocalRequest::GetImport { import_id } => Ok(LocalResponse::Import {
+                import: Box::new(self.store()?.get_import(&import_id)?),
+            }),
+            LocalRequest::CancelImport { import_id } => Ok(LocalResponse::Import {
+                import: Box::new(self.store()?.cancel_import(&import_id)?),
+            }),
+            LocalRequest::PreviewSnapshot {
+                project_id,
+                snapshot_id,
+                offset,
+            } => Ok(LocalResponse::SnapshotPreview {
+                preview: self.preview_snapshot(&project_id, &snapshot_id, offset)?,
             }),
             LocalRequest::ControllerStatus => Err(
                 "controller_status is available through the Debian controller, not worker IPC"
@@ -158,9 +199,13 @@ impl Worker {
                         task: Box::new(task),
                     });
                 }
-                let command = self.config.resolve(&request)?;
+                let command = self.resolve_task(&request)?;
                 Ok(LocalResponse::Task {
-                    task: Box::new(store.accept(request, command)?),
+                    task: Box::new(store.accept(
+                        request.clone(),
+                        command,
+                        self.snapshot_reference(&request)?,
+                    )?),
                 })
             }
             LocalRequest::GetTask { task_id } => Ok(LocalResponse::Task {
@@ -196,13 +241,61 @@ impl Worker {
             .map_err(|_| "process registry lock poisoned")?;
         // Journal and project admission are inspected while holding both locks.
         let mut store = self.store()?;
-        for mut task in store.all()? {
+        let tasks = store.all()?;
+        let imports = store.imports(false)?;
+        for mut import in imports
+            .iter()
+            .filter(|r| r.status == TaskStatus::Queued)
+            .cloned()
+        {
+            let project = import.submission.project_id.clone();
+            if active.contains(&project)
+                || tasks.iter().any(|t| {
+                    t.status == TaskStatus::Queued
+                        && t.submission.project_id == project
+                        && t.accepted_at_ms <= import.accepted_at_ms
+                })
+            {
+                continue;
+            }
+            import.status = TaskStatus::Running;
+            import.phase = "validate".into();
+            Store::import_event(
+                &mut import,
+                "Import lease acquired; validating immutable delivery",
+            );
+            store.save_import(&import)?;
+            active.insert(project.clone());
+            let worker = Arc::clone(self);
+            thread::spawn(move || {
+                if let Err(error) = worker.execute_import(import.clone()) {
+                    if let Ok(mut store) = worker.store() {
+                        let _ = store.finish_import(
+                            &import.import_id,
+                            TaskStatus::Indeterminate,
+                            &error,
+                        );
+                    }
+                }
+                if let Ok(mut projects) = worker.active_projects.lock() {
+                    projects.remove(&project);
+                }
+            });
+        }
+        for mut task in tasks {
             let project = task.submission.project_id.clone();
-            if task.status != TaskStatus::Queued || active.contains(&project) {
+            if task.status != TaskStatus::Queued
+                || active.contains(&project)
+                || imports.iter().any(|r| {
+                    r.status == TaskStatus::Queued
+                        && r.submission.project_id == project
+                        && r.accepted_at_ms < task.accepted_at_ms
+                })
+            {
                 continue;
             }
             // Revalidate real paths at launch; never run against a silently changed root/cwd.
-            match self.config.resolve(&task.submission) {
+            match self.resolve_task(&task.submission) {
                 Ok(command) if command == task.resolved_command => {}
                 result => {
                     let reason = result.err().unwrap_or_else(|| "resolved command changed since acceptance; submit a new task after checking project paths".into());
@@ -244,6 +337,55 @@ impl Worker {
                 "Cancelled before process creation",
             )?;
             return Ok(());
+        }
+        if let Some(snapshot) = &task.submission.snapshot_id {
+            if task
+                .snapshot
+                .as_ref()
+                .is_none_or(|r| r.snapshot_id != *snapshot)
+            {
+                self.store()?.finish(
+                    &id,
+                    TaskStatus::Failed,
+                    None,
+                    "Task lacks a bound accepted snapshot manifest; submit a new explicit task",
+                )?;
+                return Ok(());
+            }
+            let project = self
+                .config
+                .projects
+                .iter()
+                .find(|p| p.id == task.submission.project_id)
+                .ok_or("Snapshot project removed")?;
+            let result = winbridge_workspace_sync::verified_generation(
+                &project.workspace_root,
+                &project.id,
+                snapshot,
+                task.snapshot.as_ref().map(|r| r.manifest_sha256.as_str()),
+                |_, _, _| {
+                    if self.stop.load(Ordering::Acquire) || self.store()?.get(&id)?.cancel_requested
+                    {
+                        return Err("Cancelled during snapshot source verification".into());
+                    }
+                    Ok(())
+                },
+            );
+            if let Err(reason) = result {
+                let cancelled =
+                    self.stop.load(Ordering::Acquire) || self.store()?.get(&id)?.cancel_requested;
+                self.store()?.finish(
+                    &id,
+                    if cancelled {
+                        TaskStatus::Cancelled
+                    } else {
+                        TaskStatus::Failed
+                    },
+                    None,
+                    &reason,
+                )?;
+                return Ok(());
+            }
         }
         let (mut child, stdout, stderr) = match ManagedChild::spawn(&task.resolved_command) {
             Ok(child) => child,

@@ -15,7 +15,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -24,9 +24,9 @@ async fn run() -> Result<(), String> {
         descriptor.implemented_capabilities = vec![
             winbridge_protocol::Capability::TaskSubmit,
             winbridge_protocol::Capability::TaskCancel,
+            winbridge_protocol::Capability::WorkspaceImport,
         ];
         descriptor.planned_capabilities = vec![
-            winbridge_protocol::Capability::WorkspaceImport,
             winbridge_protocol::Capability::LogRead,
             winbridge_protocol::Capability::AttentionRequest,
         ];
@@ -43,7 +43,7 @@ async fn run() -> Result<(), String> {
     let operation = &args[2..];
     match operation {
         [name] if name == "validate" => {
-            println!("Valid config: instance {}, {} project(s); controller connection {}, snapshot import not yet active", config.instance_id, config.projects.len(), config.worker.controller_url.as_deref().unwrap_or("disabled"));
+            println!("Valid config: instance {}, {} project(s); controller connection {}, snapshot import available when delivery is configured", config.instance_id, config.projects.len(), config.worker.controller_url.as_deref().unwrap_or("disabled"));
             Ok(())
         }
         [name] if name == "serve" => {
@@ -51,6 +51,25 @@ async fn run() -> Result<(), String> {
         }
         _ => {
             let request = match operation {
+                [name] if name == "imports" => LocalRequest::ListImports,
+                [name, id] if name == "get-import" => LocalRequest::GetImport {
+                    import_id: id.clone(),
+                },
+                [name, id] if name == "cancel-import" => LocalRequest::CancelImport {
+                    import_id: id.clone(),
+                },
+                [name, project, snapshot] if name == "preview" => LocalRequest::PreviewSnapshot {
+                    project_id: project.clone(),
+                    snapshot_id: snapshot.clone(),
+                    offset: 0,
+                },
+                [name, path] if name == "import" => LocalRequest::ImportSnapshot {
+                    request: serde_json::from_slice(&winbridge_workspace_sync::read_bounded(
+                        Path::new(path),
+                        65536,
+                    )?)
+                    .map_err(|_| "Invalid import request JSON")?,
+                },
                 [name] if name == "info" => LocalRequest::Info,
                 [name] if name == "list" => LocalRequest::ListTasks,
                 [name, path] if name == "submit" => {

@@ -132,6 +132,7 @@ fn validate_draft(draft: &CommandDraft) -> Result<()> {
         || !valid_id(&draft.project_id)
         || draft.workspace_root.is_empty()
         || draft.recipe_id.as_ref().is_some_and(|id| !valid_id(id))
+        || draft.snapshot_id.as_ref().is_some_and(|id| !valid_id(id))
     {
         return Err("desktop draft: invalid worker/project/recipe scope".into());
     }
@@ -160,6 +161,7 @@ mod tests {
             project_id: project.into(),
             workspace_root: r"K:\project with spaces".into(),
             recipe_id: None,
+            snapshot_id: None,
             executable: r"K:\project with spaces\fixture.exe".into(),
             arguments_json: "[\"long\", \"Привет ✓\"]".into(),
             working_directory: ".".into(),

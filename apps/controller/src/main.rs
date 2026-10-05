@@ -31,7 +31,7 @@ async fn run() -> Result<(), String> {
         }
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
+        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -40,6 +40,7 @@ async fn run() -> Result<(), String> {
         descriptor.implemented_capabilities = vec![
             winbridge_protocol::Capability::TaskSubmit,
             winbridge_protocol::Capability::TaskCancel,
+            winbridge_protocol::Capability::WorkspaceImport,
         ];
         descriptor
             .planned_capabilities
@@ -58,9 +59,14 @@ async fn run() -> Result<(), String> {
     let address = winbridge_controller::endpoint(&config);
     match operation {
         [name] if name == "validate" => println!(
-            "Valid local pair {}: ws://{}; worker {}; snapshot import is not yet active",
+            "Valid local pair {}: ws://{}; worker {}; snapshot import available when delivery is configured",
             config.instance_id, config.controller.listen_address, config.controller.worker_node_id
         ),
+        [name,project,revision] if name=="publish" => {
+            let source=config.projects.iter().find(|p|p.id==*project).ok_or("Source project is not registered in controller JSON")?;
+            let ready=winbridge_workspace_sync::publish(config.delivery.as_ref().ok_or("Configure delivery in controller local JSON")?,&source.source_root,&config.state_directory,project,revision)?;
+            println!("{}",serde_json::to_string(&ready).map_err(|e|e.to_string())?);
+        }
         [name] if name == "serve" => {
             return winbridge_controller::serve(winbridge_controller::Controller::new(config)?)
                 .await
@@ -70,6 +76,11 @@ async fn run() -> Result<(), String> {
         }
         _ => {
             let request = match operation {
+                [name] if name == "imports" => LocalRequest::ListImports,
+                [name, id] if name == "get-import" => LocalRequest::GetImport {import_id:id.clone()},
+                [name, id] if name == "cancel-import" => LocalRequest::CancelImport {import_id:id.clone()},
+                [name, project, snapshot] if name == "preview" => LocalRequest::PreviewSnapshot {project_id:project.clone(),snapshot_id:snapshot.clone(),offset:0},
+                [name, path] if name == "import" => LocalRequest::ImportSnapshot {request:serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),65536)?).map_err(|_|"Invalid import request JSON")?},
                 [name] if name == "status" => LocalRequest::ControllerStatus,
                 [name] if name == "info" => LocalRequest::Info,
                 [name] if name == "list" => LocalRequest::ListTasks,

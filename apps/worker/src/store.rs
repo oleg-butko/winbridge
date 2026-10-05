@@ -16,11 +16,11 @@ pub fn now_ms() -> u64 {
         .unwrap_or_default()
         .as_millis() as u64
 }
-fn sql(error: rusqlite::Error) -> String {
+pub(crate) fn sql(error: rusqlite::Error) -> String {
     format!("local journal: {error}")
 }
 pub struct Store {
-    connection: Connection,
+    pub(crate) connection: Connection,
 }
 
 impl Store {
@@ -32,8 +32,8 @@ impl Store {
         let version: u32 = connection
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
-        if version > 1 {
-            return Err(format!("journal schema {version} is unsupported; expected 1; keep the database and use a compatible worker"));
+        if version > 2 {
+            return Err(format!("journal schema {version} is unsupported; expected 2; keep the database and use a compatible worker"));
         }
         if version == 0 {
             let tables: u32 = connection.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0)).map_err(sql)?;
@@ -53,6 +53,22 @@ impl Store {
                 "PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON;",
             )
             .map_err(sql)?;
+        if version <= 1 {
+            if version == 1 {
+                let backup = path.with_file_name(format!(
+                    "journal-v1-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE imports (id TEXT PRIMARY KEY, project TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, record TEXT NOT NULL, UNIQUE(project,key));
+                PRAGMA user_version=2; COMMIT;").map_err(sql)?;
+        }
         Ok(Self { connection })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {
@@ -86,6 +102,7 @@ impl Store {
         &mut self,
         request: TaskSubmission,
         command: ResolvedCommand,
+        snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
     ) -> Result<TaskRecord> {
         if let Some(task) = self.existing(&request)? {
             return Ok(task);
@@ -95,6 +112,7 @@ impl Store {
             task_id: Uuid::new_v4().to_string(),
             submission: request,
             resolved_command: command,
+            snapshot,
             status: TaskStatus::Queued,
             accepted_at_ms: now,
             started_at_ms: None,

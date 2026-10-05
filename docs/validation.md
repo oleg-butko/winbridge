@@ -92,3 +92,13 @@ Shared evidence: `session-validation/debian-20261005-170829-53b92c6d`; подр�
 Общие SnapshotManifest/SnapshotReady/source/file DTO добавлены в protocol, TS bindings сгенерированы. Pure core checks отклоняют traversal/reserved/ADS/noncanonical paths, case collisions и file/directory conflicts, malformed hashes, несогласованные размеры, oversized/unknown JSON и metadata budget overflow. CLI --check-snapshot-manifest читает bounded input и явно возвращает metadata_only/payloadVerified false/imported false.
 
 33 Rust tests проходят, включая четыре новых metadata test groups. Новый CLI реально запущен с valid Unicode example и malicious traversal/reserved/config/oversize inputs; workspace_import проверен как planned, не implemented. Generated contracts, TypeScript/UI build, Clippy/fmt, Windows all-targets compile и standalone Linux desktop check проходят. ZIP bytes/hash verification, local filesystem staging/import/lease и native Windows snapshot gate этими проверками не заменяются. [Формат и следующий сценарий](snapshot-format.md).
+
+## Этап 3: snapshot runtime, 2026-10-05
+
+44 Rust tests включают actual Git object capture, dirty-tree exclusion, deterministic repeat, corrupt/incomplete package, valid-hash ZIP extra/link/content rejection, cancel/read-unavailable staging, local-source extras, real build and bound manifest tamper refusal, durable dedup/retry/recovery, shared lease и consistent schema migration backup.
+
+Новый `validate-snapshot-local.py` запускает owned IPC/WebSocket pair и использует actual HGFS. Gate `debian-20261005-183623-f32e6b76` прошёл 16 checks: actual local import/build/Unicode output, concurrent dedup/conflict, incomplete/read-unavailable/corrupt refusals, active 64 MiB cancellation и no buildable cancelled generation. Отдельный actual owned worker kill during copy_payload восстановил тот же import как interrupted без final source/повторной сборки (`.winbridge/sg/c07bd640/crash-report.json`). Это platform linux, не Windows gate.
+
+Actual HGFS directory rename ENOENT найден и исправлен на per-file .part/readback/ready-last. Existing пакеты не перезаписываются; failed .part evidence оставлены. Source capture и native release archives не включают runtime config/SQLite/secrets.
+
+UI test расширен real manifest/Unicode/mapping/verified files, lost import ACK/dedup и saved snapshot field; [screenshot](screenshots/snapshot-worker-linux.png). Existing 14 session groups сохранены. Contracts/strict TS/UI build, Clippy/fmt, Windows all-targets compile, standalone Linux Tauri и PowerShell parser проверены. Native Windows import/build/NTFS junction/UI gate пока ожидается по [инструкции](windows-snapshot-validation.md).

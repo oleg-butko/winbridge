@@ -50,7 +50,7 @@ Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, спис
 
 Controller `submit/get/list/output/cancel` вызывает тот же worker handler, что и desktop. `watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]` — подписка CLI через polling journal/output каждые 500 ms; курсоры исключают повторы при reconnect. Output читается страницами, `outputComplete` появляется после terminal task и пустой следующей страницы. Отдельная server-push очередь пока не нужна. `watch` не отправляет submit; неизвестный результат мутации требует того же key/ID. Controller не копирует Windows SQLite и не кеширует неподтверждённый task success.
 
-Transport использует [tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.30.0/tokio_tungstenite/) с отключёнными TLS features и явными bounds. [Windows runtime/native UI gate локальной сессии](windows-session-gate-2026-10-05.md) пройден. Snapshot metadata проверяется отдельно по [формату этапа 3](snapshot-format.md); это ещё не импорт.
+Transport использует [tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.30.0/tokio_tungstenite/) с отключёнными TLS features и явными bounds. [Windows runtime/native UI gate локальной сессии](windows-session-gate-2026-10-05.md) пройден. Snapshot runtime работает по [формату этапа 3](snapshot-format.md); native Windows gate пока ожидается.
 
 Heartbeat отвечает за свежесть соединения; task status отвечает за выполнение. Offline controller, закрытый UI и неизвестный результат команды — разные состояния. Bounded buffers, timeout, cancellation и backpressure проектируются до непрерывного stdout stream.
 
@@ -84,7 +84,7 @@ Delivery adapter отделён от orchestration. Первый adapter — sha
 
 Manifest фиксирует source mode (commit SHA или dirty snapshot), пути, hashes, размеры, состав обязательных build files. Staging и ready marker защищают от чтения неполного пакета. До выполнения worker проверяет manifest и содержимое. Сборка работает на стабильном поколении Windows, а caches остаются локальными и переиспользуемыми.
 
-Операция sync удаляет только ранее управляемые исходники. Runtime configs, secrets, пользовательские файлы, live databases, logs и результаты других программ не входят в source snapshot. Подробности в [shared-folders.md](shared-folders.md).
+На этапе 3 import создаёт новое immutable поколение и не удаляет файлы; cleanup/incremental sync ещё не реализованы. Runtime configs, secrets, пользовательские файлы, live databases, logs и результаты других программ не входят в source snapshot. Подробности в [shared-folders.md](shared-folders.md).
 
 ## UI и расширение
 

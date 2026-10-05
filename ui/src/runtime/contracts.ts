@@ -11,16 +11,20 @@ export type SnapshotManifest = { schemaVersion: number, projectId: string, snaps
  */
 payloadBytes: number, payloadSha256: string, totalBytes: number, files: Array<SnapshotFile>, };
 export type SnapshotReady = { schemaVersion: number, projectId: string, snapshotId: string, manifestSha256: string, payloadSha256: string, payloadBytes: number, };
+export type ImportSubmission = { protocolVersion: number, requestId: string, projectId: string, snapshotId: string, manifestSha256: string, idempotencyKey: string, timeoutMs: number, };
+export type ImportRecord = { importId: string, submission: ImportSubmission, status: TaskStatus, phase: string, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, completedFiles: number, completedBytes: number, totalFiles: number | null, totalBytes: number | null, commit: string | null, sharedPath: string, workspacePath: string, reason: string | null, events: Array<JournalEvent>, };
+export type SnapshotPreview = { projectId: string, snapshotId: string, manifestSha256: string, source: SnapshotSource, totalFiles: number, totalBytes: number, payloadBytes: number, sharedPath: string, workspacePath: string, files: Array<SnapshotFile>, nextOffset: number | null, payloadVerified: boolean, peerSharedPath: string | null, };
+export type VerifiedSnapshotRef = { snapshotId: string, manifestSha256: string, source: SnapshotSource, };
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted" | "indeterminate";
 export type CommandSource = { "kind": "recipe", recipeId: string, arguments: Array<string>, } | { "kind": "direct", executable: string, arguments: Array<string>,
 /**
  * Relative path inside the registered project. Validation belongs to core/worker.
  */
 workingDirectory: string, };
-export type TaskSubmission = { protocolVersion: number, requestId: string, projectId: string, idempotencyKey: string, timeoutMs: number, command: CommandSource, };
+export type TaskSubmission = { protocolVersion: number, requestId: string, projectId: string, idempotencyKey: string, timeoutMs: number, snapshotId?: string, command: CommandSource, };
 export type ResolvedCommand = { executable: string, arguments: Array<string>, workingDirectory: string, timeoutMs: number, };
 export type JournalEvent = { sequence: number, occurredAtMs: number, status: TaskStatus, summary: string, };
-export type TaskRecord = { taskId: string, submission: TaskSubmission, resolvedCommand: ResolvedCommand, status: TaskStatus, acceptedAtMs: number, startedAtMs: number | null, finishedAtMs: number | null, processId: number | null, exitCode: number | null, reason: string | null, cancelRequested: boolean, outputBytes: number, outputTruncated: boolean, events: Array<JournalEvent>, };
+export type TaskRecord = { taskId: string, submission: TaskSubmission, resolvedCommand: ResolvedCommand, snapshot: VerifiedSnapshotRef | null, status: TaskStatus, acceptedAtMs: number, startedAtMs: number | null, finishedAtMs: number | null, processId: number | null, exitCode: number | null, reason: string | null, cancelRequested: boolean, outputBytes: number, outputTruncated: boolean, events: Array<JournalEvent>, };
 export type TaskSummary = { taskId: string, projectId: string, status: TaskStatus, acceptedAtMs: number, };
 export type OutputStream = "stdout" | "stderr";
 export type OutputChunk = { sequence: number, stream: OutputStream, offset: number,
@@ -34,11 +38,11 @@ export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type ControllerConnection = { url: string, state: ConnectionState, sessionId: string | null, controllerNodeId: string | null, controllerGeneration: string | null, lastConfirmedAtMs: number | null, error: string | null, };
 export type ActivityLogStatus = { path: string, maxFileBytes: number, retainedArchives: number, droppedRecords: number, lastError: string | null, };
 export type ControllerStatus = { instanceId: string, nodeId: string, generation: string, listenAddress: string, connected: boolean, sessionId: string | null, workerNodeId: string | null, workerGeneration: string | null, workerAddress: string | null, lastError: string | null, activityLog: ActivityLogStatus | null, };
-export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, };
-export type LocalRequest = { "method": "info" } | { "method": "controller_status" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
-export type LocalResponse = { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, } | { "kind": "controller_status", status: ControllerStatus, };
+export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, };
+export type LocalRequest = { "method": "import_snapshot", request: ImportSubmission, } | { "method": "list_imports" } | { "method": "get_import", importId: string, } | { "method": "cancel_import", importId: string, } | { "method": "preview_snapshot", projectId: string, snapshotId: string, offset: number, } | { "method": "info" } | { "method": "controller_status" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
+export type LocalResponse = { "kind": "import", import: ImportRecord, } | { "kind": "imports", imports: Array<ImportRecord>, } | { "kind": "snapshot_preview", preview: SnapshotPreview, } | { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, } | { "kind": "controller_status", status: ControllerStatus, };
 export type TaskReport = { schemaVersion: number, platform: string, task: TaskRecord, output: Array<OutputChunk>, outputComplete: boolean, };
-export type CommandDraft = { workerInstanceId: string, projectId: string, workspaceRoot: string, recipeId: string | null, executable: string,
+export type CommandDraft = { workerInstanceId: string, projectId: string, workspaceRoot: string, recipeId: string | null, snapshotId?: string, executable: string,
 /**
  * Preserve the text exactly, including an incomplete JSON edit.
  */

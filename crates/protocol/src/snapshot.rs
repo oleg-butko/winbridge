@@ -1,4 +1,4 @@
-//! Snapshot metadata contract. Import is not implemented/advertised by these DTOs.
+//! Immutable source delivery and durable import contracts.
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -44,4 +44,67 @@ pub struct SnapshotReady {
     pub manifest_sha256: String,
     pub payload_sha256: String,
     pub payload_bytes: u64,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportSubmission {
+    pub protocol_version: u16,
+    pub request_id: String,
+    pub project_id: String,
+    pub snapshot_id: String,
+    pub manifest_sha256: String,
+    pub idempotency_key: String,
+    pub timeout_ms: u64,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportRecord {
+    pub import_id: String,
+    pub submission: ImportSubmission,
+    pub status: crate::TaskStatus,
+    pub phase: String,
+    pub accepted_at_ms: u64,
+    pub finished_at_ms: Option<u64>,
+    pub cancel_requested: bool,
+    pub completed_files: u64,
+    pub completed_bytes: u64,
+    pub total_files: Option<u64>,
+    pub total_bytes: Option<u64>,
+    pub commit: Option<String>,
+    pub shared_path: String,
+    pub workspace_path: String,
+    pub reason: Option<String>,
+    pub events: Vec<crate::JournalEvent>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotPreview {
+    pub project_id: String,
+    pub snapshot_id: String,
+    pub manifest_sha256: String,
+    pub source: SnapshotSource,
+    pub total_files: u64,
+    pub total_bytes: u64,
+    pub payload_bytes: u64,
+    pub shared_path: String,
+    pub workspace_path: String,
+    pub files: Vec<SnapshotFile>,
+    pub next_offset: Option<u64>,
+    pub payload_verified: bool,
+    pub peer_shared_path: Option<String>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct VerifiedSnapshotRef {
+    pub snapshot_id: String,
+    pub manifest_sha256: String,
+    pub source: SnapshotSource,
 }

@@ -102,6 +102,8 @@ pub struct DeliverySettings {
     pub adapter: String,
     pub root: PathBuf,
     pub namespace: String,
+    #[serde(default)]
+    pub peer_root: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -132,6 +134,18 @@ pub fn valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
+impl DeliverySettings {
+    pub fn validate(&self) -> Result<()> {
+        if self.adapter != "shared-folder" || !self.root.is_absolute() || !valid_id(&self.namespace)
+        {
+            return Err(
+                "delivery requires shared-folder, absolute root and a safe namespace ID".into(),
+            );
+        }
+        validate_relative(&self.namespace)
+    }
+}
+
 impl WorkerConfig {
     pub fn load(path: &Path) -> Result<Self> {
         let config: Self = read_config(path)?;
@@ -140,6 +154,9 @@ impl WorkerConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        if let Some(delivery) = &self.delivery {
+            delivery.validate()?;
+        }
         if self.schema_version != 1 {
             return Err(format!(
                 "schemaVersion {} is unsupported; expected 1",
@@ -432,7 +449,7 @@ pub fn scoped_directory(root: &Path, relative: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn contains_path(root: &Path, path: &Path) -> bool {
+pub fn contains_path(root: &Path, path: &Path) -> bool {
     #[cfg(windows)]
     {
         let normalized = |p: &Path| {

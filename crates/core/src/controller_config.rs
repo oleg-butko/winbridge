@@ -55,6 +55,9 @@ impl ControllerConfig {
         Ok(config)
     }
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(delivery) = &self.delivery {
+            delivery.validate()?;
+        }
         if self.schema_version != 1 {
             return Err("controller schemaVersion must be 1".into());
         }
@@ -81,7 +84,7 @@ impl ControllerConfig {
                 || !project.source_root.is_absolute()
                 || project.source_mode != "commit"
             {
-                return Err("controller projects require unique IDs, absolute sourceRoot and sourceMode commit; import is not yet active".into());
+                return Err("controller projects require unique IDs, absolute sourceRoot and sourceMode commit".into());
             }
         }
         Ok(())

@@ -23,6 +23,7 @@ fn config(root: &Path, limit: u64) -> WorkerConfig {
 }
 fn submission(key: &str, mode: &str, timeout: u64) -> TaskSubmission {
     TaskSubmission {
+        snapshot_id: None,
         protocol_version: 1,
         request_id: format!("request-{key}"),
         project_id: "fixture".into(),
@@ -174,7 +175,7 @@ fn launch_intent_recovery_is_indeterminate_and_queued_survives() {
     let command = cfg.resolve(&request).unwrap();
     let path = root.path().join("journal.sqlite");
     let mut store = Store::open(&path).unwrap();
-    let mut accepted = store.accept(request.clone(), command).unwrap();
+    let mut accepted = store.accept(request.clone(), command, None).unwrap();
     accepted.status = TaskStatus::Running;
     Store::event(&mut accepted, "Launch intent");
     store.save(&accepted).unwrap();
@@ -182,6 +183,7 @@ fn launch_intent_recovery_is_indeterminate_and_queued_survives() {
         .accept(
             submission("queued", "success", 5000),
             cfg.resolve(&submission("queued", "success", 5000)).unwrap(),
+            None,
         )
         .unwrap();
     drop(store);

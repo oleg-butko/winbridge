@@ -5,6 +5,7 @@ import { expectResult, workerCall } from "../../runtime/adapter";
 import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft } from "../../runtime/commandDrafts";
 import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo } from "../../runtime/contracts";
+import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { TaskDetail, statuses } from "./TaskDetail";
 
 function TaskSession({ id }: { id: string }) {
@@ -162,7 +163,7 @@ export function NativeWorkbench() {
       if (!Number.isFinite(Number(timeout)) || Number(timeout) <= 0) throw new Error("Укажите положительный timeout в секундах");
       if (!recipeId && !executable.trim()) throw new Error("Укажите executable или выберите рецепт");
       await send({ protocolVersion: info!.protocolVersion, projectId: project.id, requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID(), timeoutMs: Math.round(Number(timeout) * 1000),
-        command: recipeId ? { kind: "recipe", recipeId, arguments: [] } : { kind: "direct", executable, arguments: argumentsList, workingDirectory: cwd } });
+        snapshotId: form.snapshotId, command: recipeId ? { kind: "recipe", recipeId, arguments: [] } : { kind: "direct", executable, arguments: argumentsList, workingDirectory: cwd } });
     } catch (error) { setError(String(error)); }
   }
   return <Stack gap="lg">
@@ -179,10 +180,12 @@ export function NativeWorkbench() {
         {!controllerFresh && <Text size="sm">Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет.</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
+    {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} />}
     <Card withBorder><Stack>
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />
       {project && <Text size="xs" c="dimmed">Рабочий корень: {project.workspaceRoot}</Text>}
+      {info?.snapshotImportAvailable && <TextInput label="Snapshot ID для сборки" description="Пустое поле использует корень проекта. Для snapshot worker проверит исходники перед запуском; cwd задаётся внутри поколения." value={form.snapshotId ?? ""} onChange={(e) => updateForm({snapshotId:e.currentTarget.value || undefined})} disabled={pending !== null || !formReady || closing} />}
       <Select label="Способ запуска" value={recipeId ? `recipe:${recipeId}` : "direct"} onChange={(id) => updateForm({ recipeId: id?.startsWith("recipe:") ? id.slice(7) : null })} data={[
         ...(project?.allowDirectCommands ? [{ value: "direct", label: "Прямая команда" }] : []),
         ...(project?.recipes.map((r) => ({ value: `recipe:${r.id}`, label: `Рецепт: ${r.id}` })) ?? []),

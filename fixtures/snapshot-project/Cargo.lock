@@ -1,0 +1,6 @@
+# Fixture has no external dependencies; Windows builds from delivered sources.
+version = 3
+
+[[package]]
+name = "snapshot-fixture"
+version = "0.1.0"

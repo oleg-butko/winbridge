@@ -30,6 +30,8 @@ export function TaskDetail({ task, chunks }: { task: TaskRecord; chunks: OutputC
       <Grid.Col span={{ base: 12, md: 4 }}><Card withBorder h="100%"><Stack gap="sm">
         <Text fw={600}>Контекст выполнения</Text>
         <Text size="sm">Источник: {task.submission.command.kind === "recipe" ? `рецепт ${task.submission.command.recipeId}` : "прямая команда"}</Text>
+        <Text size="sm">Snapshot: {task.submission.snapshotId ?? "корень проекта"}</Text>
+        {task.snapshot && <><Text size="sm">Commit: {task.snapshot.source.commit}</Text><Text size="xs">Manifest SHA-256: {task.snapshot.manifestSha256}</Text></>}
         <Text size="sm">Request ID: {task.submission.requestId}</Text>
         <Text size="sm">Принято: {new Date(task.acceptedAtMs).toLocaleString()}</Text>
         <Text size="sm">Запуск: {task.startedAtMs === null ? "ожидается" : new Date(task.startedAtMs).toLocaleString()}</Text>

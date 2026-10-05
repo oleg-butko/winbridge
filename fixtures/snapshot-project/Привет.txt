@@ -1,0 +1,1 @@
+Проверенный commit → Windows build ✓
