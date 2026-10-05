@@ -1,0 +1,13 @@
+{
+  "protocolVersion": 1,
+  "requestId": "request-example-001",
+  "projectId": "netwatch",
+  "idempotencyKey": "example-direct-001",
+  "timeoutMs": 600000,
+  "command": {
+    "kind": "direct",
+    "executable": "cargo.exe",
+    "arguments": ["build", "--locked", "--release", "-p", "netwatch-agent"],
+    "workingDirectory": "."
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "instanceId": "local-development",
+  "nodeId": "debian-vm",
+  "controller": {
+    "listenAddress": "192.168.56.2:1143",
+    "allowedWorkerAddresses": ["192.168.56.1"]
+  },
+  "delivery": {
+    "adapter": "shared-folder",
+    "root": "/mnt/hgfs/shared",
+    "namespace": "winbridge"
+  },
+  "projects": [
+    { "id": "netwatch", "sourceRoot": "/home/user1/netwatch", "sourceMode": "commit" }
+  ]
+}

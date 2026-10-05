@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "instanceId": "local-development",
+  "nodeId": "windows-host",
+  "worker": {
+    "controllerUrl": "ws://192.168.56.2:1143",
+    "keepRunningOnUiExit": true
+  },
+  "delivery": {
+    "adapter": "shared-folder",
+    "root": "K:\\VMs\\shared",
+    "namespace": "winbridge"
+  },
+  "stateDirectory": "%LOCALAPPDATA%\\WinBridge",
+  "projects": [
+    {
+      "id": "netwatch",
+      "workspaceRoot": "K:\\WinBridge\\workspaces\\netwatch",
+      "allowDirectCommands": true,
+      "maxConcurrentMutations": 1,
+      "recipes": [
+        {
+          "id": "build-portable",
+          "executable": "node.exe",
+          "arguments": ["scripts/build-portable.mjs"],
+          "workingDirectory": ".",
+          "timeoutMs": 1800000
+        }
+      ]
+    }
+  ]
+}

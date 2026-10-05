@@ -1,0 +1,8 @@
+{
+  "protocolVersion": 1,
+  "requestId": "request-example-002",
+  "projectId": "netwatch",
+  "idempotencyKey": "example-recipe-001",
+  "timeoutMs": 1800000,
+  "command": { "kind": "recipe", "recipeId": "build-portable", "arguments": [] }
+}

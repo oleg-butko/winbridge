@@ -1,0 +1,4 @@
+body { margin: 0; }
+.page { min-height: 100vh; background: radial-gradient(ellipse at top left, #1d2b40 0, #121820 55%); }
+.eyebrow { color: #74c0fc; letter-spacing: .12em; font-size: .75rem; font-weight: 700; margin-bottom: .65rem; }
+pre { overflow-wrap: anywhere; white-space: pre-wrap; }
