@@ -71,7 +71,7 @@ npm run build:ui
 npm run dev:ui
 ```
 
-UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка этапа 1: [сценарий](docs/windows-validation.md). Следующая проверка: [локальная сессия Debian ↔ Windows](docs/windows-session-validation.md). Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
+UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка этапа 1: [сценарий](docs/windows-validation.md). Следующая проверка: [локальная сессия Debian ↔ Windows](docs/windows-session-validation.md). Её runtime по умолчанию — постоянный `K:\_proj-26\winbridge\runtime`, задаваемый локальным runtimeDirectory; повторная подготовка сохраняет configs, форму и journal. Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
 
 Реальные проверки Unix development adapter (сначала `cargo build --workspace --locked`):
 

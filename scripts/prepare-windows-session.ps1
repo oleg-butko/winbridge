@@ -9,12 +9,7 @@ $RepoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if ($RepoRoot.StartsWith('K:\VMs\shared\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Extract sources to a local Windows folder before building; do not build in shared' }
 if (-not $SettingsPath) { $SettingsPath = Join-Path $RepoRoot 'target\debug\winbridge-session.local.json' }
 $SettingsPath = [IO.Path]::GetFullPath($SettingsPath)
-function Write-NewJson([string]$Path, $Value) {
-  [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path)) | Out-Null
-  $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($Value | ConvertTo-Json -Depth 30))
-  $stream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-  try { $stream.Write($bytes, 0, $bytes.Length); $stream.Flush($true) } finally { $stream.Dispose() }
-}
+. (Join-Path $PSScriptRoot 'session-runtime.ps1')
 function Invoke-Checked([string]$Executable, [string[]]$Arguments) {
   & $Executable @Arguments
   if ($LASTEXITCODE -ne 0) { throw "$Executable exited with code $LASTEXITCODE" }
@@ -25,8 +20,9 @@ if (-not (Test-Path -LiteralPath $SettingsPath)) {
 }
 $settings = Get-Content -Raw -Encoding UTF8 -LiteralPath $SettingsPath | ConvertFrom-Json
 $fields = @($settings.PSObject.Properties.Name)
-$expected = @('schemaVersion', 'controllerUrl', 'instanceId', 'nodeId', 'reportDirectory', 'fixtureDirectory')
-foreach ($field in $expected) { if ($field -notin $fields) { throw "Missing $field in $SettingsPath" } }
+$required = @('schemaVersion', 'controllerUrl', 'instanceId', 'nodeId', 'reportDirectory', 'fixtureDirectory')
+$expected = $required + @('runtimeDirectory')
+foreach ($field in $required) { if ($field -notin $fields) { throw "Missing $field in $SettingsPath" } }
 if (@($fields | Where-Object { $_ -notin $expected }).Count) { throw "Unknown settings fields in $SettingsPath" }
 if ($settings.schemaVersion -ne 1) { throw 'Unsupported session settings schemaVersion; expected 1' }
 foreach ($id in @($settings.instanceId, $settings.nodeId)) { if ($id -notmatch '^[A-Za-z0-9_-]{1,80}$') { throw 'instanceId/nodeId must use 1-80 letters, digits, dash or underscore' } }
@@ -43,15 +39,23 @@ if (-not [IO.Path]::IsPathRooted($fixtureRoot)) { $fixtureRoot = Join-Path $Repo
 $fixtureRoot = [IO.Path]::GetFullPath($fixtureRoot)
 $sharedRoot = [IO.Path]::GetFullPath('K:\VMs\shared').TrimEnd('\')
 if ($fixtureRoot -eq $sharedRoot -or $fixtureRoot.StartsWith($sharedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Fixtures/state/build must stay on a local disk outside shared' }
+$runtimeRoot = 'K:\_proj-26\winbridge\runtime'
+if ('runtimeDirectory' -in $fields) {
+  if (-not ($settings.runtimeDirectory -is [string]) -or -not $settings.runtimeDirectory.Trim()) { throw 'runtimeDirectory must be a nonempty path' }
+  $runtimeRoot = [string]$settings.runtimeDirectory
+}
+if ($runtimeRoot -match '^[\\/]' -or $runtimeRoot -match '^[A-Za-z]:(?![\\/])') { throw 'runtimeDirectory cannot use UNC/root-relative/drive-relative paths' }
+if (-not [IO.Path]::IsPathRooted($runtimeRoot)) { $runtimeRoot = Join-Path $RepoRoot $runtimeRoot }
+$runtimeRoot = [IO.Path]::GetFullPath($runtimeRoot)
+if ($runtimeRoot -eq $sharedRoot -or $runtimeRoot.StartsWith($sharedRoot + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Runtime/config/state must stay on a local disk outside shared' }
 $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
-$runRoot = Join-Path $fixtureRoot $runId
+$layout = Get-SessionLayout $fixtureRoot $runtimeRoot $runId
+$runRoot = $layout.runRoot
 if (Test-Path -LiteralPath $runRoot) { throw "Run directory already exists; files preserved: $runRoot" }
-$runtime = Join-Path $runRoot 'runtime'
-$project = Join-Path $runRoot 'project'
-[IO.Directory]::CreateDirectory($runtime) | Out-Null
-[IO.Directory]::CreateDirectory($project) | Out-Null
+$runtime = $layout.runtimeDirectory
+[IO.Directory]::CreateDirectory($runRoot) | Out-Null
 $reportRoot = Join-Path $settings.reportDirectory $runId
-$workerConfig = Join-Path $runtime 'winbridge-worker.local.json'
+$workerConfig = $layout.workerConfigPath
 $report = [ordered]@{ schemaVersion = 1; platform = 'windows'; preparationStatus = 'preparing'; runId = $runId; runRoot = $runRoot; reportRoot = $reportRoot; settingsPath = $SettingsPath; controllerUrl = $settings.controllerUrl; instanceId = $settings.instanceId; nodeId = $settings.nodeId; workerConfigPath = $workerConfig; runtimeDirectory = $runtime; error = $null }
 Push-Location $RepoRoot
 try {
@@ -60,14 +64,30 @@ try {
     Invoke-Checked 'npm.cmd' @('ci')
     Invoke-Checked 'npm.cmd' @('run', 'build:desktop')
   }
-  foreach ($name in @('winbridge-worker.exe', 'winbridge-fixture.exe')) {
-    Copy-Item -LiteralPath (Join-Path $RepoRoot ('target\debug\' + $name)) -Destination (Join-Path $runtime $name)
+  $active = @(Get-Process -Name 'winbridge-worker','winbridge-desktop','winbridge-fixture' -ErrorAction SilentlyContinue | ForEach-Object { if ($_.Path) { $_.Path } })
+  $sources = [ordered]@{
+    'winbridge-worker.exe' = Join-Path $RepoRoot 'target\debug\winbridge-worker.exe'
+    'winbridge-fixture.exe' = Join-Path $RepoRoot 'target\debug\winbridge-fixture.exe'
+    'winbridge-desktop.exe' = Join-Path $RepoRoot 'apps\desktop\src-tauri\target\release\winbridge-desktop.exe'
   }
-  Copy-Item -LiteralPath (Join-Path $RepoRoot 'apps\desktop\src-tauri\target\release\winbridge-desktop.exe') -Destination (Join-Path $runtime 'winbridge-desktop.exe')
-  $fixture = Join-Path $runtime 'winbridge-fixture.exe'
-  Write-NewJson $workerConfig @{ schemaVersion = 1; instanceId = $settings.instanceId; nodeId = $settings.nodeId; stateDirectory = (Join-Path $runRoot 'state'); worker = @{ controllerUrl = $settings.controllerUrl; keepRunningOnUiExit = $true }; projects = @(@{ id = 'fixture'; workspaceRoot = $project; allowDirectCommands = $true; maxConcurrentMutations = 1; recipes = @(@{ id = 'fixture-success'; executable = $fixture; arguments = @('success'); workingDirectory = '.'; timeoutMs = 10000 }) }) }
-  Write-NewJson (Join-Path $runtime 'winbridge-desktop.local.json') @{ schemaVersion = 1; workerConfigPath = $workerConfig }
+  $report.binaries = @(Copy-SessionBinaries $sources $runtime (Join-Path $runRoot 'staged-binaries') $active)
+  $existingConfig = Test-Path -LiteralPath $workerConfig
+  $actual = Initialize-SessionConfiguration $layout $settings
+  $report.workerConfigPreserved = $existingConfig
+  $report.controllerUrl = $actual.worker.controllerUrl
+  $report.instanceId = $actual.instanceId
+  $report.nodeId = $actual.nodeId
+  $report.stateDirectory = $actual.stateDirectory
+  $report.projectDirectories = @($actual.projects | ForEach-Object { $_.workspaceRoot })
+  if ($existingConfig) { Write-Host "Existing worker config preserved: $workerConfig; its settings take precedence over creation defaults" }
   Invoke-Checked (Join-Path $runtime 'winbridge-worker.exe') @('--config', $workerConfig, 'validate')
+  if (-not $PrepareOnly) {
+    $existing = Get-SessionWorkerInfo (Join-Path $runtime 'winbridge-worker.exe') $workerConfig
+    if ($existing) { throw "Worker instance $($existing.instanceId) is already running (generation $($existing.generation)); keep using it or stop it before preparing another launch. Configs/state preserved" }
+    if (@($active | Where-Object { $_.Equals((Join-Path $runtime 'winbridge-worker.exe'), [StringComparison]::OrdinalIgnoreCase) }).Count) {
+      throw 'The fixed worker executable is already running but local IPC could not confirm it; stop it before preparing another launch'
+    }
+  }
   $report.preparationStatus = 'prepared'
 } catch {
   $report.preparationStatus = 'failed'
@@ -82,6 +102,7 @@ try {
 Write-Host "Session prepared: $runRoot"
 Write-Host "Shared report: $reportRoot"
 Write-Host "Settings preserved: $SettingsPath"
+Write-Host "Fixed runtime: $runtime (runtimeDirectory in settings; changing it changes the firewall application path)"
 Write-Host "Worker start: & '$(Join-Path $runtime 'winbridge-worker.exe')' --config '$workerConfig' serve"
 Write-Host "Desktop: $(Join-Path $runtime 'winbridge-desktop.exe')"
 if (-not $PrepareOnly) {

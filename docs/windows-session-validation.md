@@ -9,7 +9,7 @@
 - Worker сам подключается к `ws://192.168.44.203:1143`. Controller не фильтрует источник по IP; handshake требует node `windows-host`, instance `local-development` и совместимый протокол/capabilities.
 - Данные fixture, SQLite и exe — на локальном Windows диске; отчёты — `K:\VMs\shared\WinBridge\session-validation`.
 
-Настройки VMware, mount, firewall и services менять не требуется. Если изменится адрес Debian, обновить listenAddress/controllerUrl; смена IP Windows не требует правки allowlist. Handshake/version/timeout ошибки показываются в desktop.
+Сценарий не меняет VMware, mount, firewall и services. Для файервола с разрешениями по приложению нужен доступ именно запускаемого worker.exe; ниже описана диагностика. Если изменится адрес Debian, обновить listenAddress/controllerUrl; смена IP Windows не требует правки allowlist. Ошибки TCP, WebSocket и обмена Hello/Welcome показываются в desktop.
 
 ## Один запуск в Windows
 
@@ -22,15 +22,21 @@ Set-Location 'K:\_proj-26\winbridge\session-src-20261005\winbridge'
 .\scripts\prepare-windows-session.ps1
 ```
 
-Сценарий собирает worker с bundled SQLite, UI и desktop. Он создаёт `target\debug\winbridge-session.local.json` из [seed](../examples/windows-session.config.json), если локального файла ещё нет. Существующий settings JSON сохраняется. В нём задаются controllerUrl, instanceId/nodeId, reportDirectory и fixtureDirectory; переменные окружения не нужны.
+Сценарий собирает worker с bundled SQLite, UI и desktop. Он создаёт `target\debug\winbridge-session.local.json` из [seed](../examples/windows-session.config.json), если локального файла ещё нет. Существующий settings JSON сохраняется. В нём задаются controllerUrl, instanceId/nodeId, reportDirectory, fixtureDirectory и runtimeDirectory; переменные окружения не нужны.
 
-Каждый прогон получает отдельный `.winbridge\windows-session\TIMESTAMP-ID` с `project`, `state` и `runtime`. В runtime лежат копии готовых exe, `winbridge-worker.local.json` и `winbridge-desktop.local.json` с workerConfigPath. Форма desktop тоже сохраняется рядом с этим exe. Старые configs, exe и SQLite предыдущего gate не перезаписываются.
+`runtimeDirectory` по умолчанию — `K:\_proj-26\winbridge\runtime`. Этот путь одинаков для всех прогонов и папок исходников. Старый settings JSON без этого поля поддерживается с тем же значением по умолчанию. Можно задать другой локальный абсолютный путь; относительный разрешается от папки исходников и зависит от её расположения. Для постоянного правила файервола использовать абсолютный путь. Runtime, project и SQLite остаются вне shared.
 
-Сценарий открывает новый desktop и оставляет worker работать в текущем PowerShell. Оставить это окно открытым. При необходимости повторного запуска использовать напечатанную команду `worker --config ... serve`; Ctrl+C останавливает этот worker. Если старое desktop окно ещё открыто, закрыть его для удобства и смотреть новое окно текущего прогона.
+В постоянной папке лежат три exe, `winbridge-worker.local.json`, `winbridge-desktop.local.json`, форма `winbridge-desktop-state.local.json`, `project` и `state`. Configs создаются только при отсутствии; затем worker config определяет controllerUrl, instance/node, stateDirectory и проекты. Правки defaults в settings JSON не заменяют существующий worker config: адрес менять непосредственно в `K:\_proj-26\winbridge\runtime\winbridge-worker.local.json`. Desktop использует соседний worker config; несовпадающий существующий desktop config вызывает понятную ошибку и сохраняется.
+
+Готовые exe сначала копируются в staging и проверяются по SHA-256. Одинаковые runtime exe не переписываются. Перед обновлением изменившихся exe закрыть desktop и остановить worker; обнаруженный работающий runtime блокирует замену. Сценарий не завершает процессы самостоятельно. Поля формы, configs, project и state при обновлении сохраняются.
+
+Каждый прогон получает отдельный `.winbridge\windows-session\TIMESTAMP-ID` для отчёта и staged-binaries. Старые каталоги предыдущих версий, их configs и SQLite остаются на месте; автоматического переноса прежнего journal или формы в новый постоянный runtime нет. Первый запуск постоянной папки создаёт отдельный fixture; последующие используют его же.
+
+Сценарий открывает desktop из постоянной папки и оставляет worker работать в текущем PowerShell. Оставить это окно открытым. При необходимости повторного запуска использовать напечатанную команду `worker --config ... serve`; Ctrl+C останавливает этот worker. Уже запущенный worker с тем же instance обнаруживается через local IPC: второй запуск отклоняется, чтобы новое окно не подключалось к прежнему worker незаметно.
 
 В shared появляется `session-validation\TIMESTAMP-ID\setup-report.json`; при недоступном shared остаётся локальная копия. Передать агенту имя `TIMESTAMP-ID`. Это отчёт подготовки: удалённое исполнение проверяется следующим шагом.
 
-`-SkipBuild` допустим после сборки актуальных исходников. `-PrepareOnly` создаёт configs/report и печатает команды запуска без открытия UI и worker. `-SettingsPath PATH` позволяет выбрать другой локальный settings файл. Скрипт не меняет существующие desktop configs в target debug/release.
+`-SkipBuild` допустим после сборки актуальных исходников: первый запуск обновлённых исходников выполнить без этого флага. `-PrepareOnly` подготавливает runtime/configs/report и печатает команды запуска без открытия UI и worker. `-SettingsPath PATH` позволяет выбрать другой локальный settings файл. Скрипт не меняет существующие desktop configs в target debug/release.
 
 ## Действия в Debian
 
@@ -82,3 +88,22 @@ python3 scripts/validate-remote.py --config .winbridge/controller-session.local.
 | Worker выключен | Свежесть controller помечена как неизвестная/последняя известная, task не становится successful/failed только из-за offline. |
 
 Ожидаемое поведение нового UI подтвердить текстом; `dev:ui` этапа 1 уже проверен и повторять его не нужно. Закрыть этап 2 можно после реального Debian→Windows выполнения и reconnect проверки, а затем перейти к snapshot import.
+
+## Если Windows не подключается
+
+Ошибка `10013` (`WSAEACCES`) означает отказ Windows в операции с сокетом; сама по себе она не определяет конкретный блокирующий продукт. [Коды Winsock Microsoft](https://learn.microsoft.com/en-us/windows/win32/winsock/windows-sockets-error-codes-2). Если в activity.jsonl отсутствует tcp_accepted от Windows, worker ещё не дошёл до обмена протоколом с controller. Журнал фиксирует соединения после TCP accept, а не пакеты, заблокированные до него.
+
+Сначала оставить controller работать в Debian и проверить `status`/listener. Из Windows выполнить проверку без изменения настроек:
+
+```powershell
+Test-NetConnection 192.168.44.203 -Port 1143 |
+  Select-Object ComputerName,RemoteAddress,RemotePort,InterfaceAlias,SourceAddress,TcpTestSucceeded
+```
+
+`TcpTestSucceeded: True` подтверждает TCP доступ из PowerShell; это не проверка разрешения для другого exe. Если worker получает 10013, проверить существующее правило в используемом файерволе для **точного пути запущенного worker**, направление outbound, destination `192.168.44.203:1143`, TCP. Worker не слушает входящий TCP-порт на Windows; исходный порт выбирает ОС. Не путать permission для desktop, target/debug worker и runtime worker.
+
+Новая версия prepare всегда запускает `K:\_proj-26\winbridge\runtime\winbridge-worker.exe` по умолчанию. Установить разрешение для этого постоянного пути вместо `.winbridge\windows-session\TIMESTAMP-ID\runtime\winbridge-worker.exe` прежних версий. Смена runtimeDirectory меняет путь для правила файервола. Во время диагностики можно повторно запускать напечатанную команду `worker --config ... serve`, сохраняя прежние exe/config/state. `-SkipBuild` пропускает сборку; обновлённая диагностика появится только после сборки новых исходников.
+
+Общий deadline подключения остаётся 5 секунд, но сообщение указывает этап: TCP connection; WebSocket upgrade после успешного TCP; WinBridge Hello/Welcome после успешного WebSocket. Для отказа 10013 сообщение содержит полный путь фактически запущенного exe. UI больше не сообщает «ожидается handshake», когда TCP ещё не установлен.
+
+Если разрешение выглядит правильным, нужны название файервола, его запись блокировки с exe/destination/direction и результат Test-NetConnection. Windows event 5157 (если аудит уже включён) содержит application path, направление, адреса/порты и filter ID; его отсутствие не доказывает разрешение. [Описание события Microsoft](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-5157). Для этой проверки не включать аудит, не отключать файервол и не менять VMware/firewall/services автоматически.

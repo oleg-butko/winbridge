@@ -4,5 +4,6 @@
   "instanceId": "local-development",
   "nodeId": "windows-host",
   "reportDirectory": "K:\\VMs\\shared\\WinBridge\\session-validation",
-  "fixtureDirectory": ".winbridge\\windows-session"
+  "fixtureDirectory": ".winbridge\\windows-session",
+  "runtimeDirectory": "K:\\_proj-26\\winbridge\\runtime"
 }

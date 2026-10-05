@@ -10,7 +10,8 @@ use tokio_tungstenite::tungstenite::{protocol::WebSocketConfig, Message};
 use winbridge_protocol::{LocalRequest, LocalResponse, SessionMessage};
 
 pub use tokio_tungstenite::{
-    accept_async_with_config, connect_async_with_config, MaybeTlsStream, WebSocketStream,
+    accept_async_with_config, client_async_with_config, connect_async_with_config, MaybeTlsStream,
+    WebSocketStream,
 };
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 pub const RPC_TIMEOUT: Duration = Duration::from_secs(8);

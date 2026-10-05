@@ -172,7 +172,7 @@ export function NativeWorkbench() {
     </Alert>
     <Alert color={controllerFresh ? "teal" : "yellow"} title={controllerFresh ? "Controller Debian подключён" : !info ? "Состояние controller пока неизвестно" : controller ? connected && controller.state === "connecting" ? "Подключение к controller Debian…" : "Нет свежего соединения с controller Debian" : "Управление из Debian не настроено"}>
       {controller ? <>
-        <Text size="sm">{controller.url} · {controller.controllerNodeId ?? "ожидается handshake"}</Text>
+        <Text size="sm">{controller.url} · {controller.controllerNodeId ?? "node controller ещё не получен"}</Text>
         <Text size="xs">Последнее подтверждение: {controller.lastConfirmedAtMs === null ? "ещё не получено" : new Date(controller.lastConfirmedAtMs).toLocaleString()} · session: {controller.sessionId ?? "ещё не создана"}</Text>
         {!connected && <Text size="sm">Worker недоступен; сохранены последние известные данные соединения.</Text>}
         {controller.error && <Text size="sm">{controller.error}</Text>}

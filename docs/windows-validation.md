@@ -128,3 +128,5 @@ Browser `npm run dev:ui` умеет открыть один `*.task-report.json`
 Следующий gate: [управление из Debian через локальный ws://](windows-session-validation.md). Первый этап повторять не требуется.
 
 В текущей локальной разработке controller не блокирует IP источника. Адреса активности записываются в Debian `stateDirectory/activity.jsonl` с ротацией (1 MiB и пять архивов); старое поле allowedWorkerAddresses игнорируется. Подробности и результаты [ревью этапа 2](review-stage2-2026-10-05.md).
+
+Для этапа 2 `prepare-windows-session.ps1` использует постоянный `K:\_proj-26\winbridge\runtime`, задаваемый runtimeDirectory в локальном settings JSON. Путь exe не меняется от прогона к прогону; configs, форма и state сохраняются. Отдельные каталоги с датой используются для отчётов/staging. Настройки и запуск описаны в [Windows session инструкции](windows-session-validation.md); этап 1 повторять не требуется.
