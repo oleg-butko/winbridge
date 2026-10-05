@@ -11,7 +11,7 @@
     "root": "K:\\VMs\\shared",
     "namespace": "winbridge"
   },
-  "stateDirectory": "%LOCALAPPDATA%\\WinBridge",
+  "stateDirectory": "K:\\WinBridge\\state",
   "projects": [
     {
       "id": "netwatch",

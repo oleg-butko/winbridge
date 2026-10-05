@@ -23,12 +23,17 @@ K:\WinBridge\workspaces\<projectId>\           Отдельная локальн
   cache/                                     Windows build/dependency caches
   artifacts/<taskId>/                         Результаты конкретной задачи
 
-%LOCALAPPDATA%\WinBridge\                     Локальное состояние worker
+K:\WinBridge\state\                          Локальное состояние worker из config
   journal.sqlite3
   output/<taskId>/
+
+/mnt/hgfs/shared/WinBridge/validation/         K:\VMs\shared\WinBridge\validation\
+  <timestamp>-<id>/                          Отчёты проверки Windows, JSON и stderr
 ```
 
 `K:\WinBridge` — пример выбираемого корня, не обещание существования. UI выбирает shared mapping и workspace root, показывает обе стороны и проверяет чтение/запись небольшим probe только при явной настройке. Controller выбирает relative delivery ID, а не передаёт произвольный Windows absolute path.
+
+На этапе 1 [Windows проверка](windows-validation.md) берёт reportDirectory из локального файла рядом с worker exe и сохраняет отчёты в shared. Тестовый project и live SQLite остаются в локальной папке исходников; desktop читает отдельный локальный JSON рядом со своим exe. Это экспорт диагностических файлов, не реализация snapshot import.
 
 ## Публикация и импорт
 

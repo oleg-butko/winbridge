@@ -1,3 +1,3 @@
-# Будущие platform adapters
+# Platform adapters
 
-Windows process tree/Job Objects, filesystem/path rules и IPC security primitives; Linux capture/filesystem primitives. Без task orchestration и UI. Сначала реальный Windows fixture scenario, затем Cargo package и минимальные interfaces под него. Cross-compile не заменяет Windows execution.
+`ManagedChild`: Windows suspended launch, назначение в Job Object с kill-on-close, resume через documented thread APIs, tree termination и проверка active process count. Unix process group — development/test adapter. `require_local_disk` отклоняет HGFS и Windows network/removable volumes для state/build roots. Без task orchestration/journal/Tauri. Windows Rust cross-check проходит; real Job Object execution проверяет `scripts/validate-windows.ps1` на host.

@@ -1,4 +1,7 @@
-//! Framework entry points. No processes, listeners or shared-folder writes yet.
+//! Project/config policy and the controller scaffold entry point. No OS execution here.
+
+pub mod config;
+pub mod desktop_state;
 
 use std::io::{self, Write};
 use winbridge_protocol::{Capability, Component, RuntimeDescriptor, PROTOCOL_VERSION};

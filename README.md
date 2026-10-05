@@ -1,18 +1,21 @@
 # WinBridge
 
-Локальный каркас для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
+Локальный проект для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
 
-Название выбрано пользователем. Репозиторий отделён от Netwatch. Rust отвечает за runtime, React/Mantine — за UI, Tauri запланирован как Windows tray/WebView shell. Node.js нужен для сборки UI, а не для будущего runtime.
+Название выбрано пользователем. Репозиторий отделён от Netwatch. Rust отвечает за runtime, React/Mantine — за UI, Tauri — за native WebView shell; tray запланирован. Node.js нужен для сборки UI, а не для runtime.
 
 ## Что готово
 
 - Собирающийся Rust workspace: общие DTO, core entry point и отдельные binaries controller/worker.
-- CLI `--help` и `--describe` с честным описанием готовности: implemented capabilities пока пусты.
+- Worker CLI: config validation, serve, submit/get/list/output/cancel через local IPC. Controller пока scaffold.
+- SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
+- Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
+- User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.
 - Тесты контракта команд: Windows пути и отдельные аргументы, отклонение неизвестных режимов и полей.
-- Интерактивная демонстрация UI: timeline, параметры команды, output, успех, ошибка и отсутствие свежего подтверждения.
+- Connected UI: форма команды, recent tasks, timeline, output/exit code, cancel и независимая свежесть соединения. Browser: явно помеченная демонстрация и просмотр сохранённого отчёта worker.
 - Архитектура, поэтапный roadmap, UX требования, ADR, примеры конфигурации и инструкции следующему агенту.
 
-Исполнение команд, сетевые listener, доставка снимков и сохранение журнала пока не реализованы. UI демонстрация использует fixtures и не выполняет операции на Windows.
+**Этап 1 завершён 2026-10-05:** получен Windows отчёт со всеми десятью успешными runtime checks, пользователь подтвердил пять native UI шагов. [Доказательства gate](docs/windows-gate-2026-10-05.md). Worker объявляет `task_submit` и `task_cancel`; controller пока scaffold. Desktop сохраняет поля команды в локальном JSON рядом с exe, отдельно для worker/project/root. Debian→Windows WebSocket, доставка snapshot, log tail и attention — следующие этапы. Browser сам команды не выполняет.
 
 ## Принятые решения
 
@@ -27,13 +30,13 @@
 ```text
 apps/
   controller/       Debian coordinator; сейчас CLI scaffold
-  worker/           Windows execution authority; сейчас CLI scaffold
-  desktop/          Запланированный Tauri shell
+  worker/           Local execution authority, CLI, SQLite, fixture executable
+  desktop/          Tauri shell с worker IPC bridge, отдельный Cargo package
 crates/
   protocol/         Общие wire DTO и версия протокола
   core/             Логика задач, policy и interfaces модулей
-  transport/        Запланированные WebSocket и local IPC adapters
-  platform/         Запланированные операции Windows/Linux
+  transport/        Bounded local IPC; WebSocket запланирован
+  platform/         Process tree/Job Object и local disk adapters
 modules/
   workspace-sync/   Снимки, manifest, импорт из shared папки
   runner/           Рецепты, direct commands, lifecycle процессов
@@ -49,23 +52,35 @@ tests/fixtures/     Локальные fixtures для следующих эта
 docs/               Архитектура, UX, roadmap, ADR и handoff
 ```
 
-`transport`, `platform`, `desktop` и `modules` пока имеют описание границ; они не объявлены Cargo packages. Новые crates создавать при появлении реального кода. Core и protocol не зависят от Tauri, конкретной VM или соседнего Netwatch repository.
+`transport` и `platform` входят в workspace. Desktop — отдельный package в `apps/desktop/src-tauri` со своим lockfile, чтобы workspace проверки не требовали GUI SDK. Runner service сейчас находится в worker; `modules` описывает будущие границы. Core и protocol не зависят от Tauri, конкретной VM или соседнего Netwatch repository.
 
-## Проверка и запуск scaffold
+## Проверка и запуск
 
 ```bash
 cargo test --workspace --locked
 cargo check --workspace --locked
+cargo fmt --all -- --check
 cargo run -p winbridge-controller --locked -- --describe
 cargo run -p winbridge-worker --locked -- --help
 npm ci
 npm run check:scaffold
+npm run check:contracts
 npm run typecheck
 npm run build:ui
 npm run dev:ui
 ```
 
-UI dev server слушает только `127.0.0.1`; открыть адрес, показанный Vite. Сборка находится в `web-dist/`. CLI не принимает runtime config и не запускает сервисы на этом этапе.
+UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка: [точный сценарий](docs/windows-validation.md). Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
+
+Реальные проверки Unix development adapter (сначала `cargo build --workspace --locked`):
+
+```bash
+python3 scripts/validate-local.py
+npm run test:ui
+cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+```
+
+UI integration test использует headless Chromium с sandbox и временный транспортный shim к настоящему Unix worker. Он требует `/usr/bin/chromium`, `WINBRIDGE_BROWSER` или установленный Playwright Chromium. Сам browser UI не получает command endpoint. [Скриншот реального Linux результата](docs/screenshots/local-worker-linux.png).
 
 Пример интерфейса: [task workbench](docs/screenshots/task-workbench.png). Результаты подготовки: [validation](docs/validation.md).
 

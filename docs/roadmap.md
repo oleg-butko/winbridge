@@ -10,16 +10,18 @@
 - [x] Принятые локальные решения, HGFS схема, UX, ADR и handoff.
 - [x] Lockfiles и воспроизводимые проверки.
 
-Готовность: сборка Rust/UI и contract tests проходят. Реальных listeners, processes, sync и journal ещё нет.
+Результат этапа 0: сборка Rust/UI и contract tests проходят; на момент его завершения runtime отсутствовал. Текущее состояние следующего этапа описано ниже.
 
 ## Этап 1 — одна команда и реальный журнал на Windows
 
-- [ ] Runtime config loader: один project, разрешённые recipes/direct, относительный cwd, timeout. Добавить версионирование и actionable validation errors.
-- [ ] Windows worker выполняет одну команду в локальном fixture project. Начать с direct executable, одновременно читать stdout/stderr; затем recipe использует тот же service.
-- [ ] Durable task ID, accepted до ACK, idempotency key/payload check, локальное task/output хранилище. State transitions и recovery записываются явно.
-- [ ] User-scoped named pipe и Tauri shell; desktop только вызывает worker и читает read model. Не повторять Netwatch SID-only имя: нужен WinBridge instance ID.
-- [ ] UI показывает источник, executable, массив аргументов, cwd, timestamps, output и exit code; реальные данные заменяют fixtures через adapter.
-- [ ] Управляемое дерево процессов, timeout и cancel. Закрытие UI не останавливает worker.
+Статус 2026-10-05: этап завершён по [Windows отчёту и пяти подтверждённым native UI шагам](windows-gate-2026-10-05.md). Worker объявляет implementedCapabilities `task_submit`, `task_cancel`; controller остаётся scaffold. Настройки validation и desktop находятся рядом с exe, отчёты — в shared. Дополнительно исправлено сохранение формы команды при повторном открытии окна; этот UI fix проверен Rust storage tests, browser integration и дополнительно подтверждён пользователем на Windows вместе с dev:ui.
+
+- [x] Runtime config loader: один project, разрешённые recipes/direct, относительный cwd, timeout. Версионирование и actionable validation errors.
+- [x] Windows worker выполняет команду в локальном fixture project. Direct executable одновременно читает stdout/stderr; recipe использует тот же service.
+- [x] Durable task ID, accepted до ACK, idempotency key/payload check, локальное task/output хранилище. State transitions и recovery записываются явно.
+- [x] User-scoped named pipe и Tauri shell; desktop только вызывает worker и читает read model. SID + WinBridge instance ID.
+- [x] UI показывает источник, executable, массив аргументов, cwd, timestamps, output и exit code; реальные данные через adapter.
+- [x] Управляемое дерево процессов, timeout и cancel. Закрытие UI не останавливает worker.
 
 Критерий: пользователь выполняет fixture команду, видит успех и ошибку, отменяет длительный process tree; дубликат запроса не создаёт второй процесс. Сбой после запуска виден как interrupted/indeterminate без молчаливого повторения. Windows проверка обязательна; Linux cross-compile её не заменяет.
 
@@ -84,4 +86,4 @@
 
 ## Следующий конкретный шаг
 
-Начать этап 1: config + local worker task service на fixture project и durable result. Предпочтение — один реально исполняемый Windows сценарий и его UI, затем усложнение. Не переписывать планы заново и не начинать с TLS, mounts, service installation или преждевременного extraction Netwatch.
+Следующий рабочий этап — этап 2: подключить Debian controller и Windows worker по локальному `ws://`, сохранив существующий command service, durable acceptance и native UI. Сначала определить реальные адреса доступной локальной пары; не менять VMware/firewall/mounts без отдельного разрешения. Snapshot import остаётся этапом 3. Повторять весь gate этапа 1 для проверки сохранения формы не требуется.

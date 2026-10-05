@@ -1,10 +1,10 @@
 # Структура и правила расширения
 
-Папки отражают границы изменений. Scaffold содержит только два crates и два binaries; transport/platform/desktop/modules представлены описаниями до начала их реальной реализации.
+Папки отражают границы изменений. Этап 1 добавил transport/platform crates, local worker runtime и отдельный Tauri package. Modules пока описывает следующие границы; первая runner orchestration и SQLite Store находятся в worker, project policy — в core.
 
 | Путь | Владелец логики | Допустимые зависимости |
 | --- | --- | --- |
-| crates/protocol | DTO/version/errors/identifiers | serde; без async runtime/platform/UI |
+| crates/protocol | DTO/version/errors/identifiers и TypeScript generation | serde; optional ts-rs только для generation, без async runtime/platform/UI |
 | crates/core | Task/project policy, orchestration, Store/Runner/Delivery interfaces | protocol; инфраструктура через interfaces |
 | crates/transport | Sessions, IPC, WebSocket | protocol, async runtime, platform IPC primitives |
 | crates/platform | Processes/files/path handling | OS APIs; без Tauri и UI DTO |
@@ -27,9 +27,9 @@ Project configuration + зарегистрированные recipes, source all
 
 ## Контракты и версии
 
-Protocol DTO находятся только в protocol. UI fixtures имеют собственные demo types и не являются wire schema. При подключении реального IPC генерировать TypeScript из Rust DTO либо schema и проверять sample messages; не дублировать rules в Tauri и UI.
+Protocol DTO находятся только в protocol. `npm run generate:contracts` генерирует `ui/src/runtime/contracts.ts` из Rust через optional feature `typescript`; `npm run check:contracts` проверяет отсутствие drift. UI fixtures имеют собственные demo types и не являются wire schema. Tauri передаёт LocalRequest в worker; policy не дублируется в desktop/UI. Browser отчёт проходит проверку формата перед отображением.
 
-App version начинается с 0.1.0; protocolVersion = 1, config schemaVersion = 1. Они развиваются независимо. На этом этапе Cargo workspace и package.json задают app version; Tauri config добавится при создании desktop. Capabilities в handshake содержат только реализованные функции.
+App version начинается с 0.1.0; protocolVersion = 1, config schemaVersion = 1. Они развиваются независимо. Cargo workspace, package.json и Tauri config задают app version. После [Windows gate](windows-gate-2026-10-05.md) worker объявляет `task_submit`/`task_cancel`; controller остаётся scaffold с пустыми implementedCapabilities. Будущий handshake содержит только проверенные функции.
 
 ## Данные вне исходников
 

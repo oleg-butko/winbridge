@@ -1,0 +1,6 @@
+{
+  "identifier": "main-window",
+  "description": "Local window only; command execution goes through worker policy and journal.",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:window:allow-destroy"]
+}

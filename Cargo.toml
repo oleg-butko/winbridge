@@ -1,5 +1,6 @@
 [workspace]
-members = ["crates/protocol", "crates/core", "apps/controller", "apps/worker"]
+members = ["crates/protocol", "crates/core", "crates/platform", "crates/transport", "apps/controller", "apps/worker"]
+exclude = ["apps/desktop/src-tauri"]
 resolver = "2"
 
 [workspace.package]
@@ -12,3 +13,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 winbridge-protocol = { path = "crates/protocol" }
 winbridge-core = { path = "crates/core" }
+winbridge-platform = { path = "crates/platform" }
+winbridge-transport = { path = "crates/transport" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "signal"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Memory", "Win32_Storage_FileSystem"] }

@@ -3,11 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev:ui": "vite --host 127.0.0.1",
+    "dev:desktop": "cd apps/desktop && tauri dev",
+    "build:desktop": "npm run build:ui && cd apps/desktop && tauri build --no-bundle",
     "build:ui": "vite build",
     "typecheck": "tsc -p ui/tsconfig.json --noEmit",
+    "test:ui": "node scripts/validate-ui.mjs",
+    "generate:contracts": "cargo run --locked -p winbridge-protocol --example export-types --features typescript",
+    "check:contracts": "cargo run --locked -p winbridge-protocol --example export-types --features typescript -- --check",
     "check:scaffold": "node scripts/check-scaffold.mjs",
     "check:rust": "cargo check --workspace --locked",
     "test:rust": "cargo test --workspace --locked",
@@ -16,14 +23,17 @@
   "dependencies": {
     "@mantine/core": "^8.3.16",
     "@mantine/hooks": "^8.3.16",
+    "@tauri-apps/api": "^2.12.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1",
     "@types/node": "^26.6.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "playwright": "^1.63.0",
     "typescript": "^5.9.0",
     "vite": "^8.2.2"
   }

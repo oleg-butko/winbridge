@@ -1,0 +1,34 @@
+// Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted" | "indeterminate";
+export type CommandSource = { "kind": "recipe", recipeId: string, arguments: Array<string>, } | { "kind": "direct", executable: string, arguments: Array<string>, 
+/**
+ * Relative path inside the registered project. Validation belongs to core/worker.
+ */
+workingDirectory: string, };
+export type TaskSubmission = { protocolVersion: number, requestId: string, projectId: string, idempotencyKey: string, timeoutMs: number, command: CommandSource, };
+export type ResolvedCommand = { executable: string, arguments: Array<string>, workingDirectory: string, timeoutMs: number, };
+export type JournalEvent = { sequence: number, occurredAtMs: number, status: TaskStatus, summary: string, };
+export type TaskRecord = { taskId: string, submission: TaskSubmission, resolvedCommand: ResolvedCommand, status: TaskStatus, acceptedAtMs: number, startedAtMs: number | null, finishedAtMs: number | null, processId: number | null, exitCode: number | null, reason: string | null, cancelRequested: boolean, outputBytes: number, outputTruncated: boolean, events: Array<JournalEvent>, };
+export type TaskSummary = { taskId: string, projectId: string, status: TaskStatus, acceptedAtMs: number, };
+export type OutputStream = "stdout" | "stderr";
+export type OutputChunk = { sequence: number, stream: OutputStream, offset: number, 
+/**
+ * Raw bytes: UI decodes each stream incrementally, without splitting UTF-8 characters.
+ */
+bytes: Array<number>, };
+export type RecipeInfo = { id: string, command: ResolvedCommand, };
+export type ProjectInfo = { id: string, workspaceRoot: string, allowDirectCommands: boolean, recipes: Array<RecipeInfo>, };
+export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, };
+export type LocalRequest = { "method": "info" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
+export type LocalResponse = { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, };
+export type TaskReport = { schemaVersion: number, platform: string, task: TaskRecord, output: Array<OutputChunk>, outputComplete: boolean, };
+export type CommandDraft = { workerInstanceId: string, projectId: string, workspaceRoot: string, recipeId: string | null, executable: string, 
+/**
+ * Preserve the text exactly, including an incomplete JSON edit.
+ */
+argumentsJson: string, workingDirectory: string, timeoutSeconds: string, };
+export type DesktopDraftState = { schemaVersion: number, 
+/**
+ * Oldest first; the last matching worker entry restores its project choice.
+ */
+drafts: Array<CommandDraft>, };

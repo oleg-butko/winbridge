@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "WinBridge",
+  "version": "0.1.0",
+  "identifier": "local.winbridge.desktop",
+  "build": {
+    "frontendDist": "../../../web-dist",
+    "devUrl": "http://127.0.0.1:5173"
+  },
+  "app": {
+    "windows": [{ "label": "main", "title": "WinBridge — журнал задач", "width": 1200, "height": 900, "minWidth": 700, "minHeight": 600 }],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"
+    }
+  },
+  "bundle": { "active": false, "icon": ["icons/icon.png", "icons/icon.ico"] }
+}

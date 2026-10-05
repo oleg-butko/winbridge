@@ -31,6 +31,8 @@
 
 Команда показывается как executable, отдельный массив аргументов и cwd; recipe name дополняет, а не заменяет фактические параметры. Shell/script виден явно. Sensitive values редактируются в UI/export, без скрытия самого факта передачи параметра. Доступно копирование параметров; формат отображения не используется для обратного исполнения.
 
+Форма запоминает executable, исходный текст JSON argv, cwd, timeout и выбранный рецепт отдельно для worker/project/root. После открытия desktop заполняет прежние поля, включая незавершённую правку JSON, и выбирает последний использованный зарегистрированный проект. Видны состояния сохранения и ошибка; закрытие окна ждёт записи последних правок. Восстановление не запускает команду. Файл `winbridge-desktop-state.local.json` хранится рядом с exe; worker config остаётся отдельно.
+
 Output: независимые stdout/stderr, поиск, severity filters, pause autoscroll, новые фрагменты, byte offset и признаки gaps. Virtualization и paging появляются до больших logs. Копирование/экспорт показывает, что выбрано: весь сохранённый output или фильтрованная часть.
 
 Доставка: capture, pack, shared write, validation/import и ready for build — отдельные шаги. Progress bytes/files точный, если известен размер; иначе indeterminate progress без придуманного процента. Пользователь может увидеть snapshot manifest и какие files будут заменены.
@@ -64,4 +66,4 @@ Tray показывает активные задачи и attention count. За
 
 ## Что уже можно посмотреть
 
-`npm run dev:ui` открывает browser prototype на localhost: три демонстрационных сценария, timeline, параметры и output. Fixtures явно подписаны, отсутствуют кнопки, которые притворяются реальным выполнением команды. Следующий этап подключит те же экраны к read model Windows worker.
+`npm run dev:ui` открывает browser prototype и просмотр сохранённого TaskReport на localhost. Fixtures явно подписаны; browser не выполняет команды. Tauri использует worker adapter: форма project/recipe/direct, recent tasks, реальные параметры/timestamps, journal timeline, output paging и cancel. При потере ответа submit сохраняет исходные параметры/key для безопасного повторного запроса. Соединение и последний task status отображаются независимо. [Native Windows gate пройден](windows-gate-2026-10-05.md); UI integration test дополнительно проверяет сохранение формы и закрытие через файловый IPC shim к настоящему Unix worker.

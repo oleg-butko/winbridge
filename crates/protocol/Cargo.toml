@@ -4,8 +4,16 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+typescript = ["dep:ts-rs"]
+
 [dependencies]
 serde.workspace = true
+ts-rs = { version = "12", optional = true, features = ["no-serde-warnings"] }
+
+[[example]]
+name = "export-types"
+required-features = ["typescript"]
 
 [dev-dependencies]
 serde_json.workspace = true
