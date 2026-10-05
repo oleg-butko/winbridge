@@ -28,7 +28,7 @@ CONTROLLER_SOCKET = RUN / 'c' / ('controller-' + INSTANCE + '.sock')
 WORKER_SOCKET = RUN / 'w' / ('worker-' + INSTANCE + '.sock')
 FIXTURE = ROOT / 'target/debug/winbridge-fixture'
 CONTROLLER_CFG.write_text(json.dumps({'schemaVersion': 1, 'instanceId': INSTANCE, 'nodeId': 'debian', 'stateDirectory': str(RUN / 'c'),
-    'controller': {'listenAddress': '127.0.0.1:' + str(PORT), 'allowedWorkerAddresses': ['127.0.0.1'], 'workerNodeId': 'windows'}}))
+    'controller': {'listenAddress': '127.0.0.1:' + str(PORT), 'workerNodeId': 'windows'}}))
 WORKER_CFG.write_text(json.dumps({'schemaVersion': 1, 'instanceId': INSTANCE, 'nodeId': 'windows', 'stateDirectory': str(RUN / 'w'),
     'worker': {'controllerUrl': 'ws://127.0.0.1:' + str(PORT), 'keepRunningOnUiExit': True},
     'projects': [{'id': 'fixture', 'workspaceRoot': str(PROJECT), 'allowDirectCommands': True, 'maxConcurrentMutations': 1,
@@ -303,13 +303,16 @@ try:
         rejected = fake.hello(**fields)
         assert rejected['type'] == 'rejected' and expected in rejected['message'], rejected
         fake.close()
-    try:
-        denied = RawWebSocket('127.0.0.2')
-        denied.close()
-        raise AssertionError('unregistered source IP accepted')
-    except (OSError, RuntimeError):
-        pass
-    checks.append('handshake-rejects-wire-version-pair-capabilities-and-unregistered-ip')
+    different_source = RawWebSocket('127.0.0.2')
+    assert different_source.hello()['type'] == 'welcome'
+    assert call({'method': 'controller_status'})['status']['workerAddress'].startswith('127.0.0.2:')
+    different_source.close()
+    until(lambda: not connected(), 'different source session did not close')
+    def source_logged():
+        records = [json.loads(line) for line in (RUN / 'c' / 'activity.jsonl').read_text().splitlines(keepends=True) if line.endswith('\n')]
+        return any(record.get('sourceIp') == '127.0.0.2' and record['event'] == 'worker_connected' for record in records)
+    until(source_logged, 'source IP not recorded in activity log')
+    checks.append('handshake-validates-wire-pair-capabilities-without-ip-filter-and-logs-source')
 
     fake = RawWebSocket()
     assert fake.hello()['type'] == 'welcome'
@@ -329,6 +332,15 @@ try:
     fake.close()
     until(lambda: not connected(), 'fake session did not close')
     checks.append('out-of-order-responses-correlate-to-the-correct-caller')
+
+    fake = RawWebSocket()
+    assert fake.hello()['type'] == 'welcome'
+    fake.send({'type': 'private-payload-' + 'x' * 60000})
+    until(lambda: not connected(), 'malformed JSON session remained active')
+    error = call({'method': 'controller_status'})['status']['lastError']
+    assert 'Invalid WebSocket JSON' in error and len(error) < 200 and 'private-payload' not in error, error
+    fake.close()
+    checks.append('invalid-json-diagnostics-bounded-without-echoing-peer-payload')
 
     fake = RawWebSocket()
     assert fake.hello()['type'] == 'welcome'

@@ -22,7 +22,8 @@
 | Local IPC/runtime tasks | User SID + instance named pipe, user-only protected DACL, exclusive journal и Windows Job Objects подтверждены Windows отчётом. Unix socket/private state также проверены; bounded frames/deadline/connections. |
 | HGFS delivery/import | Дизайн snapshot import и mapping. Windows validation reports читаются из shared; snapshot import и benchmark ещё не реализованы. |
 | SQLite/process tree | Local WAL/FULL, durable acceptance, dedup, queue/cancel, launch intent/recovery, independent pipe drain/quota. Реальные Windows tree timeout/cancel/crash cleanup и сохранённый indeterminate без retry подтверждены. |
-| WebSocket | Versioned pair handshake, bounded RPC/correlation/heartbeat, reconnect, CLI watch replay и controller freshness UI реализованы; 13 групп real-process session checks и UI integration проходят в Debian. Windows gate этапа 2 подготовлен, ещё не выполнен. |
+| WebSocket | Versioned pair handshake, bounded RPC/correlation/heartbeat, reconnect, CLI watch replay и controller freshness UI реализованы; 14 групп real-process session checks и UI integration проходят в Debian. Ревью и исправления этапа 2 завершены. Windows gate этапа 2 подготовлен, ещё не выполнен. |
+| Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
 | Log tail/attention | Не реализованы; следующие этапы. |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 
@@ -68,7 +69,7 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
 ## Следующий разумный объём работы
 
-Текущий рабочий этап — этап 2. Код bounded ws:// сессии, CLI submit/get/list/output/cancel/watch, reconnect/reconcile и UI controller freshness готов. 13 групп настоящих session checks, 18 Rust tests, UI integration, Windows all-targets compile и standalone Linux desktop check проходят. Native Windows gate ещё не выполнен. Адреса пары уже подтверждены; не задавать этот вопрос повторно.
+Текущий рабочий этап — этап 2. Код bounded ws:// сессии, CLI submit/get/list/output/cancel/watch, reconnect/reconcile и UI controller freshness готов. 14 групп настоящих session checks, 27 Rust tests, UI integration, Windows all-targets compile и standalone Linux desktop check проходят. [Ревью](review-stage2-2026-10-05.md) исправило cleanup прерванной сессии, отказ oversized исходящего запроса без disconnect, отражение входящего JSON в ошибке, пропущенные Welcome capabilities и общий handshake budget. Native Windows gate ещё не выполнен. Адреса пары уже подтверждены; не задавать этот вопрос повторно. IP Windows теперь не блокируется: менять локальный config для нового исходного IP не требуется.
 
 В текущей сессии listener уже запущен на выбранном IP; актуальную доступность проверить командой `controller --config .winbridge/controller-session.local.json status`. Runtime config исключён из Git.
 

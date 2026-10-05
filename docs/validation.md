@@ -64,3 +64,9 @@ Backup paths и exact restore commands: [migration recovery](context/migration-r
 - Адреса существующего VMnet8 подтверждены пользователем: Debian 192.168.44.203, Windows 192.168.44.1. Mounts, VMware, firewall, services и global settings не менялись. Этап 2 остаётся открыт до [native Windows session gate](windows-session-validation.md).
 
 - `validate-remote.py --managed-controller --allow-unix-fixture` проверен с настоящими controller/worker процессами: все шесть групп проходят, включая literal argv и restart/replay. Отчёт сохраняет platform linux; Windows результат не заявлен.
+
+## Ревью этапа 2 и журнал активности — 2026-10-05
+
+По прямому решению пользователя входящие IP не блокируются; legacy allowedWorkerAddresses игнорируется без перезаписи runtime config. Другой источник 127.0.0.2 реально принят, его адрес записан в activity.jsonl. Ротация ограничивает текущий файл и пять архивов; ошибки/пропуски видны через status.activityLog. Доказательства и пять закрытых findings описаны в [ревью](review-stage2-2026-10-05.md).
+
+27 Rust tests, 14 групп настоящих session checks, UI integration, Clippy/fmt, generated contracts/TypeScript/UI build, Windows all-targets compile и standalone Linux desktop check проходят. Новые tests проверяют abort→reconnect без retry, oversized envelope без потери session, обе стороны handshake, bounded malformed-JSON diagnostics и filesystem поведение журнала (rotation/reopen/symlink/shutdown/error/recovery/crash fragment). Native Windows gate этапа 2 ещё ожидается; этап 1 по-прежнему закрыт.

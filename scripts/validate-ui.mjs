@@ -22,7 +22,7 @@ await new Promise((resolve) => portProbe.listen(0, "127.0.0.1", resolve));
 const controllerPort = portProbe.address().port;
 await new Promise((resolve) => portProbe.close(resolve));
 await writeFile(controllerConfig, JSON.stringify({ schemaVersion: 1, instanceId: "ui-test", nodeId: "debian-ui-test", stateDirectory: join(run, "controller"),
-  controller: { listenAddress: `127.0.0.1:${controllerPort}`, allowedWorkerAddresses: ["127.0.0.1"], workerNodeId: "linux-ui-test" } }));
+  controller: { listenAddress: `127.0.0.1:${controllerPort}`, workerNodeId: "linux-ui-test" } }));
 const fixture = join(root, "target/debug/winbridge-fixture");
 const preferencesPath = join(run, "winbridge-desktop-state.local.json");
 const otherProject = join(run, "second project");

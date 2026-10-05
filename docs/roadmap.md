@@ -30,6 +30,7 @@
 Статус 2026-10-05: реализация и Debian проверки готовы; этап остаётся открытым до запуска новой сессии на настоящем Windows. Адреса VMnet8 подтверждены: VM 192.168.44.203, host 192.168.44.1. [Windows инструкция](windows-session-validation.md).
 
 - [x] Plain `ws://` listener на выбранном локальном IP Debian, Windows outbound connection; никаких TLS/certificates/relay.
+- [x] Входящие IP не блокируются; источники активности записываются в JSONL с ротацией и видимыми ошибками записи (решение 2026-10-05).
 - [x] Handshake, wire version, реализованные capabilities, instance/generation IDs, request/response correlation, bounded message sizes.
 - [x] CLI для submit/get/cancel и подписки на события через controller. Controller не выдаёт собственный статус за подтверждение исполнения worker.
 - [x] Worker сохраняет задачу перед подтверждением; reconnect восстанавливает её по прежнему ID и события по sequence.

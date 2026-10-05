@@ -36,7 +36,9 @@ pub struct ControllerConfig {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ControllerSettings {
     pub listen_address: SocketAddr,
-    pub allowed_worker_addresses: Vec<Ipv4Addr>,
+    // Preserve existing local configs, but source IP filtering is disabled.
+    #[serde(default, rename = "allowedWorkerAddresses")]
+    _legacy_allowed_worker_addresses: Option<serde::de::IgnoredAny>,
     pub worker_node_id: String,
 }
 #[derive(Clone, Debug, Deserialize)]
@@ -71,10 +73,6 @@ impl ControllerConfig {
             || self.controller.listen_address.port() == 0
         {
             return Err("controller.listenAddress requires an explicit private/loopback IPv4 address and nonzero port; 0.0.0.0 is not allowed".into());
-        }
-        let peers = &self.controller.allowed_worker_addresses;
-        if peers.is_empty() || peers.len() > 8 || peers.iter().any(|ip| !local_ip(*ip)) {
-            return Err("controller.allowedWorkerAddresses must contain 1–8 literal private/loopback IPv4 addresses".into());
         }
         let mut ids = HashSet::new();
         for project in &self.projects {
@@ -112,15 +110,21 @@ mod tests {
     fn controller_requires_explicit_pair_and_schema() {
         let mut config: ControllerConfig = serde_json::from_value(serde_json::json!({
             "schemaVersion":1,"instanceId":"pair","nodeId":"debian","stateDirectory":std::env::temp_dir().join("private-controller"),
-            "controller":{"listenAddress":"127.0.0.1:1143","allowedWorkerAddresses":["127.0.0.1"],"workerNodeId":"windows"}
+            "controller":{"listenAddress":"127.0.0.1:1143","workerNodeId":"windows"}
         })).unwrap();
         config.validate().unwrap();
         config.controller.listen_address = "0.0.0.0:1143".parse().unwrap();
         assert!(config.validate().unwrap_err().contains("0.0.0.0"));
         config.controller.listen_address = "127.0.0.1:1143".parse().unwrap();
-        config.controller.allowed_worker_addresses.clear();
-        assert!(config.validate().is_err());
         config.schema_version = 99;
         assert!(config.validate().unwrap_err().contains("schemaVersion"));
+    }
+    #[test]
+    fn legacy_ip_filter_is_ignored_without_rewriting_local_config() {
+        let config: ControllerConfig = serde_json::from_value(serde_json::json!({
+            "schemaVersion":1,"instanceId":"pair","nodeId":"debian","stateDirectory":std::env::temp_dir().join("private-controller"),
+            "controller":{"listenAddress":"127.0.0.1:1143","allowedWorkerAddresses":[],"workerNodeId":"windows"}
+        })).unwrap();
+        config.validate().unwrap();
     }
 }

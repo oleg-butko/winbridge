@@ -79,4 +79,17 @@ pub struct ControllerStatus {
     pub worker_generation: Option<String>,
     pub worker_address: Option<String>,
     pub last_error: Option<String>,
+    #[serde(default)]
+    pub activity_log: Option<ActivityLogStatus>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActivityLogStatus {
+    pub path: String,
+    pub max_file_bytes: u64,
+    pub retained_archives: u32,
+    pub dropped_records: u64,
+    pub last_error: Option<String>,
 }

@@ -41,7 +41,11 @@ pub async fn connect(worker: Arc<Worker>) {
                         && peer.instance_id == worker.config.instance_id
                         && winbridge_core::config::valid_id(&peer.node_id)
                         && winbridge_core::config::valid_id(&peer.generation)
-                        && winbridge_core::config::valid_id(&session_id) => {
+                        && winbridge_core::config::valid_id(&session_id)
+                        && !peer.application_version.is_empty() && peer.application_version.len() <= 80
+                        && peer.capabilities.len() <= 16
+                        && peer.capabilities.contains(&Capability::TaskSubmit)
+                        && peer.capabilities.contains(&Capability::TaskCancel) => {
                     update(&worker, |s| {
                         s.state = ConnectionState::Connected; s.error = None;
                         s.session_id = Some(session_id); s.controller_node_id = Some(peer.node_id);
@@ -50,7 +54,7 @@ pub async fn connect(worker: Arc<Worker>) {
                     Ok(socket)
                 }
                 SessionMessage::Rejected { message } => Err(format!("Controller rejected handshake: {message}")),
-                _ => Err("Controller handshake mismatch: protocolVersion/component/instanceId/generation; check both builds and pair configuration".into()),
+                _ => Err("Controller handshake mismatch: protocolVersion/component/instanceId/nodeId/generation/appVersion/capabilities; check both builds and pair configuration".into()),
             }
         }).await;
         let result = match handshake {
@@ -126,5 +130,49 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                 _ => return Err("Unexpected message in worker session".into()),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use winbridge_protocol::LocalRequest;
+
+    #[tokio::test]
+    async fn invalid_welcome_does_not_publish_connected_state_or_break_local_handler() {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            for missing_capability in [true, false] {
+                let root = tempfile::tempdir().unwrap();
+                let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+                let config = serde_json::from_value(serde_json::json!({
+                    "schemaVersion":1,"instanceId":"review","nodeId":"worker",
+                    "stateDirectory":root.path().join("state"),
+                    "worker":{"controllerUrl":format!("ws://{}", listener.local_addr().unwrap()),"keepRunningOnUiExit":true},
+                    "projects":[{"id":"fixture","workspaceRoot":root.path(),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]
+                })).unwrap();
+                let worker = Worker::open(config).unwrap();
+                let connector = tokio::spawn(connect(Arc::clone(&worker)));
+                let (stream, _) = listener.accept().await.unwrap();
+                let mut socket = ws::accept_async_with_config(stream, Some(ws::config())).await.unwrap();
+                assert!(matches!(ws::first(&mut socket).await.unwrap(), SessionMessage::Hello { .. }));
+                ws::send(&mut socket, &SessionMessage::Welcome {
+                    session_id:"session".into(), peer:PeerIdentity {
+                        protocol_version:PROTOCOL_VERSION, component:Component::Controller,
+                        instance_id:"review".into(), node_id:"controller".into(), generation:"generation".into(),
+                        application_version:if missing_capability { "test".into() } else { String::new() },
+                        capabilities:if missing_capability { vec![Capability::TaskSubmit] } else { vec![Capability::TaskSubmit,Capability::TaskCancel] },
+                    },
+                }).await.unwrap();
+                assert!(ws::first(&mut socket).await.is_err(), "Worker must close an incompatible session");
+                let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else { panic!("Local handler must remain available") };
+                let connection = info.controller_connection.unwrap();
+                assert!(matches!(connection.state, ConnectionState::Disconnected));
+                assert!(connection.session_id.is_none());
+                assert!(connection.error.unwrap().contains("capabilities"));
+                assert!(matches!(worker.handle(LocalRequest::ListTasks), LocalResponse::Tasks { tasks } if tasks.is_empty()));
+                connector.abort();
+                let _ = connector.await;
+            }
+        }).await.unwrap();
     }
 }

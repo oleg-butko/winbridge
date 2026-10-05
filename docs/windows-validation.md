@@ -126,3 +126,5 @@ Browser `npm run dev:ui` умеет открыть один `*.task-report.json`
 Для принятого прогона `20261005-161827-c8deef84` все проверки уже подтверждены; worker объявляет `task_submit`/`task_cancel`. Управление из Debian по `ws://`, HGFS import и tray/attention относятся к следующим этапам. Сохранение формы и dev:ui также подтверждены пользователем на Windows; Rust/UI integration проверки выполнены в Debian.
 
 Следующий gate: [управление из Debian через локальный ws://](windows-session-validation.md). Первый этап повторять не требуется.
+
+В текущей локальной разработке controller не блокирует IP источника. Адреса активности записываются в Debian `stateDirectory/activity.jsonl` с ротацией (1 MiB и пять архивов); старое поле allowedWorkerAddresses игнорируется. Подробности и результаты [ревью этапа 2](review-stage2-2026-10-05.md).

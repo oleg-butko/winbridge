@@ -10,6 +10,7 @@ use winbridge_protocol::{
     SessionMessage, PROTOCOL_VERSION,
 };
 use winbridge_transport::websocket::{self as ws, Result, RpcSender};
+mod activity;
 
 struct Session {
     sender: RpcSender,
@@ -26,14 +27,17 @@ pub struct Controller {
     pub config: ControllerConfig,
     pub generation: String,
     state: Mutex<State>,
+    activity: activity::ActivityLog,
 }
 impl Controller {
     pub fn new(config: ControllerConfig) -> Result<Arc<Self>> {
         config.validate()?;
+        let activity = activity::ActivityLog::open(&config.state_directory)?;
         Ok(Arc::new(Self {
             config,
             generation: uuid::Uuid::new_v4().to_string(),
             state: Mutex::new(State::default()),
+            activity,
         }))
     }
     pub fn status(&self) -> Result<ControllerStatus> {
@@ -52,6 +56,7 @@ impl Controller {
             worker_generation: state.last_peer.as_ref().map(|(p, _)| p.generation.clone()),
             worker_address: state.last_peer.as_ref().map(|(_, a)| a.to_string()),
             last_error: state.last_error.clone(),
+            activity_log: Some(self.activity.status()),
         })
     }
     pub async fn call(&self, request: LocalRequest) -> LocalResponse {
@@ -59,27 +64,51 @@ impl Controller {
             if matches!(request, LocalRequest::ControllerStatus) {
                 return Ok(LocalResponse::ControllerStatus { status: self.status()? });
             }
-            let sender = self.state.lock().map_err(|_| "controller session state poisoned")?
-                .active.as_ref().filter(|s| s.ready).map(|s| s.sender.clone())
-                .ok_or("Windows worker is offline; last task state is retained. No command was automatically retried")?;
-            sender.call(request).await
+            let (sender, session_id, worker_address) = {
+                let state = self.state.lock().map_err(|_| "controller session state poisoned")?;
+                let session = state.active.as_ref().filter(|s| s.ready)
+                    .ok_or("Windows worker is offline; last task state is retained. No command was automatically retried")?;
+                (session.sender.clone(), session.id.clone(), state.last_peer.as_ref().map(|(_, address)| address.to_string()))
+            };
+            let method = request_method(&request);
+            self.activity.record(serde_json::json!({"event":"rpc_requested","origin":"local_ipc","workerAddress":worker_address,"sessionId":session_id,"method":method}));
+            let result = sender.call(request).await;
+            let outcome = match &result {
+                Ok(LocalResponse::Error { .. }) => "rejected",
+                Ok(_) => "responded",
+                Err(error) if error.ends_with("request rejected before transmission") => "rejected_before_transmission",
+                Err(_) => "unconfirmed",
+            };
+            self.activity.record(serde_json::json!({"event":"rpc_completed","origin":"local_ipc","workerAddress":worker_address,"sessionId":session_id,"method":method,"outcome":outcome}));
+            result
         }.await;
         result.unwrap_or_else(|message| LocalResponse::Error { message })
     }
     pub async fn accept(self: Arc<Self>, stream: TcpStream, address: SocketAddr) -> Result<()> {
-        if !self
-            .config
-            .controller
-            .allowed_worker_addresses
-            .iter()
-            .any(|ip| std::net::IpAddr::V4(*ip) == address.ip())
-        {
-            return Err(format!(
-                "Worker address {} is not in controller.allowedWorkerAddresses",
-                address.ip()
-            ));
-        }
-        let handshake = tokio::time::timeout(ws::HANDSHAKE_TIMEOUT, async {
+        self.network_activity("tcp_accepted", address);
+        let mut guard = ConnectionGuard {
+            controller: Arc::clone(&self),
+            address,
+            session_id: None,
+            outcome: "interrupted",
+            error: None,
+        };
+        let result = self.accept_inner(stream, address, &mut guard).await;
+        guard.outcome = if result.is_ok() { "ended" } else { "failed" };
+        guard.error = result.as_ref().err().cloned();
+        result
+    }
+    pub(crate) fn network_activity(&self, event: &str, address: SocketAddr) {
+        self.activity.record(serde_json::json!({"event":event,"sourceIp":address.ip().to_string(),"sourceAddress":address.to_string()}));
+    }
+    async fn accept_inner(
+        &self,
+        stream: TcpStream,
+        address: SocketAddr,
+        guard: &mut ConnectionGuard,
+    ) -> Result<()> {
+        let deadline = tokio::time::Instant::now() + ws::HANDSHAKE_TIMEOUT;
+        let handshake = tokio::time::timeout_at(deadline, async {
             let mut socket = ws::accept_async_with_config(stream, Some(ws::config()))
                 .await
                 .map_err(|e| e.to_string())?;
@@ -127,10 +156,13 @@ impl Controller {
             }
         };
         if !reserved {
-            ws::send(&mut socket, &SessionMessage::Rejected { message: "This pair already has an active worker session; stop the other worker or wait for heartbeat expiry".into() }).await?;
+            tokio::time::timeout_at(deadline, ws::send(&mut socket, &SessionMessage::Rejected { message: "This pair already has an active worker session; stop the other worker or wait for heartbeat expiry".into() }))
+                .await.map_err(|_| "Worker handshake timeout after 5 seconds".to_string())??;
             return Err("Duplicate worker session rejected".into());
         }
-        let result = async {
+        guard.session_id = Some(id.clone());
+        tokio::time::timeout_at(
+            deadline,
             ws::send(
                 &mut socket,
                 &SessionMessage::Welcome {
@@ -145,36 +177,22 @@ impl Controller {
                         capabilities: vec![Capability::TaskSubmit, Capability::TaskCancel],
                     },
                 },
-            )
-            .await?;
-            if let Some(session) = self
-                .state
-                .lock()
-                .map_err(|_| "controller session state poisoned")?
-                .active
-                .as_mut()
-            {
-                session.ready = true;
-            }
-            eprintln!("WinBridge worker connected: {address}; session {id}");
-            ws::controller_session(socket, calls, &id).await
-        }
-        .await;
+            ),
+        )
+        .await
+        .map_err(|_| "Worker handshake timeout after 5 seconds".to_string())??;
+        if let Some(session) = self
+            .state
+            .lock()
+            .map_err(|_| "controller session state poisoned")?
+            .active
+            .as_mut()
         {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| "controller session state poisoned")?;
-            if state.active.as_ref().is_some_and(|s| s.id == id) {
-                state.active = None;
-                state.last_error = result
-                    .as_ref()
-                    .err()
-                    .cloned()
-                    .or(Some("Worker session ended".into()));
-            }
+            session.ready = true;
         }
-        result
+        self.activity.record(serde_json::json!({"event":"worker_connected","sourceIp":address.ip().to_string(),"sourceAddress":address.to_string(),"sessionId":id,"nodeId":peer.node_id,"generation":peer.generation}));
+        eprintln!("WinBridge worker connected: {address}; session {id}");
+        ws::controller_session(socket, calls, &id).await
     }
     fn validate_peer(&self, peer: &PeerIdentity) -> Result<()> {
         if peer.protocol_version != PROTOCOL_VERSION {
@@ -198,6 +216,46 @@ impl Controller {
             return Err("Worker handshake needs a valid generation/appVersion and task_submit/task_cancel capabilities".into());
         }
         Ok(())
+    }
+}
+
+// Runs on return, cancellation and panic; never leaves a reserved session behind.
+struct ConnectionGuard {
+    controller: Arc<Controller>,
+    address: SocketAddr,
+    session_id: Option<String>,
+    outcome: &'static str,
+    error: Option<String>,
+}
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        if let Some(id) = &self.session_id {
+            let mut state = self
+                .controller
+                .state
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if state.active.as_ref().is_some_and(|s| &s.id == id) {
+                state.active = None;
+                state.last_error = Some(
+                    self.error
+                        .clone()
+                        .unwrap_or_else(|| format!("Worker session {}", self.outcome)),
+                );
+            }
+        }
+        self.controller.activity.record(serde_json::json!({"event":"connection_closed","sourceIp":self.address.ip().to_string(),"sourceAddress":self.address.to_string(),"sessionId":self.session_id,"outcome":self.outcome}));
+    }
+}
+fn request_method(request: &LocalRequest) -> &'static str {
+    match request {
+        LocalRequest::Info => "info",
+        LocalRequest::ControllerStatus => "controller_status",
+        LocalRequest::Submit { .. } => "submit",
+        LocalRequest::ListTasks => "list_tasks",
+        LocalRequest::GetTask { .. } => "get_task",
+        LocalRequest::ReadOutput { .. } => "read_output",
+        LocalRequest::Cancel { .. } => "cancel",
     }
 }
 

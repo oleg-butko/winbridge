@@ -5,7 +5,6 @@
   "stateDirectory": "/home/user1/winbridge/.winbridge/controller",
   "controller": {
     "listenAddress": "192.168.44.203:1143",
-    "allowedWorkerAddresses": ["192.168.44.1"],
     "workerNodeId": "windows-host"
   },
   "delivery": {

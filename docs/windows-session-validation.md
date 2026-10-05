@@ -6,10 +6,10 @@
 
 - Debian VM: `192.168.44.203:1143`, существующий VMnet8.
 - Windows host: `192.168.44.1`, адрес подтверждён пользователем.
-- Worker сам подключается к `ws://192.168.44.203:1143`. Controller принимает только `192.168.44.1`, node `windows-host`, instance `local-development`.
+- Worker сам подключается к `ws://192.168.44.203:1143`. Controller не фильтрует источник по IP; handshake требует node `windows-host`, instance `local-development` и совместимый протокол/capabilities.
 - Данные fixture, SQLite и exe — на локальном Windows диске; отчёты — `K:\VMs\shared\WinBridge\session-validation`.
 
-Настройки VMware, mount, firewall и services менять не требуется. Если адреса изменятся, обновить локальные configs обеих сторон; handshake/version/timeout ошибки показываются в desktop.
+Настройки VMware, mount, firewall и services менять не требуется. Если изменится адрес Debian, обновить listenAddress/controllerUrl; смена IP Windows не требует правки allowlist. Handshake/version/timeout ошибки показываются в desktop.
 
 ## Один запуск в Windows
 
@@ -41,6 +41,14 @@ Set-Location 'K:\_proj-26\winbridge\session-src-20261005\winbridge'
 ```
 
 Для вручную созданного config использовать [пример](../examples/controller.config.json), свои stateDirectory и адреса. stateDirectory — private directory 0700, local socket — 0600. Открытие UI и закрытие CLI не управляют lifetime принятой задачи.
+
+IP-блокировки отключены, включая поле allowedWorkerAddresses в прежних локальных configs. Источники TCP активности, подключения/отказы/разрывы и методы RPC записываются в `stateDirectory/activity.jsonl`. Ротация: текущий файл до 1 MiB плюс пять архивов `activity.jsonl.1`–`.5` (0600, `.1` — самый свежий). Команды/аргументы/output в диагностический журнал не попадают. `status.activityLog` показывает путь, лимиты, droppedRecords и lastError; stderr сообщает об отказе записи. Например, в текущей VM:
+
+```bash
+tail -n 30 .winbridge/controller-session/activity.jsonl
+```
+
+Неверная версия/пара по-прежнему отклоняется; запись содержит реальный исходный IP и port. Список разрешённых IP в конфигурации сейчас не действует и может быть добавлен отдельным расширением.
 
 Проверить подключение и реальные проекты:
 

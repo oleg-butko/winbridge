@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ProjectInfo::decl(&config),
         ConnectionState::decl(&config),
         ControllerConnection::decl(&config),
+        ActivityLogStatus::decl(&config),
         ControllerStatus::decl(&config),
         WorkerInfo::decl(&config),
         LocalRequest::decl(&config),

@@ -9,7 +9,9 @@ use tokio::{
 use tokio_tungstenite::tungstenite::{protocol::WebSocketConfig, Message};
 use winbridge_protocol::{LocalRequest, LocalResponse, SessionMessage};
 
-pub use tokio_tungstenite::{accept_async_with_config, connect_async_with_config, WebSocketStream};
+pub use tokio_tungstenite::{
+    accept_async_with_config, connect_async_with_config, MaybeTlsStream, WebSocketStream,
+};
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 pub const RPC_TIMEOUT: Duration = Duration::from_secs(8);
 pub const WRITE_TIMEOUT: Duration = Duration::from_secs(2);
@@ -31,10 +33,19 @@ pub async fn send<S: AsyncRead + AsyncWrite + Unpin>(
     socket: &mut WebSocketStream<S>,
     message: &SessionMessage,
 ) -> Result<()> {
+    send_encoded(socket, encode(message)?).await
+}
+fn encode(message: &SessionMessage) -> Result<String> {
     let bytes = serde_json::to_string(message).map_err(|e| e.to_string())?;
     if bytes.len() > crate::MAX_FRAME_BYTES {
         return Err("WebSocket message exceeds 1 MiB".into());
     }
+    Ok(bytes)
+}
+async fn send_encoded<S: AsyncRead + AsyncWrite + Unpin>(
+    socket: &mut WebSocketStream<S>,
+    bytes: String,
+) -> Result<()> {
     tokio::time::timeout(WRITE_TIMEOUT, socket.send(Message::Text(bytes.into())))
         .await
         .map_err(|_| "WebSocket write timeout".to_string())?
@@ -47,7 +58,15 @@ pub async fn receive<S: AsyncRead + AsyncWrite + Unpin>(
     match socket.next().await {
         Some(Ok(Message::Text(text))) => serde_json::from_str(&text)
             .map(Some)
-            .map_err(|e| format!("Invalid WebSocket JSON: {e}")),
+            // Serde error text may echo an entire unknown field or enum value.
+            .map_err(|e| {
+                format!(
+                    "Invalid WebSocket JSON ({:?}) at line {}, column {}",
+                    e.classify(),
+                    e.line(),
+                    e.column()
+                )
+            }),
         Some(Ok(Message::Ping(_) | Message::Pong(_))) => {
             // Tungstenite queues the control pong. Bound its flush too.
             tokio::time::timeout(WRITE_TIMEOUT, socket.flush())
@@ -131,9 +150,17 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                 }
                 counter += 1;
                 let id = format!("{generation}-{counter}");
+                let message = SessionMessage::Request { id: id.clone(), request: call.request };
+                let bytes = match encode(&message) {
+                    Ok(bytes) => bytes,
+                    Err(error) => {
+                        let _ = call.reply.send(Err(format!("{error}; request rejected before transmission")));
+                        continue;
+                    }
+                };
                 // Insert before writing: losing this write/ACK leaves acceptance unknown.
                 pending.insert(id.clone(), (Instant::now(), call.reply));
-                send(&mut socket, &SessionMessage::Request { id, request: call.request }).await?;
+                send_encoded(&mut socket, bytes).await?;
             }
             message = receive(&mut socket) => {
                 match message? {

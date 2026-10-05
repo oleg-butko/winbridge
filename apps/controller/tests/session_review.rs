@@ -1,0 +1,129 @@
+use std::sync::Arc;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    task::JoinHandle,
+};
+use winbridge_controller::Controller;
+use winbridge_core::controller_config::ControllerConfig;
+use winbridge_protocol::{
+    Capability, Component, LocalRequest, LocalResponse, PeerIdentity, SessionMessage,
+    PROTOCOL_VERSION,
+};
+use winbridge_transport::websocket as ws;
+
+type Client = ws::WebSocketStream<ws::MaybeTlsStream<TcpStream>>;
+
+async fn pair() -> (tempfile::TempDir, Arc<Controller>, Arc<TcpListener>) {
+    let root = tempfile::tempdir().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config: ControllerConfig = serde_json::from_value(serde_json::json!({
+        "schemaVersion":1,"instanceId":"review","nodeId":"debian",
+        "stateDirectory":root.path().join("state"),
+        "controller":{"listenAddress":listener.local_addr().unwrap(),"workerNodeId":"windows"}
+    }))
+    .unwrap();
+    (root, Controller::new(config).unwrap(), Arc::new(listener))
+}
+async fn connect(
+    controller: &Arc<Controller>,
+    listener: &Arc<TcpListener>,
+) -> (JoinHandle<ws::Result<()>>, Client) {
+    let url = format!("ws://{}", listener.local_addr().unwrap());
+    let server = Arc::clone(listener);
+    let controller = Arc::clone(controller);
+    let actor = tokio::spawn(async move {
+        let (stream, address) = server.accept().await.unwrap();
+        controller.accept(stream, address).await
+    });
+    let (mut client, _) = ws::connect_async_with_config(&url, Some(ws::config()), true)
+        .await
+        .unwrap();
+    ws::send(
+        &mut client,
+        &SessionMessage::Hello {
+            peer: PeerIdentity {
+                protocol_version: PROTOCOL_VERSION,
+                application_version: "review".into(),
+                component: Component::Worker,
+                instance_id: "review".into(),
+                node_id: "windows".into(),
+                generation: "worker-generation".into(),
+                capabilities: vec![Capability::TaskSubmit, Capability::TaskCancel],
+            },
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        ws::first(&mut client).await.unwrap(),
+        SessionMessage::Welcome { .. }
+    ));
+    (actor, client)
+}
+async fn next_request(client: &mut Client) -> SessionMessage {
+    loop {
+        match ws::first(client).await.unwrap() {
+            SessionMessage::Ping { nonce } => ws::send(client, &SessionMessage::Pong { nonce })
+                .await
+                .unwrap(),
+            message => return message,
+        }
+    }
+}
+
+#[tokio::test]
+async fn cancelled_actor_clears_session_and_allows_reconnect_without_retry() {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let (_root, controller, listener) = pair().await;
+        let (actor, mut client) = connect(&controller, &listener).await;
+        assert!(controller.status().unwrap().connected);
+        let caller = Arc::clone(&controller);
+        let pending = tokio::spawn(async move { caller.call(LocalRequest::Info).await });
+        assert!(matches!(
+            next_request(&mut client).await,
+            SessionMessage::Request { .. }
+        ));
+        actor.abort();
+        assert!(actor.await.unwrap_err().is_cancelled());
+        assert!(!controller.status().unwrap().connected);
+        assert!(controller
+            .status()
+            .unwrap()
+            .last_error
+            .unwrap()
+            .contains("interrupted"));
+        let LocalResponse::Error { message } = pending.await.unwrap() else {
+            panic!("Expected unknown outcome")
+        };
+        assert!(message.contains("unknown"));
+        let (second, _client) = connect(&controller, &listener).await;
+        assert!(controller.status().unwrap().connected);
+        second.abort();
+        let _ = second.await;
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn oversized_outbound_request_is_not_sent_and_does_not_disconnect_peer() {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let (_root, controller, listener) = pair().await;
+        let (actor, mut client) = connect(&controller, &listener).await;
+        let LocalResponse::Error { message } = controller.call(LocalRequest::GetTask {
+            task_id: "x".repeat(winbridge_transport::MAX_FRAME_BYTES),
+        }).await else { panic!("Expected preflight rejection") };
+        assert!(message.contains("rejected before transmission"));
+        assert!(controller.status().unwrap().connected);
+        let caller = Arc::clone(&controller);
+        let pending = tokio::spawn(async move { caller.call(LocalRequest::Info).await });
+        let SessionMessage::Request { id, request: LocalRequest::Info } = next_request(&mut client).await else {
+            panic!("Only the subsequent Info request should reach the peer")
+        };
+        ws::send(&mut client, &SessionMessage::Response { id, response: LocalResponse::Error { message: "fixture response".into() }}).await.unwrap();
+        assert!(matches!(pending.await.unwrap(), LocalResponse::Error { message } if message == "fixture response"));
+        assert!(controller.status().unwrap().connected);
+        actor.abort();
+        let _ = actor.await;
+    }).await.unwrap();
+}

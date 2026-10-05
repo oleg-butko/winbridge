@@ -1,33 +1,11 @@
 use super::*;
 use std::{
     fs,
-    os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, PermissionsExt},
+    os::unix::fs::{FileTypeExt, PermissionsExt},
     path::Path,
 };
 
 pub async fn serve(controller: Arc<Controller>) -> Result<()> {
-    let root = &controller.config.state_directory;
-    if !root.exists() {
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(root)
-            .map_err(|e| format!("controller stateDirectory: {e}"))?;
-    }
-    let metadata = fs::symlink_metadata(root).map_err(|e| e.to_string())?;
-    unsafe extern "C" {
-        fn getuid() -> u32;
-    }
-    if metadata.file_type().is_symlink()
-        || !metadata.is_dir()
-        || metadata.uid() != unsafe { getuid() }
-        || metadata.permissions().mode() & 0o077 != 0
-    {
-        return Err(
-            "controller stateDirectory must be a real private directory owned by this user (0700)"
-                .into(),
-        );
-    }
     let listener = tokio::net::TcpListener::bind(controller.config.controller.listen_address)
         .await
         .map_err(|e| format!("controller listenAddress: {e}"))?;
@@ -48,6 +26,11 @@ pub async fn serve(controller: Arc<Controller>) -> Result<()> {
     let ipc = tokio::net::UnixListener::bind(&address).map_err(|e| e.to_string())?;
     fs::set_permissions(&address, fs::Permissions::from_mode(0o600)).map_err(|e| e.to_string())?;
     eprintln!("WinBridge controller ready: ws://{}; local IPC {address}; expected worker {} / instance {}", listener.local_addr().map_err(|e| e.to_string())?, controller.config.controller.worker_node_id, controller.config.instance_id);
+    eprintln!(
+        "Source IP filtering disabled; activity log: {}",
+        controller.activity.status().path
+    );
+    controller.activity.record(serde_json::json!({"event":"controller_started","listenAddress":controller.config.controller.listen_address.to_string(),"generation":controller.generation}));
     let network_limit = Arc::new(tokio::sync::Semaphore::new(4));
     let ipc_limit = Arc::new(tokio::sync::Semaphore::new(32));
     let mut connections = tokio::task::JoinSet::new();
@@ -61,7 +44,10 @@ pub async fn serve(controller: Arc<Controller>) -> Result<()> {
             }
             result = listener.accept() => {
                 let (stream, peer) = result.map_err(|e| e.to_string())?;
-                let Ok(permit) = Arc::clone(&network_limit).try_acquire_owned() else { continue; };
+                let Ok(permit) = Arc::clone(&network_limit).try_acquire_owned() else {
+                    controller.network_activity("connection_limit_rejected", peer);
+                    continue;
+                };
                 let controller = Arc::clone(&controller);
                 connections.spawn(async move {
                     let _permit = permit;
@@ -96,6 +82,9 @@ pub async fn serve(controller: Arc<Controller>) -> Result<()> {
     }
     connections.abort_all();
     while connections.join_next().await.is_some() {}
+    controller.activity.record(
+        serde_json::json!({"event":"controller_stopped","generation":controller.generation}),
+    );
     fs::remove_file(Path::new(&address)).map_err(|e| e.to_string())?;
     Ok(())
 }
