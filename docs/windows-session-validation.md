@@ -1,6 +1,6 @@
 # Проверка локальной сессии Debian ↔ Windows — этап 2
 
-Этап 1 закрыт и закоммичен как `9ae8153`. Код этапа 2 и реальные Debian проверки готовы; native Windows gate этой новой сессии ещё не выполнен. Первый gate повторять не требуется.
+Этап 1 закрыт и закоммичен как `9ae8153`. Автоматический Windows runtime gate этапа 2 [пройден 2026-10-05](windows-session-gate-2026-10-05.md); подключение в UI подтверждено, три новых ручных UI наблюдения ещё ожидаются. Ниже сохранена инструкция для повторной проверки. Первый gate повторять не требуется.
 
 ## Выбранная пара
 
@@ -68,10 +68,12 @@ tail -n 30 .winbridge/controller-session/activity.jsonl
 Автоматический gate выполняет агент из Debian:
 
 ```bash
-python3 scripts/validate-remote.py --config .winbridge/controller-session.local.json --managed-controller
+python3 scripts/validate-remote.py --config .winbridge/controller-session.local.json --managed-controller --reconnect-pause-seconds 15
 ```
 
 Перед `--managed-controller` остановить ранее запущенный listener: harness сам создаёт controller subprocess, перезапускает и завершает только его. После проверки снова запустить controller командой выше, чтобы UI оставался подключённым. Режим без этого флага использует текущий listener и проверяет команды, но оставляет `reconnectVerified: false`. Скрипт требует platform windows и отдельный fixture registry; `--allow-unix-fixture` предназначен только для development проверки и сохраняет фактическую platform linux.
+
+`--reconnect-pause-seconds` задаёт 2–60 секунд offline (по умолчанию 2); 15 секунд позволяют увидеть новую свежесть связи в desktop. Harness печатает Task ID/PID до отключения и сохраняет обе generation/session и PID в итоговом report. Он не управляет Windows worker или чужими controller processes.
 
 Отчёты и TaskReport сохраняются локально в `.winbridge/remote-validation/TIMESTAMP-ID`; при настоящем Windows worker копии публикуются в `shared/WinBridge/session-validation/debian-TIMESTAMP-ID`. Summary отдельно указывает platform, passed и reconnectVerified; ручное UI подтверждение фиксируется в документах.
 

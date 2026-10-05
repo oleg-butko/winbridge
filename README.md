@@ -16,7 +16,7 @@
 - Connected UI: форма команды, recent tasks, timeline, output/exit code, cancel и независимая свежесть соединения. Browser: явно помеченная демонстрация и просмотр сохранённого отчёта worker.
 - Архитектура, поэтапный roadmap, UX требования, ADR, примеры конфигурации и инструкции следующему агенту.
 
-**Этап 1 завершён 2026-10-05:** получен Windows отчёт со всеми десятью успешными runtime checks, пользователь подтвердил пять native UI шагов. [Доказательства gate](docs/windows-gate-2026-10-05.md). Worker объявляет `task_submit` и `task_cancel`; controller реализует локальную сессию, Windows gate этапа 2 ещё ожидается. Desktop сохраняет поля команды в локальном JSON рядом с exe, отдельно для worker/project/root. WebSocket/controller и отдельная свежесть связи реализованы и проверены настоящими Linux процессами; native Windows проверка этапа 2 подготовлена. Доставка snapshot, log tail и attention — следующие этапы. Browser сам команды не выполняет.
+**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); подключение native UI подтверждено, три новых UI наблюдения пока ожидаются. Desktop сохраняет форму рядом с exe. Доставка snapshot, log tail и attention — следующие этапы. Browser сам команды не выполняет.
 
 ## Принятые решения
 

@@ -15,8 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--config', type=Path, required=True)
 parser.add_argument('--managed-controller', action='store_true', help='Start/stop only a controller subprocess owned by this run to check reconnect')
+parser.add_argument('--reconnect-pause-seconds', type=int, default=2, help='Keep the owned controller offline for 2-60 seconds so native UI freshness can be observed')
 parser.add_argument('--allow-unix-fixture', action='store_true', help='Development check only; never record it as Windows validation')
 args = parser.parse_args()
+if not 2 <= args.reconnect_pause_seconds <= 60:
+    parser.error('--reconnect-pause-seconds must be between 2 and 60')
 config_path = args.config.resolve()
 config = json.loads(config_path.read_text())
 CONTROLLER = ROOT / 'target/debug/winbridge-controller'
@@ -57,7 +60,11 @@ def start_controller():
     log = open(LOCAL / ('controller-' + uuid.uuid4().hex[:6] + '.log'), 'wb')
     process = subprocess.Popen([str(CONTROLLER), '--config', str(config_path), 'serve'], stdout=log, stderr=log)
     log.close()
-    until(lambda: process.poll() is None and b'WinBridge controller ready:' in Path(log.name).read_bytes() and cli('status'), 'Owned controller did not start; stop the previous listener first')
+    try:
+        until(lambda: process.poll() is None and b'WinBridge controller ready:' in Path(log.name).read_bytes() and cli('status'), 'Owned controller did not start; stop the previous listener first')
+    except Exception:
+        stop(process)
+        raise
     return process
 
 
@@ -182,16 +189,17 @@ try:
     checks.append('remote-timeout-and-managed-tree-cancel')
 
     if args.managed_controller:
-        long = submit(request('long', 60000))
+        long = submit(request('long', max(60000, (args.reconnect_pause_seconds + 35) * 1000)))
         pid = until(lambda: get(long['taskId'])['processId'], 'Long fixture did not start')
         previous = cli('status')['status']
+        print(f"Reconnect check: Task ID {long['taskId']}, Windows PID {pid}; controller will be offline for {args.reconnect_pause_seconds}s", flush=True)
         watch_log = open(LOCAL / 'watch.jsonl', 'wb')
         watch = subprocess.Popen([str(CONTROLLER), '--config', str(config_path), 'watch', long['taskId']], stdout=watch_log, stderr=watch_log)
         watch_log.close()
         until(lambda: (LOCAL / 'watch.jsonl').stat().st_size, 'Watch did not receive journal events')
         stop(controller)
         controller = None
-        time.sleep(2)
+        time.sleep(args.reconnect_pause_seconds)
         controller = start_controller()
         until(lambda: cli('status')['status']['connected'], 'Worker did not reconnect')
         current = cli('status')['status']
@@ -200,6 +208,11 @@ try:
         assert current['generation'] != previous['generation'] and current['sessionId'] != previous['sessionId']
         assert current['workerGeneration'] == previous['workerGeneration']
         assert task['taskId'] == long['taskId']
+        report['reconnect'] = {'taskId': task['taskId'], 'processIdBefore': pid, 'processIdAfter': task['processId'],
+                               'workerGenerationBefore': previous['workerGeneration'], 'workerGenerationAfter': current['workerGeneration'],
+                               'controllerGenerationBefore': previous['generation'], 'controllerGenerationAfter': current['generation'],
+                               'sessionIdBefore': previous['sessionId'], 'sessionIdAfter': current['sessionId'],
+                               'offlineSeconds': args.reconnect_pause_seconds}
         cli('cancel', task['taskId'])
         save_task(finish(task['taskId'], 'cancelled'), 'reconnect')
         watch.wait(15)

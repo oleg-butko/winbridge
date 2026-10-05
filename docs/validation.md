@@ -80,3 +80,9 @@ Backup paths и exact restore commands: [migration recovery](context/migration-r
 - 29 Rust tests проходят: две новые проверки настоящего TCP различают connection refused, задержку HTTP upgrade и задержку Welcome после Hello. Local handler остаётся доступным; общий connection deadline сохраняется. 14 session groups и UI integration вновь проходят с новым worker; reconnect сохраняет task ID без повторного запуска. TypeScript/UI build, contracts, Clippy/fmt, Windows all-targets compile и standalone Linux desktop check проходят.
 
 Инструкции: [Windows session](windows-session-validation.md) и [Windows validation](windows-validation.md). Изменений firewall/VMware/services агент не выполнял. Native Windows gate этапа 2 остаётся открыт.
+
+## Windows runtime gate этапа 2 — 2026-10-05
+
+Пользователь передал setup run `20261005-235244-97785d52` и подтвердил native UI connected с session `42cdb08d-41bb-40c7-a34a-99b2bd3a871b`. Затем `validate-remote.py --managed-controller --reconnect-pause-seconds 15` реально выполнил шесть групп на platform windows, passed/reconnectVerified true. Проверены success/lost ACK/dedup, буквальные Windows argv/Unicode, failure/recipe, timeout/cancel дерева и сохранение PID `17620`/Task ID при restart controller. Watch дочитал output без повторов. Семь TaskReport проверены по sequences/offsets/byte counts.
+
+Shared evidence: `session-validation/debian-20261005-170829-53b92c6d`; подробности и checksum — [Windows session gate](windows-session-gate-2026-10-05.md). Автоматический report и подготовка пользователя не редактировались. Постоянный controller снова запущен, Windows worker подключён. Native UI подтверждение трёх новых наблюдений пока ожидается; этап 2 ещё не записан как завершённый. Harness теперь сохраняет сравниваемые session/generation/PID и убирает только собственный subprocess даже при ошибке старта.
