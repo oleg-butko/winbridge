@@ -1,6 +1,6 @@
-# Windows gate этапа 2 — runtime пройден 2026-10-05
+# Windows gate этапа 2 — пройден 2026-10-05
 
-Автоматическая проверка настоящего Windows worker пройдена; ручное подтверждение трёх новых native UI наблюдений пока ожидается. Этап 2 будет закрыт после него. Этап 1 повторно не проверялся.
+Автоматическая проверка настоящего Windows worker пройдена; пользователь подтвердил подключение и все три новых native UI наблюдения. Этап 2 завершён. Этап 1 повторно не проверялся.
 
 Подготовка пользователя: `K:\VMs\shared\WinBridge\session-validation\20261005-235244-97785d52\setup-report.json`. Runtime — постоянный `K:\_proj-26\winbridge\runtime`; worker config, fixture project и SQLite находятся на локальном Windows диске. Пользователь подтвердил «Controller Debian подключён», URL `ws://192.168.44.203:1143`, node `debian-vm`, session `42cdb08d-41bb-40c7-a34a-99b2bd3a871b`.
 
@@ -45,6 +45,10 @@ python3 scripts/validate-remote.py --config .winbridge/controller-session.local.
 
 ## Native UI
 
-Подключение controller подтверждено пользователем. Пользователь ответил «Проверю эти три пункта и сообщу результат» на запрос проверить: задачи из Debian с command/output/exit; offline controller при продолжающейся long task; новый session и прежний Task ID после reconnect, затем отмена. Это обещание проверки, а не подтверждённый результат; остальные три пункта пока не записаны как пройденные.
+Подключение controller подтверждено пользователем. После автоматического прогона пользователь ответил «Все три наблюдения подтвердились»:
+
+1. Задачи из Debian появляются в desktop с command/output/exit.
+2. Offline controller отображается отдельно от продолжающейся long task.
+3. После reconnect появляется новый session, сохраняется прежний Task ID; затем видна отмена.
 
 Firewall, VMware, mounts и services агент не менял. Windows worker не останавливался; выполнялись только задачи fixture текущего прогона. Следующий этап — verified snapshot import через shared folder, его готовность пока не повышается.

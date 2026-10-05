@@ -27,7 +27,7 @@
 
 ## Этап 2 — Debian управляет Windows по локальной сессии
 
-Статус 2026-10-05: [настоящий Windows runtime gate](windows-session-gate-2026-10-05.md) пройден: шесть групп, включая Debian→Windows execution, cancel, dedup и reconnect с тем же PID. Подключение в native UI подтверждено; три новых UI наблюдения ожидаются, до них этап остаётся открыт. Адреса VMnet8: VM 192.168.44.203, host 192.168.44.1. [Windows инструкция](windows-session-validation.md).
+Статус 2026-10-05: [настоящий Windows runtime gate](windows-session-gate-2026-10-05.md) пройден: шесть групп, включая Debian→Windows execution, cancel, dedup и reconnect с тем же PID. Подключение и три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. Адреса VMnet8: VM 192.168.44.203, host 192.168.44.1. [Windows инструкция](windows-session-validation.md).
 
 - [x] Plain `ws://` listener на выбранном локальном IP Debian, Windows outbound connection; никаких TLS/certificates/relay.
 - [x] Входящие IP не блокируются; источники активности записываются в JSONL с ротацией и видимыми ошибками записи (решение 2026-10-05).
