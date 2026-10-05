@@ -9,6 +9,7 @@
 - Собирающийся Rust workspace: общие DTO, core entry point и отдельные binaries controller/worker.
 - Worker CLI: config validation, serve, submit/get/list/output/cancel через local IPC. Controller CLI передаёт запросы по локальному ws:// и читает результаты worker.
 - Controller записывает адреса сетевой активности в JSONL с ротацией; блокировки по IP в текущей локальной разработке нет.
+- Этап 3 начат: общие snapshot manifest/ready DTO и CLI metadata preflight; публикация и импорт ещё впереди. [Формат](docs/snapshot-format.md).
 - SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
 - Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
 - User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.

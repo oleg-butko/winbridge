@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "projectId": "fixture",
+  "snapshotId": "example-metadata",
+  "source": { "kind": "git_commit", "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+  "payloadBytes": 20,
+  "payloadSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "totalBytes": 3,
+  "files": [
+    { "path": "src/Привет.txt", "bytes": 3, "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "executable": false }
+  ]
+}

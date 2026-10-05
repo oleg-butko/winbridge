@@ -41,6 +41,9 @@
 
 ## Этап 3 — готовый snapshot через VMware Shared Folders
 
+Статус 2026-10-05: начат [manifest/ready metadata contract и CLI preflight](snapshot-format.md). Публикация, импорт и их UI ещё не реализованы; workspace_import не объявляется реализованным.
+
+- [x] Общие Rust/TypeScript DTO manifest/ready и bounded metadata preflight: Windows пути, case collisions, file/directory conflicts, hashes/size syntax и byte counts.
 - [ ] Выбор mapping `/mnt/hgfs/shared` ↔ `K:\VMs\shared` и отдельного Windows workspace root.
 - [ ] Capture точного commit SHA; затем поддержка immutable dirty snapshot с явной маркировкой.
 - [ ] Namespace, `.part`, manifest, ready marker, RPC import и локальный verified staging.

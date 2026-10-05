@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 mod session;
 pub use session::*;
+mod snapshot;
+pub use snapshot::*;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 

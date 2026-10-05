@@ -8,6 +8,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        SnapshotSource::decl(&config),
+        SnapshotFile::decl(&config),
+        SnapshotManifest::decl(&config),
+        SnapshotReady::decl(&config),
         TaskStatus::decl(&config),
         CommandSource::decl(&config),
         TaskSubmission::decl(&config),
@@ -34,7 +38,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "// Generated from crates/protocol by npm run generate:contracts. Do not edit.\n{}\n",
         declarations
             .iter()
-            .map(|d| format!("export {d}"))
+            .map(|d| {
+                let declaration = format!("export {d}");
+                declaration
+                    .lines()
+                    .map(str::trim_end)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .collect::<Vec<_>>()
             .join("\n")
     );

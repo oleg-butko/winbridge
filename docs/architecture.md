@@ -50,7 +50,7 @@ Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, спис
 
 Controller `submit/get/list/output/cancel` вызывает тот же worker handler, что и desktop. `watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]` — подписка CLI через polling journal/output каждые 500 ms; курсоры исключают повторы при reconnect. Output читается страницами, `outputComplete` появляется после terminal task и пустой следующей страницы. Отдельная server-push очередь пока не нужна. `watch` не отправляет submit; неизвестный результат мутации требует того же key/ID. Controller не копирует Windows SQLite и не кеширует неподтверждённый task success.
 
-Transport использует [tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.30.0/tokio_tungstenite/) с отключёнными TLS features и явными bounds. [Проверка настоящими процессами](windows-session-validation.md) описывает следующий Windows gate.
+Transport использует [tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.30.0/tokio_tungstenite/) с отключёнными TLS features и явными bounds. [Windows runtime/native UI gate локальной сессии](windows-session-gate-2026-10-05.md) пройден. Snapshot metadata проверяется отдельно по [формату этапа 3](snapshot-format.md); это ещё не импорт.
 
 Heartbeat отвечает за свежесть соединения; task status отвечает за выполнение. Offline controller, закрытый UI и неизвестный результат команды — разные состояния. Bounded buffers, timeout, cancellation и backpressure проектируются до непрерывного stdout stream.
 

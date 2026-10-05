@@ -1,4 +1,4 @@
-use std::{path::Path, process::ExitCode};
+use std::{io::Read, path::Path, process::ExitCode};
 use winbridge_core::controller_config::ControllerConfig;
 use winbridge_protocol::{LocalRequest, LocalResponse};
 
@@ -14,8 +14,24 @@ async fn main() -> ExitCode {
 }
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let [operation, path] = args.as_slice() {
+        if operation == "--check-snapshot-manifest" {
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)
+                .map_err(|e| format!("manifest {path}: {e}"))?
+                .take(winbridge_core::snapshot::MAX_MANIFEST_BYTES as u64 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|e| format!("manifest {path}: {e}"))?;
+            let manifest = winbridge_core::snapshot::parse_manifest(&bytes)?;
+            println!(
+                "{}",
+                serde_json::json!({"validation":"metadata_only", "projectId":manifest.project_id, "snapshotId":manifest.snapshot_id, "files":manifest.files.len(), "totalBytes":manifest.total_bytes, "payloadVerified":false, "imported":false})
+            );
+            return Ok(());
+        }
+    }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
+        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
         return Ok(());
     }
     if args == ["--describe"] {

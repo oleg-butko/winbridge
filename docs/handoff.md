@@ -20,7 +20,7 @@
 | UI | Пять native Windows шагов подтверждены пользователем. Новый fix формы сохраняет executable/argv/cwd/timeout/recipe по worker/project/root. Browser остаётся demo/report viewer; UI integration проверен на настоящем Unix worker. |
 | Tauri desktop | Native host запуск подтверждён. workerConfigPath в winbridge-desktop.local.json, форма в winbridge-desktop-state.local.json рядом с exe. worker_rpc и два local draft commands; close ждёт save ACK. Сохранение формы и dev:ui дополнительно подтверждены пользователем на Windows. |
 | Local IPC/runtime tasks | User SID + instance named pipe, user-only protected DACL, exclusive journal и Windows Job Objects подтверждены Windows отчётом. Unix socket/private state также проверены; bounded frames/deadline/connections. |
-| HGFS delivery/import | Дизайн snapshot import и mapping. Windows validation reports читаются из shared; snapshot import и benchmark ещё не реализованы. |
+| HGFS delivery/import | Mapping и shared validation reports работают. Начаты manifest/ready DTO, metadata policy и CLI preflight; publisher/importer, actual payload validation, UI и benchmark ещё не реализованы. workspace_import остаётся planned. |
 | SQLite/process tree | Local WAL/FULL, durable acceptance, dedup, queue/cancel, launch intent/recovery, independent pipe drain/quota. Реальные Windows tree timeout/cancel/crash cleanup и сохранённый indeterminate без retry подтверждены. |
 | WebSocket | Versioned handshake/RPC/heartbeat/reconnect/watch реализованы; 14 session groups и UI integration проходят в Debian. Шесть групп Windows runtime gate прошли, включая прежний task/PID/generation после offline. Подключение и все три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. |
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
@@ -70,6 +70,8 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 ## Следующий разумный объём работы
 
 Текущий рабочий этап — этап 3. Этап 2 завершён: [Windows runtime и native UI gate](windows-session-gate-2026-10-05.md) пройдены. Пользователь подтвердил задачи из Debian, потерю связи при продолжающейся задаче, новый session с прежним Task ID после reconnect и отмену. 14 групп настоящих session checks, 29 Rust tests, UI integration, Windows all-targets compile и standalone Linux desktop check проходят. [Ревью](review-stage2-2026-10-05.md) исправило cleanup прерванной сессии, oversized requests, отражение входящего JSON, Welcome capabilities и handshake budget. Адреса пары подтверждены; не задавать вопрос повторно. IP Windows не блокируется.
+
+Начат [snapshot format](snapshot-format.md): DTO в protocol, pure policy в core, generated TS, controller --check-snapshot-manifest PATH. 33 Rust tests (четыре новых для untrusted metadata), CLI reject/size checks, contracts/TypeScript/UI build, Clippy/fmt, Windows compile и Linux desktop check проходят. CLI честно возвращает metadata_only/payloadVerified false/imported false; actual ZIP/hash/link checks и Windows import ещё впереди. Не выдавать preflight за verified generation и не включать capability до реализации.
 
 В текущей сессии listener уже запущен на выбранном IP; актуальную доступность проверить командой `controller --config .winbridge/controller-session.local.json status`. Runtime config исключён из Git.
 
