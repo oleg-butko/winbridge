@@ -1,4 +1,5 @@
 //! Windows execution authority. The Unix runner is a development/test adapter.
+mod network;
 pub mod store;
 use fs2::FileExt;
 use std::{
@@ -27,6 +28,7 @@ pub struct Worker {
     store: Mutex<Store>,
     active_projects: Mutex<HashSet<String>>,
     stop: AtomicBool,
+    controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
     _instance_lock: File,
 }
 impl Worker {
@@ -87,12 +89,24 @@ impl Worker {
         }
         let mut store = Store::open(&db_path)?;
         store.recover()?;
+        let controller_connection = config.worker.controller_url.as_ref().map(|url| {
+            winbridge_protocol::ControllerConnection {
+                url: url.clone(),
+                state: winbridge_protocol::ConnectionState::Connecting,
+                session_id: None,
+                controller_node_id: None,
+                controller_generation: None,
+                last_confirmed_at_ms: None,
+                error: None,
+            }
+        });
         Ok(Arc::new(Self {
             config,
             generation: uuid::Uuid::new_v4().to_string(),
             store: Mutex::new(store),
             active_projects: Mutex::new(HashSet::new()),
             stop: AtomicBool::new(false),
+            controller_connection: Mutex::new(controller_connection),
             _instance_lock: lock,
         }))
     }
@@ -123,8 +137,17 @@ impl Worker {
                     }
                     .into(),
                     projects: self.config.public_projects(),
+                    controller_connection: self
+                        .controller_connection
+                        .lock()
+                        .map_err(|_| "connection state lock poisoned")?
+                        .clone(),
                 },
             }),
+            LocalRequest::ControllerStatus => Err(
+                "controller_status is available through the Debian controller, not worker IPC"
+                    .into(),
+            ),
             LocalRequest::Submit { request } => {
                 if self.stop.load(Ordering::Acquire) {
                     return Err("worker is stopping; new tasks are not accepted".into());
@@ -458,6 +481,12 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
         worker.generation
     );
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
+    let network = worker
+        .config
+        .worker
+        .controller_url
+        .as_ref()
+        .map(|_| tokio::spawn(network::connect(Arc::clone(&worker))));
     let mut interval = tokio::time::interval(Duration::from_millis(25));
     let shutdown = tokio::signal::ctrl_c();
     tokio::pin!(shutdown);
@@ -470,6 +499,9 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
                 accept_connection(stream, Arc::clone(&worker), Arc::clone(&permits));
             },
         }
+    }
+    if let Some(network) = network {
+        network.abort();
     }
     worker.stop();
     while !worker.is_idle() {

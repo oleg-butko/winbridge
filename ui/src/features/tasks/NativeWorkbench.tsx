@@ -114,6 +114,8 @@ export function NativeWorkbench() {
     });
   }, [info, drafts]);
   const project = info?.projects.find((project) => project.id === projectId);
+  const controller = info?.controllerConnection;
+  const controllerFresh = connected && controller?.state === "connected";
   const scope = info && project ? { workerInstanceId: info.instanceId, projectId: project.id, workspaceRoot: project.workspaceRoot } : null;
   const scopeKey = scope ? JSON.stringify(scope) : null;
   useEffect(() => {
@@ -167,6 +169,15 @@ export function NativeWorkbench() {
     <Alert color={connected ? "teal" : "yellow"} title={connected ? `Worker подключён · ${info?.platform} · ${info?.instanceId}` : "Worker недоступен"}>
       {connected ? "Данные поступают из локального журнала worker. Закрытие окна не отменяет принятую задачу." : connectionError ?? "Ожидается соединение с локальным worker."}
       {info && <Text size="xs" mt="xs">{info.runtimeValidation}</Text>}
+    </Alert>
+    <Alert color={controllerFresh ? "teal" : "yellow"} title={controllerFresh ? "Controller Debian подключён" : !info ? "Состояние controller пока неизвестно" : controller ? connected && controller.state === "connecting" ? "Подключение к controller Debian…" : "Нет свежего соединения с controller Debian" : "Управление из Debian не настроено"}>
+      {controller ? <>
+        <Text size="sm">{controller.url} · {controller.controllerNodeId ?? "ожидается handshake"}</Text>
+        <Text size="xs">Последнее подтверждение: {controller.lastConfirmedAtMs === null ? "ещё не получено" : new Date(controller.lastConfirmedAtMs).toLocaleString()} · session: {controller.sessionId ?? "ещё не создана"}</Text>
+        {!connected && <Text size="sm">Worker недоступен; сохранены последние известные данные соединения.</Text>}
+        {controller.error && <Text size="sm">{controller.error}</Text>}
+        {!controllerFresh && <Text size="sm">Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет.</Text>}
+      </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
     <Card withBorder><Stack>
       <Title order={3}>Запустить команду</Title>

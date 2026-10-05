@@ -18,9 +18,12 @@ export type OutputChunk = { sequence: number, stream: OutputStream, offset: numb
 bytes: Array<number>, };
 export type RecipeInfo = { id: string, command: ResolvedCommand, };
 export type ProjectInfo = { id: string, workspaceRoot: string, allowDirectCommands: boolean, recipes: Array<RecipeInfo>, };
-export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, };
-export type LocalRequest = { "method": "info" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
-export type LocalResponse = { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, };
+export type ConnectionState = "connecting" | "connected" | "disconnected";
+export type ControllerConnection = { url: string, state: ConnectionState, sessionId: string | null, controllerNodeId: string | null, controllerGeneration: string | null, lastConfirmedAtMs: number | null, error: string | null, };
+export type ControllerStatus = { instanceId: string, nodeId: string, generation: string, listenAddress: string, connected: boolean, sessionId: string | null, workerNodeId: string | null, workerGeneration: string | null, workerAddress: string | null, lastError: string | null, };
+export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, };
+export type LocalRequest = { "method": "info" } | { "method": "controller_status" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
+export type LocalResponse = { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, } | { "kind": "controller_status", status: ControllerStatus, };
 export type TaskReport = { schemaVersion: number, platform: string, task: TaskRecord, output: Array<OutputChunk>, outputComplete: boolean, };
 export type CommandDraft = { workerInstanceId: string, projectId: string, workspaceRoot: string, recipeId: string | null, executable: string, 
 /**

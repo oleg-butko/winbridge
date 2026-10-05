@@ -124,3 +124,5 @@ npm run build:desktop
 Browser `npm run dev:ui` умеет открыть один `*.task-report.json` кнопкой «Открыть сохранённый отчёт worker». Отчёт помечен как сохранённый результат выбранной платформы; browser не подключается к worker и не выполняет команды.
 
 Для принятого прогона `20261005-161827-c8deef84` все проверки уже подтверждены; worker объявляет `task_submit`/`task_cancel`. Управление из Debian по `ws://`, HGFS import и tray/attention относятся к следующим этапам. Сохранение формы и dev:ui также подтверждены пользователем на Windows; Rust/UI integration проверки выполнены в Debian.
+
+Следующий gate: [управление из Debian через локальный ws://](windows-session-validation.md). Первый этап повторять не требуется.

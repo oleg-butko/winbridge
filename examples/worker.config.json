@@ -3,7 +3,7 @@
   "instanceId": "local-development",
   "nodeId": "windows-host",
   "worker": {
-    "controllerUrl": "ws://192.168.56.2:1143",
+    "controllerUrl": "ws://192.168.44.203:1143",
     "keepRunningOnUiExit": true
   },
   "delivery": {

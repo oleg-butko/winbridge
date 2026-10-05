@@ -46,6 +46,6 @@
 
 ## Итог и последующий fix
 
-Этап 1 завершён. Worker объявляет `task_submit` и `task_cancel`; controller/WebSocket, snapshot import, log tail и attention ещё не реализованы.
+Этап 1 завершён. Worker объявляет `task_submit` и `task_cancel`; На момент закрытия этапа 1 controller/WebSocket, snapshot import, log tail и attention ещё не были реализованы. Текущая готовность следующих этапов — в [roadmap](roadmap.md).
 
 В пункте 4 пользователь обнаружил неудобство: executable/argv не восстанавливались при открытии desktop. После gate добавлено локальное сохранение формы, включая cwd/timeout/recipe, в `winbridge-desktop-state.local.json` рядом с exe. Новый fix проверен Rust filesystem tests, TypeScript, production UI build и browser integration с новым WebView и файловым IPC shim. Пользователь дополнительно подтвердил Windows-native проверку этого fix и dev:ui. Короткие шаги для повторного прогона находятся в [Windows инструкции](windows-validation.md). Незавершённых проверок этапа 1 не осталось.

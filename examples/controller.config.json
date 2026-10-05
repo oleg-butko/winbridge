@@ -2,9 +2,11 @@
   "schemaVersion": 1,
   "instanceId": "local-development",
   "nodeId": "debian-vm",
+  "stateDirectory": "/home/user1/winbridge/.winbridge/controller",
   "controller": {
-    "listenAddress": "192.168.56.2:1143",
-    "allowedWorkerAddresses": ["192.168.56.1"]
+    "listenAddress": "192.168.44.203:1143",
+    "allowedWorkerAddresses": ["192.168.44.1"],
+    "workerNodeId": "windows-host"
   },
   "delivery": {
     "adapter": "shared-folder",

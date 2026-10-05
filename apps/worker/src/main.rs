@@ -43,7 +43,7 @@ async fn run() -> Result<(), String> {
     let operation = &args[2..];
     match operation {
         [name] if name == "validate" => {
-            println!("Valid config: instance {}, {} project(s); controller/delivery settings are inactive until later stages", config.instance_id, config.projects.len());
+            println!("Valid config: instance {}, {} project(s); controller connection {}, snapshot import not yet active", config.instance_id, config.projects.len(), config.worker.controller_url.as_deref().unwrap_or("disabled"));
             Ok(())
         }
         [name] if name == "serve" => {

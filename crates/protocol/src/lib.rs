@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+mod session;
+pub use session::*;
+
 pub const PROTOCOL_VERSION: u16 = 1;
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -209,6 +212,8 @@ pub struct WorkerInfo {
     pub platform: String,
     pub runtime_validation: String,
     pub projects: Vec<ProjectInfo>,
+    #[serde(default)]
+    pub controller_connection: Option<ControllerConnection>,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -216,6 +221,7 @@ pub struct WorkerInfo {
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
     Info,
+    ControllerStatus,
     Submit {
         request: TaskSubmission,
     },
@@ -245,6 +251,7 @@ pub enum LocalResponse {
     Tasks { tasks: Vec<TaskSummary> },
     Output { chunks: Vec<OutputChunk> },
     Error { message: String },
+    ControllerStatus { status: ControllerStatus },
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

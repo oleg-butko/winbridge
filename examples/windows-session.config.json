@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "controllerUrl": "ws://192.168.44.203:1143",
+  "instanceId": "local-development",
+  "nodeId": "windows-host",
+  "reportDirectory": "K:\\VMs\\shared\\WinBridge\\session-validation",
+  "fixtureDirectory": ".winbridge\\windows-session"
+}

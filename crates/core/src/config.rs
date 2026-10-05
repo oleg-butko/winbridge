@@ -64,7 +64,7 @@ impl DesktopConfig {
     }
 }
 
-fn read_config<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
+pub(crate) fn read_config<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     let bytes = fs::read(path).map_err(|e| format!("config {}: {e}", path.display()))?;
     if bytes.len() > 1024 * 1024 {
         return Err(format!("config {} exceeds 1 MiB", path.display()));
@@ -155,15 +155,8 @@ impl WorkerConfig {
         if !self.worker.keep_running_on_ui_exit {
             return Err("worker.keepRunningOnUiExit must be true: tasks belong to worker".into());
         }
-        if self
-            .worker
-            .controller_url
-            .as_ref()
-            .is_some_and(|u| !u.starts_with("ws://"))
-        {
-            return Err(
-                "worker.controllerUrl must use ws://; connection is planned for stage 2".into(),
-            );
+        if let Some(url) = &self.worker.controller_url {
+            crate::controller_config::validate_controller_url(url)?;
         }
         if !(4096..=256 * 1024 * 1024).contains(&self.max_output_bytes_per_task) {
             return Err("maxOutputBytesPerTask must be 4096–268435456 bytes".into());

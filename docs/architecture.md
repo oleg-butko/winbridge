@@ -1,6 +1,6 @@
 # Архитектура WinBridge
 
-Статус: решения для локального проекта, утверждённые пользователем 2026-10-04. Local worker/journal/IPC и native UI прошли [Windows gate 2026-10-05](windows-gate-2026-10-05.md); этап 1 завершён. Приняты рецепты + произвольные команды в проекте и доставка через HGFS с отдельной Windows сборкой. Диаграмма описывает целевую архитектуру; WebSocket/delivery пока не реализованы.
+Статус: решения для локального проекта, утверждённые пользователем 2026-10-04. Local worker/journal/IPC и native UI прошли [Windows gate 2026-10-05](windows-gate-2026-10-05.md); этап 1 завершён. Приняты рецепты + произвольные команды в проекте и доставка через HGFS с отдельной Windows сборкой. Диаграмма описывает целевую архитектуру; WebSocket/controller реализованы и проверены в Debian; Windows gate этой сессии ещё ожидается. Snapshot delivery пока не реализована.
 
 ## Назначение и среда
 
@@ -41,6 +41,14 @@ Windows worker устанавливает постоянное соединен�
 Worker использует настроенный адрес controller. Controller принимает worker из явно выбранной локальной пары/адреса и показывает его в UI. Ограничение локальной пары — часть маршрутизации и product setup, не основание для навязывания encrypted transport. Изменения firewall/mounts не выполняются скрытно.
 
 Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, список реально реализованных capabilities. Несовместимая версия даёт понятную ошибку с дальнейшим действием. AppVersion не заменяет wire version. Session generation меняется после рестарта, durable task/event IDs сохраняются.
+
+Текущая сессия: выбран VMnet8, Debian `192.168.44.203:1143`, Windows `192.168.44.1` (адрес подтверждён пользователем). Strict schema 1 controller config задаёт stateDirectory, listenAddress, allowedWorkerAddresses и workerNodeId; instanceId совпадает у пары. Поддерживаются literal private/loopback IPv4, без DNS и extra URL path. Controller CLI использует private Unix socket (0700 directory/0600 socket), worker сохраняет прежний SID named pipe для desktop.
+
+Handshake включает HTTP upgrade и JSON hello/welcome; общий deadline 5 секунд. Не более четырёх network connections/handshakes, одной принятой worker session, 32 queued calls и 16 in-flight запросов. Frames/messages не более 1 MiB; write/flush deadline 2 секунды; RPC deadline 8 секунд. Controller посылает JSON ping раз в 5 секунд, ждёт соответствующий nonce не более 10 секунд: другой traffic не продлевает deadline. Worker прекращает session после 15 секунд без нового ping. Backoff 1–10 секунд восстанавливает соединение, без retry команд.
+
+Controller `submit/get/list/output/cancel` вызывает тот же worker handler, что и desktop. `watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]` — подписка CLI через polling journal/output каждые 500 ms; курсоры исключают повторы при reconnect. Output читается страницами, `outputComplete` появляется после terminal task и пустой следующей страницы. Отдельная server-push очередь пока не нужна. `watch` не отправляет submit; неизвестный результат мутации требует того же key/ID. Controller не копирует Windows SQLite и не кеширует неподтверждённый task success.
+
+Transport использует [tokio-tungstenite](https://docs.rs/tokio-tungstenite/0.30.0/tokio_tungstenite/) с отключёнными TLS features и явными bounds. [Проверка настоящими процессами](windows-session-validation.md) описывает следующий Windows gate.
 
 Heartbeat отвечает за свежесть соединения; task status отвечает за выполнение. Offline controller, закрытый UI и неизвестный результат команды — разные состояния. Bounded buffers, timeout, cancellation и backpressure проектируются до непрерывного stdout stream.
 

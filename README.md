@@ -7,7 +7,7 @@
 ## Что готово
 
 - Собирающийся Rust workspace: общие DTO, core entry point и отдельные binaries controller/worker.
-- Worker CLI: config validation, serve, submit/get/list/output/cancel через local IPC. Controller пока scaffold.
+- Worker CLI: config validation, serve, submit/get/list/output/cancel через local IPC. Controller CLI передаёт запросы по локальному ws:// и читает результаты worker.
 - SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
 - Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
 - User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.
@@ -15,7 +15,7 @@
 - Connected UI: форма команды, recent tasks, timeline, output/exit code, cancel и независимая свежесть соединения. Browser: явно помеченная демонстрация и просмотр сохранённого отчёта worker.
 - Архитектура, поэтапный roadmap, UX требования, ADR, примеры конфигурации и инструкции следующему агенту.
 
-**Этап 1 завершён 2026-10-05:** получен Windows отчёт со всеми десятью успешными runtime checks, пользователь подтвердил пять native UI шагов. [Доказательства gate](docs/windows-gate-2026-10-05.md). Worker объявляет `task_submit` и `task_cancel`; controller пока scaffold. Desktop сохраняет поля команды в локальном JSON рядом с exe, отдельно для worker/project/root. Debian→Windows WebSocket, доставка snapshot, log tail и attention — следующие этапы. Browser сам команды не выполняет.
+**Этап 1 завершён 2026-10-05:** получен Windows отчёт со всеми десятью успешными runtime checks, пользователь подтвердил пять native UI шагов. [Доказательства gate](docs/windows-gate-2026-10-05.md). Worker объявляет `task_submit` и `task_cancel`; controller реализует локальную сессию, Windows gate этапа 2 ещё ожидается. Desktop сохраняет поля команды в локальном JSON рядом с exe, отдельно для worker/project/root. WebSocket/controller и отдельная свежесть связи реализованы и проверены настоящими Linux процессами; native Windows проверка этапа 2 подготовлена. Доставка snapshot, log tail и attention — следующие этапы. Browser сам команды не выполняет.
 
 ## Принятые решения
 
@@ -29,13 +29,13 @@
 
 ```text
 apps/
-  controller/       Debian coordinator; сейчас CLI scaffold
+  controller/       Debian coordinator; ws:// listener и CLI submit/get/cancel/watch
   worker/           Local execution authority, CLI, SQLite, fixture executable
   desktop/          Tauri shell с worker IPC bridge, отдельный Cargo package
 crates/
   protocol/         Общие wire DTO и версия протокола
   core/             Логика задач, policy и interfaces модулей
-  transport/        Bounded local IPC; WebSocket запланирован
+  transport/        Bounded local IPC/WebSocket, handshake, heartbeat и deadlines
   platform/         Process tree/Job Object и local disk adapters
 modules/
   workspace-sync/   Снимки, manifest, импорт из shared папки
@@ -70,12 +70,13 @@ npm run build:ui
 npm run dev:ui
 ```
 
-UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка: [точный сценарий](docs/windows-validation.md). Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
+UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка этапа 1: [сценарий](docs/windows-validation.md). Следующая проверка: [локальная сессия Debian ↔ Windows](docs/windows-session-validation.md). Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
 
 Реальные проверки Unix development adapter (сначала `cargo build --workspace --locked`):
 
 ```bash
 python3 scripts/validate-local.py
+python3 scripts/validate-session.py
 npm run test:ui
 cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 ```

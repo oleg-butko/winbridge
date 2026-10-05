@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
-import { createConnection } from "node:net";
+import { createConnection, createServer as createTcpServer } from "node:net";
 import { createServer } from "vite";
 import { chromium } from "playwright";
 
@@ -15,6 +15,14 @@ const project = join(run, "project with spaces");
 const config = join(run, "worker.local.json");
 const socket = join(run, "state/worker-ui-test.sock");
 const workerExe = join(root, "target/debug/winbridge-worker");
+const controllerExe = join(root, "target/debug/winbridge-controller");
+const controllerConfig = join(run, "controller.local.json");
+const portProbe = createTcpServer();
+await new Promise((resolve) => portProbe.listen(0, "127.0.0.1", resolve));
+const controllerPort = portProbe.address().port;
+await new Promise((resolve) => portProbe.close(resolve));
+await writeFile(controllerConfig, JSON.stringify({ schemaVersion: 1, instanceId: "ui-test", nodeId: "debian-ui-test", stateDirectory: join(run, "controller"),
+  controller: { listenAddress: `127.0.0.1:${controllerPort}`, allowedWorkerAddresses: ["127.0.0.1"], workerNodeId: "linux-ui-test" } }));
 const fixture = join(root, "target/debug/winbridge-fixture");
 const preferencesPath = join(run, "winbridge-desktop-state.local.json");
 const otherProject = join(run, "second project");
@@ -22,7 +30,7 @@ await mkdir(project);
 await mkdir(otherProject);
 await mkdir(join(project, "nested"));
 await writeFile(config, JSON.stringify({ schemaVersion: 1, instanceId: "ui-test", nodeId: "linux-ui-test", stateDirectory: join(run, "state"),
-  worker: { keepRunningOnUiExit: true }, projects: [{ id: "fixture", workspaceRoot: project, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [{ id: "direct", executable: fixture, arguments: ["success"], workingDirectory: ".", timeoutMs: 10000 }] },
+  worker: { keepRunningOnUiExit: true, controllerUrl: `ws://127.0.0.1:${controllerPort}` }, projects: [{ id: "fixture", workspaceRoot: project, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [{ id: "direct", executable: fixture, arguments: ["success"], workingDirectory: ".", timeoutMs: 10000 }] },
     { id: "other-fixture", workspaceRoot: otherProject, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [] }] }));
 
 function call(request) {
@@ -49,6 +57,7 @@ async function until(check, message) {
   throw new Error(message);
 }
 let worker;
+let controller;
 let browser;
 let server;
 let crashedPid;
@@ -56,6 +65,17 @@ async function startWorker() {
   worker = spawn(workerExe, ["--config", config, "serve"], { stdio: ["ignore", "ignore", "pipe"] });
   worker.stderr.on("data", () => {});
   await until(async () => (await call({ method: "info" })).kind === "info", "worker unavailable");
+}
+async function startController() {
+  controller = spawn(controllerExe, ["--config", controllerConfig, "serve"], { stdio: ["ignore", "ignore", "pipe"] });
+  controller.stderr.on("data", () => {});
+}
+async function stopController() {
+  if (!controller || controller.exitCode !== null || controller.signalCode !== null) return;
+  const closed = new Promise((resolve) => controller.once("exit", resolve));
+  controller.kill("SIGINT");
+  const completed = await Promise.race([closed.then(() => true), sleep(10000).then(() => false)]);
+  if (!completed) { controller.kill("SIGKILL"); await closed; throw new Error("controller shutdown deadline exceeded"); }
 }
 async function latestTask() {
   const summary = (await call({ method: "list_tasks" })).tasks[0];
@@ -69,6 +89,7 @@ async function stopWorker(signal = "SIGINT") {
   if (!completed) { worker.kill("SIGKILL"); await closed; throw new Error("worker shutdown deadline exceeded"); }
 }
 try {
+  await startController();
   await startWorker();
   server = await createServer({ server: { host: "127.0.0.1", port: 0, strictPort: false } });
   await server.listen();
@@ -129,6 +150,7 @@ try {
   await attachNative(page);
   await page.goto(url);
   await page.getByText("Worker подключён · linux · ui-test", { exact: true }).waitFor();
+  await page.getByText("Controller Debian подключён", { exact: true }).waitFor();
   await page.getByLabel("Executable", { exact: true }).fill(fixture);
   await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill('["success"]');
   await page.getByRole("button", { name: "Передать задачу worker", exact: true }).click();
@@ -159,10 +181,18 @@ try {
   await page.getByRole("button", { name: "Передать задачу worker", exact: true }).click();
   await until(async () => { const task = await latestTask(); return task.submission.command.arguments[0] === "long" && task.status === "running" && task.processId !== null; }, "long command did not start");
   const long = await latestTask();
+  await stopController();
+  await page.getByText("Нет свежего соединения с controller Debian", { exact: true }).waitFor();
+  assert.equal((await call({ method: "get_task", taskId: long.taskId })).task.status, "running", "controller exit cancelled a task");
+  await startController();
+  await page.getByText("Controller Debian подключён", { exact: true }).waitFor();
+  assert.equal((await latestTask()).taskId, long.taskId, "reconnect created a new task");
   crashedPid = long.processId;
   await page.locator('.mantine-Badge-root').filter({ hasText: "Выполняется" }).waitFor();
   await stopWorker("SIGKILL");
   await page.getByText("Нет свежего подтверждения worker", { exact: true }).waitFor();
+  await page.getByText("Нет свежего соединения с controller Debian", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Controller Debian подключён", { exact: true }).count(), 0, "stale worker info presented controller as online");
   assert.equal(await page.locator('.mantine-Badge-root').filter({ hasText: "Выполняется" }).count(), 1);
   try { process.kill(-crashedPid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; } crashedPid = undefined;
   await startWorker();
@@ -233,11 +263,12 @@ try {
   await restoredPage.getByRole("button", { name: "Закрыть без сохранения", exact: true }).click();
   await until(async () => await restoredPage.evaluate(() => window.__destroyed), "explicit close did not close the window");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: lost ACK/dedup, output/Unicode, cancel, offline freshness, crash recovery, report import, recipes, per-project drafts, fresh WebView restore without task submission, close flush and honest save failure.");
+  console.log("UI verified against real Unix worker: lost ACK/dedup, output/Unicode, cancel, offline freshness, crash recovery, report import, recipes, per-project drafts, fresh WebView restore without task submission, close flush, honest save failure and separate controller connection/reconnect without task cancellation.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();
   await server?.close();
   await stopWorker();
+  await stopController();
   await rm(run, { recursive: true, force: true });
 }

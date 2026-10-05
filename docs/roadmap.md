@@ -14,7 +14,7 @@
 
 ## Этап 1 — одна команда и реальный журнал на Windows
 
-Статус 2026-10-05: этап завершён по [Windows отчёту и пяти подтверждённым native UI шагам](windows-gate-2026-10-05.md). Worker объявляет implementedCapabilities `task_submit`, `task_cancel`; controller остаётся scaffold. Настройки validation и desktop находятся рядом с exe, отчёты — в shared. Дополнительно исправлено сохранение формы команды при повторном открытии окна; этот UI fix проверен Rust storage tests, browser integration и дополнительно подтверждён пользователем на Windows вместе с dev:ui.
+Статус 2026-10-05: этап завершён по [Windows отчёту и пяти подтверждённым native UI шагам](windows-gate-2026-10-05.md). Worker объявляет implementedCapabilities `task_submit`, `task_cancel`; на момент коммита этапа 1 controller оставался scaffold. Настройки validation и desktop находятся рядом с exe, отчёты — в shared. Дополнительно исправлено сохранение формы команды при повторном открытии окна; этот UI fix проверен Rust storage tests, browser integration и дополнительно подтверждён пользователем на Windows вместе с dev:ui.
 
 - [x] Runtime config loader: один project, разрешённые recipes/direct, относительный cwd, timeout. Версионирование и actionable validation errors.
 - [x] Windows worker выполняет команду в локальном fixture project. Direct executable одновременно читает stdout/stderr; recipe использует тот же service.
@@ -27,11 +27,13 @@
 
 ## Этап 2 — Debian управляет Windows по локальной сессии
 
-- [ ] Plain `ws://` listener на выбранном локальном IP Debian, Windows outbound connection; никаких TLS/certificates/relay.
-- [ ] Handshake, wire version, реализованные capabilities, instance/generation IDs, request/response correlation, bounded message sizes.
-- [ ] CLI для submit/get/cancel и подписки на события через controller. Controller не выдаёт собственный статус за подтверждение исполнения worker.
-- [ ] Worker сохраняет задачу перед подтверждением; reconnect восстанавливает её по прежнему ID и события по sequence.
-- [ ] UI отдельными состояниями показывает controller online/offline, последнее подтверждение задачи, очередь и возможные действия.
+Статус 2026-10-05: реализация и Debian проверки готовы; этап остаётся открытым до запуска новой сессии на настоящем Windows. Адреса VMnet8 подтверждены: VM 192.168.44.203, host 192.168.44.1. [Windows инструкция](windows-session-validation.md).
+
+- [x] Plain `ws://` listener на выбранном локальном IP Debian, Windows outbound connection; никаких TLS/certificates/relay.
+- [x] Handshake, wire version, реализованные capabilities, instance/generation IDs, request/response correlation, bounded message sizes.
+- [x] CLI для submit/get/cancel и подписки на события через controller. Controller не выдаёт собственный статус за подтверждение исполнения worker.
+- [x] Worker сохраняет задачу перед подтверждением; reconnect восстанавливает её по прежнему ID и события по sequence.
+- [x] UI отдельными состояниями показывает controller online/offline, последнее подтверждение задачи, очередь и возможные действия.
 
 Критерий: агент Debian запускает задачу в Windows fixture project, получает output; разрыв соединения не останавливает процесс, reconnect возвращает результат, повтор key не дублирует исполнение. Неверная версия и timeout имеют понятную причину в UI.
 
