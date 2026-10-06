@@ -1,4 +1,5 @@
 //! Windows execution authority. The Unix runner is a development/test adapter.
+mod artifacts;
 mod imports;
 mod network;
 pub mod store;
@@ -31,6 +32,7 @@ pub struct Worker {
     active_projects: Mutex<HashMap<String, String>>,
     active_jobs: AtomicUsize,
     readiness_scans: Mutex<HashMap<String, (u64, Vec<u8>)>>,
+    checks: Mutex<HashMap<String, Option<Result<workflows::CheckResult>>>>,
     stop: AtomicBool,
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
     _instance_lock: File,
@@ -111,6 +113,7 @@ impl Worker {
             active_projects: Mutex::new(HashMap::new()),
             active_jobs: AtomicUsize::new(0),
             readiness_scans: Mutex::new(HashMap::new()),
+            checks: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
             _instance_lock: lock,
@@ -153,7 +156,7 @@ impl Worker {
                     return Err("Workflow queue limit reached (128)".into());
                 }
                 Ok(LocalResponse::Workflow {
-                    workflow: Box::new(store.accept_workflow(request)?),
+                    workflow: Box::new(store.accept_workflow(*request)?),
                 })
             }
             LocalRequest::ListWorkflows => Ok(LocalResponse::Workflows {
@@ -208,7 +211,9 @@ impl Worker {
                 })
             }
             LocalRequest::Info => Ok(LocalResponse::Info {
-                info: WorkerInfo {
+                info: Box::new(WorkerInfo {
+                    build: Some(winbridge_protocol::build_identity()),
+                    workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                     protocol_version: PROTOCOL_VERSION,
                     instance_id: self.config.instance_id.clone(),
                     node_id: self.config.node_id.clone(),
@@ -228,7 +233,7 @@ impl Worker {
                         .lock()
                         .map_err(|_| "connection state lock poisoned")?
                         .clone(),
-                },
+                }),
             }),
             LocalRequest::ImportSnapshot { request } => {
                 if self.stop.load(Ordering::Acquire) {

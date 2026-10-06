@@ -923,6 +923,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2",
  "ts-rs",
 ]
 
@@ -932,8 +933,10 @@ version = "0.1.0"
 dependencies = [
  "futures-util",
  "serde_json",
+ "tempfile",
  "tokio",
  "tokio-tungstenite",
+ "winbridge-platform",
  "winbridge-protocol",
  "windows-sys",
 ]
@@ -945,6 +948,7 @@ dependencies = [
  "fs2",
  "rusqlite",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
  "uuid",

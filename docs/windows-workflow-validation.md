@@ -23,7 +23,7 @@
 после reconnect UI покажет «Controller Debian подключён» и «Цикл разработки».
 
 `test-windows-workflow.ps1` выполняет **автоматические тесты**, а не обновление рабочего
-приложения. Агент уже выполнил [37 Windows тестов этого выпуска](windows-workflow-gate-2026-10-06.md).
+приложения. Результаты автоматических прогонов записаны в [Windows gate](windows-workflow-gate-2026-10-06.md).
 Повторять их для установки не требуется. Если запущенный сценарий ждёт `SourceDirectory:`,
 прервать запрос через Ctrl+C и выполнить команду обновления выше.
 
@@ -32,7 +32,7 @@
 | Параметр | Значение и назначение |
 | --- | --- |
 | `SourceDirectory` | Корень распакованных исходников: папка с `Cargo.toml`, `scripts` и `winbridge-source-manifest.json`. Пример: `K:\_proj-26\winbridge\src`. Из этих файлов собираются тесты; здесь проверяется соответствие source manifest. |
-| `ReportDirectory` | Новая папка одного прогона в shared, например `K:\VMs\shared\WinBridge\workflow-validation\manual-20261006-01`. Туда записываются отчёт и два test logs; агент может их прочитать из Debian. |
+| `ReportDirectory` | Новая папка одного прогона в shared, например `K:\VMs\shared\WinBridge\workflow-validation\manual-20261006-01`. Туда записываются отчёт и test logs; агент может их прочитать из Debian. |
 | `SourceArchiveSha256` | SHA-256 исходного ZIP. Связывает результат с конкретной проверенной версией, а не только с произвольной папкой исходников. Не SHA папки или config. |
 
 В обновлённой версии `SourceDirectory` определяется от папки самого сценария, если его
@@ -89,3 +89,5 @@ Source export содержит точный manifest всех source files с ha
 `K:\VMs\shared\WinBridge\workflow-validation\<run>` содержит `report.json`, два полных test logs и `report.ready.json` с hashes/размерами. Report включает actual platform=windows, source archive hash/commit/dirty, argv и exit code каждой группы. Ready публикуется после logs/report. Debian harness сверяет каждый artifact, exit code task, обе группы и source SHA-256. Ошибка bootstrap сохраняет task/output в локальном отчёте; старый run не удаляется и не переиспользуется.
 
 При изменении runtime code повторяется автоматический сценарий; изменение только документации не требует нового Windows gate. Пользователю нужен один общий update fixed runtime после готового выпуска, а не цикл ручных проверок после каждого fix. Обновление через уже существующий `prepare-windows-snapshot.ps1`: закрыть desktop, штатно остановить worker, выполнить сценарий из новой source версии. Он сохраняет configs/state и отказывается заменять активные exe. Подробная инструкция этапа 3 остаётся [здесь](windows-snapshot-validation.md); новый worker объявляет workflowAvailable/log_read, UI показывает «Цикл разработки».
+
+Расширенный прогон этапа 4 включает readiness IPC tests и [изолированный Netwatch](netwatch-validation.md). Опция `--netwatch-profile` передаёт подготовленный frozen профиль дополнительному test worker. Не запускайте эти test scripts вручную для обычного обновления приложения.

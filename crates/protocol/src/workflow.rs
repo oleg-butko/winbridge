@@ -6,8 +6,43 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ReadinessProbe {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub stdout_contains: String,
     pub timeout_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub netwatch: Option<NetwatchProbe>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NetwatchProbe {
+    pub instance_id: String,
+    pub runtime_directory: String,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ArtifactSpec {
+    pub name: String,
+    /// Relative to the project root, outside immutable snapshots.
+    pub path: String,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildArtifact {
+    pub name: String,
+    pub path: String,
+    pub bytes: u64,
+    pub sha256: String,
+    pub source_commit: String,
+    pub manifest_sha256: String,
+    pub build_task_id: String,
+    pub recorded_at_ms: u64,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -27,6 +62,8 @@ pub struct WorkflowSubmission {
     pub readiness: ReadinessProbe,
     /// UTF-8 application log, relative to the registered project root, outside snapshots.
     pub log_path: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub artifacts: Vec<ArtifactSpec>,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -69,6 +106,8 @@ pub struct WorkflowRecord {
     pub application_id: Option<String>,
     pub steps: Vec<WorkflowStep>,
     pub events: Vec<JournalEvent>,
+    #[serde(default)]
+    pub artifacts: Vec<BuildArtifact>,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Alert, Badge, Button, Card, Code, Grid, Group, Stack, Tabs, Text, Timeline, Title } from "@mantine/core";
 import type { OutputChunk, TaskRecord, TaskStatus } from "../../runtime/contracts";
 import { decodeOutput } from "../../runtime/adapter";
+import { OutputView } from "./OutputView";
 
 export const statuses: Record<TaskStatus, { label: string; color: string }> = {
   queued: { label: "В очереди", color: "gray" }, running: { label: "Выполняется", color: "blue" },
@@ -56,8 +57,7 @@ export function TaskDetail({ task, chunks }: { task: TaskRecord; chunks: OutputC
         {task.outputTruncated && <Alert color="yellow">Достигнута квота сохранения вывода. Часть байтов отброшена; worker продолжил читать оба потока.</Alert>}
         <Text size="sm" c="dimmed">Сохранено worker: {task.outputBytes} байт · загружено: {chunks.reduce((n, c) => n + c.bytes.length, 0)} байт · UTF-8</Text>
         {(["stdout", "stderr"] as const).map((stream) => <Card key={stream} withBorder><Text fw={600} mb="xs">{stream}</Text>
-          {output[stream].length > 65536 && <Text size="xs" c="dimmed">Показаны последние 65536 символов загруженного вывода.</Text>}
-          <Code block>{output[stream].slice(-65536) || "Нет сохранённого вывода"}</Code>
+          <OutputView key={task.taskId} text={output[stream]} label={stream} empty="Нет сохранённого вывода" />
         </Card>)}
       </Stack></Tabs.Panel>
     </Tabs>

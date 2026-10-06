@@ -133,13 +133,14 @@ try {
     await nativePage.exposeFunction("draftBridge", async (command, args) => {
       const state = existsSync(preferencesPath) ? JSON.parse(await readFile(preferencesPath, "utf8")) : { schemaVersion: 1, drafts: [], deliveryDrafts: [] };
       state.deliveryDrafts ??= [];
+      state.workflowProfiles ??= [];
       if (command === "load_command_drafts") return state;
-      assert.ok(["save_command_draft", "save_delivery_draft"].includes(command));
+      assert.ok(["save_command_draft", "save_delivery_draft", "save_workflow_profile"].includes(command));
       if (draftSaveDelay) await sleep(draftSaveDelay);
       if (failDraftSaves || (command === "save_delivery_draft" && failDeliverySaves)) throw new Error("Test: local state directory is unavailable");
-      const draft = args.draft;
-      const field = command === "save_command_draft" ? "drafts" : "deliveryDrafts";
-      state[field] = state[field].filter((saved) => saved.workerInstanceId !== draft.workerInstanceId || saved.projectId !== draft.projectId || saved.workspaceRoot !== draft.workspaceRoot);
+      const draft = args.draft ?? args.profile;
+      const field = command === "save_workflow_profile" ? "workflowProfiles" : command === "save_command_draft" ? "drafts" : "deliveryDrafts";
+      state[field] = state[field].filter((saved) => saved.workerInstanceId !== draft.workerInstanceId || saved.projectId !== draft.projectId || saved.workspaceRoot !== draft.workspaceRoot || (field === "workflowProfiles" && saved.name !== draft.name));
       state[field].push(draft);
       await writeFile(preferencesPath, JSON.stringify(state));
     });
@@ -158,7 +159,8 @@ try {
         transformCallback: (callback) => { const id = ++nextCallback; callbacks.set(id, callback); return id; },
         invoke: (command, args) => {
           if (command === "worker_rpc") return window.workerBridge(args.request);
-          if (["load_command_drafts", "save_command_draft", "save_delivery_draft"].includes(command)) return window.draftBridge(command, args);
+          if (command === "desktop_build") return Promise.resolve({ version: "0.1.0", sourceCommit: "browser-test", sourceDirty: false, sourceManifestSha256: null, buildId: "test-shell" });
+          if (["load_command_drafts", "save_command_draft", "save_delivery_draft", "save_workflow_profile"].includes(command)) return window.draftBridge(command, args);
           if (command === "plugin:event|listen") { const id = args.handler; listeners.set(id, args); return Promise.resolve(id); }
           if (command === "plugin:event|unlisten") { listeners.delete(args.eventId); return Promise.resolve(); }
           if (command === "plugin:window|destroy") { window.__destroyed = true; return Promise.resolve(); }
@@ -351,10 +353,26 @@ try {
   await workflowPage.getByText("Worker подключён · linux · ui-test", { exact: true }).waitFor();
   await workflowPage.getByRole("button", { name: "Посмотреть состав snapshot", exact: true }).click();
   await workflowPage.getByRole("button", { name: "Использовать в workflow", exact: true }).click();
+  const profileField = workflowPage.getByLabel("Параметры workflow — JSON", { exact: true });
+  const configured = JSON.parse(await profileField.inputValue());
+  configured.artifacts = [{ name: "fixture executable", path: "build-cache/debug/snapshot-fixture" }];
+  await profileField.fill(JSON.stringify(configured, null, 2));
+  await workflowPage.getByLabel("Имя профиля", { exact: true }).fill("fixture profile");
+  await workflowPage.getByRole("button", { name: "Сохранить профиль", exact: true }).click();
+  await workflowPage.getByText("Именованный профиль сохранён", { exact: true }).waitFor();
+  await workflowPage.reload();
+  await until(async () => (await profileField.inputValue()).includes("fixture executable"), "workflow draft not restored after reload");
+  assert.equal((await call({ method: "list_workflows" })).workflows.length, 0, "profile restore submitted a command");
   await workflowPage.getByRole("button", { name: "Запустить workflow", exact: true }).click();
   await workflowPage.getByText("Приём workflow не подтверждён", { exact: true }).waitFor();
   await workflowPage.getByRole("button", { name: "Проверить приём workflow", exact: true }).click();
-  await workflowPage.getByText("Приложение готово", { exact: true }).waitFor();
+  try { await workflowPage.getByText("Приложение готово", { exact: true }).waitFor(); }
+  catch (error) { console.error(JSON.stringify(await call({ method: "get_workflow", workflowId: acceptedWorkflowId }), null, 2)); throw error; }
+  await workflowPage.getByText(/start pid=\d+ · Привет ✓/).waitFor();
+  await workflowPage.getByText("Результаты сборки", { exact: true }).waitFor();
+  await workflowPage.getByLabel("Фильтр Лог", { exact: true }).fill("never-match");
+  await workflowPage.getByText("Нет строк по фильтру", { exact: true }).waitFor();
+  await workflowPage.getByLabel("Фильтр Лог", { exact: true }).fill("Привет");
   await workflowPage.getByText(/start pid=\d+ · Привет ✓/).waitFor();
   const completedWorkflow = (await call({ method: "get_workflow", workflowId: acceptedWorkflowId })).workflow;
   assert.equal(completedWorkflow.status, "succeeded");

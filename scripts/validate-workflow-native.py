@@ -4,7 +4,7 @@ import argparse
 import base64
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import socket
 import struct
 import time
@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--controller-config', type=Path, required=True)
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--project', default='snapshot-fixture')
+    parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
     config = json.loads(args.controller_config.read_text())
     endpoint = Path(config['stateDirectory']) / ('controller-' + config['instanceId'] + '.sock')
@@ -62,6 +63,25 @@ def main():
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
+    extra = ''
+    profile_argument = ''
+    if args.netwatch_profile:
+        profile = json.loads(args.netwatch_profile.read_text())
+        if not profile.get('readiness', {}).get('netwatch', {}).get('instanceId', '').startswith('winbridge-'):
+            raise RuntimeError('Netwatch profile must have an isolated instance')
+        arguments = profile['start']['arguments']
+        runtime = PureWindowsPath(arguments[arguments.index('--runtime-directory') + 1])
+        suffix = PureWindowsPath(profile['readiness']['netwatch']['runtimeDirectory'])
+        if runtime.parts[-len(suffix.parts):] != suffix.parts:
+            raise RuntimeError('Netwatch runtime mapping mismatch')
+        test_root = runtime.parents[len(suffix.parts) - 1]
+        owned_relative = test_root.relative_to(PureWindowsPath(project['workspaceRoot']))
+        if not owned_relative.parts or owned_relative.parts[0].lower() in {'snapshots', '.winbridge'} or '..' in owned_relative.parts or profile['projectId'] != args.project:
+            raise RuntimeError('Isolated Netwatch test root must be a new subdirectory of the registered project')
+        PureWindowsPath(profile['start']['executable']).relative_to(test_root)
+        encoded = base64.b64encode(json.dumps(profile).encode()).decode()
+        extra = f"$profilePath = Join-Path $local 'netwatch.request.json'\n[IO.File]::WriteAllBytes($profilePath, [Convert]::FromBase64String('{encoded}'))\n"
+        profile_argument = ' -NetwatchProfile $profilePath'
     script = f"""$ErrorActionPreference = 'Stop'
 $archive = {ps_string(windows_archive)}
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne {ps_string(digest)}) {{ throw 'Archive SHA-256 mismatch' }}
@@ -77,8 +97,9 @@ try {{
 New-Item -ItemType Directory -Path $local | Out-Null
 Expand-Archive -LiteralPath $archive -DestinationPath $local
 $source = Join-Path $local 'winbridge'
+{extra}
 $pwsh = (Get-Command pwsh.exe -ErrorAction Stop).Source
-& $pwsh -NoProfile -File (Join-Path $source 'scripts/test-windows-workflow.ps1') -SourceDirectory $source -ReportDirectory {ps_string(windows_report)} -SourceArchiveSha256 {ps_string(digest)}
+& $pwsh -NoProfile -File (Join-Path $source 'scripts/test-windows-workflow.ps1') -SourceDirectory $source -ReportDirectory {ps_string(windows_report)} -SourceArchiveSha256 {ps_string(digest)}{profile_argument}
 exit $LASTEXITCODE
 """
     request = {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': args.project,
@@ -88,11 +109,8 @@ exit $LASTEXITCODE
     local_report = ROOT / '.winbridge' / 'workflow-validation' / run_id
     local_report.mkdir(parents=True)
     (local_report / 'request.json').write_text(json.dumps(request, indent=2))
-    # Repeat the frozen request if an ACK is lost; the worker owns the same key.
-    try:
-        accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
-    except (OSError, RuntimeError):
-        accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
+    # Preserve the request for reconciliation; stop on an unexpected worker error.
+    accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
     task_id = accepted['taskId']
     print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest}), flush=True)
     chunks = []

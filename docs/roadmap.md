@@ -58,7 +58,7 @@
 
 ## Этап 4 — первый полный цикл разработки
 
-Статус 2026-10-06: основной цикл реализован на committed snapshot-fixture; Windows tests выполняются автоматически через разрешённый worker. [Контракт и ограничения](workflows.md), [автоматический сценарий](windows-workflow-validation.md). Полный этап остаётся открытым: Netwatch profile/probe и оставшиеся UI критерии ещё не выполнены.
+Статус 2026-10-06: основной цикл реализован на committed snapshot-fixture; Windows tests выполняются автоматически через разрешённый worker. [Контракт и ограничения](workflows.md), [автоматический сценарий](windows-workflow-validation.md). Добавлены named profiles/drafts, output filters, artifact catalog, build identity и isolated Netwatch IPC probe. Unix Netwatch cycle и browser UI проверены; этап остаётся открытым до общего автоматического Windows прогона Netwatch.
 
 - [x] Workflow fixture: выбрать SHA → publish/import → build → start → stdout readiness → log tail.
 - [x] Принятый профиль и step IDs в journal; ошибка сборки блокирует запуск следующего шага, dedup не создаёт повторный процесс.
@@ -67,7 +67,7 @@
 - [x] UI workflow steps/timeline, ссылки на build/start tasks, app status и связанный лог; принятие request не считается завершением.
 - [x] Автоматические Windows regression через старый fixed worker, isolated source/build/state и checksum-verified shared report.
 - [ ] Netwatch profile с безопасной изоляцией и фактическим readiness probe; production экземпляр не использовать как fixture.
-- [ ] Отдельные editable именованные profiles, фильтрация output и artifact catalog.
+- [x] Отдельные editable именованные profiles/drafts, фильтрация output и artifact catalog; Rust storage и browser integration прошли.
 
 Критерий: на примере Netwatch агент получает стабильный snapshot, собирает на Windows, запускает его, читает лог и видит все шаги в UI. Падение приложения и провал readiness показываются отдельно от успешной сборки.
 

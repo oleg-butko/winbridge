@@ -10,7 +10,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use winbridge_protocol::{CommandDraft, DeliveryDraft, DesktopDraftState};
+use winbridge_protocol::{CommandDraft, DeliveryDraft, DesktopDraftState, WorkflowProfile};
 
 pub const DESKTOP_STATE_FILE: &str = "winbridge-desktop-state.local.json";
 const MAX_BYTES: usize = 1024 * 1024;
@@ -80,6 +80,26 @@ impl DesktopDraftStore {
         self.write(&bytes)
     }
 
+    pub fn save_workflow(&self, profile: WorkflowProfile) -> Result<()> {
+        validate_workflow_profile(&profile)?;
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "desktop state lock poisoned")?;
+        let mut state = self.read()?;
+        state.workflow_profiles.retain(|p| {
+            p.worker_instance_id != profile.worker_instance_id
+                || p.project_id != profile.project_id
+                || p.workspace_root != profile.workspace_root
+                || p.name != profile.name
+        });
+        if state.workflow_profiles.len() >= MAX_DRAFTS {
+            return Err("Profile limit reached (128); existing profiles are preserved".into());
+        }
+        state.workflow_profiles.push(profile);
+        self.write_state(&state)
+    }
+
     fn read(&self) -> Result<DesktopDraftState> {
         let file = match fs::File::open(&self.path) {
             Ok(file) => file,
@@ -88,6 +108,7 @@ impl DesktopDraftStore {
                     schema_version: 1,
                     drafts: Vec::new(),
                     delivery_drafts: Vec::new(),
+                    workflow_profiles: Vec::new(),
                 });
             }
             Err(error) => return Err(format!("desktop state {}: {error}", self.path.display())),
@@ -107,6 +128,7 @@ impl DesktopDraftStore {
         if state.schema_version != 1
             || state.drafts.len() > MAX_DRAFTS
             || state.delivery_drafts.len() > MAX_DRAFTS
+            || state.workflow_profiles.len() > MAX_DRAFTS
         {
             return Err(format!(
                 "desktop state {}: expected schemaVersion 1 and at most 128 drafts",
@@ -118,6 +140,9 @@ impl DesktopDraftStore {
         }
         for draft in &state.delivery_drafts {
             validate_delivery_draft(draft)?;
+        }
+        for profile in &state.workflow_profiles {
+            validate_workflow_profile(profile)?;
         }
         Ok(state)
     }
@@ -153,6 +178,23 @@ impl DesktopDraftStore {
         }
         result.map_err(|e| format!("desktop state {}: {e}", self.path.display()))
     }
+}
+
+fn validate_workflow_profile(profile: &WorkflowProfile) -> Result<()> {
+    if !valid_id(&profile.worker_instance_id)
+        || !valid_id(&profile.project_id)
+        || profile.workspace_root.is_empty()
+        || profile.workspace_root.len() > 65536
+        || profile.workspace_root.contains('\0')
+        || profile.name.len() > 160
+        || profile.name.chars().any(char::is_control)
+        || profile.parameters_json.len() > 65536
+        || profile.parameters_json.contains('\0')
+    {
+        return Err("Workflow profile: invalid scope, name or JSON size (64 KiB)".into());
+    }
+    // Drafts deliberately retain incomplete JSON; execution validates independently.
+    Ok(())
 }
 
 fn same_scope(left: &CommandDraft, right: &CommandDraft) -> bool {
@@ -201,6 +243,38 @@ fn validate_delivery_draft(draft: &DeliveryDraft) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn named_profiles_and_incomplete_drafts_are_scoped_and_survive_reopen() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(DESKTOP_STATE_FILE);
+        fs::write(
+            &path,
+            br#"{"schemaVersion":1,"drafts":[],"deliveryDrafts":[]}"#,
+        )
+        .unwrap();
+        let store = DesktopDraftStore::new(path.clone());
+        let mut profile = WorkflowProfile {
+            worker_instance_id: "worker-1".into(),
+            project_id: "project".into(),
+            workspace_root: r"K:\project".into(),
+            name: "Netwatch".into(),
+            parameters_json: "{\"name\":\"Привет ✓\"}".into(),
+        };
+        store.save_workflow(profile.clone()).unwrap();
+        profile.name.clear();
+        profile.parameters_json = "{\n  \"unfinished\": ".into();
+        store.save_workflow(profile.clone()).unwrap();
+        profile.workspace_root = r"K:\other".into();
+        store.save_workflow(profile.clone()).unwrap();
+        let mut saved = DesktopDraftStore::new(path.clone()).load().unwrap();
+        assert_eq!(saved.workflow_profiles.len(), 3);
+        assert_eq!(saved.workflow_profiles.pop().unwrap(), profile);
+        let before = fs::read(&path).unwrap();
+        profile.parameters_json = "x".repeat(65537);
+        assert!(store.save_workflow(profile).is_err());
+        assert_eq!(fs::read(path).unwrap(), before);
+    }
 
     fn draft(project: &str) -> CommandDraft {
         CommandDraft {

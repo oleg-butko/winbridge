@@ -42,6 +42,35 @@ pub struct RuntimeDescriptor {
     pub scaffold: bool,
     pub implemented_capabilities: Vec<Capability>,
     pub planned_capabilities: Vec<Capability>,
+    #[serde(default)]
+    pub build: Option<BuildIdentity>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildIdentity {
+    pub version: String,
+    pub source_commit: Option<String>,
+    pub source_dirty: bool,
+    pub source_manifest_sha256: Option<String>,
+    pub build_id: String,
+}
+pub fn build_identity() -> BuildIdentity {
+    let optional = |v: &str| {
+        if v.is_empty() {
+            None
+        } else {
+            Some(v.to_string())
+        }
+    };
+    BuildIdentity {
+        version: env!("CARGO_PKG_VERSION").into(),
+        source_commit: optional(env!("WINBRIDGE_SOURCE_COMMIT")),
+        source_dirty: env!("WINBRIDGE_SOURCE_DIRTY") == "true",
+        source_manifest_sha256: optional(env!("WINBRIDGE_SOURCE_MANIFEST_SHA256")),
+        build_id: env!("WINBRIDGE_BUILD_ID").into(),
+    }
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -227,6 +256,10 @@ pub struct WorkerInfo {
     pub snapshot_import_available: bool,
     #[serde(default)]
     pub workflow_available: bool,
+    #[serde(default)]
+    pub workflow_features: Vec<String>,
+    #[serde(default)]
+    pub build: Option<BuildIdentity>,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -234,7 +267,7 @@ pub struct WorkerInfo {
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
     SubmitWorkflow {
-        request: WorkflowSubmission,
+        request: Box<WorkflowSubmission>,
     },
     ListWorkflows,
     GetWorkflow {
@@ -339,7 +372,7 @@ pub enum LocalResponse {
         preview: SnapshotPreview,
     },
     Info {
-        info: WorkerInfo,
+        info: Box<WorkerInfo>,
     },
     Task {
         task: Box<TaskRecord>,
@@ -397,6 +430,20 @@ pub struct DesktopDraftState {
     pub drafts: Vec<CommandDraft>,
     #[serde(default)]
     pub delivery_drafts: Vec<DeliveryDraft>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub workflow_profiles: Vec<WorkflowProfile>,
+}
+
+/// Named editable desktop profiles; an empty name is the unfinished draft.
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkflowProfile {
+    pub worker_instance_id: String,
+    pub project_id: String,
+    pub workspace_root: String,
+    pub name: String,
+    pub parameters_json: String,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

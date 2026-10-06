@@ -101,3 +101,5 @@ Worker сохраняет frozen профиль и step IDs до ACK, затем
 Добавление возможности проходит через DTO → core handler → platform/delivery adapter → journal/read model → UI → проверку восстановления. Добавление другого проекта в первую очередь требует project configuration/recipes; новая capability нужна только для новых действий. Обобщать interfaces после появления второго реального handler, а не создавать пустую систему plugins заранее.
 
 Первый полный сценарий и критерии готовности перечислены в [roadmap.md](roadmap.md).
+
+Этап 4: editable profiles/drafts принадлежат desktop state, frozen accepted profile — worker journal. Artifact hashes снимаются после build перед start в фоновой работе, с исторической привязкой к source/build task. Изолированный Netwatch readiness adapter сверяет владельца IPC и health PID; он не подключается к production pipe. Расширенные workflow поля согласуются через WorkerInfo.workflowFeatures, без изменения Hello старого worker. Build identity содержит commit/dirty/build ID и SHA source manifest при сборке из ZIP.

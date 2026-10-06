@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { Alert, Button, Card, Code, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { expectResult, workerCall } from "../../runtime/adapter";
-import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, saveDeliveryDraft } from "../../runtime/commandDrafts";
+import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, saveDeliveryDraft, saveWorkflowProfile } from "../../runtime/commandDrafts";
 import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo } from "../../runtime/contracts";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
@@ -60,6 +61,8 @@ export function NativeWorkbench() {
   const { recipeId, executable, argumentsJson: argv, workingDirectory: cwd, timeoutSeconds: timeout } = form;
   const [drafts, setDrafts] = useState<CommandDraft[] | null>(null);
   const [deliveryDrafts, setDeliveryDrafts] = useState<DeliveryDraft[] | null>(null);
+  const [workflowProfiles, setWorkflowProfiles] = useState<import("../../runtime/contracts").WorkflowProfile[] | null>(null);
+  const [desktopBuild, setDesktopBuild] = useState<import("../../runtime/contracts").BuildIdentity | null>(null);
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const loadedScopeRef = useRef<string | null>(null);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
@@ -75,10 +78,11 @@ export function NativeWorkbench() {
   const [submitting, setSubmitting] = useState(false);
   const [pending, setPending] = useState<TaskSubmission | null>(null);
   const selectedRef = useRef(selectedId); selectedRef.current = selectedId;
+  useEffect(() => { let disposed = false; void invoke<import("../../runtime/contracts").BuildIdentity>("desktop_build").then((build) => { if (!disposed) setDesktopBuild(build); }).catch(() => {}); return () => { disposed = true; }; }, []);
   useEffect(() => {
     let disposed = false;
     void loadCommandDrafts().then((state) => {
-      if (!disposed) { setDrafts(state.drafts); setDeliveryDrafts(state.deliveryDrafts); }
+      if (!disposed) { setDrafts(state.drafts); setDeliveryDrafts(state.deliveryDrafts); setWorkflowProfiles(state.workflowProfiles ?? []); }
     }).catch((error) => {
       if (!disposed) { setDrafts([]); setDeliveryDrafts([]); setSaveError(String(error)); }
     });
@@ -160,6 +164,15 @@ export function NativeWorkbench() {
     scopedSaves.current.set(`delivery:${JSON.stringify([draft.workerInstanceId, draft.projectId, draft.workspaceRoot])}`, pendingSave);
     return pendingSave;
   }
+  function persistWorkflow(profile: import("../../runtime/contracts").WorkflowProfile): Promise<void> {
+    setWorkflowProfiles((saved) => [...(saved ?? []).filter((p) => p.workerInstanceId !== profile.workerInstanceId
+      || p.projectId !== profile.projectId || p.workspaceRoot !== profile.workspaceRoot || p.name !== profile.name), profile]);
+    setCloseError(null);
+    const pendingSave = saveQueue.current.catch(() => {}).then(() => saveWorkflowProfile(profile));
+    saveQueue.current = pendingSave;
+    scopedSaves.current.set(`workflow:${JSON.stringify([profile.workerInstanceId, profile.projectId, profile.workspaceRoot, profile.name])}`, pendingSave);
+    return pendingSave;
+  }
   async function send(request: TaskSubmission) {
     setSubmitting(true); setPending(request); setError(null);
     try {
@@ -185,6 +198,8 @@ export function NativeWorkbench() {
     <Alert color={connected ? "teal" : "yellow"} title={connected ? `Worker подключён · ${info?.platform} · ${info?.instanceId}` : "Worker недоступен"}>
       {connected ? "Данные поступают из локального журнала worker. Закрытие окна не отменяет принятую задачу." : connectionError ?? "Ожидается соединение с локальным worker."}
       {info && <Text size="xs" mt="xs">{info.runtimeValidation}</Text>}
+      {info && <Text size="xs">Версия worker: {info.build ? `${info.build.version} · commit ${info.build.sourceCommit ?? "не указан"}${info.build.sourceDirty ? " · изменённые исходники" : ""} · build ${info.build.buildId}` : "этот выпуск не передаёт сведения о сборке"} · generation {info.generation}</Text>}
+      <Text size="xs">Версия desktop: {desktopBuild ? `${desktopBuild.version} · commit ${desktopBuild.sourceCommit ?? "не указан"}${desktopBuild.sourceDirty ? " · изменённые исходники" : ""} · build ${desktopBuild.buildId}` : "сведения о сборке ещё не получены"}</Text>
     </Alert>
     <Alert color={controllerFresh ? "teal" : "yellow"} title={controllerFresh ? "Controller Debian подключён" : !info ? "Состояние controller пока неизвестно" : controller ? connected && controller.state === "connecting" ? "Подключение к controller Debian…" : "Нет свежего соединения с controller Debian" : "Управление из Debian не настроено"}>
       {controller ? <>
@@ -196,7 +211,7 @@ export function NativeWorkbench() {
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
     {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
-    {info?.workflowAvailable && <WorkflowWorkbench info={info} connected={connected} closing={closing} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
+    {info?.workflowAvailable && <WorkflowWorkbench info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card withBorder><Stack>
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />

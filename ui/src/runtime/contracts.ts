@@ -40,7 +40,8 @@ export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type ControllerConnection = { url: string, state: ConnectionState, sessionId: string | null, controllerNodeId: string | null, controllerGeneration: string | null, lastConfirmedAtMs: number | null, error: string | null, };
 export type ActivityLogStatus = { path: string, maxFileBytes: number, retainedArchives: number, droppedRecords: number, lastError: string | null, };
 export type ControllerStatus = { instanceId: string, nodeId: string, generation: string, listenAddress: string, connected: boolean, sessionId: string | null, workerNodeId: string | null, workerGeneration: string | null, workerAddress: string | null, lastError: string | null, activityLog: ActivityLogStatus | null, };
-export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, workflowAvailable: boolean, };
+export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, build: BuildIdentity | null, };
+export type BuildIdentity = { version: string, sourceCommit: string | null, sourceDirty: boolean, sourceManifestSha256: string | null, buildId: string, };
 export type LocalRequest = { "method": "submit_workflow", request: WorkflowSubmission, } | { "method": "list_workflows" } | { "method": "get_workflow", workflowId: string, } | { "method": "cancel_workflow", workflowId: string, } | { "method": "list_applications" } | { "method": "get_application", applicationId: string, } | { "method": "stop_application", applicationId: string, } | { "method": "read_application_log", applicationId: string, cursor: LogCursor | null, maxBytes: number, } | { "method": "list_snapshots", projectId: string, offset: number, } | { "method": "import_snapshot", request: ImportSubmission, } | { "method": "list_imports" } | { "method": "get_import", importId: string, } | { "method": "cancel_import", importId: string, } | { "method": "preview_snapshot", projectId: string, snapshotId: string, offset: number, } | { "method": "info" } | { "method": "controller_status" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
 export type LocalResponse = { "kind": "workflow", workflow: WorkflowRecord, } | { "kind": "workflows", workflows: Array<WorkflowRecord>, } | { "kind": "application", application: ApplicationRecord, } | { "kind": "applications", applications: Array<ApplicationRecord>, } | { "kind": "log", page: LogPage, } | { "kind": "snapshots", page: PublishedSnapshotPage, } | { "kind": "import", import: ImportRecord, } | { "kind": "imports", imports: Array<ImportRecord>, } | { "kind": "snapshot_preview", preview: SnapshotPreview, } | { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, } | { "kind": "controller_status", status: ControllerStatus, };
 export type TaskReport = { schemaVersion: number, platform: string, task: TaskRecord, output: Array<OutputChunk>, outputComplete: boolean, };
@@ -54,16 +55,24 @@ export type DesktopDraftState = { schemaVersion: number,
 /**
  * Oldest first; the last matching worker entry restores its project choice.
  */
-drafts: Array<CommandDraft>, deliveryDrafts: Array<DeliveryDraft>, };
-export type ReadinessProbe = { stdoutContains: string, timeoutMs: number, };
+drafts: Array<CommandDraft>, deliveryDrafts: Array<DeliveryDraft>, workflowProfiles?: Array<WorkflowProfile>, };
+export type WorkflowProfile = { workerInstanceId: string, projectId: string, workspaceRoot: string, name: string, parametersJson: string, };
+export type ReadinessProbe = { stdoutContains?: string, timeoutMs: number, netwatch?: NetwatchProbe, };
+export type NetwatchProbe = { instanceId: string, runtimeDirectory: string, };
+export type ArtifactSpec = { name: string,
+/**
+ * Relative to the project root, outside immutable snapshots.
+ */
+path: string, };
+export type BuildArtifact = { name: string, path: string, bytes: number, sha256: string, sourceCommit: string, manifestSha256: string, buildTaskId: string, recordedAtMs: number, };
 export type WorkflowSubmission = { protocolVersion: number, requestId: string, idempotencyKey: string, name: string, projectId: string, snapshotId: string, manifestSha256: string, timeoutMs: number, build: CommandSource, start: CommandSource, readiness: ReadinessProbe,
 /**
  * UTF-8 application log, relative to the registered project root, outside snapshots.
  */
-logPath: string, };
+logPath: string, artifacts?: Array<ArtifactSpec>, };
 export type WorkflowStepStatus = "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped" | "indeterminate";
 export type WorkflowStep = { stepId: string, name: string, status: WorkflowStepStatus, operationId: string | null, startedAtMs: number | null, finishedAtMs: number | null, reason: string | null, };
-export type WorkflowRecord = { workflowId: string, submission: WorkflowSubmission, status: TaskStatus, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, reason: string | null, applicationId: string | null, steps: Array<WorkflowStep>, events: Array<JournalEvent>, };
+export type WorkflowRecord = { workflowId: string, submission: WorkflowSubmission, status: TaskStatus, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, reason: string | null, applicationId: string | null, steps: Array<WorkflowStep>, events: Array<JournalEvent>, artifacts: Array<BuildArtifact>, };
 export type ApplicationStatus = "starting" | "ready" | "stopping" | "stopped" | "exited" | "failed" | "indeterminate";
 export type ApplicationRecord = { applicationId: string, workflowId: string, projectId: string, taskId: string, status: ApplicationStatus, processId: number | null, createdAtMs: number, readyAtMs: number | null, finishedAtMs: number | null, logPath: string, reason: string | null, failureReason: string | null, };
 export type LogCursor = { fileIdentity: string, offset: number, prefixBytes: number, prefixSha256: string, };

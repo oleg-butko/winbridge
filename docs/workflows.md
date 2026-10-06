@@ -46,6 +46,50 @@ Project reservation охватывает startup prerequisites, поэтому �
 
 Cursor включает file identity, offset и hash первых ≤128 bytes. Смена identity означает rotation; уменьшение длины — truncation; изменённый prefix — rewrite. Reset явно показан, новый файл читается с начала. Перезапись области после prefix без смены identity/длины не обнаруживается: для гарантированного restart логгера использовать rotate/truncate. Файл приложения worker не изменяет. Runtime log retention принадлежит приложению; квота stdout/stderr task продолжает drain и отмечает потерю данных.
 
-## Границы этого выпуска
+## Профили и результаты сборки
 
-Полный цикл проверяется на snapshot-fixture, включая настоящее Windows исполнение. Production Netwatch не запускался. В его текущем коде readiness не выводится в stdout, log file и named pipe принадлежат Netwatch; запуск второго экземпляра под тем же Windows пользователем конфликтует с его pipe. Для безопасной интеграции нужен отдельный профиль и согласованный probe/isolation. HTTP/IPC readiness, сохранённые именованные editable profiles, отдельный artifact catalog и фильтрация output ещё не реализованы. Этап 4 в roadmap остаётся открытым до этих критериев; принятый durable профиль и UI истории уже работают.
+Именованные editable profiles и незаконченные JSON drafts сохраняются в desktop state
+рядом с exe по instance/project/workspaceRoot. До 128 записей, JSON до 64 KiB, весь
+state до 1 MiB. Выбор, восстановление и сохранение профиля не отправляют команду;
+принятая копия в worker journal остаётся неизменной. Close ожидает ACK сохранения всех
+изменённых scopes. Старые schemaVersion 1 файлы читаются без преобразования; старый
+desktop не понимает новые поля с профилями, поэтому rollback требует совместимого
+выпуска или отдельного state файла, а не удаления пользовательских форм.
+
+Необязательное `artifacts` содержит до 8 `{name,path}` относительно root проекта,
+вне snapshots/.winbridge. После build exit 0 worker проверяет каждый regular file,
+размер (до 256 MiB/file, 512 MiB/total), SHA-256 и стабильность identity/size/mtime.
+Отсутствие, замена, symlink/junction или превышение квоты блокируют start. Хеширование
+идёт в фоне и не держит journal lock. Cargo hard links допустимы для этого чтения;
+защита writable journal/log по-прежнему отклоняет hard links. Каталог фиксирует путь,
+bytes/hash, source commit, manifest hash, build task и время проверки. Это историческая
+запись; будущая сборка может изменить файл по тому же пути. Хеш не доказывает семантику
+компилятора или отсутствие вмешательства другого доверенного процесса.
+
+stdout/stderr и log имеют фильтр строк без учёта регистра и паузу просмотра. Они
+работают с последними 65 536 символами загруженного текста; capture worker и byte cursor
+продолжают обновляться. Фильтр не обещает поиск по ещё не загруженным данным журнала.
+
+## Готовность Netwatch и совместимость
+
+Вместо stdout token профиль может указать `readiness.netwatch` с `instanceId` и
+`runtimeDirectory`. Требуется отдельный `winbridge-*` instance и относительная runtime
+directory вне snapshot. Probe сверяет IPC server PID и health PID с принадлежащим
+worker процессом. Probe и stdout token взаимоисключающие. См. [изоляцию Netwatch](netwatch-validation.md).
+
+WorkerInfo объявляет строковые workflowFeatures `artifacts`/`netwatch_health` и build
+identity. Новые UI/controller проверяют их перед отправкой расширенного workflow:
+старому worker не отправляется неизвестный payload. Старый stdout workflow сохраняет
+wire fingerprint и dedup после upgrade. PeerIdentity/Hello не расширены: существующее
+соединение остаётся совместимым с предыдущим выпуском. DB schema остаётся 3; новые
+record fields читаются с defaults. После новых submissions rollback на старый worker
+не поддерживается из-за strict submission contract.
+
+Worker и desktop показывают commit, dirty marker и build ID отдельно от process
+generation. В распакованном ZIP identity берётся из source manifest, его SHA-256 также
+передаётся; build script сравнивает файлы с manifest и отмечает последующие изменения.
+В Git checkout используются HEAD/status. Отсутствие metadata показывается явно.
+
+Полный цикл fixture, process recovery и Netwatch проверяются автоматическими
+сценариями; конкретные результаты записываются в Windows gate и handoff. Native
+визуальные наблюдения новых панелей не подменяются Unix browser test.

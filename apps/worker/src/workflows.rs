@@ -4,6 +4,7 @@ use crate::{
 };
 use rusqlite::{params, OptionalExtension};
 use std::collections::HashMap;
+use std::sync::{atomic::Ordering, Arc};
 use winbridge_protocol::*;
 
 impl Store {
@@ -62,6 +63,7 @@ impl Store {
                 })
                 .collect(),
             events: vec![],
+            artifacts: vec![],
         };
         Self::workflow_event(
             &mut workflow,
@@ -257,7 +259,7 @@ impl Worker {
         winbridge_log_reader::read(&project.workspace_root, &app.log_path, id, cursor, max)
     }
     pub(crate) fn advance_workflows(
-        &self,
+        self: &Arc<Self>,
         store: &mut Store,
         active: &mut HashMap<String, String>,
     ) -> Result<()> {
@@ -368,10 +370,14 @@ impl Worker {
             .lock()
             .map_err(|_| "readiness scan lock poisoned")?
             .retain(|id, _| pending.iter().any(|f| &f.workflow_id == id));
+        self.checks
+            .lock()
+            .map_err(|_| "background checks lock poisoned")?
+            .retain(|id, _| pending.iter().any(|f| id.starts_with(&f.workflow_id)));
         Ok(())
     }
     fn advance_workflow(
-        &self,
+        self: &Arc<Self>,
         store: &mut Store,
         active: &mut HashMap<String, String>,
         flow: &mut WorkflowRecord,
@@ -473,6 +479,45 @@ impl Worker {
             return self.child_result(store, flow, 0, import.status, import.reason.as_deref());
         }
         if index == 1 || index == 2 {
+            if index == 2 && !flow.submission.artifacts.is_empty() && flow.artifacts.is_empty() {
+                let project = self
+                    .config
+                    .projects
+                    .iter()
+                    .find(|p| p.id == flow.submission.project_id)
+                    .ok_or("Project missing")?;
+                let root = project.workspace_root.clone();
+                let specs = flow.submission.artifacts.clone();
+                let task = store.get(
+                    flow.steps[1]
+                        .operation_id
+                        .as_ref()
+                        .ok_or("Build task missing")?,
+                )?;
+                let snapshot = task.snapshot.ok_or("Build snapshot missing")?;
+                match self.background_check(
+                    format!("{}:artifacts", flow.workflow_id),
+                    move || {
+                        crate::artifacts::capture(&root, &specs, &snapshot, &task.task_id)
+                            .map(CheckResult::Artifacts)
+                    },
+                )? {
+                    None => return Ok(()),
+                    Some(Ok(CheckResult::Artifacts(artifacts))) => {
+                        flow.artifacts = artifacts;
+                        Store::workflow_event(flow, "Declared build artifacts hashed and linked to verified source before start");
+                        store.save_workflow(flow)?;
+                    }
+                    Some(Err(reason)) => {
+                        return store.finish_workflow(
+                            flow,
+                            TaskStatus::Failed,
+                            &format!("Build artifact verification failed; start skipped: {reason}"),
+                        )
+                    }
+                    _ => return Err("Invalid artifact check result".into()),
+                }
+            }
             if flow.steps[index].operation_id.is_none() {
                 if index == 2 && store.applications(false)?.len() >= 32 {
                     return store.finish_workflow(flow,TaskStatus::Failed,"Application registry limit reached (32 live applications); start not submitted");
@@ -638,44 +683,86 @@ impl Worker {
             store.save_workflow(flow)?;
         }
         if index == 3 {
-            // Ready output is bounded by the task's output quota. No PID or stale log confirms readiness.
-            let needle = flow.submission.readiness.stdout_contains.as_bytes();
-            let mut scans = self
-                .readiness_scans
-                .lock()
-                .map_err(|_| "readiness scan lock poisoned")?;
-            let (after, bytes) = scans.entry(flow.workflow_id.clone()).or_default();
-            for _ in 0..4 {
-                // Bound work per scheduler tick; resume without re-reading old output.
-                let page = store.output(&app.task_id, *after)?;
-                if page.is_empty() {
-                    break;
-                }
-                *after = page.last().unwrap().sequence;
-                bytes.extend(
-                    page.into_iter()
-                        .filter(|c| matches!(c.stream, OutputStream::Stdout))
-                        .flat_map(|c| c.bytes),
-                );
-                if bytes.windows(needle.len()).any(|w| w == needle) {
-                    app.status = ApplicationStatus::Ready;
-                    app.ready_at_ms = Some(now_ms());
-                    app.reason = Some(
-                        "Configured stdout readiness token confirmed from this process".into(),
-                    );
-                    store.save_application(&app)?;
-                    update_step(
-                        flow,
-                        3,
-                        WorkflowStepStatus::Succeeded,
-                        "Readiness confirmed from this application's stdout",
-                    );
+            if let Some(probe) = &flow.submission.readiness.netwatch {
+                let root = self
+                    .config
+                    .projects
+                    .iter()
+                    .find(|p| p.id == app.project_id)
+                    .ok_or("Project missing")?
+                    .workspace_root
+                    .clone();
+                let probe = probe.clone();
+                let pid = task.process_id.ok_or("Readiness requires an owned PID")?;
+                let key = format!("{}:health", flow.workflow_id);
+                if let Some(result) = self.background_check(key.clone(), move || {
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .map_err(|e| e.to_string())?;
+                    runtime
+                        .block_on(winbridge_transport::netwatch_health(&root, &probe, pid))
+                        .map(CheckResult::Ready)
+                })? {
+                    self.checks
+                        .lock()
+                        .map_err(|_| "background checks lock poisoned")?
+                        .remove(&key);
+                    match result {
+                        Ok(CheckResult::Ready(reason)) => {
+                            app.status = ApplicationStatus::Ready;
+                            app.ready_at_ms = Some(now_ms());
+                            app.reason = Some(reason.clone());
+                            store.save_application(&app)?;
+                            update_step(flow, 3, WorkflowStepStatus::Succeeded, reason);
+                        }
+                        Err(reason) => {
+                            flow.steps[3].reason = Some(reason);
+                        }
+                        _ => return Err("Invalid health check result".into()),
+                    }
                     store.save_workflow(flow)?;
-                    break;
                 }
-                let keep = needle.len().saturating_sub(1);
-                if bytes.len() > keep {
-                    bytes.drain(..bytes.len() - keep);
+            } else {
+                // Ready output is bounded by the task's output quota. No PID or stale log confirms readiness.
+                let needle = flow.submission.readiness.stdout_contains.as_bytes();
+                let mut scans = self
+                    .readiness_scans
+                    .lock()
+                    .map_err(|_| "readiness scan lock poisoned")?;
+                let (after, bytes) = scans.entry(flow.workflow_id.clone()).or_default();
+                for _ in 0..4 {
+                    // Bound work per scheduler tick; resume without re-reading old output.
+                    let page = store.output(&app.task_id, *after)?;
+                    if page.is_empty() {
+                        break;
+                    }
+                    *after = page.last().unwrap().sequence;
+                    bytes.extend(
+                        page.into_iter()
+                            .filter(|c| matches!(c.stream, OutputStream::Stdout))
+                            .flat_map(|c| c.bytes),
+                    );
+                    if bytes.windows(needle.len()).any(|w| w == needle) {
+                        app.status = ApplicationStatus::Ready;
+                        app.ready_at_ms = Some(now_ms());
+                        app.reason = Some(
+                            "Configured stdout readiness token confirmed from this process".into(),
+                        );
+                        store.save_application(&app)?;
+                        update_step(
+                            flow,
+                            3,
+                            WorkflowStepStatus::Succeeded,
+                            "Readiness confirmed from this application's stdout",
+                        );
+                        store.save_workflow(flow)?;
+                        break;
+                    }
+                    let keep = needle.len().saturating_sub(1);
+                    if bytes.len() > keep {
+                        bytes.drain(..bytes.len() - keep);
+                    }
                 }
             }
         } else {
@@ -703,6 +790,33 @@ impl Worker {
             active.remove(&app.project_id); // The process remains owned; only the startup mutation lease ends.
         }
         Ok(())
+    }
+    fn background_check<F>(
+        self: &Arc<Self>,
+        key: String,
+        check: F,
+    ) -> Result<Option<Result<CheckResult>>>
+    where
+        F: FnOnce() -> Result<CheckResult> + Send + 'static,
+    {
+        let mut checks = self
+            .checks
+            .lock()
+            .map_err(|_| "background checks lock poisoned")?;
+        if let Some(result) = checks.get(&key) {
+            return Ok(result.clone());
+        }
+        checks.insert(key.clone(), None);
+        self.active_jobs.fetch_add(1, Ordering::AcqRel);
+        let worker = Arc::clone(self);
+        std::thread::spawn(move || {
+            let result = check();
+            if let Ok(mut checks) = worker.checks.lock() {
+                checks.insert(key, Some(result));
+            }
+            worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
+        });
+        Ok(None)
     }
     fn child_result(
         &self,
@@ -739,4 +853,10 @@ impl Worker {
         }
         Ok(())
     }
+}
+
+#[derive(Clone)]
+pub(crate) enum CheckResult {
+    Artifacts(Vec<BuildArtifact>),
+    Ready(String),
 }

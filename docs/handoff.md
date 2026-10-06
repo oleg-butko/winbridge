@@ -25,7 +25,7 @@
 | WebSocket | Versioned handshake/RPC/heartbeat/reconnect/watch реализованы; 14 session groups и UI integration проходят в Debian. Шесть групп Windows runtime gate прошли, включая прежний task/PID/generation после offline. Подключение и все три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. |
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
 | Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite schema 3 + consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
-| Attention/Netwatch profile | Attention, editable named profiles/artifact catalog и отдельный безопасный Netwatch probe/profile ещё не реализованы. Полный этап 4 остаётся открытым. |
+| Attention/Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Изолированный Netwatch clone/probe согласован пользователем; actual Unix cycle прошёл. Attention остаётся этапом 5. Полный этап 4 ждёт общего Windows Netwatch прогона. |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 
 **Этап 1 завершён 2026-10-05.** [Доказательства](windows-gate-2026-10-05.md): прогон `20261005-161827-c8deef84`, все 10 checks passed, ipcAclVerified true; пять native UI шагов подтверждены пользователем, включая отдельно уточнённый stop/restart worker. JSON uiVerified остаётся false, потому что ручные шаги не оцениваются скриптом; shared report не менялся. Worker --describe возвращает scaffold false и task_submit/task_cancel, в коммите этапа 1 controller оставался scaffold. Теперь controller реализует task_submit/task_cancel через worker; readiness этапа 2 требует отдельного Windows gate.
@@ -49,7 +49,7 @@
 
 Review fixes закоммичены `700ddd5`: bounded config/desktop state и journal link/reparse guards. Основной цикл этапа 4 реализован и проверен: [контракт](workflows.md), [37 native Windows tests](windows-workflow-gate-2026-10-06.md), [автоматический сценарий](windows-workflow-validation.md). Report run `20261006-132034-a57beb0d`, task `fc247059-8df0-4005-9253-377d328a0fac`, SHA-256 `914c7e54e90ddac912079d6a543c4cc0cc5c0a257f7aaf3c19eea79cba8ba46a`. 59 Unix tests, 15 session groups, actual UI integration, Windows compile/Clippy/contracts/build/standalone desktop проходят. Подробная native UI проверка отложена пользователем; не назначать новый ручной gate для мелких изменений.
 
-Пользователь обновил рабочий Windows runtime выпуском `652635b` через `prepare-windows-snapshot.ps1`; новая generation `210bd4b6-e35f-48e1-85a6-81c973c79605`, workflowAvailable=true, соединение подтверждено. Controller generation `ca6e5e43-3739-4f2a-819c-11e8e8ce63e0`, exec session 9142; доступность проверять status. Повторного update/gate не запрашивать. 37 native tests выполнены ранее в isolated source/cache/state через старый worker; дополнительно установленный runtime прошёл actual WebSocket import/build/start/readiness/log/dedup/stop без ручной проверки пользователя. Shared report `workflow-validation/installed-20261006-155439-827cbbac`, SHA-256 `466334303cfa8a2e28483d79a3b6e87c85341f293ad661647d246b6fd4babb8b`; [IDs и доказательства](windows-workflow-gate-2026-10-06.md). Тестовое приложение остановлено, worker оставлен работающим.
+Пользователь обновил рабочий Windows runtime выпуском `652635b` через `prepare-windows-snapshot.ps1`; новая generation `210bd4b6-e35f-48e1-85a6-81c973c79605`, workflowAvailable=true, соединение подтверждено. Controller generation `ca6e5e43-3739-4f2a-819c-11e8e8ce63e0`, exec session 9142; доступность проверять status. Не повторять прежний gate; для новых stage-4 features требуется совместимый выпуск. По новой инструкции пользователя при неожиданной ошибке worker остановиться и запросить update. 37 native tests выполнены ранее в isolated source/cache/state через старый worker; дополнительно установленный runtime прошёл actual WebSocket import/build/start/readiness/log/dedup/stop без ручной проверки пользователя. Shared report `workflow-validation/installed-20261006-155439-827cbbac`, SHA-256 `466334303cfa8a2e28483d79a3b6e87c85341f293ad661647d246b6fd4babb8b`; [IDs и доказательства](windows-workflow-gate-2026-10-06.md). Тестовое приложение остановлено, worker оставлен работающим.
 
 Committed fixture `s-e0ee0e50ee6c6de17a487199ca09689dec8f6abd`, manifest `474f1188ec53f7b0492e6a20ec8e5c17295c7c281cdc148706e904547cfb0cb1`; frozen request `.winbridge/workflow-fixture/20261006-131804-d59a5488/workflow.request.json` уже выполнен как workflow `be3004e6-8056-4e50-a5e5-58a41fde2c75`. Повтор key возвращает историю, не запускает приложение снова. `prepare-workflow.py` создаёт новый fixture/config/profile отдельно при необходимости нового цикла. Новые ручные UI checks по мелким исправлениям не назначать.
 
@@ -111,3 +111,22 @@ Runtime постоянный: `K:\_proj-26\winbridge\runtime`, runtimeDirectory 
 ## Готовый запрос для продолжения
 
 > Продолжи WinBridge в /home/user1/winbridge по AGENTS.md и docs/handoff.md. Этап 1 завершён. Windows runtime gate этапа 2 пройден 2026-10-05, доказательства в docs/windows-session-gate-2026-10-05.md. Все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён. Windows snapshot runtime gate этапа 3 пройден 2026-10-06: docs/windows-snapshot-gate-2026-10-06.md. Пользователь принял UI исправления и закрыл этап 3, подробную ручную проверку отложил. Продолжить этап 4, приоритет автоматических Windows сценариев через подключённый worker; не останавливаться на новых ручных UI gates. Сохраняй отдельный Windows workspace, постоянный путь exe/config/state, durable acceptance/dedup/cancel/recovery и понятный UI. Не вводи TLS или новые adapters без задачи пользователя; пройденные runtime gates без новой причины не повторяй.
+
+## Завершение этапа 4 — текущая работа 2026-10-06
+
+Добавлены editable named profiles и unfinished drafts в desktop state с close/save ACK,
+фильтрация и pause просмотра stdout/stderr/log, исторический artifact catalog с bytes/SHA/source/build task,
+фоновые artifact/health checks и build identity worker/desktop. DB schema остаётся 3;
+старые stdout workflow fingerprints сохраняются. Controller/UI проверяют workflowFeatures
+перед отправкой новых полей. Оригинальный Netwatch repository не меняется.
+
+Пользователь согласовал отдельный clone Netwatch с instance ID. [Сценарий](netwatch-validation.md):
+исходный commit 39409e56a26ef438adab3488afea504ef40f1363, validation commit
+e295806456a5715510918dc178ff1e7975e8626b, manifest
+b9a2cb5d1740057566452ad5acfe5f6c19be45390182a58ceaa470a1b06700ed.
+Prepared profile `.winbridge/netwatch-validation/20261006-163106-3ae4e9ff/workflow.request.json`
+зарегистрирован для отдельного native test root; не отправлять его установленному worker.
+Unix actual Netwatch import/build/artifact/start/IPC/log/stop прошёл:
+`.winbridge/netwatch-unix/97d94ee6/report.json`, workflow c11c5856-0568-4887-b383-55376449f49c,
+PID 177361 остановлен. 63 Rust tests, Clippy -D warnings, contracts/typecheck/UI build,
+Windows all-targets compile и browser integration прошли; автоматический Windows Netwatch прогон ещё предстоит.

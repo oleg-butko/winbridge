@@ -3,7 +3,9 @@ use std::{io, path::Path, time::Duration};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use winbridge_protocol::{LocalRequest, LocalResponse};
 
+mod readiness;
 pub mod websocket;
+pub use readiness::netwatch_health;
 
 #[cfg(windows)]
 mod windows;

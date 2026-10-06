@@ -38,11 +38,43 @@ pub fn validate(config: &WorkerConfig, request: &WorkflowSubmission) -> Result<(
     }
     if !(100..=1800000).contains(&request.timeout_ms)
         || !(100..=180000).contains(&request.readiness.timeout_ms)
-        || request.readiness.stdout_contains.is_empty()
         || request.readiness.stdout_contains.len() > 1024
         || request.readiness.stdout_contains.contains('\0')
     {
         return Err("Workflow timeout 100-1800000 ms; readiness timeout 100-180000 ms and nonempty stdout token up to 1024 bytes".into());
+    }
+    match &request.readiness.netwatch {
+        None if request.readiness.stdout_contains.is_empty() => {
+            return Err(
+                "Readiness requires a stdout token or isolated Netwatch health probe".into(),
+            )
+        }
+        Some(probe) => {
+            if !request.readiness.stdout_contains.is_empty()
+                || !valid_id(&probe.instance_id)
+                || !probe.instance_id.starts_with("winbridge-")
+            {
+                return Err("Netwatch probe requires an isolated winbridge-* instance ID and no stdout token".into());
+            }
+            validate_log_path(&probe.runtime_directory)?;
+        }
+        None => {}
+    }
+    if request.artifacts.len() > 8 {
+        return Err("At most 8 declared build artifacts".into());
+    }
+    let mut paths = std::collections::HashSet::new();
+    for artifact in &request.artifacts {
+        validate_log_path(&artifact.path)?;
+        if artifact.name.is_empty()
+            || artifact.name.len() > 160
+            || artifact.name.chars().any(char::is_control)
+            || !paths.insert(artifact.path.replace('\\', "/").to_ascii_lowercase())
+        {
+            return Err(
+                "Artifact requires a unique relative path and a name of 1-160 bytes".into(),
+            );
+        }
     }
     validate_log_path(&request.log_path)?;
     if config.delivery.is_none() {

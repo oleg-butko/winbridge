@@ -26,6 +26,7 @@ param(
     [string]$SourceDirectory = '',
     [string]$ReportDirectory = '',
     [string]$SourceArchiveSha256 = '',
+    [string]$NetwatchProfile = '',
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -45,7 +46,7 @@ test-windows-workflow.ps1 — автоматические Windows тесты Wi
   -ReportDirectory      Новая папка отчёта в K:\VMs\shared\WinBridge\workflow-validation.
   -SourceArchiveSha256  SHA-256 исходного ZIP для связи отчёта с проверенной версией.
 
-37 Windows тестов выпуска 652635b уже выполнены автоматически; повтор для обновления не нужен.
+Тесты агент запускает автоматически; повтор вручную для обновления не нужен.
 Объяснение и примеры: docs/windows-workflow-validation.md
 '@
     if ($Help) { exit 0 }
@@ -80,7 +81,9 @@ try {
     $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
     $groups = @(
         @{ name = 'core-and-log-reader'; arguments = @('test', '-p', 'winbridge-core', '-p', 'winbridge-log-reader', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
-        @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') }
+        @{ name = 'readiness-ipc'; arguments = @('test', '-p', 'winbridge-transport', '--lib', 'readiness', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
+        @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
+        @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
     foreach ($group in $groups) {
         $log = Join-Path $ReportDirectory ($group.name + '.log')
@@ -89,6 +92,11 @@ try {
         $code = $LASTEXITCODE
         $report.commands += [ordered]@{ name = $group.name; executable = $cargo; arguments = $commandArgs; exitCode = $code; log = (Split-Path $log -Leaf) }
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
+    }
+    if ($NetwatchProfile) {
+        & (Join-Path $source 'scripts/test-netwatch-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -ProfilePath $NetwatchProfile
+        $report.netwatch = Get-Content -LiteralPath (Join-Path $ReportDirectory 'netwatch-report.json') -Raw | ConvertFrom-Json
+        if (-not $report.netwatch.passed) { throw 'Isolated Netwatch workflow check failed' }
     }
     $report.passed = $true
 } catch {

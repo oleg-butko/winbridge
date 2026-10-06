@@ -4075,10 +4075,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "winbridge-platform"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "winbridge-protocol",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "winbridge-protocol"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -4089,6 +4100,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-tungstenite",
+ "winbridge-platform",
  "winbridge-protocol",
  "windows-sys 0.61.2",
 ]

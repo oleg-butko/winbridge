@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Badge, Button, Card, Code, Group, Select, Stack, Table, Text, Textarea, Timeline, Title } from "@mantine/core";
+import { Alert, Badge, Button, Card, Code, Group, Select, Stack, Table, Text, Textarea, TextInput, Timeline, Title } from "@mantine/core";
 import { expectResult, workerCall } from "../../runtime/adapter";
-import type { ApplicationRecord, ApplicationStatus, LogCursor, WorkerInfo, WorkflowRecord, WorkflowStepStatus, WorkflowSubmission } from "../../runtime/contracts";
+import type { ApplicationRecord, ApplicationStatus, LogCursor, WorkerInfo, WorkflowProfile, WorkflowRecord, WorkflowStepStatus, WorkflowSubmission } from "../../runtime/contracts";
+import { OutputView } from "../tasks/OutputView";
 import { statuses } from "../tasks/TaskDetail";
 
 export type WorkflowSnapshot = { projectId: string; snapshotId: string; manifestSha256: string };
@@ -42,12 +43,54 @@ function ApplicationLog({ applicationId, connected }: { applicationId: string; c
     <Text size="xs">Показаны последние 65 536 символов. Подтверждение: {confirmed === null ? "ещё не получено" : new Date(confirmed).toLocaleTimeString()}</Text>
     {(!connected || error) && <Alert color="yellow" title="Нет свежего чтения лога">{error ?? "Worker недоступен; сохранены последние данные."}</Alert>}
     {reset && <Alert color="orange">Курсор лога сброшен: {reset}. Показан новый файл или содержимое после изменения.</Alert>}
-    <Code block>{content || "Новых записей пока нет"}</Code>
+    <OutputView text={content} label="Лог" empty="Новых записей пока нет" />
   </Stack>;
 }
 
-export function WorkflowWorkbench({ info, connected, closing, snapshot, onTask }: { info: WorkerInfo; connected: boolean; closing: boolean; snapshot: WorkflowSnapshot | null; onTask: (id: string) => void }) {
+export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles, persist, onTask }: { info: WorkerInfo; connected: boolean; closing: boolean; snapshot: WorkflowSnapshot | null; profiles: WorkflowProfile[] | null; persist: (profile: WorkflowProfile) => Promise<void>; onTask: (id: string) => void }) {
   const [profile, setProfile] = useState("");
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState("");
+  const [saveState, setSaveState] = useState("");
+  const loaded = useRef(false);
+  const loadedScope = useRef<string | null>(null);
+  const saveSequence = useRef(0);
+  const scope = (id: string) => ({ workerInstanceId: info.instanceId, projectId: id, workspaceRoot: info.projects.find((p) => p.id === id)!.workspaceRoot });
+  const scoped = profiles?.filter((p) => p.workerInstanceId === info.instanceId && p.projectId === projectId && p.workspaceRoot === info.projects.find((r) => r.id === projectId)?.workspaceRoot) ?? [];
+  useEffect(() => {
+    if (loaded.current || profiles === null) return;
+    loaded.current = true;
+    const saved = [...profiles].reverse().find((p) => p.name === "" && p.workerInstanceId === info.instanceId && info.projects.some((r) => r.id === p.projectId && r.workspaceRoot === p.workspaceRoot));
+    if (saved) { setProjectId(saved.projectId); setProfile(saved.parametersJson); }
+    else setProjectId(info.projects[0]?.id ?? null);
+  }, [profiles, info]);
+  const projectRoot = info.projects.find((p) => p.id === projectId)?.workspaceRoot;
+  useEffect(() => {
+    if (profiles === null || !projectId || !projectRoot) return;
+    const key = JSON.stringify([info.instanceId, projectId, projectRoot]);
+    if (loadedScope.current === key) return;
+    loadedScope.current = key;
+    const saved = profiles.find((p) => p.name === "" && p.workerInstanceId === info.instanceId && p.projectId === projectId && p.workspaceRoot === projectRoot);
+    setProfile(saved?.parametersJson ?? ""); setProfileName("");
+  }, [info.instanceId, projectId, projectRoot, profiles]);
+  function changeProfile(text: string, id = projectId) {
+    if (!id || !info.projects.some((p) => p.id === id)) { setError("Проект профиля больше не зарегистрирован; выберите текущий проект"); return; }
+    setProfile(text);
+    setProjectId(id);
+    const sequence = ++saveSequence.current; setSaveState("Сохранение черновика…");
+    void persist({ ...scope(id), name: "", parametersJson: text }).then(() => {
+      if (sequence === saveSequence.current) setSaveState("Черновик сохранён");
+    }).catch((error) => { if (sequence === saveSequence.current) setSaveState(`Черновик не сохранён: ${error}`); });
+  }
+  async function saveNamed() {
+    if (!projectId || !profileName.trim()) return;
+    try {
+      const parsed: unknown = JSON.parse(profile);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || (parsed as { projectId?: string }).projectId !== projectId) throw new Error("projectId в JSON должен совпадать с выбранным проектом");
+      await persist({ ...scope(projectId), name: profileName.trim(), parametersJson: profile });
+      setSaveState("Именованный профиль сохранён");
+    } catch (error) { setSaveState(`Профиль не сохранён: ${error}`); }
+  }
   const [flows, setFlows] = useState<WorkflowRecord[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [record, setRecord] = useState<WorkflowRecord | null>(null);
@@ -66,11 +109,11 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, onTask }
     const project = info.projects.find((p) => p.id === snapshot.projectId); if (!project) return;
     const separator = info.platform === "windows" ? "\\" : "/";
     const join = (...parts: string[]) => [project.workspaceRoot.replace(/[\\/]$/, ""), ...parts].join(separator);
-    setProfile(JSON.stringify({ name: `${project.id} · build/start`, ...snapshot, timeoutMs: 180000,
+    changeProfile(JSON.stringify({ name: `${project.id} · build/start`, ...snapshot, timeoutMs: 180000,
       build: project.recipes.some((r) => r.id === "snapshot-build") ? { kind: "recipe", recipeId: "snapshot-build", arguments: [] }
         : { kind: "direct", executable: "cargo", arguments: ["build", "--locked", "--offline", "--target-dir", join("build-cache")], workingDirectory: "." },
       start: { kind: "direct", executable: join("build-cache", "debug", `snapshot-fixture${info.platform === "windows" ? ".exe" : ""}`), arguments: ["serve", join("logs", "app.log"), "ready"], workingDirectory: "." },
-      readiness: { stdoutContains: "READY Привет ✓", timeoutMs: 10000 }, logPath: "logs/app.log" }, null, 2));
+      readiness: { stdoutContains: "READY Привет ✓", timeoutMs: 10000 }, logPath: "logs/app.log" }, null, 2), project.id);
   }, [snapshotKey]);
   useEffect(() => {
     let disposed = false; let timer: ReturnType<typeof setTimeout>;
@@ -103,6 +146,11 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, onTask }
       if (profile.length > 65536) throw new Error("Профиль workflow превышает 64 KiB");
       const parsed: unknown = JSON.parse(profile);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Профиль должен быть JSON-объектом");
+      if ((parsed as {projectId?: string}).projectId !== projectId) throw new Error("projectId в JSON должен совпадать с выбранным проектом профиля");
+      if (!projectRoot) throw new Error("Выберите текущий зарегистрированный проект");
+      const extended = parsed as { artifacts?: unknown[]; readiness?: { netwatch?: unknown } };
+      if (extended.artifacts?.length && !info.workflowFeatures?.includes("artifacts")) throw new Error("Worker требует обновления для проверки artifacts; запрос не отправлен");
+      if (extended.readiness?.netwatch && !info.workflowFeatures?.includes("netwatch_health")) throw new Error("Worker требует обновления для Netwatch IPC probe; запрос не отправлен");
       await send({ ...parsed, protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), idempotencyKey: crypto.randomUUID() } as WorkflowSubmission);
     } catch (error) { setError(String(error)); }
   }
@@ -119,13 +167,17 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, onTask }
   function restoreProfile() {
     if (!record) return;
     const { protocolVersion: _version, requestId: _request, idempotencyKey: _key, ...saved } = record.submission;
-    setProfile(JSON.stringify(saved, null, 2));
+    changeProfile(JSON.stringify(saved, null, 2), saved.projectId);
   }
   return <Card withBorder><Stack>
     <Title order={3}>Цикл разработки</Title>
     <Text size="sm">Импорт → сборка → запуск → готовность → лог. Ошибка блокирует следующие шаги. Worker сохраняет принятый профиль и ID; закрытие окна или потеря controller не повторяет команды.</Text>
     <Text size="sm">Выберите snapshot в «Доставка исходников» и нажмите «Использовать в workflow». Шаблон настроен для snapshot-fixture; его параметры можно изменить или восстановить из истории.</Text>
-    <Textarea label="Параметры workflow — JSON" description="Проверьте команды, общий timeout, сигнал готовности в stdout и путь UTF-8 лога внутри проекта. Готовность подтверждается сигналом этого процесса. Приложение работает до явной остановки или своего завершения." value={profile} onChange={(e) => setProfile(e.currentTarget.value)} autosize minRows={5} maxRows={15} disabled={busy || pending !== null || closing} />
+    <Select label="Проект профиля" value={projectId} data={info.projects.map((p) => p.id)} allowDeselect={false} disabled={profiles === null || busy || pending !== null || closing} onChange={(id) => { if (!id) return; setProjectId(id); setProfileName(""); const saved = profiles?.find((p) => p.name === "" && p.workerInstanceId === info.instanceId && p.projectId === id && p.workspaceRoot === scope(id).workspaceRoot); changeProfile(saved?.parametersJson ?? "", id); }} />
+    <Select label="Сохранённые профили" value={scoped.some((p) => p.name === profileName && p.name) ? profileName : null} data={scoped.filter((p) => p.name).map((p) => p.name)} searchable disabled={busy || pending !== null || closing} onChange={(name) => { const saved = scoped.find((p) => p.name === name); if (saved) { setProfileName(saved.name); changeProfile(saved.parametersJson); } }} />
+    <Group align="end"><TextInput label="Имя профиля" value={profileName} onChange={(e) => setProfileName(e.currentTarget.value)} maxLength={160} disabled={busy || pending !== null || closing} /><Button variant="light" onClick={() => void saveNamed()} disabled={!profileName.trim() || !profile || busy || closing}>Сохранить профиль</Button></Group>
+    <Text size="xs">{saveState || "Выбор профиля только заполняет форму. Запуск требует отдельной кнопки."}</Text>
+    <Textarea label="Параметры workflow — JSON" description="Проверьте команды, snapshot, общий timeout, проверку готовности и путь UTF-8 лога внутри проекта. Незаконченный черновик сохраняется. Приложение работает до явной остановки или своего завершения." value={profile} onChange={(e) => changeProfile(e.currentTarget.value)} autosize minRows={5} maxRows={15} disabled={profiles === null || busy || pending !== null || closing} />
     <Button onClick={() => void submit()} loading={busy} disabled={!connected || !profile || pending !== null || closing}>Запустить workflow</Button>
     {pending && <Alert color="yellow" title="Приём workflow не подтверждён">Повтор использует те же параметры и ключ; новую цепочку не создаёт.
       <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || closing}>Проверить приём workflow</Button></Alert>}
@@ -135,6 +187,9 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, onTask }
     {record && <>
       <Group><Badge color={statuses[record.status].color}>{statuses[record.status].label}</Badge><Text>Workflow ID: {record.workflowId}</Text></Group>
       <Text size="xs">Snapshot {record.submission.snapshotId} · manifest {record.submission.manifestSha256}</Text>
+      {record.artifacts?.length > 0 && <Stack gap="xs"><Title order={4}>Результаты сборки</Title><Text size="xs">Файлы проверены перед запуском. Это запись на указанное время; последующая сборка может изменить файл по тому же пути.</Text>
+        {record.artifacts.map((a) => <Card withBorder key={a.path}><Text>{a.name} · {a.bytes} байт</Text><Code block>{a.path}</Code><Text size="xs">SHA-256: {a.sha256}</Text><Text size="xs">Commit {a.sourceCommit} · build task {a.buildTaskId} · {new Date(a.recordedAtMs).toLocaleString()}</Text></Card>)}
+      </Stack>}
       {record.reason && <Alert color={statuses[record.status].color}>{record.reason}</Alert>}
       <Group><Button variant="light" onClick={restoreProfile} disabled={busy || pending !== null || closing}>Заполнить профиль из workflow</Button>
         <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || busy || record.cancelRequested || !["queued", "running"].includes(record.status) || closing}>Отменить workflow</Button></Group>

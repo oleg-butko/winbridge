@@ -76,6 +76,17 @@ impl Controller {
                 }
                 (session.sender.clone(), session.id.clone(), state.last_peer.as_ref().map(|(_, address)| address.to_string()))
             };
+            if let LocalRequest::SubmitWorkflow { request: workflow } = &request {
+                let mut required = Vec::new();
+                if !workflow.artifacts.is_empty() { required.push("artifacts"); }
+                if workflow.readiness.netwatch.is_some() { required.push("netwatch_health"); }
+                if !required.is_empty() {
+                    let LocalResponse::Info { info } = sender.call(LocalRequest::Info).await? else { return Err("Cannot confirm worker workflow features before submission".into()); };
+                    if let Some(feature) = required.iter().find(|f| !info.workflow_features.iter().any(|v| v == **f)) {
+                        return Err(format!("Worker requires an update for workflow feature {feature}; request was not transmitted"));
+                    }
+                }
+            }
             let method = request_method(&request);
             self.activity.record(serde_json::json!({"event":"rpc_requested","origin":"local_ipc","workerAddress":worker_address,"sessionId":session_id,"method":method}));
             let result = sender.call(request).await;

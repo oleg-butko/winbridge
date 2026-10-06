@@ -11,6 +11,7 @@ use winbridge_protocol::{Capability, Component, RuntimeDescriptor, PROTOCOL_VERS
 
 pub fn descriptor(component: Component) -> RuntimeDescriptor {
     RuntimeDescriptor {
+        build: Some(winbridge_protocol::build_identity()),
         application: "WinBridge".into(),
         application_version: env!("CARGO_PKG_VERSION").into(),
         protocol_version: PROTOCOL_VERSION,

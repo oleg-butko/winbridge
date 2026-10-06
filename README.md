@@ -18,7 +18,7 @@
 - Connected UI: форма команды, recent tasks, timeline, output/exit code, cancel и независимая свежесть соединения. Browser: явно помеченная демонстрация и просмотр сохранённого отчёта worker.
 - Архитектура, поэтапный roadmap, UX требования, ADR, примеры конфигурации и инструкции следующему агенту.
 
-**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Snapshot runtime прошёл 19 Windows checks 2026-10-06; package select/delivery form restore приняты пользователем без нового ручного gate; workflow/log tail реализованы на fixture; Netwatch profile и attention ещё предстоят. Browser сам команды не выполняет.
+**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Snapshot runtime прошёл 19 Windows checks 2026-10-06; package select/delivery form restore приняты пользователем без нового ручного gate; workflow/log tail реализованы на fixture; Named profiles, output filters, artifact catalog и отдельный Netwatch IPC probe добавлены; полный Windows Netwatch сценарий проверяется автоматически. Attention относится к следующему этапу. Browser сам команды не выполняет.
 
 ## Принятые решения
 
@@ -107,3 +107,5 @@ export PATH=/home/user1/.nvm/versions/node/v24.19.0/bin:/home/user1/.local/bin:$
 Начать с [handoff](docs/handoff.md) и [инструкций агента](AGENTS.md). Далее: [архитектура](docs/architecture.md), [доставка через HGFS](docs/shared-folders.md), [поэтапный план](docs/roadmap.md), [UI/UX](docs/ux.md), [границы модулей](docs/structure.md), [решения пользователя](docs/decisions/README.md).
 
 Предыдущее предложение из Netwatch перенесено в [исторический контекст](docs/context/README.md); оно не определяет текущие решения.
+
+Этап 4: [изолированный Netwatch cycle](docs/netwatch-validation.md), editable profiles/drafts рядом с desktop, результаты сборки с SHA-256/source commit, фильтрация stdout/stderr/log и build identity worker/desktop. Принятый workflow остаётся frozen в journal; редактирование или восстановление профиля не запускает команду.

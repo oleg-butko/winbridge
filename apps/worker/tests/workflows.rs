@@ -133,8 +133,10 @@ fn setup() -> (TempDir, WorkerConfig, WorkflowSubmission) {
         readiness: ReadinessProbe {
             stdout_contains: "READY Привет ✓".into(),
             timeout_ms: 5000,
+            netwatch: None,
         },
         log_path: "logs/app.log".into(),
+        artifacts: vec![],
     };
     (temp, config, request)
 }
@@ -147,11 +149,57 @@ fn flow(worker: &Worker, id: &str) -> WorkflowRecord {
     *workflow
 }
 fn accept(worker: &Worker, request: WorkflowSubmission) -> WorkflowRecord {
-    let response = worker.handle(LocalRequest::SubmitWorkflow { request });
+    let response = worker.handle(LocalRequest::SubmitWorkflow {
+        request: Box::new(request),
+    });
     let LocalResponse::Workflow { workflow } = response else {
         panic!("{response:?}")
     };
     *workflow
+}
+
+#[test]
+fn artifacts_link_real_bytes_to_the_build_and_missing_file_prevents_start() {
+    use sha2::{Digest, Sha256};
+    let (_temp, config, mut request) = setup();
+    request.artifacts = vec![ArtifactSpec {
+        name: "fixture executable".into(),
+        path: format!(
+            "build-cache/debug/snapshot-fixture{}",
+            std::env::consts::EXE_SUFFIX
+        ),
+    }];
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let done = complete(&worker, &accept(&worker, request.clone()).workflow_id);
+    assert_eq!(done.status, TaskStatus::Succeeded, "{done:?}");
+    let artifact = &done.artifacts[0];
+    let bytes = fs::read(&artifact.path).unwrap();
+    assert_eq!(artifact.bytes, bytes.len() as u64);
+    assert_eq!(artifact.sha256, format!("{:x}", Sha256::digest(bytes)));
+    assert_eq!(
+        artifact.build_task_id,
+        done.steps[1].operation_id.clone().unwrap()
+    );
+    assert_eq!(artifact.manifest_sha256, request.manifest_sha256);
+    stop(&worker, done.application_id.as_ref().unwrap());
+    request.idempotency_key = "missing-artifact".into();
+    request.artifacts[0].path = "build-cache/debug/missing.exe".into();
+    let failed = complete(&worker, &accept(&worker, request.clone()).workflow_id);
+    assert_eq!(failed.status, TaskStatus::Failed);
+    assert!(failed.application_id.is_none());
+    assert!(failed.steps[2].operation_id.is_none());
+    assert!(failed
+        .reason
+        .unwrap()
+        .contains("artifact verification failed"));
+    request.idempotency_key = "unsafe-artifact".into();
+    request.artifacts[0].path = "../outside.exe".into();
+    assert!(matches!(
+        worker.handle(LocalRequest::SubmitWorkflow {
+            request: Box::new(request)
+        }),
+        LocalResponse::Error { .. }
+    ));
 }
 fn app(worker: &Worker, id: &str) -> ApplicationRecord {
     let LocalResponse::Application { application } = worker.handle(LocalRequest::GetApplication {
@@ -196,7 +244,9 @@ fn actual_pipeline_dedup_readiness_log_and_owner_leases() {
     let mut conflict = request.clone();
     conflict.name = "different parameters".into();
     assert!(matches!(
-        worker.handle(LocalRequest::SubmitWorkflow { request: conflict }),
+        worker.handle(LocalRequest::SubmitWorkflow {
+            request: Box::new(conflict)
+        }),
         LocalResponse::Error { .. }
     ));
     let done = complete(&worker, &accepted.workflow_id);
@@ -525,7 +575,7 @@ async fn owned_worker_crash_recovers_application_without_repeating_steps() {
     let LocalResponse::Workflow { workflow } = winbridge_transport::call(
         &endpoint,
         &LocalRequest::SubmitWorkflow {
-            request: request.clone(),
+            request: Box::new(request.clone()),
         },
     )
     .await
@@ -615,11 +665,14 @@ async fn owned_worker_crash_recovers_application_without_repeating_steps() {
         tokio::time::sleep(Duration::from_millis(25)).await;
     };
     assert_eq!(recovered.application_id, app_id);
-    let LocalResponse::Workflow { workflow: after } =
-        winbridge_transport::call(&endpoint, &LocalRequest::SubmitWorkflow { request })
-            .await
-            .unwrap()
-    else {
+    let LocalResponse::Workflow { workflow: after } = winbridge_transport::call(
+        &endpoint,
+        &LocalRequest::SubmitWorkflow {
+            request: Box::new(request),
+        },
+    )
+    .await
+    .unwrap() else {
         panic!()
     };
     assert_eq!(after.workflow_id, id);
