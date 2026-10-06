@@ -31,4 +31,28 @@ Workflow checks исполняли реальный Cargo build и Windows exe �
 - TypeScript/contracts/build и реальная browser integration с Unix worker/WebSocket: workflow lost ACK/dedup, пять steps, Unicode log, linked build task, reconnect с прежним app PID, profile restore без команды, stop с сохранением startup history. [Скриншот](screenshots/workflow-worker-linux.png).
 - Standalone Linux Tauri check. Эти проверки не объявляются новым Windows визуальным gate.
 
-Перепроверка выполняется [автоматическим сценарием](windows-workflow-validation.md). Профиль для общего обновлённого runtime уже опубликован: `s-e0ee0e50ee6c6de17a487199ca09689dec8f6abd`, manifest `474f1188ec53f7b0492e6a20ec8e5c17295c7c281cdc148706e904547cfb0cb1`; request в Debian `.winbridge/workflow-fixture/20261006-131804-d59a5488/workflow.request.json`. Старый рабочий worker ещё не поддерживает workflow RPC; для UI цикла нужен общий выпуск worker/desktop в прежний fixed runtime.
+## Проверка обновлённого рабочего runtime
+
+Пользователь распаковал выпуск `652635b`, выполнил `prepare-windows-snapshot.ps1` и оставил worker работающим. Новый actual Windows worker generation `210bd4b6-e35f-48e1-85a6-81c973c79605` подключён к controller generation `ca6e5e43-3739-4f2a-819c-11e8e8ce63e0`; Info подтверждает workflowAvailable=true. Общий update состоялся; повторной установки или ручного runtime gate не требуется.
+
+Агент автоматически передал ранее подготовленный frozen профиль по WebSocket и проверил пять групп:
+
+1. Повтор запроса с прежним key и новым requestId вернул тот же Workflow ID.
+2. Все пять steps import/build/start/readiness/log succeeded; import привязан к manifest hash, Cargo build завершился exit 0.
+3. Registry показывал ready, PID 15476 и readyAtMs; PID совпал с живой start task. Persisted stdout содержал `READY Привет ✓`.
+4. Remote LogRead страницами 3/5/65536 bytes сохранил Unicode и строку текущего PID; последующее чтение получило appended heartbeat с большим offset без reset.
+5. Явный stop завершил приложение: Application stopped, start Task cancelled; успешный Workflow и все operation IDs сохранились. Worker продолжает работать с прежней generation.
+
+| Поле | Значение |
+| --- | --- |
+| Report run | `installed-20261006-155439-827cbbac` |
+| Shared report | `K:\VMs\shared\WinBridge\workflow-validation\installed-20261006-155439-827cbbac` |
+| Report SHA-256 | `466334303cfa8a2e28483d79a3b6e87c85341f293ad661647d246b6fd4babb8b` |
+| Workflow ID | `be3004e6-8056-4e50-a5e5-58a41fde2c75` |
+| Application ID | `e6b41cb9-0b88-46dc-84ec-7bc6e5b1baf7` |
+| Build task | `33871f80-cd30-4f4b-b538-97611b9f1334` |
+| Start task | `fa7aba78-80ae-461f-b78a-4ffba5e9d551` |
+
+Report passed=true, platform=windows; report.ready.json содержит сверенный hash/размер. Report сохраняет workflow/import/tasks/output/log pages, ready/stopped app и stop intent. Это проверка установленного runtime, дополняющая 37 isolated native tests, а не новое визуальное UI подтверждение. Подробные ручные UI наблюдения остаются отложенными.
+
+Перепроверка выполняется [автоматическим сценарием](windows-workflow-validation.md). Профиль опубликован: `s-e0ee0e50ee6c6de17a487199ca09689dec8f6abd`, manifest `474f1188ec53f7b0492e6a20ec8e5c17295c7c281cdc148706e904547cfb0cb1`; request в Debian `.winbridge/workflow-fixture/20261006-131804-d59a5488/workflow.request.json`. Повтор этого файла возвращает уже завершённый workflow; новый самостоятельный цикл требует нового явно подготовленного профиля/key.
