@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/protocol", "crates/core", "crates/platform", "crates/transport", "apps/controller", "apps/worker", "modules/workspace-sync"]
+members = ["crates/protocol", "crates/core", "crates/platform", "crates/transport", "apps/controller", "apps/worker", "modules/workspace-sync", "modules/log-reader"]
 exclude = ["apps/desktop/src-tauri"]
 resolver = "2"
 
@@ -19,3 +19,4 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-uti
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Memory", "Win32_Storage_FileSystem"] }
 
 winbridge-workspace-sync = { path = "modules/workspace-sync" }
+winbridge-log-reader = { path = "modules/log-reader" }

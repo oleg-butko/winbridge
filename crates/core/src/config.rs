@@ -388,7 +388,7 @@ fn validate_timeout(ms: u64) -> Result<()> {
     }
     Ok(())
 }
-fn validate_arguments(executable: &str, arguments: &[String]) -> Result<()> {
+pub(crate) fn validate_arguments(executable: &str, arguments: &[String]) -> Result<()> {
     if executable.is_empty() || executable.len() > 32768 || executable.contains('\0') {
         return Err("executable must be nonempty and contain no NUL".into());
     }

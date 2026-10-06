@@ -898,6 +898,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "winbridge-log-reader"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "tempfile",
+ "winbridge-core",
+ "winbridge-platform",
+ "winbridge-protocol",
+]
+
+[[package]]
 name = "winbridge-platform"
 version = "0.1.0"
 dependencies = [
@@ -938,6 +949,7 @@ dependencies = [
  "tokio",
  "uuid",
  "winbridge-core",
+ "winbridge-log-reader",
  "winbridge-platform",
  "winbridge-protocol",
  "winbridge-transport",

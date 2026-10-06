@@ -6,6 +6,8 @@ mod session;
 pub use session::*;
 mod snapshot;
 pub use snapshot::*;
+mod workflow;
+pub use workflow::*;
 
 pub const PROTOCOL_VERSION: u16 = 1;
 
@@ -223,12 +225,42 @@ pub struct WorkerInfo {
     pub controller_connection: Option<ControllerConnection>,
     #[serde(default)]
     pub snapshot_import_available: bool,
+    #[serde(default)]
+    pub workflow_available: bool,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
+    SubmitWorkflow {
+        request: WorkflowSubmission,
+    },
+    ListWorkflows,
+    GetWorkflow {
+        #[serde(rename = "workflowId")]
+        workflow_id: String,
+    },
+    CancelWorkflow {
+        #[serde(rename = "workflowId")]
+        workflow_id: String,
+    },
+    ListApplications,
+    GetApplication {
+        #[serde(rename = "applicationId")]
+        application_id: String,
+    },
+    StopApplication {
+        #[serde(rename = "applicationId")]
+        application_id: String,
+    },
+    ReadApplicationLog {
+        #[serde(rename = "applicationId")]
+        application_id: String,
+        cursor: Option<LogCursor>,
+        #[serde(rename = "maxBytes")]
+        max_bytes: u32,
+    },
     ListSnapshots {
         #[serde(rename = "projectId")]
         project_id: String,
@@ -279,16 +311,51 @@ pub enum LocalRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LocalResponse {
-    Snapshots { page: PublishedSnapshotPage },
-    Import { import: Box<ImportRecord> },
-    Imports { imports: Vec<ImportRecord> },
-    SnapshotPreview { preview: SnapshotPreview },
-    Info { info: WorkerInfo },
-    Task { task: Box<TaskRecord> },
-    Tasks { tasks: Vec<TaskSummary> },
-    Output { chunks: Vec<OutputChunk> },
-    Error { message: String },
-    ControllerStatus { status: ControllerStatus },
+    Workflow {
+        workflow: Box<WorkflowRecord>,
+    },
+    Workflows {
+        workflows: Vec<WorkflowRecord>,
+    },
+    Application {
+        application: ApplicationRecord,
+    },
+    Applications {
+        applications: Vec<ApplicationRecord>,
+    },
+    Log {
+        page: LogPage,
+    },
+    Snapshots {
+        page: PublishedSnapshotPage,
+    },
+    Import {
+        import: Box<ImportRecord>,
+    },
+    Imports {
+        imports: Vec<ImportRecord>,
+    },
+    SnapshotPreview {
+        preview: SnapshotPreview,
+    },
+    Info {
+        info: WorkerInfo,
+    },
+    Task {
+        task: Box<TaskRecord>,
+    },
+    Tasks {
+        tasks: Vec<TaskSummary>,
+    },
+    Output {
+        chunks: Vec<OutputChunk>,
+    },
+    Error {
+        message: String,
+    },
+    ControllerStatus {
+        status: ControllerStatus,
+    },
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

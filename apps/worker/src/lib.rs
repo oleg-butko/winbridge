@@ -2,14 +2,15 @@
 mod imports;
 mod network;
 pub mod store;
+mod workflows;
 use fs2::FileExt;
 use std::{
-    collections::HashSet,
+    collections::HashMap,
     fs::{self, File, OpenOptions},
     io::Read,
     path::Path,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc, Mutex,
     },
     thread,
@@ -27,7 +28,9 @@ pub struct Worker {
     pub config: WorkerConfig,
     pub generation: String,
     store: Mutex<Store>,
-    active_projects: Mutex<HashSet<String>>,
+    active_projects: Mutex<HashMap<String, String>>,
+    active_jobs: AtomicUsize,
+    readiness_scans: Mutex<HashMap<String, (u64, Vec<u8>)>>,
     stop: AtomicBool,
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
     _instance_lock: File,
@@ -105,7 +108,9 @@ impl Worker {
             config,
             generation: uuid::Uuid::new_v4().to_string(),
             store: Mutex::new(store),
-            active_projects: Mutex::new(HashSet::new()),
+            active_projects: Mutex::new(HashMap::new()),
+            active_jobs: AtomicUsize::new(0),
+            readiness_scans: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
             _instance_lock: lock,
@@ -126,6 +131,71 @@ impl Worker {
     }
     fn dispatch(&self, request: LocalRequest) -> Result<LocalResponse> {
         match request {
+            LocalRequest::SubmitWorkflow { request } => {
+                if self.stop.load(Ordering::Acquire) {
+                    return Err("Worker stopping; workflow not accepted".into());
+                }
+                let mut store = self.store()?;
+                if let Some(record) = store.existing_workflow(&request)? {
+                    return Ok(LocalResponse::Workflow {
+                        workflow: Box::new(record),
+                    });
+                }
+                winbridge_core::workflow::validate(&self.config, &request)?;
+                if store
+                    .applications(false)?
+                    .iter()
+                    .any(|a| a.project_id == request.project_id)
+                {
+                    return Err("An owned application is already active for this project; explicitly stop it before another startup workflow".into());
+                }
+                if store.workflows(false)?.len() >= 128 {
+                    return Err("Workflow queue limit reached (128)".into());
+                }
+                Ok(LocalResponse::Workflow {
+                    workflow: Box::new(store.accept_workflow(request)?),
+                })
+            }
+            LocalRequest::ListWorkflows => Ok(LocalResponse::Workflows {
+                workflows: self.store()?.workflows(true)?,
+            }),
+            LocalRequest::GetWorkflow { workflow_id } => Ok(LocalResponse::Workflow {
+                workflow: Box::new(self.store()?.workflow(&workflow_id)?),
+            }),
+            LocalRequest::CancelWorkflow { workflow_id } => Ok(LocalResponse::Workflow {
+                workflow: Box::new(self.store()?.cancel_workflow(&workflow_id)?),
+            }),
+            LocalRequest::ListApplications => Ok(LocalResponse::Applications {
+                applications: self.store()?.applications(true)?,
+            }),
+            LocalRequest::GetApplication { application_id } => Ok(LocalResponse::Application {
+                application: self.store()?.application(&application_id)?,
+            }),
+            LocalRequest::StopApplication { application_id } => Ok(LocalResponse::Application {
+                application: self.store()?.stop_application(&application_id)?,
+            }),
+            LocalRequest::ReadApplicationLog {
+                application_id,
+                cursor,
+                max_bytes,
+            } => {
+                let app = self.store()?.application(&application_id)?;
+                let project = self
+                    .config
+                    .projects
+                    .iter()
+                    .find(|p| p.id == app.project_id)
+                    .ok_or("Application project not registered")?;
+                Ok(LocalResponse::Log {
+                    page: winbridge_log_reader::read(
+                        &project.workspace_root,
+                        &app.log_path,
+                        &application_id,
+                        cursor.as_ref(),
+                        max_bytes,
+                    )?,
+                })
+            }
             LocalRequest::ListSnapshots { project_id, offset } => {
                 // Reuse registration checks before any discovery filesystem access.
                 self.import_paths(&project_id, "listing")?;
@@ -152,6 +222,7 @@ impl Worker {
                     .into(),
                     projects: self.config.public_projects(),
                     snapshot_import_available: self.config.delivery.is_some(),
+                    workflow_available: self.config.delivery.is_some(),
                     controller_connection: self
                         .controller_connection
                         .lock()
@@ -252,6 +323,8 @@ impl Worker {
             .map_err(|_| "process registry lock poisoned")?;
         // Journal and project admission are inspected while holding both locks.
         let mut store = self.store()?;
+        self.advance_workflows(&mut store, &mut active)?;
+        let workflows = store.workflows(false)?;
         let tasks = store.all()?;
         let imports = store.imports(false)?;
         for mut import in imports
@@ -260,9 +333,11 @@ impl Worker {
             .cloned()
         {
             let project = import.submission.project_id.clone();
-            if active.contains(&project)
+            if active.contains_key(&project)
+                || workflows::reserved_for_other(&workflows, &project, &import.import_id)
                 || tasks.iter().any(|t| {
                     t.status == TaskStatus::Queued
+                        && !workflows::reserved_for_other(&workflows, &project, &t.task_id)
                         && t.submission.project_id == project
                         && t.accepted_at_ms <= import.accepted_at_ms
                 })
@@ -276,7 +351,8 @@ impl Worker {
                 "Import lease acquired; validating immutable delivery",
             );
             store.save_import(&import)?;
-            active.insert(project.clone());
+            active.insert(project.clone(), import.import_id.clone());
+            self.active_jobs.fetch_add(1, Ordering::AcqRel);
             let worker = Arc::clone(self);
             thread::spawn(move || {
                 if let Err(error) = worker.execute_import(import.clone()) {
@@ -289,16 +365,21 @@ impl Worker {
                     }
                 }
                 if let Ok(mut projects) = worker.active_projects.lock() {
-                    projects.remove(&project);
+                    if projects.get(&project) == Some(&import.import_id) {
+                        projects.remove(&project);
+                    }
                 }
+                worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
             });
         }
         for mut task in tasks {
             let project = task.submission.project_id.clone();
             if task.status != TaskStatus::Queued
-                || active.contains(&project)
+                || active.contains_key(&project)
+                || workflows::reserved_for_other(&workflows, &project, &task.task_id)
                 || imports.iter().any(|r| {
                     r.status == TaskStatus::Queued
+                        && !workflows::reserved_for_other(&workflows, &project, &r.import_id)
                         && r.submission.project_id == project
                         && r.accepted_at_ms < task.accepted_at_ms
                 })
@@ -320,7 +401,8 @@ impl Worker {
                 "Launch intent committed; awaiting process creation",
             );
             store.save(&task)?;
-            active.insert(project.clone());
+            active.insert(project.clone(), task.task_id.clone());
+            self.active_jobs.fetch_add(1, Ordering::AcqRel);
             let worker = Arc::clone(self);
             thread::spawn(move || {
                 let id = task.task_id.clone();
@@ -332,8 +414,11 @@ impl Worker {
                     }
                 }
                 if let Ok(mut projects) = worker.active_projects.lock() {
-                    projects.remove(&project);
+                    if projects.get(&project) == Some(&id) {
+                        projects.remove(&project);
+                    }
                 }
+                worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
             });
         }
         Ok(())
@@ -472,7 +557,11 @@ impl Worker {
             })
         })
         .collect();
-        let deadline = Instant::now() + Duration::from_millis(task.resolved_command.timeout_ms);
+        let deadline = if self.store()?.application_for_task(&id)?.is_some() {
+            None
+        } else {
+            Some(Instant::now() + Duration::from_millis(task.resolved_command.timeout_ms))
+        };
         let (status, exit_code, reason) = loop {
             if let Some(exit) = child.try_wait().map_err(|e| e.to_string())? {
                 break (
@@ -491,7 +580,11 @@ impl Worker {
             let current = self.store()?.get(&id)?;
             let stop = self.stop.load(Ordering::Acquire);
             let error = fault.load(Ordering::Acquire);
-            if stop || current.cancel_requested || error || Instant::now() >= deadline {
+            if stop
+                || current.cancel_requested
+                || error
+                || deadline.is_some_and(|d| Instant::now() >= d)
+            {
                 let (status, reason) = if error {
                     (
                         TaskStatus::Indeterminate,
@@ -547,7 +640,7 @@ impl Worker {
         self.stop.store(true, Ordering::Release);
     }
     pub fn is_idle(&self) -> bool {
-        self.active_projects.lock().is_ok_and(|p| p.is_empty())
+        self.active_jobs.load(Ordering::Acquire) == 0
     }
 }
 
@@ -601,7 +694,13 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
     #[cfg(unix)]
     let mut listener = {
         use std::os::unix::fs::{FileTypeExt, PermissionsExt};
-        reject_symlink(Path::new(&address))?;
+        // The endpoint itself is an expected Unix socket. Validate its ancestors
+        // separately; the regular-file guard intentionally rejects special files.
+        reject_symlink(
+            Path::new(&address)
+                .parent()
+                .ok_or("IPC path has no parent")?,
+        )?;
         if Path::new(&address).exists() {
             if !fs::symlink_metadata(&address)
                 .map_err(|e| e.to_string())?

@@ -21,38 +21,9 @@ pub fn sha256(bytes: &[u8]) -> String {
 /// Reject symlinks, Windows junctions/reparse points and special filesystem entries.
 /// The local developer account remains trusted; this is not a hostile-user sandbox.
 pub fn safe_path(path: &Path) -> Result<()> {
-    if !path.is_absolute() {
-        return Err("Filesystem path must be absolute".into());
-    }
-    for ancestor in path.ancestors() {
-        match fs::symlink_metadata(ancestor) {
-            Ok(metadata) => {
-                let mut linked = metadata.file_type().is_symlink();
-                #[cfg(windows)]
-                {
-                    use std::os::windows::fs::MetadataExt;
-                    linked |= metadata.file_attributes() & 0x400 != 0;
-                }
-                #[cfg(not(windows))]
-                {
-                    let _ = &mut linked;
-                }
-                if linked || !(metadata.is_dir() || metadata.is_file()) {
-                    return Err(format!(
-                        "Linked/reparse/special path refused: {}",
-                        ancestor.display()
-                    ));
-                }
-                if metadata.is_file() {
-                    winbridge_platform::require_single_link(ancestor).map_err(error)?;
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(format!("{}: {e}", ancestor.display())),
-        }
-    }
-    Ok(())
+    winbridge_platform::require_safe_path(path).map_err(error)
 }
+
 fn directory(path: &Path) -> Result<()> {
     safe_path(path)?;
     if !path.is_dir() {

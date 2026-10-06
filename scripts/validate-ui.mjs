@@ -22,6 +22,10 @@ const shared = join(run, "shared");
 const source = join(run, "snapshot-source");
 await mkdir(shared); await mkdir(source);
 await writeFile(join(source, "Привет.txt"), "UI snapshot ✓");
+await mkdir(join(source, "src"));
+for (const name of ["Cargo.toml", "Cargo.lock", "src/main.rs"]) {
+  await writeFile(join(source, name), await readFile(join(root, "fixtures/snapshot-project", name)));
+}
 for (const args of [["init", "-q"], ["add", "."], ["-c", "user.name=Fixture", "-c", "user.email=fixture@local", "commit", "-qm", "UI snapshot"]]) await exec("git", ["-C", source, ...args]);
 const controllerConfig = join(run, "controller.local.json");
 const portProbe = createTcpServer();
@@ -40,9 +44,9 @@ await writeFile(config, JSON.stringify({ schemaVersion: 1, instanceId: "ui-test"
   delivery: {adapter:"shared-folder",root:shared,namespace:"WinBridge",peerRoot:shared}, worker: { keepRunningOnUiExit: true, controllerUrl: `ws://127.0.0.1:${controllerPort}` }, projects: [{ id: "fixture", workspaceRoot: project, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [{ id: "direct", executable: fixture, arguments: ["success"], workingDirectory: ".", timeoutMs: 10000 }] },
     { id: "other-fixture", workspaceRoot: otherProject, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [] }] }));
 
-function call(request) {
+function call(request, endpoint = socket) {
   return new Promise((resolve, reject) => {
-    const stream = createConnection(socket);
+    const stream = createConnection(endpoint);
     let received = Buffer.alloc(0);
     stream.setTimeout(10000, () => stream.destroy(new Error("IPC deadline")));
     stream.on("connect", () => { const bytes = Buffer.from(JSON.stringify(request)); const prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length); stream.write(Buffer.concat([prefix, bytes])); });
@@ -109,6 +113,8 @@ try {
   page.on("pageerror", (error) => errors.push(error.message));
   let loseFirstAck = true;
   let loseFirstImportAck = true;
+  let loseFirstWorkflowAck = true;
+  let acceptedWorkflowId;
   let importedId;
   let submittedId;
   let draftSaveDelay = 0;
@@ -116,9 +122,10 @@ try {
   let failDeliverySaves = false;
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
-      const response = await call(request);
+      const response = await call(request, request.method === "submit_workflow" ? join(run, "controller/controller-ui-test.sock") : socket);
       if (request.method === "submit" && loseFirstAck) { loseFirstAck = false; submittedId = response.task.taskId; throw new Error("Test: acceptance response was lost"); }
       if (request.method === "import_snapshot" && loseFirstImportAck) { loseFirstImportAck = false; importedId = response.import.importId; throw new Error("Test: import ACK lost"); }
+      if (request.method === "submit_workflow" && loseFirstWorkflowAck && response.kind === "workflow") { loseFirstWorkflowAck = false; acceptedWorkflowId = response.workflow.workflowId; throw new Error("Test: workflow ACK lost"); }
       return response;
     });
     // Native filesystem persistence is covered by core tests. Here the IPC shim
@@ -336,7 +343,43 @@ try {
   await restoredPage.getByRole("button", { name: "Закрыть без сохранения", exact: true }).click();
   await until(async () => await restoredPage.evaluate(() => window.__destroyed), "explicit close did not close the window");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/refresh/commit metadata, manifest/Unicode/mapping, lost import ACK/dedup, verified files; independent delivery project/snapshot persistence, fresh WebView restore without import/task submission, shared close flush and visible delivery-save failure even after a successful command save.");
+  failDraftSaves = false;
+  const workflowPage = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+  workflowPage.on("pageerror", (error) => errors.push(error.message));
+  await attachNative(workflowPage);
+  await workflowPage.goto(url);
+  await workflowPage.getByText("Worker подключён · linux · ui-test", { exact: true }).waitFor();
+  await workflowPage.getByRole("button", { name: "Посмотреть состав snapshot", exact: true }).click();
+  await workflowPage.getByRole("button", { name: "Использовать в workflow", exact: true }).click();
+  await workflowPage.getByRole("button", { name: "Запустить workflow", exact: true }).click();
+  await workflowPage.getByText("Приём workflow не подтверждён", { exact: true }).waitFor();
+  await workflowPage.getByRole("button", { name: "Проверить приём workflow", exact: true }).click();
+  await workflowPage.getByText("Приложение готово", { exact: true }).waitFor();
+  await workflowPage.getByText(/start pid=\d+ · Привет ✓/).waitFor();
+  const completedWorkflow = (await call({ method: "get_workflow", workflowId: acceptedWorkflowId })).workflow;
+  assert.equal(completedWorkflow.status, "succeeded");
+  assert.equal(completedWorkflow.submission.snapshotId, secondPublished.snapshotId);
+  assert.equal(completedWorkflow.steps.length, 5);
+  assert.ok(completedWorkflow.steps.every((s) => s.status === "succeeded"));
+  assert.equal((await call({ method: "list_workflows" })).workflows.length, 1, "lost workflow ACK created a duplicate pipeline");
+  const readyApp = (await call({ method: "get_application", applicationId: completedWorkflow.applicationId })).application;
+  await stopController();
+  await workflowPage.getByText("Нет свежего соединения с controller Debian", { exact: true }).waitFor();
+  assert.equal((await call({ method: "get_application", applicationId: readyApp.applicationId })).application.processId, readyApp.processId);
+  await startController();
+  await workflowPage.getByText("Controller Debian подключён", { exact: true }).waitFor();
+  await workflowPage.getByRole("button", { name: "Открыть задачу build", exact: true }).click();
+  await workflowPage.getByText("Exit code: 0", { exact: true }).waitFor();
+  await workflowPage.getByRole("button", { name: "Заполнить профиль из workflow", exact: true }).click();
+  const restoredProfile = JSON.parse(await workflowPage.getByLabel("Параметры workflow — JSON", { exact: true }).inputValue());
+  assert.equal(restoredProfile.snapshotId, secondPublished.snapshotId);
+  assert.equal((await call({ method: "list_workflows" })).workflows.length, 1, "restoring a profile submitted another workflow");
+  await workflowPage.screenshot({ path: join(root, "docs/screenshots/workflow-worker-linux.png"), fullPage: true });
+  await workflowPage.getByRole("button", { name: "Остановить приложение", exact: true }).click();
+  await workflowPage.getByText("Приложение остановлено", { exact: true }).waitFor();
+  assert.equal((await call({ method: "get_workflow", workflowId: acceptedWorkflowId })).workflow.status, "succeeded", "app stop rewrote completed startup history");
+  assert.deepEqual(errors, []);
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/refresh/commit/Unicode/mapping, lost import ACK/dedup; independent delivery/command drafts and close/save failures. Workflow: real import/build/start/readiness/log, lost ACK/dedup, controller reconnect preserves app PID, linked build task, restore profile without commands, separate app stop and startup history.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

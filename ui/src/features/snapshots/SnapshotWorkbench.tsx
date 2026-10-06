@@ -3,11 +3,13 @@ import { Alert, Badge, Button, Card, Code, Group, Progress, Select, Stack, Table
 import { expectResult, workerCall } from "../../runtime/adapter";
 import type { DeliveryDraft, ImportRecord, ImportSubmission, PublishedSnapshotPage, SnapshotPreview, WorkerInfo } from "../../runtime/contracts";
 import { statuses } from "../tasks/TaskDetail";
+import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
 
 const phases: Record<string, string> = { queued: "Ожидает свободного проекта", validate: "Проверка пакета", copy_payload: "Копирование ZIP на локальный диск", extract: "Распаковка и проверка файлов", verify_local: "Проверка локальных исходников", publish_local: "Публикация поколения", verified: "Готово для сборки" };
-export function SnapshotWorkbench({ info, connected, closing, drafts, persist }: {
+export function SnapshotWorkbench({ info, connected, closing, drafts, persist, onWorkflowSnapshot }: {
   info: WorkerInfo; connected: boolean; closing: boolean; drafts: DeliveryDraft[] | null;
   persist: (draft: DeliveryDraft) => Promise<void>;
+  onWorkflowSnapshot?: (snapshot: WorkflowSnapshot) => void;
 }) {
   const [selection, setSelection] = useState<DeliveryDraft | null>(null);
   const project = selection?.projectId ?? null;
@@ -142,6 +144,7 @@ export function SnapshotWorkbench({ info, connected, closing, drafts, persist }:
       <Text size="sm">{preview.totalFiles} файлов · {preview.totalBytes} байт исходников · ZIP {preview.payloadBytes} байт</Text>
       <Text size="xs">Manifest SHA-256: {preview.manifestSha256}</Text>
       <Alert color="blue">Это предварительный состав. Проверка ZIP и всех файлов выполняется при импорте; сборка запускается отдельной командой.</Alert>
+      {onWorkflowSnapshot && <Button variant="light" onClick={() => onWorkflowSnapshot({ projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256 })} disabled={busy || closing}>Использовать в workflow</Button>}
       <Table.ScrollContainer minWidth={450}><Table><Table.Thead><Table.Tr><Table.Th>Файл</Table.Th><Table.Th>Байт</Table.Th><Table.Th>SHA-256</Table.Th></Table.Tr></Table.Thead><Table.Tbody>
         {preview.files.map((file) => <Table.Tr key={file.path}><Table.Td>{file.path}</Table.Td><Table.Td>{file.bytes}</Table.Td><Table.Td><Code>{file.sha256}</Code></Table.Td></Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>

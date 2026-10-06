@@ -16,6 +16,66 @@ pub struct ManagedChild {
 
 pub type OutputReader = Box<dyn Read + Send>;
 
+/// Reject linked/reparse/special paths before accessing managed state or project files.
+pub fn require_safe_path(path: &std::path::Path) -> io::Result<()> {
+    if !path.is_absolute() {
+        return Err(io::Error::other("Filesystem path must be absolute"));
+    }
+    for ancestor in path.ancestors() {
+        match std::fs::symlink_metadata(ancestor) {
+            Ok(metadata) => {
+                let mut linked = metadata.file_type().is_symlink();
+                #[cfg(windows)]
+                {
+                    use std::os::windows::fs::MetadataExt;
+                    linked |= metadata.file_attributes() & 0x400 != 0;
+                }
+                #[cfg(not(windows))]
+                {
+                    let _ = &mut linked;
+                }
+                if linked || !(metadata.is_dir() || metadata.is_file()) {
+                    return Err(io::Error::other(format!(
+                        "Linked/reparse/special path refused: {}",
+                        ancestor.display()
+                    )));
+                }
+                if metadata.is_file() {
+                    require_single_link(ancestor)?;
+                }
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => return Err(io::Error::other(format!("{}: {e}", ancestor.display()))),
+        }
+    }
+    Ok(())
+}
+
+/// Stable identity of the opened file, independent of name and length.
+pub fn file_identity(file: &std::fs::File) -> io::Result<String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let meta = file.metadata()?;
+        Ok(format!("{}:{}", meta.dev(), meta.ino()))
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let mut meta: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut meta) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(format!(
+            "{}:{}:{}",
+            meta.dwVolumeSerialNumber, meta.nFileIndexHigh, meta.nFileIndexLow
+        ))
+    }
+}
+
 pub fn require_local_disk(path: &std::path::Path) -> io::Result<()> {
     #[cfg(windows)]
     {

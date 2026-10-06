@@ -6,6 +6,8 @@ import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, 
 import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo } from "../../runtime/contracts";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
+import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
+import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
 import { TaskDetail, statuses } from "./TaskDetail";
 
 function TaskSession({ id }: { id: string }) {
@@ -50,6 +52,7 @@ function TaskSession({ id }: { id: string }) {
 
 export function NativeWorkbench() {
   const [info, setInfo] = useState<WorkerInfo | null>(null);
+  const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -192,7 +195,8 @@ export function NativeWorkbench() {
         {!controllerFresh && <Text size="sm">Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет.</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
-    {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} />}
+    {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
+    {info?.workflowAvailable && <WorkflowWorkbench info={info} connected={connected} closing={closing} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card withBorder><Stack>
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />
@@ -221,6 +225,6 @@ export function NativeWorkbench() {
       <Button onClick={() => void submit()} loading={submitting} disabled={!connected || pending !== null || !project || !formReady || closing || (!recipeId && !project.allowDirectCommands)}>Передать задачу worker</Button>
     </Stack></Card>
     <Select label="Последние 10 задач" value={selectedId} onChange={setSelectedId} searchable data={tasks.map((t) => ({ value: t.taskId, label: `${t.projectId} · ${statuses[t.status].label} · ${t.taskId}` }))} />
-    {selectedId ? <TaskSession key={selectedId} id={selectedId} /> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
+    {selectedId ? <div id="native-task-detail"><TaskSession key={selectedId} id={selectedId} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
   </Stack>;
 }

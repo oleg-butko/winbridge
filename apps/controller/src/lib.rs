@@ -68,6 +68,9 @@ impl Controller {
                 let state = self.state.lock().map_err(|_| "controller session state poisoned")?;
                 let session = state.active.as_ref().filter(|s| s.ready)
                     .ok_or("Windows worker is offline; last task state is retained. No command was automatically retried")?;
+                if matches!(request,LocalRequest::SubmitWorkflow {..}|LocalRequest::ListWorkflows|LocalRequest::GetWorkflow {..}|LocalRequest::CancelWorkflow {..}|LocalRequest::ListApplications|LocalRequest::GetApplication {..}|LocalRequest::StopApplication {..}|LocalRequest::ReadApplicationLog {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::LogRead)) {
+                    return Err("Worker does not advertise stage-4 workflow/log support; update the fixed runtime with the combined release".into());
+                }
                 if matches!(request, LocalRequest::ImportSnapshot {..} | LocalRequest::ListImports | LocalRequest::GetImport {..} | LocalRequest::CancelImport {..} | LocalRequest::PreviewSnapshot {..} | LocalRequest::ListSnapshots {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::WorkspaceImport)) {
                     return Err("Worker does not advertise workspace_import; update the fixed runtime and configure delivery in local JSON".into());
                 }
@@ -256,6 +259,14 @@ impl Drop for ConnectionGuard {
 }
 fn request_method(request: &LocalRequest) -> &'static str {
     match request {
+        LocalRequest::SubmitWorkflow { .. } => "submit_workflow",
+        LocalRequest::ListWorkflows => "list_workflows",
+        LocalRequest::GetWorkflow { .. } => "get_workflow",
+        LocalRequest::CancelWorkflow { .. } => "cancel_workflow",
+        LocalRequest::ListApplications => "list_applications",
+        LocalRequest::GetApplication { .. } => "get_application",
+        LocalRequest::StopApplication { .. } => "stop_application",
+        LocalRequest::ReadApplicationLog { .. } => "read_application_log",
         LocalRequest::ListSnapshots { .. } => "list_snapshots",
         LocalRequest::ImportSnapshot { .. } => "import_snapshot",
         LocalRequest::ListImports => "list_imports",

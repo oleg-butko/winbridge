@@ -1,0 +1,14 @@
+[package]
+name = "winbridge-log-reader"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+winbridge-core.workspace = true
+winbridge-protocol.workspace = true
+winbridge-platform.workspace = true
+sha2 = "0.10.9"
+
+[dev-dependencies]
+tempfile = "3"

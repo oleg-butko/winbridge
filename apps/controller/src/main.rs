@@ -31,7 +31,7 @@ async fn run() -> Result<(), String> {
         }
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
+        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -41,6 +41,7 @@ async fn run() -> Result<(), String> {
             winbridge_protocol::Capability::TaskSubmit,
             winbridge_protocol::Capability::TaskCancel,
             winbridge_protocol::Capability::WorkspaceImport,
+            winbridge_protocol::Capability::LogRead,
         ];
         descriptor
             .planned_capabilities
@@ -76,6 +77,15 @@ async fn run() -> Result<(), String> {
         }
         _ => {
             let request = match operation {
+                [name, path] if name == "workflow" => LocalRequest::SubmitWorkflow {request:serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),65536)?).map_err(|_|"Invalid workflow JSON")?},
+                [name] if name == "workflows" => LocalRequest::ListWorkflows,
+                [name,id] if name == "get-workflow" => LocalRequest::GetWorkflow {workflow_id:id.clone()},
+                [name,id] if name == "cancel-workflow" => LocalRequest::CancelWorkflow {workflow_id:id.clone()},
+                [name] if name == "applications" => LocalRequest::ListApplications,
+                [name,id] if name == "get-application" => LocalRequest::GetApplication {application_id:id.clone()},
+                [name,id] if name == "stop-application" => LocalRequest::StopApplication {application_id:id.clone()},
+                [name,id] if name == "log" => LocalRequest::ReadApplicationLog {application_id:id.clone(),cursor:None,max_bytes:65536},
+                [name,id,path] if name == "log" => LocalRequest::ReadApplicationLog {application_id:id.clone(),cursor:Some(serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),8192)?).map_err(|_|"Invalid log cursor JSON")?),max_bytes:65536},
                 [name] if name == "imports" => LocalRequest::ListImports,
                 [name, project] if name == "snapshots" => LocalRequest::ListSnapshots {project_id:project.clone(),offset:0},
                 [name, project, offset] if name == "snapshots" => LocalRequest::ListSnapshots {project_id:project.clone(),offset:offset.parse().map_err(|_|"Snapshot offset must be an integer")?},

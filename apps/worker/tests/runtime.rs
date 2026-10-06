@@ -52,6 +52,42 @@ fn journal_paths_refuse_linked_ancestors_and_hardlinks_without_touching_targets(
         "unchanged"
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn journal_paths_refuse_ntfs_junctions_and_hardlinks_without_touching_targets() {
+    let temp = TempDir::new().unwrap();
+    let root = temp.path();
+    fs::create_dir(root.join("real-state")).unwrap();
+    let quote = |path: &Path| format!("'{}'", path.display().to_string().replace('\'', "''"));
+    let script = format!(
+        "New-Item -ItemType Junction -Path {} -Target {} | Out-Null",
+        quote(&root.join("state")),
+        quote(&root.join("real-state"))
+    );
+    assert!(std::process::Command::new("pwsh.exe")
+        .args(["-NoProfile", "-Command", &script])
+        .status()
+        .unwrap()
+        .success());
+    assert!(Worker::open(config(root, 10000))
+        .err()
+        .unwrap()
+        .contains("Linked/reparse"));
+    assert_eq!(fs::read_dir(root.join("real-state")).unwrap().count(), 0);
+    fs::remove_dir(root.join("state")).unwrap();
+    fs::create_dir(root.join("state")).unwrap();
+    fs::write(root.join("canary"), "unchanged").unwrap();
+    fs::hard_link(root.join("canary"), root.join("state/journal.sqlite")).unwrap();
+    assert!(Worker::open(config(root, 10000))
+        .err()
+        .unwrap()
+        .contains("Hard-linked"));
+    assert_eq!(
+        fs::read_to_string(root.join("canary")).unwrap(),
+        "unchanged"
+    );
+}
 fn submission(key: &str, mode: &str, timeout: u64) -> TaskSubmission {
     TaskSubmission {
         snapshot_id: None,

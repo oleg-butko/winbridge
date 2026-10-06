@@ -58,11 +58,16 @@
 
 ## Этап 4 — первый полный цикл разработки
 
-- [ ] Workflow: выбрать SHA → deliver/import → build → start → проверить готовность → log tail.
-- [ ] Сохранённый pipeline и step IDs; ошибка сборки блокирует запуск следующего шага.
-- [ ] Process registry для приложений, отдельно от одноразовых build tasks.
-- [ ] Log read/tail: offset, encoding, truncation/rotation, квота и история.
-- [ ] UI task detail с timeline, фильтрацией output, artifacts, process status и связанным логом. Никаких fake success при принятии request.
+Статус 2026-10-06: основной цикл реализован на committed snapshot-fixture; Windows tests выполняются автоматически через разрешённый worker. [Контракт и ограничения](workflows.md), [автоматический сценарий](windows-workflow-validation.md). Полный этап остаётся открытым: Netwatch profile/probe и оставшиеся UI критерии ещё не выполнены.
+
+- [x] Workflow fixture: выбрать SHA → publish/import → build → start → stdout readiness → log tail.
+- [x] Принятый профиль и step IDs в journal; ошибка сборки блокирует запуск следующего шага, dedup не создаёт повторный процесс.
+- [x] Process registry для приложений, отдельно от одноразовых build tasks; явный stop и indeterminate recovery.
+- [x] Log read/tail: byte offset, UTF-8, truncation/rotation/prefix rewrite, page/UI квота. Task output сохраняется в journal; файл лога читается у приложения.
+- [x] UI workflow steps/timeline, ссылки на build/start tasks, app status и связанный лог; принятие request не считается завершением.
+- [x] Автоматические Windows regression через старый fixed worker, isolated source/build/state и checksum-verified shared report.
+- [ ] Netwatch profile с безопасной изоляцией и фактическим readiness probe; production экземпляр не использовать как fixture.
+- [ ] Отдельные editable именованные profiles, фильтрация output и artifact catalog.
 
 Критерий: на примере Netwatch агент получает стабильный snapshot, собирает на Windows, запускает его, читает лог и видит все шаги в UI. Падение приложения и провал readiness показываются отдельно от успешной сборки.
 
@@ -96,4 +101,4 @@
 
 ## Следующий конкретный шаг
 
-Этап 4: сохранённый workflow import → build → start → readiness → log tail, registry приложений и общий UI. Ошибка любого prerequisite блокирует следующий шаг; восстановление не повторяет неизвестные внешние команды. Windows regression выполнять автоматически через одобренные fixture сценарии; использовать подключённый worker для подготовки/запуска изолированных тестов новой версии, сохранять fixed пользовательский runtime. Подробные ручные UI checks отложены пользователем и не должны дробить работу на мелкие итерации. Dirty source mode и performance extensions остаются будущими задачами.
+Завершить оставшиеся критерии этапа 4: Netwatch profile/probe/isolation, editable profiles, output filters/artifacts. Основной workflow/process/log цикл уже работает; не возвращаться к новому ручному gate для каждого fix. Windows regression — scripts/validate-workflow-native.py через подключённый fixed worker. Подробные ручные UI checks отложены пользователем. Затем этап 5 добавит внимание пользователя и ежедневные операции. Dirty source mode и performance extensions остаются будущими задачами.

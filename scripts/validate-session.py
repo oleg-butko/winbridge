@@ -316,6 +316,12 @@ try:
 
     fake = RawWebSocket()
     assert fake.hello()['type'] == 'welcome'
+    # A new controller must refuse workflow RPC locally when an older peer does
+    # not advertise LogRead, rather than send an unknown enum and kill its session.
+    unsupported = call({'method': 'list_workflows'}, error=True)
+    assert 'workflow/log support' in unsupported['message'], unsupported
+    assert connected(), 'unsupported workflow request disconnected the legacy worker'
+    checks.append('legacy-worker-workflow-capability-guard-preserves-session')
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         futures = [pool.submit(call, {'method': method}, error=True) for method in ['info', 'list_tasks']]
         received = []

@@ -15,7 +15,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -25,11 +25,9 @@ async fn run() -> Result<(), String> {
             winbridge_protocol::Capability::TaskSubmit,
             winbridge_protocol::Capability::TaskCancel,
             winbridge_protocol::Capability::WorkspaceImport,
-        ];
-        descriptor.planned_capabilities = vec![
             winbridge_protocol::Capability::LogRead,
-            winbridge_protocol::Capability::AttentionRequest,
         ];
+        descriptor.planned_capabilities = vec![winbridge_protocol::Capability::AttentionRequest];
         println!(
             "{}",
             serde_json::to_string_pretty(&descriptor).map_err(|e| e.to_string())?
@@ -51,6 +49,43 @@ async fn run() -> Result<(), String> {
         }
         _ => {
             let request = match operation {
+                [name, path] if name == "workflow" => LocalRequest::SubmitWorkflow {
+                    request: serde_json::from_slice(&winbridge_workspace_sync::read_bounded(
+                        Path::new(path),
+                        65536,
+                    )?)
+                    .map_err(|_| "Invalid workflow JSON")?,
+                },
+                [name] if name == "workflows" => LocalRequest::ListWorkflows,
+                [name, id] if name == "get-workflow" => LocalRequest::GetWorkflow {
+                    workflow_id: id.clone(),
+                },
+                [name, id] if name == "cancel-workflow" => LocalRequest::CancelWorkflow {
+                    workflow_id: id.clone(),
+                },
+                [name] if name == "applications" => LocalRequest::ListApplications,
+                [name, id] if name == "get-application" => LocalRequest::GetApplication {
+                    application_id: id.clone(),
+                },
+                [name, id] if name == "stop-application" => LocalRequest::StopApplication {
+                    application_id: id.clone(),
+                },
+                [name, id] if name == "log" => LocalRequest::ReadApplicationLog {
+                    application_id: id.clone(),
+                    cursor: None,
+                    max_bytes: 65536,
+                },
+                [name, id, path] if name == "log" => LocalRequest::ReadApplicationLog {
+                    application_id: id.clone(),
+                    cursor: Some(
+                        serde_json::from_slice(&winbridge_workspace_sync::read_bounded(
+                            Path::new(path),
+                            8192,
+                        )?)
+                        .map_err(|_| "Invalid log cursor JSON")?,
+                    ),
+                    max_bytes: 65536,
+                },
                 [name] if name == "imports" => LocalRequest::ListImports,
                 [name, project] if name == "snapshots" => LocalRequest::ListSnapshots {
                     project_id: project.clone(),

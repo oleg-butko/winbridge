@@ -40,6 +40,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         CommandDraft::decl(&config),
         DeliveryDraft::decl(&config),
         DesktopDraftState::decl(&config),
+        ReadinessProbe::decl(&config),
+        WorkflowSubmission::decl(&config),
+        WorkflowStepStatus::decl(&config),
+        WorkflowStep::decl(&config),
+        WorkflowRecord::decl(&config),
+        ApplicationStatus::decl(&config),
+        ApplicationRecord::decl(&config),
+        LogCursor::decl(&config),
+        LogPage::decl(&config),
     ];
     let text = format!(
         "// Generated from crates/protocol by npm run generate:contracts. Do not edit.\n{}\n",

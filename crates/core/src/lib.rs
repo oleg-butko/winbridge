@@ -4,6 +4,7 @@ pub mod config;
 pub mod controller_config;
 pub mod desktop_state;
 pub mod snapshot;
+pub mod workflow;
 
 use std::io::{self, Write};
 use winbridge_protocol::{Capability, Component, RuntimeDescriptor, PROTOCOL_VERSION};
