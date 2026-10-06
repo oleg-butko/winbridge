@@ -59,6 +59,12 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
+**После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
+через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.
+Сценарий соберёт и обновит постоянный runtime, сохранит настройки/журнал и запустит
+worker/desktop. `test-windows-workflow.ps1` предназначен для автоматических тестов;
+[назначение сценариев и параметры](docs/windows-workflow-validation.md).
+
 ```bash
 cargo test --workspace --locked
 cargo check --workspace --locked

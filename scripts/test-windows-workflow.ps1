@@ -1,10 +1,58 @@
+<#
+.SYNOPSIS
+Проверяет исходники WinBridge на настоящей Windows и сохраняет отчёт в shared.
+.DESCRIPTION
+Это автоматический тестовый сценарий, вызываемый из Debian через уже работающий worker.
+Для обновления рабочего worker/desktop используйте .\scripts\prepare-windows-snapshot.ps1.
+Сценарий проверяет source manifest, собирает тесты Cargo offline, запускает изолированные
+worker/process/import/workflow проверки и записывает report.json, logs и report.ready.json.
+.PARAMETER SourceDirectory
+Корень распакованных исходников с Cargo.toml, scripts и winbridge-source-manifest.json.
+По умолчанию определяется как родитель папки scripts этого сценария, независимо от cwd.
+Пример: K:\_proj-26\winbridge\src. Это папка исходников, из которых собираются тесты.
+.PARAMETER ReportDirectory
+Новая папка одного отчёта, обычно K:\VMs\shared\WinBridge\workflow-validation\<run>.
+.PARAMETER SourceArchiveSha256
+SHA-256 исходного ZIP, из которого распакованы исходники. Нужен для связи отчёта с
+проверенной версией. Агент передаёт его автоматически; вручную можно взять из .zip.sha256.
+.PARAMETER Help
+Показывает назначение сценария и команду обновления, без сборки или записи файлов.
+.EXAMPLE
+.\scripts\test-windows-workflow.ps1 -Help
+.NOTES
+Полная инструкция: docs/windows-workflow-validation.md.
+#>
 param(
-    [Parameter(Mandatory = $true)][string]$SourceDirectory,
-    [Parameter(Mandatory = $true)][string]$ReportDirectory,
-    [Parameter(Mandatory = $true)][string]$SourceArchiveSha256
+    [string]$SourceDirectory = '',
+    [string]$ReportDirectory = '',
+    [string]$SourceArchiveSha256 = '',
+    [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
+if ($Help -or -not $ReportDirectory -or -not $SourceArchiveSha256) {
+    Write-Host @'
+test-windows-workflow.ps1 — автоматические Windows тесты WinBridge.
+Этот сценарий агент запускает из Debian; он не обновляет рабочие exe и не открывает desktop.
+
+Чтобы обновить и запустить WinBridge после распаковки исходников:
+  1. Закройте desktop и остановите прежний worker через Ctrl+C.
+  2. Из папки исходников выполните: .\scripts\prepare-windows-snapshot.ps1
+
+Для отдельного тестового прогона нужны:
+  -SourceDirectory      Папка с Cargo.toml, scripts и winbridge-source-manifest.json.
+                        По умолчанию: корень исходников этого сценария.
+  -ReportDirectory      Новая папка отчёта в K:\VMs\shared\WinBridge\workflow-validation.
+  -SourceArchiveSha256  SHA-256 исходного ZIP для связи отчёта с проверенной версией.
+
+37 Windows тестов выпуска 652635b уже выполнены автоматически; повтор для обновления не нужен.
+Объяснение и примеры: docs/windows-workflow-validation.md
+'@
+    if ($Help) { exit 0 }
+    Write-Host 'Тесты не запущены: укажите ReportDirectory и SourceArchiveSha256 или используйте команду обновления выше.'
+    exit 2
+}
+if (-not $SourceDirectory) { $SourceDirectory = Join-Path $PSScriptRoot '..' }
 if ($env:OS -ne 'Windows_NT') { throw 'This scenario requires actual Windows' }
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
 $manifest = Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json

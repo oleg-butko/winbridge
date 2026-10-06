@@ -1,5 +1,67 @@
 # Автоматические Windows проверки workflow
 
+## Что запустить после распаковки исходников
+
+Чтобы обновить **рабочий WinBridge и увидеть новый UI**, закройте desktop и остановите
+прежний worker через Ctrl+C в его окне. Из корня распакованных исходников, где лежат
+`Cargo.toml`, `scripts` и `package.json`, выполните в PowerShell:
+
+```powershell
+.\scripts\prepare-windows-snapshot.ps1
+```
+
+Например, если исходники находятся в `K:\_proj-26\winbridge\src`, выполнять команду
+нужно из этой папки. ZIP содержит верхнюю папку `winbridge`: при извлечении в новую
+папку корень исходников может оказаться на один уровень глубже. Ориентир — `Cargo.toml`
+рядом с папкой `scripts`.
+
+Сценарий собирает Rust worker/fixture, устанавливает зависимости UI через `npm ci`,
+собирает desktop и обновляет exe в постоянном `K:\_proj-26\winbridge\runtime`.
+Затем открывает desktop и запускает worker с прежним snapshot config. Существующие
+настройки, формы и journal сохраняются; при upgrade SQLite создаётся consistent backup.
+Новое окно PowerShell с worker оставить открытым. Debian controller уже запускает агент;
+после reconnect UI покажет «Controller Debian подключён» и «Цикл разработки».
+
+`test-windows-workflow.ps1` выполняет **автоматические тесты**, а не обновление рабочего
+приложения. Агент уже выполнил [37 Windows тестов этого выпуска](windows-workflow-gate-2026-10-06.md).
+Повторять их для установки не требуется. Если запущенный сценарий ждёт `SourceDirectory:`,
+прервать запрос через Ctrl+C и выполнить команду обновления выше.
+
+## Что означает SourceDirectory и остальные параметры теста
+
+| Параметр | Значение и назначение |
+| --- | --- |
+| `SourceDirectory` | Корень распакованных исходников: папка с `Cargo.toml`, `scripts` и `winbridge-source-manifest.json`. Пример: `K:\_proj-26\winbridge\src`. Из этих файлов собираются тесты; здесь проверяется соответствие source manifest. |
+| `ReportDirectory` | Новая папка одного прогона в shared, например `K:\VMs\shared\WinBridge\workflow-validation\manual-20261006-01`. Туда записываются отчёт и два test logs; агент может их прочитать из Debian. |
+| `SourceArchiveSha256` | SHA-256 исходного ZIP. Связывает результат с конкретной проверенной версией, а не только с произвольной папкой исходников. Не SHA папки или config. |
+
+В обновлённой версии `SourceDirectory` определяется от папки самого сценария, если его
+не передать; без report directory/hash сценарий выводит объяснение и завершает работу
+без тестов и записи файлов. Справка:
+
+```powershell
+.\scripts\test-windows-workflow.ps1 -Help
+Get-Help .\scripts\test-windows-workflow.ps1 -Full
+```
+
+В уже скопированном архиве `652635b` параметры обязательны; полный ручной вызов выглядит
+так (приведён для отдельного повторного теста, для обновления используйте команду выше):
+
+```powershell
+$report = 'K:\VMs\shared\WinBridge\workflow-validation\manual-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+.\scripts\test-windows-workflow.ps1 `
+  -SourceDirectory (Get-Location).Path `
+  -ReportDirectory $report `
+  -SourceArchiveSha256 '5a9e4e7e06d483d054d3184f45466917de50c44c161d92e7bbaefefcb10b5eb2'
+```
+
+Хэш в примере относится только к `winbridge-20261006T172619Z-652635b-c8d60318.zip`.
+Для другого ZIP взять его SHA-256 из соответствующего `.zip.sha256` или `Get-FileHash`.
+Ручной тест требует неизменённых source files и `winbridge-source-manifest.json` из ZIP.
+Проверка собирает отдельные тестовые exe; рабочий desktop автоматически не запускается.
+
+## Как выполняется автоматическая проверка
+
 Сценарий использует уже подключённый разрешённый worker, собирает новую версию в отдельном локальном подкаталоге зарегистрированного `snapshot-fixture` и запускает настоящие Windows тесты. Агент читает checksum-verified report из shared. Пользовательский fixed runtime/конфигурация/SQLite остаются рабочими; новый тестовый worker использует уникальный SID+instance pipe без WebSocket, поэтому менять сетевые правила для его пути не нужно.
 
 ## Запуск из Debian
