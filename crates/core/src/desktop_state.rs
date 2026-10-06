@@ -2,7 +2,7 @@
 use crate::config::{valid_id, Result};
 use std::{
     fs::{self, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -81,8 +81,8 @@ impl DesktopDraftStore {
     }
 
     fn read(&self) -> Result<DesktopDraftState> {
-        let bytes = match fs::read(&self.path) {
-            Ok(bytes) => bytes,
+        let file = match fs::File::open(&self.path) {
+            Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(DesktopDraftState {
                     schema_version: 1,
@@ -92,6 +92,10 @@ impl DesktopDraftStore {
             }
             Err(error) => return Err(format!("desktop state {}: {error}", self.path.display())),
         };
+        let mut bytes = Vec::new();
+        file.take(MAX_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("desktop state {}: {e}", self.path.display()))?;
         if bytes.len() > MAX_BYTES {
             return Err(format!(
                 "desktop state {} exceeds 1 MiB",
@@ -250,6 +254,18 @@ mod tests {
             store.load().unwrap().drafts,
             vec![second, other_worker, other_root, updated]
         );
+    }
+
+    #[test]
+    fn oversized_existing_file_is_rejected_and_preserved() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(DESKTOP_STATE_FILE);
+        let bytes = vec![b' '; MAX_BYTES + 1];
+        fs::write(&path, &bytes).unwrap();
+        let store = DesktopDraftStore::new(path.clone());
+        assert!(store.load().unwrap_err().contains("exceeds 1 MiB"));
+        assert!(store.save(draft("project")).is_err());
+        assert_eq!(fs::read(path).unwrap(), bytes);
     }
 
     #[test]

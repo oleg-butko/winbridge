@@ -21,6 +21,37 @@ fn config(root: &Path, limit: u64) -> WorkerConfig {
             "recipes":[{"id":"success","executable":env!("CARGO_BIN_EXE_winbridge-fixture"),"arguments":["success"],"workingDirectory":".","timeoutMs":5000}]}]
     })).unwrap()
 }
+
+#[cfg(unix)]
+#[test]
+fn journal_paths_refuse_linked_ancestors_and_hardlinks_without_touching_targets() {
+    let temp = TempDir::new().unwrap();
+    let root = temp.path();
+    fs::create_dir(root.join("real-state")).unwrap();
+    std::os::unix::fs::symlink(root.join("real-state"), root.join("state")).unwrap();
+    assert!(Worker::open(config(root, 10000))
+        .err()
+        .unwrap()
+        .contains("Linked/reparse"));
+    assert_eq!(fs::read_dir(root.join("real-state")).unwrap().count(), 0);
+    fs::remove_file(root.join("state")).unwrap();
+    fs::create_dir(root.join("state")).unwrap();
+    fs::set_permissions(
+        root.join("state"),
+        std::os::unix::fs::PermissionsExt::from_mode(0o700),
+    )
+    .unwrap();
+    fs::write(root.join("canary"), "unchanged").unwrap();
+    fs::hard_link(root.join("canary"), root.join("state/journal.sqlite")).unwrap();
+    assert!(Worker::open(config(root, 10000))
+        .err()
+        .unwrap()
+        .contains("Hard-linked"));
+    assert_eq!(
+        fs::read_to_string(root.join("canary")).unwrap(),
+        "unchanged"
+    );
+}
 fn submission(key: &str, mode: &str, timeout: u64) -> TaskSubmission {
     TaskSubmission {
         snapshot_id: None,

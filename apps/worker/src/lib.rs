@@ -552,15 +552,12 @@ impl Worker {
 }
 
 fn reject_symlink(path: &Path) -> Result<()> {
-    if let Ok(metadata) = fs::symlink_metadata(path) {
-        if metadata.file_type().is_symlink() {
-            return Err(format!(
-                "state file {} must not be a symlink",
-                path.display()
-            ));
-        }
-    }
-    Ok(())
+    winbridge_workspace_sync::safe_path(path).map_err(|reason| {
+        format!(
+            "state file {} must be a real path without links: {reason}",
+            path.display()
+        )
+    })
 }
 // Unix UID without another platform-specific dependency in the worker package.
 #[cfg(unix)]
@@ -571,6 +568,7 @@ unsafe fn libc_uid() -> u32 {
     unsafe { getuid() }
 }
 fn ensure_local_state(path: &Path) -> Result<()> {
+    winbridge_workspace_sync::safe_path(path)?;
     if path.to_string_lossy().replace('\\', "/").starts_with("//") {
         return Err("stateDirectory must be on a local disk, not UNC/network storage".into());
     }

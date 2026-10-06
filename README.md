@@ -9,7 +9,7 @@
 - Собирающийся Rust workspace: общие DTO, core entry point и отдельные binaries controller/worker.
 - Worker CLI: config validation, serve, submit/get/list/output/cancel через local IPC. Controller CLI передаёт запросы по локальному ws:// и читает результаты worker.
 - Controller записывает адреса сетевой активности в JSONL с ротацией; блокировки по IP в текущей локальной разработке нет.
-- Snapshot runtime: точный Git commit, verified HGFS package, durable import, общий project lease и explicit build из локального поколения. Native UI: manifest/mapping/progress/history/cancel. [Формат](docs/snapshot-format.md); [Windows runtime gate пройден](docs/windows-snapshot-gate-2026-10-06.md); завершается native UX проверка формы доставки.
+- Snapshot runtime: точный Git commit, verified HGFS package, durable import, общий project lease и explicit build из локального поколения. Native UI: manifest/mapping/progress/history/cancel. [Формат](docs/snapshot-format.md); [Windows runtime gate пройден](docs/windows-snapshot-gate-2026-10-06.md); UI исправления приняты пользователем, этап 3 завершён.
 - SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
 - Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
 - User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.
@@ -17,7 +17,7 @@
 - Connected UI: форма команды, recent tasks, timeline, output/exit code, cancel и независимая свежесть соединения. Browser: явно помеченная демонстрация и просмотр сохранённого отчёта worker.
 - Архитектура, поэтапный roadmap, UX требования, ADR, примеры конфигурации и инструкции следующему агенту.
 
-**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Snapshot runtime прошёл 19 Windows checks 2026-10-06; package select/delivery form restore ждут Windows подтверждения; log tail и attention — следующие этапы. Browser сам команды не выполняет.
+**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Snapshot runtime прошёл 19 Windows checks 2026-10-06; package select/delivery form restore приняты пользователем без нового ручного gate; log tail и attention — следующие этапы. Browser сам команды не выполняет.
 
 ## Принятые решения
 

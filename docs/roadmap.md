@@ -41,7 +41,7 @@
 
 ## Этап 3 — готовый snapshot через VMware Shared Folders
 
-Статус 2026-10-06: [Windows runtime gate пройден](windows-snapshot-gate-2026-10-06.md), 19 actual import/build/run/cancel/junction checks. Пользователь подтвердил imports/preview/build/failure/history в native UI. По его замечаниям добавлены shared package select, сохранение delivery form и понятный отказ сборки непроверенного snapshot; 48 Rust tests и реальная UI integration проходят. Этап на завершающей Windows UX проверке этих исправлений, ещё не закрыт.
+Статус 2026-10-06: [Windows runtime gate пройден](windows-snapshot-gate-2026-10-06.md), 19 actual import/build/run/cancel/junction checks. Пользователь подтвердил imports/preview/build/failure/history в native UI. По его замечаниям добавлены shared package select, сохранение delivery form и понятный отказ сборки непроверенного snapshot; 48 Rust tests и реальная UI integration проходят. Этап 3 завершён по решению пользователя: UI исправления приняты, подробная ручная проверка отложена. Это принятие не обозначается как дополнительный выполненный Windows UI test.
 
 - [x] Общие Rust/TypeScript DTO manifest/ready и bounded metadata preflight: Windows пути, case collisions, file/directory conflicts, hashes/size syntax и byte counts.
 - [x] Выбор mapping `/mnt/hgfs/shared` ↔ `K:\VMs\shared` и отдельного Windows workspace root.
@@ -50,7 +50,7 @@
 - [x] Namespace, `.part`, manifest, ready marker, RPC import и локальный verified staging.
 - [x] Policy/actual-byte/link guards и Windows compile для path/size/hash/traversal/collision/reserved names/incomplete transfers.
 - [x] Настоящий Windows runtime gate: import/build/run/cancel/NTFS junction, 19 checks.
-- [ ] Подтверждение новых native UI исправлений: список пакетов и сохранение delivery form; показ Unicode результата отдельной задачи запуска.
+- [x] Пользователь принял новые UI исправления; подробные ручные наблюдения отложены по его решению.
 - [x] Workspace lease: импорт и сборка одного поколения не пересекаются. Runtime configs и пользовательские данные сохраняются отдельно.
 - [x] UI preview состава snapshot, bytes/files, progress и причины отказа, адреса обоих представлений shared folder.
 
@@ -96,4 +96,4 @@
 
 ## Следующий конкретный шаг
 
-Обновить fixed Windows runtime архивом с UX исправлениями и подтвердить три наблюдения из [инструкции](windows-snapshot-validation.md), включая delivery form restore. 19 Windows runtime checks уже прошли; не повторять их без новой причины. После UI подтверждения закрыть этап 3 и перейти к сохранённому workflow этапа 4. Dirty source mode и performance extensions не выдавать за выполненные.
+Этап 4: сохранённый workflow import → build → start → readiness → log tail, registry приложений и общий UI. Ошибка любого prerequisite блокирует следующий шаг; восстановление не повторяет неизвестные внешние команды. Windows regression выполнять автоматически через одобренные fixture сценарии; использовать подключённый worker для подготовки/запуска изолированных тестов новой версии, сохранять fixed пользовательский runtime. Подробные ручные UI checks отложены пользователем и не должны дробить работу на мелкие итерации. Dirty source mode и performance extensions остаются будущими задачами.

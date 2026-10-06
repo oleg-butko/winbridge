@@ -3,6 +3,7 @@ use serde::Deserialize;
 use std::{
     collections::HashSet,
     fs,
+    io::Read,
     path::{Path, PathBuf},
 };
 use winbridge_protocol::{
@@ -65,7 +66,10 @@ impl DesktopConfig {
 }
 
 pub(crate) fn read_config<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
-    let bytes = fs::read(path).map_err(|e| format!("config {}: {e}", path.display()))?;
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .and_then(|file| file.take(1024 * 1024 + 1).read_to_end(&mut bytes))
+        .map_err(|e| format!("config {}: {e}", path.display()))?;
     if bytes.len() > 1024 * 1024 {
         return Err(format!("config {} exceeds 1 MiB", path.display()));
     }
