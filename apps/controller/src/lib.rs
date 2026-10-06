@@ -68,7 +68,7 @@ impl Controller {
                 let state = self.state.lock().map_err(|_| "controller session state poisoned")?;
                 let session = state.active.as_ref().filter(|s| s.ready)
                     .ok_or("Windows worker is offline; last task state is retained. No command was automatically retried")?;
-                if matches!(request, LocalRequest::ImportSnapshot {..} | LocalRequest::ListImports | LocalRequest::GetImport {..} | LocalRequest::CancelImport {..} | LocalRequest::PreviewSnapshot {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::WorkspaceImport)) {
+                if matches!(request, LocalRequest::ImportSnapshot {..} | LocalRequest::ListImports | LocalRequest::GetImport {..} | LocalRequest::CancelImport {..} | LocalRequest::PreviewSnapshot {..} | LocalRequest::ListSnapshots {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::WorkspaceImport)) {
                     return Err("Worker does not advertise workspace_import; update the fixed runtime and configure delivery in local JSON".into());
                 }
                 (session.sender.clone(), session.id.clone(), state.last_peer.as_ref().map(|(_, address)| address.to_string()))
@@ -256,6 +256,7 @@ impl Drop for ConnectionGuard {
 }
 fn request_method(request: &LocalRequest) -> &'static str {
     match request {
+        LocalRequest::ListSnapshots { .. } => "list_snapshots",
         LocalRequest::ImportSnapshot { .. } => "import_snapshot",
         LocalRequest::ListImports => "list_imports",
         LocalRequest::GetImport { .. } => "get_import",

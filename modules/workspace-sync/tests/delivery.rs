@@ -54,6 +54,77 @@ fn setup() -> (TempDir, DeliverySettings, SnapshotReady, ImportSubmission) {
     (temp, delivery, ready, request)
 }
 #[test]
+fn discovery_pages_metadata_without_verifying_payload_or_creating_directories() {
+    let (temp, delivery, ready, _) = setup();
+    let parent = package_path(&delivery, "fixture", &ready.snapshot_id).unwrap();
+    // Discovery must not claim that a metadata-valid package has valid payload bytes.
+    fs::write(parent.join("payload.zip"), "corrupt").unwrap();
+    let first = list_snapshots(&delivery, "fixture", 0).unwrap();
+    assert_eq!(first.snapshots.len(), 1);
+    assert!(first.snapshots[0].metadata_error.is_none());
+    assert_eq!(first.snapshots[0].total_files, Some(2));
+    let parent = parent.parent().unwrap();
+    for index in 0..105 {
+        fs::create_dir(parent.join(format!("candidate-{index:03}"))).unwrap();
+    }
+    fs::create_dir(parent.join(".unfinished.part")).unwrap();
+    fs::write(parent.join("plain-file"), "ignored").unwrap();
+    let first = list_snapshots(&delivery, "fixture", 0).unwrap();
+    assert_eq!(first.snapshots.len(), 100);
+    assert!(first.snapshots.iter().all(|s| s.metadata_error.is_some()));
+    assert_eq!(first.next_offset, Some(100));
+    let next = list_snapshots(&delivery, "fixture", 100).unwrap();
+    assert_eq!(next.snapshots.len(), 6);
+    assert_eq!(next.next_offset, None);
+    assert_eq!(
+        next.snapshots.last().unwrap().snapshot_id,
+        ready.snapshot_id
+    );
+    assert!(list_snapshots(&delivery, "fixture", u64::MAX).is_err());
+    assert!(list_snapshots(&delivery, "../outside", 0).is_err());
+    assert!(list_snapshots(&delivery, "empty-project", 0)
+        .unwrap()
+        .snapshots
+        .is_empty());
+    assert!(!parent.parent().unwrap().join("empty-project").exists());
+    fs::rename(&delivery.root, temp.path().join("shared-offline")).unwrap();
+    assert!(list_snapshots(&delivery, "fixture", 0).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn discovery_refuses_linked_parent_and_reports_linked_candidate() {
+    let (temp, delivery, ready, _) = setup();
+    let package = package_path(&delivery, "fixture", &ready.snapshot_id).unwrap();
+    std::os::unix::fs::symlink(&package, package.parent().unwrap().join("linked-package")).unwrap();
+    let page = list_snapshots(&delivery, "fixture", 0).unwrap();
+    let linked = page
+        .snapshots
+        .iter()
+        .find(|s| s.snapshot_id == "linked-package")
+        .unwrap();
+    assert!(linked
+        .metadata_error
+        .as_ref()
+        .unwrap()
+        .contains("Linked/reparse"));
+    std::os::unix::fs::symlink(
+        package.parent().unwrap(),
+        package
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join("linked-project"),
+    )
+    .unwrap();
+    assert!(list_snapshots(&delivery, "linked-project", 0)
+        .unwrap_err()
+        .contains("Linked/reparse"));
+    assert!(temp.path().join("shared").exists());
+}
+
+#[test]
 fn exact_commit_ignores_dirty_tree_and_repeat_is_immutable() {
     let (temp, delivery, ready, request) = setup();
     let root = temp.path();

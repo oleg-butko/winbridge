@@ -1,6 +1,6 @@
 # Windows gate этапа 3: shared snapshot → import → build
 
-Runtime этапа 3 реализован и проверен на Unix adapter с настоящими HGFS/WebSocket/процессами. Этот документ описывает оставшуюся Windows проверку; до её результата этап 3 не завершён. Этапы 1 и 2 повторять не нужно.
+Windows runtime gate пройден 2026-10-06: 19 checks, actual import/build/run/cancel/NTFS junction. [Доказательства и точные IDs](windows-snapshot-gate-2026-10-06.md). Остаётся подтвердить исправления формы доставки после обновления binaries. Этот документ сохраняет инструкцию для нового прогона; уже пройденные gates этапов 1–3 повторять не нужно.
 
 ## Подготовка Windows
 
@@ -52,10 +52,18 @@ python3 scripts/validate-snapshot.py --controller-config .winbridge/controller-s
 
 ## Наблюдения в desktop
 
+Основной маленький тестовый пакет: **`s-9c3799cf4a9a4c658b222158dc319b2fb0718279`**, проект **`snapshot-fixture`**, 4 файла, ZIP 885 байт. В shared также остаются большие пакеты с `padding.dat` и `gate-...` для отрицательных проверок; наличие папки само по себе не означает успешный импорт. Не выбирать произвольный пакет для основного build/run сценария.
+
+«Snapshot ID опубликованного пакета» теперь searchable select. Worker читает папки `delivery.root\namespace\deliveries\projectId`, возвращает по 100 пакетов, ID/commit/count/ZIP bytes или ошибку метаданных. «Обновить список пакетов» перечитывает shared; «Следующие 100 пакетов» загружает следующую страницу. Поиск действует на загруженные страницы. `.part` и имена вне snapshot policy не предлагаются. ZIP ещё не проверен: повреждённый payload может иметь корректные manifest/ready, а импорт обнаружит ошибку содержимого.
+
 1. В «Последние 10 импортов» видны операции Debian, project/snapshot/commit, shared и локальный пути, phases и причина завершения. Готовый import показывает «Готово для сборки».
-2. В форме доставки указать snapshot ID из отчёта, нажать «Посмотреть состав snapshot»: видны `Привет.txt`, Rust sources/lockfile, sizes/hashes и обе стороны mapping. Preview подписан как предварительный, без утверждения о payload verification.
-3. В задачах видна сборка с snapshot ID, actual cwd под `snapshots\...`, argv с отдельным `build-cache`, output и Exit code 0. Следующая задача запускает собранный fixture и печатает «Проверенный commit → Windows build ✓».
+2. Выбрать проект `snapshot-fixture`, обновить shared-список и выбрать точный Snapshot ID выше. Нажать «Посмотреть состав snapshot»: видны `Привет.txt`, Rust sources/lockfile, sizes/hashes и обе стороны mapping. Preview подписан как предварительный, без утверждения о payload verification.
+3. В задачах выбрать build `0f9646e9-86b2-4786-8993-b58caaddabb2`: snapshot ID, actual cwd под `snapshots\...`, argv с отдельным `build-cache`, stderr Cargo и Exit code 0. Затем выбрать **другую** задачу `102d9bb3-434a-4df7-9bd5-3952d38e3772` и вкладку **«stdout / stderr»**: здесь находится «Проверенный commit → Windows build ✓». Рецепт `snapshot-build` только компилирует программу; её текста в build stdout не ожидается.
 4. Failed imports показывают конкретный отказ; отменённый import не предлагается как готовые исходники. Состояние controller и статус операции отображаются отдельно.
-5. Закрыть и открыть desktop: прежние imports/tasks читаются из journal. Поле «Snapshot ID для сборки», как остальные command fields, сохраняется; восстановление формы не выполняет команду.
+5. Закрыть и открыть desktop: прежние imports/tasks читаются из journal. Поля «Проект доставки» и «Snapshot ID опубликованного пакета» восстанавливаются независимо от command form; для каждого worker/project/root сохраняется свой выбор. «Snapshot ID для сборки», как остальные command fields, также сохраняется. Восстановление формы не запускает импорт или команду. Сохранённый пакет, которого больше нет в загруженном shared-списке, остаётся виден с пояснением.
+
+Для ручного запуска после успешной сборки выбрать зарегистрированный проект `snapshot-fixture`, Snapshot ID для сборки тот же, способ «Прямая команда», Executable `K:\_proj-26\winbridge\workspaces\snapshot-fixture\build-cache\debug\snapshot-fixture.exe`, аргументы `[]`, cwd `.`, timeout 60 секунд. Передать задачу и открыть «stdout / stderr». При попытке сборки snapshot без успешного импорта worker объясняет, что сначала нужен импорт, сохраняет исходную причину и не создаёт процесс.
+
+Для новых исправлений достаточно трёх наблюдений: пакеты доступны из select; проект/snapshot сохраняются после открытия окна без нового импорта; непроверенный snapshot даёт понятный отказ сборки. В готовом отчёте не менять результаты старого runtime gate.
 
 Передать результат этих пяти наблюдений. Для закрытия этапа нужны и настоящий Windows JSON gate, и UI подтверждение. При ошибке передать её текст и имя каталога отчёта: новый request/key без сверки существующей операции не нужен.

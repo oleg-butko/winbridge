@@ -14,6 +14,8 @@ export type SnapshotReady = { schemaVersion: number, projectId: string, snapshot
 export type ImportSubmission = { protocolVersion: number, requestId: string, projectId: string, snapshotId: string, manifestSha256: string, idempotencyKey: string, timeoutMs: number, };
 export type ImportRecord = { importId: string, submission: ImportSubmission, status: TaskStatus, phase: string, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, completedFiles: number, completedBytes: number, totalFiles: number | null, totalBytes: number | null, commit: string | null, sharedPath: string, workspacePath: string, reason: string | null, events: Array<JournalEvent>, };
 export type SnapshotPreview = { projectId: string, snapshotId: string, manifestSha256: string, source: SnapshotSource, totalFiles: number, totalBytes: number, payloadBytes: number, sharedPath: string, workspacePath: string, files: Array<SnapshotFile>, nextOffset: number | null, payloadVerified: boolean, peerSharedPath: string | null, };
+export type PublishedSnapshot = { snapshotId: string, source: SnapshotSource | null, totalFiles: number | null, totalBytes: number | null, payloadBytes: number | null, metadataError: string | null, };
+export type PublishedSnapshotPage = { projectId: string, sharedPath: string, snapshots: Array<PublishedSnapshot>, nextOffset: number | null, };
 export type VerifiedSnapshotRef = { snapshotId: string, manifestSha256: string, source: SnapshotSource, };
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted" | "indeterminate";
 export type CommandSource = { "kind": "recipe", recipeId: string, arguments: Array<string>, } | { "kind": "direct", executable: string, arguments: Array<string>,
@@ -39,16 +41,17 @@ export type ControllerConnection = { url: string, state: ConnectionState, sessio
 export type ActivityLogStatus = { path: string, maxFileBytes: number, retainedArchives: number, droppedRecords: number, lastError: string | null, };
 export type ControllerStatus = { instanceId: string, nodeId: string, generation: string, listenAddress: string, connected: boolean, sessionId: string | null, workerNodeId: string | null, workerGeneration: string | null, workerAddress: string | null, lastError: string | null, activityLog: ActivityLogStatus | null, };
 export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, };
-export type LocalRequest = { "method": "import_snapshot", request: ImportSubmission, } | { "method": "list_imports" } | { "method": "get_import", importId: string, } | { "method": "cancel_import", importId: string, } | { "method": "preview_snapshot", projectId: string, snapshotId: string, offset: number, } | { "method": "info" } | { "method": "controller_status" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
-export type LocalResponse = { "kind": "import", import: ImportRecord, } | { "kind": "imports", imports: Array<ImportRecord>, } | { "kind": "snapshot_preview", preview: SnapshotPreview, } | { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, } | { "kind": "controller_status", status: ControllerStatus, };
+export type LocalRequest = { "method": "list_snapshots", projectId: string, offset: number, } | { "method": "import_snapshot", request: ImportSubmission, } | { "method": "list_imports" } | { "method": "get_import", importId: string, } | { "method": "cancel_import", importId: string, } | { "method": "preview_snapshot", projectId: string, snapshotId: string, offset: number, } | { "method": "info" } | { "method": "controller_status" } | { "method": "submit", request: TaskSubmission, } | { "method": "list_tasks" } | { "method": "get_task", taskId: string, } | { "method": "read_output", taskId: string, afterSequence: number, } | { "method": "cancel", taskId: string, };
+export type LocalResponse = { "kind": "snapshots", page: PublishedSnapshotPage, } | { "kind": "import", import: ImportRecord, } | { "kind": "imports", imports: Array<ImportRecord>, } | { "kind": "snapshot_preview", preview: SnapshotPreview, } | { "kind": "info", info: WorkerInfo, } | { "kind": "task", task: TaskRecord, } | { "kind": "tasks", tasks: Array<TaskSummary>, } | { "kind": "output", chunks: Array<OutputChunk>, } | { "kind": "error", message: string, } | { "kind": "controller_status", status: ControllerStatus, };
 export type TaskReport = { schemaVersion: number, platform: string, task: TaskRecord, output: Array<OutputChunk>, outputComplete: boolean, };
 export type CommandDraft = { workerInstanceId: string, projectId: string, workspaceRoot: string, recipeId: string | null, snapshotId?: string, executable: string,
 /**
  * Preserve the text exactly, including an incomplete JSON edit.
  */
 argumentsJson: string, workingDirectory: string, timeoutSeconds: string, };
+export type DeliveryDraft = { workerInstanceId: string, projectId: string, workspaceRoot: string, snapshotId: string | null, };
 export type DesktopDraftState = { schemaVersion: number,
 /**
  * Oldest first; the last matching worker entry restores its project choice.
  */
-drafts: Array<CommandDraft>, };
+drafts: Array<CommandDraft>, deliveryDrafts: Array<DeliveryDraft>, };

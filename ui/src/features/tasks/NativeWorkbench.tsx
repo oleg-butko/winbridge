@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Alert, Button, Card, Code, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { expectResult, workerCall } from "../../runtime/adapter";
-import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft } from "../../runtime/commandDrafts";
+import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, saveDeliveryDraft } from "../../runtime/commandDrafts";
 import type { CommandForm } from "../../runtime/commandDrafts";
-import type { CommandDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo } from "../../runtime/contracts";
+import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo } from "../../runtime/contracts";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { TaskDetail, statuses } from "./TaskDetail";
 
@@ -56,9 +56,11 @@ export function NativeWorkbench() {
   const [form, setForm] = useState<CommandForm>(emptyCommandForm);
   const { recipeId, executable, argumentsJson: argv, workingDirectory: cwd, timeoutSeconds: timeout } = form;
   const [drafts, setDrafts] = useState<CommandDraft[] | null>(null);
+  const [deliveryDrafts, setDeliveryDrafts] = useState<DeliveryDraft[] | null>(null);
   const [loadedScope, setLoadedScope] = useState<string | null>(null);
   const loadedScopeRef = useRef<string | null>(null);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const scopedSaves = useRef(new Map<string, Promise<void>>());
   const saveSequence = useRef(0);
   const [saveStatus, setSaveStatus] = useState("Поля пока не сохранены");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -73,9 +75,9 @@ export function NativeWorkbench() {
   useEffect(() => {
     let disposed = false;
     void loadCommandDrafts().then((state) => {
-      if (!disposed) setDrafts(state.drafts);
+      if (!disposed) { setDrafts(state.drafts); setDeliveryDrafts(state.deliveryDrafts); }
     }).catch((error) => {
-      if (!disposed) { setDrafts([]); setSaveError(String(error)); }
+      if (!disposed) { setDrafts([]); setDeliveryDrafts([]); setSaveError(String(error)); }
     });
     return () => { disposed = true; };
   }, []);
@@ -85,7 +87,7 @@ export function NativeWorkbench() {
     void getCurrentWindow().onCloseRequested(async (event) => {
       event.preventDefault();
       setClosing(true);
-      try { await saveQueue.current; await getCurrentWindow().destroy(); }
+      try { await Promise.all(scopedSaves.current.values()); await getCurrentWindow().destroy(); }
       catch (error) { setClosing(false); setCloseError(String(error)); }
     }).then((stop) => { if (disposed) stop(); else unlisten = stop; })
       .catch((error) => { if (!disposed) setSaveError(String(error)); });
@@ -139,11 +141,21 @@ export function NativeWorkbench() {
     setSaveStatus("Сохранение полей…"); setSaveError(null); setCloseError(null);
     const pendingSave = saveQueue.current.catch(() => {}).then(() => saveCommandDraft(draft));
     saveQueue.current = pendingSave;
+    scopedSaves.current.set(`command:${scopeKey}`, pendingSave);
     void pendingSave.then(() => {
       if (sequence === saveSequence.current) setSaveStatus("Поля сохранены");
     }).catch((error) => {
       if (sequence === saveSequence.current) { setSaveStatus("Поля не сохранены"); setSaveError(String(error)); }
     });
+  }
+  function persistDelivery(draft: DeliveryDraft): Promise<void> {
+    setDeliveryDrafts((saved) => [...(saved ?? []).filter((previous) => previous.workerInstanceId !== draft.workerInstanceId
+      || previous.projectId !== draft.projectId || previous.workspaceRoot !== draft.workspaceRoot), draft]);
+    setCloseError(null);
+    const pendingSave = saveQueue.current.catch(() => {}).then(() => saveDeliveryDraft(draft));
+    saveQueue.current = pendingSave;
+    scopedSaves.current.set(`delivery:${JSON.stringify([draft.workerInstanceId, draft.projectId, draft.workspaceRoot])}`, pendingSave);
+    return pendingSave;
   }
   async function send(request: TaskSubmission) {
     setSubmitting(true); setPending(request); setError(null);
@@ -180,7 +192,7 @@ export function NativeWorkbench() {
         {!controllerFresh && <Text size="sm">Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет.</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
-    {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} />}
+    {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} />}
     <Card withBorder><Stack>
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />

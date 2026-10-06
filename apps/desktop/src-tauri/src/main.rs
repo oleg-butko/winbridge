@@ -2,7 +2,7 @@
 
 use winbridge_core::config::{DesktopConfig, WorkerConfig, DESKTOP_CONFIG_FILE};
 use winbridge_core::desktop_state::{DesktopDraftStore, DESKTOP_STATE_FILE};
-use winbridge_protocol::{CommandDraft, DesktopDraftState, LocalRequest, LocalResponse};
+use winbridge_protocol::{CommandDraft, DeliveryDraft, DesktopDraftState, LocalRequest, LocalResponse};
 
 struct WorkerEndpoint(Result<String, String>);
 struct DesktopState(Result<DesktopDraftStore, String>);
@@ -18,6 +18,14 @@ fn save_command_draft(
     draft: CommandDraft,
 ) -> Result<(), String> {
     state.0.as_ref().map_err(Clone::clone)?.save(draft)
+}
+
+#[tauri::command]
+fn save_delivery_draft(
+    state: tauri::State<'_, DesktopState>,
+    draft: DeliveryDraft,
+) -> Result<(), String> {
+    state.0.as_ref().map_err(Clone::clone)?.save_delivery(draft)
 }
 
 #[tauri::command]
@@ -62,7 +70,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             worker_rpc,
             load_command_drafts,
-            save_command_draft
+            save_command_draft,
+            save_delivery_draft
         ])
         .run(tauri::generate_context!())
         .expect("WinBridge desktop runtime");

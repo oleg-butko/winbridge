@@ -146,6 +146,76 @@ pub fn generation_path(root: &Path, snapshot: &str) -> Result<PathBuf> {
     validate_ids("project", snapshot)?;
     Ok(root.join("snapshots").join(snapshot))
 }
+
+/// Enumerate only the configured project's immediate package directories. No payload
+/// is read, no directory is created, and linked candidates fail metadata validation.
+pub fn list_snapshots(
+    delivery: &DeliverySettings,
+    project: &str,
+    offset: u64,
+) -> Result<PublishedSnapshotPage> {
+    let parent = package_path(delivery, project, "listing")?
+        .parent()
+        .ok_or("Package parent missing")?
+        .to_path_buf();
+    directory(&delivery.root)?; // A missing mount must not look like an empty project.
+    safe_path(&parent)?;
+    let entries = match fs::read_dir(&parent) {
+        Ok(entries) => Some(entries),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("Cannot list {}: {e}", parent.display())),
+    };
+    let mut ids = Vec::new();
+    if let Some(entries) = entries {
+        for (index, entry) in entries.enumerate() {
+            if index >= 10000 {
+                return Err("Package directory exceeds discovery limit of 10000 entries".into());
+            }
+            let entry = entry.map_err(error)?;
+            let kind = entry.file_type().map_err(error)?;
+            let Some(id) = entry.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            if (kind.is_dir() || kind.is_symlink()) && validate_ids(project, &id).is_ok() {
+                ids.push(id);
+            }
+        }
+    }
+    ids.sort();
+    let offset = usize::try_from(offset).map_err(|_| "Discovery offset exceeds range")?;
+    if offset > ids.len() {
+        return Err("Discovery offset exceeds package count; refresh the list".into());
+    }
+    let end = (offset + 100).min(ids.len());
+    let snapshots = ids[offset..end]
+        .iter()
+        .map(|id| match metadata(delivery, project, id, None) {
+            Ok((manifest, _, _)) => PublishedSnapshot {
+                snapshot_id: id.clone(),
+                source: Some(manifest.source),
+                total_files: Some(manifest.files.len() as u64),
+                total_bytes: Some(manifest.total_bytes),
+                payload_bytes: Some(manifest.payload_bytes),
+                metadata_error: None,
+            },
+            Err(reason) => PublishedSnapshot {
+                snapshot_id: id.clone(),
+                source: None,
+                total_files: None,
+                total_bytes: None,
+                payload_bytes: None,
+                metadata_error: Some(reason),
+            },
+        })
+        .collect();
+    Ok(PublishedSnapshotPage {
+        project_id: project.into(),
+        shared_path: parent.to_string_lossy().into(),
+        snapshots,
+        next_offset: (end < ids.len()).then_some(end as u64),
+    })
+}
+
 pub fn metadata(
     delivery: &DeliverySettings,
     project: &str,

@@ -108,3 +108,26 @@ pub struct VerifiedSnapshotRef {
     pub manifest_sha256: String,
     pub source: SnapshotSource,
 }
+
+/// Metadata discovery only; payload bytes are verified during import.
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedSnapshot {
+    pub snapshot_id: String,
+    pub source: Option<SnapshotSource>,
+    pub total_files: Option<u64>,
+    pub total_bytes: Option<u64>,
+    pub payload_bytes: Option<u64>,
+    pub metadata_error: Option<String>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublishedSnapshotPage {
+    pub project_id: String,
+    pub shared_path: String,
+    pub snapshots: Vec<PublishedSnapshot>,
+    pub next_offset: Option<u64>,
+}

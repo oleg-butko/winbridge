@@ -113,6 +113,7 @@ try {
   let submittedId;
   let draftSaveDelay = 0;
   let failDraftSaves = false;
+  let failDeliverySaves = false;
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
       const response = await call(request);
@@ -123,14 +124,16 @@ try {
     // Native filesystem persistence is covered by core tests. Here the IPC shim
     // uses a real file across fresh WebViews to test the form and close lifecycle.
     await nativePage.exposeFunction("draftBridge", async (command, args) => {
-      const state = existsSync(preferencesPath) ? JSON.parse(await readFile(preferencesPath, "utf8")) : { schemaVersion: 1, drafts: [] };
+      const state = existsSync(preferencesPath) ? JSON.parse(await readFile(preferencesPath, "utf8")) : { schemaVersion: 1, drafts: [], deliveryDrafts: [] };
+      state.deliveryDrafts ??= [];
       if (command === "load_command_drafts") return state;
-      assert.equal(command, "save_command_draft");
+      assert.ok(["save_command_draft", "save_delivery_draft"].includes(command));
       if (draftSaveDelay) await sleep(draftSaveDelay);
-      if (failDraftSaves) throw new Error("Test: local state directory is unavailable");
+      if (failDraftSaves || (command === "save_delivery_draft" && failDeliverySaves)) throw new Error("Test: local state directory is unavailable");
       const draft = args.draft;
-      state.drafts = state.drafts.filter((saved) => saved.workerInstanceId !== draft.workerInstanceId || saved.projectId !== draft.projectId || saved.workspaceRoot !== draft.workspaceRoot);
-      state.drafts.push(draft);
+      const field = command === "save_command_draft" ? "drafts" : "deliveryDrafts";
+      state[field] = state[field].filter((saved) => saved.workerInstanceId !== draft.workerInstanceId || saved.projectId !== draft.projectId || saved.workspaceRoot !== draft.workspaceRoot);
+      state[field].push(draft);
       await writeFile(preferencesPath, JSON.stringify(state));
     });
     await nativePage.addInitScript(() => {
@@ -148,7 +151,7 @@ try {
         transformCallback: (callback) => { const id = ++nextCallback; callbacks.set(id, callback); return id; },
         invoke: (command, args) => {
           if (command === "worker_rpc") return window.workerBridge(args.request);
-          if (command === "load_command_drafts" || command === "save_command_draft") return window.draftBridge(command, args);
+          if (["load_command_drafts", "save_command_draft", "save_delivery_draft"].includes(command)) return window.draftBridge(command, args);
           if (command === "plugin:event|listen") { const id = args.handler; listeners.set(id, args); return Promise.resolve(id); }
           if (command === "plugin:event|unlisten") { listeners.delete(args.eventId); return Promise.resolve(); }
           if (command === "plugin:window|destroy") { window.__destroyed = true; return Promise.resolve(); }
@@ -162,11 +165,18 @@ try {
   await page.getByText("Worker подключён · linux · ui-test", { exact: true }).waitFor();
   await page.getByText("Controller Debian подключён", { exact: true }).waitFor();
   const published = JSON.parse((await exec(controllerExe,["--config",controllerConfig,"publish","fixture","HEAD"])).stdout);
-  await page.getByLabel("Snapshot ID опубликованного пакета",{exact:true}).fill(published.snapshotId);
+  const discovered = JSON.parse((await exec(controllerExe,["--config",controllerConfig,"snapshots","fixture"])).stdout);
+  assert.equal(discovered.kind, "snapshots");
+  assert.ok(discovered.page.snapshots.some((s) => s.snapshotId === published.snapshotId && s.metadataError === null), "WebSocket discovery omitted the published commit");
+  await page.getByRole("button", {name:"Обновить список пакетов",exact:true}).click();
+  const deliverySnapshot = page.getByRole("textbox", {name:"Snapshot ID опубликованного пакета",exact:true});
+  await deliverySnapshot.fill(published.snapshotId);
+  await page.getByRole("option", {name:new RegExp(`^${published.snapshotId} · commit`)}).click();
+  await page.getByText(/Выбор сохранён\. Восстановление/).waitFor();
   await page.getByRole("button",{name:"Посмотреть состав snapshot",exact:true}).click();
   await page.getByRole("cell",{name:"Привет.txt",exact:true}).waitFor();
   await page.getByText(`Debian shared: ${shared}/WinBridge/deliveries/fixture/${published.snapshotId}`,{exact:true}).waitFor();
-  await page.getByRole("button",{name:"Импортировать проверенный пакет",exact:true}).click();
+  await page.getByRole("button",{name:"Импортировать пакет",exact:true}).click();
   await page.getByText("Приём импорта не подтверждён",{exact:true}).waitFor();
   await page.getByRole("button",{name:"Проверить приём импорта",exact:true}).click();
   await page.getByText("Готово для сборки",{exact:true}).waitFor();
@@ -262,12 +272,28 @@ try {
   await page.getByRole("option", { name: "fixture", exact: true }).click();
   await until(async () => await page.getByLabel("Executable", { exact: true }).inputValue() === fixture, "fixture draft was not restored");
   assert.equal(await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).inputValue(), savedArgv);
+  // Delivery project choice and per-project snapshot are independent of command fields.
+  await page.getByRole("textbox", {name:"Проект доставки", exact:true}).click();
+  await page.getByRole("option", {name:"other-fixture",exact:true}).click();
+  await page.getByText("Опубликованных пакетов для этого проекта пока нет.", {exact:true}).waitFor();
+  assert.equal(await deliverySnapshot.inputValue(), "");
+  await page.getByRole("textbox", {name:"Проект доставки", exact:true}).click();
+  await page.getByRole("option", {name:"fixture",exact:true}).click();
+  await until(async () => (await deliverySnapshot.inputValue()).startsWith(published.snapshotId), "per-project delivery snapshot was not restored");
+  await writeFile(join(source, "Привет.txt"), "UI second snapshot ✓");
+  await exec("git", ["-C",source,"add","."]);
+  await exec("git", ["-C",source,"-c","user.name=Fixture","-c","user.email=fixture@local","commit","-qm","second snapshot"]);
+  const secondPublished = JSON.parse((await exec(controllerExe,["--config",controllerConfig,"publish","fixture","HEAD"])).stdout);
+  await page.getByRole("button", {name:"Обновить список пакетов",exact:true}).click();
   draftSaveDelay = 250;
   const lastArgv = '["long", "last edit before close ✓"]';
   await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill(lastArgv);
+  await deliverySnapshot.fill(secondPublished.snapshotId);
+  await page.getByRole("option", {name:new RegExp(`^${secondPublished.snapshotId} · commit`)}).click();
   await page.evaluate(() => window.__testClose());
   assert.equal(await page.evaluate(() => window.__destroyed), true);
   assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).drafts.at(-1).argumentsJson, lastArgv);
+  assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).deliveryDrafts.at(-1).snapshotId, secondPublished.snapshotId);
   await page.close();
   draftSaveDelay = 0;
   const restoredPage = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
@@ -279,7 +305,27 @@ try {
   assert.equal(await restoredPage.getByLabel("Аргументы — JSON-массив строк", { exact: true }).inputValue(), lastArgv);
   assert.equal(await restoredPage.getByLabel("Рабочая папка относительно корня проекта", { exact: true }).inputValue(), "nested");
   assert.equal(await restoredPage.getByLabel("Timeout, секунд", { exact: true }).inputValue(), "120");
+  await restoredPage.getByText(/Выбор восстановлен из локального файла/).waitFor();
+  assert.equal(await restoredPage.getByRole("textbox", {name:"Проект доставки", exact:true}).inputValue(), "fixture");
+  assert.ok((await restoredPage.getByRole("textbox", {name:"Snapshot ID опубликованного пакета", exact:true}).inputValue()).startsWith(secondPublished.snapshotId));
+  assert.equal((await call({method:"list_imports"})).imports.length, 1, "delivery restore started an import");
   assert.deepEqual((await call({ method: "list_tasks" })).tasks.map((task) => task.taskId), tasksBeforeRestore, "form restore submitted a task");
+  failDeliverySaves = true;
+  await restoredPage.getByRole("textbox", {name:"Snapshot ID опубликованного пакета", exact:true}).fill(published.snapshotId);
+  await restoredPage.getByRole("option", {name:new RegExp(`^${published.snapshotId} · commit`)}).click();
+  await restoredPage.getByText("Не удалось сохранить выбор доставки", {exact:true}).waitFor();
+  // A later successful command save must not hide an earlier delivery failure at close.
+  await restoredPage.getByLabel("Timeout, секунд", {exact:true}).fill("121");
+  await restoredPage.getByLabel("Timeout, секунд", {exact:true}).fill("120");
+  await restoredPage.getByText(/Поля сохранены\. Восстановление/).waitFor();
+  await restoredPage.evaluate(() => window.__testClose());
+  await restoredPage.getByText("Окно осталось открытым: поля не сохранены", {exact:true}).waitFor();
+  assert.equal(await restoredPage.evaluate(() => window.__destroyed), false);
+  assert.equal(JSON.parse(await readFile(preferencesPath,"utf8")).deliveryDrafts.at(-1).snapshotId, secondPublished.snapshotId);
+  failDeliverySaves = false;
+  await restoredPage.getByRole("textbox", {name:"Snapshot ID опубликованного пакета", exact:true}).fill(secondPublished.snapshotId);
+  await restoredPage.getByRole("option", {name:new RegExp(`^${secondPublished.snapshotId} · commit`)}).click();
+  await restoredPage.getByText(/Выбор сохранён\. Восстановление/).waitFor();
   failDraftSaves = true;
   await restoredPage.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill("[");
   await restoredPage.getByText("Не удалось сохранить поля команды", { exact: true }).waitFor();
@@ -290,7 +336,7 @@ try {
   await restoredPage.getByRole("button", { name: "Закрыть без сохранения", exact: true }).click();
   await until(async () => await restoredPage.evaluate(() => window.__destroyed), "explicit close did not close the window");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: lost ACK/dedup, output/Unicode, cancel, offline freshness, crash recovery, report import, recipes, per-project drafts, fresh WebView restore without task submission, close flush, honest save failure and separate controller connection/reconnect without task cancellation; snapshot manifest/Unicode/mapping, lost import ACK/dedup, verified files, and saved snapshot selection.");
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/refresh/commit metadata, manifest/Unicode/mapping, lost import ACK/dedup, verified files; independent delivery project/snapshot persistence, fresh WebView restore without import/task submission, shared close flush and visible delivery-save failure even after a successful command save.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

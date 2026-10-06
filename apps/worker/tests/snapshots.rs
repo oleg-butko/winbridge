@@ -112,6 +112,37 @@ fn wait(worker: &Arc<Worker>, id: &str) -> ImportRecord {
     }
 }
 #[test]
+fn discovery_requires_registration_and_missing_import_explains_admission_failure() {
+    let (_temp, config, request) = setup();
+    let worker = Worker::open(config).unwrap();
+    assert!(
+        matches!(worker.handle(LocalRequest::ListSnapshots {project_id:"unregistered".into(),offset:0}), LocalResponse::Error {message} if message.contains("not registered"))
+    );
+    assert!(
+        matches!(worker.handle(LocalRequest::ListSnapshots {project_id:request.project_id.clone(),offset:0}), LocalResponse::Snapshots {page} if page.snapshots.len() == 1)
+    );
+    let command = TaskSubmission {
+        protocol_version: 1,
+        request_id: "missing".into(),
+        project_id: request.project_id,
+        snapshot_id: Some(request.snapshot_id),
+        idempotency_key: "missing".into(),
+        timeout_ms: 10000,
+        command: CommandSource::Direct {
+            executable: "unused".into(),
+            arguments: vec![],
+            working_directory: ".".into(),
+        },
+    };
+    assert!(
+        matches!(worker.handle(LocalRequest::Submit {request:command}), LocalResponse::Error {message} if message.contains("Сначала успешно импортируйте") && message.contains("процесс не запущен"))
+    );
+    assert!(
+        matches!(worker.handle(LocalRequest::ListTasks), LocalResponse::Tasks {tasks} if tasks.is_empty())
+    );
+}
+
+#[test]
 fn import_acceptance_dedup_cancel_and_restart_are_durable() {
     let (_temp, config, request) = setup();
     let worker = Worker::open(config.clone()).unwrap();

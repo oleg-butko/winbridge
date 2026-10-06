@@ -126,6 +126,17 @@ impl Worker {
     }
     fn dispatch(&self, request: LocalRequest) -> Result<LocalResponse> {
         match request {
+            LocalRequest::ListSnapshots { project_id, offset } => {
+                // Reuse registration checks before any discovery filesystem access.
+                self.import_paths(&project_id, "listing")?;
+                Ok(LocalResponse::Snapshots {
+                    page: winbridge_workspace_sync::list_snapshots(
+                        self.config.delivery.as_ref().unwrap(),
+                        &project_id,
+                        offset,
+                    )?,
+                })
+            }
             LocalRequest::Info => Ok(LocalResponse::Info {
                 info: WorkerInfo {
                     protocol_version: PROTOCOL_VERSION,

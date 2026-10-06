@@ -229,6 +229,11 @@ pub struct WorkerInfo {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
+    ListSnapshots {
+        #[serde(rename = "projectId")]
+        project_id: String,
+        offset: u64,
+    },
     ImportSnapshot {
         request: ImportSubmission,
     },
@@ -274,6 +279,7 @@ pub enum LocalRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LocalResponse {
+    Snapshots { page: PublishedSnapshotPage },
     Import { import: Box<ImportRecord> },
     Imports { imports: Vec<ImportRecord> },
     SnapshotPreview { preview: SnapshotPreview },
@@ -322,4 +328,16 @@ pub struct DesktopDraftState {
     pub schema_version: u16,
     /// Oldest first; the last matching worker entry restores its project choice.
     pub drafts: Vec<CommandDraft>,
+    #[serde(default)]
+    pub delivery_drafts: Vec<DeliveryDraft>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DeliveryDraft {
+    pub worker_instance_id: String,
+    pub project_id: String,
+    pub workspace_root: String,
+    pub snapshot_id: Option<String>,
 }

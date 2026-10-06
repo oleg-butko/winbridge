@@ -15,6 +15,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ImportSubmission::decl(&config),
         ImportRecord::decl(&config),
         SnapshotPreview::decl(&config),
+        PublishedSnapshot::decl(&config),
+        PublishedSnapshotPage::decl(&config),
         VerifiedSnapshotRef::decl(&config),
         TaskStatus::decl(&config),
         CommandSource::decl(&config),
@@ -36,6 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         LocalResponse::decl(&config),
         TaskReport::decl(&config),
         CommandDraft::decl(&config),
+        DeliveryDraft::decl(&config),
         DesktopDraftState::decl(&config),
     ];
     let text = format!(

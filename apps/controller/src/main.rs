@@ -31,7 +31,7 @@ async fn run() -> Result<(), String> {
         }
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
+        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -77,6 +77,8 @@ async fn run() -> Result<(), String> {
         _ => {
             let request = match operation {
                 [name] if name == "imports" => LocalRequest::ListImports,
+                [name, project] if name == "snapshots" => LocalRequest::ListSnapshots {project_id:project.clone(),offset:0},
+                [name, project, offset] if name == "snapshots" => LocalRequest::ListSnapshots {project_id:project.clone(),offset:offset.parse().map_err(|_|"Snapshot offset must be an integer")?},
                 [name, id] if name == "get-import" => LocalRequest::GetImport {import_id:id.clone()},
                 [name, id] if name == "cancel-import" => LocalRequest::CancelImport {import_id:id.clone()},
                 [name, project, snapshot] if name == "preview" => LocalRequest::PreviewSnapshot {project_id:project.clone(),snapshot_id:snapshot.clone(),offset:0},

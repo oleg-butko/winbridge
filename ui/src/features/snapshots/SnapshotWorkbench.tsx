@@ -1,13 +1,26 @@
-import { useEffect, useState } from "react";
-import { Alert, Badge, Button, Card, Code, Group, Progress, Select, Stack, Table, Text, TextInput, Timeline, Title } from "@mantine/core";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Badge, Button, Card, Code, Group, Progress, Select, Stack, Table, Text, Timeline, Title } from "@mantine/core";
 import { expectResult, workerCall } from "../../runtime/adapter";
-import type { ImportRecord, ImportSubmission, SnapshotPreview, WorkerInfo } from "../../runtime/contracts";
+import type { DeliveryDraft, ImportRecord, ImportSubmission, PublishedSnapshotPage, SnapshotPreview, WorkerInfo } from "../../runtime/contracts";
 import { statuses } from "../tasks/TaskDetail";
 
 const phases: Record<string, string> = { queued: "Ожидает свободного проекта", validate: "Проверка пакета", copy_payload: "Копирование ZIP на локальный диск", extract: "Распаковка и проверка файлов", verify_local: "Проверка локальных исходников", publish_local: "Публикация поколения", verified: "Готово для сборки" };
-export function SnapshotWorkbench({ info, connected }: { info: WorkerInfo; connected: boolean }) {
-  const [project, setProject] = useState<string | null>(info.projects[0]?.id ?? null);
-  const [snapshot, setSnapshot] = useState("");
+export function SnapshotWorkbench({ info, connected, closing, drafts, persist }: {
+  info: WorkerInfo; connected: boolean; closing: boolean; drafts: DeliveryDraft[] | null;
+  persist: (draft: DeliveryDraft) => Promise<void>;
+}) {
+  const [selection, setSelection] = useState<DeliveryDraft | null>(null);
+  const project = selection?.projectId ?? null;
+  const snapshot = selection?.snapshotId ?? null;
+  const scopeKey = selection ? JSON.stringify([selection.workerInstanceId, project, selection.workspaceRoot]) : null;
+  const [page, setPage] = useState<PublishedSnapshotPage | null>(null);
+  const pageScope = useRef<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [listBusy, setListBusy] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [saveStatus, setSaveStatus] = useState("Выбор пока не сохранён");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveSequence = useRef(0);
   const [preview, setPreview] = useState<SnapshotPreview | null>(null);
   const [imports, setImports] = useState<ImportRecord[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -17,6 +30,49 @@ export function SnapshotWorkbench({ info, connected }: { info: WorkerInfo; conne
   const [pollError, setPollError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmedAt, setConfirmedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (drafts === null) return;
+    const matches = (draft: DeliveryDraft) => draft.workerInstanceId === info.instanceId
+      && info.projects.some((p) => p.id === draft.projectId && p.workspaceRoot === draft.workspaceRoot);
+    if (selection && matches(selection)) return;
+    const saved = [...drafts].reverse().find(matches);
+    const first = info.projects[0];
+    setSelection(saved ?? (first ? { workerInstanceId: info.instanceId, projectId: first.id, workspaceRoot: first.workspaceRoot, snapshotId: null } : null));
+    setPreview(null);
+    setSaveStatus(saved ? "Выбор восстановлен из локального файла" : "Выбор пока не сохранён");
+  }, [info, drafts, selection]);
+  useEffect(() => {
+    let disposed = false;
+    if (pageScope.current !== scopeKey) { setPage(null); pageScope.current = scopeKey; }
+    if (!project || !connected) { setListBusy(false); return; }
+    setListBusy(true); setListError(null);
+    void workerCall({ method: "list_snapshots", projectId: project, offset: 0 }).then((response) => {
+      const next = expectResult(response, "snapshots").page;
+      if (!disposed) setPage(next);
+    }).catch((error) => { if (!disposed) setListError(String(error)); })
+      .finally(() => { if (!disposed) setListBusy(false); });
+    return () => { disposed = true; };
+  }, [scopeKey, connected, refresh]);
+  function choose(projectId: string | null, snapshotId?: string | null) {
+    const registered = info.projects.find((p) => p.id === projectId);
+    if (!registered) return;
+    const saved = drafts?.find((d) => d.workerInstanceId === info.instanceId && d.projectId === projectId && d.workspaceRoot === registered.workspaceRoot);
+    const next: DeliveryDraft = { workerInstanceId: info.instanceId, projectId: registered.id, workspaceRoot: registered.workspaceRoot,
+      snapshotId: snapshotId === undefined ? saved?.snapshotId ?? null : snapshotId };
+    setSelection(next); setPreview(null); setError(null); setSaveError(null); setSaveStatus("Сохранение выбора…");
+    const sequence = ++saveSequence.current;
+    void persist(next).then(() => { if (sequence === saveSequence.current) setSaveStatus("Выбор сохранён"); })
+      .catch((error) => { if (sequence === saveSequence.current) { setSaveError(String(error)); setSaveStatus("Выбор не сохранён"); } });
+  }
+  async function morePackages() {
+    if (!project || page?.nextOffset == null) return;
+    setListBusy(true); setListError(null);
+    try {
+      const next = expectResult(await workerCall({ method: "list_snapshots", projectId: project, offset: page.nextOffset }), "snapshots").page;
+      setPage((previous) => previous?.projectId === next.projectId ? { ...next, snapshots: [...new Map([...previous.snapshots, ...next.snapshots].map((s) => [s.snapshotId, s])).values()] } : next);
+    } catch (error) { setListError(String(error)); }
+    finally { setListBusy(false); }
+  }
   useEffect(() => {
     let disposed = false; let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -58,12 +114,27 @@ export function SnapshotWorkbench({ info, connected }: { info: WorkerInfo; conne
   }
   const copying = record?.phase === "copy_payload";
   const progressKnown = record?.totalBytes != null && !copying;
+  const visiblePage = pageScope.current === scopeKey ? page : null;
+  const packages = visiblePage?.projectId === project ? visiblePage.snapshots : [];
+  const packageOptions = packages.map((s) => ({ value: s.snapshotId, label: s.metadataError ? `${s.snapshotId} · ошибка метаданных`
+    : `${s.snapshotId} · commit ${s.source?.commit.slice(0, 8)} · ${s.totalFiles} файлов · ZIP ${s.payloadBytes?.toLocaleString()} байт` }));
+  if (snapshot && !packages.some((s) => s.snapshotId === snapshot)) packageOptions.unshift({ value: snapshot, label: `${snapshot} · сохранённый выбор, нет в загруженном списке` });
+  const chosen = packages.find((s) => s.snapshotId === snapshot);
   return <Card withBorder><Stack>
     <Title order={3}>Доставка исходников</Title>
     <Text size="sm">Controller публикует точный Git commit в shared. Worker проверяет пакет и создаёт отдельное поколение на локальном диске Windows.</Text>
-    <Select label="Проект доставки" data={info.projects.map((p) => p.id)} value={project} onChange={(id) => { setProject(id); setPreview(null); }} disabled={busy || pending !== null} />
-    <TextInput label="Snapshot ID опубликованного пакета" value={snapshot} onChange={(e) => { setSnapshot(e.currentTarget.value); setPreview(null); }} disabled={busy || pending !== null} />
-    <Button variant="light" onClick={() => void inspect()} loading={busy} disabled={!connected || !project || !snapshot || pending !== null}>Посмотреть состав snapshot</Button>
+    <Select label="Проект доставки" data={info.projects.map((p) => p.id)} value={project} onChange={(id) => choose(id)} disabled={busy || listBusy || pending !== null || closing || drafts === null} allowDeselect={false} />
+    <Select label="Snapshot ID опубликованного пакета" description="Список из shared-папки worker. Поиск по ID или commit. Метаданные не подтверждают целостность ZIP." searchable clearable nothingFoundMessage="Пакет не найден в загруженном списке" data={packageOptions} value={snapshot} onChange={(id) => choose(project, id)} disabled={busy || listBusy || pending !== null || closing || !selection} />
+    <Group><Button variant="light" onClick={() => setRefresh((r) => r + 1)} loading={listBusy} disabled={!connected || !project || closing}>Обновить список пакетов</Button>
+      {visiblePage?.nextOffset != null && <Button variant="light" onClick={() => void morePackages()} disabled={!connected || listBusy || closing}>Следующие 100 пакетов</Button>}</Group>
+    {visiblePage && <Text size="xs">Папка пакетов: {visiblePage.sharedPath}</Text>}
+    {visiblePage && packages.length === 0 && <Text size="sm">Опубликованных пакетов для этого проекта пока нет.</Text>}
+    {!connected && <Text c="yellow">Shared-список не обновлён: worker недоступен. Сохранённый выбор остаётся в форме.</Text>}
+    {listError && <Alert color="yellow" title="Не удалось обновить список пакетов">{listError}</Alert>}
+    {chosen?.metadataError && <Alert color="yellow" title="Метаданные выбранного пакета недоступны">{chosen.metadataError}</Alert>}
+    <Text size="xs" c="dimmed">{saveStatus}. Восстановление выбора не запускает импорт или сборку.</Text>
+    {saveError && <Alert color="yellow" title="Не удалось сохранить выбор доставки">{saveError}</Alert>}
+    <Button variant="light" onClick={() => void inspect()} loading={busy} disabled={!connected || !project || !snapshot || pending !== null || closing}>Посмотреть состав snapshot</Button>
     {preview && <>
       <Text size="sm">Commit: {preview.source.commit}</Text>
       <Text size="sm">Debian shared: {preview.peerSharedPath ?? "Укажите delivery.peerRoot в локальном worker JSON"}</Text>
@@ -74,11 +145,11 @@ export function SnapshotWorkbench({ info, connected }: { info: WorkerInfo; conne
       <Table.ScrollContainer minWidth={450}><Table><Table.Thead><Table.Tr><Table.Th>Файл</Table.Th><Table.Th>Байт</Table.Th><Table.Th>SHA-256</Table.Th></Table.Tr></Table.Thead><Table.Tbody>
         {preview.files.map((file) => <Table.Tr key={file.path}><Table.Td>{file.path}</Table.Td><Table.Td>{file.bytes}</Table.Td><Table.Td><Code>{file.sha256}</Code></Table.Td></Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>
-      {preview.nextOffset !== null && <Button variant="light" onClick={() => void inspect(preview.nextOffset!)} disabled={busy}>Следующие 100 файлов</Button>}
-      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 })} disabled={!connected || busy || pending !== null}>Импортировать проверенный пакет</Button>
+      {preview.nextOffset !== null && <Button variant="light" onClick={() => void inspect(preview.nextOffset!)} disabled={!connected || busy || closing}>Следующие 100 файлов</Button>}
+      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 })} disabled={!connected || busy || pending !== null || closing}>Импортировать пакет</Button>
     </>}
     {pending && <Alert color="yellow" title="Приём импорта не подтверждён">Повтор отправит прежние параметры и ключ.
-      <Button onClick={() => void send(pending)} loading={busy}>Проверить приём импорта</Button>
+      <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || closing}>Проверить приём импорта</Button>
     </Alert>}
     {pollError && <Alert color="yellow" title="Нет свежего подтверждения worker">{pollError}</Alert>}
     {error && <Alert color="yellow" title="Нет свежего результата операции">{error}</Alert>}
@@ -93,7 +164,7 @@ export function SnapshotWorkbench({ info, connected }: { info: WorkerInfo; conne
       {progressKnown && <Progress value={record.totalBytes === 0 ? 100 : Math.min(100, record.completedBytes / record.totalBytes! * 100)} />}
       {record.reason && <Alert color={statuses[record.status].color}>{record.reason}</Alert>}
       {record.cancelRequested && !record.finishedAtMs && <Text>Отмена запрошена; ожидается ближайшая проверка worker.</Text>}
-      <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || busy || record.cancelRequested || !["queued", "running"].includes(record.status)}>Отменить импорт</Button>
+      <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || busy || closing || record.cancelRequested || !["queued", "running"].includes(record.status)}>Отменить импорт</Button>
       <Timeline active={record.events.length - 1}>{record.events.map((event) => <Timeline.Item key={event.sequence} title={statuses[event.status].label}><Text size="sm">{event.summary}</Text></Timeline.Item>)}</Timeline>
     </Stack>}
   </Stack></Card>;

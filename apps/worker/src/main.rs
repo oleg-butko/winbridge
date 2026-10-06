@@ -15,7 +15,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -52,6 +52,16 @@ async fn run() -> Result<(), String> {
         _ => {
             let request = match operation {
                 [name] if name == "imports" => LocalRequest::ListImports,
+                [name, project] if name == "snapshots" => LocalRequest::ListSnapshots {
+                    project_id: project.clone(),
+                    offset: 0,
+                },
+                [name, project, offset] if name == "snapshots" => LocalRequest::ListSnapshots {
+                    project_id: project.clone(),
+                    offset: offset
+                        .parse()
+                        .map_err(|_| "Snapshot offset must be an integer")?,
+                },
                 [name, id] if name == "get-import" => LocalRequest::GetImport {
                     import_id: id.clone(),
                 },

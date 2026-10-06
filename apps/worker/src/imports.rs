@@ -251,7 +251,9 @@ impl Worker {
         let marker = sync::read_bounded(
             &generation.join(".winbridge/verified.json"),
             winbridge_core::snapshot::MAX_READY_BYTES as u64,
-        )?;
+        ).map_err(|reason| format!(
+            "Snapshot {snapshot} не готов для сборки. Сначала успешно импортируйте этот пакет в блоке «Доставка исходников». Запрос команды отклонён; процесс не запущен. Причина: {reason}"
+        ))?;
         let ready = winbridge_core::snapshot::parse_ready(&marker)?;
         if ready.project_id != project.id || ready.snapshot_id != *snapshot {
             return Err("Verified generation IDs mismatch".into());

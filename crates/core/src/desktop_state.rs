@@ -10,7 +10,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use winbridge_protocol::{CommandDraft, DesktopDraftState};
+use winbridge_protocol::{CommandDraft, DeliveryDraft, DesktopDraftState};
 
 pub const DESKTOP_STATE_FILE: &str = "winbridge-desktop-state.local.json";
 const MAX_BYTES: usize = 1024 * 1024;
@@ -50,7 +50,30 @@ impl DesktopDraftStore {
         if state.drafts.len() > MAX_DRAFTS {
             state.drafts.remove(0);
         }
-        let bytes = serde_json::to_vec_pretty(&state).map_err(|e| e.to_string())?;
+        self.write_state(&state)
+    }
+
+    pub fn save_delivery(&self, draft: DeliveryDraft) -> Result<()> {
+        validate_delivery_draft(&draft)?;
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "desktop state lock poisoned")?;
+        let mut state = self.read()?;
+        state.delivery_drafts.retain(|saved| {
+            saved.worker_instance_id != draft.worker_instance_id
+                || saved.project_id != draft.project_id
+                || saved.workspace_root != draft.workspace_root
+        });
+        state.delivery_drafts.push(draft);
+        if state.delivery_drafts.len() > MAX_DRAFTS {
+            state.delivery_drafts.remove(0);
+        }
+        self.write_state(&state)
+    }
+
+    fn write_state(&self, state: &DesktopDraftState) -> Result<()> {
+        let bytes = serde_json::to_vec_pretty(state).map_err(|e| e.to_string())?;
         if bytes.len() > MAX_BYTES {
             return Err("desktop form state exceeds 1 MiB".into());
         }
@@ -64,6 +87,7 @@ impl DesktopDraftStore {
                 return Ok(DesktopDraftState {
                     schema_version: 1,
                     drafts: Vec::new(),
+                    delivery_drafts: Vec::new(),
                 });
             }
             Err(error) => return Err(format!("desktop state {}: {error}", self.path.display())),
@@ -76,7 +100,10 @@ impl DesktopDraftStore {
         }
         let state: DesktopDraftState = serde_json::from_slice(&bytes)
             .map_err(|e| format!("desktop state {}: {e}", self.path.display()))?;
-        if state.schema_version != 1 || state.drafts.len() > MAX_DRAFTS {
+        if state.schema_version != 1
+            || state.drafts.len() > MAX_DRAFTS
+            || state.delivery_drafts.len() > MAX_DRAFTS
+        {
             return Err(format!(
                 "desktop state {}: expected schemaVersion 1 and at most 128 drafts",
                 self.path.display()
@@ -84,6 +111,9 @@ impl DesktopDraftStore {
         }
         for draft in &state.drafts {
             validate_draft(draft)?;
+        }
+        for draft in &state.delivery_drafts {
+            validate_delivery_draft(draft)?;
         }
         Ok(state)
     }
@@ -151,6 +181,19 @@ fn validate_draft(draft: &CommandDraft) -> Result<()> {
     Ok(())
 }
 
+fn validate_delivery_draft(draft: &DeliveryDraft) -> Result<()> {
+    if !valid_id(&draft.worker_instance_id)
+        || !valid_id(&draft.project_id)
+        || draft.workspace_root.is_empty()
+        || draft.workspace_root.len() > 65536
+        || draft.workspace_root.contains('\0')
+        || draft.snapshot_id.as_ref().is_some_and(|id| !valid_id(id))
+    {
+        return Err("desktop delivery draft: invalid worker/project/root/snapshot scope".into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +250,32 @@ mod tests {
             store.load().unwrap().drafts,
             vec![second, other_worker, other_root, updated]
         );
+    }
+
+    #[test]
+    fn delivery_and_command_state_survive_updates_and_legacy_file() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(DESKTOP_STATE_FILE);
+        fs::write(&path, br#"{"schemaVersion":1,"drafts":[]}"#).unwrap();
+        let store = DesktopDraftStore::new(path.clone());
+        assert!(store.load().unwrap().delivery_drafts.is_empty());
+        let mut first = DeliveryDraft {
+            worker_instance_id: "worker-1".into(),
+            project_id: "first".into(),
+            workspace_root: r"K:\first".into(),
+            snapshot_id: Some("s-first".into()),
+        };
+        let mut second = first.clone();
+        second.project_id = "second".into();
+        second.workspace_root = r"K:\second".into();
+        store.save_delivery(first.clone()).unwrap();
+        store.save(draft("first")).unwrap();
+        store.save_delivery(second.clone()).unwrap();
+        first.snapshot_id = Some("s-updated".into());
+        store.save_delivery(first.clone()).unwrap();
+        let reopened = DesktopDraftStore::new(path).load().unwrap();
+        assert_eq!(reopened.drafts, vec![draft("first")]);
+        assert_eq!(reopened.delivery_drafts, vec![second, first]);
     }
 
     #[test]
