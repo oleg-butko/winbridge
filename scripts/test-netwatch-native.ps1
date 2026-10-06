@@ -9,6 +9,7 @@ param([Parameter(Mandatory)][string]$SourceDirectory, [Parameter(Mandatory)][str
       [Parameter(Mandatory)][string]$ProfilePath)
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
+. (Join-Path $PSScriptRoot 'worker-cli.ps1')
 $request = Get-Content -LiteralPath $ProfilePath -Raw | ConvertFrom-Json
 $instance = $request.readiness.netwatch.instanceId
 if ($instance -notmatch '^winbridge-[A-Za-z0-9-]{1,50}$') { throw 'Netwatch validation requires an isolated instance ID' }
@@ -31,9 +32,7 @@ $process = $null
 $application = $null
 $result = [ordered]@{ platform = 'windows'; passed = $false; instanceId = $instance; workflow = $null; application = $null; build = $null; log = $null; error = $null }
 function Invoke-TestWorker([string[]]$Arguments) {
-    $text = & $worker --config $configPath @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "Test worker CLI failed: $text" }
-    return ($text | ConvertFrom-Json)
+    return (Invoke-WorkerJson -Executable $worker -ConfigPath $configPath -Arguments $Arguments)
 }
 try {
     # Quotes are required because Start-Process builds one native command-line string.
@@ -58,8 +57,7 @@ try {
     foreach ($step in $flow.steps | Where-Object { $_.name -in @('build', 'start') -and $_.operationId }) {
         $task = Invoke-TestWorker -Arguments @('get', $step.operationId)
         $task | ConvertTo-Json -Depth 40 | Set-Content -LiteralPath (Join-Path $ReportDirectory ('netwatch-' + $step.name + '-task.json')) -Encoding utf8
-        & $worker --config $configPath output $step.operationId | Set-Content -LiteralPath (Join-Path $ReportDirectory ('netwatch-' + $step.name + '-output.json')) -Encoding utf8
-        if ($LASTEXITCODE -ne 0) { throw 'Could not capture Netwatch output' }
+        Invoke-TestWorker -Arguments @('output', $step.operationId) | ConvertTo-Json -Depth 40 | Set-Content -LiteralPath (Join-Path $ReportDirectory ('netwatch-' + $step.name + '-output.json')) -Encoding utf8
     }
     if ($flow.status -ne 'succeeded') { throw "Netwatch workflow failed: $($flow.reason)" }
     if ($flow.artifacts.Count -ne 1 -or $flow.artifacts[0].sourceCommit -ne $flow.submission.snapshotId.Substring(2)) { throw 'Artifact/source association mismatch' }

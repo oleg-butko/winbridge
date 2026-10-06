@@ -58,7 +58,7 @@
 
 ## Этап 4 — первый полный цикл разработки
 
-Статус 2026-10-06: основной цикл реализован на committed snapshot-fixture; Windows tests выполняются автоматически через разрешённый worker. [Контракт и ограничения](workflows.md), [автоматический сценарий](windows-workflow-validation.md). Добавлены named profiles/drafts, output filters, artifact catalog, build identity и isolated Netwatch IPC probe. Unix Netwatch cycle и browser UI проверены; этап остаётся открытым до общего автоматического Windows прогона Netwatch.
+Статус 2026-10-06: этап завершён. Автоматический Windows прогон `20261006-163840-a97da6e3` подтвердил 41 native test, native desktop check и полный import/build/artifact/start/IPC/log/dedup/stop на отдельном Netwatch clone. [Доказательства](windows-workflow-gate-2026-10-06.md), [изоляция](netwatch-validation.md). Editable profiles/drafts, output filters и artifact UI проверены browser integration; подробные ручные Windows UI наблюдения отложены пользователем. Рабочий установленный runtime 652635b остаётся подключённым; новые функции устанавливаются одним общим update из проверенных исходников.
 
 - [x] Workflow fixture: выбрать SHA → publish/import → build → start → stdout readiness → log tail.
 - [x] Принятый профиль и step IDs в journal; ошибка сборки блокирует запуск следующего шага, dedup не создаёт повторный процесс.
@@ -66,7 +66,7 @@
 - [x] Log read/tail: byte offset, UTF-8, truncation/rotation/prefix rewrite, page/UI квота. Task output сохраняется в journal; файл лога читается у приложения.
 - [x] UI workflow steps/timeline, ссылки на build/start tasks, app status и связанный лог; принятие request не считается завершением.
 - [x] Автоматические Windows regression через старый fixed worker, isolated source/build/state и checksum-verified shared report.
-- [ ] Netwatch profile с безопасной изоляцией и фактическим readiness probe; production экземпляр не использовать как fixture.
+- [x] Netwatch profile с отдельными config/logs/IPC и фактическим health/PID probe; production экземпляр не использовался.
 - [x] Отдельные editable именованные profiles/drafts, фильтрация output и artifact catalog; Rust storage и browser integration прошли.
 
 Критерий: на примере Netwatch агент получает стабильный snapshot, собирает на Windows, запускает его, читает лог и видит все шаги в UI. Падение приложения и провал readiness показываются отдельно от успешной сборки.
@@ -101,4 +101,10 @@
 
 ## Следующий конкретный шаг
 
-Завершить оставшиеся критерии этапа 4: Netwatch profile/probe/isolation, editable profiles, output filters/artifacts. Основной workflow/process/log цикл уже работает; не возвращаться к новому ручному gate для каждого fix. Windows regression — scripts/validate-workflow-native.py через подключённый fixed worker. Подробные ручные UI checks отложены пользователем. Затем этап 5 добавит внимание пользователя и ежедневные операции. Dirty source mode и performance extensions остаются будущими задачами.
+Этап 4 завершён по автоматическому Windows gate. Следующий — этап 5: attention/tray,
+долговечные acknowledgements, retention/диагностический export и MCP adapter над теми
+же операциями. Новый installed runtime получает профили/artifacts/Netwatch probe одним
+update; повторять 41 native test или назначать новые ручные UI gates пользователю не
+нужно. Если подключённый worker даёт неожиданную ошибку, по инструкции пользователя
+остановиться и запросить его обновление. Dirty source mode и performance extensions
+остаются будущими задачами.

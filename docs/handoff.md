@@ -18,14 +18,14 @@
 | Rust protocol/core/controller/worker | Worker runtime/CLI и platform/transport crates прошли Windows gate; worker capabilities: task_submit/task_cancel, а workspace_import объявляется при delivery config; native snapshot runtime gate пройден 2026-10-06. Controller CLI submit/get/list/output/cancel/watch реально проверен с Windows worker; runtime и native UI gate этапа 2 пройдены, этап завершён. |
 | DTO и config | Strict schemaVersion 1 loader, registry/recipes/direct/cwd/timeout policy. LocalRequest/Response, TaskRecord/Summary, output byte pages. TS генерируется из Rust; check:contracts проверяет drift. |
 | UI | Пять native Windows шагов подтверждены пользователем. Новый fix формы сохраняет executable/argv/cwd/timeout/recipe по worker/project/root. Browser остаётся demo/report viewer; UI integration проверен на настоящем Unix worker. |
-| Tauri desktop | Native host запуск подтверждён. workerConfigPath в winbridge-desktop.local.json, форма в winbridge-desktop-state.local.json рядом с exe. worker_rpc и три local draft commands; close ждёт save ACK каждой изменённой command/delivery scope. Shared package select и delivery form restore проверены UI integration; пользователь принял их без нового подробного ручного gate. Сохранение формы и dev:ui дополнительно подтверждены пользователем на Windows. |
+| Tauri desktop | Native host запуск подтверждён. workerConfigPath в winbridge-desktop.local.json, форма в winbridge-desktop-state.local.json рядом с exe. worker_rpc, четыре local draft commands и desktop_build; close ждёт save ACK каждой изменённой command/delivery/workflow scope. Shared package select и delivery form restore проверены UI integration; пользователь принял их без нового подробного ручного gate. Сохранение формы и dev:ui дополнительно подтверждены пользователем на Windows. |
 | Local IPC/runtime tasks | User SID + instance named pipe, user-only protected DACL, exclusive journal и Windows Job Objects подтверждены Windows отчётом. Unix socket/private state также проверены; bounded frames/deadline/connections. |
 | HGFS delivery/import | Git commit capture, deterministic Stored ZIP, actual HGFS .part/readback/ready, durable worker import/lease/pinned build и UI реализованы. 16 actual Unix/HGFS/WebSocket gate checks и actual owned import crash/recovery проходят. 19 actual Windows import/build/run/cancel/NTFS junction checks пройдены 2026-10-06; delivery UX принята пользователем, подробная ручная проверка отложена. Dirty/incremental/benchmark ещё не реализованы. |
 | SQLite/process tree | Local WAL/FULL, durable acceptance, dedup, queue/cancel, launch intent/recovery, independent pipe drain/quota. Реальные Windows tree timeout/cancel/crash cleanup и сохранённый indeterminate без retry подтверждены. |
 | WebSocket | Versioned handshake/RPC/heartbeat/reconnect/watch реализованы; 14 session groups и UI integration проходят в Debian. Шесть групп Windows runtime gate прошли, включая прежний task/PID/generation после offline. Подключение и все три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. |
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
 | Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite schema 3 + consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
-| Attention/Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Изолированный Netwatch clone/probe согласован пользователем; actual Unix cycle прошёл. Attention остаётся этапом 5. Полный этап 4 ждёт общего Windows Netwatch прогона. |
+| Attention/Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Изолированный Netwatch clone/probe согласован пользователем; actual Unix cycle прошёл. Attention остаётся этапом 5. Этап 4 завершён по общему Windows Netwatch прогону; native визуальная проверка отложена. |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 
 **Этап 1 завершён 2026-10-05.** [Доказательства](windows-gate-2026-10-05.md): прогон `20261005-161827-c8deef84`, все 10 checks passed, ipcAclVerified true; пять native UI шагов подтверждены пользователем, включая отдельно уточнённый stop/restart worker. JSON uiVerified остаётся false, потому что ручные шаги не оцениваются скриптом; shared report не менялся. Worker --describe возвращает scaffold false и task_submit/task_cancel, в коммите этапа 1 controller оставался scaffold. Теперь controller реализует task_submit/task_cancel через worker; readiness этапа 2 требует отдельного Windows gate.
@@ -53,7 +53,7 @@ Review fixes закоммичены `700ddd5`: bounded config/desktop state и j
 
 Committed fixture `s-e0ee0e50ee6c6de17a487199ca09689dec8f6abd`, manifest `474f1188ec53f7b0492e6a20ec8e5c17295c7c281cdc148706e904547cfb0cb1`; frozen request `.winbridge/workflow-fixture/20261006-131804-d59a5488/workflow.request.json` уже выполнен как workflow `be3004e6-8056-4e50-a5e5-58a41fde2c75`. Повтор key возвращает историю, не запускает приложение снова. `prepare-workflow.py` создаёт новый fixture/config/profile отдельно при необходимости нового цикла. Новые ручные UI checks по мелким исправлениям не назначать.
 
-Этап 4 целиком не закрыт: production Netwatch не запускать; его текущий agent пишет только file log и использует fixed SID named pipe. Отдельный безопасный profile/probe/isolation ещё требуется, как и editable именованные profiles/output filters/artifacts. Повторять уже пройденные gates с нуля не нужно.
+Этап 4 завершён: 41 native Windows test, native desktop check и отдельный Netwatch validation clone прошли автоматически. Production Netwatch не запускать. Profiles/output filters/artifacts/build identity реализованы; подробнее в последнем разделе. Повторять прежние gates и назначать ручную проверку пользователю не нужно.
 
 ## Проверки текущей подготовки
 
@@ -110,7 +110,7 @@ Runtime постоянный: `K:\_proj-26\winbridge\runtime`, runtimeDirectory 
 
 ## Готовый запрос для продолжения
 
-> Продолжи WinBridge в /home/user1/winbridge по AGENTS.md и docs/handoff.md. Этап 1 завершён. Windows runtime gate этапа 2 пройден 2026-10-05, доказательства в docs/windows-session-gate-2026-10-05.md. Все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён. Windows snapshot runtime gate этапа 3 пройден 2026-10-06: docs/windows-snapshot-gate-2026-10-06.md. Пользователь принял UI исправления и закрыл этап 3, подробную ручную проверку отложил. Продолжить этап 4, приоритет автоматических Windows сценариев через подключённый worker; не останавливаться на новых ручных UI gates. Сохраняй отдельный Windows workspace, постоянный путь exe/config/state, durable acceptance/dedup/cancel/recovery и понятный UI. Не вводи TLS или новые adapters без задачи пользователя; пройденные runtime gates без новой причины не повторяй.
+> Продолжи WinBridge в /home/user1/winbridge по AGENTS.md и docs/handoff.md. Этап 1 завершён. Windows runtime gate этапа 2 пройден 2026-10-05, доказательства в docs/windows-session-gate-2026-10-05.md. Все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён. Windows snapshot runtime gate этапа 3 пройден 2026-10-06: docs/windows-snapshot-gate-2026-10-06.md. Пользователь принял UI исправления и закрыл этап 3, подробную ручную проверку отложил. Этап 4 завершён 2026-10-06 по автоматическому Netwatch gate: 41 native test и Windows desktop check. Следующий этап — 5; приоритет автоматических Windows сценариев через подключённый worker; не останавливаться на новых ручных UI gates. Сохраняй отдельный Windows workspace, постоянный путь exe/config/state, durable acceptance/dedup/cancel/recovery и понятный UI. Не вводи TLS или новые adapters без задачи пользователя; пройденные runtime gates без новой причины не повторяй.
 
 ## Завершение этапа 4 — текущая работа 2026-10-06
 
@@ -129,4 +129,27 @@ Prepared profile `.winbridge/netwatch-validation/20261006-163106-3ae4e9ff/workfl
 Unix actual Netwatch import/build/artifact/start/IPC/log/stop прошёл:
 `.winbridge/netwatch-unix/97d94ee6/report.json`, workflow c11c5856-0568-4887-b383-55376449f49c,
 PID 177361 остановлен. 63 Rust tests, Clippy -D warnings, contracts/typecheck/UI build,
-Windows all-targets compile и browser integration прошли; автоматический Windows Netwatch прогон ещё предстоит.
+Windows all-targets compile и browser integration прошли; автоматический Windows Netwatch прогон также завершён (ниже).
+
+Полный native gate: `WinBridge/workflow-validation/20261006-163840-a97da6e3`,
+outer task 98c4a0eb-00f8-4f20-8747-77ecddc8af12, report SHA
+f1ccabe0039fadeb3daa7820f1e347896cddb4d70691632579fa9c5ed0ff0195.
+Source commit 612b3b2 (clean ZIP), SHA f85b755a24503ba64901e99361de0b2951aa2dfaa58f5471348e028c79855185.
+41 Windows tests, native Tauri check, Netwatch workflow
+6f647cac-c662-4761-a836-a383757809d1 и application
+7cd82e14-5337-49ef-8062-67272ad51128, PID 21416: ready подтверждён IPC,
+затем explicit stop; startup history succeeded, runtime и test worker остановлены.
+Оригинальные Netwatch files и установленный fixed worker не менялись.
+
+Дополнительная проверка UTF-8 отчёта: `workflow-validation/encoding-20261006-612b3b2.json`,
+SHA f530848f81367eb6740faf15ee6a0e14fa7a21166271413182f1f95fac75555a,
+task ea16150d-452a-4996-b385-c41628428f10 exit 0. Journal/CLI worker сохраняют
+правильный UTF-8; PowerShell native capture портил кириллицу в report по OEM code page.
+Общий scripts/worker-cli.ps1 теперь читает stdout/stderr как UTF-8 одновременно,
+без изменения console/global settings. Проверен реальным Windows CLI и PowerShell
+в Debian. Rust/UI код финального выпуска совпадает с native-tested 612b3b2;
+после gate изменены только reader тестового отчёта и документация.
+
+Установленный worker generation 210bd4b6-e35f-48e1-85a6-81c973c79605 остаётся
+здоровым; stage-4 Netwatch probe/artifacts требуют одного совместного update worker/desktop.
+Новый ручной gate не нужен. Следующий незавершённый roadmap этап — 5.

@@ -56,3 +56,58 @@ Workflow checks исполняли реальный Cargo build и Windows exe �
 Report passed=true, platform=windows; report.ready.json содержит сверенный hash/размер. Report сохраняет workflow/import/tasks/output/log pages, ready/stopped app и stop intent. Это проверка установленного runtime, дополняющая 37 isolated native tests, а не новое визуальное UI подтверждение. Подробные ручные UI наблюдения остаются отложенными.
 
 Перепроверка выполняется [автоматическим сценарием](windows-workflow-validation.md). Профиль опубликован: `s-e0ee0e50ee6c6de17a487199ca09689dec8f6abd`, manifest `474f1188ec53f7b0492e6a20ec8e5c17295c7c281cdc148706e904547cfb0cb1`; request в Debian `.winbridge/workflow-fixture/20261006-131804-d59a5488/workflow.request.json`. Повтор этого файла возвращает уже завершённый workflow; новый самостоятельный цикл требует нового явно подготовленного профиля/key.
+
+## Завершение этапа 4: Netwatch, profiles, artifacts
+
+Автоматический прогон 2026-10-06 завершился успешно. Текущий fixed worker выполнил
+одну разрешённую задачу проверки новой версии в отдельном каталоге; его exe/config/state
+не обновлялись. Test worker использовал свой user-scoped pipe, SQLite и workspace,
+без WebSocket. Production Netwatch не запускался и его репозиторий не менялся.
+
+| Поле | Значение |
+| --- | --- |
+| Shared run | `K:\VMs\shared\WinBridge\workflow-validation\20261006-163840-a97da6e3` |
+| Outer task | `98c4a0eb-00f8-4f20-8747-77ecddc8af12`, succeeded, exit 0 |
+| Report SHA-256 | `f1ccabe0039fadeb3daa7820f1e347896cddb4d70691632579fa9c5ed0ff0195` |
+| Test source commit | `612b3b229e37cb7d25cd99eb05314d96a3c15d43`, dirty=false |
+| Source ZIP | `winbridge-20261006T203827Z-612b3b2-0f006336.zip` |
+| ZIP SHA-256 | `f85b755a24503ba64901e99361de0b2951aa2dfaa58f5471348e028c79855185` |
+| Source manifest SHA-256 | `d33f36cd8a58b810b1d100ca3eb6395ad18816bde906b41f8629a1906579c425` |
+| Netwatch original commit | `39409e56a26ef438adab3488afea504ef40f1363` |
+| Netwatch validation commit | `e295806456a5715510918dc178ff1e7975e8626b` |
+| Snapshot manifest | `b9a2cb5d1740057566452ad5acfe5f6c19be45390182a58ceaa470a1b06700ed` |
+| Netwatch workflow | `6f647cac-c662-4761-a836-a383757809d1`, succeeded |
+| Netwatch application | `7cd82e14-5337-49ef-8062-67272ad51128`, PID 21416, ready → stopped |
+| Build task | `c4d9a5ae-d813-4d35-81f1-909a1fd8f2f1`, exit 0 |
+| Start task | `44dfb02a-d49e-46c7-abb9-2253030ad6fd`, cancelled после stop |
+| Netwatch executable | 6 085 120 bytes; SHA-256 `60f0a2b8f54376ccba041dde0ebb949bbe3abbeaada4ebe9685b457634e268f7` |
+| Netwatch report SHA-256 | `0d0db91fbdd1d2e283fad48a84c543e4b6b7231e18bc8de035fd8d8d9dba594a` |
+
+Четыре группы cargo завершились exit 0: core/log reader (18 tests), readiness IPC
+(2), worker runtime/snapshots/workflows (21), native desktop check. Всего 41 native
+Windows test; это включает настоящие NTFS/process/Job/crash/recovery checks и новые
+profiles/artifact/IPC PID cases. Desktop проверен Windows toolchain, включая новый IPC
+сохранения профилей и build identity; запуск нового визуального окна не заявляется.
+
+Отдельный Netwatch сценарий подтвердил import/build/artifacts/start/IPC/log/dedup/stop.
+Health сверил server PID средствами ОС и pid/service/status из Netwatch ответа.
+Лог содержал config изолированного node и ready IPC listener. SHA executable был
+пересчитан из реальных Windows bytes. После stop PID исчез, успешная startup history
+сохранилась. Test worker остановлен; текущий fixed worker остаётся подключённым.
+
+63 Rust tests и browser integration прошли в Debian: сохранение/восстановление named
+profile и draft не запускает команды, artifacts видны, фильтр log действует, lost ACK
+не дублирует workflow. Новые ручные Windows UI наблюдения пользователь отложил.
+
+В первоначальном JSON строка build reason искажена OEM-декодированием PowerShell.
+Journal и UTF-8 CLI содержат правильную строку; отдельная native проверка
+`encoding-20261006-612b3b2.json` (SHA
+`f530848f81367eb6740faf15ee6a0e14fa7a21166271413182f1f95fac75555a`)
+подтвердила «Команда завершилась с кодом 0», task
+`ea16150d-452a-4996-b385-c41628428f10` exit 0. Исправлен только report reader:
+stdout/stderr декодируются как UTF-8 через ProcessStartInfo без изменения console code
+page. Исходные checksum-verified отчёты сохранены. Этот дефект не находился в worker;
+его обновление для исправления кодировки не требовалось.
+
+Этап 4 завершён. Новый installed worker/desktop обновляются одним общим пакетом;
+проверенный Rust/UI код тот же, что в 612b3b2. Повтор ручного gate не требуется.
