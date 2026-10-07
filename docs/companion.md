@@ -1,11 +1,10 @@
 # Tray и фоновые уведомления
 
 Сценарий этапа 5, начатый 2026-10-07 после [ревью](review-attention-2026-10-07.md)
-и commit плана. Реализация готова к автоматическому native gate; завершение проверки
-фиксируется отдельно, compilation/browser shim не доказывают Windows popup или звук.
-[Первый native прогон](windows-companion-attempt-2026-10-07.md) остановлен после
-неожиданного завершения desktop и неверного размера runtime log в ready manifest;
-popup/tray/sound пока не считать подтверждёнными на Windows.
+и commit плана. [Автоматический Windows gate пройден](windows-companion-gate-2026-10-07.md):
+настоящие tray/popup/sound API, close/hide/quit, task navigation и restart проверены
+в отдельном runtime. [Прежний прерванный прогон](windows-companion-attempt-2026-10-07.md)
+сохранён как история; рабочий runtime ещё не обновлялся.
 
 ## Ежедневное использование
 
@@ -23,7 +22,8 @@ companion Windows popup/звук не воспроизводятся, но worke
 Rust poll работает независимо от WebView. Tooltip tray показывает свежесть worker,
 общее непрочитанное внимание и queued/running command count по всему journal.
 Оранжевый badge обозначает pending attention, серый — отсутствие worker.
-Недоступные счётчики обозначаются `?`, в окне — «неизвестно».
+Если загрузка desktop state не удалась, прежний attention count сбрасывается в неизвестный;
+свежий Info сам по себе его не подтверждает. Недоступные счётчики обозначаются `?`, в окне — «неизвестно».
 Для старого worker без attention capability требуется совместное обновление;
 неизвестные attention RPC ему не отправляются.
 

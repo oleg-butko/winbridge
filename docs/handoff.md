@@ -2,29 +2,30 @@
 
 ## Текущий шаг — 2026-10-07
 
-**Пользователь разрешил диагностику, исправление и автоматический повтор.**
-Предыдущий run `20261007-055534-610692b2` не прошёл native gate. Пользователь сообщил,
-что закрывал desktop после появления необозначенного второго окна; это согласуется
-с прерыванием, но прежний harness не сохранил точную причину. Новый сценарий добавляет
-заметное обозначение тестового runtime, текущие шаги, явный abort, защиту обычного
-закрытия, args/PID/exit/progress и local output drain перед shared publication.
-Manifest вычисляет bytes и SHA из одного массива данных вместо cached HGFS stat.
-[Прежние результаты](windows-companion-attempt-2026-10-07.md) не изменяются.
-Перед Windows прогоном обязательно объяснять, что оставить запущенным и какие окна
-появятся; по окончании явно сообщать, что можно закрыть. Для companion gate нужен
-рабочий worker, рабочий desktop необязателен; отдельное тестовое окно не трогать.
-Рабочий runtime не обновлять; новый native gate пока не считать пройденным.
+**Native tray/popup/settings gate пройден автоматически на Windows.**
+[Доказательства](windows-companion-gate-2026-10-07.md): clean source `f7c4878`,
+run `20261007-063240-8e63081e`, task `f4d7db75-db65-4e15-8a75-7d05bd2e21d1`
+succeeded/exit 0, report SHA-256
+`5b2fa9985438efcab6006ce73c13a8f2bb96a6e2b2cccf988060e54b2af93c86`.
+21 core + 9 attention Windows tests, offline worker/desktop builds, два actual native
+UI запуска с exit 0 и все 16 checksum artifacts подтверждены. Реальные tray/hide,
+защита случайного close, single instance/reopen, popup без focus, sound API,
+точная task page без implicit ACK, rate aggregation/deferred ACK и restart cursor/settings
+прошли. Тестовые процессы завершены, рабочий worker `523fc5b`/generation прежние.
 
-После review/plan commit `bbba964` реализован [tray companion](companion.md):
-close/save/hide/explicit quit, runtime-scoped single instance, Rust background poll,
-popup task link без ACK, built-in sound/volume/quiet/rate и durable cursor/settings.
-Native gate попытка завершилась отказом; сценарий `--companion-only` подготовлен для отдельного
-runtime с bundled UI, без замены установленного worker/desktop и без debugger port.
-77 workspace tests, Clippy, Windows workspace compile, TypeScript/UI build и
-Linux standalone desktop check прошли. Browser integration проверил settings/save/hide/quit,
-tray failure/task navigation и настоящий result journal fault. Native проверки
-этого среза пока не считать пройденными. Workflow/app attention/history/export/MCP
-остаются незавершёнными, stage 5 не закрыт.
+[Первый прерванный прогон](windows-companion-attempt-2026-10-07.md) сохранён как история.
+По разрешению пользователя исправлены UX тестового окна, args/PID/exit/checkpoints,
+CreateNoWindow, local concurrent output drain и publication bytes/SHA из одного массива.
+Перед каждым Windows прогоном объяснять необходимые worker/desktop и появление тестовых
+окон; после явно сообщать, что можно закрыть. Для автоматического gate нужен рабочий
+worker, рабочий desktop необязателен. Пользователю уже сообщено: desktop можно закрыть,
+worker оставить работающим. Это правило закреплено также в AGENTS.md.
+
+[Tray companion](companion.md) реализован и проверен; рабочий runtime ещё не обновлён,
+новые worker/desktop собрать вместе при следующем согласованном обновлении.
+Локально прошли standalone desktop Clippy, 20 core tests, contracts/typecheck/UI build,
+PowerShell parser/capture smoke и browser integration с настоящим Unix worker.
+Workflow/app attention, history/export/MCP остаются незавершёнными, stage 5 не закрыт.
 
 Новое ревью исправило незаписанный process result: journalRecoveryRequired,
 stale GetTask/cancel error, остановка admission/queue и сохранение lease до recovery.
@@ -61,9 +62,8 @@ Source `6b855f6` clean, ZIP SHA-256
 Final UI decoder принимает то же Base64 padding/trailing-bit поведение, что .NET;
 Rust код после native proof не менялся. Основной worker здоров, generation/session прежние.
 Stage 5 не закрыт: workflow/app attention, history/export/MCP ещё предстоят;
-tray/popup/sound/settings описаны в текущем шаге выше. Installed runtime остаётся `523fc5b`; первый срез не требует нового
-ручного gate. Текущий рабочий сценарий — native tray/popup/sound/preferences поверх
-durable attention, затем workflow/app outcome signals и диагностика/MCP. Не просить
+tray/popup/sound/settings прошли gate, описанный в текущем шаге выше. Installed runtime остаётся `523fc5b`; первый срез не требует нового
+ручного gate. Следующий рабочий сценарий — workflow/app outcome signals, затем диагностика/MCP. Не просить
 обновлять runtime по каждой небольшой правке; готовые изменения объединить.
 
 ## Сначала прочитать
@@ -92,7 +92,7 @@ durable attention, затем workflow/app outcome signals и диагности
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
 | Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite workflows/applications (schema 3), текущая schema 4 с attention; consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
 | Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Этап 4 завершён по общему Windows Netwatch прогону; native визуальная проверка отложена. |
-| Attention | Durable task outcome/request attention, dedup/acknowledgement, schema 4 + consistent v3 backup, capability guards, CLI и paged UI/task links. Tray/popup/sound/settings реализованы в исходниках, native gate ещё не завершён. Workflow/app attention ещё предстоит. [Journal](attention.md), [companion](companion.md). |
+| Attention | Durable task outcome/request attention, dedup/acknowledgement, schema 4 + consistent v3 backup, capability guards, CLI и paged UI/task links. Tray/popup/sound/settings прошли автоматический native gate с двумя UI запусками. Workflow/app attention ещё предстоит. [Journal](attention.md), [companion](companion.md). |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 
 **Этап 1 завершён 2026-10-05.** [Доказательства](windows-gate-2026-10-05.md): прогон `20261005-161827-c8deef84`, все 10 checks passed, ipcAclVerified true; пять native UI шагов подтверждены пользователем, включая отдельно уточнённый stop/restart worker. JSON uiVerified остаётся false, потому что ручные шаги не оцениваются скриптом; shared report не менялся. Worker --describe возвращает scaffold false и task_submit/task_cancel, в коммите этапа 1 controller оставался scaffold. Теперь controller реализует task_submit/task_cancel через worker; readiness этапа 2 требует отдельного Windows gate.

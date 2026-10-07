@@ -79,20 +79,20 @@
 Первый сценарий реализован: [журнал внимания и границы](attention.md). Task outcomes,
 dedup и acknowledgements сохраняются у worker; UI раскрывает EncodedCommand и
 предлагает task links/explicit acknowledgement. [Tray/popup/sound/preferences](companion.md)
-реализованы в исходниках; автоматический native gate ещё не завершён.
-[Первый прогон](windows-companion-attempt-2026-10-07.md) прошёл tests/builds, но
-native desktop phase и ready bytes не подтвердились. Пользователь разрешил исправить
-UX тестового окна и публикацию отчёта, затем повторить автоматический gate.
+реализованы и [прошли автоматический Windows gate](windows-companion-gate-2026-10-07.md):
+21 core + 9 attention tests, два native UI запуска, 16 verified artifacts.
+[Первый прерванный прогон](windows-companion-attempt-2026-10-07.md) остаётся историей;
+исправлены обозначение тестового окна, защита close и публикация отчёта.
 Workflow/app attention, диагностика и MCP ещё не реализованы; этап не закрыт.
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
 [Ревью](review-attention-2026-10-07.md) исправило fresh running после failed result commit.
-Текущий сценарий — [tray/popup/sound/preferences](tray-plan.md); план зафиксирован
-коммитом `bbba964` до реализации по инструкции пользователя.
+Сценарий [tray/popup/sound/preferences](tray-plan.md) завершён; план был зафиксирован
+коммитом `bbba964` до реализации. Далее — workflow/app outcome attention.
 
-- [ ] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
-- [ ] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
+- [x] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
+- [x] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
 - [ ] Projects, history/audit, connection settings, command palette и доступность с клавиатуры.
 - [ ] Retention, quotas, output paging, recovery без UI; экспорт диагностического task report с редактированием секретов.
 - [ ] MCP stdio adapter использует те же операции, что CLI; domain logic не дублируется.

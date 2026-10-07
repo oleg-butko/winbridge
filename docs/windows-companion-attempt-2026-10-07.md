@@ -55,3 +55,5 @@ close, CreateNoWindow для debug console/secondary launch, args/PID/exit/check
 параллельное чтение stdout/stderr и bounded drain в локальные файлы до публикации.
 Ready manifest читает size/SHA из одного массива bytes. Прежние shared evidence
 не переписываются. Результат нового gate фиксируется отдельно после выполнения.
+
+[Исправленный повтор пройден](windows-companion-gate-2026-10-07.md); первый failed report остаётся неизменным.
