@@ -36,6 +36,7 @@ pub struct Worker {
     checks: Mutex<HashMap<String, Option<Result<workflows::CheckResult>>>>,
     stop: AtomicBool,
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
+    unreconciled_tasks: Mutex<HashMap<String, String>>,
     _instance_lock: File,
 }
 impl Worker {
@@ -117,6 +118,7 @@ impl Worker {
             checks: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
+            unreconciled_tasks: Mutex::new(HashMap::new()),
             _instance_lock: lock,
         });
         worker.recover_imports()?;
@@ -134,6 +136,16 @@ impl Worker {
         }
     }
     fn dispatch(&self, request: LocalRequest) -> Result<LocalResponse> {
+        if matches!(
+            request,
+            LocalRequest::Submit { .. }
+                | LocalRequest::SubmitWorkflow { .. }
+                | LocalRequest::ImportSnapshot { .. }
+        ) {
+            if let Some(reason) = self.journal_recovery_required()? {
+                return Err(reason);
+            }
+        }
         match request {
             LocalRequest::RequestAttention { request } => {
                 if self.stop.load(Ordering::Acquire) {
@@ -157,6 +169,9 @@ impl Worker {
                     return Err("Worker stopping; workflow not accepted".into());
                 }
                 let mut store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
                 if let Some(record) = store.existing_workflow(&request)? {
                     return Ok(LocalResponse::Workflow {
                         workflow: Box::new(record),
@@ -233,6 +248,7 @@ impl Worker {
                     build: Some(winbridge_protocol::build_identity()),
                     workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                     attention_available: true,
+                    journal_recovery_required: self.journal_recovery_required()?,
                     protocol_version: PROTOCOL_VERSION,
                     instance_id: self.config.instance_id.clone(),
                     node_id: self.config.node_id.clone(),
@@ -259,6 +275,9 @@ impl Worker {
                     return Err("Worker stopping; import not accepted".into());
                 }
                 let mut store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
                 if let Some(import) = store.existing_import(&request)? {
                     return Ok(LocalResponse::Import {
                         import: Box::new(import),
@@ -300,6 +319,9 @@ impl Worker {
                     return Err("worker is stopping; new tasks are not accepted".into());
                 }
                 let mut store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
                 if let Some(task) = store.existing(&request)? {
                     return Ok(LocalResponse::Task {
                         task: Box::new(task),
@@ -314,9 +336,13 @@ impl Worker {
                     )?),
                 })
             }
-            LocalRequest::GetTask { task_id } => Ok(LocalResponse::Task {
-                task: Box::new(self.store()?.get(&task_id)?),
-            }),
+            LocalRequest::GetTask { task_id } => {
+                let store = self.store()?;
+                self.require_committed_result(&task_id)?;
+                Ok(LocalResponse::Task {
+                    task: Box::new(store.get(&task_id)?),
+                })
+            }
             LocalRequest::ListTasks => {
                 let tasks = self
                     .store()?
@@ -332,13 +358,17 @@ impl Worker {
             } => Ok(LocalResponse::Output {
                 chunks: self.store()?.output(&task_id, after_sequence)?,
             }),
-            LocalRequest::Cancel { task_id } => Ok(LocalResponse::Task {
-                task: Box::new(self.store()?.cancel(&task_id)?),
-            }),
+            LocalRequest::Cancel { task_id } => {
+                let mut store = self.store()?;
+                self.require_committed_result(&task_id)?;
+                Ok(LocalResponse::Task {
+                    task: Box::new(store.cancel(&task_id)?),
+                })
+            }
         }
     }
     pub fn schedule(self: &Arc<Self>) -> Result<()> {
-        if self.stop.load(Ordering::Acquire) {
+        if self.stop.load(Ordering::Acquire) || self.journal_recovery_required()?.is_some() {
             return Ok(());
         }
         let mut active = self
@@ -347,6 +377,9 @@ impl Worker {
             .map_err(|_| "process registry lock poisoned")?;
         // Journal and project admission are inspected while holding both locks.
         let mut store = self.store()?;
+        if self.journal_recovery_required()?.is_some() {
+            return Ok(());
+        }
         self.advance_workflows(&mut store, &mut active)?;
         let workflows = store.workflows(false)?;
         let tasks = store.all()?;
@@ -433,12 +466,27 @@ impl Worker {
                 let project = task.submission.project_id.clone();
                 if let Err(error) = worker.execute(task) {
                     eprintln!("task {id}: {error}; outcome requires reconciliation");
-                    if let Ok(mut store) = worker.store() {
-                        let _ = store.finish(&id, TaskStatus::Indeterminate, None, &error);
+                    // Publish the fault before releasing the journal lock. Admission
+                    // rechecks while holding it, so it cannot race the failed commit.
+                    match worker.store() {
+                        Ok(mut store) => {
+                            if let Err(recovery_error) =
+                                store.finish(&id, TaskStatus::Indeterminate, None, &error)
+                            {
+                                worker.record_journal_fault(&id, &error, &recovery_error);
+                            }
+                        }
+                        Err(recovery_error) => {
+                            worker.record_journal_fault(&id, &error, &recovery_error)
+                        }
                     }
                 }
+                let unreconciled = worker
+                    .unreconciled_tasks
+                    .lock()
+                    .map_or(true, |faults| faults.contains_key(&id));
                 if let Ok(mut projects) = worker.active_projects.lock() {
-                    if projects.get(&project) == Some(&id) {
+                    if !unreconciled && projects.get(&project) == Some(&id) {
                         projects.remove(&project);
                     }
                 }
@@ -446,6 +494,33 @@ impl Worker {
             });
         }
         Ok(())
+    }
+    fn journal_recovery_required(&self) -> Result<Option<String>> {
+        let faults = self
+            .unreconciled_tasks
+            .lock()
+            .map_err(|_| "journal fault state lock poisoned")?;
+        Ok(faults.keys().next().map(|id|format!("Task {id} has an uncommitted outcome. New launches are suspended; repair journal storage and restart worker for indeterminate recovery. No command is automatically resubmitted")))
+    }
+    fn require_committed_result(&self, id: &str) -> Result<()> {
+        if let Some(reason) = self
+            .unreconciled_tasks
+            .lock()
+            .map_err(|_| "journal fault state lock poisoned")?
+            .get(id)
+        {
+            return Err(format!("Task {id}: result could not be committed; journal status is stale. {reason}. Repair journal storage and restart worker to reconcile; do not resubmit the command"));
+        }
+        Ok(())
+    }
+    fn record_journal_fault(&self, id: &str, error: &str, recovery_error: &str) {
+        let reason = format!(
+            "Execution error: {error}; recording unknown outcome also failed: {recovery_error}"
+        );
+        eprintln!("task {id}: {reason}; new launches suspended until journal recovery");
+        if let Ok(mut faults) = self.unreconciled_tasks.lock() {
+            faults.insert(id.into(), reason);
+        }
     }
     fn execute(self: &Arc<Self>, task: TaskRecord) -> Result<()> {
         let id = task.task_id.clone();

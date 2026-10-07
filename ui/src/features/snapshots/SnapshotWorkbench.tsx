@@ -149,7 +149,7 @@ export function SnapshotWorkbench({ info, connected, closing, drafts, persist, o
         {preview.files.map((file) => <Table.Tr key={file.path}><Table.Td>{file.path}</Table.Td><Table.Td>{file.bytes}</Table.Td><Table.Td><Code>{file.sha256}</Code></Table.Td></Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>
       {preview.nextOffset !== null && <Button variant="light" onClick={() => void inspect(preview.nextOffset!)} disabled={!connected || busy || closing}>Следующие 100 файлов</Button>}
-      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 })} disabled={!connected || busy || pending !== null || closing}>Импортировать пакет</Button>
+      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 })} disabled={!connected || !!info.journalRecoveryRequired || busy || pending !== null || closing}>Импортировать пакет</Button>
     </>}
     {pending && <Alert color="yellow" title="Приём импорта не подтверждён">Повтор отправит прежние параметры и ключ.
       <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || closing}>Проверить приём импорта</Button>

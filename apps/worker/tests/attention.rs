@@ -79,6 +79,83 @@ fn wait(worker: &Arc<Worker>, id: &str) -> TaskRecord {
 }
 
 #[test]
+fn uncommitted_process_result_is_not_reported_fresh_and_new_launches_wait_for_recovery() {
+    let root = TempDir::new().unwrap();
+    let cfg = config(root.path());
+    let worker = Worker::open(cfg.clone()).unwrap();
+    let failed = task(worker.handle(LocalRequest::Submit {
+        request: submission("uncommitted", "failure"),
+    }));
+    let queued = task(worker.handle(LocalRequest::Submit {
+        request: submission("waiting", "success"),
+    }));
+    let connection =
+        rusqlite::Connection::open(cfg.state_directory.join("journal.sqlite")).unwrap();
+    connection.execute_batch("CREATE TRIGGER fail_outcome BEFORE INSERT ON attention WHEN NEW.origin='task_outcome' BEGIN SELECT RAISE(ABORT,'expected outcome persistence failure'); END;").unwrap();
+    worker.schedule().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !worker.is_idle() {
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(10));
+    }
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!()
+    };
+    assert!(info
+        .journal_recovery_required
+        .unwrap()
+        .contains("uncommitted"));
+    assert!(
+        matches!(worker.handle(LocalRequest::GetTask {task_id:failed.task_id.clone()}),LocalResponse::Error {message} if message.contains("status is stale"))
+    );
+    assert!(
+        matches!(worker.handle(LocalRequest::Submit {request:submission("blocked","success")}),LocalResponse::Error {message} if message.contains("suspended"))
+    );
+    worker.schedule().unwrap();
+    assert_eq!(
+        task(worker.handle(LocalRequest::GetTask {
+            task_id: queued.task_id.clone()
+        }))
+        .status,
+        TaskStatus::Queued
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("runs.log"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    connection
+        .execute_batch("DROP TRIGGER fail_outcome;")
+        .unwrap();
+    drop(connection);
+    drop(worker);
+    let recovered = Worker::open(cfg).unwrap();
+    assert_eq!(
+        task(recovered.handle(LocalRequest::GetTask {
+            task_id: failed.task_id
+        }))
+        .status,
+        TaskStatus::Indeterminate
+    );
+    assert_eq!(
+        task(recovered.handle(LocalRequest::GetTask {
+            task_id: queued.task_id
+        }))
+        .status,
+        TaskStatus::Queued
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join("runs.log"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn lost_ack_dedup_conflict_and_acknowledgement_survive_restart() {
     let root = TempDir::new().unwrap();
     let cfg = config(root.path());

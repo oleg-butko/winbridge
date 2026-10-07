@@ -264,6 +264,8 @@ pub struct WorkerInfo {
     #[serde(default)]
     pub attention_available: bool,
     #[serde(default)]
+    pub journal_recovery_required: Option<String>,
+    #[serde(default)]
     pub build: Option<BuildIdentity>,
 }
 

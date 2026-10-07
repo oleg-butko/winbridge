@@ -127,6 +127,7 @@ export function NativeWorkbench() {
   const project = info?.projects.find((project) => project.id === projectId);
   const controller = info?.controllerConnection;
   const controllerFresh = connected && controller?.state === "connected";
+  const executionReady = connected && !info?.journalRecoveryRequired;
   const scope = info && project ? { workerInstanceId: info.instanceId, projectId: project.id, workspaceRoot: project.workspaceRoot } : null;
   const scopeKey = scope ? JSON.stringify(scope) : null;
   useEffect(() => {
@@ -212,6 +213,7 @@ export function NativeWorkbench() {
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => { const detail = document.getElementById("native-task-detail"); detail?.scrollIntoView({ behavior: "smooth" }); detail?.focus({ preventScroll: true }); }); }} />}
+    {info?.journalRecoveryRequired && <Alert color="red" title="Результат задачи не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
     {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
     {info?.workflowAvailable && <WorkflowWorkbench info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card withBorder><Stack>
@@ -239,7 +241,7 @@ export function NativeWorkbench() {
         Worker мог сохранить задачу до потери ответа. Повтор отправит прежние параметры и тот же ключ, чтобы получить ту же задачу.
         <Button mt="sm" onClick={() => void send(pending)}>Проверить приём — повторить тот же запрос</Button>
       </Alert>}
-      <Button onClick={() => void submit()} loading={submitting} disabled={!connected || pending !== null || !project || !formReady || closing || (!recipeId && !project.allowDirectCommands)}>Передать задачу worker</Button>
+      <Button onClick={() => void submit()} loading={submitting} disabled={!executionReady || pending !== null || !project || !formReady || closing || (!recipeId && !project.allowDirectCommands)}>Передать задачу worker</Button>
     </Stack></Card>
     <Select label="Последние 10 задач" value={selectedId} onChange={setSelectedId} searchable data={tasks.map((t) => ({ value: t.taskId, label: `${t.projectId} · ${statuses[t.status].label} · ${t.taskId}` }))} />
     {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}

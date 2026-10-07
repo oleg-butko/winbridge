@@ -178,7 +178,7 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles
     <Group align="end"><TextInput label="Имя профиля" value={profileName} onChange={(e) => setProfileName(e.currentTarget.value)} maxLength={160} disabled={busy || pending !== null || closing} /><Button variant="light" onClick={() => void saveNamed()} disabled={!profileName.trim() || !profile || busy || closing}>Сохранить профиль</Button></Group>
     <Text size="xs">{saveState || "Выбор профиля только заполняет форму. Запуск требует отдельной кнопки."}</Text>
     <Textarea label="Параметры workflow — JSON" description="Проверьте команды, snapshot, общий timeout, проверку готовности и путь UTF-8 лога внутри проекта. Незаконченный черновик сохраняется. Приложение работает до явной остановки или своего завершения." value={profile} onChange={(e) => changeProfile(e.currentTarget.value)} autosize minRows={5} maxRows={15} disabled={profiles === null || busy || pending !== null || closing} />
-    <Button onClick={() => void submit()} loading={busy} disabled={!connected || !profile || pending !== null || closing}>Запустить workflow</Button>
+    <Button onClick={() => void submit()} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || !profile || pending !== null || closing}>Запустить workflow</Button>
     {pending && <Alert color="yellow" title="Приём workflow не подтверждён">Повтор использует те же параметры и ключ; новую цепочку не создаёт.
       <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || closing}>Проверить приём workflow</Button></Alert>}
     {error && <Alert color="yellow" title="Операция workflow не подтверждена">{error}</Alert>}

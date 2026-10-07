@@ -2,6 +2,13 @@
 
 ## Текущий шаг — 2026-10-07
 
+Новое ревью исправило незаписанный process result: journalRecoveryRequired,
+stale GetTask/cancel error, остановка admission/queue и сохранение lease до recovery.
+72 workspace tests, Clippy, Windows compile и TypeScript прошли.
+[Ревью](review-attention-2026-10-07.md), [следующий сценарий](tray-plan.md).
+Installed worker `523fc5b` остаётся здоровым; новые native проверки выполнять в
+отдельном runtime. План tray/quiet/sound/close фиксируется перед реализацией.
+
 Пользователь обновил worker/desktop. Read-only `info` подтвердил Windows build
 `523fc5b`, sourceDirty=false, generation `bff7f8da-af71-432b-83af-739a020d9e37`,
 features artifacts/netwatch_health и connected controller. Controller generation

@@ -83,6 +83,10 @@ dedup и acknowledgements сохраняются у worker; UI раскрыва�
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
+[Ревью](review-attention-2026-10-07.md) исправило fresh running после failed result commit.
+Следующий сценарий — [tray/popup/sound/preferences](tray-plan.md); план фиксируется
+до реализации по инструкции пользователя.
+
 - [ ] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [ ] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
 - [ ] Projects, history/audit, connection settings, command palette и доступность с клавиатуры.
