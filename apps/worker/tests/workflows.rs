@@ -482,7 +482,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();

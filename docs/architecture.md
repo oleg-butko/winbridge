@@ -1,6 +1,6 @@
 # Архитектура WinBridge
 
-Статус 2026-10-06: этапы 1–3 завершены; Windows runtime/IPC, WebSocket и snapshot delivery проверены на настоящей Windows. Реализован [workflow этапа 4](workflows.md) с process registry и log tail; Windows regression запускается [автоматически](windows-workflow-validation.md). Диаграмма включает будущие tray/attention возможности.
+Статус 2026-10-07: этапы 1–4 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Начат [журнал внимания этапа 5](attention.md). Windows regression запускается [автоматически](windows-workflow-validation.md). Диаграмма включает будущие tray/popup/sound возможности.
 
 ## Назначение и среда
 
@@ -90,7 +90,13 @@ Manifest фиксирует source mode (commit SHA или dirty snapshot), пу
 
 Worker сохраняет frozen профиль и step IDs до ACK, затем связывает durable import/build/start с readiness/log. SQLite schema 3 добавляет workflows/applications; перед upgrade существующей базы выполняется consistent backup. Общая project reservation защищает startup; после готовности приложение продолжает жить под управлением worker, отдельно от mutation lease. Старый процесс снимает только собственную lease по operation ID. Startup deadline не ограничивает последующую жизнь приложения.
 
-В этом выпуске readiness подтверждается stdout token именно запущенного процесса. Readable UTF-8 log находится вне snapshots; byte cursor обнаруживает rotate/truncate/prefix rewrite. App lifecycle отделён от исторического результата запуска; неизвестный исход после crash не повторяется. Подробные границы и CLI/UI описаны в [workflows](workflows.md).
+Readiness подтверждается stdout token именно запущенного процесса либо изолированным Netwatch IPC probe с проверкой PID владельца. Readable UTF-8 log находится вне snapshots; byte cursor обнаруживает rotate/truncate/prefix rewrite. App lifecycle отделён от исторического результата запуска; неизвестный исход после crash не повторяется. Подробные границы и CLI/UI описаны в [workflows](workflows.md).
+
+Этап 5 добавляет SQLite schema 4: attention хранится у worker, explicit key дедуплицируется,
+acknowledgement переживает desktop/worker restart. Failed/indeterminate task и связанное
+attention event фиксируются одной транзакцией. Перед v3 upgrade — consistent SQLite
+backup. Native presentation не хранит собственный источник истины об acknowledgement;
+tray/quiet hours будут управлять сигналом над этим журналом. [Контракт](attention.md).
 
 ## UI и расширение
 

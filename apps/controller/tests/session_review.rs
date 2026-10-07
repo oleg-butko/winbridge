@@ -127,3 +127,26 @@ async fn oversized_outbound_request_is_not_sent_and_does_not_disconnect_peer() {
         let _ = actor.await;
     }).await.unwrap();
 }
+
+#[tokio::test]
+async fn legacy_worker_rejects_attention_before_transmission_and_keeps_session() {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let (_root, controller, listener) = pair().await;
+        let (actor, mut client) = connect(&controller, &listener).await;
+        for request in [
+            LocalRequest::RequestAttention { request: winbridge_protocol::AttentionSubmission {request_id:"one".into(),idempotency_key:"one".into(),task_id:"task".into(),severity:winbridge_protocol::AttentionSeverity::Warning,message:"check".into()} },
+            LocalRequest::ListAttention {after_sequence:0,pending_only:true},
+            LocalRequest::AcknowledgeAttention {attention_id:"event".into()},
+        ] {
+            let LocalResponse::Error {message}=controller.call(request).await else {panic!("Expected capability refusal")};
+            assert!(message.contains("not transmitted"));
+        }
+        assert!(controller.status().unwrap().connected);
+        let caller=Arc::clone(&controller);
+        let pending=tokio::spawn(async move {caller.call(LocalRequest::Info).await});
+        let SessionMessage::Request {id,request:LocalRequest::Info}=next_request(&mut client).await else {panic!("Attention must not reach old worker")};
+        ws::send(&mut client,&SessionMessage::Response {id,response:LocalResponse::Error {message:"fixture response".into()}}).await.unwrap();
+        assert!(matches!(pending.await.unwrap(),LocalResponse::Error {message} if message=="fixture response"));
+        actor.abort();let _=actor.await;
+    }).await.unwrap();
+}

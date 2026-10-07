@@ -114,6 +114,8 @@ try {
   let loseFirstAck = true;
   let loseFirstImportAck = true;
   let loseFirstWorkflowAck = true;
+  let loseFirstAttentionAck = true;
+  let loseFirstAttentionConfirmation = true;
   let acceptedWorkflowId;
   let importedId;
   let submittedId;
@@ -122,10 +124,12 @@ try {
   let failDeliverySaves = false;
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
-      const response = await call(request, request.method === "submit_workflow" ? join(run, "controller/controller-ui-test.sock") : socket);
+      const response = await call(request, ["submit_workflow", "request_attention", "list_attention", "acknowledge_attention"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
       if (request.method === "submit" && loseFirstAck) { loseFirstAck = false; submittedId = response.task.taskId; throw new Error("Test: acceptance response was lost"); }
       if (request.method === "import_snapshot" && loseFirstImportAck) { loseFirstImportAck = false; importedId = response.import.importId; throw new Error("Test: import ACK lost"); }
       if (request.method === "submit_workflow" && loseFirstWorkflowAck && response.kind === "workflow") { loseFirstWorkflowAck = false; acceptedWorkflowId = response.workflow.workflowId; throw new Error("Test: workflow ACK lost"); }
+      if (request.method === "request_attention" && loseFirstAttentionAck && response.kind === "attention") { loseFirstAttentionAck = false; throw new Error("Test: attention acceptance ACK lost"); }
+      if (request.method === "acknowledge_attention" && loseFirstAttentionConfirmation && response.kind === "attention") { loseFirstAttentionConfirmation = false; throw new Error("Test: attention confirmation ACK lost"); }
       return response;
     });
     // Native filesystem persistence is covered by core tests. Here the IPC shim
@@ -396,8 +400,46 @@ try {
   await workflowPage.getByRole("button", { name: "Остановить приложение", exact: true }).click();
   await workflowPage.getByText("Приложение остановлено", { exact: true }).waitFor();
   assert.equal((await call({ method: "get_workflow", workflowId: acceptedWorkflowId })).workflow.status, "succeeded", "app stop rewrote completed startup history");
+  // Deliberately missing executable: render the actual accepted encoded command, no script runs.
+  const readableScript = "# Проверка прозрачности ✓ 🚀\nWrite-Output 'quoted \"text\"'\n";
+  const readableArgv = ["-NoProfile", "-EncodedCommand", Buffer.from(readableScript, "utf16le").toString("base64")];
+  const encodedTask = (await call({ method: "submit", request: {protocolVersion:1,requestId:"encoded-ui",projectId:"other-fixture",idempotencyKey:"encoded-ui",timeoutMs:5000,command:{kind:"direct",executable:"/deliberately-missing/pwsh.exe",arguments:readableArgv,workingDirectory:"."}} })).task;
+  await until(async () => (await call({method:"get_task",taskId:encodedTask.taskId})).task.status === "failed", "intentional missing executable did not fail");
+  // An automatic outcome appears, links the task, and does not acknowledge it on opening.
+  await workflowPage.locator(`[data-attention-id]`).filter({hasText:encodedTask.taskId}).getByRole("button",{name:"Открыть задачу",exact:true}).click();
+  await workflowPage.getByTestId("powershell-script").waitFor();
+  assert.equal(await workflowPage.getByTestId("powershell-script").textContent(), readableScript);
+  assert.equal(await workflowPage.getByText(JSON.stringify(readableArgv,null,2),{exact:true}).isVisible(),false,"Base64 remained in the default command view");
+  await workflowPage.getByRole("button",{name:"Точные аргументы запуска · включая Base64",exact:true}).click();
+  await workflowPage.getByText(JSON.stringify(readableArgv,null,2),{exact:true}).waitFor();
+  assert.deepEqual((await call({method:"get_task",taskId:encodedTask.taskId})).task.resolvedCommand.arguments,readableArgv);
+  const eventRequest={method:"request_attention",request:{requestId:"one",idempotencyKey:"ui-attention",taskId:encodedTask.taskId,severity:"warning",message:"Проверьте понятный сценарий ✓"}};
+  await assert.rejects(workflowPage.evaluate((request)=>window.workerBridge(request),eventRequest),/attention acceptance ACK lost/);
+  eventRequest.request.requestId="after-reconnect";
+  const event=(await workflowPage.evaluate((request)=>window.workerBridge(request),eventRequest)).attention;
+  const eventCard=workflowPage.locator(`[data-attention-id="${event.attentionId}"]`);
+  await eventCard.getByText(event.message,{exact:true}).waitFor();
+  assert.equal((await call({method:"list_attention",afterSequence:0,pendingOnly:true})).page.records.filter((r)=>r.message===event.message).length,1);
+  await eventCard.getByRole("button",{name:"Открыть задачу",exact:true}).click();
+  assert.equal((await call({method:"list_attention",afterSequence:0,pendingOnly:true})).page.records.find((r)=>r.attentionId===event.attentionId).acknowledgedAtMs,null);
+  await eventCard.getByRole("button",{name:"Прочитано",exact:true}).click();
+  await workflowPage.getByText(/Test: attention confirmation ACK lost/).waitFor();
+  // Retry the same confirmation after loss; the worker keeps the original acknowledgement time.
+  const acknowledged=(await call({method:"acknowledge_attention",attentionId:event.attentionId})).attention;
+  assert.ok(acknowledged.acknowledgedAtMs !== null);
+  await workflowPage.getByRole("button",{name:"Проверить подтверждение",exact:true}).click();
+  await until(async () => !await workflowPage.getByText(/Test: attention confirmation ACK lost/).isVisible(),"Confirmation retry did not resolve the lost ACK");
+  await workflowPage.reload();
+  await workflowPage.getByLabel("Показать также подтверждённые события",{exact:true}).check();
+  await eventCard.getByText(/Прочитано:/).waitFor();
+  await stopWorker();
+  await workflowPage.getByText("Worker недоступен",{exact:true}).waitFor();
+  await startWorker();
+  await workflowPage.getByText("Worker подключён · linux · ui-test",{exact:true}).waitFor();
+  await eventCard.getByText(/Прочитано:/).waitFor();
+  assert.deepEqual((await call({method:"acknowledge_attention",attentionId:event.attentionId})).attention,acknowledged);
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/refresh/commit/Unicode/mapping, lost import ACK/dedup; independent delivery/command drafts and close/save failures. Workflow: real import/build/start/readiness/log, lost ACK/dedup, controller reconnect preserves app PID, linked build task, restore profile without commands, separate app stop and startup history.");
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell with original argv, task attention links, WebSocket attention ACK loss/dedup, explicit acknowledgement, desktop and worker restart persistence.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

@@ -2,6 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+mod attention;
+pub use attention::*;
+
 mod session;
 pub use session::*;
 mod snapshot;
@@ -259,6 +262,8 @@ pub struct WorkerInfo {
     #[serde(default)]
     pub workflow_features: Vec<String>,
     #[serde(default)]
+    pub attention_available: bool,
+    #[serde(default)]
     pub build: Option<BuildIdentity>,
 }
 
@@ -266,6 +271,19 @@ pub struct WorkerInfo {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
+    RequestAttention {
+        request: AttentionSubmission,
+    },
+    ListAttention {
+        #[serde(rename = "afterSequence")]
+        after_sequence: u64,
+        #[serde(rename = "pendingOnly")]
+        pending_only: bool,
+    },
+    AcknowledgeAttention {
+        #[serde(rename = "attentionId")]
+        attention_id: String,
+    },
     SubmitWorkflow {
         request: Box<WorkflowSubmission>,
     },
@@ -344,6 +362,12 @@ pub enum LocalRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LocalResponse {
+    Attention {
+        attention: AttentionRecord,
+    },
+    AttentionList {
+        page: AttentionPage,
+    },
     Workflow {
         workflow: Box<WorkflowRecord>,
     },

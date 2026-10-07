@@ -32,8 +32,8 @@ impl Store {
         let version: u32 = connection
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
-        if version > 3 {
-            return Err(format!("journal schema {version} is unsupported; expected 3; keep the database and use a compatible worker"));
+        if version > 4 {
+            return Err(format!("journal schema {version} is unsupported; expected 4; keep the database and use a compatible worker"));
         }
         if version == 0 {
             let tables: u32 = connection.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0)).map_err(sql)?;
@@ -85,6 +85,23 @@ impl Store {
                 CREATE TABLE workflows (id TEXT PRIMARY KEY, project TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL, record TEXT NOT NULL, UNIQUE(project,key));
                 CREATE TABLE applications (id TEXT PRIMARY KEY, workflow TEXT NOT NULL REFERENCES workflows(id), task TEXT NOT NULL UNIQUE REFERENCES tasks(id), status TEXT NOT NULL, record TEXT NOT NULL);
                 PRAGMA user_version=3; COMMIT;").map_err(sql)?;
+        }
+        if version <= 3 {
+            if version == 3 {
+                let backup = path.with_file_name(format!(
+                    "journal-v3-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE attention (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, project TEXT NOT NULL, task TEXT NOT NULL REFERENCES tasks(id), severity TEXT NOT NULL, message TEXT NOT NULL, origin TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, created INTEGER NOT NULL, acknowledged INTEGER, UNIQUE(origin,key));
+                CREATE INDEX attention_pending ON attention(acknowledged,sequence);
+                PRAGMA user_version=4; COMMIT;").map_err(sql)?;
         }
         Ok(Self { connection })
     }
@@ -230,7 +247,18 @@ impl Store {
         task.finished_at_ms = Some(now_ms());
         task.reason = Some(reason.into());
         Self::event(&mut task, reason);
-        self.save(&task)?;
+        let transaction = self.connection.transaction().map_err(sql)?;
+        transaction
+            .execute(
+                "UPDATE tasks SET record=?2 WHERE id=?1",
+                params![
+                    task.task_id,
+                    serde_json::to_string(&task).map_err(|e| e.to_string())?
+                ],
+            )
+            .map_err(sql)?;
+        crate::attention::task_outcome(&transaction, &task)?;
+        transaction.commit().map_err(sql)?;
         Ok(task)
     }
     pub fn cancel(&mut self, id: &str) -> Result<TaskRecord> {

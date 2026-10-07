@@ -13,6 +13,7 @@
     "build:ui": "vite build",
     "typecheck": "tsc -p ui/tsconfig.json --noEmit",
     "test:ui": "node scripts/validate-ui.mjs",
+    "test:command-presentation": "node scripts/test-command-presentation.mjs",
     "generate:contracts": "cargo run --locked -p winbridge-protocol --example export-types --features typescript",
     "check:contracts": "cargo run --locked -p winbridge-protocol --example export-types --features typescript -- --check",
     "check:scaffold": "node scripts/check-scaffold.mjs",

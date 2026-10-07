@@ -1,0 +1,72 @@
+import { useEffect, useState } from "react";
+import { Alert, Badge, Button, Card, Checkbox, Group, ScrollArea, Stack, Text, Title } from "@mantine/core";
+import type { AttentionPage, WorkerInfo } from "../../runtime/contracts";
+import { expectResult, workerCall } from "../../runtime/adapter";
+
+const severity = {
+  info: { label: "Сообщение", color: "blue" },
+  warning: { label: "Требует проверки", color: "yellow" },
+  error: { label: "Ошибка", color: "red" },
+};
+
+export function AttentionInbox({ info, connected, onTask }: {
+  info: WorkerInfo; connected: boolean; onTask: (id: string) => void;
+}) {
+  const [page, setPage] = useState<AttentionPage | null>(null);
+  const [after, setAfter] = useState(0);
+  const [history, setHistory] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ackError, setAckError] = useState<{ id: string; message: string } | null>(null);
+  const [acknowledging, setAcknowledging] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const scope = `${info.instanceId}:${info.nodeId}`;
+  useEffect(() => { setPage(null); setAfter(0); setError(null); setAckError(null); }, [scope, info.generation]);
+  useEffect(() => {
+    if (!info.attentionAvailable || !connected) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      try {
+        const result = expectResult(await workerCall({ method: "list_attention", afterSequence: after, pendingOnly: !history }), "attention_list");
+        if (!disposed) { setPage(result.page); setError(null); }
+      } catch (error) { if (!disposed) setError(String(error)); }
+      if (!disposed) timer = setTimeout(() => void poll(), 1500);
+    }
+    void poll();
+    return () => { disposed = true; clearTimeout(timer); };
+  }, [scope, info.generation, info.attentionAvailable, connected, after, history, revision]);
+  async function acknowledge(id: string) {
+    setAcknowledging(id); setAckError(null);
+    try {
+      expectResult(await workerCall({ method: "acknowledge_attention", attentionId: id }), "attention");
+      setRevision((value) => value + 1);
+    } catch (error) { setAckError({ id, message: `Ответ на подтверждение не получен: ${String(error)}. Повтор использует то же событие и сохраняет время первого подтверждения.` }); }
+    finally { setAcknowledging(null); }
+  }
+  return <Card withBorder><Stack>
+    <Group justify="space-between"><Title order={3}>Требует внимания</Title>
+      <Badge color={page?.pendingCount ? "orange" : "gray"}>{!info.attentionAvailable ? "Требуется обновление" : page ? `${page.pendingCount} неподтверждённых` : "Читается журнал"}</Badge>
+    </Group>
+    <Text size="sm">События хранятся у worker при закрытом окне. Открытие задачи не подтверждает просмотр; нажмите «Прочитано» отдельно.</Text>
+    {!info.attentionAvailable ? <Alert color="yellow">Журнал внимания требует следующего общего обновления worker и desktop.</Alert> : <>
+      {(!connected || error) && <Alert color="yellow" title="Нет свежего подтверждения журнала внимания">{error ?? "Worker недоступен; показаны последние известные события."}</Alert>}
+      {ackError && <Alert color="yellow">{ackError.message}<Button mt="sm" variant="light" loading={acknowledging === ackError.id} disabled={!connected || acknowledging !== null} onClick={() => void acknowledge(ackError.id)}>Проверить подтверждение</Button></Alert>}
+      <Checkbox label="Показать также подтверждённые события" checked={history} onChange={(event) => { setHistory(event.currentTarget.checked); setAfter(0); setPage(null); }} />
+      <ScrollArea.Autosize mah={360}><Stack gap="sm">
+        {page?.records.map((record) => <Card key={record.attentionId} withBorder data-attention-id={record.attentionId}>
+          <Group><Badge color={severity[record.severity].color}>{severity[record.severity].label}</Badge><Text fw={600}>{record.projectId}</Text></Group>
+          <Text mt="xs">{record.message}</Text>
+          <Text size="xs" c="dimmed">{new Date(record.createdAtMs).toLocaleString()} · {record.origin === "task_outcome" ? "Результат задачи" : "Запрос агента"} · Task ID: {record.taskId}</Text>
+          <Group mt="sm"><Button size="xs" variant="light" onClick={() => onTask(record.taskId)}>Открыть задачу</Button>
+            {record.acknowledgedAtMs === null ? <Button size="xs" loading={acknowledging === record.attentionId} disabled={!connected || acknowledging !== null} onClick={() => void acknowledge(record.attentionId)}>Прочитано</Button>
+              : <Text size="xs">Прочитано: {new Date(record.acknowledgedAtMs).toLocaleString()}</Text>}
+          </Group>
+        </Card>)}
+      </Stack></ScrollArea.Autosize>
+      {page && !page.records.length && <Text c="dimmed">{after ? "На этой странице больше нет событий. Вернитесь к первым событиям." : history ? "Журнал внимания пока пуст." : "Нет событий, ожидающих подтверждения."}</Text>}
+      <Group><Button variant="subtle" disabled={after === 0} onClick={() => { setAfter(0); setPage(null); }}>Первые события</Button>
+        <Button variant="light" disabled={!page?.hasMore || !connected} onClick={() => { if (page) { setAfter(page.nextSequence); setPage(null); } }}>Следующие 50 событий</Button>
+      </Group>
+    </>}
+  </Stack></Card>;
+}

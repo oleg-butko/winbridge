@@ -58,7 +58,7 @@
 
 ## Этап 4 — первый полный цикл разработки
 
-Статус 2026-10-06: этап завершён. Автоматический Windows прогон `20261006-163840-a97da6e3` подтвердил 41 native test, native desktop check и полный import/build/artifact/start/IPC/log/dedup/stop на отдельном Netwatch clone. [Доказательства](windows-workflow-gate-2026-10-06.md), [изоляция](netwatch-validation.md). Editable profiles/drafts, output filters и artifact UI проверены browser integration; подробные ручные Windows UI наблюдения отложены пользователем. Рабочий установленный runtime 652635b остаётся подключённым; новые функции устанавливаются одним общим update из проверенных исходников.
+Статус 2026-10-06: этап завершён. Автоматический Windows прогон `20261006-163840-a97da6e3` подтвердил 41 native test, native desktop check и полный import/build/artifact/start/IPC/log/dedup/stop на отдельном Netwatch clone. [Доказательства](windows-workflow-gate-2026-10-06.md), [изоляция](netwatch-validation.md). Editable profiles/drafts, output filters и artifact UI проверены browser integration; подробные ручные Windows UI наблюдения отложены пользователем. Пользователь обновил runtime до 523fc5b; source commit и features подтверждены read-only запросом 2026-10-07.
 
 - [x] Workflow fixture: выбрать SHA → publish/import → build → start → stdout readiness → log tail.
 - [x] Принятый профиль и step IDs в journal; ошибка сборки блокирует запуск следующего шага, dedup не создаёт повторный процесс.
@@ -75,6 +75,11 @@
 
 План и порядок реализации согласованы 2026-10-07: [объяснение этапа 5](stage5-plan.md).
 Первый сценарий — читаемый PowerShell и долговечный список внимания с acknowledgement.
+
+Первый сценарий реализован: [журнал внимания и границы](attention.md). Task outcomes,
+dedup и acknowledgements сохраняются у worker; UI раскрывает EncodedCommand и
+предлагает task links/explicit acknowledgement. Tray/popup/sound, workflow/app attention,
+настройки, диагностика и MCP ещё не реализованы; этап не закрыт.
 
 - [ ] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [ ] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.

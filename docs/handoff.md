@@ -15,6 +15,16 @@ history/export и MCP. План фиксируется до реализации
 При вопросах или непредвиденном поведении остановиться и уточнить; новые мелкие ручные
 Windows gates не назначать.
 
+Первый сценарий этапа 5 реализован: decoded PowerShell с исходными argv отдельно,
+worker attention journal (schema 4, consistent v3 migration backup), task outcome
+attention и explicit request/dedup/acknowledgement, paged list, capability guards,
+CLI и UI task links/explicit confirmation. [Контракт и границы](attention.md).
+71 workspace Rust tests, Clippy -D warnings, Windows all-targets compile,
+TypeScript/UI build, standalone desktop check и browser integration прошли, включая
+generation cursor reset; настоящий Windows attention-only прогон — следующая проверка.
+Stage 5 не закрыт: tray/popup/sound/settings, workflow/app attention, history/export/MCP
+ещё предстоят. Installed runtime остаётся `523fc5b`, его journal не менялся.
+
 ## Сначала прочитать
 
 Корневой AGENTS.md → README → architecture → roadmap → ux → shared-folders → ADR. Затем `git status --short` и текущую таблицу готовности. Первоначальный proposal в context сохранён для истории; его TLS и общий workspace с Netwatch отменены.
@@ -39,8 +49,9 @@ Windows gates не назначать.
 | SQLite/process tree | Local WAL/FULL, durable acceptance, dedup, queue/cancel, launch intent/recovery, independent pipe drain/quota. Реальные Windows tree timeout/cancel/crash cleanup и сохранённый indeterminate без retry подтверждены. |
 | WebSocket | Versioned handshake/RPC/heartbeat/reconnect/watch реализованы; 14 session groups и UI integration проходят в Debian. Шесть групп Windows runtime gate прошли, включая прежний task/PID/generation после offline. Подключение и все три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. |
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
-| Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite schema 3 + consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
-| Attention/Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Изолированный Netwatch clone/probe согласован пользователем; actual Unix cycle прошёл. Attention остаётся этапом 5. Этап 4 завершён по общему Windows Netwatch прогону; native визуальная проверка отложена. |
+| Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite workflows/applications (schema 3), текущая schema 4 с attention; consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
+| Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Этап 4 завершён по общему Windows Netwatch прогону; native визуальная проверка отложена. |
+| Attention | Первый сценарий этапа 5: durable task outcome/request attention, dedup/acknowledgement, schema 4 + consistent v3 backup, capability guards, CLI и paged UI/task links. Native tray/popup/sound/settings и workflow/app attention ещё предстоят. [Границы](attention.md). |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 
 **Этап 1 завершён 2026-10-05.** [Доказательства](windows-gate-2026-10-05.md): прогон `20261005-161827-c8deef84`, все 10 checks passed, ipcAclVerified true; пять native UI шагов подтверждены пользователем, включая отдельно уточнённый stop/restart worker. JSON uiVerified остаётся false, потому что ручные шаги не оцениваются скриптом; shared report не менялся. Worker --describe возвращает scaffold false и task_submit/task_cancel, в коммите этапа 1 controller оставался scaffold. Теперь controller реализует task_submit/task_cancel через worker; readiness этапа 2 требует отдельного Windows gate.

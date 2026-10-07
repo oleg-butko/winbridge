@@ -17,6 +17,8 @@ SHA-256 исходного ZIP, из которого распакованы и�
 проверенной версией. Агент передаёт его автоматически; вручную можно взять из .zip.sha256.
 .PARAMETER Help
 Показывает назначение сценария и команду обновления, без сборки или записи файлов.
+.PARAMETER AttentionOnly
+Запускает только новые stage-5 attention tests; завершённый Windows workflow gate не повторяется.
 .EXAMPLE
 .\scripts\test-windows-workflow.ps1 -Help
 .NOTES
@@ -27,6 +29,7 @@ param(
     [string]$ReportDirectory = '',
     [string]$SourceArchiveSha256 = '',
     [string]$NetwatchProfile = '',
+    [switch]$AttentionOnly,
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -82,9 +85,13 @@ try {
     $groups = @(
         @{ name = 'core-and-log-reader'; arguments = @('test', '-p', 'winbridge-core', '-p', 'winbridge-log-reader', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'readiness-ipc'; arguments = @('test', '-p', 'winbridge-transport', '--lib', 'readiness', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
-        @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
+        @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
+    if ($AttentionOnly) {
+        if ($NetwatchProfile) { throw 'AttentionOnly cannot be combined with a Netwatch profile' }
+        $groups = @(@{ name = 'worker-attention'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') })
+    }
     foreach ($group in $groups) {
         $log = Join-Path $ReportDirectory ($group.name + '.log')
         $commandArgs = $group.arguments

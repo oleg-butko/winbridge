@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AttentionInbox } from "../attention/AttentionInbox";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { Alert, Button, Card, Code, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
@@ -210,6 +211,7 @@ export function NativeWorkbench() {
         {!controllerFresh && <Text size="sm">Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет.</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
+    {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => { const detail = document.getElementById("native-task-detail"); detail?.scrollIntoView({ behavior: "smooth" }); detail?.focus({ preventScroll: true }); }); }} />}
     {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
     {info?.workflowAvailable && <WorkflowWorkbench info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card withBorder><Stack>
@@ -240,6 +242,6 @@ export function NativeWorkbench() {
       <Button onClick={() => void submit()} loading={submitting} disabled={!connected || pending !== null || !project || !formReady || closing || (!recipeId && !project.allowDirectCommands)}>Передать задачу worker</Button>
     </Stack></Card>
     <Select label="Последние 10 задач" value={selectedId} onChange={setSelectedId} searchable data={tasks.map((t) => ({ value: t.taskId, label: `${t.projectId} · ${statuses[t.status].label} · ${t.taskId}` }))} />
-    {selectedId ? <div id="native-task-detail"><TaskSession key={selectedId} id={selectedId} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
+    {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
   </Stack>;
 }

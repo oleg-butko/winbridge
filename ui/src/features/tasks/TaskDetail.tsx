@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Alert, Badge, Button, Card, Code, Grid, Group, Stack, Tabs, Text, Timeline, Title } from "@mantine/core";
+import { Accordion, Alert, Badge, Button, Card, Code, Grid, Group, Stack, Tabs, Text, Timeline, Title } from "@mantine/core";
 import type { OutputChunk, TaskRecord, TaskStatus } from "../../runtime/contracts";
 import { decodeOutput } from "../../runtime/adapter";
 import { OutputView } from "./OutputView";
+import { powerShellScript } from "./commandPresentation";
 
 export const statuses: Record<TaskStatus, { label: string; color: string }> = {
   queued: { label: "В очереди", color: "gray" }, running: { label: "Выполняется", color: "blue" },
@@ -13,6 +14,7 @@ export const statuses: Record<TaskStatus, { label: string; color: string }> = {
 export function TaskDetail({ task, chunks }: { task: TaskRecord; chunks: OutputChunk[] }) {
   const [copyState, setCopyState] = useState<string | null>(null);
   const status = statuses[task.status];
+  const shell = useMemo(() => powerShellScript(task.resolvedCommand), [task.resolvedCommand]);
   const loadedBytes = chunks.reduce((n, chunk) => n + chunk.bytes.length, 0);
   const finalOutput = !["queued", "running"].includes(task.status) && loadedBytes === task.outputBytes;
   const output = useMemo(() => decodeOutput(chunks, finalOutput), [chunks, finalOutput]);
@@ -42,7 +44,18 @@ export function TaskDetail({ task, chunks }: { task: TaskRecord; chunks: OutputC
       <Grid.Col span={{ base: 12, md: 8 }}><Card withBorder><Stack gap="sm">
         <Group justify="space-between"><Text fw={600}>Фактические параметры команды</Text><Button size="xs" variant="light" onClick={() => void copy()}>Копировать параметры</Button></Group>
         <Text size="sm">Executable</Text><Code block>{task.resolvedCommand.executable}</Code>
-        <Text size="sm">Аргументы — отдельные значения</Text><Code block>{JSON.stringify(task.resolvedCommand.arguments)}</Code>
+        {shell && ("script" in shell ? <>
+          <Text fw={600}>Сценарий PowerShell · декодирован из EncodedCommand</Text>
+          <Text size="sm">В параметрах запуска сценарий передаётся PowerShell в Base64 (UTF-16LE), чтобы сохранить Unicode, кавычки и переносы строк. Ниже показан его текст; просмотр не выполняет команду.</Text>
+          <Text size="sm">Параметры оболочки · текст сценария раскрыт ниже</Text><Code block>{JSON.stringify(task.resolvedCommand.arguments.map((arg, index) => index === shell.argumentIndex ? "[сценарий ниже]" : arg))}</Code>
+          <Code block data-testid="powershell-script" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", maxHeight: 480, overflow: "auto" }}>{shell.script}</Code>
+        </> : <Alert color="yellow" title="Сценарий PowerShell не декодирован">{shell.error}</Alert>)}
+        {shell ? <Accordion variant="contained"><Accordion.Item value="raw-argv">
+          <Accordion.Control>Точные аргументы запуска · включая Base64</Accordion.Control>
+          <Accordion.Panel><Code block style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{JSON.stringify(task.resolvedCommand.arguments, null, 2)}</Code>
+            <Text size="xs">«Копировать параметры» копирует исходные executable, аргументы и cwd из журнала, включая EncodedCommand.</Text>
+          </Accordion.Panel>
+        </Accordion.Item></Accordion> : <><Text size="sm">Аргументы — отдельные значения</Text><Code block>{JSON.stringify(task.resolvedCommand.arguments)}</Code></>}
         <Text size="sm">Рабочая папка</Text><Code block>{task.resolvedCommand.workingDirectory}</Code>
         {copyState && <Text role="status" size="xs">{copyState}</Text>}
       </Stack></Card></Grid.Col>

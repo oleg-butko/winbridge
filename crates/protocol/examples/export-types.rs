@@ -8,6 +8,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        AttentionSeverity::decl(&config),
+        AttentionSubmission::decl(&config),
+        AttentionRecord::decl(&config),
+        AttentionPage::decl(&config),
         SnapshotSource::decl(&config),
         SnapshotFile::decl(&config),
         SnapshotManifest::decl(&config),

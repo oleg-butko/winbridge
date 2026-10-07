@@ -1,5 +1,6 @@
 //! Windows execution authority. The Unix runner is a development/test adapter.
 mod artifacts;
+mod attention;
 mod imports;
 mod network;
 pub mod store;
@@ -134,6 +135,23 @@ impl Worker {
     }
     fn dispatch(&self, request: LocalRequest) -> Result<LocalResponse> {
         match request {
+            LocalRequest::RequestAttention { request } => {
+                if self.stop.load(Ordering::Acquire) {
+                    return Err("Worker stopping; attention not accepted".into());
+                }
+                Ok(LocalResponse::Attention {
+                    attention: self.store()?.request_attention(&request)?,
+                })
+            }
+            LocalRequest::ListAttention {
+                after_sequence,
+                pending_only,
+            } => Ok(LocalResponse::AttentionList {
+                page: self.store()?.list_attention(after_sequence, pending_only)?,
+            }),
+            LocalRequest::AcknowledgeAttention { attention_id } => Ok(LocalResponse::Attention {
+                attention: self.store()?.acknowledge_attention(&attention_id)?,
+            }),
             LocalRequest::SubmitWorkflow { request } => {
                 if self.stop.load(Ordering::Acquire) {
                     return Err("Worker stopping; workflow not accepted".into());
@@ -214,6 +232,7 @@ impl Worker {
                 info: Box::new(WorkerInfo {
                     build: Some(winbridge_protocol::build_identity()),
                     workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
+                    attention_available: true,
                     protocol_version: PROTOCOL_VERSION,
                     instance_id: self.config.instance_id.clone(),
                     node_id: self.config.node_id.clone(),

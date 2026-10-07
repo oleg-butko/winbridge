@@ -1,5 +1,6 @@
 //! Project/config policy and the controller scaffold entry point. No OS execution here.
 
+pub mod attention;
 pub mod config;
 pub mod controller_config;
 pub mod desktop_state;
