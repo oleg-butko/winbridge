@@ -23,9 +23,11 @@ export function powerShellScript(command: ResolvedCommand): PowerShellScript | n
     if (encoded.length > 262144) return { error: "Сценарий слишком большой для декодирования в карточке (лимит 256 KiB Base64). Исходные аргументы доступны ниже." };
     try {
       const compact = encoded.replace(/[\t\n\r ]/g, "");
-      // Reject forgiving browser decoding (bad padding/trailing bits) rather than invent text.
+      // Match PowerShell/.NET padding requirements; atob alone accepts missing padding.
+      // .NET accepts nonzero unused trailing bits, so re-encoding is not a validity check.
+      if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(compact)) throw new Error("invalid base64");
       const binary = atob(compact);
-      if (btoa(binary) !== compact || binary.length % 2 !== 0) throw new Error("invalid encoding");
+      if (binary.length % 2 !== 0) throw new Error("invalid encoding");
       const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
       const script = new TextDecoder("utf-16le", { fatal: true, ignoreBOM: true }).decode(bytes);
       return { script, argumentIndex: i + 1 };

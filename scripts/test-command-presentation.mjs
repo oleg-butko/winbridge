@@ -21,6 +21,7 @@ for (const args of [["-File", "script.ps1", "-EncodedCommand", encoded], ["-Comm
 assert.equal(powerShellScript(command("other.exe", ["-EncodedCommand", encoded])), null);
 assert.equal(powerShellScript(command("pwsh", ["-EncodedCommand", encoded.slice(0, 16) + "\r\n " + encoded.slice(16)])).script, script);
 assert.equal(powerShellScript(command("pwsh", ["-EncodedCommand", ""])).script, "");
+assert.equal(powerShellScript(command("pwsh", ["-EncodedCommand", "QQB="])).script, "A", "PowerShell accepts nonzero unused Base64 bits");
 for (const bad of ["not-base64!", "AA==", "ANg=", "AA", "A".repeat(262145)]) {
   assert.ok(powerShellScript(command("pwsh", ["-EncodedCommand", bad])).error);
 }

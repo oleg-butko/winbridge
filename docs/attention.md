@@ -107,4 +107,6 @@ python3 scripts/validate-workflow-native.py \
 
 Сценарий запускается агентом через текущий worker, собирает новый тестовый source
 offline и публикует checksum-verified report в shared. Он не устанавливает runtime.
-Факт настоящего Windows прогона добавляется в handoff после получения отчёта.
+[Настоящий Windows прогон](windows-attention-gate-2026-10-07.md) выполнен: семь новых
+native tests прошли, отчёт прочитан из shared и checksums сверены. Установленный
+worker/desktop остаётся `523fc5b`, новые функции попадут в общее обновление этапа 5.

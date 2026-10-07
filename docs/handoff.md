@@ -21,9 +21,19 @@ attention и explicit request/dedup/acknowledgement, paged list, capability guar
 CLI и UI task links/explicit confirmation. [Контракт и границы](attention.md).
 71 workspace Rust tests, Clippy -D warnings, Windows all-targets compile,
 TypeScript/UI build, standalone desktop check и browser integration прошли, включая
-generation cursor reset; настоящий Windows attention-only прогон — следующая проверка.
+generation cursor reset. [Windows attention-only прогон](windows-attention-gate-2026-10-07.md)
+успешен: 7 native tests, task `719111f4-cdfd-4ac4-8926-f6bc548eeed2`, report
+`workflow-validation/20261007-044046-eebbd202`, SHA-256
+`006784bf39af25640bed803eee08d27668ee2855427e0d6df758605e7c000f3f`.
+Source `6b855f6` clean, ZIP SHA-256
+`27e7510dbba8247d076fdc5bab4b2c7eda2eb3f7e3ecb197eeddcd8265bd800b`.
+Final UI decoder принимает то же Base64 padding/trailing-bit поведение, что .NET;
+Rust код после native proof не менялся. Основной worker здоров, generation/session прежние.
 Stage 5 не закрыт: tray/popup/sound/settings, workflow/app attention, history/export/MCP
-ещё предстоят. Installed runtime остаётся `523fc5b`, его journal не менялся.
+ещё предстоят. Installed runtime остаётся `523fc5b`; первый срез не требует нового
+ручного gate. Следующий рабочий сценарий — native tray/popup/sound/preferences поверх
+durable attention, затем workflow/app outcome signals и диагностика/MCP. Не просить
+обновлять runtime по каждой небольшой правке; готовые изменения объединить.
 
 ## Сначала прочитать
 

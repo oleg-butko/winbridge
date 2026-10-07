@@ -80,6 +80,8 @@
 dedup и acknowledgements сохраняются у worker; UI раскрывает EncodedCommand и
 предлагает task links/explicit acknowledgement. Tray/popup/sound, workflow/app attention,
 настройки, диагностика и MCP ещё не реализованы; этап не закрыт.
+[Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
+прошли через установленный worker без повторения завершённого workflow gate.
 
 - [ ] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [ ] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
