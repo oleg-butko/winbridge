@@ -19,6 +19,7 @@ def git(*args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-directory', type=Path, required=True)
+    parser.add_argument('--include-built-ui', action='store_true', help='Include the locally built web-dist for isolated native desktop validation without Windows npm installation')
     args = parser.parse_args()
     commit = git('rev-parse', 'HEAD').decode().strip()
     dirty = bool(git('status', '--porcelain'))
@@ -37,8 +38,21 @@ def main():
             raise ValueError(f'Source must be a regular file: {name}')
         data = source.read_bytes()
         files.append((name, data))
+    if args.include_built_ui:
+        frontend = ROOT / 'web-dist'
+        if not (frontend / 'index.html').is_file():
+            raise ValueError('Build the UI with npm run build:ui before --include-built-ui')
+        for source in sorted(frontend.rglob('*')):
+            if source.is_symlink():
+                raise ValueError('Built frontend contains a symlink')
+            if source.is_file():
+                data = source.read_bytes()
+                if len(data) > 8 * 1024 * 1024:
+                    raise ValueError('Built frontend file exceeds 8 MiB')
+                files.append((str(source.relative_to(ROOT)), data))
     created = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     manifest = {'schemaVersion': 1, 'sourceCommit': commit, 'dirty': dirty, 'createdAt': created,
+                'includesBuiltUi': args.include_built_ui,
                 'files': [{'path': name, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()} for name, data in files]}
     label = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime()) + '-' + commit[:7] + '-' + uuid.uuid4().hex[:8]
     args.output_directory.mkdir(parents=True, exist_ok=True)

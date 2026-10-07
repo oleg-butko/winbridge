@@ -4,6 +4,7 @@ pub mod attention;
 pub mod config;
 pub mod controller_config;
 pub mod desktop_state;
+pub mod notifications;
 pub mod snapshot;
 pub mod workflow;
 

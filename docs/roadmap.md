@@ -78,14 +78,15 @@
 
 Первый сценарий реализован: [журнал внимания и границы](attention.md). Task outcomes,
 dedup и acknowledgements сохраняются у worker; UI раскрывает EncodedCommand и
-предлагает task links/explicit acknowledgement. Tray/popup/sound, workflow/app attention,
-настройки, диагностика и MCP ещё не реализованы; этап не закрыт.
+предлагает task links/explicit acknowledgement. [Tray/popup/sound/preferences](companion.md)
+реализованы в исходниках; автоматический native gate ещё не завершён.
+Workflow/app attention, диагностика и MCP ещё не реализованы; этап не закрыт.
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
 [Ревью](review-attention-2026-10-07.md) исправило fresh running после failed result commit.
-Следующий сценарий — [tray/popup/sound/preferences](tray-plan.md); план фиксируется
-до реализации по инструкции пользователя.
+Текущий сценарий — [tray/popup/sound/preferences](tray-plan.md); план зафиксирован
+коммитом `bbba964` до реализации по инструкции пользователя.
 
 - [ ] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [ ] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.

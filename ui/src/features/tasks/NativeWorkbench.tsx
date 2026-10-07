@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { AttentionInbox } from "../attention/AttentionInbox";
+import { CompanionPanel } from "../attention/CompanionPanel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { Alert, Button, Card, Code, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { expectResult, workerCall } from "../../runtime/adapter";
 import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, saveDeliveryDraft, saveWorkflowProfile } from "../../runtime/commandDrafts";
 import type { CommandForm } from "../../runtime/commandDrafts";
-import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo } from "../../runtime/contracts";
+import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences } from "../../runtime/contracts";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
@@ -41,7 +42,7 @@ function TaskSession({ id }: { id: string }) {
     catch (error) { setError(String(error)); }
     finally { setCancelling(false); }
   }
-  return <Stack>
+  return <Stack data-confirmed-task-id={task?.taskId}>
     {error && <Alert color="yellow" title="Нет свежего подтверждения worker">{error}<Text mt="xs">Последнее подтверждение: {confirmedAt === null ? "ещё не получено" : new Date(confirmedAt).toLocaleString()}. Последний известный статус сохранён; повторный запуск не выполняется.</Text></Alert>}
     {task ? <>
       <Group justify="space-between"><Text size="xs" c="dimmed">Последнее подтверждение: {confirmedAt && new Date(confirmedAt).toLocaleTimeString()}</Text>
@@ -73,6 +74,16 @@ export function NativeWorkbench() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const [closeReady, setCloseReady] = useState(false);
+  const closingRef = useRef(false);
+  const closeQuit = useRef(false);
+  const closeHandler = useRef<(quit: boolean) => Promise<void>>(async () => {});
+  const [companion, setCompanion] = useState<CompanionStatus | null>(null);
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+  const [preferencesError, setPreferencesError] = useState<string | null>(null);
+  const [preferencesStatus, setPreferencesStatus] = useState("Настройки ещё не загружены");
+  const preferencesSequence = useRef(0);
+  const [companionError, setCompanionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -83,7 +94,7 @@ export function NativeWorkbench() {
   useEffect(() => {
     let disposed = false;
     void loadCommandDrafts().then((state) => {
-      if (!disposed) { setDrafts(state.drafts); setDeliveryDrafts(state.deliveryDrafts); setWorkflowProfiles(state.workflowProfiles ?? []); }
+      if (!disposed) { setDrafts(state.drafts); setDeliveryDrafts(state.deliveryDrafts); setWorkflowProfiles(state.workflowProfiles ?? []); setPreferences(state.notificationPreferences); setPreferencesStatus("Настройки загружены из локального файла"); }
     }).catch((error) => {
       if (!disposed) { setDrafts([]); setDeliveryDrafts([]); setSaveError(String(error)); }
     });
@@ -94,13 +105,47 @@ export function NativeWorkbench() {
     let unlisten: (() => void) | undefined;
     void getCurrentWindow().onCloseRequested(async (event) => {
       event.preventDefault();
-      setClosing(true);
-      try { await Promise.all(scopedSaves.current.values()); await getCurrentWindow().destroy(); }
-      catch (error) { setClosing(false); setCloseError(String(error)); }
-    }).then((stop) => { if (disposed) stop(); else unlisten = stop; })
+      await closeHandler.current(false);
+    }).then((stop) => { if (disposed) stop(); else { unlisten = stop; setCloseReady(true); } })
       .catch((error) => { if (!disposed) setSaveError(String(error)); });
     return () => { disposed = true; unlisten?.(); };
   }, []);
+  async function requestClose(quit: boolean) {
+    if (closingRef.current) return;
+    closingRef.current = true; closeQuit.current = quit; setClosing(true);
+    try {
+      await Promise.all(scopedSaves.current.values());
+      await invoke("companion_close", { quit });
+      setCloseError(null);
+    } catch (error) { setCloseError(String(error)); }
+    finally { closingRef.current = false; setClosing(false); }
+  }
+  closeHandler.current = requestClose;
+  useEffect(() => {
+    let disposed = false; let timer: ReturnType<typeof setTimeout>;
+    let openSequence = 0; let quitSequence = 0;
+    async function poll() {
+      try {
+        const status = await invoke<CompanionStatus>("companion_status");
+        if (disposed) return;
+        setCompanion(status); setCompanionError(null);
+        if (status.openTaskSequence > openSequence && status.openTaskId) {
+          openSequence = status.openTaskSequence; setSelectedId(status.openTaskId);
+          requestAnimationFrame(() => { const detail = document.getElementById("native-task-detail"); detail?.scrollIntoView(); detail?.focus({preventScroll:true}); });
+        }
+        if (status.quitRequestSequence > quitSequence) { quitSequence = status.quitRequestSequence; await closeHandler.current(true); }
+      } catch (error) { if (!disposed) setCompanionError(String(error)); }
+      if (!disposed) timer = setTimeout(() => void poll(), 750);
+    }
+    void poll(); return () => { disposed = true; clearTimeout(timer); };
+  }, []);
+  function persistPreferences(next: NotificationPreferences) {
+    setPreferences(next); setPreferencesError(null); setCloseError(null);
+    const sequence = ++preferencesSequence.current; setPreferencesStatus("Сохранение настроек…");
+    const pendingSave = saveQueue.current.catch(() => {}).then(() => invoke<void>("save_notification_preferences", {preferences:next}));
+    saveQueue.current = pendingSave; scopedSaves.current.set("notifications", pendingSave);
+    void pendingSave.then(() => { if (sequence === preferencesSequence.current) setPreferencesStatus("Настройки сохранены"); }).catch((error) => { if (sequence === preferencesSequence.current) { setPreferencesError(String(error)); setPreferencesStatus("Настройки не сохранены"); } });
+  }
   useEffect(() => {
     let disposed = false; let timer: ReturnType<typeof setTimeout>;
     async function poll() {
@@ -196,7 +241,7 @@ export function NativeWorkbench() {
         snapshotId: form.snapshotId, command: recipeId ? { kind: "recipe", recipeId, arguments: [] } : { kind: "direct", executable, arguments: argumentsList, workingDirectory: cwd } });
     } catch (error) { setError(String(error)); }
   }
-  return <Stack gap="lg">
+  return <Stack gap="lg" data-close-ready={closeReady}>
     <Alert color={connected ? "teal" : "yellow"} title={connected ? `Worker подключён · ${info?.platform} · ${info?.instanceId}` : "Worker недоступен"}>
       {connected ? "Данные поступают из локального журнала worker. Закрытие окна не отменяет принятую задачу." : connectionError ?? "Ожидается соединение с локальным worker."}
       {info && <Text size="xs" mt="xs">{info.runtimeValidation}</Text>}
@@ -213,6 +258,7 @@ export function NativeWorkbench() {
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => { const detail = document.getElementById("native-task-detail"); detail?.scrollIntoView({ behavior: "smooth" }); detail?.focus({ preventScroll: true }); }); }} />}
+    <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} />
     {info?.journalRecoveryRequired && <Alert color="red" title="Результат задачи не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
     {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
     {info?.workflowAvailable && <WorkflowWorkbench info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
@@ -233,8 +279,8 @@ export function NativeWorkbench() {
       <NumberInput label="Timeout, секунд" value={timeout} onChange={(value) => updateForm({ timeoutSeconds: String(value) })} min={0.1} max={86400} disabled={pending !== null || !formReady || closing} />
       <Text size="xs" c="dimmed">{saveStatus}. Восстановление формы не запускает команду.</Text>
       {saveError && <Alert color="yellow" title="Не удалось сохранить поля команды">{saveError}</Alert>}
-      {closeError && <Alert color="yellow" title="Окно осталось открытым: поля не сохранены">{closeError}
-        <Button mt="sm" variant="light" onClick={() => { void getCurrentWindow().destroy().catch((error) => setCloseError(String(error))); }}>Закрыть без сохранения</Button>
+      {closeError && <Alert color="yellow" title="Окно осталось открытым: закрытие не подтверждено">{closeError}
+        <Button mt="sm" variant="light" onClick={() => { void invoke("companion_close", {quit:closeQuit.current}).catch((error) => setCloseError(String(error))); }}>Закрыть без сохранения</Button>
       </Alert>}
       {error && connected && <Alert color="red" title="Запрос не завершён">{error}</Alert>}
       {pending && !submitting && <Alert color="yellow" title="Приём задачи не подтверждён">

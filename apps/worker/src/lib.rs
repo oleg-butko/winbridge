@@ -243,33 +243,43 @@ impl Worker {
                     )?,
                 })
             }
-            LocalRequest::Info => Ok(LocalResponse::Info {
-                info: Box::new(WorkerInfo {
-                    build: Some(winbridge_protocol::build_identity()),
-                    workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
-                    attention_available: true,
-                    journal_recovery_required: self.journal_recovery_required()?,
-                    protocol_version: PROTOCOL_VERSION,
-                    instance_id: self.config.instance_id.clone(),
-                    node_id: self.config.node_id.clone(),
-                    generation: self.generation.clone(),
-                    platform: std::env::consts::OS.into(),
-                    runtime_validation: if cfg!(windows) {
-                        "Локальное выполнение, отмена и восстановление проверены на Windows"
-                    } else {
-                        "Локальное выполнение через Unix adapter разработки"
-                    }
-                    .into(),
-                    projects: self.config.public_projects(),
-                    snapshot_import_available: self.config.delivery.is_some(),
-                    workflow_available: self.config.delivery.is_some(),
-                    controller_connection: self
-                        .controller_connection
-                        .lock()
-                        .map_err(|_| "connection state lock poisoned")?
-                        .clone(),
-                }),
-            }),
+            LocalRequest::Info => {
+                let store = self.store()?;
+                let recovery = self.journal_recovery_required()?;
+                let active_task_count = if recovery.is_some() {
+                    None
+                } else {
+                    Some(store.active_task_count()?)
+                };
+                Ok(LocalResponse::Info {
+                    info: Box::new(WorkerInfo {
+                        build: Some(winbridge_protocol::build_identity()),
+                        workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
+                        attention_available: true,
+                        journal_recovery_required: recovery,
+                        active_task_count,
+                        protocol_version: PROTOCOL_VERSION,
+                        instance_id: self.config.instance_id.clone(),
+                        node_id: self.config.node_id.clone(),
+                        generation: self.generation.clone(),
+                        platform: std::env::consts::OS.into(),
+                        runtime_validation: if cfg!(windows) {
+                            "Локальное выполнение, отмена и восстановление проверены на Windows"
+                        } else {
+                            "Локальное выполнение через Unix adapter разработки"
+                        }
+                        .into(),
+                        projects: self.config.public_projects(),
+                        snapshot_import_available: self.config.delivery.is_some(),
+                        workflow_available: self.config.delivery.is_some(),
+                        controller_connection: self
+                            .controller_connection
+                            .lock()
+                            .map_err(|_| "connection state lock poisoned")?
+                            .clone(),
+                    }),
+                })
+            }
             LocalRequest::ImportSnapshot { request } => {
                 if self.stop.load(Ordering::Acquire) {
                     return Err("Worker stopping; import not accepted".into());

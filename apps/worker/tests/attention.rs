@@ -65,6 +65,21 @@ fn accepted(store: &mut Store) -> TaskRecord {
         )
         .unwrap()
 }
+
+#[test]
+fn active_count_includes_tasks_older_than_recent_page() {
+    let root = TempDir::new().unwrap();
+    let worker = Worker::open(config(root.path())).unwrap();
+    for i in 0..13 {
+        task(worker.handle(LocalRequest::Submit {
+            request: submission(&format!("count-{i}"), "success"),
+        }));
+    }
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!()
+    };
+    assert_eq!(info.active_task_count, Some(13));
+}
 fn wait(worker: &Arc<Worker>, id: &str) -> TaskRecord {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
@@ -101,6 +116,7 @@ fn uncommitted_process_result_is_not_reported_fresh_and_new_launches_wait_for_re
     let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
         panic!()
     };
+    assert_eq!(info.active_task_count, None);
     assert!(info
         .journal_recovery_required
         .unwrap()

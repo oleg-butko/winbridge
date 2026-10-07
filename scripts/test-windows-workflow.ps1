@@ -19,6 +19,9 @@ SHA-256 исходного ZIP, из которого распакованы и�
 Показывает назначение сценария и команду обновления, без сборки или записи файлов.
 .PARAMETER AttentionOnly
 Запускает только новые stage-5 attention tests; завершённый Windows workflow gate не повторяется.
+.PARAMETER CompanionOnly
+Собирает отдельный desktop/worker и проверяет tray, popup, звук, переход к задаче и restart.
+Требует source archive с --include-built-ui; рабочие exe не заменяет.
 .EXAMPLE
 .\scripts\test-windows-workflow.ps1 -Help
 .NOTES
@@ -30,6 +33,7 @@ param(
     [string]$SourceArchiveSha256 = '',
     [string]$NetwatchProfile = '',
     [switch]$AttentionOnly,
+    [switch]$CompanionOnly,
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -37,10 +41,11 @@ $PSNativeCommandUseErrorActionPreference = $false
 if ($Help -or -not $ReportDirectory -or -not $SourceArchiveSha256) {
     Write-Host @'
 test-windows-workflow.ps1 — автоматические Windows тесты WinBridge.
-Этот сценарий агент запускает из Debian; он не обновляет рабочие exe и не открывает desktop.
+Этот сценарий агент запускает из Debian; он не обновляет рабочие exe.
+-CompanionOnly открывает отдельный тестовый desktop для автоматической проверки tray.
 
 Чтобы обновить и запустить WinBridge после распаковки исходников:
-  1. Закройте desktop и остановите прежний worker через Ctrl+C.
+  1. Завершите desktop через «Завершить интерфейс» в окне/tray и остановите worker через Ctrl+C.
   2. Из папки исходников выполните: .\scripts\prepare-windows-snapshot.ps1
 
 Для отдельного тестового прогона нужны:
@@ -92,6 +97,16 @@ try {
         if ($NetwatchProfile) { throw 'AttentionOnly cannot be combined with a Netwatch profile' }
         $groups = @(@{ name = 'worker-attention'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') })
     }
+    if ($CompanionOnly) {
+        if ($AttentionOnly -or $NetwatchProfile) { throw 'CompanionOnly cannot be combined with another scenario' }
+        if (-not $manifest.includesBuiltUi) { throw 'Companion validation requires a source archive with --include-built-ui' }
+        $groups = @(
+            @{ name = 'companion-policy-and-persistence'; arguments = @('test', '-p', 'winbridge-core', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
+            @{ name = 'worker-attention'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
+            @{ name = 'companion-worker-build'; arguments = @('build', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--bins', '--locked', '--offline') },
+            @{ name = 'companion-desktop-build'; arguments = @('build', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--features', 'custom-protocol', '--locked', '--offline') }
+        )
+    }
     foreach ($group in $groups) {
         $log = Join-Path $ReportDirectory ($group.name + '.log')
         $commandArgs = $group.arguments
@@ -104,6 +119,11 @@ try {
         & (Join-Path $source 'scripts/test-netwatch-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -ProfilePath $NetwatchProfile
         $report.netwatch = Get-Content -LiteralPath (Join-Path $ReportDirectory 'netwatch-report.json') -Raw | ConvertFrom-Json
         if (-not $report.netwatch.passed) { throw 'Isolated Netwatch workflow check failed' }
+    }
+    if ($CompanionOnly) {
+        & (Join-Path $source 'scripts/test-companion-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory
+        $report.companion = Get-Content -LiteralPath (Join-Path $ReportDirectory 'companion-report.json') -Raw | ConvertFrom-Json
+        if (-not $report.companion.passed) { throw 'Isolated companion check failed' }
     }
     $report.passed = $true
 } catch {

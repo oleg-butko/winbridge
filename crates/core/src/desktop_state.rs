@@ -10,7 +10,10 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use winbridge_protocol::{CommandDraft, DeliveryDraft, DesktopDraftState, WorkflowProfile};
+use winbridge_protocol::{
+    CommandDraft, DeliveryDraft, DesktopDraftState, NotificationCursor, NotificationPreferences,
+    WorkflowProfile,
+};
 
 pub const DESKTOP_STATE_FILE: &str = "winbridge-desktop-state.local.json";
 const MAX_BYTES: usize = 1024 * 1024;
@@ -100,6 +103,41 @@ impl DesktopDraftStore {
         self.write_state(&state)
     }
 
+    pub fn save_preferences(&self, preferences: NotificationPreferences) -> Result<()> {
+        crate::notifications::validate(&preferences)?;
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "desktop state lock poisoned")?;
+        let mut state = self.read()?;
+        state.notification_preferences = preferences;
+        self.write_state(&state)
+    }
+
+    pub fn save_cursor(&self, cursor: NotificationCursor) -> Result<()> {
+        validate_cursor(&cursor)?;
+        let _guard = self
+            .lock
+            .lock()
+            .map_err(|_| "desktop state lock poisoned")?;
+        let mut state = self.read()?;
+        if let Some(saved) = state.notification_cursors.iter_mut().find(|saved| {
+            saved.worker_instance_id == cursor.worker_instance_id && saved.node_id == cursor.node_id
+        }) {
+            // Delayed presenters cannot rewind a durable cursor.
+            saved.after_sequence = saved.after_sequence.max(cursor.after_sequence);
+        } else {
+            if state.notification_cursors.len() >= MAX_DRAFTS {
+                return Err(
+                    "Notification cursor limit reached (128); existing cursors are preserved"
+                        .into(),
+                );
+            }
+            state.notification_cursors.push(cursor);
+        }
+        self.write_state(&state)
+    }
+
     fn read(&self) -> Result<DesktopDraftState> {
         let file = match fs::File::open(&self.path) {
             Ok(file) => file,
@@ -109,6 +147,8 @@ impl DesktopDraftStore {
                     drafts: Vec::new(),
                     delivery_drafts: Vec::new(),
                     workflow_profiles: Vec::new(),
+                    notification_preferences: Default::default(),
+                    notification_cursors: Vec::new(),
                 });
             }
             Err(error) => return Err(format!("desktop state {}: {error}", self.path.display())),
@@ -129,6 +169,7 @@ impl DesktopDraftStore {
             || state.drafts.len() > MAX_DRAFTS
             || state.delivery_drafts.len() > MAX_DRAFTS
             || state.workflow_profiles.len() > MAX_DRAFTS
+            || state.notification_cursors.len() > MAX_DRAFTS
         {
             return Err(format!(
                 "desktop state {}: expected schemaVersion 1 and at most 128 drafts",
@@ -143,6 +184,10 @@ impl DesktopDraftStore {
         }
         for profile in &state.workflow_profiles {
             validate_workflow_profile(profile)?;
+        }
+        crate::notifications::validate(&state.notification_preferences)?;
+        for cursor in &state.notification_cursors {
+            validate_cursor(cursor)?;
         }
         Ok(state)
     }
@@ -178,6 +223,16 @@ impl DesktopDraftStore {
         }
         result.map_err(|e| format!("desktop state {}: {e}", self.path.display()))
     }
+}
+
+fn validate_cursor(cursor: &NotificationCursor) -> Result<()> {
+    if !valid_id(&cursor.worker_instance_id)
+        || !valid_id(&cursor.node_id)
+        || cursor.after_sequence > i64::MAX as u64
+    {
+        return Err("Invalid notification cursor scope or sequence".into());
+    }
+    Ok(())
 }
 
 fn validate_workflow_profile(profile: &WorkflowProfile) -> Result<()> {
@@ -243,6 +298,44 @@ fn validate_delivery_draft(draft: &DeliveryDraft) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preferences_and_monotonic_cursors_preserve_forms_and_legacy_defaults() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(DESKTOP_STATE_FILE);
+        fs::write(&path, br#"{"schemaVersion":1,"drafts":[]}"#).unwrap();
+        let store = DesktopDraftStore::new(path.clone());
+        assert_eq!(
+            store.load().unwrap().notification_preferences,
+            NotificationPreferences::default()
+        );
+        store.save(draft("project")).unwrap();
+        let p = NotificationPreferences {
+            volume_percent: 0,
+            ..Default::default()
+        };
+        store.save_preferences(p.clone()).unwrap();
+        let mut cursor = NotificationCursor {
+            worker_instance_id: "worker-1".into(),
+            node_id: "windows".into(),
+            after_sequence: 9,
+        };
+        store.save_cursor(cursor.clone()).unwrap();
+        cursor.after_sequence = 3;
+        store.save_cursor(cursor).unwrap();
+        let reopened = DesktopDraftStore::new(path.clone()).load().unwrap();
+        assert_eq!(reopened.notification_preferences, p);
+        assert_eq!(reopened.notification_cursors[0].after_sequence, 9);
+        assert_eq!(reopened.drafts, vec![draft("project")]);
+        let before = fs::read(&path).unwrap();
+        assert!(store
+            .save_preferences(NotificationPreferences {
+                volume_percent: 101,
+                ..p
+            })
+            .is_err());
+        assert_eq!(fs::read(path).unwrap(), before);
+    }
 
     #[test]
     fn named_profiles_and_incomplete_drafts_are_scoped_and_survive_reopen() {

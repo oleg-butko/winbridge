@@ -138,10 +138,12 @@ try {
       const state = existsSync(preferencesPath) ? JSON.parse(await readFile(preferencesPath, "utf8")) : { schemaVersion: 1, drafts: [], deliveryDrafts: [] };
       state.deliveryDrafts ??= [];
       state.workflowProfiles ??= [];
+      state.notificationPreferences ??= {popupEnabled:true,soundEnabled:true,volumePercent:25,minimumSeverity:"warning",minimumIntervalSeconds:30,quietHoursEnabled:false,quietStartMinute:1320,quietEndMinute:480};
       if (command === "load_command_drafts") return state;
-      assert.ok(["save_command_draft", "save_delivery_draft", "save_workflow_profile"].includes(command));
+      assert.ok(["save_command_draft", "save_delivery_draft", "save_workflow_profile", "save_notification_preferences"].includes(command));
       if (draftSaveDelay) await sleep(draftSaveDelay);
       if (failDraftSaves || (command === "save_delivery_draft" && failDeliverySaves)) throw new Error("Test: local state directory is unavailable");
+      if (command === "save_notification_preferences") { state.notificationPreferences = args.preferences; await writeFile(preferencesPath, JSON.stringify(state)); return; }
       const draft = args.draft ?? args.profile;
       const field = command === "save_workflow_profile" ? "workflowProfiles" : command === "save_command_draft" ? "drafts" : "deliveryDrafts";
       state[field] = state[field].filter((saved) => saved.workerInstanceId !== draft.workerInstanceId || saved.projectId !== draft.projectId || saved.workspaceRoot !== draft.workspaceRoot || (field === "workflowProfiles" && saved.name !== draft.name));
@@ -151,7 +153,9 @@ try {
     await nativePage.addInitScript(() => {
       const callbacks = new Map(); const listeners = new Map(); let nextCallback = 0;
       window.isTauri = true;
+      window.__hidden = false;
       window.__destroyed = false;
+      window.__companion = {trayReady:true,workerConnected:true,lastConfirmedAtMs:Date.now(),pendingCount:0,activeTaskCount:0,error:null,latestAttention:null,openTaskId:null,openTaskSequence:0,quitRequestSequence:0};
       window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener: (_event, id) => listeners.delete(id) };
       window.__testClose = async () => {
         for (const [id, registration] of listeners) {
@@ -164,7 +168,9 @@ try {
         invoke: (command, args) => {
           if (command === "worker_rpc") return window.workerBridge(args.request);
           if (command === "desktop_build") return Promise.resolve({ version: "0.1.0", sourceCommit: "browser-test", sourceDirty: false, sourceManifestSha256: null, buildId: "test-shell" });
-          if (["load_command_drafts", "save_command_draft", "save_delivery_draft", "save_workflow_profile"].includes(command)) return window.draftBridge(command, args);
+          if (["load_command_drafts", "save_command_draft", "save_delivery_draft", "save_workflow_profile", "save_notification_preferences"].includes(command)) return window.draftBridge(command, args);
+          if (command === "companion_status") return Promise.resolve(window.__companion);
+          if (command === "companion_close") { if (args.quit) window.__destroyed = true; else { if (!window.__companion.trayReady) return Promise.reject("Tray unavailable"); window.__hidden = true; } return Promise.resolve(); }
           if (command === "plugin:event|listen") { const id = args.handler; listeners.set(id, args); return Promise.resolve(id); }
           if (command === "plugin:event|unlisten") { listeners.delete(args.eventId); return Promise.resolve(); }
           if (command === "plugin:window|destroy") { window.__destroyed = true; return Promise.resolve(); }
@@ -300,11 +306,13 @@ try {
   await page.getByRole("button", {name:"Обновить список пакетов",exact:true}).click();
   draftSaveDelay = 250;
   const lastArgv = '["long", "last edit before close ✓"]';
+  await page.getByLabel("Громкость сигнала, %", {exact:true}).fill("30");
   await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill(lastArgv);
   await deliverySnapshot.fill(secondPublished.snapshotId);
   await page.getByRole("option", {name:new RegExp(`^${secondPublished.snapshotId} · commit`)}).click();
   await page.evaluate(() => window.__testClose());
-  assert.equal(await page.evaluate(() => window.__destroyed), true);
+  assert.equal(await page.evaluate(() => window.__hidden), true);
+  assert.equal(await page.evaluate(() => window.__destroyed), false, "hide must keep the companion alive");
   assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).drafts.at(-1).argumentsJson, lastArgv);
   assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).deliveryDrafts.at(-1).snapshotId, secondPublished.snapshotId);
   await page.close();
@@ -318,6 +326,7 @@ try {
   assert.equal(await restoredPage.getByLabel("Аргументы — JSON-массив строк", { exact: true }).inputValue(), lastArgv);
   assert.equal(await restoredPage.getByLabel("Рабочая папка относительно корня проекта", { exact: true }).inputValue(), "nested");
   assert.equal(await restoredPage.getByLabel("Timeout, секунд", { exact: true }).inputValue(), "120");
+  assert.equal(await restoredPage.getByLabel("Громкость сигнала, %", {exact:true}).inputValue(), "30");
   await restoredPage.getByText(/Выбор восстановлен из локального файла/).waitFor();
   assert.equal(await restoredPage.getByRole("textbox", {name:"Проект доставки", exact:true}).inputValue(), "fixture");
   assert.ok((await restoredPage.getByRole("textbox", {name:"Snapshot ID опубликованного пакета", exact:true}).inputValue()).startsWith(secondPublished.snapshotId));
@@ -332,8 +341,8 @@ try {
   await restoredPage.getByLabel("Timeout, секунд", {exact:true}).fill("120");
   await restoredPage.getByText(/Поля сохранены\. Восстановление/).waitFor();
   await restoredPage.evaluate(() => window.__testClose());
-  await restoredPage.getByText("Окно осталось открытым: поля не сохранены", {exact:true}).waitFor();
-  assert.equal(await restoredPage.evaluate(() => window.__destroyed), false);
+  await restoredPage.getByText("Окно осталось открытым: закрытие не подтверждено", {exact:true}).waitFor();
+  assert.equal(await restoredPage.evaluate(() => window.__hidden), false);
   assert.equal(JSON.parse(await readFile(preferencesPath,"utf8")).deliveryDrafts.at(-1).snapshotId, secondPublished.snapshotId);
   failDeliverySaves = false;
   await restoredPage.getByRole("textbox", {name:"Snapshot ID опубликованного пакета", exact:true}).fill(secondPublished.snapshotId);
@@ -343,11 +352,11 @@ try {
   await restoredPage.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill("[");
   await restoredPage.getByText("Не удалось сохранить поля команды", { exact: true }).waitFor();
   await restoredPage.evaluate(() => window.__testClose());
-  await restoredPage.getByText("Окно осталось открытым: поля не сохранены", { exact: true }).waitFor();
+  await restoredPage.getByText("Окно осталось открытым: закрытие не подтверждено", { exact: true }).waitFor();
   assert.equal(await restoredPage.evaluate(() => window.__destroyed), false);
   assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).drafts.at(-1).argumentsJson, lastArgv);
   await restoredPage.getByRole("button", { name: "Закрыть без сохранения", exact: true }).click();
-  await until(async () => await restoredPage.evaluate(() => window.__destroyed), "explicit close did not close the window");
+  await until(async () => await restoredPage.evaluate(() => window.__hidden), "explicit close did not hide the window");
   assert.deepEqual(errors, []);
   failDraftSaves = false;
   const workflowPage = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
@@ -438,8 +447,28 @@ try {
   await workflowPage.getByText("Worker подключён · linux · ui-test",{exact:true}).waitFor();
   await eventCard.getByText(/Прочитано:/).waitFor();
   assert.deepEqual((await call({method:"acknowledge_attention",attentionId:event.attentionId})).attention,acknowledged);
+  // Background popup navigation is consumed after the main WebView resumes.
+  await workflowPage.evaluate((id) => { window.__companion.openTaskId=id; window.__companion.openTaskSequence++; }, completedWorkflow.steps.find((s)=>s.name==="build").operationId);
+  await workflowPage.getByText("Exit code: 0",{exact:true}).waitFor();
+  // A real journal failure must block new launches without presenting stale running as fresh.
+  await exec("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"CREATE TRIGGER reject_outcome BEFORE INSERT ON attention WHEN NEW.origin='task_outcome' BEGIN SELECT RAISE(ABORT,'expected UI journal fault'); END\"); c.commit()", join(run,"state/journal.sqlite")]);
+  const uncommitted=(await call({method:"submit",request:{protocolVersion:1,requestId:"journal-fault-ui",projectId:"other-fixture",idempotencyKey:"journal-fault-ui",timeoutMs:5000,command:{kind:"direct",executable:"/deliberately-missing/fixture",arguments:[],workingDirectory:"."}}})).task;
+  await workflowPage.getByText("Результат задачи не записан · новые запуски приостановлены",{exact:true}).waitFor();
+  assert.equal(await workflowPage.getByRole("button",{name:"Передать задачу worker",exact:true}).isDisabled(),true);
+  assert.equal((await call({method:"get_task",taskId:uncommitted.taskId})).kind,"error");
+  await exec("python3",["-c","import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute('DROP TRIGGER reject_outcome'); c.commit()",join(run,"state/journal.sqlite")]);
+  await stopWorker(); await startWorker();
+  await until(async()=>!(await call({method:"info"})).info.journalRecoveryRequired,"worker journal recovery did not clear fault");
+  assert.equal((await call({method:"get_task",taskId:uncommitted.taskId})).task.status,"indeterminate");
+  // Loss of tray keeps the window accessible; explicit quit is still available.
+  await workflowPage.evaluate(() => { window.__companion.trayReady=false; });
+  await workflowPage.evaluate(() => window.__testClose());
+  await workflowPage.getByText("Окно осталось открытым: закрытие не подтверждено",{exact:true}).waitFor();
+  assert.equal(await workflowPage.evaluate(() => window.__hidden),false);
+  await workflowPage.getByRole("button",{name:"Завершить интерфейс",exact:true}).click();
+  await until(async () => await workflowPage.evaluate(() => window.__destroyed),"explicit companion quit did not exit");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell with original argv, task attention links, WebSocket attention ACK loss/dedup, explicit acknowledgement, desktop and worker restart persistence.");
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences, save/hide/quit, missing tray and popup task navigation. Native tray/popup/sound are validated separately on Windows.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

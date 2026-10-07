@@ -200,6 +200,13 @@ impl Store {
         rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
             .collect()
     }
+    pub fn active_task_count(&self) -> Result<u64> {
+        let count: i64 = self.connection.query_row(
+            "SELECT count(*) FROM tasks WHERE json_extract(record,'$.status') IN ('queued','running')",
+            [], |r| r.get(0),
+        ).map_err(sql)?;
+        u64::try_from(count).map_err(|_| "Invalid negative active task count".into())
+    }
     pub fn recent(&self) -> Result<Vec<TaskRecord>> {
         let mut statement = self
             .connection

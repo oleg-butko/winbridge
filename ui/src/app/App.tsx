@@ -5,10 +5,12 @@ import { TaskWorkbench } from "../features/tasks/TaskWorkbench";
 import { NativeWorkbench } from "../features/tasks/NativeWorkbench";
 import { ReportWorkbench } from "../features/tasks/ReportWorkbench";
 import { nativeRuntime } from "../runtime/adapter";
+import { AttentionPopup } from "../features/attention/AttentionPopup";
 
 export function App() {
   const [scenarioId, setScenarioId] = useState(() => new URLSearchParams(window.location.search).get("scenario") ?? "success");
   const scenario = demoScenarios.find((item) => item.id === scenarioId) ?? demoScenarios[0];
+  if (nativeRuntime && new URLSearchParams(window.location.search).has("attention-popup")) return <MantineProvider defaultColorScheme="dark"><AttentionPopup /></MantineProvider>;
   return <MantineProvider defaultColorScheme="dark">
     <Box className="page"><Container size="lg" py="xl"><Stack gap="xl">
       <Group justify="space-between" align="start">

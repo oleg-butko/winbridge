@@ -265,6 +265,9 @@ pub struct WorkerInfo {
     pub attention_available: bool,
     #[serde(default)]
     pub journal_recovery_required: Option<String>,
+    /// Queued/running tasks across the entire journal; None when unavailable or stale.
+    #[serde(default)]
+    pub active_task_count: Option<u64>,
     #[serde(default)]
     pub build: Option<BuildIdentity>,
 }
@@ -458,6 +461,66 @@ pub struct DesktopDraftState {
     pub delivery_drafts: Vec<DeliveryDraft>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub workflow_profiles: Vec<WorkflowProfile>,
+    #[serde(default)]
+    pub notification_preferences: NotificationPreferences,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notification_cursors: Vec<NotificationCursor>,
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NotificationPreferences {
+    pub popup_enabled: bool,
+    pub sound_enabled: bool,
+    pub volume_percent: u8,
+    pub minimum_severity: AttentionSeverity,
+    pub minimum_interval_seconds: u32,
+    pub quiet_hours_enabled: bool,
+    pub quiet_start_minute: u16,
+    pub quiet_end_minute: u16,
+}
+
+impl Default for NotificationPreferences {
+    fn default() -> Self {
+        Self {
+            popup_enabled: true,
+            sound_enabled: true,
+            volume_percent: 25,
+            minimum_severity: AttentionSeverity::Warning,
+            minimum_interval_seconds: 30,
+            quiet_hours_enabled: false,
+            quiet_start_minute: 22 * 60,
+            quiet_end_minute: 8 * 60,
+        }
+    }
+}
+
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NotificationCursor {
+    pub worker_instance_id: String,
+    pub node_id: String,
+    pub after_sequence: u64,
+}
+
+/// Native shell observations, never substituted for worker task acceptance.
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompanionStatus {
+    pub tray_ready: bool,
+    pub worker_connected: bool,
+    pub last_confirmed_at_ms: Option<u64>,
+    pub pending_count: Option<u64>,
+    pub active_task_count: Option<u64>,
+    pub error: Option<String>,
+    pub latest_attention: Option<AttentionRecord>,
+    pub open_task_id: Option<String>,
+    pub open_task_sequence: u64,
+    pub quit_request_sequence: u64,
+    pub preferences: NotificationPreferences,
 }
 
 /// Named editable desktop profiles; an empty name is the unfinished draft.
