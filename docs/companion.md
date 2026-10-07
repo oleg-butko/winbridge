@@ -3,6 +3,9 @@
 Сценарий этапа 5, начатый 2026-10-07 после [ревью](review-attention-2026-10-07.md)
 и commit плана. Реализация готова к автоматическому native gate; завершение проверки
 фиксируется отдельно, compilation/browser shim не доказывают Windows popup или звук.
+[Первый native прогон](windows-companion-attempt-2026-10-07.md) остановлен после
+неожиданного завершения desktop и неверного размера runtime log в ready manifest;
+popup/tray/sound пока не считать подтверждёнными на Windows.
 
 ## Ежедневное использование
 

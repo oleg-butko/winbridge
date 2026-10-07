@@ -80,6 +80,8 @@
 dedup и acknowledgements сохраняются у worker; UI раскрывает EncodedCommand и
 предлагает task links/explicit acknowledgement. [Tray/popup/sound/preferences](companion.md)
 реализованы в исходниках; автоматический native gate ещё не завершён.
+[Первый прогон](windows-companion-attempt-2026-10-07.md) прошёл tests/builds, но
+native desktop phase и ready bytes не подтвердились. Работа остановлена для уточнения.
 Workflow/app attention, диагностика и MCP ещё не реализованы; этап не закрыт.
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.

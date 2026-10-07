@@ -2,10 +2,18 @@
 
 ## Текущий шаг — 2026-10-07
 
+**Остановлено для уточнения после неожиданного native результата.**
+Implementation `c1e9402`, автоматический run `20261007-055534-610692b2`:
+21 core + 9 attention Windows tests и worker/desktop builds exit 0, но initial desktop
+не создал phase report; stderr не устанавливает причину. Ready manifest имеет неверные
+bytes одного runtime stderr log (SHA совпадает). Gate не пройден, повтор не запускать
+до ответа пользователя. [Точные результаты и следующий шаг](windows-companion-attempt-2026-10-07.md).
+Рабочий worker/desktop не обновлялись, installed worker здоров и generation прежняя.
+
 После review/plan commit `bbba964` реализован [tray companion](companion.md):
 close/save/hide/explicit quit, runtime-scoped single instance, Rust background poll,
 popup task link без ACK, built-in sound/volume/quiet/rate и durable cursor/settings.
-Native gate ещё не выполнен; сценарий `--companion-only` подготовлен для отдельного
+Native gate попытка завершилась отказом; сценарий `--companion-only` подготовлен для отдельного
 runtime с bundled UI, без замены установленного worker/desktop и без debugger port.
 77 workspace tests, Clippy, Windows workspace compile, TypeScript/UI build и
 Linux standalone desktop check прошли. Browser integration проверил settings/save/hide/quit,
