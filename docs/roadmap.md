@@ -73,6 +73,9 @@
 
 ## Этап 5 — внимание пользователя и нормальная ежедневная работа
 
+План и порядок реализации согласованы 2026-10-07: [объяснение этапа 5](stage5-plan.md).
+Первый сценарий — читаемый PowerShell и долговечный список внимания с acknowledgement.
+
 - [ ] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [ ] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
 - [ ] Projects, history/audit, connection settings, command palette и доступность с клавиатуры.
@@ -101,10 +104,10 @@
 
 ## Следующий конкретный шаг
 
-Этап 4 завершён по автоматическому Windows gate. Следующий — этап 5: attention/tray,
+Этап 4 завершён по автоматическому Windows gate. Начинается этап 5: attention/tray,
 долговечные acknowledgements, retention/диагностический export и MCP adapter над теми
-же операциями. Новый installed runtime получает профили/artifacts/Netwatch probe одним
-update; повторять 41 native test или назначать новые ручные UI gates пользователю не
+же операциями. Пользователь обновил installed runtime до `523fc5b`; worker подтверждает
+профили/artifacts/Netwatch probe. Повторять 41 native test или назначать новые ручные UI gates пользователю не
 нужно. Если подключённый worker даёт неожиданную ошибку, по инструкции пользователя
 остановиться и запросить его обновление. Dirty source mode и performance extensions
 остаются будущими задачами.

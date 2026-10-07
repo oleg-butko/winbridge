@@ -1,5 +1,20 @@
 # Следующей сессии: продолжение WinBridge
 
+## Текущий шаг — 2026-10-07
+
+Пользователь обновил worker/desktop. Read-only `info` подтвердил Windows build
+`523fc5b`, sourceDirty=false, generation `bff7f8da-af71-432b-83af-739a020d9e37`,
+features artifacts/netwatch_health и connected controller. Controller generation
+`381e409f-8949-413c-a439-7d0622159614`, session `7fa9c4d3-eae9-42d1-8d83-966e2d79bd13`.
+Предыдущие записи runtime ниже — история; доступность всегда проверять заново.
+
+Начинается [этап 5](stage5-plan.md). Замечание пользователя: Base64 `-EncodedCommand`
+не объясняет действие. Первым исправлением будет decoded PowerShell script с пояснением
+и отдельными точными аргументами. Затем durable attention/acknowledgement, tray/settings,
+history/export и MCP. План фиксируется до реализации по инструкции пользователя.
+При вопросах или непредвиденном поведении остановиться и уточнить; новые мелкие ручные
+Windows gates не назначать.
+
 ## Сначала прочитать
 
 Корневой AGENTS.md → README → architecture → roadmap → ux → shared-folders → ADR. Затем `git status --short` и текущую таблицу готовности. Первоначальный proposal в context сохранён для истории; его TLS и общий workspace с Netwatch отменены.
