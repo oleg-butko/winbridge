@@ -2,14 +2,17 @@
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::Instant,
 };
 use tauri::Manager;
 use winbridge_core::desktop_state::DesktopDraftStore;
 use winbridge_protocol::{
-    AttentionSeverity, AttentionSubmission, CommandSource, LocalRequest, LocalResponse,
-    TaskSubmission,
+    AttentionSeverity, AttentionSubmission, CommandSource, DesktopValidationStatus, LocalRequest,
+    LocalResponse, TaskSubmission,
 };
 
 #[derive(Default)]
@@ -18,14 +21,74 @@ pub struct Validation {
     probes: Mutex<HashMap<String, serde_json::Value>>,
     signals: Mutex<Vec<String>>,
     pub loaded_windows: Mutex<HashSet<String>>,
+    status: Mutex<DesktopValidationStatus>,
+    checkpoint: Option<PathBuf>,
+    history: Mutex<Vec<serde_json::Value>>,
+    pub allow_close: AtomicBool,
+    aborted: AtomicBool,
 }
 impl Validation {
-    pub fn new(enabled: bool) -> Self {
-        Self {
-            enabled,
+    pub fn new(report: Option<&PathBuf>, restart: bool) -> Self {
+        let state = Self {
+            enabled: report.is_some(),
+            checkpoint: report.map(|p| p.with_extension("progress.json")),
+            status: Mutex::new(DesktopValidationStatus {
+                enabled: report.is_some(),
+                phase: if restart { "restart" } else { "initial" }.into(),
+                ..Default::default()
+            }),
             ..Default::default()
-        }
+        };
+        state.progress("Запуск отдельного тестового окна", None);
+        state
     }
+    pub fn progress(&self, step: &str, error: Option<String>) {
+        if !self.enabled {
+            return;
+        }
+        let mut status = self.status.lock().unwrap();
+        status.step = step.into();
+        status.error = error;
+        let mut history = self.history.lock().unwrap();
+        history.push(serde_json::json!({"at":chrono::Utc::now().to_rfc3339(), "status":*status}));
+        let checkpoint = serde_json::json!({"pid":std::process::id(), "executable":std::env::current_exe().ok(), "arguments":std::env::args().skip(1).collect::<Vec<_>>(), "history":*history});
+        if let Some(path) = &self.checkpoint {
+            if let Err(e) = std::fs::write(path, serde_json::to_vec_pretty(&checkpoint).unwrap()) {
+                eprintln!("Validation checkpoint: {e}");
+            }
+        }
+        eprintln!("Native validation: {step}");
+    }
+    pub fn guard_close(&self) -> Result<(), String> {
+        if self.enabled && !self.allow_close.load(Ordering::SeqCst) {
+            return Err("Идёт автоматическая проверка. Для остановки используйте «Прервать проверку» в жёлтом блоке.".into());
+        }
+        Ok(())
+    }
+}
+
+#[tauri::command]
+pub fn desktop_validation_status(state: tauri::State<'_, Validation>) -> DesktopValidationStatus {
+    state.status.lock().unwrap().clone()
+}
+
+#[tauri::command]
+pub fn abort_desktop_validation(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+) -> Result<(), String> {
+    super::main_only(&window)?;
+    let state = app.state::<Validation>();
+    if !state.enabled {
+        return Err("Native validation is disabled".into());
+    }
+    state.aborted.store(true, Ordering::SeqCst);
+    state.progress(
+        "Проверка прервана пользователем",
+        Some("User cancelled native validation".into()),
+    );
+    app.exit(2);
+    Ok(())
 }
 
 #[tauri::command]
@@ -91,7 +154,7 @@ async fn js(
         .ok_or("Validation window not created")?;
     let key = serde_json::to_string(probe).map_err(|e| e.to_string())?;
     // Expressions are fixed source literals below; task values use JSON serialization.
-    let script = format!("Promise.resolve((() => {{ {expression} }})()).then(value => window.__TAURI_INTERNALS__.invoke('companion_probe', {{ probe:{key}, value }}));");
+    let script = format!("Promise.resolve().then(() => {{ {expression} }}).catch(error => ({{__validationError:String(error)}})).then(value => window.__TAURI_INTERNALS__.invoke('companion_probe', {{ probe:{key}, value }}));");
     window.eval(&script).map_err(|e| e.to_string())?;
     wait(probe, || {
         Ok(app
@@ -102,13 +165,17 @@ async fn js(
             .contains_key(probe))
     })
     .await?;
-    Ok(app
+    let value = app
         .state::<Validation>()
         .probes
         .lock()
         .unwrap()
         .remove(probe)
-        .unwrap())
+        .unwrap();
+    if let Some(error) = value.get("__validationError") {
+        return Err(format!("WebView probe {probe}: {error}"));
+    }
+    Ok(value)
 }
 
 async fn click(app: &tauri::AppHandle, label: &str, test_id: &str) -> Result<(), String> {
@@ -205,7 +272,19 @@ pub fn start(
 ) {
     tauri::async_runtime::spawn(async move {
         let result = run(&app, address, store, restart).await;
+        if app.state::<Validation>().aborted.load(Ordering::SeqCst) {
+            return;
+        }
         let passed = result.is_ok();
+        app.state::<Validation>().status.lock().unwrap().completed = true;
+        app.state::<Validation>().progress(
+            if passed {
+                "Проверки выполнены; сохранение и завершение тестового окна"
+            } else {
+                "Проверка завершилась ошибкой"
+            },
+            result.as_ref().err().cloned(),
+        );
         let report_value = serde_json::json!({"platform":"windows", "passed":passed, "restart":restart, "observations":result.as_ref().ok(), "error":result.err()});
         if let Err(e) = std::fs::write(&report, serde_json::to_vec_pretty(&report_value).unwrap()) {
             eprintln!("Native validation report: {e}");
@@ -214,6 +293,9 @@ pub fn start(
         }
         if passed {
             // Exercise the actual UI save/quit route. PS checks exit and worker survival.
+            app.state::<Validation>()
+                .allow_close
+                .store(true, Ordering::SeqCst);
             if let Err(e) = click(&app, "main", "companion-quit").await {
                 eprintln!("Native quit: {e}");
                 app.exit(1);
@@ -233,6 +315,8 @@ async fn run(
     if !cfg!(windows) {
         return Err("This scenario requires actual Windows".into());
     }
+    app.state::<Validation>()
+        .progress("Проверка связи с отдельным worker и готовности tray", None);
     let address = address?;
     let store = store?;
     let info = match call(&address, LocalRequest::Info).await? {
@@ -260,6 +344,10 @@ async fn run(
     .await?;
     let main = app.get_webview_window("main").ok_or("Main window")?;
     if restart {
+        app.state::<Validation>().progress(
+            "Повторный запуск: настройки, счётчик и отсутствие повторного сигнала",
+            None,
+        );
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         if !app.state::<Validation>().signals.lock().unwrap().is_empty() {
             return Err("Restart replayed a presented notification".into());
@@ -286,6 +374,10 @@ async fn run(
     let mut prefs = defaults;
     prefs.minimum_interval_seconds = 1;
     store.save_preferences(prefs.clone())?;
+    app.state::<Validation>().progress(
+        "Создание исходной задачи и проверка загрузки интерфейса",
+        None,
+    );
     let baseline = fixture(&address, &runtime, &info.projects[0].id, "baseline-task").await?;
     task_page(app, &baseline).await?;
     // Give the actual React close handler time to install and load forms.
@@ -308,16 +400,46 @@ async fn run(
     if !close_ready {
         return Err("Main close listener was not installed".into());
     }
+    app.state::<Validation>()
+        .progress("Защита от случайного закрытия тестового окна", None);
+    main.close().map_err(|e| e.to_string())?;
+    let mut blocked = false;
+    for _ in 0..40 {
+        if js(app, "main", "close-blocked", "return document.body.textContent.includes('Для остановки используйте «Прервать проверку»');").await? == true {
+            blocked = true;
+            break;
+        }
+        pause().await;
+    }
+    if !blocked || !main.is_visible().map_err(|e| e.to_string())? {
+        return Err("Accidental close was not blocked with a visible explanation".into());
+    }
+    app.state::<Validation>().progress(
+        "Закрытие тестового окна: сохранение форм и скрытие в tray",
+        None,
+    );
+    app.state::<Validation>()
+        .allow_close
+        .store(true, Ordering::SeqCst);
     main.close().map_err(|e| e.to_string())?;
     wait("main hidden", || {
         main.is_visible().map(|v| !v).map_err(|e| e.to_string())
     })
     .await?;
+    app.state::<Validation>()
+        .allow_close
+        .store(false, Ordering::SeqCst);
+    app.state::<Validation>()
+        .progress("Повторный запуск открывает прежнее тестовое окно", None);
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let secondary = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
-        let mut child = std::process::Command::new(exe)
-            .spawn()
-            .map_err(|e| e.to_string())?;
+        let mut command = std::process::Command::new(exe);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000); // CREATE_NO_WINDOW: debug console must not appear.
+        }
+        let mut child = command.spawn().map_err(|e| e.to_string())?;
         let deadline = Instant::now() + std::time::Duration::from_secs(15);
         loop {
             if let Some(status) = child.try_wait().map_err(|e| e.to_string())? {
@@ -340,11 +462,21 @@ async fn run(
         main.is_visible().map_err(|e| e.to_string())
     })
     .await?;
+    app.state::<Validation>()
+        .allow_close
+        .store(true, Ordering::SeqCst);
     click(app, "main", "companion-hide").await?;
     wait("main hidden again", || {
         main.is_visible().map(|v| !v).map_err(|e| e.to_string())
     })
     .await?;
+    app.state::<Validation>()
+        .allow_close
+        .store(false, Ordering::SeqCst);
+    app.state::<Validation>().progress(
+        "Уведомление при скрытом окне: popup, звук и сохранение фокуса",
+        None,
+    );
     let task_id = fixture(&address, &runtime, &info.projects[0].id, "tray-task").await?;
     let first = attention(&address, &task_id, "first").await?;
     wait("notification while hidden", || {
@@ -372,12 +504,18 @@ async fn run(
             return Err("Popup stole foreground focus".into());
         }
     }
+    app.state::<Validation>()
+        .progress("Открытие точной страницы задачи из popup", None);
     click(app, "attention-popup", "popup-open-task").await?;
     wait("popup action reopened main", || {
         main.is_visible().map_err(|e| e.to_string())
     })
     .await?;
     task_page(app, &task_id).await?;
+    app.state::<Validation>().progress(
+        "Rate limit, подтверждение отложенного события и объединение сигналов",
+        None,
+    );
     let before = store.load()?.notification_cursors;
     prefs.minimum_interval_seconds = 3600;
     store.save_preferences(prefs.clone())?;
@@ -434,6 +572,6 @@ async fn run(
         return Err("Opening popup acknowledged worker attention".into());
     }
     Ok(
-        serde_json::json!({"trayReady":true,"hideKeepsProcess":true,"singleInstanceReopens":true,"backgroundPopup":true,"noFocusSteal":true,"nativeSoundApiSucceeded":true,"taskPage":task_id,"previousTaskPage":baseline,"openingDoesNotAcknowledge":true,"deferredAckSuppressed":true,"burstAggregated":true,"signals":signals,"pendingCount":pending}),
+        serde_json::json!({"trayReady":true,"accidentalCloseBlocked":true,"hideKeepsProcess":true,"singleInstanceReopens":true,"backgroundPopup":true,"noFocusSteal":true,"nativeSoundApiSucceeded":true,"taskPage":task_id,"previousTaskPage":baseline,"openingDoesNotAcknowledge":true,"deferredAckSuppressed":true,"burstAggregated":true,"signals":signals,"pendingCount":pending}),
     )
 }

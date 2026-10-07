@@ -2,13 +2,18 @@
 
 ## Текущий шаг — 2026-10-07
 
-**Остановлено для уточнения после неожиданного native результата.**
-Implementation `c1e9402`, автоматический run `20261007-055534-610692b2`:
-21 core + 9 attention Windows tests и worker/desktop builds exit 0, но initial desktop
-не создал phase report; stderr не устанавливает причину. Ready manifest имеет неверные
-bytes одного runtime stderr log (SHA совпадает). Gate не пройден, повтор не запускать
-до ответа пользователя. [Точные результаты и следующий шаг](windows-companion-attempt-2026-10-07.md).
-Рабочий worker/desktop не обновлялись, installed worker здоров и generation прежняя.
+**Пользователь разрешил диагностику, исправление и автоматический повтор.**
+Предыдущий run `20261007-055534-610692b2` не прошёл native gate. Пользователь сообщил,
+что закрывал desktop после появления необозначенного второго окна; это согласуется
+с прерыванием, но прежний harness не сохранил точную причину. Новый сценарий добавляет
+заметное обозначение тестового runtime, текущие шаги, явный abort, защиту обычного
+закрытия, args/PID/exit/progress и local output drain перед shared publication.
+Manifest вычисляет bytes и SHA из одного массива данных вместо cached HGFS stat.
+[Прежние результаты](windows-companion-attempt-2026-10-07.md) не изменяются.
+Перед Windows прогоном обязательно объяснять, что оставить запущенным и какие окна
+появятся; по окончании явно сообщать, что можно закрыть. Для companion gate нужен
+рабочий worker, рабочий desktop необязателен; отдельное тестовое окно не трогать.
+Рабочий runtime не обновлять; новый native gate пока не считать пройденным.
 
 После review/plan commit `bbba964` реализован [tray companion](companion.md):
 close/save/hide/explicit quit, runtime-scoped single instance, Rust background poll,

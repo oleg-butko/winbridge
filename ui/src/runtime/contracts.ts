@@ -71,6 +71,7 @@ drafts: Array<CommandDraft>, deliveryDrafts: Array<DeliveryDraft>, workflowProfi
 export type NotificationPreferences = { popupEnabled: boolean, soundEnabled: boolean, volumePercent: number, minimumSeverity: AttentionSeverity, minimumIntervalSeconds: number, quietHoursEnabled: boolean, quietStartMinute: number, quietEndMinute: number, };
 export type NotificationCursor = { workerInstanceId: string, nodeId: string, afterSequence: number, };
 export type CompanionStatus = { trayReady: boolean, workerConnected: boolean, lastConfirmedAtMs: number | null, pendingCount: number | null, activeTaskCount: number | null, error: string | null, latestAttention: AttentionRecord | null, openTaskId: string | null, openTaskSequence: number, quitRequestSequence: number, preferences: NotificationPreferences, };
+export type DesktopValidationStatus = { enabled: boolean, phase: string, step: string, completed: boolean, error: string | null, };
 export type WorkflowProfile = { workerInstanceId: string, projectId: string, workspaceRoot: string, name: string, parametersJson: string, };
 export type ReadinessProbe = { stdoutContains?: string, timeoutMs: number, netwatch?: NetwatchProbe, };
 export type NetwatchProbe = { instanceId: string, runtimeDirectory: string, };

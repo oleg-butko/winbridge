@@ -6,12 +6,14 @@ import { NativeWorkbench } from "../features/tasks/NativeWorkbench";
 import { ReportWorkbench } from "../features/tasks/ReportWorkbench";
 import { nativeRuntime } from "../runtime/adapter";
 import { AttentionPopup } from "../features/attention/AttentionPopup";
+import { ValidationBanner } from "../features/attention/ValidationBanner";
 
 export function App() {
   const [scenarioId, setScenarioId] = useState(() => new URLSearchParams(window.location.search).get("scenario") ?? "success");
   const scenario = demoScenarios.find((item) => item.id === scenarioId) ?? demoScenarios[0];
   if (nativeRuntime && new URLSearchParams(window.location.search).has("attention-popup")) return <MantineProvider defaultColorScheme="dark"><AttentionPopup /></MantineProvider>;
   return <MantineProvider defaultColorScheme="dark">
+    {nativeRuntime && <ValidationBanner />}
     <Box className="page"><Container size="lg" py="xl"><Stack gap="xl">
       <Group justify="space-between" align="start">
         <Box><Text className="eyebrow">WINBRIDGE / DEBIAN ↔ WINDOWS</Text><Title order={1}>Каждое действие видно</Title><Text c="dimmed" mt="xs">Команды, файлы и результаты в одном журнале проекта</Text></Box>

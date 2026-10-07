@@ -169,6 +169,8 @@ try {
           if (command === "worker_rpc") return window.workerBridge(args.request);
           if (command === "desktop_build") return Promise.resolve({ version: "0.1.0", sourceCommit: "browser-test", sourceDirty: false, sourceManifestSha256: null, buildId: "test-shell" });
           if (["load_command_drafts", "save_command_draft", "save_delivery_draft", "save_workflow_profile", "save_notification_preferences"].includes(command)) return window.draftBridge(command, args);
+          if (command === "desktop_validation_status") return Promise.resolve(structuredClone(window.__validation ?? {enabled:false,phase:"",step:"",completed:false,error:null}));
+          if (command === "abort_desktop_validation") { window.__aborted=true; return Promise.resolve(); }
           if (command === "companion_status") return Promise.resolve(window.__companion);
           if (command === "companion_close") { if (args.quit) window.__destroyed = true; else { if (!window.__companion.trayReady) return Promise.reject("Tray unavailable"); window.__hidden = true; } return Promise.resolve(); }
           if (command === "plugin:event|listen") { const id = args.handler; listeners.set(id, args); return Promise.resolve(id); }
@@ -467,6 +469,17 @@ try {
   assert.equal(await workflowPage.evaluate(() => window.__hidden),false);
   await workflowPage.getByRole("button",{name:"Завершить интерфейс",exact:true}).click();
   await until(async () => await workflowPage.evaluate(() => window.__destroyed),"explicit companion quit did not exit");
+  // Explicit test mode is visibly distinct and offers a deliberate abort action.
+  await workflowPage.addInitScript(() => { window.__validation={enabled:true,phase:"initial",step:"Проверка скрытия и возврата окна",completed:false,error:null}; });
+  await workflowPage.reload();
+  const validationBanner = workflowPage.getByTestId("validation-banner");
+  await validationBanner.getByText("initial: Проверка скрытия и возврата окна",{exact:true}).waitFor();
+  await workflowPage.evaluate(() => { window.__validation.step="Проверка повторного запуска"; });
+  await validationBanner.getByText("initial: Проверка повторного запуска",{exact:true}).waitFor();
+  await validationBanner.getByRole("button",{name:"Прервать проверку",exact:true}).click();
+  assert.equal(await workflowPage.evaluate(() => window.__aborted),true);
+  await workflowPage.evaluate(() => { window.__validation.enabled=false; });
+  await until(async()=>!await validationBanner.isVisible(),"Validation banner did not clear");
   assert.deepEqual(errors, []);
   console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences, save/hide/quit, missing tray and popup task navigation. Native tray/popup/sound are validated separately on Windows.");
 } finally {

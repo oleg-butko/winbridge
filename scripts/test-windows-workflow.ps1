@@ -137,7 +137,10 @@ try {
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {
-        [ordered]@{ path = $_.Name; bytes = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+        # HGFS metadata may lag: size and digest must describe the same captured bytes.
+        $content = [System.IO.File]::ReadAllBytes($_.FullName)
+        $digest = [System.Security.Cryptography.SHA256]::HashData($content)
+        [ordered]@{ path = $_.Name; bytes = $content.LongLength; sha256 = [Convert]::ToHexString($digest).ToLowerInvariant() }
     })
     [ordered]@{ schemaVersion = 1; platform = 'windows'; passed = $report.passed; files = $artifacts } |
         ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $ReportDirectory 'report.ready.json') -Encoding utf8

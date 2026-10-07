@@ -523,6 +523,18 @@ pub struct CompanionStatus {
     pub preferences: NotificationPreferences,
 }
 
+/// Visible progress of the explicitly enabled isolated desktop validation.
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopValidationStatus {
+    pub enabled: bool,
+    pub phase: String,
+    pub step: String,
+    pub completed: bool,
+    pub error: Option<String>,
+}
+
 /// Named editable desktop profiles; an empty name is the unfinished draft.
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

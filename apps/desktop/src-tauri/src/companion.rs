@@ -166,6 +166,8 @@ async fn poll(
                 .as_millis() as u64,
         );
         s.active_task_count = info.active_task_count;
+        // Info freshness does not confirm the attention count if state loading fails.
+        s.pending_count = None;
         s.error = state
             .tray_error
             .lock()
@@ -352,8 +354,19 @@ fn show_popup(app: &tauri::AppHandle) -> Result<(), String> {
             "attention-popup",
             WebviewUrl::App("index.html?attention-popup".into()),
         )
-        .title("WinBridge · требуется внимание")
-        .inner_size(440.0, 270.0)
+        .title(if app.state::<super::validation::Validation>().enabled {
+            "WinBridge · ТЕСТОВОЕ уведомление"
+        } else {
+            "WinBridge · требуется внимание"
+        })
+        .inner_size(
+            440.0,
+            if app.state::<super::validation::Validation>().enabled {
+                370.0
+            } else {
+                270.0
+            },
+        )
         .resizable(false)
         .always_on_top(true)
         .skip_taskbar(true)
@@ -446,6 +459,7 @@ pub fn companion_close(
     quit: bool,
 ) -> Result<(), String> {
     super::main_only(&window)?;
+    app.state::<super::validation::Validation>().guard_close()?;
     if quit {
         app.exit(0);
         return Ok(());

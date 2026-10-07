@@ -28,29 +28,66 @@ $instance = 'tray-gate-' + [guid]::NewGuid().ToString('N')
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtime 'winbridge-desktop.local.json') -Encoding utf8
 $worker = Join-Path $runtime 'winbridge-worker.exe'
 $desktop = Join-Path $runtime 'winbridge-desktop.exe'
-$workerProcess = $null
-$desktopProcess = $null
-$result = [ordered]@{platform='windows'; passed=$false; runtime=$runtime; instanceId=$instance; phases=@(); workerSurvivesQuit=$false; error=$null}
+# All live writers use local NTFS. Publish only after process/output completion.
+$localReports = Join-Path $runtime 'reports'
+New-Item -ItemType Directory -Path $localReports | Out-Null
+$captures = [System.Collections.Generic.List[object]]::new()
+$result = [ordered]@{platform='windows'; passed=$false; runtime=$runtime; instanceId=$instance; phases=@(); executions=@(); workerSurvivesQuit=$false; cleanupErrors=@(); error=$null}
+function Start-Captured([string]$Executable, [string[]]$Arguments, [string]$Name) {
+    $start = [System.Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = $Executable
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $start.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
+    foreach ($argument in $Arguments) { $start.ArgumentList.Add($argument) }
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    if (-not $process.Start()) { throw "Failed to start $Name" }
+    $record = [ordered]@{name=$Name; executable=$Executable; arguments=$Arguments; pid=$process.Id; startedAt=[DateTime]::UtcNow.ToString('o'); exitCode=$null; reportExists=$false}
+    $capture = @{Process=$process; Out=$process.StandardOutput.ReadToEndAsync(); Err=$process.StandardError.ReadToEndAsync(); Name=$Name; Record=$record; Completed=$false}
+    $captures.Add($capture)
+    $result.executions += $record
+    return $capture
+}
+function Complete-Captured($Capture, [bool]$Stop = $false) {
+    if ($Capture.Completed) { return }
+    $process = $Capture.Process
+    if ($Stop -and -not $process.HasExited) { $process.Kill($true) }
+    if (-not $process.WaitForExit(5000)) { throw "Owned process $($Capture.Name) did not exit" }
+    $Capture.Record.exitCode = $process.ExitCode
+    $Capture.Record.finishedAt = [DateTime]::UtcNow.ToString('o')
+    foreach ($stream in @(@('Out','stdout'), @('Err','stderr'))) {
+        $reader = $Capture[$stream[0]]
+        if (-not $reader.Wait(5000)) { throw "Output drain timed out: $($Capture.Name) $($stream[1])" }
+        [System.IO.File]::WriteAllText((Join-Path $localReports ($Capture.Name + '.' + $stream[1] + '.log')), $reader.GetAwaiter().GetResult(), [System.Text.UTF8Encoding]::new($false))
+    }
+    $Capture.Completed = $true
+}
 try {
-    $workerProcess = Start-Process -FilePath $worker -ArgumentList @('--config', ('"' + $configPath + '"'), 'serve') -NoNewWindow -PassThru -RedirectStandardOutput (Join-Path $ReportDirectory 'companion-worker.stdout.log') -RedirectStandardError (Join-Path $ReportDirectory 'companion-worker.stderr.log')
+    $workerCapture = Start-Captured $worker @('--config', $configPath, 'serve') 'companion-worker'
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
     do {
-        if ($workerProcess.HasExited) { throw 'Isolated worker exited before readiness' }
+        if ($workerCapture.Process.HasExited) { throw 'Isolated worker exited before readiness' }
         try { $info = (Invoke-WorkerJson -Executable $worker -ConfigPath $configPath -Arguments @('info')).info; break }
         catch { if ([DateTime]::UtcNow -ge $deadline) { throw }; Start-Sleep -Milliseconds 100 }
     } while ($true)
     if (-not $info.attentionAvailable -or $info.instanceId -ne $instance) { throw 'Wrong isolated worker or unsupported attention capability' }
     foreach ($phase in @('initial', 'restart')) {
-        $phaseReport = Join-Path $ReportDirectory ('companion-' + $phase + '.json')
+        $phaseReport = Join-Path $localReports ('companion-' + $phase + '.json')
         $mode = if ($phase -eq 'initial') { '--validate-companion' } else { '--validate-companion-restart' }
-        $desktopProcess = Start-Process -FilePath $desktop -ArgumentList @($mode, ('"' + $phaseReport + '"')) -PassThru -RedirectStandardOutput (Join-Path $ReportDirectory ('companion-' + $phase + '.stdout.log')) -RedirectStandardError (Join-Path $ReportDirectory ('companion-' + $phase + '.stderr.log'))
-        if (-not $desktopProcess.WaitForExit(240000)) { throw "Native companion $phase exceeded deadline" }
-        $desktopProcess.Refresh()
-        if ($desktopProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $phaseReport)) { throw "Native companion $phase failed; see retained logs/report" }
+        Write-Output "Opening isolated TEST desktop ($phase). Keep the installed worker running; do not interact with the test window."
+        $capture = Start-Captured $desktop @($mode, $phaseReport) ('companion-' + $phase)
+        if (-not $capture.Process.WaitForExit(240000)) { throw "Native companion $phase exceeded deadline; last step retained in progress.json" }
+        Complete-Captured $capture
+        $capture.Record.reportExists = Test-Path -LiteralPath $phaseReport
+        if ($capture.Record.exitCode -ne 0 -or -not $capture.Record.reportExists) { throw "Native companion $phase failed: exit $($capture.Record.exitCode), report exists $($capture.Record.reportExists); see progress and logs" }
         $observation = Get-Content -LiteralPath $phaseReport -Raw | ConvertFrom-Json
-        if (-not $observation.passed -or $observation.platform -ne 'windows') { throw "Native companion $phase reported failure" }
         $result.phases += $observation
-        if ($workerProcess.HasExited) { throw 'Quitting the desktop terminated its independent worker' }
+        if (-not $observation.passed -or $observation.platform -ne 'windows') { throw "Native companion $phase reported failure: $($observation.error)" }
+        if ($workerCapture.Process.HasExited) { throw 'Quitting the desktop terminated its independent worker' }
         $info = (Invoke-WorkerJson -Executable $worker -ConfigPath $configPath -Arguments @('info')).info
         if ($info.instanceId -ne $instance) { throw 'Worker identity changed after desktop quit' }
     }
@@ -60,7 +97,14 @@ try {
     $result.error = $_.Exception.Message
     throw
 } finally {
-    if ($desktopProcess -and -not $desktopProcess.HasExited) { Stop-Process -Id $desktopProcess.Id -ErrorAction SilentlyContinue }
-    if ($workerProcess -and -not $workerProcess.HasExited) { Stop-Process -Id $workerProcess.Id -ErrorAction SilentlyContinue }
-    $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $ReportDirectory 'companion-report.json') -Encoding utf8
+    foreach ($capture in $captures) {
+        try { Complete-Captured $capture $true }
+        catch { $result.cleanupErrors += $_.Exception.Message; $result.passed = $false }
+        finally { $capture.Process.Dispose() }
+    }
+    $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $localReports 'companion-report.json') -Encoding utf8
+    # These files are immutable now; outer script hashes actual bytes, not cached HGFS stat.
+    Get-ChildItem -LiteralPath $localReports -File | Copy-Item -Destination $ReportDirectory
+    Write-Output 'Isolated test desktop/worker cleanup finished. The installed worker should remain running; the working desktop may be closed.'
+    if ($result.cleanupErrors.Count -gt 0) { throw ('Companion cleanup failed: ' + ($result.cleanupErrors -join '; ')) }
 }

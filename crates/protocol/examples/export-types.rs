@@ -48,6 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         NotificationPreferences::decl(&config),
         NotificationCursor::decl(&config),
         CompanionStatus::decl(&config),
+        DesktopValidationStatus::decl(&config),
         WorkflowProfile::decl(&config),
         ReadinessProbe::decl(&config),
         NetwatchProbe::decl(&config),

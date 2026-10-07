@@ -137,6 +137,16 @@ fn main() {
         }
         _ => None,
     };
+    if validation_report.is_some() {
+        context.config_mut().app.windows[0].title =
+            "WinBridge — АВТОМАТИЧЕСКАЯ ПРОВЕРКА (отдельный runtime)".into();
+    }
+    let validation = validation::Validation::new(
+        validation_report.as_ref().map(|(path, _)| path),
+        validation_report
+            .as_ref()
+            .is_some_and(|(_, restart)| *restart),
+    );
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Err(e) = companion::show_main(app) {
@@ -146,7 +156,7 @@ fn main() {
         .manage(WorkerEndpoint(endpoint))
         .manage(DesktopState(drafts))
         .manage(companion::Companion::new())
-        .manage(validation::Validation::new(validation_report.is_some()))
+        .manage(validation)
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished {
                 webview
@@ -178,6 +188,13 @@ fn main() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                let state = window.app_handle().state::<validation::Validation>();
+                if state.enabled {
+                    eprintln!(
+                        "Native validation window close requested: {}",
+                        window.label()
+                    );
+                }
                 if window.label() == "attention-popup" {
                     let _ = window.hide();
                 }
@@ -195,7 +212,9 @@ fn main() {
             companion::companion_open_task,
             companion::companion_dismiss,
             companion::save_notification_preferences,
-            validation::companion_probe
+            validation::companion_probe,
+            validation::desktop_validation_status,
+            validation::abort_desktop_validation
         ])
         .run(context)
         .expect("WinBridge desktop runtime");

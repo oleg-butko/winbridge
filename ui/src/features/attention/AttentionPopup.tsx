@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Alert, Badge, Button, Group, Stack, Text } from "@mantine/core";
 import type { CompanionStatus } from "../../runtime/contracts";
+import { ValidationBanner } from "./ValidationBanner";
 
 export function AttentionPopup() {
   const [status, setStatus] = useState<CompanionStatus | null>(null);
@@ -18,6 +19,7 @@ export function AttentionPopup() {
   async function action(command: string) { try { await invoke(command); } catch (e) { setError(String(e)); } }
   const record = status?.latestAttention;
   return <Stack p="md" gap="sm">
+    <ValidationBanner compact />
     <Group justify="space-between"><Text fw={600}>WinBridge · требуется внимание</Text><Badge color={record?.severity === "error" ? "red" : "yellow"}>{record?.severity ?? "…"}</Badge></Group>
     <Text size="sm">Проект: {record?.projectId ?? "…"} · непрочитано: {status?.pendingCount ?? "неизвестно"}</Text>
     <Text size="sm" style={{ maxHeight: 88, overflowY: "auto", whiteSpace: "pre-wrap" }}>{record?.message ?? "Получаем событие…"}</Text>
