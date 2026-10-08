@@ -44,9 +44,16 @@ application read после child result fault; commit `8f9ee71` фиксиру�
 storage usage и editable redacted preview/save. Дополнительно исправлен незаписанный
 import result: fault/lease сохраняются до recovery. 103 workspace Rust tests, Clippy, Windows all-targets compile, standalone desktop
 check/Clippy, contracts/typecheck/build и actual browser integration прошли;
-Windows history gate ещё предстоит. Рабочий runtime остаётся f7c4878; новый сценарий
+[Windows history gate](windows-history-gate-2026-10-08.md) завершён: source a64caf7,
+run `20261008-065054-f727f7bb`, task `04cf615b-0510-451e-bfd3-e3f8721cc87a`,
+succeeded/exit 0, report SHA-256
+`d7f39ff0217399261f629992d1814c7a071dd53ff1330dab74d8684820c868b9`.
+13 backend tests, actual history/preview/edit/save/retry UI, 17 verified artifacts.
+Cleanup без ошибок; installed worker healthy/activeTaskCount=0, generation прежняя.
+Пользователю сообщено, что тестовое окно закрылось, desktop можно завершить, worker оставить. Рабочий runtime остаётся f7c4878; новый сценарий
 `--history-diagnostics-only` выполняется в отдельном runtime через установленный worker.
-Новые ручные Windows наблюдения не требуются. MCP/retention/settings остаются.
+Новые ручные Windows наблюдения не требуются. MCP начинается по [плану](mcp-plan.md),
+зафиксированному до реализации; retention/settings остаются.
 
 ## Завершённый сценарий — 2026-10-07
 

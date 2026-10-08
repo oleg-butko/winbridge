@@ -85,20 +85,23 @@ dedup и acknowledgements сохраняются у worker; UI раскрыва�
 исправлены обозначение тестового окна, защита close и публикация отчёта.
 Workflow/app attention реализованы по [плану](workflow-attention-plan.md) и
 [прошли автоматический Windows gate](windows-workflow-attention-gate-2026-10-08.md):
-19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, автоматический Windows gate ещё предстоит. MCP ещё не реализован; этап не закрыт.
+19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, [автоматический Windows gate](windows-history-gate-2026-10-08.md) пройден. MCP ещё не реализован; этап не закрыт.
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
 [Ревью](review-attention-2026-10-07.md) исправило fresh running после failed result commit.
 Сценарий [tray/popup/sound/preferences](tray-plan.md) завершён; план был зафиксирован
 коммитом `bbba964` до реализации. План workflow/app attention зафиксирован `aeae684`
-до реализации; сценарий завершён. [История/диагностика](history-diagnostics.md) добавляет keyset pages, старые IDs, keyboard actions, redacted editable task report и storage usage; Windows gate ещё предстоит. Далее — MCP и retention/settings.
+до реализации; сценарий завершён. [История/диагностика](history-diagnostics.md) добавляет keyset pages, старые IDs, keyboard actions, redacted editable task report и storage usage; [Windows gate](windows-history-gate-2026-10-08.md) пройден: 13 tests, actual UI и 17 artifacts. Далее — [MCP](mcp-plan.md) и retention/settings.
 
 - [x] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [x] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
 - [x] Workflow/application attention: typed targets, единый сигнал родительского workflow, атомарная запись и native target navigation gate.
-- [ ] Projects, history/audit, connection settings, command palette и доступность с клавиатуры.
-- [ ] Retention, quotas, output paging, recovery без UI; экспорт диагностического task report с редактированием секретов.
+- [x] История task/import/workflow/application, поиск/фильтры/keyset pages, точные старые IDs, быстрые действия и keyboard shortcuts.
+- [ ] Projects/connection settings и полная доступность UI с клавиатуры.
+- [x] Editable task diagnostic с redaction, default omission, create-only save и проверкой readback/SHA-256.
+- [x] Output paging/quota, recovery без UI и read-only размеры журнала.
+- [ ] Полная retention policy и её настройки; automatic deletion пока выключен.
 - [ ] MCP stdio adapter использует те же операции, что CLI; domain logic не дублируется.
 
 Критерий: пользователь понимает, что сделал агент, получает уместный сигнал, открывает причину и может продолжить работу. Рутинные разрешённые действия не требуют повторяющихся confirmations.

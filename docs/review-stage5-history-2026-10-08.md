@@ -24,4 +24,4 @@ lease удерживается, свежие reads/cancel/list/history и admiss
 
 Следующая работа зафиксирована в [плане](history-diagnostics-plan.md) до реализации.
 Installed Windows runtime остаётся f7c4878; новые функции проверяются в отдельном
-runtime через уже разрешённый worker. Новый Windows gate пока не выполнен.
+runtime через уже разрешённый worker. [Новый Windows gate](windows-history-gate-2026-10-08.md) прошёл: обе journal fault регрессии проверены на Windows.
