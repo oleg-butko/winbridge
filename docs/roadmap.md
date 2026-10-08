@@ -85,7 +85,7 @@ dedup и acknowledgements сохраняются у worker; UI раскрыва�
 исправлены обозначение тестового окна, защита close и публикация отчёта.
 Workflow/app attention реализованы по [плану](workflow-attention-plan.md) и
 [прошли автоматический Windows gate](windows-workflow-attention-gate-2026-10-08.md):
-19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, [автоматический Windows gate](windows-history-gate-2026-10-08.md) пройден. MCP ещё не реализован; этап не закрыт.
+19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, [автоматический Windows gate](windows-history-gate-2026-10-08.md) пройден. [MCP adapter](mcp.md) также прошёл actual Windows gate; этап не закрыт для projects/connection settings и полной retention policy.
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
@@ -102,7 +102,7 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 - [x] Editable task diagnostic с redaction, default omission, create-only save и проверкой readback/SHA-256.
 - [x] Output paging/quota, recovery без UI и read-only размеры журнала.
 - [ ] Полная retention policy и её настройки; automatic deletion пока выключен.
-- [ ] [MCP stdio adapter](mcp.md) реализован: 30 typed tools над теми же RPC/handler; contract и actual Unix gate прошли, Windows gate ещё предстоит.
+- [x] [MCP stdio adapter](mcp.md): 30 typed tools над теми же RPC/handler; contract, actual Unix lost ACK и [Windows gate](windows-mcp-gate-2026-10-08.md) прошли.
 
 Критерий: пользователь понимает, что сделал агент, получает уместный сигнал, открывает причину и может продолжить работу. Рутинные разрешённые действия не требуют повторяющихся confirmations.
 
@@ -126,10 +126,12 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 
 ## Следующий конкретный шаг
 
-Этап 4 завершён по автоматическому Windows gate. Начинается этап 5: attention/tray,
-долговечные acknowledgements, retention/диагностический export и MCP adapter над теми
-же операциями. Пользователь обновил installed runtime до `523fc5b`; worker подтверждает
-профили/artifacts/Netwatch probe. Повторять 41 native test или назначать новые ручные UI gates пользователю не
-нужно. Если подключённый worker даёт неожиданную ошибку, по инструкции пользователя
-остановиться и запросить его обновление. Dirty source mode и performance extensions
-остаются будущими задачами.
+Этап 5: attention/tray, typed workflow/app events, history/diagnostic и MCP прошли
+автоматические Windows gates. Далее — удобные projects/connection settings и
+полная retention policy с явными лимитами; автоматического удаления нет.
+Размеры/quota уже видны, старые snapshots/reports/history не очищать.
+Installed worker остаётся f7c4878, Debian controller — cc18156. Новые Windows
+worker/desktop возможности проверены в отдельном runtime, обновление объединяется.
+Новых мелких ручных UI gates не назначать. Если подключённый worker даёт неожиданную
+ошибку, остановиться и уточнить по инструкции пользователя. Dirty source mode и
+performance extensions остаются будущими задачами.

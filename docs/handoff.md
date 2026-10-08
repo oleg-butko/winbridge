@@ -11,9 +11,11 @@ generation `8c5d8c94-697c-4e9f-9cdb-765930ee36f3`, attentionAvailable=true,
 workflowAvailable=true, features artifacts/netwatch_health и activeTaskCount=0.
 Рабочий runtime уже обновлён; записи о `523fc5b` ниже относятся к прежней сессии.
 
-Controller запущен с `.winbridge/controller-snapshot.local.json`, exec session 6831,
-generation `598a67c3-d759-4eee-87fa-e034e6828f8f`, `ws://192.168.44.203:1143`.
-Status connected=true, session `e7882b06-a99c-404f-ada4-a76a0bb9beeb`, lastError=null;
+Controller обновлён до `cc18156` для MCP gate и запущен с прежним
+`.winbridge/controller-snapshot.local.json`, текущий exec session 27844,
+generation `6928c40a-2c66-4bde-8226-a6b59d2fb789`, `ws://192.168.44.203:1143`.
+Status connected=true, session `90a2ff78-83e3-435b-975b-f0d78b0e0947`, lastError=null.
+Старый exec session 6831 завершён штатно; это был controller предыдущего прогона;
 read-only Info по WebSocket успешен. Старые exec session IDs после reboot не действуют.
 Доступность всегда проверять заново. Пользователю сообщено: desktop можно завершить
 через «Завершить интерфейс»; крестик скрывает его в tray. Worker оставить запущенным.
@@ -58,7 +60,15 @@ Cleanup без ошибок; installed worker healthy/activeTaskCount=0, generat
 lifecycle и forwarding в existing controller IPC. Четыре contract tests и actual
 Unix pipeline/lost ACK/dedup/output/history/diagnostic/client exit/cancel прошли.
 107 workspace tests, Clippy, Windows all-targets compile и contracts/typecheck прошли.
-Windows MCP gate ещё предстоит; installed worker не заменяется.
+[Windows MCP gate](windows-mcp-gate-2026-10-08.md) завершён:
+run `20261008-072201-391f141c`, report SHA-256
+`e401fa6a6b063090c53eb61bde1c78f47f80c87f662346a2ee51ff795e0af2c1`.
+Setup/success tasks succeeded, repeat key сохранил task/PID, client exit сохранил
+running/PID и explicit cancel завершился cancelled. Старый worker получил только
+поддерживаемые запросы: HistoryRead отказал controller с not transmitted.
+Installed worker не заменён, healthy, activeTaskCount=0. Следующая работа — GUI
+projects/connection settings и полная retention policy; stage 5 пока не закрыт.
+Ручные UI gates для мелких правок не назначать; новые worker/desktop обновлять вместе.
 
 ## Завершённый сценарий — 2026-10-07
 
@@ -152,6 +162,7 @@ tray/popup/sound/settings прошли gate, описанный в текуще�
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
 | Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite workflows/applications (schema 3), текущая schema 4 с attention; consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
 | Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Этап 4 завершён по общему Windows Netwatch прогону; native визуальная проверка отложена. |
+| History/diagnostic/MCP | Mixed 50-record keyset pages, filters/search, exact old IDs, keyboard palette, editable redacted create-only reports и read-only storage usage. History native Windows gate: 13 tests + actual UI + 17 artifacts. MCP: 30 typed tools над controller IPC; actual Unix lost ACK и Windows submit/dedup/client exit/cancel подтверждены. [History](history-diagnostics.md), [MCP](mcp.md). |
 | Attention | Durable task outcome/request attention, dedup/acknowledgement, schema 5 + consistent v3/v4 backups, capability guards, CLI и paged UI/typed targets. Tray/popup/sound/settings прошли автоматический native gate с двумя UI запусками. Workflow/app attention прошли автоматический Windows gate: 19 tests и native popup/target/ACK. [Journal](attention.md), [companion](companion.md). |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 

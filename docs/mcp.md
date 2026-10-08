@@ -96,3 +96,7 @@ runtime нет. Перед прогоном агент объясняет, чт�
 необязателен; после сообщает о завершении. Shared report создаётся новым каталогом
 с readback bytes/SHA-256 и ready marker. При неожиданной ошибке worker сценарий
 останавливается без automatic retry; correlations и принятый Task ID сохраняются.
+
+[Windows gate](windows-mcp-gate-2026-10-08.md) пройден: actual task/output/dedup,
+client exit с прежним PID, explicit cancel и ожидаемый capability refusal старого
+worker. Installed runtime остался f7c4878 и здоров.
