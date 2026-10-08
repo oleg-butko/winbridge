@@ -66,6 +66,17 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 worker/desktop. `test-windows-workflow.ps1` предназначен для автоматических тестов;
 [назначение сценариев и параметры](docs/windows-workflow-validation.md).
 
+После перезапуска Debian controller нужно снова запустить. Для уже подготовленной
+snapshot-конфигурации команда в Debian:
+
+```bash
+./target/debug/winbridge-controller --config .winbridge/controller-snapshot.local.json serve
+```
+
+Работающий Windows worker подключится сам. Desktop нужен для просмотра состояния;
+для команд агента достаточно оставить worker запущенным. Крестик desktop скрывает
+окно в tray; «Завершить интерфейс» полностью закрывает companion и сохраняет формы.
+
 ```bash
 cargo test --workspace --locked
 cargo check --workspace --locked

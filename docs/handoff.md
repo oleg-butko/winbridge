@@ -1,6 +1,26 @@
 # Следующей сессии: продолжение WinBridge
 
-## Текущий шаг — 2026-10-07
+## Текущая сессия — 2026-10-08
+
+Debian перезапущена. Пользователь распаковал clean archive
+`winbridge-20261007T103234Z-f7c4878-0ac18efc.zip` и выполнил
+`prepare-windows-snapshot.ps1`. Read-only worker info подтвердил Windows source
+`f7c4878fa5800bec5d8f4ae2781ee9b5108f0b36`, sourceDirty=false,
+manifest SHA-256 `c318705bfd7916f98421dda6c467e4edbcc4bc111834dc83ad7219d4f5fc0663`,
+generation `8c5d8c94-697c-4e9f-9cdb-765930ee36f3`, attentionAvailable=true,
+workflowAvailable=true, features artifacts/netwatch_health и activeTaskCount=0.
+Рабочий runtime уже обновлён; записи о `523fc5b` ниже относятся к прежней сессии.
+
+Controller запущен с `.winbridge/controller-snapshot.local.json`, exec session 6831,
+generation `598a67c3-d759-4eee-87fa-e034e6828f8f`, `ws://192.168.44.203:1143`.
+Status connected=true, session `e7882b06-a99c-404f-ada4-a76a0bb9beeb`, lastError=null;
+read-only Info по WebSocket успешен. Старые exec session IDs после reboot не действуют.
+Доступность всегда проверять заново. Пользователю сообщено: desktop можно завершить
+через «Завершить интерфейс»; крестик скрывает его в tray. Worker оставить запущенным.
+Восстановление соединения само по себе не требует повторения пройденных gates.
+Следующий сценарий этапа 5 — workflow/app outcome attention, затем диагностика/MCP.
+
+## Завершённый сценарий — 2026-10-07
 
 **Native tray/popup/settings gate пройден автоматически на Windows.**
 [Доказательства](windows-companion-gate-2026-10-07.md): clean source `f7c4878`,
