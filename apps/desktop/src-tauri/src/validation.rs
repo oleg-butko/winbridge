@@ -269,9 +269,14 @@ pub fn start(
     store: Result<Arc<DesktopDraftStore>, String>,
     report: PathBuf,
     restart: bool,
+    targets: bool,
 ) {
     tauri::async_runtime::spawn(async move {
-        let result = run(&app, address, store, restart).await;
+        let result = if targets {
+            run_targets(&app, address, store).await
+        } else {
+            run(&app, address, store, restart).await
+        };
         if app.state::<Validation>().aborted.load(Ordering::SeqCst) {
             return;
         }
@@ -573,5 +578,241 @@ async fn run(
     }
     Ok(
         serde_json::json!({"trayReady":true,"accidentalCloseBlocked":true,"hideKeepsProcess":true,"singleInstanceReopens":true,"backgroundPopup":true,"noFocusSteal":true,"nativeSoundApiSucceeded":true,"taskPage":task_id,"previousTaskPage":baseline,"openingDoesNotAcknowledge":true,"deferredAckSuppressed":true,"burstAggregated":true,"signals":signals,"pendingCount":pending}),
+    )
+}
+
+async fn run_targets(
+    app: &tauri::AppHandle,
+    address: Result<String, String>,
+    store: Result<Arc<DesktopDraftStore>, String>,
+) -> Result<serde_json::Value, String> {
+    if !cfg!(windows) {
+        return Err("Actual Windows required".into());
+    }
+    let address = address?;
+    let store = store?;
+    let info = match call(&address, LocalRequest::Info).await? {
+        LocalResponse::Info { info } => info,
+        _ => return Err("Info response".into()),
+    };
+    let runtime = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .parent()
+        .ok_or("Runtime directory")?
+        .to_path_buf();
+    if !info.instance_id.starts_with("tray-gate-")
+        || info.node_id != "tray-validation"
+        || info.projects.len() != 1
+        || std::path::Path::new(&info.projects[0].workspace_root) != runtime.join("project")
+        || !info.attention_targets_available
+    {
+        return Err(
+            "Refusing validation outside its isolated target-capable worker/runtime".into(),
+        );
+    }
+    wait("tray ready", || {
+        Ok(app
+            .state::<super::companion::Companion>()
+            .snapshot()?
+            .tray_ready)
+    })
+    .await?;
+    let mut prefs = store.load()?.notification_preferences;
+    prefs.minimum_interval_seconds = 1;
+    store.save_preferences(prefs)?;
+    let main = app.get_webview_window("main").ok_or("Main window")?;
+    let mut workflow_ids = Vec::new();
+    let mut event_ids = Vec::new();
+    for phase in ["baseline", "target"] {
+        app.state::<Validation>().progress(
+            if phase == "baseline" {
+                "Загрузка исходного workflow и подтверждение его события"
+            } else {
+                "Ошибка workflow до Task ID при скрытом окне"
+            },
+            None,
+        );
+        if phase == "target" {
+            app.state::<Validation>()
+                .allow_close
+                .store(true, Ordering::SeqCst);
+            click(app, "main", "companion-hide").await?;
+            wait("main hidden", || {
+                main.is_visible().map(|v| !v).map_err(|e| e.to_string())
+            })
+            .await?;
+            app.state::<Validation>()
+                .allow_close
+                .store(false, Ordering::SeqCst);
+        }
+        let executable = runtime
+            .join("project/winbridge-fixture.exe")
+            .to_string_lossy()
+            .into_owned();
+        let command = winbridge_protocol::CommandSource::Direct {
+            executable,
+            arguments: vec!["success".into()],
+            working_directory: ".".into(),
+        };
+        let request = winbridge_protocol::WorkflowSubmission {
+            protocol_version: 1,
+            request_id: phase.into(),
+            idempotency_key: phase.into(),
+            name: format!("Native workflow target · {phase}"),
+            project_id: info.projects[0].id.clone(),
+            snapshot_id: format!("missing-native-package-{phase}"),
+            manifest_sha256: "a".repeat(64),
+            timeout_ms: 60000,
+            build: command.clone(),
+            start: command,
+            readiness: winbridge_protocol::ReadinessProbe {
+                stdout_contains: "READY".into(),
+                timeout_ms: 5000,
+                netwatch: None,
+            },
+            log_path: "logs/app.log".into(),
+            artifacts: vec![],
+        };
+        let id = match call(
+            &address,
+            LocalRequest::SubmitWorkflow {
+                request: Box::new(request),
+            },
+        )
+        .await?
+        {
+            LocalResponse::Workflow { workflow } => workflow.workflow_id,
+            _ => return Err("Workflow response".into()),
+        };
+        let mut event = None;
+        for _ in 0..120 {
+            if let LocalResponse::AttentionEvents { page } = call(
+                &address,
+                LocalRequest::ListAttentionEvents {
+                    after_sequence: 0,
+                    pending_only: true,
+                },
+            )
+            .await?
+            {
+                event = page.records.into_iter().find(|r| {
+                    r.target
+                        == winbridge_protocol::AttentionTarget::Workflow {
+                            workflow_id: id.clone(),
+                        }
+                });
+            }
+            if event.is_some() {
+                break;
+            }
+            pause().await;
+        }
+        let event = event.ok_or("Workflow attention missing")?;
+        wait("workflow popup signal", || {
+            Ok(app
+                .state::<Validation>()
+                .signals
+                .lock()
+                .unwrap()
+                .contains(&event.attention_id))
+        })
+        .await?;
+        if phase == "target" {
+            let popup = app
+                .get_webview_window("attention-popup")
+                .ok_or("Popup window")?;
+            if main.is_visible().map_err(|e| e.to_string())?
+                || !popup.is_visible().map_err(|e| e.to_string())?
+            {
+                return Err("Workflow popup did not preserve hidden main".into());
+            }
+            #[cfg(windows)]
+            unsafe {
+                if windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow()
+                    == popup.hwnd().map_err(|e| e.to_string())?.0 as _
+                {
+                    return Err("Workflow popup stole focus".into());
+                }
+            }
+            app.state::<Validation>().progress(
+                "Popup открывает точный workflow вместо выдуманной task",
+                None,
+            );
+            click(app, "attention-popup", "popup-open-task").await?;
+        }
+        let mut confirmed = false;
+        for _ in 0..100 {
+            if js(app,"main","workflow-page","return document.querySelector('[data-confirmed-workflow-id]')?.getAttribute('data-confirmed-workflow-id') ?? null;").await? == id { confirmed=true;break; }
+            pause().await;
+        }
+        if !confirmed {
+            return Err("Confirmed workflow page did not open".into());
+        }
+        let LocalResponse::AttentionEvents { page } = call(
+            &address,
+            LocalRequest::ListAttentionEvents {
+                after_sequence: 0,
+                pending_only: true,
+            },
+        )
+        .await?
+        else {
+            return Err("Feed response".into());
+        };
+        if !page
+            .records
+            .iter()
+            .any(|r| r.attention_id == event.attention_id)
+        {
+            return Err("Opening workflow implicitly acknowledged its event".into());
+        }
+        // Actual React ACK action, separately from navigation.
+        click(
+            app,
+            "main",
+            &format!("ack-attention-{}", event.attention_id),
+        )
+        .await?;
+        for _ in 0..100 {
+            let LocalResponse::AttentionEvents { page } = call(
+                &address,
+                LocalRequest::ListAttentionEvents {
+                    after_sequence: 0,
+                    pending_only: true,
+                },
+            )
+            .await?
+            else {
+                return Err("Feed response".into());
+            };
+            if !page
+                .records
+                .iter()
+                .any(|r| r.attention_id == event.attention_id)
+            {
+                break;
+            }
+            pause().await;
+        }
+        super::companion::companion_dismiss(app.clone())?;
+        workflow_ids.push(id);
+        event_ids.push(event.attention_id);
+    }
+    let LocalResponse::AttentionEvents { page } = call(
+        &address,
+        LocalRequest::ListAttentionEvents {
+            after_sequence: 0,
+            pending_only: true,
+        },
+    )
+    .await?
+    else {
+        return Err("Feed response".into());
+    };
+    if page.pending_count != 0 {
+        return Err("Workflow UI ACK was not committed".into());
+    }
+    Ok(
+        serde_json::json!({"genericWorkflowPopup":true,"tasklessFailure":true,"exactWorkflowPage":true,"noFocusSteal":true,"openingDoesNotAcknowledge":true,"explicitUiAck":true,"workflowIds":workflow_ids,"eventIds":event_ids}),
     )
 }

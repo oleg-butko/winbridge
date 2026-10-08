@@ -32,6 +32,7 @@ pub enum Capability {
     WorkspaceImport,
     LogRead,
     AttentionRequest,
+    AttentionTargets,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -264,6 +265,8 @@ pub struct WorkerInfo {
     #[serde(default)]
     pub attention_available: bool,
     #[serde(default)]
+    pub attention_targets_available: bool,
+    #[serde(default)]
     pub journal_recovery_required: Option<String>,
     /// Queued/running tasks across the entire journal; None when unavailable or stale.
     #[serde(default)]
@@ -276,6 +279,16 @@ pub struct WorkerInfo {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
+    ListAttentionEvents {
+        #[serde(rename = "afterSequence")]
+        after_sequence: u64,
+        #[serde(rename = "pendingOnly")]
+        pending_only: bool,
+    },
+    AcknowledgeAttentionEvent {
+        #[serde(rename = "attentionId")]
+        attention_id: String,
+    },
     RequestAttention {
         request: AttentionSubmission,
     },
@@ -367,6 +380,12 @@ pub enum LocalRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LocalResponse {
+    AttentionEvent {
+        event: AttentionEvent,
+    },
+    AttentionEvents {
+        page: AttentionEventPage,
+    },
     Attention {
         attention: AttentionRecord,
     },
@@ -516,8 +535,10 @@ pub struct CompanionStatus {
     pub pending_count: Option<u64>,
     pub active_task_count: Option<u64>,
     pub error: Option<String>,
-    pub latest_attention: Option<AttentionRecord>,
+    pub latest_attention: Option<AttentionEvent>,
     pub open_task_id: Option<String>,
+    #[serde(default)]
+    pub open_target: Option<AttentionTarget>,
     pub open_task_sequence: u64,
     pub quit_request_sequence: u64,
     pub preferences: NotificationPreferences,

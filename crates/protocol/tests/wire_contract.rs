@@ -53,3 +53,46 @@ fn documented_requests_follow_the_wire_contract() {
         assert_eq!(request.protocol_version, PROTOCOL_VERSION);
     }
 }
+
+#[test]
+fn attention_targets_are_additive_and_legacy_records_keep_their_wire_shape() {
+    use winbridge_protocol::{
+        AttentionEvent, AttentionRecord, AttentionTarget, LocalRequest, WorkerInfo,
+    };
+    let legacy = serde_json::json!({
+        "attentionId":"a", "sequence":17, "projectId":"p", "taskId":"t",
+        "severity":"warning", "message":"check", "origin":"agent_request",
+        "createdAtMs":100, "acknowledgedAtMs":null
+    });
+    let old: AttentionRecord = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&old).unwrap(), legacy);
+    let mut generic = serde_json::to_value(AttentionEvent::from(old)).unwrap();
+    assert!(generic.get("taskId").is_none());
+    for target in [
+        serde_json::json!({"kind":"task", "taskId":"t"}),
+        serde_json::json!({"kind":"workflow", "workflowId":"w"}),
+        serde_json::json!({"kind":"application", "applicationId":"a", "workflowId":"w"}),
+    ] {
+        generic["target"] = target.clone();
+        let event: AttentionEvent = serde_json::from_value(generic.clone()).unwrap();
+        assert_eq!(serde_json::to_value(event.target).unwrap(), target);
+    }
+    assert!(
+        serde_json::from_value::<AttentionTarget>(serde_json::json!({"kind":"workflow"})).is_err()
+    );
+    for wire in [
+        serde_json::json!({"method":"list_attention_events", "afterSequence":17,"pendingOnly":true}),
+        serde_json::json!({"method":"acknowledge_attention_event", "attentionId":"a"}),
+    ] {
+        let request: LocalRequest = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(request).unwrap(), wire);
+    }
+    let old_info: WorkerInfo = serde_json::from_value(serde_json::json!({
+        "protocolVersion":1,"instanceId":"i","nodeId":"n","generation":"g",
+        "platform":"windows","runtimeValidation":"windows-native","projects":[],"attentionAvailable":true
+    })).unwrap();
+    assert!(
+        !old_info.attention_targets_available,
+        "old worker must use the legacy feed"
+    );
+}

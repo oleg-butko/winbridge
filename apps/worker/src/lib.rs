@@ -147,6 +147,19 @@ impl Worker {
             }
         }
         match request {
+            LocalRequest::ListAttentionEvents {
+                after_sequence,
+                pending_only,
+            } => Ok(LocalResponse::AttentionEvents {
+                page: self
+                    .store()?
+                    .list_attention_events(after_sequence, pending_only)?,
+            }),
+            LocalRequest::AcknowledgeAttentionEvent { attention_id } => {
+                Ok(LocalResponse::AttentionEvent {
+                    event: self.store()?.acknowledge_attention_event(&attention_id)?,
+                })
+            }
             LocalRequest::RequestAttention { request } => {
                 if self.stop.load(Ordering::Acquire) {
                     return Err("Worker stopping; attention not accepted".into());
@@ -192,24 +205,52 @@ impl Worker {
                     workflow: Box::new(store.accept_workflow(*request)?),
                 })
             }
-            LocalRequest::ListWorkflows => Ok(LocalResponse::Workflows {
-                workflows: self.store()?.workflows(true)?,
-            }),
-            LocalRequest::GetWorkflow { workflow_id } => Ok(LocalResponse::Workflow {
-                workflow: Box::new(self.store()?.workflow(&workflow_id)?),
-            }),
-            LocalRequest::CancelWorkflow { workflow_id } => Ok(LocalResponse::Workflow {
-                workflow: Box::new(self.store()?.cancel_workflow(&workflow_id)?),
-            }),
-            LocalRequest::ListApplications => Ok(LocalResponse::Applications {
-                applications: self.store()?.applications(true)?,
-            }),
-            LocalRequest::GetApplication { application_id } => Ok(LocalResponse::Application {
-                application: self.store()?.application(&application_id)?,
-            }),
-            LocalRequest::StopApplication { application_id } => Ok(LocalResponse::Application {
-                application: self.store()?.stop_application(&application_id)?,
-            }),
+            LocalRequest::ListWorkflows => {
+                let store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
+                Ok(LocalResponse::Workflows {
+                    workflows: store.workflows(true)?,
+                })
+            }
+            LocalRequest::GetWorkflow { workflow_id } => {
+                let store = self.store()?;
+                self.require_committed_result(&workflow_id)?;
+                Ok(LocalResponse::Workflow {
+                    workflow: Box::new(store.workflow(&workflow_id)?),
+                })
+            }
+            LocalRequest::CancelWorkflow { workflow_id } => {
+                let mut store = self.store()?;
+                self.require_committed_result(&workflow_id)?;
+                Ok(LocalResponse::Workflow {
+                    workflow: Box::new(store.cancel_workflow(&workflow_id)?),
+                })
+            }
+            LocalRequest::ListApplications => {
+                let store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
+                Ok(LocalResponse::Applications {
+                    applications: store.applications(true)?,
+                })
+            }
+            LocalRequest::GetApplication { application_id } => {
+                let store = self.store()?;
+                self.require_committed_result(&application_id)?;
+                Ok(LocalResponse::Application {
+                    application: store.application(&application_id)?,
+                })
+            }
+            LocalRequest::StopApplication { application_id } => {
+                let mut store = self.store()?;
+                self.require_committed_result(&application_id)?;
+                Ok(LocalResponse::Application {
+                    application: store.stop_application(&application_id)?,
+                })
+            }
             LocalRequest::ReadApplicationLog {
                 application_id,
                 cursor,
@@ -256,6 +297,7 @@ impl Worker {
                         build: Some(winbridge_protocol::build_identity()),
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
+                        attention_targets_available: true,
                         journal_recovery_required: recovery,
                         active_task_count,
                         protocol_version: PROTOCOL_VERSION,
@@ -510,7 +552,7 @@ impl Worker {
             .unreconciled_tasks
             .lock()
             .map_err(|_| "journal fault state lock poisoned")?;
-        Ok(faults.keys().next().map(|id|format!("Task {id} has an uncommitted outcome. New launches are suspended; repair journal storage and restart worker for indeterminate recovery. No command is automatically resubmitted")))
+        Ok(faults.keys().next().map(|id|format!("Operation {id} has an uncommitted outcome. New launches are suspended; repair journal storage and restart worker for indeterminate recovery. No command is automatically resubmitted")))
     }
     fn require_committed_result(&self, id: &str) -> Result<()> {
         if let Some(reason) = self
@@ -519,7 +561,7 @@ impl Worker {
             .map_err(|_| "journal fault state lock poisoned")?
             .get(id)
         {
-            return Err(format!("Task {id}: result could not be committed; journal status is stale. {reason}. Repair journal storage and restart worker to reconcile; do not resubmit the command"));
+            return Err(format!("Operation {id}: result could not be committed; journal status is stale. {reason}. Repair journal storage and restart worker to reconcile; do not resubmit the command"));
         }
         Ok(())
     }

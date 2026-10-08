@@ -23,7 +23,7 @@ export function AttentionPopup() {
     <Group justify="space-between"><Text fw={600}>WinBridge · требуется внимание</Text><Badge color={record?.severity === "error" ? "red" : "yellow"}>{record?.severity ?? "…"}</Badge></Group>
     <Text size="sm">Проект: {record?.projectId ?? "…"} · непрочитано: {status?.pendingCount ?? "неизвестно"}</Text>
     <Text size="sm" style={{ maxHeight: 88, overflowY: "auto", whiteSpace: "pre-wrap" }}>{record?.message ?? "Получаем событие…"}</Text>
-    <Group><Button data-testid="popup-open-task" disabled={!record} onClick={() => void action("companion_open_task")}>Открыть задачу</Button><Button variant="subtle" onClick={() => void action("companion_dismiss")}>Скрыть</Button></Group>
+    <Group><Button data-testid="popup-open-task" disabled={!record} onClick={() => void action("companion_open_task")}>{record?.target.kind === "workflow" ? "Открыть workflow" : record?.target.kind === "application" ? "Открыть приложение" : "Открыть задачу"}</Button><Button variant="subtle" onClick={() => void action("companion_dismiss")}>Скрыть</Button></Group>
     <Text size="xs" c="dimmed">Подтверждение — отдельно в журнале внимания.</Text>
     {error && <Alert color="red">{error}</Alert>}
   </Stack>;

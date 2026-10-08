@@ -32,8 +32,8 @@ impl Store {
         let version: u32 = connection
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
-        if version > 4 {
-            return Err(format!("journal schema {version} is unsupported; expected 4; keep the database and use a compatible worker"));
+        if version > 5 {
+            return Err(format!("journal schema {version} is unsupported; expected 5; keep the database and use a compatible worker"));
         }
         if version == 0 {
             let tables: u32 = connection.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0)).map_err(sql)?;
@@ -102,6 +102,29 @@ impl Store {
                 CREATE TABLE attention (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, project TEXT NOT NULL, task TEXT NOT NULL REFERENCES tasks(id), severity TEXT NOT NULL, message TEXT NOT NULL, origin TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, created INTEGER NOT NULL, acknowledged INTEGER, UNIQUE(origin,key));
                 CREATE INDEX attention_pending ON attention(acknowledged,sequence);
                 PRAGMA user_version=4; COMMIT;").map_err(sql)?;
+        }
+        if version <= 4 {
+            if version == 4 {
+                let backup = path.with_file_name(format!(
+                    "journal-v4-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE attention_v5 (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, project TEXT NOT NULL, task TEXT REFERENCES tasks(id), target TEXT NOT NULL CHECK(json_valid(target)), severity TEXT NOT NULL, message TEXT NOT NULL, origin TEXT NOT NULL, key TEXT NOT NULL, payload TEXT NOT NULL, created INTEGER NOT NULL, acknowledged INTEGER, UNIQUE(origin,key));
+                INSERT INTO attention_v5(sequence,id,project,task,target,severity,message,origin,key,payload,created,acknowledged)
+                  SELECT sequence,id,project,task,json_object('kind','task','taskId',task),severity,message,origin,key,payload,created,acknowledged FROM attention;
+                INSERT INTO sqlite_sequence(name,seq) SELECT 'attention_v5',seq FROM sqlite_sequence WHERE name='attention' AND NOT EXISTS(SELECT 1 FROM sqlite_sequence WHERE name='attention_v5');
+                UPDATE sqlite_sequence SET seq=max(seq,coalesce((SELECT seq FROM sqlite_sequence WHERE name='attention'),0)) WHERE name='attention_v5';
+                DROP TABLE attention;
+                ALTER TABLE attention_v5 RENAME TO attention;
+                CREATE INDEX attention_pending ON attention(acknowledged,sequence);
+                PRAGMA user_version=5; COMMIT;").map_err(sql)?;
         }
         Ok(Self { connection })
     }

@@ -1,6 +1,6 @@
 //! Pure notification policy. Wall time controls quiet hours; elapsed time controls rate.
 use crate::config::Result;
-use winbridge_protocol::{AttentionRecord, AttentionSeverity, NotificationPreferences};
+use winbridge_protocol::{AttentionEvent, AttentionSeverity, NotificationPreferences};
 
 pub fn validate(p: &NotificationPreferences) -> Result<()> {
     if p.volume_percent > 100
@@ -51,8 +51,8 @@ pub fn plan(
     elapsed_seconds: Option<u64>,
     after: u64,
     scanned: u64,
-    records: &[AttentionRecord],
-) -> (u64, Option<AttentionRecord>) {
+    records: &[AttentionEvent],
+) -> (u64, Option<AttentionEvent>) {
     let latest = records
         .iter()
         .rev()
@@ -106,11 +106,13 @@ mod tests {
             quiet_hours_enabled: true,
             ..Default::default()
         };
-        let mut r = AttentionRecord {
+        let mut r = AttentionEvent {
             attention_id: "a".into(),
             sequence: 7,
             project_id: "p".into(),
-            task_id: "t".into(),
+            target: winbridge_protocol::AttentionTarget::Task {
+                task_id: "t".into(),
+            },
             severity: AttentionSeverity::Error,
             message: "failure".into(),
             origin: "task_outcome".into(),

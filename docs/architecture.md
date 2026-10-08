@@ -1,6 +1,6 @@
 # Архитектура WinBridge
 
-Статус 2026-10-07: этапы 1–4 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Начат [журнал внимания этапа 5](attention.md). Windows regression запускается [автоматически](windows-workflow-validation.md). Диаграмма включает будущие tray/popup/sound возможности.
+Статус 2026-10-08: этапы 1–4 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Начат [журнал внимания этапа 5](attention.md). Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; новые workflow/application attention targets ждут отдельного автоматического native gate.
 
 ## Назначение и среда
 
@@ -92,11 +92,15 @@ Worker сохраняет frozen профиль и step IDs до ACK, затем
 
 Readiness подтверждается stdout token именно запущенного процесса либо изолированным Netwatch IPC probe с проверкой PID владельца. Readable UTF-8 log находится вне snapshots; byte cursor обнаруживает rotate/truncate/prefix rewrite. App lifecycle отделён от исторического результата запуска; неизвестный исход после crash не повторяется. Подробные границы и CLI/UI описаны в [workflows](workflows.md).
 
-Этап 5 добавляет SQLite schema 4: attention хранится у worker, explicit key дедуплицируется,
-acknowledgement переживает desktop/worker restart. Failed/indeterminate task и связанное
-attention event фиксируются одной транзакцией. Перед v3 upgrade — consistent SQLite
-backup. Native presentation не хранит собственный источник истины об acknowledgement;
-tray/quiet hours будут управлять сигналом над этим журналом. [Контракт](attention.md).
+Этап 5 использует SQLite schema 5: typed task/workflow/application attention хранится
+у worker, explicit key дедуплицируется, acknowledgement переживает restart. Terminal
+record и event фиксируются одной транзакцией; child failure внутри workflow не
+дублирует родительское уведомление. Перед v4 upgrade — consistent SQLite backup;
+IDs, ACK и sequence high-water сохраняются. При ошибке commit worker отклоняет stale
+состояние и приостанавливает admission/queue до восстановления. Native presentation
+использует journal и сохранённый cursor; tray/quiet hours управляют только сигналом.
+Additive attention_targets capability защищает старые peers от неизвестных RPC.
+[Контракт и границы](attention.md).
 
 ## UI и расширение
 

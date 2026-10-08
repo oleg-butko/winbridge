@@ -130,10 +130,16 @@ fn main() {
         [mode, report]
             if matches!(
                 mode.as_str(),
-                "--validate-companion" | "--validate-companion-restart"
+                "--validate-companion"
+                    | "--validate-companion-restart"
+                    | "--validate-workflow-attention"
             ) =>
         {
-            Some((std::path::PathBuf::from(report), mode.ends_with("-restart")))
+            Some((
+                std::path::PathBuf::from(report),
+                mode.ends_with("-restart"),
+                mode == "--validate-workflow-attention",
+            ))
         }
         _ => None,
     };
@@ -142,10 +148,10 @@ fn main() {
             "WinBridge — АВТОМАТИЧЕСКАЯ ПРОВЕРКА (отдельный runtime)".into();
     }
     let validation = validation::Validation::new(
-        validation_report.as_ref().map(|(path, _)| path),
+        validation_report.as_ref().map(|(path, _, _)| path),
         validation_report
             .as_ref()
-            .is_some_and(|(_, restart)| *restart),
+            .is_some_and(|(_, restart, _)| *restart),
     );
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -174,13 +180,14 @@ fn main() {
                 background_endpoint.clone(),
                 background_drafts.clone(),
             );
-            if let Some((report, restart)) = validation_report {
+            if let Some((report, restart, targets)) = validation_report {
                 validation::start(
                     app.handle().clone(),
                     background_endpoint,
                     background_drafts,
                     report,
                     restart,
+                    targets,
                 );
             }
             Ok(())

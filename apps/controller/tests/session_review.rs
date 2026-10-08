@@ -28,6 +28,18 @@ async fn connect(
     controller: &Arc<Controller>,
     listener: &Arc<TcpListener>,
 ) -> (JoinHandle<ws::Result<()>>, Client) {
+    connect_with_capabilities(
+        controller,
+        listener,
+        vec![Capability::TaskSubmit, Capability::TaskCancel],
+    )
+    .await
+}
+async fn connect_with_capabilities(
+    controller: &Arc<Controller>,
+    listener: &Arc<TcpListener>,
+    capabilities: Vec<Capability>,
+) -> (JoinHandle<ws::Result<()>>, Client) {
     let url = format!("ws://{}", listener.local_addr().unwrap());
     let server = Arc::clone(listener);
     let controller = Arc::clone(controller);
@@ -48,7 +60,7 @@ async fn connect(
                 instance_id: "review".into(),
                 node_id: "windows".into(),
                 generation: "worker-generation".into(),
-                capabilities: vec![Capability::TaskSubmit, Capability::TaskCancel],
+                capabilities,
             },
         },
     )
@@ -59,6 +71,28 @@ async fn connect(
         SessionMessage::Welcome { .. }
     ));
     (actor, client)
+}
+
+#[tokio::test]
+async fn task_attention_worker_rejects_target_requests_before_transmission() {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let (_root, controller, listener) = pair().await;
+        let (actor, mut client) = connect_with_capabilities(&controller, &listener, vec![Capability::TaskSubmit, Capability::TaskCancel, Capability::AttentionRequest]).await;
+        for request in [
+            LocalRequest::ListAttentionEvents {after_sequence:0,pending_only:true},
+            LocalRequest::AcknowledgeAttentionEvent {attention_id:"a".into()},
+        ] {
+            let LocalResponse::Error {message}=controller.call(request).await else {panic!("Expected capability refusal")};
+            assert!(message.contains("attention_targets") && message.contains("not transmitted"));
+        }
+        assert!(controller.status().unwrap().connected);
+        let caller=Arc::clone(&controller);
+        let pending=tokio::spawn(async move {caller.call(LocalRequest::ListAttention {after_sequence:0,pending_only:true}).await});
+        let SessionMessage::Request {id,request:LocalRequest::ListAttention {..}}=next_request(&mut client).await else {panic!("Only supported legacy request should reach the worker")};
+        ws::send(&mut client,&SessionMessage::Response {id,response:LocalResponse::Error {message:"legacy feed response".into()}}).await.unwrap();
+        assert!(matches!(pending.await.unwrap(),LocalResponse::Error {message} if message=="legacy feed response"));
+        actor.abort();let _=actor.await;
+    }).await.unwrap();
 }
 async fn next_request(client: &mut Client) -> SessionMessage {
     loop {

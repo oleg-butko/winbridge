@@ -26,6 +26,7 @@ pub fn descriptor(component: Component) -> RuntimeDescriptor {
             Capability::WorkspaceImport,
             Capability::LogRead,
             Capability::AttentionRequest,
+            Capability::AttentionTargets,
         ],
     }
 }

@@ -71,6 +71,15 @@ $report = 'K:\VMs\shared\WinBridge\workflow-validation\manual-' + (Get-Date -For
 Сценарий открывает только тестовый desktop и не заменяет рабочий runtime.
 Подробное назначение действий и границы доказательства: [companion](companion.md).
 
+Для новых workflow/application уведомлений используется `--workflow-attention-only`
+и архив с `--include-built-ui`. PowerShell `-WorkflowAttentionOnly` запускает attention
+и отфильтрованные workflow tests, собирает worker/desktop offline. Единственное
+тестовое окно проверяет реальную ошибку import, popup без focus, переход к настоящему
+workflow и явное UI acknowledgement. Оно показывает TEST banner и текущий шаг,
+закрывается само после save/quit. Не трогать это окно до сообщения о завершении;
+рабочий desktop необязателен, установленный worker оставить работающим. Старый
+tray gate не повторяется. См. [attention](attention.md).
+
 ## Запуск из Debian
 
 ```bash

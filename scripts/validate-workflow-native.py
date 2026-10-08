@@ -48,11 +48,12 @@ def main():
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--project', default='snapshot-fixture')
     parser.add_argument('--attention-only', action='store_true', help='Run the stage-5 attention tests without repeating the completed workflow gate')
+    parser.add_argument('--workflow-attention-only', action='store_true', help='Check workflow/application attention and native workflow target navigation')
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.netwatch_profile)) > 1:
-        parser.error('Choose one isolated scenario: attention, companion or Netwatch')
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.netwatch_profile)) > 1:
+        parser.error('Choose one isolated scenario: task attention, workflow attention, companion or Netwatch')
     config = json.loads(args.controller_config.read_text())
     endpoint = Path(config['stateDirectory']) / ('controller-' + config['instanceId'] + '.sock')
     info = call(endpoint, {'method': 'info'})['info']
@@ -73,6 +74,8 @@ def main():
         profile_argument = ' -AttentionOnly'
     if args.companion_only:
         profile_argument = ' -CompanionOnly'
+    if args.workflow_attention_only:
+        profile_argument = ' -WorkflowAttentionOnly'
     if args.netwatch_profile:
         profile = json.loads(args.netwatch_profile.read_text())
         if not profile.get('readiness', {}).get('netwatch', {}).get('instanceId', '').startswith('winbridge-'):
@@ -91,6 +94,7 @@ def main():
         extra = f"$profilePath = Join-Path $local 'netwatch.request.json'\n[IO.File]::WriteAllBytes($profilePath, [Convert]::FromBase64String('{encoded}'))\n"
         profile_argument = ' -NetwatchProfile $profilePath'
     script = f"""$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 $archive = {ps_string(windows_archive)}
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne {ps_string(digest)}) {{ throw 'Archive SHA-256 mismatch' }}
 $local = {ps_string(local)}

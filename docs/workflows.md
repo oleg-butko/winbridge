@@ -40,6 +40,17 @@ Project reservation охватывает startup prerequisites, поэтому �
 
 Успех startup и дальнейшая жизнь приложения показаны отдельно. PID подтверждает создание процесса, stdout token этого процесса подтверждает readiness, readable log подтверждает доступ к логу. Падение после готовности меняет ApplicationRecord, сохраняя исторический успешный WorkflowRecord. Отмена завершённого workflow не останавливает приложение; для него есть `stop-application`.
 
+## Уведомления о результате
+
+Workflow failure/indeterminate создаёт одно событие с workflow ID, шагом и причиной,
+включая import failures до появления Task ID. Owned build/start task не создаёт
+дублирующее task notification. После successful startup crash/exit/unknown приложения
+даёт отдельный application event; прежний startup остаётся succeeded. Stop/cancel
+тихие. Readiness/log failure сигнализирует родительский workflow. Все terminal
+records и соответствующие events записываются атомарно в schema 5; journal fault
+блокирует выдачу stale результата и новые запуски. [Контракт](attention.md). Новый
+Windows target navigation gate пока не завершён.
+
 ## Чтение лога
 
 `logPath` находится внутри зарегистрированного проекта, вне snapshots/.winbridge. Worker отклоняет traversal, junction/symlink, special files и hard links. LogRead возвращает raw bytes; кодировка профиля — UTF-8. Page ≤64 KiB; byte offset не разрезает данные при последовательном чтении, UI декодирует incremental TextDecoder и держит последние 65 536 Unicode символов.

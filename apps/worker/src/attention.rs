@@ -1,7 +1,11 @@
 //! Durable attention records share the task journal, independently of desktop lifetime.
 use crate::store::{now_ms, sql, Result, Store};
 use rusqlite::{params, Connection, OptionalExtension, Row};
-use winbridge_protocol::{AttentionPage, AttentionRecord, AttentionSubmission};
+use winbridge_protocol::{
+    ApplicationRecord, ApplicationStatus, AttentionEvent, AttentionEventPage, AttentionPage,
+    AttentionRecord, AttentionSeverity, AttentionSubmission, AttentionTarget, WorkflowRecord,
+    WorkflowStepStatus,
+};
 
 fn counter(row: &Row<'_>, index: usize) -> rusqlite::Result<u64> {
     let value: i64 = row.get(index)?;
@@ -10,7 +14,7 @@ fn counter(row: &Row<'_>, index: usize) -> rusqlite::Result<u64> {
 fn timestamp(value: u64) -> Result<i64> {
     i64::try_from(value).map_err(|_| "Journal timestamp exceeds integer range".into())
 }
-fn record(row: &Row<'_>) -> rusqlite::Result<AttentionRecord> {
+fn legacy_record(row: &Row<'_>) -> rusqlite::Result<AttentionRecord> {
     let severity: String = row.get(4)?;
     let severity = serde_json::from_str(&severity).map_err(|error| {
         rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(error))
@@ -32,19 +36,176 @@ fn record(row: &Row<'_>) -> rusqlite::Result<AttentionRecord> {
             .transpose()?,
     })
 }
+fn event(row: &Row<'_>) -> rusqlite::Result<AttentionEvent> {
+    let target: String = row.get(9)?;
+    let target = serde_json::from_str(&target).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let severity: String = row.get(4)?;
+    Ok(AttentionEvent {
+        attention_id: row.get(0)?,
+        sequence: counter(row, 1)?,
+        project_id: row.get(2)?,
+        target,
+        severity: serde_json::from_str(&severity).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        message: row.get(5)?,
+        origin: row.get(6)?,
+        created_at_ms: counter(row, 7)?,
+        acknowledged_at_ms: row
+            .get::<_, Option<i64>>(8)?
+            .map(|v| u64::try_from(v).map_err(|_| rusqlite::Error::IntegralValueOutOfRange(8, v)))
+            .transpose()?,
+    })
+}
+fn message(text: String) -> String {
+    let mut out = String::new();
+    for c in text.chars().map(|c| if c.is_control() { ' ' } else { c }) {
+        if out.len() + c.len_utf8() > 1020 {
+            out.push('…');
+            break;
+        }
+        out.push(c);
+    }
+    out
+}
+pub(crate) fn workflow_outcome(connection: &Connection, flow: &WorkflowRecord) -> Result<()> {
+    let Some((severity, _)) = winbridge_core::attention::outcome(flow.status) else {
+        return Ok(());
+    };
+    let step = flow
+        .steps
+        .iter()
+        .find(|s| {
+            matches!(
+                s.status,
+                WorkflowStepStatus::Failed | WorkflowStepStatus::Indeterminate
+            )
+        })
+        .map_or("очередь/восстановление", |s| {
+            s.name.as_str()
+        });
+    insert_outcome(
+        connection,
+        Outcome {
+            project: &flow.submission.project_id,
+            task: None,
+            target: &AttentionTarget::Workflow {
+                workflow_id: flow.workflow_id.clone(),
+            },
+            severity,
+            message: &message(format!(
+                "Workflow «{}» · {}: {}",
+                flow.submission.name,
+                step,
+                flow.reason.as_deref().unwrap_or("Исход требует проверки")
+            )),
+            origin: "workflow_outcome",
+            key: &flow.workflow_id,
+            created: flow.finished_at_ms.unwrap_or_else(now_ms),
+        },
+    )
+}
+pub(crate) fn application_outcome(connection: &Connection, app: &ApplicationRecord) -> Result<()> {
+    if app.ready_at_ms.is_none() {
+        return Ok(());
+    }
+    // Startup failure is already represented by a single workflow event.
+    let started: bool = connection
+        .query_row(
+            "SELECT status='succeeded' FROM workflows WHERE id=?1",
+            [&app.workflow_id],
+            |r| r.get(0),
+        )
+        .map_err(sql)?;
+    if !started {
+        return Ok(());
+    }
+    let severity = match app.status {
+        ApplicationStatus::Failed => AttentionSeverity::Error,
+        ApplicationStatus::Indeterminate | ApplicationStatus::Exited => AttentionSeverity::Warning,
+        _ => return Ok(()),
+    };
+    let label = match app.status {
+        ApplicationStatus::Failed => "ошибка",
+        ApplicationStatus::Exited => "самостоятельное завершение",
+        _ => "исход неизвестен",
+    };
+    insert_outcome(
+        connection,
+        Outcome {
+            project: &app.project_id,
+            task: Some(&app.task_id),
+            target: &AttentionTarget::Application {
+                application_id: app.application_id.clone(),
+                workflow_id: app.workflow_id.clone(),
+            },
+            severity,
+            message: &message(format!(
+                "Приложение после успешного startup · {label}: {}",
+                app.reason
+                    .as_deref()
+                    .unwrap_or("Приложение завершилось самостоятельно")
+            )),
+            origin: "application_outcome",
+            key: &app.application_id,
+            created: app.finished_at_ms.unwrap_or_else(now_ms),
+        },
+    )
+}
+struct Outcome<'a> {
+    project: &'a str,
+    task: Option<&'a str>,
+    target: &'a AttentionTarget,
+    severity: AttentionSeverity,
+    message: &'a str,
+    origin: &'a str,
+    key: &'a str,
+    created: u64,
+}
+fn insert_outcome(connection: &Connection, outcome: Outcome<'_>) -> Result<()> {
+    let Outcome {
+        project,
+        task,
+        target,
+        severity,
+        message,
+        origin,
+        key,
+        created,
+    } = outcome;
+    connection.execute("INSERT INTO attention(id,project,task,target,severity,message,origin,key,payload,created) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'',?9) ON CONFLICT(origin,key) DO NOTHING",
+        params![uuid::Uuid::new_v4().to_string(),project,task,serde_json::to_string(target).map_err(|e|e.to_string())?,
+            serde_json::to_string(&severity).map_err(|e|e.to_string())?,message,origin,key,timestamp(created)?]).map_err(sql)?;
+    Ok(())
+}
 const COLUMNS: &str = "id,sequence,project,task,severity,message,origin,created,acknowledged";
 
 pub(crate) fn task_outcome(
     connection: &Connection,
     task: &winbridge_protocol::TaskRecord,
 ) -> Result<()> {
+    let owned: bool = connection.query_row("SELECT EXISTS(SELECT 1 FROM workflows w,json_each(w.record,'$.steps') s WHERE json_extract(s.value,'$.operationId')=?1)", [&task.task_id], |r|r.get(0)).map_err(sql)?;
+    if owned {
+        return Ok(());
+    }
     if let Some((severity, message)) = winbridge_core::attention::outcome(task.status) {
-        connection.execute(
-            "INSERT INTO attention(id,project,task,severity,message,origin,key,payload,created) VALUES (?1,?2,?3,?4,?5,'task_outcome',?3,'',?6) ON CONFLICT(origin,key) DO NOTHING",
-            params![uuid::Uuid::new_v4().to_string(), task.submission.project_id, task.task_id,
-                serde_json::to_string(&severity).map_err(|e|e.to_string())?, message,
-                timestamp(task.finished_at_ms.unwrap_or_else(now_ms))?],
-        ).map_err(sql)?;
+        insert_outcome(
+            connection,
+            Outcome {
+                project: &task.submission.project_id,
+                task: Some(&task.task_id),
+                target: &AttentionTarget::Task {
+                    task_id: task.task_id.clone(),
+                },
+                severity,
+                message,
+                origin: "task_outcome",
+                key: &task.task_id,
+                created: task.finished_at_ms.unwrap_or_else(now_ms),
+            },
+        )?;
     }
     Ok(())
 }
@@ -80,10 +241,10 @@ impl Store {
         }
         let id = uuid::Uuid::new_v4().to_string();
         self.connection.execute(
-            "INSERT INTO attention(id,project,task,severity,message,origin,key,payload,created) VALUES (?1,?2,?3,?4,?5,'agent_request',?6,?7,?8)",
+            "INSERT INTO attention(id,project,task,target,severity,message,origin,key,payload,created) VALUES (?1,?2,?3,?9,?4,?5,'agent_request',?6,?7,?8)",
             params![id, task.submission.project_id, request.task_id,
                 serde_json::to_string(&request.severity).map_err(|e|e.to_string())?, request.message,
-                request.idempotency_key, payload, timestamp(now_ms())?],
+                request.idempotency_key, payload, timestamp(now_ms())?, serde_json::to_string(&AttentionTarget::Task {task_id:request.task_id.clone()}).map_err(|e|e.to_string())?],
         ).map_err(sql)?; // FULL synchronous WAL commit precedes the response.
         self.attention(&id)
     }
@@ -91,9 +252,9 @@ impl Store {
     pub fn attention(&self, id: &str) -> Result<AttentionRecord> {
         self.connection
             .query_row(
-                &format!("SELECT {COLUMNS} FROM attention WHERE id=?1"),
+                &format!("SELECT {COLUMNS} FROM attention WHERE id=?1 AND json_extract(target,'$.kind')='task'"),
                 [id],
-                record,
+                legacy_record,
             )
             .optional()
             .map_err(sql)?
@@ -101,6 +262,7 @@ impl Store {
     }
 
     pub fn acknowledge_attention(&mut self, id: &str) -> Result<AttentionRecord> {
+        self.attention(id)?; // Reject non-task targets before a legacy ACK can mutate them.
         self.connection
             .execute(
                 "UPDATE attention SET acknowledged=COALESCE(acknowledged,?2) WHERE id=?1",
@@ -116,14 +278,14 @@ impl Store {
         let pending_count = self
             .connection
             .query_row(
-                "SELECT count(*) FROM attention WHERE acknowledged IS NULL",
+                "SELECT count(*) FROM attention WHERE acknowledged IS NULL AND json_extract(target,'$.kind')='task'",
                 [],
                 |r| counter(r, 0),
             )
             .map_err(sql)?;
-        let mut query = self.connection.prepare(&format!("SELECT {COLUMNS} FROM attention WHERE sequence>?1 AND (?2=0 OR acknowledged IS NULL) ORDER BY sequence LIMIT 51")).map_err(sql)?;
+        let mut query = self.connection.prepare(&format!("SELECT {COLUMNS} FROM attention WHERE sequence>?1 AND (?2=0 OR acknowledged IS NULL) AND json_extract(target,'$.kind')='task' ORDER BY sequence LIMIT 51")).map_err(sql)?;
         let mut records = query
-            .query_map(params![after, pending_only], record)
+            .query_map(params![after, pending_only], legacy_record)
             .map_err(sql)?
             .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(sql)?;
@@ -131,6 +293,57 @@ impl Store {
         records.truncate(50);
         let next_sequence = records.last().map_or(after_sequence, |r| r.sequence);
         Ok(AttentionPage {
+            records,
+            next_sequence,
+            has_more,
+            pending_count,
+        })
+    }
+    pub fn attention_event(&self, id: &str) -> Result<AttentionEvent> {
+        self.connection
+            .query_row(
+                &format!("SELECT {COLUMNS},target FROM attention WHERE id=?1"),
+                [id],
+                event,
+            )
+            .optional()
+            .map_err(sql)?
+            .ok_or_else(|| format!("attentionId {id:?} was not found"))
+    }
+    pub fn acknowledge_attention_event(&mut self, id: &str) -> Result<AttentionEvent> {
+        self.connection
+            .execute(
+                "UPDATE attention SET acknowledged=COALESCE(acknowledged,?2) WHERE id=?1",
+                params![id, timestamp(now_ms())?],
+            )
+            .map_err(sql)?;
+        self.attention_event(id)
+    }
+    pub fn list_attention_events(
+        &self,
+        after_sequence: u64,
+        pending_only: bool,
+    ) -> Result<AttentionEventPage> {
+        let after = i64::try_from(after_sequence)
+            .map_err(|_| "Attention cursor exceeds journal integer range")?;
+        let pending_count = self
+            .connection
+            .query_row(
+                "SELECT count(*) FROM attention WHERE acknowledged IS NULL",
+                [],
+                |r| counter(r, 0),
+            )
+            .map_err(sql)?;
+        let mut statement = self.connection.prepare(&format!("SELECT {COLUMNS},target FROM attention WHERE sequence>?1 AND (?2=0 OR acknowledged IS NULL) ORDER BY sequence LIMIT 51")).map_err(sql)?;
+        let mut records = statement
+            .query_map(params![after, pending_only], event)
+            .map_err(sql)?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(sql)?;
+        let has_more = records.len() > 50;
+        records.truncate(50);
+        let next_sequence = records.last().map_or(after_sequence, |r| r.sequence);
+        Ok(AttentionEventPage {
             records,
             next_sequence,
             has_more,

@@ -124,12 +124,12 @@ try {
   let failDeliverySaves = false;
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
-      const response = await call(request, ["submit_workflow", "request_attention", "list_attention", "acknowledge_attention"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
+      const response = await call(request, ["submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
       if (request.method === "submit" && loseFirstAck) { loseFirstAck = false; submittedId = response.task.taskId; throw new Error("Test: acceptance response was lost"); }
       if (request.method === "import_snapshot" && loseFirstImportAck) { loseFirstImportAck = false; importedId = response.import.importId; throw new Error("Test: import ACK lost"); }
       if (request.method === "submit_workflow" && loseFirstWorkflowAck && response.kind === "workflow") { loseFirstWorkflowAck = false; acceptedWorkflowId = response.workflow.workflowId; throw new Error("Test: workflow ACK lost"); }
       if (request.method === "request_attention" && loseFirstAttentionAck && response.kind === "attention") { loseFirstAttentionAck = false; throw new Error("Test: attention acceptance ACK lost"); }
-      if (request.method === "acknowledge_attention" && loseFirstAttentionConfirmation && response.kind === "attention") { loseFirstAttentionConfirmation = false; throw new Error("Test: attention confirmation ACK lost"); }
+      if (["acknowledge_attention","acknowledge_attention_event"].includes(request.method) && loseFirstAttentionConfirmation && ["attention","attention_event"].includes(response.kind)) { loseFirstAttentionConfirmation = false; throw new Error("Test: attention confirmation ACK lost"); }
       return response;
     });
     // Native filesystem persistence is covered by core tests. Here the IPC shim
@@ -452,10 +452,41 @@ try {
   // Background popup navigation is consumed after the main WebView resumes.
   await workflowPage.evaluate((id) => { window.__companion.openTaskId=id; window.__companion.openTaskSequence++; }, completedWorkflow.steps.find((s)=>s.name==="build").operationId);
   await workflowPage.getByText("Exit code: 0",{exact:true}).waitFor();
+  // Generic workflow target exists even when import failed before any task.
+  const missingRequest={...completedWorkflow.submission,requestId:"missing-import-ui",idempotencyKey:"missing-import-ui",snapshotId:"missing-published-snapshot"};
+  const missingWorkflow=(await workflowPage.evaluate((request)=>window.workerBridge({method:"submit_workflow",request}),missingRequest)).workflow;
+  await until(async()=>(await call({method:"get_workflow",workflowId:missingWorkflow.workflowId})).workflow.status==="failed","missing import did not fail");
+  const failureEvent=(await call({method:"list_attention_events",afterSequence:0,pendingOnly:true})).page.records.find((r)=>r.target.kind==="workflow" && r.target.workflowId===missingWorkflow.workflowId);
+  assert.ok(failureEvent);
+  const workflowCard=workflowPage.locator(`[data-attention-id="${failureEvent.attentionId}"]`);
+  await workflowCard.getByRole("button",{name:"Открыть workflow",exact:true}).click();
+  await workflowPage.locator(`[data-confirmed-workflow-id="${missingWorkflow.workflowId}"]`).waitFor();
+  assert.equal((await call({method:"list_attention_events",afterSequence:0,pendingOnly:true})).page.records.find((r)=>r.attentionId===failureEvent.attentionId).acknowledgedAtMs,null);
+  await workflowCard.getByRole("button",{name:"Прочитано",exact:true}).click();
+  await until(async()=>(await call({method:"list_attention_events",afterSequence:0,pendingOnly:false})).page.records.find((r)=>r.attentionId===failureEvent.attentionId).acknowledgedAtMs!==null,"workflow event ACK missing");
+  // Application target opens the actual application without rewriting startup success.
+  const crashRequest={...completedWorkflow.submission,requestId:"crash-ui",idempotencyKey:"crash-ui",start:{...completedWorkflow.submission.start,arguments:["serve",join(project,"logs/app.log"),"crash-late"]}};
+  const crashWorkflow=(await workflowPage.evaluate((request)=>window.workerBridge({method:"submit_workflow",request}),crashRequest)).workflow;
+  await until(async()=>(await call({method:"get_workflow",workflowId:crashWorkflow.workflowId})).workflow.status==="succeeded","crash fixture startup failed");
+  const crashDone=(await call({method:"get_workflow",workflowId:crashWorkflow.workflowId})).workflow;
+  await until(async()=>(await call({method:"get_application",applicationId:crashDone.applicationId})).application.status==="failed","application did not crash");
+  const appEvent=(await call({method:"list_attention_events",afterSequence:0,pendingOnly:true})).page.records.find((r)=>r.target.kind==="application" && r.target.applicationId===crashDone.applicationId);
+  assert.ok(appEvent);
+  await workflowPage.locator(`[data-attention-id="${appEvent.attentionId}"]`).getByRole("button",{name:"Открыть приложение",exact:true}).click();
+  await workflowPage.locator(`[data-confirmed-application-id="${crashDone.applicationId}"]`).waitFor();
+  assert.equal((await call({method:"get_workflow",workflowId:crashWorkflow.workflowId})).workflow.status,"succeeded");
+  // A popup target can select an older workflow outside the recent ten.
+  for (let i=0;i<11;i++) {
+    const queued=(await call({method:"submit_workflow",request:{...missingRequest,requestId:`older-${i}`,idempotencyKey:`older-${i}`}})).workflow;
+    await call({method:"cancel_workflow",workflowId:queued.workflowId});
+  }
+  assert.ok(!(await call({method:"list_workflows"})).workflows.some((r)=>r.workflowId===missingWorkflow.workflowId));
+  await workflowPage.evaluate((target)=>{window.__companion.openTarget=target;window.__companion.openTaskSequence++;},failureEvent.target);
+  await workflowPage.locator(`[data-confirmed-workflow-id="${missingWorkflow.workflowId}"]`).waitFor();
   // A real journal failure must block new launches without presenting stale running as fresh.
   await exec("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"CREATE TRIGGER reject_outcome BEFORE INSERT ON attention WHEN NEW.origin='task_outcome' BEGIN SELECT RAISE(ABORT,'expected UI journal fault'); END\"); c.commit()", join(run,"state/journal.sqlite")]);
   const uncommitted=(await call({method:"submit",request:{protocolVersion:1,requestId:"journal-fault-ui",projectId:"other-fixture",idempotencyKey:"journal-fault-ui",timeoutMs:5000,command:{kind:"direct",executable:"/deliberately-missing/fixture",arguments:[],workingDirectory:"."}}})).task;
-  await workflowPage.getByText("Результат задачи не записан · новые запуски приостановлены",{exact:true}).waitFor();
+  await workflowPage.getByText("Результат операции не записан · новые запуски приостановлены",{exact:true}).waitFor();
   assert.equal(await workflowPage.getByRole("button",{name:"Передать задачу worker",exact:true}).isDisabled(),true);
   assert.equal((await call({method:"get_task",taskId:uncommitted.taskId})).kind,"error");
   await exec("python3",["-c","import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute('DROP TRIGGER reject_outcome'); c.commit()",join(run,"state/journal.sqlite")]);
@@ -481,7 +512,7 @@ try {
   await workflowPage.evaluate(() => { window.__validation.enabled=false; });
   await until(async()=>!await validationBanner.isVisible(),"Validation banner did not clear");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences, save/hide/quit, missing tray and popup task navigation. Native tray/popup/sound are validated separately on Windows.");
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences, save/hide/quit, missing tray and popup task/workflow/application navigation, including targets outside the recent ten. Native tray/popup/sound are validated separately on Windows.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

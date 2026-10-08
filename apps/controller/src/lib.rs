@@ -68,6 +68,9 @@ impl Controller {
                 let state = self.state.lock().map_err(|_| "controller session state poisoned")?;
                 let session = state.active.as_ref().filter(|s| s.ready)
                     .ok_or("Windows worker is offline; last task state is retained. No command was automatically retried")?;
+                if matches!(request, LocalRequest::ListAttentionEvents {..} | LocalRequest::AcknowledgeAttentionEvent {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::AttentionTargets)) {
+                    return Err("Worker does not advertise attention_targets; request was not transmitted. Update worker/desktop together".into());
+                }
                 if matches!(request, LocalRequest::RequestAttention {..} | LocalRequest::ListAttention {..} | LocalRequest::AcknowledgeAttention {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::AttentionRequest)) {
                     return Err("Worker does not advertise attention_request; request was not transmitted. Update worker/desktop together".into());
                 }
@@ -273,6 +276,8 @@ impl Drop for ConnectionGuard {
 }
 fn request_method(request: &LocalRequest) -> &'static str {
     match request {
+        LocalRequest::ListAttentionEvents { .. } => "list_attention_events",
+        LocalRequest::AcknowledgeAttentionEvent { .. } => "acknowledge_attention_event",
         LocalRequest::RequestAttention { .. } => "request_attention",
         LocalRequest::ListAttention { .. } => "list_attention",
         LocalRequest::AcknowledgeAttention { .. } => "acknowledge_attention",

@@ -47,7 +47,7 @@ function ApplicationLog({ applicationId, connected }: { applicationId: string; c
   </Stack>;
 }
 
-export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles, persist, onTask }: { info: WorkerInfo; connected: boolean; closing: boolean; snapshot: WorkflowSnapshot | null; profiles: WorkflowProfile[] | null; persist: (profile: WorkflowProfile) => Promise<void>; onTask: (id: string) => void }) {
+export function WorkflowWorkbench({ navigation, info, connected, closing, snapshot, profiles, persist, onTask }: { navigation?: {sequence:number;workflowId:string;applicationId:string|null} | null; info: WorkerInfo; connected: boolean; closing: boolean; snapshot: WorkflowSnapshot | null; profiles: WorkflowProfile[] | null; persist: (profile: WorkflowProfile) => Promise<void>; onTask: (id: string) => void }) {
   const [profile, setProfile] = useState("");
   const [projectId, setProjectId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState("");
@@ -101,6 +101,11 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles
   const [pollError, setPollError] = useState<string | null>(null);
   const [pending, setPending] = useState<WorkflowSubmission | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!navigation) return;
+    setSelected(navigation.workflowId); setAppId(navigation.applicationId);
+    setRecord(null); setApplication(null);
+  }, [navigation]);
   const selectedRef = useRef(selected); selectedRef.current = selected;
   const appRef = useRef(appId); appRef.current = appId;
   const snapshotKey = snapshot ? JSON.stringify([info.instanceId, snapshot, info.projects.find((p) => p.id === snapshot.projectId)?.workspaceRoot]) : null;
@@ -120,12 +125,13 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles
     async function poll() {
       try {
         const flows = expectResult(await workerCall({ method: "list_workflows" }), "workflows").workflows;
-        const id = selectedRef.current ?? flows[0]?.workflowId;
+        const selectedAtStart = selectedRef.current; const appAtStart = appRef.current;
+        const id = selectedAtStart ?? flows[0]?.workflowId;
         const flow = id ? expectResult(await workerCall({ method: "get_workflow", workflowId: id }), "workflow").workflow : null;
         const list = expectResult(await workerCall({ method: "list_applications" }), "applications").applications;
-        const applicationId = appRef.current ?? flow?.applicationId;
+        const applicationId = appAtStart ?? flow?.applicationId;
         const current = applicationId ? expectResult(await workerCall({ method: "get_application", applicationId }), "application").application : null;
-        if (!disposed) { setFlows(flows); setRecord(flow); setApplications(list); setApplication(current); setPollError(null); }
+        if (!disposed && selectedRef.current === selectedAtStart && appRef.current === appAtStart) { setFlows(flows); setRecord(flow); setApplications(list); setApplication(current); setPollError(null); }
       } catch (error) { if (!disposed) setPollError(String(error)); }
       if (!disposed) timer = setTimeout(() => void poll(), 750);
     }
@@ -169,7 +175,7 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles
     const { protocolVersion: _version, requestId: _request, idempotencyKey: _key, ...saved } = record.submission;
     changeProfile(JSON.stringify(saved, null, 2), saved.projectId);
   }
-  return <Card withBorder><Stack>
+  return <Card id="native-workflow-detail" tabIndex={-1} withBorder><Stack>
     <Title order={3}>Цикл разработки</Title>
     <Text size="sm">Импорт → сборка → запуск → готовность → лог. Ошибка блокирует следующие шаги. Worker сохраняет принятый профиль и ID; закрытие окна или потеря controller не повторяет команды.</Text>
     <Text size="sm">Выберите snapshot в «Доставка исходников» и нажмите «Использовать в workflow». Шаблон настроен для snapshot-fixture; его параметры можно изменить или восстановить из истории.</Text>
@@ -183,8 +189,8 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles
       <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || closing}>Проверить приём workflow</Button></Alert>}
     {error && <Alert color="yellow" title="Операция workflow не подтверждена">{error}</Alert>}
     {(pollError || !connected) && <Alert color="yellow" title="Нет свежего состояния workflow">{pollError ?? "Worker недоступен; показаны последние известные записи."}</Alert>}
-    <Select label="Последние 10 workflow" value={selected ?? record?.workflowId ?? null} onChange={(id) => { setSelected(id); setAppId(null); }} data={flows.map((f) => ({ value: f.workflowId, label: `${f.submission.name} · ${statuses[f.status].label} · ${f.workflowId}` }))} searchable />
-    {record && <>
+    <Select label="Последние 10 workflow" value={selected ?? record?.workflowId ?? null} onChange={(id) => { setSelected(id); setAppId(null); }} data={(record && !flows.some((f)=>f.workflowId===record.workflowId) ? [record,...flows] : flows).map((f) => ({ value: f.workflowId, label: `${f.submission.name} · ${statuses[f.status].label} · ${f.workflowId}` }))} searchable />
+    {record && <Stack data-confirmed-workflow-id={record.workflowId}>
       <Group><Badge color={statuses[record.status].color}>{statuses[record.status].label}</Badge><Text>Workflow ID: {record.workflowId}</Text></Group>
       <Text size="xs">Snapshot {record.submission.snapshotId} · manifest {record.submission.manifestSha256}</Text>
       {record.artifacts?.length > 0 && <Stack gap="xs"><Title order={4}>Результаты сборки</Title><Text size="xs">Файлы проверены перед запуском. Это запись на указанное время; последующая сборка может изменить файл по тому же пути.</Text>
@@ -201,16 +207,16 @@ export function WorkflowWorkbench({ info, connected, closing, snapshot, profiles
         </Table.Td></Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>
       <Timeline active={record.events.length - 1}>{record.events.map((event) => <Timeline.Item key={event.sequence} title={statuses[event.status].label}><Text size="sm">{event.summary}</Text></Timeline.Item>)}</Timeline>
-    </>}
+    </Stack>}
     <Title order={4}>Приложения</Title>
-    <Select label="Последние 10 приложений" value={appId ?? application?.applicationId ?? null} onChange={setAppId} data={applications.map((a) => ({ value: a.applicationId, label: `${a.projectId} · ${appStates[a.status].label} · ${a.applicationId}` }))} />
-    {application && <>
+    <Select label="Последние 10 приложений" value={appId ?? application?.applicationId ?? null} onChange={setAppId} data={(application && !applications.some((a)=>a.applicationId===application.applicationId) ? [application,...applications] : applications).map((a) => ({ value: a.applicationId, label: `${a.projectId} · ${appStates[a.status].label} · ${a.applicationId}` }))} />
+    {application && <Stack data-confirmed-application-id={application.applicationId}>
       <Group><Badge color={appStates[application.status].color}>{appStates[application.status].label}</Badge><Text size="sm">PID: {application.processId ?? "ещё не подтверждён"}</Text></Group>
       <Text size="xs">Application ID: {application.applicationId} · workflow {application.workflowId} · task {application.taskId}</Text>
       <Text size="sm">Готовность: {application.readyAtMs === null ? "не подтверждена" : new Date(application.readyAtMs).toLocaleString()}</Text>
       {application.reason && <Alert color={appStates[application.status].color}>{application.reason}</Alert>}
       <Button color="orange" variant="light" onClick={() => void stop()} disabled={!connected || busy || terminalApp(application) || application.status === "stopping" || closing}>Остановить приложение</Button>
       <ApplicationLog key={application.applicationId} applicationId={application.applicationId} connected={connected} />
-    </>}
+    </Stack>}
   </Stack></Card>;
 }

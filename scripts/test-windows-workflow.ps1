@@ -19,6 +19,8 @@ SHA-256 исходного ZIP, из которого распакованы и�
 Показывает назначение сценария и команду обновления, без сборки или записи файлов.
 .PARAMETER AttentionOnly
 Запускает только новые stage-5 attention tests; завершённый Windows workflow gate не повторяется.
+.PARAMETER WorkflowAttentionOnly
+Проверяет новые workflow/application events, миграцию и native popup → workflow navigation.
 .PARAMETER CompanionOnly
 Собирает отдельный desktop/worker и проверяет tray, popup, звук, переход к задаче и restart.
 Требует source archive с --include-built-ui; рабочие exe не заменяет.
@@ -34,6 +36,7 @@ param(
     [string]$NetwatchProfile = '',
     [switch]$AttentionOnly,
     [switch]$CompanionOnly,
+    [switch]$WorkflowAttentionOnly,
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -107,6 +110,16 @@ try {
             @{ name = 'companion-desktop-build'; arguments = @('build', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--features', 'custom-protocol', '--locked', '--offline') }
         )
     }
+    if ($WorkflowAttentionOnly) {
+        if ($AttentionOnly -or $CompanionOnly -or $NetwatchProfile) { throw 'WorkflowAttentionOnly cannot be combined with another scenario' }
+        if (-not $manifest.includesBuiltUi) { throw 'Workflow attention UI validation requires --include-built-ui' }
+        $groups = @(
+            @{ name='attention-compatibility-and-migration'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','attention','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='workflow-application-attention'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','workflows','attention_','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='companion-worker-build'; arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite','--bins','--locked','--offline') },
+            @{ name='companion-desktop-build'; arguments=@('build','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--features','custom-protocol','--locked','--offline') }
+        )
+    }
     foreach ($group in $groups) {
         $log = Join-Path $ReportDirectory ($group.name + '.log')
         $commandArgs = $group.arguments
@@ -120,8 +133,8 @@ try {
         $report.netwatch = Get-Content -LiteralPath (Join-Path $ReportDirectory 'netwatch-report.json') -Raw | ConvertFrom-Json
         if (-not $report.netwatch.passed) { throw 'Isolated Netwatch workflow check failed' }
     }
-    if ($CompanionOnly) {
-        & (Join-Path $source 'scripts/test-companion-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory
+    if ($CompanionOnly -or $WorkflowAttentionOnly) {
+        & (Join-Path $source 'scripts/test-companion-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -WorkflowAttention:$WorkflowAttentionOnly
         $report.companion = Get-Content -LiteralPath (Join-Path $ReportDirectory 'companion-report.json') -Raw | ConvertFrom-Json
         if (-not $report.companion.passed) { throw 'Isolated companion check failed' }
     }

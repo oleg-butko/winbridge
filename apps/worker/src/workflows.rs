@@ -95,7 +95,8 @@ impl Store {
             .collect()
     }
     fn save_workflow(&mut self, record: &WorkflowRecord) -> Result<()> {
-        self.connection
+        let transaction = self.connection.transaction().map_err(sql)?;
+        transaction
             .execute(
                 "UPDATE workflows SET status=?2,record=?3 WHERE id=?1",
                 params![
@@ -107,7 +108,8 @@ impl Store {
                 ],
             )
             .map_err(sql)?;
-        Ok(())
+        crate::attention::workflow_outcome(&transaction, record)?;
+        transaction.commit().map_err(sql)
     }
     fn workflow_event(record: &mut WorkflowRecord, summary: impl Into<String>) {
         record.events.push(JournalEvent {
@@ -195,8 +197,10 @@ impl Store {
             .collect()
     }
     fn save_application(&mut self, app: &ApplicationRecord) -> Result<()> {
-        self.connection.execute("INSERT INTO applications(id,workflow,task,status,record) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET status=excluded.status,record=excluded.record",params![app.application_id,app.workflow_id,app.task_id,serde_json::to_value(app.status).map_err(|e|e.to_string())?.as_str(),serde_json::to_string(app).map_err(|e|e.to_string())?]).map_err(sql)?;
-        Ok(())
+        let transaction = self.connection.transaction().map_err(sql)?;
+        transaction.execute("INSERT INTO applications(id,workflow,task,status,record) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET status=excluded.status,record=excluded.record",params![app.application_id,app.workflow_id,app.task_id,serde_json::to_value(app.status).map_err(|e|e.to_string())?.as_str(),serde_json::to_string(app).map_err(|e|e.to_string())?]).map_err(sql)?;
+        crate::attention::application_outcome(&transaction, app)?;
+        transaction.commit().map_err(sql)
     }
     pub fn stop_application(&mut self, id: &str) -> Result<ApplicationRecord> {
         let mut app = self.application(id)?;
@@ -284,7 +288,14 @@ impl Worker {
                 app.reason = app.failure_reason.clone().or(task.reason.clone());
             }
             if changed {
-                store.save_application(&app)?;
+                if let Err(error) = store.save_application(&app) {
+                    self.record_journal_fault(
+                        &app.application_id,
+                        &error,
+                        "application outcome remains uncommitted",
+                    );
+                    return Err(error);
+                }
             }
         }
         let flows = store.workflows(false)?;
@@ -300,7 +311,7 @@ impl Worker {
                     || now_ms().saturating_sub(flow.accepted_at_ms) >= flow.submission.timeout_ms
                 {
                     let cancelled = flow.cancel_requested;
-                    store.finish_workflow(
+                    if let Err(error) = store.finish_workflow(
                         &mut flow,
                         if cancelled {
                             TaskStatus::Cancelled
@@ -312,7 +323,14 @@ impl Worker {
                         } else {
                             "Workflow expired while waiting; no child operation started"
                         },
-                    )?;
+                    ) {
+                        self.record_journal_fault(
+                            &flow.workflow_id,
+                            &error,
+                            "queued workflow outcome remains uncommitted",
+                        );
+                        return Err(error);
+                    }
                     continue;
                 }
                 if store
@@ -344,9 +362,31 @@ impl Worker {
                     &mut flow,
                     "Project reserved for import/build/start/readiness; unrelated mutations wait",
                 );
-                store.save_workflow(&flow)?;
+                if let Err(error) = store.save_workflow(&flow) {
+                    self.record_journal_fault(
+                        &flow.workflow_id,
+                        &error,
+                        "workflow launch intent remains uncommitted",
+                    );
+                    return Err(error);
+                }
             }
             if let Err(reason) = self.advance_workflow(store, active, &mut flow) {
+                if reason.starts_with("local journal:") {
+                    self.record_journal_fault(
+                        &flow.workflow_id,
+                        &reason,
+                        "workflow outcome remains uncommitted",
+                    );
+                    if let Some(id) = &flow.application_id {
+                        self.record_journal_fault(
+                            id,
+                            &reason,
+                            "application startup state may remain uncommitted",
+                        );
+                    }
+                    return Err(reason);
+                }
                 for (index, step) in flow.steps.iter().enumerate().take(3) {
                     if let Some(id) = &step.operation_id {
                         if index == 0 {
@@ -356,13 +396,16 @@ impl Worker {
                         }
                     }
                 }
-                store.finish_workflow(
+                if let Err(error) = store.finish_workflow(
                     &mut flow,
                     TaskStatus::Indeterminate,
                     &format!(
                         "Workflow reconciliation failed; automatic restart disabled: {reason}"
                     ),
-                )?;
+                ) {
+                    self.record_journal_fault(&flow.workflow_id, &reason, &error);
+                    return Err(error);
+                }
             }
         }
         let pending = store.workflows(false)?;

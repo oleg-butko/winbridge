@@ -15,7 +15,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -27,6 +27,7 @@ async fn run() -> Result<(), String> {
             winbridge_protocol::Capability::WorkspaceImport,
             winbridge_protocol::Capability::LogRead,
             winbridge_protocol::Capability::AttentionRequest,
+            winbridge_protocol::Capability::AttentionTargets,
         ];
         descriptor.planned_capabilities = vec![];
         println!(
@@ -74,6 +75,27 @@ async fn run() -> Result<(), String> {
                 [name, id] if name == "ack-attention" => LocalRequest::AcknowledgeAttention {
                     attention_id: id.clone(),
                 },
+                [name] if name == "attention-events" || name == "attention-events-history" => {
+                    LocalRequest::ListAttentionEvents {
+                        after_sequence: 0,
+                        pending_only: name == "attention-events",
+                    }
+                }
+                [name, after]
+                    if name == "attention-events" || name == "attention-events-history" =>
+                {
+                    LocalRequest::ListAttentionEvents {
+                        after_sequence: after
+                            .parse()
+                            .map_err(|_| "Attention cursor must be an unsigned integer")?,
+                        pending_only: name == "attention-events",
+                    }
+                }
+                [name, id] if name == "ack-attention-event" => {
+                    LocalRequest::AcknowledgeAttentionEvent {
+                        attention_id: id.clone(),
+                    }
+                }
                 [name, path] if name == "workflow" => LocalRequest::SubmitWorkflow {
                     request: serde_json::from_slice(&winbridge_workspace_sync::read_bounded(
                         Path::new(path),

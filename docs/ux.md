@@ -6,7 +6,7 @@
 
 Tray companion скрывает окно только после сохранения всех форм/настроек и при исправном
 tray. Явный quit сохраняет их по тому же правилу. Popup не забирает focus и открывает
-конкретную task page; открытие/скрытие не подменяет «Прочитано». Offline/неизвестные
+конкретную task/workflow/application page; открытие/скрытие не подменяет «Прочитано». Offline/неизвестные
 счётчики показываются явно, ошибка cursor/presentation остаётся видимой.
 Поведение и defaults описаны в [companion](companion.md).
 
@@ -65,13 +65,16 @@ Last known status + connection freshness — два независимых по�
 
 ## Attention и tray
 
-Popup/звук содержит проект, короткую причину и действие «Открыть задачу». Нормальная успешная сборка может быть тихой; blocked workflow требует внимания по настройке пользователя. Повторяющиеся события объединяются. Quiet hours, volume, severity, acknowledged и missed attention доступны в UI.
+Popup/звук содержит проект, короткую причину и действие «Открыть задачу», «Открыть workflow» или «Открыть приложение». Нормальная успешная сборка может быть тихой; blocked workflow требует внимания по настройке пользователя. Повторяющиеся события объединяются. Quiet hours, volume, severity, acknowledged и missed attention доступны в UI.
 
 Первый реализованный сценарий 2026-10-07 — [журнал внимания](attention.md): pending count,
 страницы по 50, severity/причина/проект и task link, отдельная кнопка «Прочитано».
 Открытие задачи не подтверждает просмотр; acknowledgement живёт у worker и сохраняется
-после перезапуска UI. Tray/popup/sound/quiet hours и уведомления workflow/app остаются
-запланированными, текущий список не обозначает их готовность.
+после перезапуска UI. Tray/popup/sound/quiet hours прошли автоматический Windows gate.
+Workflow/application events добавлены 2026-10-08: ошибка import не требует Task ID,
+workflow failure показывает шаг/причину, runtime crash не переписывает успешный
+startup. Target открывается по точному ID, даже вне recent list. Новый native gate
+пока не завершён.
 
 Tray показывает активные задачи и attention count. Закрытие окна скрывает UI. «Закрыть интерфейс» и «Остановить worker» — разные команды; остановка показывает последствия для текущих tasks. Не требовать admin права для обычного runtime.
 

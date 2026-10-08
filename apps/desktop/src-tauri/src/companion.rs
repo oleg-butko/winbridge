@@ -211,16 +211,25 @@ async fn poll(
     let mut count = 0;
     // Bounded batches prevent long histories from starving freshness checks.
     for _ in 0..4 {
-        let page = match rpc(
-            address,
+        let request = if info.attention_targets_available {
+            LocalRequest::ListAttentionEvents {
+                after_sequence: scanned,
+                pending_only: true,
+            }
+        } else {
             LocalRequest::ListAttention {
                 after_sequence: scanned,
                 pending_only: true,
+            }
+        };
+        let page = match rpc(address, request).await? {
+            LocalResponse::AttentionEvents { page } => page,
+            LocalResponse::AttentionList { page } => winbridge_protocol::AttentionEventPage {
+                records: page.records.into_iter().map(Into::into).collect(),
+                next_sequence: page.next_sequence,
+                has_more: page.has_more,
+                pending_count: page.pending_count,
             },
-        )
-        .await?
-        {
-            LocalResponse::AttentionList { page } => page,
             _ => return Err("Unexpected worker attention response".into()),
         };
         count = page.pending_count;
@@ -477,13 +486,17 @@ pub fn companion_open_task(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<Companion>();
     {
         let mut s = state.status.lock().map_err(|_| "Companion lock poisoned")?;
-        s.open_task_id = Some(
-            s.latest_attention
-                .as_ref()
-                .ok_or("No attention event")?
-                .task_id
-                .clone(),
-        );
+        let target = s
+            .latest_attention
+            .as_ref()
+            .ok_or("No attention event")?
+            .target
+            .clone();
+        s.open_task_id = match &target {
+            winbridge_protocol::AttentionTarget::Task { task_id } => Some(task_id.clone()),
+            _ => None,
+        };
+        s.open_target = Some(target);
         s.open_task_sequence += 1;
     }
     show_main(&app)?;

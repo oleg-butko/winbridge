@@ -7,7 +7,7 @@ import { Alert, Button, Card, Code, Group, NumberInput, Select, Stack, Text, Tex
 import { expectResult, workerCall } from "../../runtime/adapter";
 import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, saveDeliveryDraft, saveWorkflowProfile } from "../../runtime/commandDrafts";
 import type { CommandForm } from "../../runtime/commandDrafts";
-import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences } from "../../runtime/contracts";
+import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
@@ -57,6 +57,15 @@ export function NativeWorkbench() {
   const [info, setInfo] = useState<WorkerInfo | null>(null);
   const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
+  const [workflowNavigation, setWorkflowNavigation] = useState<{sequence:number;workflowId:string;applicationId:string|null} | null>(null);
+  function openAttention(target: AttentionTarget) {
+    if (target.kind === "task") setSelectedId(target.taskId);
+    else setWorkflowNavigation((previous) => ({sequence:(previous?.sequence ?? 0)+1, workflowId:target.workflowId, applicationId:target.kind === "application" ? target.applicationId : null}));
+    requestAnimationFrame(() => {
+      const detail = document.getElementById(target.kind === "task" ? "native-task-detail" : "native-workflow-detail");
+      detail?.scrollIntoView(); detail?.focus({preventScroll:true});
+    });
+  }
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [form, setForm] = useState<CommandForm>(emptyCommandForm);
@@ -129,9 +138,10 @@ export function NativeWorkbench() {
         const status = await invoke<CompanionStatus>("companion_status");
         if (disposed) return;
         setCompanion(status); setCompanionError(null);
-        if (status.openTaskSequence > openSequence && status.openTaskId) {
-          openSequence = status.openTaskSequence; setSelectedId(status.openTaskId);
-          requestAnimationFrame(() => { const detail = document.getElementById("native-task-detail"); detail?.scrollIntoView(); detail?.focus({preventScroll:true}); });
+        if (status.openTaskSequence > openSequence) {
+          openSequence = status.openTaskSequence;
+          const target = status.openTarget ?? (status.openTaskId ? {kind:"task" as const,taskId:status.openTaskId} : null);
+          if (target) openAttention(target);
         }
         if (status.quitRequestSequence > quitSequence) { quitSequence = status.quitRequestSequence; await closeHandler.current(true); }
       } catch (error) { if (!disposed) setCompanionError(String(error)); }
@@ -257,11 +267,11 @@ export function NativeWorkbench() {
         {!controllerFresh && <Text size="sm">Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет.</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
-    {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => { const detail = document.getElementById("native-task-detail"); detail?.scrollIntoView({ behavior: "smooth" }); detail?.focus({ preventScroll: true }); }); }} />}
+    {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}
     <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} />
-    {info?.journalRecoveryRequired && <Alert color="red" title="Результат задачи не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
+    {info?.journalRecoveryRequired && <Alert color="red" title="Результат операции не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
     {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
-    {info?.workflowAvailable && <WorkflowWorkbench info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
+    {info?.workflowAvailable && <WorkflowWorkbench navigation={workflowNavigation} info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card withBorder><Stack>
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />

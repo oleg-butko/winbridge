@@ -476,3 +476,75 @@ fn v3_migration_has_consistent_backup_and_preserves_old_task() {
         1
     );
 }
+
+#[test]
+fn v4_migration_preserves_target_ids_acknowledgement_and_sequence_high_water() {
+    let root = TempDir::new().unwrap();
+    let path = root.path().join("journal.sqlite");
+    let mut store = Store::open(&path).unwrap();
+    let task = accepted(&mut store);
+    let event = store
+        .request_attention(&request(&task.task_id, "before-v4-upgrade"))
+        .unwrap();
+    let ack = store.acknowledge_attention(&event.attention_id).unwrap();
+    drop(store);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("BEGIN; ALTER TABLE attention RENAME TO richer_attention;
+      CREATE TABLE attention (sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,project TEXT NOT NULL,task TEXT NOT NULL REFERENCES tasks(id),severity TEXT NOT NULL,message TEXT NOT NULL,origin TEXT NOT NULL,key TEXT NOT NULL,payload TEXT NOT NULL,created INTEGER NOT NULL,acknowledged INTEGER,UNIQUE(origin,key));
+      INSERT INTO attention SELECT sequence,id,project,task,severity,message,origin,key,payload,created,acknowledged FROM richer_attention;
+      DROP TABLE richer_attention; CREATE INDEX attention_pending ON attention(acknowledged,sequence);
+      UPDATE sqlite_sequence SET seq=5000 WHERE name='attention'; PRAGMA user_version=4; COMMIT;").unwrap();
+    drop(db);
+    let mut store = Store::open(&path).unwrap();
+    assert_eq!(store.attention(&event.attention_id).unwrap(), ack);
+    assert_eq!(
+        store.list_attention_events(0, false).unwrap().records[0],
+        ack.clone().into()
+    );
+    assert_eq!(
+        store
+            .request_attention(&request(&task.task_id, "before-v4-upgrade"))
+            .unwrap(),
+        ack
+    );
+    assert_eq!(
+        store
+            .request_attention(&request(&task.task_id, "after-v4-upgrade"))
+            .unwrap()
+            .sequence,
+        5001
+    );
+    drop(store);
+    let backups: Vec<_> = std::fs::read_dir(root.path())
+        .unwrap()
+        .map(|r| r.unwrap().path())
+        .filter(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("journal-v4-")
+        })
+        .collect();
+    assert_eq!(backups.len(), 1);
+    let backup = rusqlite::Connection::open_with_flags(
+        &backups[0],
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    )
+    .unwrap();
+    assert_eq!(
+        backup
+            .query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))
+            .unwrap(),
+        4
+    );
+    assert_eq!(
+        backup
+            .query_row(
+                "SELECT acknowledged FROM attention WHERE id=?1",
+                [event.attention_id],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+        i64::try_from(ack.acknowledged_at_ms.unwrap()).unwrap()
+    );
+}

@@ -6,7 +6,7 @@ Called by test-windows-workflow.ps1 -CompanionOnly after offline builds. Each de
 phase uses its actual Tauri windows and React actions. No debugger/listening control port.
 Only this script's child PIDs are stopped during cleanup; reports and runtime are retained.
 #>
-param([Parameter(Mandatory)][string]$SourceDirectory, [Parameter(Mandatory)][string]$ReportDirectory)
+param([Parameter(Mandatory)][string]$SourceDirectory, [Parameter(Mandatory)][string]$ReportDirectory, [switch]$WorkflowAttention)
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 . (Join-Path $PSScriptRoot 'worker-cli.ps1')
@@ -26,6 +26,13 @@ $instance = 'tray-gate-' + [guid]::NewGuid().ToString('N')
     ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath -Encoding utf8
 @{ schemaVersion = 1; workerConfigPath = 'winbridge-worker.local.json' } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtime 'winbridge-desktop.local.json') -Encoding utf8
+if ($WorkflowAttention) {
+    $delivery = Join-Path $runtime 'delivery'
+    New-Item -ItemType Directory -Path $delivery | Out-Null
+    $settings = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+    $settings | Add-Member -NotePropertyName delivery -NotePropertyValue @{adapter='shared-folder';root=$delivery;namespace='WinBridge'}
+    $settings | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath -Encoding utf8
+}
 $worker = Join-Path $runtime 'winbridge-worker.exe'
 $desktop = Join-Path $runtime 'winbridge-desktop.exe'
 # All live writers use local NTFS. Publish only after process/output completion.
@@ -75,9 +82,10 @@ try {
         catch { if ([DateTime]::UtcNow -ge $deadline) { throw }; Start-Sleep -Milliseconds 100 }
     } while ($true)
     if (-not $info.attentionAvailable -or $info.instanceId -ne $instance) { throw 'Wrong isolated worker or unsupported attention capability' }
-    foreach ($phase in @('initial', 'restart')) {
+    $phases = if ($WorkflowAttention) { @('targets') } else { @('initial','restart') }
+    foreach ($phase in $phases) {
         $phaseReport = Join-Path $localReports ('companion-' + $phase + '.json')
-        $mode = if ($phase -eq 'initial') { '--validate-companion' } else { '--validate-companion-restart' }
+        $mode = if ($phase -eq 'targets') { '--validate-workflow-attention' } elseif ($phase -eq 'initial') { '--validate-companion' } else { '--validate-companion-restart' }
         Write-Output "Opening isolated TEST desktop ($phase). Keep the installed worker running; do not interact with the test window."
         $capture = Start-Captured $desktop @($mode, $phaseReport) ('companion-' + $phase)
         if (-not $capture.Process.WaitForExit(240000)) { throw "Native companion $phase exceeded deadline; last step retained in progress.json" }

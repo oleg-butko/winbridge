@@ -710,3 +710,348 @@ async fn owned_worker_crash_recovers_application_without_repeating_steps() {
     restarted.0.kill().unwrap();
     restarted.0.wait().unwrap();
 }
+
+fn attention_events(worker: &Worker) -> Vec<AttentionEvent> {
+    let LocalResponse::AttentionEvents { page } =
+        worker.handle(LocalRequest::ListAttentionEvents {
+            after_sequence: 0,
+            pending_only: false,
+        })
+    else {
+        panic!("attention feed missing")
+    };
+    page.records
+}
+#[test]
+fn attention_import_failure_without_task_has_workflow_target_and_ack_survives_restart() {
+    let (_temp, config, mut request) = setup();
+    request.snapshot_id = "absent-published-package".into();
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let failed = complete(&worker, &accept(&worker, request).workflow_id);
+    assert_eq!(failed.status, TaskStatus::Failed);
+    assert!(failed.steps[1].operation_id.is_none());
+    let events = attention_events(&worker);
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].target,
+        AttentionTarget::Workflow {
+            workflow_id: failed.workflow_id.clone()
+        }
+    );
+    assert_eq!(events[0].severity, AttentionSeverity::Error);
+    assert!(events[0].message.contains("import"));
+    assert!(matches!(
+        worker.handle(LocalRequest::AcknowledgeAttention {
+            attention_id: events[0].attention_id.clone()
+        }),
+        LocalResponse::Error { .. }
+    ));
+    assert!(attention_events(&worker)[0].acknowledged_at_ms.is_none());
+    let LocalResponse::AttentionEvent { event: ack } =
+        worker.handle(LocalRequest::AcknowledgeAttentionEvent {
+            attention_id: events[0].attention_id.clone(),
+        })
+    else {
+        panic!()
+    };
+    drop(worker);
+    let recovered = WorkerOwner(Worker::open(config).unwrap());
+    for _ in 0..4 {
+        recovered.schedule().unwrap();
+    }
+    assert_eq!(attention_events(&recovered), vec![ack]);
+}
+#[test]
+fn attention_build_failure_is_one_parent_event_and_cancel_stays_quiet() {
+    let (_temp, config, mut request) = setup();
+    request.build = CommandSource::Direct {
+        executable: env!("CARGO_BIN_EXE_winbridge-fixture").into(),
+        arguments: vec!["failure".into()],
+        working_directory: ".".into(),
+    };
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let failed = complete(&worker, &accept(&worker, request.clone()).workflow_id);
+    assert_eq!(failed.status, TaskStatus::Failed);
+    let events = attention_events(&worker);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].origin, "workflow_outcome");
+    assert!(events[0].message.contains("build"));
+    let LocalResponse::AttentionList { page } = worker.handle(LocalRequest::ListAttention {
+        after_sequence: 0,
+        pending_only: true,
+    }) else {
+        panic!()
+    };
+    assert!(page.records.is_empty());
+    assert_eq!(page.pending_count, 0);
+    request.idempotency_key = "cancel-before-child".into();
+    let cancelled = accept(&worker, request);
+    worker.handle(LocalRequest::CancelWorkflow {
+        workflow_id: cancelled.workflow_id.clone(),
+    });
+    assert_eq!(
+        complete(&worker, &cancelled.workflow_id).status,
+        TaskStatus::Cancelled
+    );
+    assert_eq!(attention_events(&worker), events);
+}
+#[test]
+fn attention_readiness_failure_stops_tree_and_has_no_duplicate_application_event() {
+    let (_temp, config, mut request) = setup();
+    request.readiness.timeout_ms = 300;
+    if let CommandSource::Direct { arguments, .. } = &mut request.start {
+        arguments[2] = "silent".into();
+    }
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let failed = complete(&worker, &accept(&worker, request).workflow_id);
+    until(&worker, || worker.is_idle());
+    let events = attention_events(&worker);
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].target,
+        AttentionTarget::Workflow {
+            workflow_id: failed.workflow_id
+        }
+    );
+    assert_eq!(events[0].severity, AttentionSeverity::Error);
+    assert_eq!(
+        app(&worker, failed.application_id.as_ref().unwrap()).status,
+        ApplicationStatus::Failed
+    );
+}
+#[test]
+fn attention_runtime_crash_keeps_startup_success_and_explicit_stop_is_quiet() {
+    let (_temp, config, mut request) = setup();
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let healthy = complete(&worker, &accept(&worker, request.clone()).workflow_id);
+    stop(&worker, healthy.application_id.as_ref().unwrap());
+    assert!(attention_events(&worker).is_empty());
+    request.idempotency_key = "runtime-crash-attention".into();
+    if let CommandSource::Direct { arguments, .. } = &mut request.start {
+        arguments[2] = "crash-late".into();
+    }
+    let startup = complete(&worker, &accept(&worker, request).workflow_id);
+    let id = startup.application_id.unwrap();
+    until(&worker, || {
+        app(&worker, &id).status == ApplicationStatus::Failed && worker.is_idle()
+    });
+    let events = attention_events(&worker);
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].target,
+        AttentionTarget::Application {
+            application_id: id,
+            workflow_id: startup.workflow_id.clone()
+        }
+    );
+    assert_eq!(events[0].severity, AttentionSeverity::Error);
+    assert_eq!(
+        flow(&worker, &startup.workflow_id).status,
+        TaskStatus::Succeeded
+    );
+    drop(worker);
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    for _ in 0..3 {
+        worker.schedule().unwrap();
+    }
+    assert_eq!(attention_events(&worker), events);
+}
+#[test]
+fn attention_workflow_write_failure_rolls_back_and_blocks_stale_reads_until_recovery() {
+    let (_temp, config, mut request) = setup();
+    request.snapshot_id = "absent-published-package".into();
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let accepted = accept(&worker, request.clone());
+    let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER reject_workflow_event BEFORE INSERT ON attention WHEN NEW.origin='workflow_outcome' BEGIN SELECT RAISE(ABORT,'expected workflow journal failure'); END;").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if worker.schedule().is_err() {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(10));
+    }
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!()
+    };
+    assert!(info.journal_recovery_required.is_some());
+    assert!(
+        matches!(worker.handle(LocalRequest::GetWorkflow {workflow_id:accepted.workflow_id.clone()}),LocalResponse::Error {message} if message.contains("stale"))
+    );
+    request.idempotency_key = "must-not-launch".into();
+    assert!(matches!(
+        worker.handle(LocalRequest::SubmitWorkflow {
+            request: Box::new(request)
+        }),
+        LocalResponse::Error { .. }
+    ));
+    assert!(attention_events(&worker).is_empty());
+    let record: String = db
+        .query_row(
+            "SELECT record FROM workflows WHERE id=?1",
+            [&accepted.workflow_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert!(!serde_json::from_str::<WorkflowRecord>(&record)
+        .unwrap()
+        .status
+        .is_terminal());
+    db.execute_batch("DROP TRIGGER reject_workflow_event;")
+        .unwrap();
+    drop(db);
+    drop(worker);
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let recovered = complete(&worker, &accepted.workflow_id);
+    assert!(recovered.status.is_terminal());
+    assert_eq!(attention_events(&worker).len(), 1);
+}
+#[test]
+fn attention_application_write_failure_is_not_reported_as_fresh_ready() {
+    let (_temp, config, mut request) = setup();
+    if let CommandSource::Direct { arguments, .. } = &mut request.start {
+        arguments[2] = "crash-late".into();
+    }
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let done = complete(&worker, &accept(&worker, request).workflow_id);
+    let id = done.application_id.unwrap();
+    let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER reject_app_event BEFORE INSERT ON attention WHEN NEW.origin='application_outcome' BEGIN SELECT RAISE(ABORT,'expected application journal failure'); END;").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if worker.schedule().is_err() {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(
+        matches!(worker.handle(LocalRequest::GetApplication {application_id:id.clone()}),LocalResponse::Error {message} if message.contains("stale"))
+    );
+    assert_eq!(
+        flow(&worker, &done.workflow_id).status,
+        TaskStatus::Succeeded
+    );
+    assert!(attention_events(&worker).is_empty());
+    db.execute_batch("DROP TRIGGER reject_app_event;").unwrap();
+    drop(db);
+    drop(worker);
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    until(&worker, || {
+        app(&worker, &id).status == ApplicationStatus::Failed
+    });
+    assert_eq!(attention_events(&worker).len(), 1);
+}
+
+#[test]
+fn attention_startup_application_write_failure_blocks_both_related_records() {
+    let (_temp, config, request) = setup();
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let id = accept(&worker, request).workflow_id;
+    until(&worker, || flow(&worker, &id).application_id.is_some());
+    let app_id = flow(&worker, &id).application_id.unwrap();
+    let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER reject_ready BEFORE UPDATE ON applications WHEN NEW.status='ready' BEGIN SELECT RAISE(ABORT,'expected startup application journal failure'); END;").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while worker.schedule().is_ok() {
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(10));
+    }
+    for request in [
+        LocalRequest::GetWorkflow {
+            workflow_id: id.clone(),
+        },
+        LocalRequest::GetApplication {
+            application_id: app_id,
+        },
+    ] {
+        assert!(
+            matches!(worker.handle(request), LocalResponse::Error {message} if message.contains("stale"))
+        );
+    }
+    assert!(attention_events(&worker).is_empty());
+    db.execute_batch("DROP TRIGGER reject_ready;").unwrap();
+    drop(db);
+    drop(worker);
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    assert!(complete(&worker, &id).status.is_terminal());
+    let events = attention_events(&worker);
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].target,
+        AttentionTarget::Workflow { workflow_id: id }
+    );
+}
+
+#[test]
+fn attention_clean_service_exit_is_warning_and_completed_startup_stays_successful() {
+    let (_temp, config, mut request) = setup();
+    if let CommandSource::Direct { arguments, .. } = &mut request.start {
+        arguments[2] = "exit-late".into();
+    }
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let done = complete(&worker, &accept(&worker, request).workflow_id);
+    let id = done.application_id.unwrap();
+    until(&worker, || {
+        app(&worker, &id).status == ApplicationStatus::Exited && worker.is_idle()
+    });
+    let events = attention_events(&worker);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].severity, AttentionSeverity::Warning);
+    assert_eq!(
+        events[0].target,
+        AttentionTarget::Application {
+            application_id: id,
+            workflow_id: done.workflow_id.clone()
+        }
+    );
+    assert_eq!(
+        flow(&worker, &done.workflow_id).status,
+        TaskStatus::Succeeded
+    );
+}
+#[test]
+fn attention_recovered_launch_intent_is_warning_without_another_external_start() {
+    let (_temp, config, request) = setup();
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let done = complete(&worker, &accept(&worker, request).workflow_id);
+    let id = done.application_id.unwrap();
+    let ready_app = app(&worker, &id);
+    let LocalResponse::Task { task: running } = worker.handle(LocalRequest::GetTask {
+        task_id: ready_app.task_id.clone(),
+    }) else {
+        panic!()
+    };
+    stop(&worker, &id);
+    drop(worker);
+    let log = config.projects[0].workspace_root.join("logs/app.log");
+    let before = fs::read(&log).unwrap();
+    let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
+    db.execute(
+        "UPDATE tasks SET record=?2 WHERE id=?1",
+        rusqlite::params![running.task_id, serde_json::to_string(&running).unwrap()],
+    )
+    .unwrap();
+    db.execute(
+        "UPDATE applications SET status='ready',record=?2 WHERE id=?1",
+        rusqlite::params![id, serde_json::to_string(&ready_app).unwrap()],
+    )
+    .unwrap();
+    drop(db);
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    until(&worker, || {
+        app(&worker, &id).status == ApplicationStatus::Indeterminate
+    });
+    let events = attention_events(&worker);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].severity, AttentionSeverity::Warning);
+    assert_eq!(
+        events[0].target,
+        AttentionTarget::Application {
+            application_id: id,
+            workflow_id: done.workflow_id
+        }
+    );
+    assert_eq!(fs::read(&log).unwrap(), before);
+}

@@ -31,7 +31,7 @@ async fn run() -> Result<(), String> {
         }
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
+        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH validate | serve | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -43,6 +43,7 @@ async fn run() -> Result<(), String> {
             winbridge_protocol::Capability::WorkspaceImport,
             winbridge_protocol::Capability::LogRead,
             winbridge_protocol::Capability::AttentionRequest,
+            winbridge_protocol::Capability::AttentionTargets,
         ];
         descriptor
             .planned_capabilities
@@ -82,6 +83,9 @@ async fn run() -> Result<(), String> {
                 [name] if name == "attention-list" || name == "attention-history" => LocalRequest::ListAttention {after_sequence:0,pending_only:name=="attention-list"},
                 [name, after] if name == "attention-list" || name == "attention-history" => LocalRequest::ListAttention {after_sequence:after.parse().map_err(|_|"Attention cursor must be an unsigned integer")?,pending_only:name=="attention-list"},
                 [name, id] if name == "ack-attention" => LocalRequest::AcknowledgeAttention {attention_id:id.clone()},
+                [name] if name == "attention-events" || name == "attention-events-history" => LocalRequest::ListAttentionEvents {after_sequence:0,pending_only:name=="attention-events"},
+                [name, after] if name == "attention-events" || name == "attention-events-history" => LocalRequest::ListAttentionEvents {after_sequence:after.parse().map_err(|_|"Attention cursor must be an unsigned integer")?,pending_only:name=="attention-events"},
+                [name, id] if name == "ack-attention-event" => LocalRequest::AcknowledgeAttentionEvent {attention_id:id.clone()},
                 [name, path] if name == "workflow" => LocalRequest::SubmitWorkflow {request:serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),65536)?).map_err(|_|"Invalid workflow JSON")?},
                 [name] if name == "workflows" => LocalRequest::ListWorkflows,
                 [name,id] if name == "get-workflow" => LocalRequest::GetWorkflow {workflow_id:id.clone()},
