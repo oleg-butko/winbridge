@@ -98,7 +98,7 @@ Source export содержит точный manifest всех source files с ha
 1. Core/config/desktop persistence и log reader: byte paging/Unicode, append/truncate/rewrite/rotate, guards.
 2. Worker integration runtime/snapshots/workflows: actual execution/output/cancel, NTFS guards, imports/migrations, import→build→start→ready→log, dedup/leases, build failure со старым exe, readiness и общий startup timeout, stop до готовности, позднее падение приложения, авария отдельного worker с Job close и indeterminate recovery без повторения.
 
-Тестовая авария касается только созданного harness worker. Отмена внешней задачи завершается её управляемым деревом. Новый desktop автоматически не открывается: native визуальные наблюдения пользователь отложил. Реальная browser UI integration проверяется отдельно `npm run test:ui` с Unix worker/WebSocket и transport shim; она не подменяет Windows Win32 checks.
+Тестовая авария касается только созданного harness worker. Отмена внешней задачи завершается её управляемым деревом. В обычном backend сценарии desktop не открывается. Режимы CompanionOnly и WorkflowAttentionOnly открывают обозначенные тестовые окна и сами выполняют native UI проверки. Реальная browser UI integration проверяется отдельно `npm run test:ui` с Unix worker/WebSocket и transport shim; она не подменяет Windows Win32 checks.
 
 ## Отчёт
 

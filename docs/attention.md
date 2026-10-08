@@ -2,8 +2,9 @@
 
 Статус 2026-10-08: worker journal → local IPC/WebSocket/CLI → desktop → точная
 страница → явное подтверждение. [Tray/popup/звук и quiet hours](companion.md)
-прошли Windows gate. Workflow/application targets реализованы; новый автоматический
-native gate пока не завершён. История, diagnostic export и MCP остаются в [этапе 5](stage5-plan.md).
+прошли Windows gate. Workflow/application targets также
+[прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md):
+19 backend tests и actual popup → workflow page → UI ACK. История, diagnostic export и MCP остаются в [этапе 5](stage5-plan.md).
 
 ## Что видит пользователь
 
@@ -146,6 +147,8 @@ python3 scripts/validate-workflow-native.py \
 
 Сценарий запускается агентом через текущий worker, собирает новый тестовый source
 offline и публикует checksum-verified report в shared. Он не устанавливает runtime.
+[Новый gate](windows-workflow-attention-gate-2026-10-08.md) пройден: clean source
+`3c59351`, 10 attention + 9 workflow tests и native desktop exit 0, 12 verified artifacts.
 Архив создаётся с `--include-built-ui`. Новый сценарий включает native backend tests,
 offline worker/desktop build и один заметно обозначенный тестовый desktop: настоящая
 ошибка import → popup → точная workflow page → отдельное UI acknowledgement.

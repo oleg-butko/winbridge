@@ -1,6 +1,6 @@
 # Архитектура WinBridge
 
-Статус 2026-10-08: этапы 1–4 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Начат [журнал внимания этапа 5](attention.md). Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; новые workflow/application attention targets ждут отдельного автоматического native gate.
+Статус 2026-10-08: этапы 1–4 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Начат [журнал внимания этапа 5](attention.md). Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
 
 ## Назначение и среда
 

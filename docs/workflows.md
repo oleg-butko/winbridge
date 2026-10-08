@@ -48,8 +48,8 @@ Workflow failure/indeterminate создаёт одно событие с workflo
 даёт отдельный application event; прежний startup остаётся succeeded. Stop/cancel
 тихие. Readiness/log failure сигнализирует родительский workflow. Все terminal
 records и соответствующие events записываются атомарно в schema 5; journal fault
-блокирует выдачу stale результата и новые запуски. [Контракт](attention.md). Новый
-Windows target navigation gate пока не завершён.
+блокирует выдачу stale результата и новые запуски. [Контракт](attention.md).
+[Windows target navigation gate](windows-workflow-attention-gate-2026-10-08.md) пройден.
 
 ## Чтение лога
 

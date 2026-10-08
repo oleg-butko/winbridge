@@ -24,8 +24,15 @@ additive feed/ACK/capability, schema 5 с consistent v4 backup и сохране
 единый parent workflow event, отдельные runtime outcomes приложения, quiet stop/cancel.
 Terminal record/event атомарны; journal fault блокирует stale reads и admission.
 UI открывает точный workflow/application ID вне recent 10. [Ревью и исправления](review-workflow-attention-2026-10-08.md).
-89 workspace Rust tests, Clippy и browser integration прошли;
-новый native gate пока не завершён. Для него нужен установленный worker, desktop
+89 workspace Rust tests, Clippy и browser integration прошли.
+[Windows gate](windows-workflow-attention-gate-2026-10-08.md) завершён:
+clean source `3c59351`, run `20261008-060121-324c2ef1`, task
+`7e2cc850-e9ae-4205-a12f-ea27d399efb2` succeeded/exit 0, report SHA-256
+`f5512e89434690ec036636e6f7f03226d78eee1b4e3f2dadbdc3c13c10a39988`.
+10 attention + 9 workflow tests, actual native popup → точный workflow → UI ACK,
+desktop exit 0 и все 12 artifacts подтверждены. Cleanup без ошибок; установленный
+worker прежний, healthy, activeTaskCount=0. Тестовые окна закрылись. Пользователю
+сообщено, что рабочий desktop можно завершить, worker оставить работающим. Для него нужен установленный worker, desktop
 необязателен; --workflow-attention-only собирает отдельный заметный тестовый desktop.
 Installed runtime/config/state не заменять. Следующие сценарии — история/диагностика, MCP.
 
@@ -121,7 +128,7 @@ tray/popup/sound/settings прошли gate, описанный в текуще�
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
 | Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite workflows/applications (schema 3), текущая schema 4 с attention; consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
 | Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Этап 4 завершён по общему Windows Netwatch прогону; native визуальная проверка отложена. |
-| Attention | Durable task outcome/request attention, dedup/acknowledgement, schema 5 + consistent v3/v4 backups, capability guards, CLI и paged UI/typed targets. Tray/popup/sound/settings прошли автоматический native gate с двумя UI запусками. Workflow/app attention реализованы; новый native gate пока не завершён. [Journal](attention.md), [companion](companion.md). |
+| Attention | Durable task outcome/request attention, dedup/acknowledgement, schema 5 + consistent v3/v4 backups, capability guards, CLI и paged UI/typed targets. Tray/popup/sound/settings прошли автоматический native gate с двумя UI запусками. Workflow/app attention прошли автоматический Windows gate: 19 tests и native popup/target/ACK. [Journal](attention.md), [companion](companion.md). |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 
 **Этап 1 завершён 2026-10-05.** [Доказательства](windows-gate-2026-10-05.md): прогон `20261005-161827-c8deef84`, все 10 checks passed, ipcAclVerified true; пять native UI шагов подтверждены пользователем, включая отдельно уточнённый stop/restart worker. JSON uiVerified остаётся false, потому что ручные шаги не оцениваются скриптом; shared report не менялся. Worker --describe возвращает scaffold false и task_submit/task_cancel, в коммите этапа 1 controller оставался scaffold. Теперь controller реализует task_submit/task_cancel через worker; readiness этапа 2 требует отдельного Windows gate.

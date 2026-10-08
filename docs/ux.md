@@ -73,8 +73,8 @@ Popup/звук содержит проект, короткую причину и
 после перезапуска UI. Tray/popup/sound/quiet hours прошли автоматический Windows gate.
 Workflow/application events добавлены 2026-10-08: ошибка import не требует Task ID,
 workflow failure показывает шаг/причину, runtime crash не переписывает успешный
-startup. Target открывается по точному ID, даже вне recent list. Новый native gate
-пока не завершён.
+startup. Target открывается по точному ID, даже вне recent list.
+[Новый native gate](windows-workflow-attention-gate-2026-10-08.md) пройден автоматически.
 
 Tray показывает активные задачи и attention count. Закрытие окна скрывает UI. «Закрыть интерфейс» и «Остановить worker» — разные команды; остановка показывает последствия для текущих tasks. Не требовать admin права для обычного runtime.
 

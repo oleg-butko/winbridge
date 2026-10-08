@@ -2,7 +2,9 @@
 
 План зафиксирован `aeae684` до реализации. Новый срез продолжает этап 5:
 durable typed targets, точный переход из popup/inbox, явный ACK. Native gate
-ещё не завершён; installed Windows runtime остаётся `f7c4878`.
+[пройден автоматически](windows-workflow-attention-gate-2026-10-08.md): 19 backend
+tests, actual workflow popup/navigation/ACK и 12 verified artifacts. Installed
+Windows runtime остаётся `f7c4878`.
 
 ## Важные исправления
 
