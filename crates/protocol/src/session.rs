@@ -43,6 +43,7 @@ pub enum SessionMessage {
     },
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -52,6 +53,7 @@ pub enum ConnectionState {
     Disconnected,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -65,6 +67,7 @@ pub struct ControllerConnection {
     pub error: Option<String>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +86,7 @@ pub struct ControllerStatus {
     pub activity_log: Option<ActivityLogStatus>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

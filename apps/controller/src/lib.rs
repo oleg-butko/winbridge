@@ -11,6 +11,29 @@ use winbridge_protocol::{
 };
 use winbridge_transport::websocket::{self as ws, Result, RpcSender};
 mod activity;
+pub mod mcp;
+
+pub fn publish(
+    config: &ControllerConfig,
+    project: &str,
+    revision: &str,
+) -> Result<winbridge_protocol::SnapshotReady> {
+    let source = config
+        .projects
+        .iter()
+        .find(|p| p.id == project)
+        .ok_or("Source project is not registered in controller JSON")?;
+    winbridge_workspace_sync::publish(
+        config
+            .delivery
+            .as_ref()
+            .ok_or("Configure delivery in controller local JSON")?,
+        &source.source_root,
+        &config.state_directory,
+        project,
+        revision,
+    )
+}
 
 struct Session {
     sender: RpcSender,

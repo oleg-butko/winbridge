@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -10,6 +11,7 @@ pub enum HistoryKind {
     Application,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -19,6 +21,7 @@ pub struct HistoryCursor {
     pub operation_id: String,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -30,6 +33,7 @@ pub struct HistoryQuery {
     pub before: Option<HistoryCursor>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +48,7 @@ pub struct HistoryEntry {
     pub workflow_id: Option<String>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +59,7 @@ pub struct HistoryPage {
     pub observed_at_ms: u64,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -64,6 +70,7 @@ pub struct DiagnosticRequest {
     pub redact_values: Vec<String>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -76,6 +83,7 @@ pub struct DiagnosticPreview {
     pub output_truncated: bool,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +100,7 @@ pub struct StorageUsage {
     pub output_limit_bytes_per_task: u64,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

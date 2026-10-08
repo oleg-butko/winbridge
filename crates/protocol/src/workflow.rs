@@ -2,6 +2,7 @@
 use crate::{CommandSource, JournalEvent, TaskStatus};
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -14,6 +15,7 @@ pub struct ReadinessProbe {
     pub netwatch: Option<NetwatchProbe>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -22,6 +24,7 @@ pub struct NetwatchProbe {
     pub runtime_directory: String,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -31,6 +34,7 @@ pub struct ArtifactSpec {
     pub path: String,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +49,7 @@ pub struct BuildArtifact {
     pub recorded_at_ms: u64,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -66,6 +71,7 @@ pub struct WorkflowSubmission {
     pub artifacts: Vec<ArtifactSpec>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -79,6 +85,7 @@ pub enum WorkflowStepStatus {
     Indeterminate,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +99,7 @@ pub struct WorkflowStep {
     pub reason: Option<String>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,6 +118,7 @@ pub struct WorkflowRecord {
     pub artifacts: Vec<BuildArtifact>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -131,6 +140,7 @@ impl ApplicationStatus {
     }
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -149,6 +159,7 @@ pub struct ApplicationRecord {
     pub failure_reason: Option<String>,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -159,6 +170,7 @@ pub struct LogCursor {
     pub prefix_sha256: String,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

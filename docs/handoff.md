@@ -53,7 +53,12 @@ Cleanup без ошибок; installed worker healthy/activeTaskCount=0, generat
 Пользователю сообщено, что тестовое окно закрылось, desktop можно завершить, worker оставить. Рабочий runtime остаётся f7c4878; новый сценарий
 `--history-diagnostics-only` выполняется в отдельном runtime через установленный worker.
 Новые ручные Windows наблюдения не требуются. MCP начинается по [плану](mcp-plan.md),
-зафиксированному до реализации; retention/settings остаются.
+зафиксированному до реализации коммитом `ab0eae0`; retention/settings остаются.
+[MCP adapter](mcp.md) реализован: 30 typed tools с schemas из DTO, bounded stdio
+lifecycle и forwarding в existing controller IPC. Четыре contract tests и actual
+Unix pipeline/lost ACK/dedup/output/history/diagnostic/client exit/cancel прошли.
+107 workspace tests, Clippy, Windows all-targets compile и contracts/typecheck прошли.
+Windows MCP gate ещё предстоит; installed worker не заменяется.
 
 ## Завершённый сценарий — 2026-10-07
 

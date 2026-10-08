@@ -102,7 +102,7 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 - [x] Editable task diagnostic с redaction, default omission, create-only save и проверкой readback/SHA-256.
 - [x] Output paging/quota, recovery без UI и read-only размеры журнала.
 - [ ] Полная retention policy и её настройки; automatic deletion пока выключен.
-- [ ] MCP stdio adapter использует те же операции, что CLI; domain logic не дублируется.
+- [ ] [MCP stdio adapter](mcp.md) реализован: 30 typed tools над теми же RPC/handler; contract и actual Unix gate прошли, Windows gate ещё предстоит.
 
 Критерий: пользователь понимает, что сделал агент, получает уместный сигнал, открывает причину и может продолжить работу. Рутинные разрешённые действия не требуют повторяющихся confirmations.
 

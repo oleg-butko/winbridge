@@ -119,3 +119,8 @@ Task diagnostic строится в одной read transaction; redaction пр�
 Первый полный сценарий и критерии готовности перечислены в [roadmap.md](roadmap.md).
 
 Этап 4: editable profiles/drafts принадлежат desktop state, frozen accepted profile — worker journal. Artifact hashes снимаются после build перед start в фоновой работе, с исторической привязкой к source/build task. Изолированный Netwatch readiness adapter сверяет владельца IPC и health PID; он не подключается к production pipe. Расширенные workflow поля согласуются через WorkerInfo.workflowFeatures, без изменения Hello старого worker. Build identity содержит commit/dirty/build ID и SHA source manifest при сборке из ZIP.
+
+[MCP stdio](mcp.md) — вход в существующий controller IPC. Schemas инструментов
+генерируются из protocol DTO; adapter не исполняет команды и не держит execution
+queue. CLI/MCP publication используют общий handler. Потеря ответа не приводит
+к automatic replay; accepted task переживает закрытие stdio.

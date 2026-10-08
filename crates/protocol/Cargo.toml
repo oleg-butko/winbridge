@@ -6,9 +6,11 @@ publish.workspace = true
 
 [features]
 typescript = ["dep:ts-rs"]
+jsonschema = ["dep:schemars"]
 
 [dependencies]
 serde.workspace = true
+schemars = { version = "0.8.22", optional = true }
 ts-rs = { version = "12", optional = true, features = ["no-serde-warnings"] }
 
 [[example]]
