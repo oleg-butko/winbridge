@@ -10,6 +10,8 @@ import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
+import { HistoryPanel } from "../history/HistoryPanel";
+import type { HistoryEntry } from "../../runtime/contracts";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
 import { TaskDetail, statuses } from "./TaskDetail";
 
@@ -58,6 +60,19 @@ export function NativeWorkbench() {
   const [workflowSnapshot, setWorkflowSnapshot] = useState<WorkflowSnapshot | null>(null);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [workflowNavigation, setWorkflowNavigation] = useState<{sequence:number;workflowId:string;applicationId:string|null} | null>(null);
+  const [importNavigation,setImportNavigation] = useState<{sequence:number;importId:string}|null>(null);
+  async function openHistory(entry:HistoryEntry) {
+    try {
+      if(entry.kind==="import") {
+        setImportNavigation((previous)=>({sequence:(previous?.sequence??0)+1,importId:entry.operationId}));
+        requestAnimationFrame(()=>{const detail=document.getElementById("native-import-detail");detail?.scrollIntoView();detail?.focus({preventScroll:true});});
+      } else if(entry.kind==="application") {
+        const workflowId=entry.workflowId??expectResult(await workerCall({method:"get_application",applicationId:entry.operationId}),"application").application.workflowId;
+        openAttention({kind:"application",applicationId:entry.operationId,workflowId});
+      } else if(entry.kind==="workflow") openAttention({kind:"workflow",workflowId:entry.operationId});
+      else openAttention({kind:"task",taskId:entry.operationId});
+    }catch(e){setError(String(e));}
+  }
   function openAttention(target: AttentionTarget) {
     if (target.kind === "task") setSelectedId(target.taskId);
     else setWorkflowNavigation((previous) => ({sequence:(previous?.sequence ?? 0)+1, workflowId:target.workflowId, applicationId:target.kind === "application" ? target.applicationId : null}));
@@ -268,9 +283,10 @@ export function NativeWorkbench() {
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}
+    {info && <HistoryPanel key={`history:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onOpen={(entry)=>void openHistory(entry)} />}
     <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} />
     {info?.journalRecoveryRequired && <Alert color="red" title="Результат операции не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
-    {info?.snapshotImportAvailable && <SnapshotWorkbench info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
+    {info?.snapshotImportAvailable && <SnapshotWorkbench navigation={importNavigation} info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
     {info?.workflowAvailable && <WorkflowWorkbench navigation={workflowNavigation} info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card withBorder><Stack>
       <Title order={3}>Запустить команду</Title>

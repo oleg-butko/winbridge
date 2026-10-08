@@ -270,9 +270,12 @@ pub fn start(
     report: PathBuf,
     restart: bool,
     targets: bool,
+    history: bool,
 ) {
     tauri::async_runtime::spawn(async move {
-        let result = if targets {
+        let result = if history {
+            run_history(&app, address).await
+        } else if targets {
             run_targets(&app, address, store).await
         } else {
             run(&app, address, store, restart).await
@@ -814,5 +817,219 @@ async fn run_targets(
     }
     Ok(
         serde_json::json!({"genericWorkflowPopup":true,"tasklessFailure":true,"exactWorkflowPage":true,"noFocusSteal":true,"openingDoesNotAcknowledge":true,"explicitUiAck":true,"workflowIds":workflow_ids,"eventIds":event_ids}),
+    )
+}
+
+async fn task_terminal(address: &str, id: &str) -> Result<(), String> {
+    for _ in 0..120 {
+        match call(address, LocalRequest::GetTask { task_id: id.into() }).await? {
+            LocalResponse::Task { task } if task.status.is_terminal() => return Ok(()),
+            LocalResponse::Task { .. } => pause().await,
+            _ => return Err("Task response".into()),
+        }
+    }
+    Err(format!("Task did not finish: {id}"))
+}
+async fn ui_value(
+    app: &tauri::AppHandle,
+    probe: &str,
+    expression: &str,
+) -> Result<serde_json::Value, String> {
+    for _ in 0..120 {
+        let value = js(app, "main", probe, expression).await?;
+        if !value.is_null() && value != false {
+            return Ok(value);
+        }
+        pause().await;
+    }
+    Err(format!("Native UI deadline: {probe}"))
+}
+async fn set_text(app: &tauri::AppHandle, test_id: &str, value: &str) -> Result<(), String> {
+    let encoded = serde_json::to_string(value).map_err(|e| e.to_string())?;
+    let expression = format!("const e=document.querySelector('[data-testid=\"{test_id}\"]'); if(!e)return false; const p=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(p,'value').set.call(e,{encoded});e.dispatchEvent(new Event('input',{{bubbles:true}}));return true;");
+    ui_value(app, "set-text", &expression).await?;
+    pause().await;
+    Ok(())
+}
+async fn run_history(
+    app: &tauri::AppHandle,
+    address: Result<String, String>,
+) -> Result<serde_json::Value, String> {
+    use sha2::{Digest, Sha256};
+    if !cfg!(windows) {
+        return Err("Actual Windows required".into());
+    }
+    let address = address?;
+    let info = match call(&address, LocalRequest::Info).await? {
+        LocalResponse::Info { info } => info,
+        _ => return Err("Info response".into()),
+    };
+    let runtime = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .parent()
+        .ok_or("Runtime directory")?
+        .to_path_buf();
+    let reports = app.state::<super::DiagnosticDirectory>().0.clone()?;
+    if !info.instance_id.starts_with("tray-gate-")
+        || info.node_id != "tray-validation"
+        || info.projects.len() != 1
+        || std::path::Path::new(&info.projects[0].workspace_root) != runtime.join("project")
+        || !info.history_available
+        || reports != runtime.join("reports")
+    {
+        return Err(
+            "Refusing history validation outside its isolated runtime/report directory".into(),
+        );
+    }
+    app.state::<Validation>().progress(
+        "История: настоящая task и более 50 последующих записей",
+        None,
+    );
+    let executable = runtime
+        .join("project/winbridge-fixture.exe")
+        .to_string_lossy()
+        .into_owned();
+    let old = match call(
+        &address,
+        LocalRequest::Submit {
+            request: TaskSubmission {
+                protocol_version: 1,
+                request_id: "history-old".into(),
+                idempotency_key: "history-old".into(),
+                project_id: info.projects[0].id.clone(),
+                timeout_ms: 60000,
+                snapshot_id: None,
+                command: CommandSource::Direct {
+                    executable,
+                    arguments: vec![
+                        "arguments".into(),
+                        "--token".into(),
+                        "history-native-secret".into(),
+                        "Привет ✓".into(),
+                    ],
+                    working_directory: ".".into(),
+                },
+            },
+        },
+    )
+    .await?
+    {
+        LocalResponse::Task { task } => task.task_id,
+        _ => return Err("Submit response".into()),
+    };
+    task_terminal(&address, &old).await?;
+    for i in 0..55 {
+        let id = fixture(
+            &address,
+            &runtime,
+            &info.projects[0].id,
+            &format!("history-recent-{i}"),
+        )
+        .await?;
+        call(
+            &address,
+            LocalRequest::Cancel {
+                task_id: id.clone(),
+            },
+        )
+        .await?;
+        task_terminal(&address, &id).await?;
+    }
+    let before = match call(&address, LocalRequest::StorageUsage).await? {
+        LocalResponse::StorageUsage { usage } => usage,
+        _ => return Err("Usage response".into()),
+    };
+    ui_value(
+        app,
+        "history-first-page",
+        "return !!document.querySelector('[data-testid=\"history-older\"]:not(:disabled)');",
+    )
+    .await?;
+    app.state::<Validation>().progress(
+        "История: следующая страница → точный старый Task ID без выполнения",
+        None,
+    );
+    click(app, "main", "history-older").await?;
+    click(app, "main", &format!("history-open-{old}")).await?;
+    task_page(app, &old).await?;
+    app.state::<Validation>()
+        .progress("Отчёт: безопасный preview без command/output", None);
+    click(app, "main", "diagnostic-prepare").await?;
+    let text = ui_value(
+        app,
+        "diagnostic-default",
+        "return document.querySelector('[data-testid=\"diagnostic-preview\"]')?.value || null;",
+    )
+    .await?;
+    let defaults: serde_json::Value =
+        serde_json::from_str(text.as_str().ok_or("Preview text")?).map_err(|e| e.to_string())?;
+    if defaults["commandIncluded"] != false
+        || defaults["outputIncluded"] != false
+        || text.as_str().unwrap().contains("history-native-secret")
+    {
+        return Err("Default report disclosed omitted command/output".into());
+    }
+    app.state::<Validation>().progress(
+        "Отчёт: Unicode, маскирование и ручное редактирование preview",
+        None,
+    );
+    click(app, "main", "diagnostic-include-command").await?;
+    click(app, "main", "diagnostic-include-output").await?;
+    set_text(app, "diagnostic-redactions", "history-native-secret").await?;
+    click(app, "main", "diagnostic-prepare").await?;
+    let text=ui_value(app,"diagnostic-redacted","const e=document.querySelector('[data-testid=\"diagnostic-preview\"]');if(!e)return null;const j=JSON.parse(e.value);return j.commandIncluded && j.outputIncluded ? e.value:null;").await?;
+    let text = text.as_str().ok_or("Redacted preview text")?;
+    if text.contains("history-native-secret")
+        || !text.contains("Привет ✓")
+        || !text.contains("[REDACTED]")
+    {
+        return Err("Report redaction/Unicode mismatch".into());
+    }
+    let mut reviewed: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    reviewed["reviewNote"] = serde_json::json!("Проверено ✓");
+    let reviewed = serde_json::to_string_pretty(&reviewed).map_err(|e| e.to_string())?;
+    set_text(app, "diagnostic-preview", &reviewed).await?;
+    app.state::<Validation>().progress(
+        "Отчёт: сохранение показанного JSON и повтор с тем же ID",
+        None,
+    );
+    click(app, "main", "diagnostic-save").await?;
+    let saved=ui_value(app,"diagnostic-file","const e=document.querySelector('[data-testid=\"diagnostic-saved\"]');return e?{path:e.getAttribute('data-diagnostic-path'),sha256:e.getAttribute('data-diagnostic-sha256')}:null;").await?;
+    let path = std::path::PathBuf::from(saved["path"].as_str().ok_or("Saved path")?);
+    if path.parent() != Some(reports.as_path()) {
+        return Err("Report escaped isolated report directory".into());
+    }
+    let actual = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let sha = format!("{:x}", Sha256::digest(&actual));
+    if actual != reviewed.as_bytes() || saved["sha256"] != sha {
+        return Err("Saved file differs from reviewed preview/SHA-256".into());
+    }
+    let count = std::fs::read_dir(&reports)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name().to_string_lossy().starts_with("diagnostic-"))
+        .count();
+    click(app, "main", "diagnostic-save").await?;
+    ui_value(app,"diagnostic-retry-finished","return !!document.querySelector('[data-testid=\"diagnostic-saved\"]') && !!document.querySelector('[data-testid=\"diagnostic-save\"]:not([data-loading])');").await?;
+    let count_after = std::fs::read_dir(&reports)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name().to_string_lossy().starts_with("diagnostic-"))
+        .count();
+    let after = match call(&address, LocalRequest::StorageUsage).await? {
+        LocalResponse::StorageUsage { usage } => usage,
+        _ => return Err("Usage response".into()),
+    };
+    if count != 1
+        || count_after != count
+        || before.task_count != after.task_count
+        || before.pending_attention_count != after.pending_attention_count
+    {
+        return Err(
+            "History/report UI created a task, acknowledged attention or duplicated report".into(),
+        );
+    }
+    Ok(
+        serde_json::json!({"historyTaskId":old,"historyOlderPage":true,"exactTaskPage":true,"historyReadHasNoEffects":true,"defaultReportOmittedCommandAndOutput":true,"literalRedactionAndUnicode":true,"editedPreviewSavedExactly":true,"retryKeptOneFile":true,"diagnosticFile":path,"diagnosticBytes":actual.len(),"diagnosticSha256":sha,"taskCount":after.task_count}),
     )
 }

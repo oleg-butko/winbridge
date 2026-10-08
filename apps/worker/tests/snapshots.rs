@@ -75,6 +75,58 @@ fn setup() -> (TempDir, WorkerConfig, ImportSubmission) {
     let config=serde_json::from_value(serde_json::json!({"schemaVersion":1,"instanceId":"snapshot-test","nodeId":"test-worker","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"delivery":{"adapter":"shared-folder","root":delivery.root,"namespace":"WinBridge"},"projects":[{"id":"fixture","workspaceRoot":root.join("project"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]})).unwrap();
     (temp, config, request)
 }
+
+#[test]
+fn history_import_journal_failure_blocks_stale_reads_and_admission_until_restart() {
+    let (_temp, config, mut request) = setup();
+    request.snapshot_id = "missing-owned-package".into();
+    let worker = Worker::open(config.clone()).unwrap();
+    let id = accept(&worker, request).import_id;
+    let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER reject_import_result BEFORE UPDATE ON imports WHEN json_extract(NEW.record,'$.status') IN ('failed','indeterminate') BEGIN SELECT RAISE(ABORT,'expected import result failure'); END;").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) {
+            if info.journal_recovery_required.is_some() {
+                break;
+            }
+        }
+        let _ = worker.schedule();
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(10));
+    }
+    for request in [
+        LocalRequest::GetImport {
+            import_id: id.clone(),
+        },
+        LocalRequest::CancelImport {
+            import_id: id.clone(),
+        },
+        LocalRequest::ListImports,
+        LocalRequest::History {
+            query: HistoryQuery {
+                project_id: None,
+                kind: None,
+                status: None,
+                search: String::new(),
+                before: None,
+            },
+        },
+    ] {
+        assert!(matches!(
+            worker.handle(request),
+            LocalResponse::Error { .. }
+        ));
+    }
+    db.execute_batch("DROP TRIGGER reject_import_result;")
+        .unwrap();
+    drop(db);
+    worker.stop();
+    drop(worker);
+    let worker = Worker::open(config).unwrap();
+    assert_eq!(get(&worker, &id).status, TaskStatus::Interrupted);
+    worker.stop();
+}
 fn git(root: &Path, args: &[&str]) {
     assert!(Command::new("git")
         .arg("-C")

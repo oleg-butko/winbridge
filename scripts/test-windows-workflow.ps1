@@ -21,6 +21,8 @@ SHA-256 исходного ZIP, из которого распакованы и�
 Запускает только новые stage-5 attention tests; завершённый Windows workflow gate не повторяется.
 .PARAMETER WorkflowAttentionOnly
 Проверяет новые workflow/application events, миграцию и native popup → workflow navigation.
+.PARAMETER HistoryDiagnosticsOnly
+Проверяет историю, восстановление journal, redaction и native UI → диагностический файл.
 .PARAMETER CompanionOnly
 Собирает отдельный desktop/worker и проверяет tray, popup, звук, переход к задаче и restart.
 Требует source archive с --include-built-ui; рабочие exe не заменяет.
@@ -37,6 +39,7 @@ param(
     [switch]$AttentionOnly,
     [switch]$CompanionOnly,
     [switch]$WorkflowAttentionOnly,
+    [switch]$HistoryDiagnosticsOnly,
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -96,6 +99,21 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($HistoryDiagnosticsOnly) {
+        if ($NetwatchProfile) { throw 'HistoryDiagnosticsOnly cannot be combined with a Netwatch profile' }
+        if (-not $manifest.includesBuiltUi) { throw 'History UI validation requires --include-built-ui' }
+        $groups = @(
+            @{ name='history-pagination-and-diagnostics'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','history','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='history-pipeline-and-journal-recovery'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','workflows','--test','snapshots','history_','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='child-journal-fault-review'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','workflows','attention_uncommitted_child_result','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='diagnostic-file-publication'; arguments=@('test','-p','winbridge-platform','reports::','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='diagnostic-redaction'; arguments=@('test','-p','winbridge-core','redaction_','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='desktop-report-directory'; arguments=@('test','-p','winbridge-core','report_directory_','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='companion-worker-build'; arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite','--bins','--locked','--offline') },
+            @{ name='companion-desktop-build'; arguments=@('build','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--features','custom-protocol','--locked','--offline') }
+        )
+    }
     if ($AttentionOnly) {
         if ($NetwatchProfile) { throw 'AttentionOnly cannot be combined with a Netwatch profile' }
         $groups = @(@{ name = 'worker-attention'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') })
@@ -133,8 +151,8 @@ try {
         $report.netwatch = Get-Content -LiteralPath (Join-Path $ReportDirectory 'netwatch-report.json') -Raw | ConvertFrom-Json
         if (-not $report.netwatch.passed) { throw 'Isolated Netwatch workflow check failed' }
     }
-    if ($CompanionOnly -or $WorkflowAttentionOnly) {
-        & (Join-Path $source 'scripts/test-companion-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -WorkflowAttention:$WorkflowAttentionOnly
+    if ($CompanionOnly -or $WorkflowAttentionOnly -or $HistoryDiagnosticsOnly) {
+        & (Join-Path $source 'scripts/test-companion-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -WorkflowAttention:$WorkflowAttentionOnly -HistoryDiagnostics:$HistoryDiagnosticsOnly
         $report.companion = Get-Content -LiteralPath (Join-Path $ReportDirectory 'companion-report.json') -Raw | ConvertFrom-Json
         if (-not $report.companion.passed) { throw 'Isolated companion check failed' }
     }

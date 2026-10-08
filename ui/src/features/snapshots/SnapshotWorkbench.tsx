@@ -6,7 +6,8 @@ import { statuses } from "../tasks/TaskDetail";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
 
 const phases: Record<string, string> = { queued: "Ожидает свободного проекта", validate: "Проверка пакета", copy_payload: "Копирование ZIP на локальный диск", extract: "Распаковка и проверка файлов", verify_local: "Проверка локальных исходников", publish_local: "Публикация поколения", verified: "Готово для сборки" };
-export function SnapshotWorkbench({ info, connected, closing, drafts, persist, onWorkflowSnapshot }: {
+export function SnapshotWorkbench({ navigation, info, connected, closing, drafts, persist, onWorkflowSnapshot }: {
+  navigation?: {sequence:number;importId:string}|null;
   info: WorkerInfo; connected: boolean; closing: boolean; drafts: DeliveryDraft[] | null;
   persist: (draft: DeliveryDraft) => Promise<void>;
   onWorkflowSnapshot?: (snapshot: WorkflowSnapshot) => void;
@@ -26,6 +27,7 @@ export function SnapshotWorkbench({ info, connected, closing, drafts, persist, o
   const [preview, setPreview] = useState<SnapshotPreview | null>(null);
   const [imports, setImports] = useState<ImportRecord[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
+  useEffect(()=>{if(navigation){setSelected(navigation.importId);setRecord(null);}},[navigation]);
   const [record, setRecord] = useState<ImportRecord | null>(null);
   const [pending, setPending] = useState<ImportSubmission | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +124,7 @@ export function SnapshotWorkbench({ info, connected, closing, drafts, persist, o
     : `${s.snapshotId} · commit ${s.source?.commit.slice(0, 8)} · ${s.totalFiles} файлов · ZIP ${s.payloadBytes?.toLocaleString()} байт` }));
   if (snapshot && !packages.some((s) => s.snapshotId === snapshot)) packageOptions.unshift({ value: snapshot, label: `${snapshot} · сохранённый выбор, нет в загруженном списке` });
   const chosen = packages.find((s) => s.snapshotId === snapshot);
-  return <Card withBorder><Stack>
+  return <Card id="native-import-detail" tabIndex={-1} withBorder><Stack>
     <Title order={3}>Доставка исходников</Title>
     <Text size="sm">Controller публикует точный Git commit в shared. Worker проверяет пакет и создаёт отдельное поколение на локальном диске Windows.</Text>
     <Select label="Проект доставки" data={info.projects.map((p) => p.id)} value={project} onChange={(id) => choose(id)} disabled={busy || listBusy || pending !== null || closing || drafts === null} allowDeselect={false} />
@@ -156,8 +158,8 @@ export function SnapshotWorkbench({ info, connected, closing, drafts, persist, o
     </Alert>}
     {pollError && <Alert color="yellow" title="Нет свежего подтверждения worker">{pollError}</Alert>}
     {error && <Alert color="yellow" title="Нет свежего результата операции">{error}</Alert>}
-    <Select label="Последние 10 импортов" value={selected ?? record?.importId ?? null} onChange={setSelected} data={imports.map((r) => ({ value: r.importId, label: `${r.submission.projectId} · ${statuses[r.status].label} · ${r.importId}` }))} />
-    {record && <Stack gap="xs">
+    <Select label="Последние 10 импортов" value={selected ?? record?.importId ?? null} onChange={setSelected} data={(record&&!imports.some((r)=>r.importId===record.importId)?[record,...imports]:imports).map((r) => ({ value: r.importId, label: `${r.submission.projectId} · ${statuses[r.status].label} · ${r.importId}` }))} />
+    {record && <Stack gap="xs" data-confirmed-import-id={record.importId}>
       <Group><Badge color={statuses[record.status].color}>{statuses[record.status].label}</Badge><Text>{phases[record.phase] ?? record.phase}</Text></Group>
       <Text size="xs">Import ID: {record.importId} · подтверждение: {confirmedAt === null ? "ожидается" : new Date(confirmedAt).toLocaleTimeString()}</Text>
       {!connected && <Text c="yellow">Worker недоступен. Показано последнее подтверждение; импорт не запускается повторно.</Text>}

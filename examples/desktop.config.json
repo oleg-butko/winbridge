@@ -1,4 +1,5 @@
 {
   "schemaVersion": 1,
-  "workerConfigPath": "worker.local.json"
+  "workerConfigPath": "worker.local.json",
+  "reportDirectory": "K:\\VMs\\shared\\WinBridge\\diagnostics"
 }

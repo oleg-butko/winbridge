@@ -85,14 +85,14 @@ dedup и acknowledgements сохраняются у worker; UI раскрыва�
 исправлены обозначение тестового окна, защита close и публикация отчёта.
 Workflow/app attention реализованы по [плану](workflow-attention-plan.md) и
 [прошли автоматический Windows gate](windows-workflow-attention-gate-2026-10-08.md):
-19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. Диагностика и MCP ещё не реализованы; этап не закрыт.
+19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, автоматический Windows gate ещё предстоит. MCP ещё не реализован; этап не закрыт.
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
 [Ревью](review-attention-2026-10-07.md) исправило fresh running после failed result commit.
 Сценарий [tray/popup/sound/preferences](tray-plan.md) завершён; план был зафиксирован
 коммитом `bbba964` до реализации. План workflow/app attention зафиксирован `aeae684`
-до реализации; сценарий завершён. Далее — история/диагностика, затем MCP.
+до реализации; сценарий завершён. [История/диагностика](history-diagnostics.md) добавляет keyset pages, старые IDs, keyboard actions, redacted editable task report и storage usage; Windows gate ещё предстоит. Далее — MCP и retention/settings.
 
 - [x] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [x] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.

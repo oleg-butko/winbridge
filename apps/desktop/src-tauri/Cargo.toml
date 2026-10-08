@@ -20,6 +20,7 @@ tokio = { version = "1", features = ["time"] }
 winbridge-core = { path = "../../../crates/core" }
 winbridge-protocol = { path = "../../../crates/protocol" }
 winbridge-transport = { path = "../../../crates/transport" }
+winbridge-platform = { path = "../../../crates/platform" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Media_Audio", "Win32_UI_WindowsAndMessaging"] }

@@ -8,6 +8,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        HistoryKind::decl(&config),
+        HistoryCursor::decl(&config),
+        HistoryQuery::decl(&config),
+        HistoryEntry::decl(&config),
+        HistoryPage::decl(&config),
+        DiagnosticRequest::decl(&config),
+        DiagnosticPreview::decl(&config),
+        StorageUsage::decl(&config),
+        SavedDiagnostic::decl(&config),
         AttentionSeverity::decl(&config),
         AttentionSubmission::decl(&config),
         AttentionRecord::decl(&config),

@@ -722,6 +722,41 @@ fn attention_events(worker: &Worker) -> Vec<AttentionEvent> {
     };
     page.records
 }
+
+#[test]
+fn history_mixed_pipeline_links_import_tasks_workflow_and_application() {
+    let (_temp, config, request) = setup();
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let done = complete(&worker, &accept(&worker, request).workflow_id);
+    let LocalResponse::History { page } = worker.handle(LocalRequest::History {
+        query: HistoryQuery {
+            project_id: Some("fixture".into()),
+            kind: None,
+            status: None,
+            search: String::new(),
+            before: None,
+        },
+    }) else {
+        panic!()
+    };
+    assert_eq!(page.records.len(), 5);
+    for kind in [
+        HistoryKind::Task,
+        HistoryKind::Import,
+        HistoryKind::Workflow,
+        HistoryKind::Application,
+    ] {
+        assert!(page.records.iter().any(|r| r.kind == kind));
+    }
+    let app = page
+        .records
+        .iter()
+        .find(|r| r.kind == HistoryKind::Application)
+        .unwrap();
+    assert_eq!(app.workflow_id.as_deref(), Some(done.workflow_id.as_str()));
+    assert_eq!(Some(&app.operation_id), done.application_id.as_ref());
+    stop(&worker, done.application_id.as_ref().unwrap());
+}
 #[test]
 fn attention_import_failure_without_task_has_workflow_target_and_ack_survives_restart() {
     let (_temp, config, mut request) = setup();

@@ -6,6 +6,10 @@ publish.workspace = true
 
 [dependencies]
 winbridge-protocol.workspace = true
+sha2 = "0.10.9"
+
+[dev-dependencies]
+tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true

@@ -102,6 +102,12 @@ IDs, ACK и sequence high-water сохраняются. При ошибке comm
 Additive attention_targets capability защищает старые peers от неизвестных RPC.
 [Контракт и границы](attention.md).
 
+HistoryRead добавляет read-only history и storage usage без новой схемы SQLite.
+Task diagnostic строится в одной read transaction; redaction применяется к строкам
+до JSON encoding. Desktop показывает редактируемый preview и сохраняет именно его
+в configured reportDirectory с create-only write/readback/SHA-256. Старые peers
+защищены capability guard. [Контракт](history-diagnostics.md).
+
 ## UI и расширение
 
 Каждое capability имеет понятное имя, описание параметров, видимые события, cancel/retry semantics и read model для UI. Event journal — единый источник данных для task page, общего audit и уведомлений. Desktop закрывается независимо от worker; отдельное явное действие останавливает worker с показом активных задач.

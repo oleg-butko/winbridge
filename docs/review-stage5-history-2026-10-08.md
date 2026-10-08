@@ -14,6 +14,14 @@ tasks SQLite trigger, проверяет stale read/stop отказ и сохр�
 После repair/restart приложение становится indeterminate с одним событием, без
 повторного внешнего запуска. Этот targeted Linux тест прошёл.
 
+При реализации history обнаружена аналогичная проблема импорта: если запись
+результата и recovery finish_import обе не удались, исключение игнорировалось,
+lease освобождалась, GetImport мог вернуть старое running. Теперь fault сохраняется,
+lease удерживается, свежие reads/cancel/list/history и admission отклоняются.
+Регрессия запрещает terminal import UPDATE SQLite trigger; после repair/restart
+незавершённый import без verified generation становится interrupted по прежнему
+правилу recovery. Новый внешний запуск не выполняется. Linux тест прошёл.
+
 Следующая работа зафиксирована в [плане](history-diagnostics-plan.md) до реализации.
 Installed Windows runtime остаётся f7c4878; новые функции проверяются в отдельном
 runtime через уже разрешённый worker. Новый Windows gate пока не выполнен.

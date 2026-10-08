@@ -4,6 +4,7 @@ pub mod attention;
 pub mod config;
 pub mod controller_config;
 pub mod desktop_state;
+pub mod diagnostics;
 pub mod notifications;
 pub mod snapshot;
 pub mod workflow;
@@ -27,6 +28,7 @@ pub fn descriptor(component: Component) -> RuntimeDescriptor {
             Capability::LogRead,
             Capability::AttentionRequest,
             Capability::AttentionTargets,
+            Capability::HistoryRead,
         ],
     }
 }

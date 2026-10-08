@@ -1,4 +1,5 @@
 // Integration test: browser transport shim -> real local worker, never fixture task data.
+import { createHash } from "node:crypto";
 import { promisify } from "node:util";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
@@ -122,9 +123,13 @@ try {
   let draftSaveDelay = 0;
   let failDraftSaves = false;
   let failDeliverySaves = false;
+  const diagnosticsDirectory=join(run,"diagnostics");
+  await mkdir(diagnosticsDirectory);
+  const diagnosticSaves=[];
+  let loseDiagnosticSaveAck=false;
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
-      const response = await call(request, ["submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
+      const response = await call(request, ["submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
       if (request.method === "submit" && loseFirstAck) { loseFirstAck = false; submittedId = response.task.taskId; throw new Error("Test: acceptance response was lost"); }
       if (request.method === "import_snapshot" && loseFirstImportAck) { loseFirstImportAck = false; importedId = response.import.importId; throw new Error("Test: import ACK lost"); }
       if (request.method === "submit_workflow" && loseFirstWorkflowAck && response.kind === "workflow") { loseFirstWorkflowAck = false; acceptedWorkflowId = response.workflow.workflowId; throw new Error("Test: workflow ACK lost"); }
@@ -134,6 +139,21 @@ try {
     });
     // Native filesystem persistence is covered by core tests. Here the IPC shim
     // uses a real file across fresh WebViews to test the form and close lifecycle.
+    await nativePage.exposeFunction("diagnosticBridge", async(command,args)=>{
+      if(command==="diagnostic_directory")return diagnosticsDirectory;
+      assert.equal(command,"save_diagnostic");
+      assert.match(args.requestId,/^[a-f0-9-]{36}$/i);
+      const parsed=JSON.parse(args.json);
+      assert.equal(parsed.kind,"winbridge_task_diagnostic");
+      const path=join(diagnosticsDirectory,`diagnostic-${args.requestId}.json`);
+      const bytes=Buffer.from(args.json);
+      try {await writeFile(path,bytes,{flag:"wx"});}catch(e){if(e.code!=="EEXIST")throw e;}
+      const actual=await readFile(path);
+      assert.deepEqual(actual,bytes,"Diagnostic save overwrote a previous report");
+      diagnosticSaves.push({id:args.requestId,json:args.json,path});
+      if(loseDiagnosticSaveAck){loseDiagnosticSaveAck=false;throw new Error("Test: diagnostic file written but save ACK lost");}
+      return {path,bytes:actual.length,sha256:createHash("sha256").update(actual).digest("hex")};
+    });
     await nativePage.exposeFunction("draftBridge", async (command, args) => {
       const state = existsSync(preferencesPath) ? JSON.parse(await readFile(preferencesPath, "utf8")) : { schemaVersion: 1, drafts: [], deliveryDrafts: [] };
       state.deliveryDrafts ??= [];
@@ -166,6 +186,7 @@ try {
         metadata: { currentWindow: { label: "main" } },
         transformCallback: (callback) => { const id = ++nextCallback; callbacks.set(id, callback); return id; },
         invoke: (command, args) => {
+          if (["diagnostic_directory","save_diagnostic"].includes(command)) return window.diagnosticBridge(command,args);
           if (command === "worker_rpc") return window.workerBridge(args.request);
           if (command === "desktop_build") return Promise.resolve({ version: "0.1.0", sourceCommit: "browser-test", sourceDirty: false, sourceManifestSha256: null, buildId: "test-shell" });
           if (["load_command_drafts", "save_command_draft", "save_delivery_draft", "save_workflow_profile", "save_notification_preferences"].includes(command)) return window.draftBridge(command, args);
@@ -233,7 +254,7 @@ try {
   const tree = await latestTask();
   await page.getByRole("button", { name: "Отменить задачу", exact: true }).click();
   await until(async () => (await call({ method: "get_task", taskId: tree.taskId })).task.status === "cancelled", "tree was not cancelled");
-  await page.locator('.mantine-Badge-root').filter({ hasText: "Отменено" }).waitFor();
+  await page.locator('#native-task-detail .mantine-Badge-root').filter({ hasText: "Отменено" }).waitFor();
 
   await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill('["long"]');
   await page.getByRole("button", { name: "Передать задачу worker", exact: true }).click();
@@ -246,15 +267,15 @@ try {
   await page.getByText("Controller Debian подключён", { exact: true }).waitFor();
   assert.equal((await latestTask()).taskId, long.taskId, "reconnect created a new task");
   crashedPid = long.processId;
-  await page.locator('.mantine-Badge-root').filter({ hasText: "Выполняется" }).waitFor();
+  await page.locator('#native-task-detail .mantine-Badge-root').filter({ hasText: "Выполняется" }).waitFor();
   await stopWorker("SIGKILL");
   await page.getByText("Нет свежего подтверждения worker", { exact: true }).first().waitFor();
   await page.getByText("Нет свежего соединения с controller Debian", { exact: true }).waitFor();
   assert.equal(await page.getByText("Controller Debian подключён", { exact: true }).count(), 0, "stale worker info presented controller as online");
-  assert.equal(await page.locator('.mantine-Badge-root').filter({ hasText: "Выполняется" }).count(), 1);
+  assert.equal(await page.locator('#native-task-detail .mantine-Badge-root').filter({ hasText: "Выполняется" }).count(), 1);
   try { process.kill(-crashedPid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; } crashedPid = undefined;
   await startWorker();
-  await page.locator('.mantine-Badge-root').filter({ hasText: "Результат неизвестен" }).waitFor();
+  await page.locator('#native-task-detail .mantine-Badge-root').filter({ hasText: "Результат неизвестен" }).waitFor();
   assert.equal((await call({ method: "get_task", taskId: long.taskId })).task.status, "indeterminate");
 
   const reportPage = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
@@ -483,7 +504,72 @@ try {
   assert.ok(!(await call({method:"list_workflows"})).workflows.some((r)=>r.workflowId===missingWorkflow.workflowId));
   await workflowPage.evaluate((target)=>{window.__companion.openTarget=target;window.__companion.openTaskSequence++;},failureEvent.target);
   await workflowPage.locator(`[data-confirmed-workflow-id="${missingWorkflow.workflowId}"]`).waitFor();
-  // A real journal failure must block new launches without presenting stale running as fresh.
+  // History opens exact old operations; exports use real worker preview and create-only files.
+  const historical=(await call({method:"submit",request:{protocolVersion:1,requestId:"diagnostic-old",projectId:"other-fixture",idempotencyKey:"diagnostic-old",timeoutMs:10000,command:{kind:"direct",executable:fixture,arguments:["arguments","--token","browser-fake-secret","Привет ✓"],workingDirectory:"."}}})).task;
+  await until(async()=>(await call({method:"get_task",taskId:historical.taskId})).task.status==="succeeded","history fixture did not finish");
+  for(let i=0;i<55;i++){
+    const recent=(await call({method:"submit",request:{protocolVersion:1,requestId:`history-${i}`,projectId:"other-fixture",idempotencyKey:`history-${i}`,timeoutMs:10000,command:{kind:"direct",executable:fixture,arguments:["success"],workingDirectory:"."}}})).task;
+    await call({method:"cancel",taskId:recent.taskId});
+    await until(async()=>!["running","queued"].includes((await call({method:"get_task",taskId:recent.taskId})).task.status),"history cancellation did not finish");
+  }
+  const usageBefore=(await call({method:"storage_usage"})).usage;
+  const history=workflowPage.locator("#native-history");
+  await workflowPage.keyboard.press("Control+k");
+  assert.equal(await history.getByLabel("Поиск истории по ID или названию",{exact:true}).evaluate(e=>e===document.activeElement),true);
+  // Fresh unfiltered first page must omit the older task, and its next page must contain it.
+  await history.getByRole("button",{name:"Свежие записи",exact:true}).click();
+  await until(async()=>await history.getByTestId("history-older").isEnabled(),"History page cursor missing");
+  assert.equal(await history.getByTestId(`history-open-${historical.taskId}`).count(),0);
+  await history.getByTestId("history-older").click();
+  await history.getByTestId(`history-open-${historical.taskId}`).click();
+  await workflowPage.locator(`[data-confirmed-task-id="${historical.taskId}"]`).waitFor();
+  await history.getByTestId("diagnostic-prepare").click();
+  const preview=history.getByTestId("diagnostic-preview");
+  await preview.waitFor();
+  let report=JSON.parse(await preview.inputValue());
+  assert.equal(report.commandIncluded,false);assert.equal(report.outputIncluded,false);
+  assert.ok(!JSON.stringify(report).includes("browser-fake-secret"));
+  await history.getByTestId("diagnostic-include-command").check();
+  await history.getByTestId("diagnostic-include-output").check();
+  await history.getByTestId("diagnostic-redactions").fill("browser-fake-secret");
+  await history.getByTestId("diagnostic-prepare").click();
+  await until(async()=>JSON.parse(await preview.inputValue()).outputIncluded,"Output preview missing");
+  report=JSON.parse(await preview.inputValue());
+  assert.equal(report.task.taskId,historical.taskId);
+  assert.ok(report.output.stdout.includes("Привет ✓"));
+  assert.ok(!JSON.stringify(report).includes("browser-fake-secret"));
+  report.reviewNote="Ручное изменение ✓";
+  const reviewed=JSON.stringify(report,null,2);
+  await preview.fill(reviewed);
+  loseDiagnosticSaveAck=true;
+  await history.getByTestId("diagnostic-save").click();
+  await history.getByText(/Сохранение не подтверждено.*save ACK lost/).waitFor();
+  assert.equal(await history.getByTestId("diagnostic-saved").count(),0);
+  await history.getByTestId("diagnostic-save").click();
+  await history.getByTestId("diagnostic-saved").waitFor();
+  assert.equal(diagnosticSaves.at(-1).id,diagnosticSaves.at(-2).id,"Lost ACK retry got a new file ID");
+  assert.equal(await readFile(diagnosticSaves.at(-1).path,"utf8"),reviewed);
+  report.reviewNote="Вторая версия ✓";
+  await preview.fill(JSON.stringify(report,null,2));
+  await history.getByTestId("diagnostic-save").click();
+  await history.getByTestId("diagnostic-saved").waitFor();
+  assert.notEqual(diagnosticSaves.at(-1).id,diagnosticSaves.at(-2).id,"Edited preview reused an old file ID");
+  assert.equal(await readFile(diagnosticSaves.at(-2).path,"utf8"),reviewed,"Editing report changed the previous saved file");
+  // Quick actions can open an import outside the recent selection without a command.
+  await workflowPage.keyboard.press("Control+Shift+p");
+  const palette=workflowPage.getByRole("dialog",{name:"Быстрые действия",exact:true});
+  await palette.getByLabel("Тип операции по ID",{exact:true}).click();
+  await workflowPage.getByRole("option",{name:"Импорты",exact:true}).click();
+  await palette.getByLabel("ID операции",{exact:true}).fill(importedId);
+  await palette.getByRole("button",{name:"Открыть по ID",exact:true}).click();
+  await workflowPage.locator(`[data-confirmed-import-id="${importedId}"]`).waitFor();
+  await history.getByLabel("Поиск истории по ID или названию",{exact:true}).fill(historical.taskId);
+  await history.getByTestId(`history-open-${historical.taskId}`).waitFor();
+  assert.equal(await history.locator("[data-history-id]").count(),1);
+  const usageAfter=(await call({method:"storage_usage"})).usage;
+  assert.equal(usageBefore.taskCount,usageAfter.taskCount,"History/report UI executed a task");
+  assert.equal(usageBefore.pendingAttentionCount,usageAfter.pendingAttentionCount,"History/report UI acknowledged an event");
+    // A real journal failure must block new launches without presenting stale running as fresh.
   await exec("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"CREATE TRIGGER reject_outcome BEFORE INSERT ON attention WHEN NEW.origin='task_outcome' BEGIN SELECT RAISE(ABORT,'expected UI journal fault'); END\"); c.commit()", join(run,"state/journal.sqlite")]);
   const uncommitted=(await call({method:"submit",request:{protocolVersion:1,requestId:"journal-fault-ui",projectId:"other-fixture",idempotencyKey:"journal-fault-ui",timeoutMs:5000,command:{kind:"direct",executable:"/deliberately-missing/fixture",arguments:[],workingDirectory:"."}}})).task;
   await workflowPage.getByText("Результат операции не записан · новые запуски приостановлены",{exact:true}).waitFor();
@@ -512,7 +598,7 @@ try {
   await workflowPage.evaluate(() => { window.__validation.enabled=false; });
   await until(async()=>!await validationBanner.isVisible(),"Validation banner did not clear");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences, save/hide/quit, missing tray and popup task/workflow/application navigation, including targets outside the recent ten. Native tray/popup/sound are validated separately on Windows.");
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences, save/hide/quit, missing tray and popup task/workflow/application navigation, including targets outside the recent ten. History: old-page cursor, exact ID navigation, keyboard actions, redacted editable diagnostics, lost save ACK with same-ID retry and immutable previous files. Native tray/popup/sound and actual diagnostic publication are validated separately on Windows.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

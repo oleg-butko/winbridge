@@ -80,6 +80,18 @@ workflow и явное UI acknowledgement. Оно показывает TEST bann
 рабочий desktop необязателен, установленный worker оставить работающим. Старый
 tray gate не повторяется. См. [attention](attention.md).
 
+Для истории и task diagnostic используется `--history-diagnostics-only` и архив
+с `--include-built-ui`. PowerShell `-HistoryDiagnosticsOnly` проверяет pagination,
+mixed pipeline/journal recovery, regression child result, redaction, локальную
+настройку report directory и create-only publication/junction guard. Затем строит
+отдельные worker/desktop offline и открывает одно обозначенное TEST окно.
+Оно читает старую страницу истории, открывает точную task, подготавливает безопасный
+и расширенный preview, заменяет тестовый секрет, редактирует JSON и сохраняет
+его в собственный report directory с readback/SHA-256 и same-ID retry.
+Закрывается само, после остановки тестовых процессов готовые отчёты публикуются
+в shared. Установленный worker нужен, рабочий desktop необязателен; не трогать
+тестовое окно до сообщения о завершении. [Контракт](history-diagnostics.md).
+
 ## Запуск из Debian
 
 ```bash

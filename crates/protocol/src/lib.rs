@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 mod attention;
 pub use attention::*;
+mod history;
+pub use history::*;
 
 mod session;
 pub use session::*;
@@ -33,6 +35,7 @@ pub enum Capability {
     LogRead,
     AttentionRequest,
     AttentionTargets,
+    HistoryRead,
 }
 
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -267,6 +270,8 @@ pub struct WorkerInfo {
     #[serde(default)]
     pub attention_targets_available: bool,
     #[serde(default)]
+    pub history_available: bool,
+    #[serde(default)]
     pub journal_recovery_required: Option<String>,
     /// Queued/running tasks across the entire journal; None when unavailable or stale.
     #[serde(default)]
@@ -279,6 +284,13 @@ pub struct WorkerInfo {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
+    History {
+        query: HistoryQuery,
+    },
+    PrepareTaskDiagnostic {
+        request: DiagnosticRequest,
+    },
+    StorageUsage,
     ListAttentionEvents {
         #[serde(rename = "afterSequence")]
         after_sequence: u64,
@@ -380,6 +392,15 @@ pub enum LocalRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LocalResponse {
+    History {
+        page: HistoryPage,
+    },
+    Diagnostic {
+        preview: DiagnosticPreview,
+    },
+    StorageUsage {
+        usage: StorageUsage,
+    },
     AttentionEvent {
         event: AttentionEvent,
     },

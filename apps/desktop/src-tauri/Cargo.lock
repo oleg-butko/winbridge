@@ -4406,6 +4406,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tokio",
  "winbridge-core",
+ "winbridge-platform",
  "winbridge-protocol",
  "winbridge-transport",
  "windows-sys 0.61.2",
@@ -4416,6 +4417,7 @@ name = "winbridge-platform"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "sha2",
  "winbridge-protocol",
  "windows-sys 0.61.2",
 ]

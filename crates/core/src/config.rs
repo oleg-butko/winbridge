@@ -19,9 +19,34 @@ pub const DESKTOP_CONFIG_FILE: &str = "winbridge-desktop.local.json";
 pub struct DesktopConfig {
     pub schema_version: u16,
     pub worker_config_path: PathBuf,
+    #[serde(default)]
+    pub report_directory: Option<PathBuf>,
 }
 
 impl DesktopConfig {
+    pub fn load_report_directory(path: &Path) -> Result<PathBuf> {
+        let config: Self = read_config(path)?;
+        config.resolve_worker_config(path)?;
+        let directory = config.report_directory.unwrap_or_else(|| {
+            if cfg!(windows) {
+                PathBuf::from(r"K:\VMs\shared\WinBridge\diagnostics")
+            } else {
+                path.parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .join("diagnostics")
+            }
+        });
+        if !directory.is_absolute()
+            || directory
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return Err(
+                "reportDirectory must be an absolute directory without parent traversal".into(),
+            );
+        }
+        Ok(directory)
+    }
     pub fn load(path: &Path) -> Result<PathBuf> {
         let config: Self = read_config(path)?;
         config.resolve_worker_config(path)
@@ -477,6 +502,39 @@ mod desktop_config_tests {
     use super::*;
 
     #[test]
+    fn report_directory_preserves_custom_path_and_accepts_legacy_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join(DESKTOP_CONFIG_FILE);
+        let mut json =
+            serde_json::json!({"schemaVersion":1,"workerConfigPath":"worker.local.json"});
+        fs::write(&path, json.to_string()).unwrap();
+        let expected = if cfg!(windows) {
+            PathBuf::from(r"K:\VMs\shared\WinBridge\diagnostics")
+        } else {
+            temp.path().join("diagnostics")
+        };
+        assert_eq!(
+            DesktopConfig::load_report_directory(&path).unwrap(),
+            expected
+        );
+        let selected = temp.path().join("selected reports");
+        json["reportDirectory"] = serde_json::json!(selected);
+        fs::write(&path, json.to_string()).unwrap();
+        assert_eq!(
+            DesktopConfig::load_report_directory(&path).unwrap(),
+            selected
+        );
+        for invalid in [
+            PathBuf::from("relative/reports"),
+            temp.path().join("reports/../outside"),
+        ] {
+            json["reportDirectory"] = serde_json::json!(invalid);
+            fs::write(&path, json.to_string()).unwrap();
+            assert!(DesktopConfig::load_report_directory(&path).is_err());
+        }
+    }
+
+    #[test]
     fn relative_worker_config_is_resolved_beside_desktop_config() {
         let location = std::env::temp_dir()
             .join("WinBridge folder with spaces")
@@ -495,6 +553,7 @@ mod desktop_config_tests {
         let config = DesktopConfig {
             schema_version: 1,
             worker_config_path: worker_config.clone(),
+            report_directory: None,
         };
         assert_eq!(
             config
@@ -533,6 +592,7 @@ mod desktop_config_tests {
             let config = DesktopConfig {
                 schema_version: 1,
                 worker_config_path: PathBuf::from(path),
+                report_directory: None,
             };
             assert!(config
                 .resolve_worker_config(Path::new(r"C:\desktop\winbridge-desktop.local.json"))

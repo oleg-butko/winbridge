@@ -60,7 +60,7 @@ pub async fn connect(worker: Arc<Worker>) {
                 protocol_version: PROTOCOL_VERSION, application_version: env!("CARGO_PKG_VERSION").into(),
                 component: Component::Worker, instance_id: worker.config.instance_id.clone(),
                 node_id: worker.config.node_id.clone(), generation: worker.generation.clone(),
-                capabilities: if worker.config.delivery.is_some() { vec![Capability::TaskSubmit, Capability::TaskCancel, Capability::WorkspaceImport,Capability::LogRead,Capability::AttentionRequest,Capability::AttentionTargets] } else { vec![Capability::TaskSubmit, Capability::TaskCancel,Capability::AttentionRequest,Capability::AttentionTargets] },
+                capabilities: if worker.config.delivery.is_some() { vec![Capability::TaskSubmit, Capability::TaskCancel, Capability::WorkspaceImport,Capability::LogRead,Capability::AttentionRequest,Capability::AttentionTargets, Capability::HistoryRead] } else { vec![Capability::TaskSubmit, Capability::TaskCancel,Capability::AttentionRequest,Capability::AttentionTargets, Capability::HistoryRead] },
             }}).await?;
             match ws::first(&mut socket).await? {
                 SessionMessage::Welcome { peer, session_id }

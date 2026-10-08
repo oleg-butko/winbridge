@@ -14,6 +14,61 @@ use winbridge_protocol::{
 
 struct WorkerEndpoint(Result<String, String>);
 struct DesktopState(Result<Arc<DesktopDraftStore>, String>);
+struct DiagnosticDirectory(Result<std::path::PathBuf, String>);
+
+#[tauri::command]
+fn diagnostic_directory(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, DiagnosticDirectory>,
+) -> Result<String, String> {
+    main_only(&window)?;
+    Ok(state
+        .0
+        .as_ref()
+        .map_err(Clone::clone)?
+        .to_string_lossy()
+        .into())
+}
+#[tauri::command]
+async fn save_diagnostic(
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, DiagnosticDirectory>,
+    request_id: String,
+    json: String,
+) -> Result<winbridge_protocol::SavedDiagnostic, String> {
+    main_only(&window)?;
+    if request_id.len() != 36
+        || !request_id
+            .bytes()
+            .all(|c| c.is_ascii_hexdigit() || c == b'-')
+        || json.len() > 512 * 1024
+    {
+        return Err("Invalid diagnostic save ID or preview exceeds 512 KiB".into());
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(&json).map_err(|e| format!("Preview is not valid JSON: {e}"))?;
+    if value["kind"] != "winbridge_task_diagnostic"
+        || value["schemaVersion"] != 1
+        || !value["task"]["taskId"].is_string()
+    {
+        return Err("Preview must retain diagnostic kind/schemaVersion/taskId".into());
+    }
+    let directory = state.0.as_ref().map_err(Clone::clone)?.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        winbridge_platform::reports::publish(
+            &directory,
+            &format!("diagnostic-{request_id}.json"),
+            json.as_bytes(),
+        )
+        .map_err(|e| {
+            format!(
+                "Diagnostic save not confirmed: {e}; files retained, retry uses the same save ID"
+            )
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
 
 fn main_only(window: &tauri::WebviewWindow) -> Result<(), String> {
     if window.label() == "main" {
@@ -101,6 +156,15 @@ fn configured_endpoint() -> Result<String, String> {
 }
 
 fn main() {
+    let report_directory = std::env::current_exe()
+        .map_err(|e| e.to_string())
+        .and_then(|exe| {
+            DesktopConfig::load_report_directory(
+                &exe.parent()
+                    .ok_or("Runtime directory")?
+                    .join(DESKTOP_CONFIG_FILE),
+            )
+        });
     // Keep the window available so configuration errors are visible in the UI.
     let endpoint = configured_endpoint();
     let drafts = std::env::current_exe()
@@ -133,12 +197,14 @@ fn main() {
                 "--validate-companion"
                     | "--validate-companion-restart"
                     | "--validate-workflow-attention"
+                    | "--validate-history-diagnostics"
             ) =>
         {
             Some((
                 std::path::PathBuf::from(report),
                 mode.ends_with("-restart"),
                 mode == "--validate-workflow-attention",
+                mode == "--validate-history-diagnostics",
             ))
         }
         _ => None,
@@ -148,10 +214,10 @@ fn main() {
             "WinBridge — АВТОМАТИЧЕСКАЯ ПРОВЕРКА (отдельный runtime)".into();
     }
     let validation = validation::Validation::new(
-        validation_report.as_ref().map(|(path, _, _)| path),
+        validation_report.as_ref().map(|(path, _, _, _)| path),
         validation_report
             .as_ref()
-            .is_some_and(|(_, restart, _)| *restart),
+            .is_some_and(|(_, restart, _, _)| *restart),
     );
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -161,6 +227,7 @@ fn main() {
         }))
         .manage(WorkerEndpoint(endpoint))
         .manage(DesktopState(drafts))
+        .manage(DiagnosticDirectory(report_directory))
         .manage(companion::Companion::new())
         .manage(validation)
         .on_page_load(|webview, payload| {
@@ -180,7 +247,7 @@ fn main() {
                 background_endpoint.clone(),
                 background_drafts.clone(),
             );
-            if let Some((report, restart, targets)) = validation_report {
+            if let Some((report, restart, targets, history)) = validation_report {
                 validation::start(
                     app.handle().clone(),
                     background_endpoint,
@@ -188,6 +255,7 @@ fn main() {
                     report,
                     restart,
                     targets,
+                    history,
                 );
             }
             Ok(())
@@ -209,6 +277,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_build,
+            diagnostic_directory,
+            save_diagnostic,
             worker_rpc,
             load_command_drafts,
             save_command_draft,

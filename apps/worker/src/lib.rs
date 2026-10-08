@@ -1,6 +1,7 @@
 //! Windows execution authority. The Unix runner is a development/test adapter.
 mod artifacts;
 mod attention;
+mod history;
 mod imports;
 mod network;
 pub mod store;
@@ -147,6 +148,43 @@ impl Worker {
             }
         }
         match request {
+            LocalRequest::History { query } => {
+                let store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
+                Ok(LocalResponse::History {
+                    page: store.history(&query)?,
+                })
+            }
+            LocalRequest::PrepareTaskDiagnostic { request } => {
+                let mut store = self.store()?;
+                self.require_committed_result(&request.task_id)?;
+                Ok(LocalResponse::Diagnostic {
+                    preview: store.diagnostic(&request)?,
+                })
+            }
+            LocalRequest::StorageUsage => {
+                let store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
+                let mut usage = store.storage_usage()?;
+                for (name, destination) in [
+                    ("journal.sqlite", &mut usage.journal_bytes),
+                    ("journal.sqlite-wal", &mut usage.wal_bytes),
+                ] {
+                    let path = self.config.state_directory.join(name);
+                    winbridge_platform::require_safe_path(&path).map_err(|e| e.to_string())?;
+                    *destination = match std::fs::metadata(path) {
+                        Ok(m) => m.len(),
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
+                        Err(e) => return Err(e.to_string()),
+                    };
+                }
+                usage.output_limit_bytes_per_task = self.config.max_output_bytes_per_task;
+                Ok(LocalResponse::StorageUsage { usage })
+            }
             LocalRequest::ListAttentionEvents {
                 after_sequence,
                 pending_only,
@@ -298,6 +336,7 @@ impl Worker {
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
                         attention_targets_available: true,
+                        history_available: true,
                         journal_recovery_required: recovery,
                         active_task_count,
                         protocol_version: PROTOCOL_VERSION,
@@ -346,15 +385,29 @@ impl Worker {
                     )?),
                 })
             }
-            LocalRequest::ListImports => Ok(LocalResponse::Imports {
-                imports: self.store()?.imports(true)?,
-            }),
-            LocalRequest::GetImport { import_id } => Ok(LocalResponse::Import {
-                import: Box::new(self.store()?.get_import(&import_id)?),
-            }),
-            LocalRequest::CancelImport { import_id } => Ok(LocalResponse::Import {
-                import: Box::new(self.store()?.cancel_import(&import_id)?),
-            }),
+            LocalRequest::ListImports => {
+                let store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
+                Ok(LocalResponse::Imports {
+                    imports: store.imports(true)?,
+                })
+            }
+            LocalRequest::GetImport { import_id } => {
+                let store = self.store()?;
+                self.require_committed_result(&import_id)?;
+                Ok(LocalResponse::Import {
+                    import: Box::new(store.get_import(&import_id)?),
+                })
+            }
+            LocalRequest::CancelImport { import_id } => {
+                let mut store = self.store()?;
+                self.require_committed_result(&import_id)?;
+                Ok(LocalResponse::Import {
+                    import: Box::new(store.cancel_import(&import_id)?),
+                })
+            }
             LocalRequest::PreviewSnapshot {
                 project_id,
                 snapshot_id,
@@ -465,16 +518,27 @@ impl Worker {
             let worker = Arc::clone(self);
             thread::spawn(move || {
                 if let Err(error) = worker.execute_import(import.clone()) {
-                    if let Ok(mut store) = worker.store() {
-                        let _ = store.finish_import(
-                            &import.import_id,
-                            TaskStatus::Indeterminate,
-                            &error,
-                        );
+                    match worker.store() {
+                        Ok(mut store) => {
+                            if let Err(recovery) = store.finish_import(
+                                &import.import_id,
+                                TaskStatus::Indeterminate,
+                                &error,
+                            ) {
+                                worker.record_journal_fault(&import.import_id, &error, &recovery);
+                            }
+                        }
+                        Err(recovery) => {
+                            worker.record_journal_fault(&import.import_id, &error, &recovery)
+                        }
                     }
                 }
+                let unreconciled = worker
+                    .unreconciled_tasks
+                    .lock()
+                    .map_or(true, |faults| faults.contains_key(&import.import_id));
                 if let Ok(mut projects) = worker.active_projects.lock() {
-                    if projects.get(&project) == Some(&import.import_id) {
+                    if !unreconciled && projects.get(&project) == Some(&import.import_id) {
                         projects.remove(&project);
                     }
                 }

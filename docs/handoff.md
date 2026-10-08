@@ -36,6 +36,18 @@ worker прежний, healthy, activeTaskCount=0. Тестовые окна з�
 необязателен; --workflow-attention-only собирает отдельный заметный тестовый desktop.
 Installed runtime/config/state не заменять. Следующие сценарии — история/диагностика, MCP.
 
+Продолжение этапа 5: [ревью](review-stage5-history-2026-10-08.md) исправило stale
+application read после child result fault; commit `8f9ee71` фиксирует исправление и
+[план истории/диагностики](history-diagnostics-plan.md) до реализации.
+[История и task diagnostic](history-diagnostics.md) реализованы: additive HistoryRead,
+50-record keyset pages/filter/search, точные старые IDs, keyboard actions, read-only
+storage usage и editable redacted preview/save. Дополнительно исправлен незаписанный
+import result: fault/lease сохраняются до recovery. 103 workspace Rust tests, Clippy, Windows all-targets compile, standalone desktop
+check/Clippy, contracts/typecheck/build и actual browser integration прошли;
+Windows history gate ещё предстоит. Рабочий runtime остаётся f7c4878; новый сценарий
+`--history-diagnostics-only` выполняется в отдельном runtime через установленный worker.
+Новые ручные Windows наблюдения не требуются. MCP/retention/settings остаются.
+
 ## Завершённый сценарий — 2026-10-07
 
 **Native tray/popup/settings gate пройден автоматически на Windows.**

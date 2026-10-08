@@ -53,12 +53,16 @@ function Initialize-SessionConfiguration($Layout, $Settings) {
     }
   }
   if (-not (Test-Path -LiteralPath $Layout.desktopConfigPath)) {
-    Write-NewJson $Layout.desktopConfigPath @{ schemaVersion = 1; workerConfigPath = 'winbridge-worker.local.json' }
+    $reportDirectory = if ($env:OS -eq 'Windows_NT') { 'K:\VMs\shared\WinBridge\diagnostics' } else { Join-Path $Layout.runtimeDirectory 'diagnostics' }
+    Write-NewJson $Layout.desktopConfigPath @{ schemaVersion = 1; workerConfigPath = 'winbridge-worker.local.json'; reportDirectory = $reportDirectory }
   }
   $desktop = Get-Content -Raw -Encoding UTF8 -LiteralPath $Layout.desktopConfigPath | ConvertFrom-Json
   $fields = @($desktop.PSObject.Properties.Name)
-  if ($fields.Count -ne 2 -or 'schemaVersion' -notin $fields -or 'workerConfigPath' -notin $fields -or $desktop.schemaVersion -ne 1 -or -not ($desktop.workerConfigPath -is [string]) -or -not $desktop.workerConfigPath.Trim()) {
+  if (@($fields | Where-Object { $_ -notin @('schemaVersion','workerConfigPath','reportDirectory') }).Count -or 'schemaVersion' -notin $fields -or 'workerConfigPath' -notin $fields -or $desktop.schemaVersion -ne 1 -or -not ($desktop.workerConfigPath -is [string]) -or -not $desktop.workerConfigPath.Trim()) {
     throw "Invalid existing desktop config; file preserved: $($Layout.desktopConfigPath)"
+  }
+  if ('reportDirectory' -in $fields -and (-not ($desktop.reportDirectory -is [string]) -or -not [IO.Path]::IsPathFullyQualified($desktop.reportDirectory) -or $desktop.reportDirectory -match '(^|[\\/])\.\.([\\/]|$)')) {
+    throw "Invalid desktop reportDirectory; config preserved: $($Layout.desktopConfigPath)"
   }
   $configured = [string]$desktop.workerConfigPath
   if ($configured -match '^[A-Za-z]:(?![\\/])' -or ($configured -match '^[\\/]' -and $configured -notmatch '^[\\/]{2}' -and $env:OS -eq 'Windows_NT')) {

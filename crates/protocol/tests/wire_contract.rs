@@ -95,4 +95,8 @@ fn attention_targets_are_additive_and_legacy_records_keep_their_wire_shape() {
         !old_info.attention_targets_available,
         "old worker must use the legacy feed"
     );
+    assert!(
+        !old_info.history_available,
+        "old worker must not receive history RPCs"
+    );
 }

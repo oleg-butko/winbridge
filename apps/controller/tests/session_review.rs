@@ -106,6 +106,69 @@ async fn next_request(client: &mut Client) -> SessionMessage {
 }
 
 #[tokio::test]
+async fn history_requests_are_refused_without_transmission_to_older_workers() {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let (_root, controller, listener) = pair().await;
+        let (actor, mut client) = connect_with_capabilities(
+            &controller,
+            &listener,
+            vec![
+                Capability::TaskSubmit,
+                Capability::TaskCancel,
+                Capability::AttentionTargets,
+            ],
+        )
+        .await;
+        for request in [
+            LocalRequest::History {
+                query: Default::default(),
+            },
+            LocalRequest::PrepareTaskDiagnostic {
+                request: winbridge_protocol::DiagnosticRequest {
+                    task_id: "old".into(),
+                    include_command: false,
+                    include_output: false,
+                    redact_values: vec![],
+                },
+            },
+            LocalRequest::StorageUsage,
+        ] {
+            let LocalResponse::Error { message } = controller.call(request).await else {
+                panic!("Expected capability refusal")
+            };
+            assert!(message.contains("history_read") && message.contains("not transmitted"));
+        }
+        assert!(controller.status().unwrap().connected);
+        let caller = Arc::clone(&controller);
+        let pending = tokio::spawn(async move { caller.call(LocalRequest::ListTasks).await });
+        let SessionMessage::Request {
+            id,
+            request: LocalRequest::ListTasks,
+        } = next_request(&mut client).await
+        else {
+            panic!("Only the supported read may reach the worker")
+        };
+        ws::send(
+            &mut client,
+            &SessionMessage::Response {
+                id,
+                response: LocalResponse::Tasks { tasks: vec![] },
+            },
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            pending.await.unwrap(),
+            LocalResponse::Tasks { .. }
+        ));
+        actor.abort();
+        let _ = actor.await;
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn cancelled_actor_clears_session_and_allows_reconnect_without_retry() {
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         let (_root, controller, listener) = pair().await;
