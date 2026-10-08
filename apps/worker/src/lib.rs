@@ -216,14 +216,15 @@ impl Worker {
             }
             LocalRequest::GetWorkflow { workflow_id } => {
                 let store = self.store()?;
-                self.require_committed_result(&workflow_id)?;
+                let workflow = store.workflow(&workflow_id)?;
+                self.require_workflow_result(&workflow)?;
                 Ok(LocalResponse::Workflow {
-                    workflow: Box::new(store.workflow(&workflow_id)?),
+                    workflow: Box::new(workflow),
                 })
             }
             LocalRequest::CancelWorkflow { workflow_id } => {
                 let mut store = self.store()?;
-                self.require_committed_result(&workflow_id)?;
+                self.require_workflow_result(&store.workflow(&workflow_id)?)?;
                 Ok(LocalResponse::Workflow {
                     workflow: Box::new(store.cancel_workflow(&workflow_id)?),
                 })
@@ -239,14 +240,13 @@ impl Worker {
             }
             LocalRequest::GetApplication { application_id } => {
                 let store = self.store()?;
-                self.require_committed_result(&application_id)?;
-                Ok(LocalResponse::Application {
-                    application: store.application(&application_id)?,
-                })
+                let application = store.application(&application_id)?;
+                self.require_application_result(&application)?;
+                Ok(LocalResponse::Application { application })
             }
             LocalRequest::StopApplication { application_id } => {
                 let mut store = self.store()?;
-                self.require_committed_result(&application_id)?;
+                self.require_application_result(&store.application(&application_id)?)?;
                 Ok(LocalResponse::Application {
                     application: store.stop_application(&application_id)?,
                 })
@@ -564,6 +564,26 @@ impl Worker {
             return Err(format!("Operation {id}: result could not be committed; journal status is stale. {reason}. Repair journal storage and restart worker to reconcile; do not resubmit the command"));
         }
         Ok(())
+    }
+    fn require_workflow_result(&self, workflow: &winbridge_protocol::WorkflowRecord) -> Result<()> {
+        self.require_committed_result(&workflow.workflow_id)?;
+        if !workflow.status.is_terminal() {
+            for id in workflow
+                .steps
+                .iter()
+                .filter_map(|s| s.operation_id.as_deref())
+            {
+                self.require_committed_result(id)?;
+            }
+        }
+        Ok(())
+    }
+    fn require_application_result(
+        &self,
+        app: &winbridge_protocol::ApplicationRecord,
+    ) -> Result<()> {
+        self.require_committed_result(&app.application_id)?;
+        self.require_committed_result(&app.task_id)
     }
     fn record_journal_fault(&self, id: &str, error: &str, recovery_error: &str) {
         let reason = format!(

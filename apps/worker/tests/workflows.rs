@@ -985,6 +985,56 @@ fn attention_startup_application_write_failure_blocks_both_related_records() {
 }
 
 #[test]
+fn attention_uncommitted_child_result_blocks_application_but_keeps_startup_history() {
+    let (_temp, config, mut request) = setup();
+    if let CommandSource::Direct { arguments, .. } = &mut request.start {
+        arguments[2] = "crash-late".into();
+    }
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
+    let done = complete(&worker, &accept(&worker, request).workflow_id);
+    let id = done.application_id.unwrap();
+    let task_id = app(&worker, &id).task_id;
+    let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
+    db.execute_batch("CREATE TRIGGER reject_child_result BEFORE UPDATE ON tasks WHEN json_extract(NEW.record,'$.status') IN ('failed','indeterminate') BEGIN SELECT RAISE(ABORT,'expected child result failure'); END;").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) {
+            if info.journal_recovery_required.is_some() {
+                break;
+            }
+        }
+        let _ = worker.schedule();
+        assert!(Instant::now() < deadline);
+        thread::sleep(Duration::from_millis(10));
+    }
+    for request in [
+        LocalRequest::GetApplication {
+            application_id: id.clone(),
+        },
+        LocalRequest::StopApplication {
+            application_id: id.clone(),
+        },
+    ] {
+        assert!(
+            matches!(worker.handle(request), LocalResponse::Error {message} if message.contains("stale") && message.contains(&task_id))
+        );
+    }
+    assert_eq!(
+        flow(&worker, &done.workflow_id).status,
+        TaskStatus::Succeeded
+    );
+    db.execute_batch("DROP TRIGGER reject_child_result;")
+        .unwrap();
+    drop(db);
+    drop(worker);
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    until(&worker, || {
+        app(&worker, &id).status == ApplicationStatus::Indeterminate
+    });
+    assert_eq!(attention_events(&worker).len(), 1);
+}
+
+#[test]
 fn attention_clean_service_exit_is_warning_and_completed_startup_stays_successful() {
     let (_temp, config, mut request) = setup();
     if let CommandSource::Direct { arguments, .. } = &mut request.start {
