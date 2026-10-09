@@ -6,11 +6,13 @@
 Read-only Info: source `58f3c143d41bf5a2137aad45dc9d7650b4bdde94`, clean,
 manifest SHA-256 `5612374373c36a48c6b2cbbae83b4aa89b527494e38ada7a7deabdd02aa88b15`,
 generation `41623e38-adb1-4a34-a2c4-3a43d9c1cf2c`, maintenance available/healthy,
-activeTaskCount=0. Controller generation прежняя `62ebf6ca-f139-4c6b-8480-b94fa208c56b`,
-session `6c8d3779-e829-4396-b579-9389cf01ed6f`, connected=true.
+activeTaskCount=0. После delta gates controller обновлён до clean `af90ec0`: exec
+session 57048, generation `95fd938e-feb3-4854-8299-91adf7c7638f`,
+worker session `0731567c-81fe-4813-9c52-7d8443671613`, connected=true.
+Прежний controller exec session 55195 завершён штатно; worker generation прежняя.
 Пользователь поручил ревью и продолжение. Исправлена обработка неверных nested
-JSON types в settings UI; backend maintenance regression проходит. Следующая
-работа по [плану этапа 6](stage6-plan.md) — baseline без изменения installed runtime.
+JSON types в settings UI; backend maintenance regression проходит. Работа по [плану этапа 6](stage6-plan.md): baseline/Git batch/delta завершены;
+следующий сценарий resume/output batching/virtualization выбирается по measurements.
 Desktop не требуется; рабочий worker оставить запущенным.
 
 Этап 6 реализует [автоматический baseline](performance-baseline.md): monotonic
@@ -41,6 +43,17 @@ ZIP changed files, pinned local base, новый immutable target и full tree v
 Добавлены capability/RPC, CLI/MCP публикация/import, понятный preview/history и
 автоматический `--delta-only` gate без desktop. 131 workspace tests, browser delta/lost-ACK integration, Clippy, contracts, UI build и Windows all-targets cross-check проходят. При ревью также исправлена recovered import phase/summary после crash между publication и journal result. [Windows gates завершены](windows-delta-gate-2026-10-09.md): native run `20261009-064716-ffce5995`, 40 tests, report SHA-256 `b34285db8c87586ff7655afb513ceea3c03fbc46bcd441d0b8043e25e1a660a8`; cross-host run `20261009T105909Z-c59b2060`, три fresh one-file commit, report SHA-256 `9cdab83a6c5420f99184fda0039393b684f419a536e3b381d5a0520ad837008b`.
 ZIP 2 367 994→193 bytes, Debian publication median 1150.73→414.14 ms; Windows observed import 1834.00→1675.17 ms. Full target hashes/build pins/Unicode output совпали. Cancel parent/child 102.88 ms, attention 52.75 ms; worker Info healthy. Installed worker остаётся `58f3c14`, его runtime не меняется.
+
+Архив для рабочего Windows update:
+`/mnt/hgfs/shared/WinBridge/sources/winbridge-20261009T110529Z-af90ec0-59c18ec0.zip`,
+SHA-256 `6147aa3c8e568e1cfaeffb60dbb86c4ce9aa0080e21941ff853c55657f16965d`,
+clean `af90ec0`, 231 files, built UI. Installed worker пока `58f3c14`; delta
+поддерживает новый архив. Для update пользователь штатно завершает desktop/worker,
+распаковывает архив и запускает `prepare-windows-snapshot.ps1`. Новый controller
+уже запущен; Windows runtime в gates не заменялся. Новых ручных проверок нет.
+После gates явно сообщено: TEST runtime завершён, desktop можно оставить закрытым,
+рабочий worker оставить запущенным. Позднейший handoff commit меняет только
+документирование runtime/archive, код release `af90ec0` остаётся тем же.
 
 Ниже — история реализации и прежних версий до этого обновления.
 
