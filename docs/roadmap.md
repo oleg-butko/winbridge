@@ -112,7 +112,9 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 Windows import/build, HGFS tree/archive и объёмов output/journal. План зафиксирован
 после ревью этапа 5; performance extensions пока не реализованы.
 
-- [ ] Benchmark HGFS tree/archive/incremental и полный time-to-build; baseline хранить с fixture параметрами.
+- [x] [Baseline HGFS tree/archive и time-to-build](performance-baseline-2026-10-09.md) с fixture параметрами: 3 повтора, 59 actual Windows операций, output/control/cancel/storage evidence.
+- [ ] Первая измеренная оптимизация capture: bounded Git batch; matched comparison и Windows repeat без изменения wire/ready.
+- [ ] Измерить incremental после реализации delta; one-file full-package baseline сохранён.
 - [ ] Delta manifest и удаление только ранее управляемых sources, content cache и локальные Windows build caches.
 - [ ] Chunk/resume больших объектов, output batching и виртуализация длинных списков UI.
 - [ ] При необходимости SocketDelivery как другой adapter. Control session не блокируется большими данными.

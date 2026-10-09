@@ -15,8 +15,12 @@ Desktop не требуется; рабочий worker оставить запу
 
 Этап 6 реализует [автоматический baseline](performance-baseline.md): monotonic
 publisher timings без изменения ready/RPC, commit fixtures/tree I/O/Windows
-import/build/output/cancel через installed worker. Native baseline пока не выполнен;
-не записывать как готовые delta/cache/resume/batching/virtualization.
+import/build/output/cancel через installed worker. [Baseline](performance-baseline-2026-10-09.md)
+прошёл: run `20261009T093357Z-0dd53063`, 12 samples/59 operations, report SHA-256
+`a6d886b28d8c4ecf50ba0ca80b8c14ecb78722d663d11570f1fd006be56b16cd`.
+Installed worker healthy/activeTaskCount=0, generation прежняя. Первая выбранная
+оптимизация — Git batch capture (518 files: capture 5.6 s, shared write 0.22 s).
+Не записывать как готовые delta/cache/resume/output batching/virtualization.
 
 Ниже — история реализации и прежних версий до этого обновления.
 
