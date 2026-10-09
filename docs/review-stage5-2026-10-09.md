@@ -30,3 +30,22 @@ shared артефакты не изменены.
 pagination до подтверждённого ответа. Повтор actual browser integration прошёл,
 включая keyboard navigation новых разделов, config/cleanup lost ACK и retention
 metadata. Повтор native gate для этого изменения read-only состояния не назначался.
+
+## Повторное ревью после обновления worker
+
+Read-only Info подтвердил clean installed source `58f3c14`, generation
+`41623e38-adb1-4a34-a2c4-3a43d9c1cf2c`, maintenanceAvailable=true,
+maintenanceError/journalRecoveryRequired=null. Проверены config identity/restart,
+bounded reads/create-only backups, retention predicates/atomic result/dedup и
+local-only RPC guards. Десять maintenance regression tests проходят.
+
+В JSON редакторе найден UI crash: syntactically valid JSON с неверными nested
+types (например `recipes: {length: {invalid: true}}`) попадал в friendly controls
+и React пытался отобразить object. Type cast не обеспечивал runtime validation.
+Теперь controls получают только проверенные формы полей; неверный/неполный JSON
+остаётся в textarea с объяснением, worker отклоняет save до записи. Browser
+regression проверяет wrong worker/recipes/retention types, отсутствие crash,
+сохранность исходного файла и последующее успешное исправление/lost ACK.
+
+После ревью начинается [baseline этапа 6](stage6-plan.md). Измерения идут через
+работающий worker без обновления его runtime и без дополнительных ручных UI gates.

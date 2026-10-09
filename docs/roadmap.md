@@ -108,6 +108,10 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 
 ## Этап 6 — скорость и объёмы после измерений
 
+Первый сценарий: [воспроизводимый baseline](stage6-plan.md) существующей доставки,
+Windows import/build, HGFS tree/archive и объёмов output/journal. План зафиксирован
+после ревью этапа 5; performance extensions пока не реализованы.
+
 - [ ] Benchmark HGFS tree/archive/incremental и полный time-to-build; baseline хранить с fixture параметрами.
 - [ ] Delta manifest и удаление только ранее управляемых sources, content cache и локальные Windows build caches.
 - [ ] Chunk/resume больших объектов, output batching и виртуализация длинных списков UI.
@@ -135,8 +139,8 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 Этап 6: снять воспроизводимый baseline capture/pack/shared publication/Windows
 import/build и объёмов output/journal. Только после измерений выбирать delta,
 cache/resume/batching/virtualization. Старые snapshots/reports/history не очищать.
-2026-10-09 пользователь обновил installed worker до clean `1982de8`;
-HistoryRead/typed attention и здоровый журнал подтверждены read-only Info.
+2026-10-09 пользователь обновил installed worker до clean `58f3c14`;
+HistoryRead/typed attention/maintenance и здоровый журнал подтверждены read-only Info.
 Debian controller снова запущен. [Ревью](review-stage5-2026-10-09.md) исправило
 неограниченный readback diagnostic collision; settings/retention завершены.
 Новых мелких ручных UI gates не назначать. Если подключённый worker даёт неожиданную

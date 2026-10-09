@@ -578,6 +578,21 @@ try {
   await workflowPage.getByRole("navigation",{name:"Разделы рабочего окна"}).getByRole("button",{name:"Настройки",exact:true}).focus();await workflowPage.keyboard.press("Enter");assert.equal(await settings.evaluate(e=>e===document.activeElement),true);
   const settingsJson=settings.getByTestId("settings-json");await settingsJson.waitFor();
   const settingsBefore=await readFile(config,"utf8");const settingsEdit=JSON.parse(settingsBefore);settingsEdit.maxOutputBytesPerTask=8192;settingsEdit.outputRetention={automatic:false,olderThanDays:30};
+  // Well-formed JSON with invalid nested types must not crash the workbench or
+  // mutate the original config. The raw text remains available for correction.
+  for (const malformed of [
+    {...settingsEdit,worker:"invalid"},
+    {...settingsEdit,projects:[{...settingsEdit.projects[0],recipes:{length:{invalid:true}}}]},
+    {...settingsEdit,outputRetention:{automatic:{invalid:true},olderThanDays:30}},
+  ]) {
+    const text=JSON.stringify(malformed);await settingsJson.fill(text);
+    await settings.getByTestId("settings-invalid-form").waitFor();
+    assert.equal(await settingsJson.inputValue(),text);
+    assert.equal(await settings.getByTestId("settings-controller-url").count(),0);
+    assert.deepEqual(errors,[]);
+  }
+  await settings.getByTestId("settings-save").click();await settings.getByText(/Config JSON/).waitFor();
+  assert.equal(await readFile(config,"utf8"),settingsBefore);
   const settingsPreview=JSON.stringify(settingsEdit,null,2);await settingsJson.fill(settingsPreview);
   await workflowPage.getByTestId("companion-quit").click();await workflowPage.getByText(/Сохраните или отмените изменения конфигурации/).waitFor();
   loseSettingsSaveAck=true;await settings.getByTestId("settings-save").click();await settings.getByText(/settings save ACK lost/).waitFor();

@@ -2,6 +2,19 @@
 
 ## Текущая сессия — 2026-10-09
 
+Пользователь обновил Windows из `winbridge-20261009T084236Z-58f3c14-eb872418.zip`.
+Read-only Info: source `58f3c143d41bf5a2137aad45dc9d7650b4bdde94`, clean,
+manifest SHA-256 `5612374373c36a48c6b2cbbae83b4aa89b527494e38ada7a7deabdd02aa88b15`,
+generation `41623e38-adb1-4a34-a2c4-3a43d9c1cf2c`, maintenance available/healthy,
+activeTaskCount=0. Controller generation прежняя `62ebf6ca-f139-4c6b-8480-b94fa208c56b`,
+session `6c8d3779-e829-4396-b579-9389cf01ed6f`, connected=true.
+Пользователь поручил ревью и продолжение. Исправлена обработка неверных nested
+JSON types в settings UI; backend maintenance regression проходит. Следующая
+работа по [плану этапа 6](stage6-plan.md) — baseline без изменения installed runtime.
+Desktop не требуется; рабочий worker оставить запущенным.
+
+Ниже — история реализации и прежних версий до этого обновления.
+
 Debian перезапущена; пользователь обновил Windows из
 `winbridge-20261008T112855Z-1982de8-82bb6412.zip`, выполнил
 `prepare-windows-snapshot.ps1`, закрыл desktop и оставил worker.

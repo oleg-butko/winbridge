@@ -5,6 +5,23 @@ import { expectResult, workerCall } from "../../runtime/adapter";
 
 type Project = {id:string;workspaceRoot:string;allowDirectCommands:boolean;maxConcurrentMutations:number;recipes:unknown[]};
 type Config = {instanceId:string;nodeId:string;stateDirectory:string;worker:{controllerUrl?:string|null;keepRunningOnUiExit:boolean};delivery?:unknown;projects:Project[];maxOutputBytesPerTask?:number;outputRetention?:{automatic:boolean;olderThanDays:number}};
+function object(value:unknown):value is Record<string,unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+// JSON text can be syntactically valid while its fields are not safe to render
+// or edit through the friendly controls. Worker remains the policy authority.
+function formConfig(value:unknown):Config|null {
+  if (!object(value) || !object(value.worker) ||
+      typeof value.worker.keepRunningOnUiExit !== "boolean" ||
+      (value.worker.controllerUrl != null && typeof value.worker.controllerUrl !== "string") ||
+      !Array.isArray(value.projects) || !value.projects.every((p:unknown)=>object(p) &&
+        typeof p.id === "string" && typeof p.workspaceRoot === "string" &&
+        typeof p.allowDirectCommands === "boolean" && Array.isArray(p.recipes)) ||
+      (value.maxOutputBytesPerTask !== undefined && typeof value.maxOutputBytesPerTask !== "number") ||
+      (value.outputRetention !== undefined && (!object(value.outputRetention) ||
+        typeof value.outputRetention.automatic !== "boolean" || typeof value.outputRetention.olderThanDays !== "number"))) return null;
+  return value as Config;
+}
 export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInfo;connected:boolean;closing:boolean;onBlocked:(blocked:boolean)=>void}) {
   const [settings,setSettings]=useState<RuntimeSettings|null>(null); const [json,setJson]=useState("");
   const [projectIndex,setProjectIndex]=useState("0"); const [error,setError]=useState<string|null>(null);
@@ -15,7 +32,7 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
   const [result,setResult]=useState<OutputCleanupResult|null>(null);
   const dirty=!!settings && json!==settings.savedJson;
   useEffect(()=>{onBlocked(dirty||busy);return()=>onBlocked(false);},[dirty,busy,onBlocked]);
-  let config:Config|null=null;try{config=JSON.parse(json) as Config;}catch{/* Raw editor preserves incomplete JSON. */}
+  let config:Config|null=null;try{config=formConfig(JSON.parse(json));}catch{/* Raw editor preserves incomplete JSON. */}
   async function load(){
     setBusy(true);setError(null);
     try{const value=expectResult(await workerCall({method:"get_runtime_settings"}),"runtime_settings").settings;setSettings(value);setJson(value.savedJson);setSaveRequest(null);setSaved(null);setBackup(null);setProjectIndex("0");}
@@ -53,7 +70,8 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
         {settings.restartRequired && <Alert color="yellow" data-testid="settings-restart-required">В файле есть изменения, которые ещё не применены. Перед ручным перезапуском проверьте активные задачи и приложения: остановка worker завершит управляемые процессы.</Alert>}
         <Text size="xs">Instance: {info.instanceId} · node: {info.nodeId}. Эти поля и stateDirectory закреплены за установкой.</Text>
         {settings.generation!==info.generation && <Alert color="yellow">Worker перезапущен. Несохранённая правка оставлена в форме; отмените её и перечитайте файл перед новым сохранением.</Alert>}
-        {config && config.worker && Array.isArray(config.projects) && config.projects.every((p)=>p && typeof p.id==="string" && typeof p.workspaceRoot==="string") && <>
+        {!config && <Alert color="yellow" data-testid="settings-invalid-form">JSON неполон или поля имеют неверные типы. Исправьте текст ниже; ваша правка сохранена в форме. Worker проверит полный конфиг перед записью.</Alert>}
+        {config && <>
           <TextInput label="Адрес controller после перезапуска" data-testid="settings-controller-url" value={config.worker?.controllerUrl??""} disabled={disabled} description="Локальный ws://IPv4:port. Пустое поле отключает связь с Debian; локальное выполнение остаётся доступным." onChange={(e)=>{const value=e.currentTarget.value;update((c)=>{c.worker.controllerUrl=value||null;});}} />
           <Select label="Настраиваемый проект" value={projectIndex} onChange={(v)=>setProjectIndex(v??"0")} disabled={disabled} data={config.projects.map((p,i)=>({value:String(i),label:p.id||`Новый проект ${i+1}`}))} />
           {project && <>
