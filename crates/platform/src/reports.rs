@@ -2,7 +2,7 @@
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Write},
     path::Path,
 };
 use winbridge_protocol::SavedDiagnostic;
@@ -39,7 +39,12 @@ pub fn publish(directory: &Path, name: &str, bytes: &[u8]) -> io::Result<SavedDi
         Err(error) => return Err(error),
     }
     super::require_safe_path(&path)?;
-    let actual = fs::read(&path)?;
+    // A pre-existing name may contain an unrelated large file. Only read the
+    // expected payload plus one byte: idempotency must not bypass the size bound.
+    let mut actual = Vec::new();
+    fs::File::open(&path)?
+        .take(bytes.len() as u64 + 1)
+        .read_to_end(&mut actual)?;
     if actual != bytes {
         return Err(io::Error::other(
             "Diagnostic readback mismatch; file retained, save not confirmed",
@@ -86,6 +91,23 @@ mod tests {
             assert!(publish(temp.path(), name, b"{}").is_err());
         }
         assert_eq!(fs::read(block).unwrap(), b"keep");
+    }
+    #[test]
+    fn oversized_existing_report_is_refused_and_preserved() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("diagnostic-collision.json");
+        let mut file = fs::File::create(&path).unwrap();
+        file.write_all(b"{}").unwrap();
+        file.set_len(2 * 1024 * 1024 * 1024).unwrap();
+        drop(file);
+        assert!(publish(temp.path(), "diagnostic-collision.json", b"{}").is_err());
+        assert_eq!(fs::metadata(&path).unwrap().len(), 2 * 1024 * 1024 * 1024);
+        let mut prefix = [0u8; 2];
+        fs::File::open(path)
+            .unwrap()
+            .read_exact(&mut prefix)
+            .unwrap();
+        assert_eq!(&prefix, b"{}");
     }
     #[cfg(unix)]
     #[test]

@@ -130,8 +130,10 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 автоматические Windows gates. Далее — удобные projects/connection settings и
 полная retention policy с явными лимитами; автоматического удаления нет.
 Размеры/quota уже видны, старые snapshots/reports/history не очищать.
-Installed worker остаётся f7c4878, Debian controller — cc18156. Новые Windows
-worker/desktop возможности проверены в отдельном runtime, обновление объединяется.
+2026-10-09 пользователь обновил installed worker до clean `1982de8`;
+HistoryRead/typed attention и здоровый журнал подтверждены read-only Info.
+Debian controller снова запущен. [Ревью](review-stage5-2026-10-09.md) исправило
+неограниченный readback diagnostic collision; settings/retention остаются.
 Новых мелких ручных UI gates не назначать. Если подключённый worker даёт неожиданную
 ошибку, остановиться и уточнить по инструкции пользователя. Dirty source mode и
 performance extensions остаются будущими задачами.

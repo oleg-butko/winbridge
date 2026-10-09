@@ -1,6 +1,26 @@
 # Следующей сессии: продолжение WinBridge
 
-## Текущая сессия — 2026-10-08
+## Текущая сессия — 2026-10-09
+
+Debian перезапущена; пользователь обновил Windows из
+`winbridge-20261008T112855Z-1982de8-82bb6412.zip`, выполнил
+`prepare-windows-snapshot.ps1`, закрыл desktop и оставил worker.
+Controller запущен с прежним `.winbridge/controller-snapshot.local.json`,
+exec session 57959, generation `e7648d53-0446-4652-9c65-be0bfbcb9cf4`.
+Worker source `1982de8b6a7e9a34e6790d5009c30406413ebf08`, sourceDirty=false,
+manifest SHA-256 `491b40038ddcdca97199a30cd21c91c7f574a5b4e554341d48e479633d8614d7`,
+generation `750f3499-f4a9-42c6-aa43-13d248abb245`;
+session `319e18f7-f389-4113-821e-acdaba1f3356`, connected=true.
+HistoryRead/typed attention доступны; journalRecoveryRequired=null, activeTaskCount=0.
+[Ревью](review-stage5-2026-10-09.md) исправило неограниченный readback существующего
+diagnostic файла. Проверены сохранение/collision/Unicode и MCP contracts.
+Проекты/соединение и output retention остаются работой этапа 5. Пользователь выбрал
+ручной restart после config save и включаемую automatic output cleanup;
+[план](settings-retention-plan.md) фиксируется до реализации. Рабочий worker оставить запущенным,
+desktop для текущего backend ревью не требуется. Installed runtime/config/state
+не менять в автоматических тестах. Предыдущие gates не повторять без причины.
+
+## Предыдущая сессия — 2026-10-08
 
 Debian перезапущена. Пользователь распаковал clean archive
 `winbridge-20261007T103234Z-f7c4878-0ac18efc.zip` и выполнил
