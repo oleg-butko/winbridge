@@ -114,8 +114,8 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 
 - [x] [Baseline HGFS tree/archive и time-to-build](performance-baseline-2026-10-09.md) с fixture параметрами: 3 повтора, 59 actual Windows операций, output/control/cancel/storage evidence.
 - [x] [Первая измеренная оптимизация capture](performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
-- [ ] Измерить incremental после реализации delta; one-file full-package baseline сохранён.
-- [ ] [Delta от verified snapshot](snapshot-delta.md): реализация schema 2/pinned base/local cache готова, отдельный automatic Windows gate выполняется. Старые поколения сохраняются; удаление отражается новым составом.
+- [x] [Incremental full/delta](windows-delta-gate-2026-10-09.md): три fresh Debian → Windows one-file commit; ZIP 2 367 994→193 bytes, publication/import timings и actual build/output/control/cancel/attention.
+- [x] [Delta от verified snapshot](snapshot-delta.md): schema 2/pinned base/local source cache, full target verification, CLI/MCP/UI; 40 native tests и cross-host gate прошли. Старые поколения сохраняются; удаление отражается новым составом.
 - [ ] Chunk/resume больших объектов, output batching и виртуализация длинных списков UI.
 - [ ] При необходимости SocketDelivery как другой adapter. Control session не блокируется большими данными.
 
@@ -139,8 +139,8 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 ## Следующий конкретный шаг
 
 Этап 6: baseline capture/pack/shared publication/Windows import/build/output/journal
-и первая Git batch оптимизация завершены. Дальше — отдельный measured delta/content
-cache сценарий с неизменной verified generation/source scope/cancel/recovery policy.
+и первая Git batch оптимизация завершены. Delta/local source cache и три measured one-file пары также [завершены](windows-delta-gate-2026-10-09.md).
+Дальше — выбрать первый resume/output batching/virtualization сценарий по сохранённым measurements.
 Resume/output batching/virtualization/другой adapter ещё не реализованы.
 Старые snapshots/reports/history не очищать.
 2026-10-09 пользователь обновил installed worker до clean `58f3c14`;

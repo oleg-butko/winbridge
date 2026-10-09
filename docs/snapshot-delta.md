@@ -64,4 +64,7 @@ Unicode output и отказ запуска после tamper. Отчёт сод
 Дополнительный `validate-delta-delivery.py --native-run RUN --controller-config ...`
 публикует три one-file commits в Debian и использует уже проверенный test worker
 без повторной сборки WinBridge. Новый isolated runtime проверяет actual imports,
-source pin/build/output и cancel/attention. Cross-host gate ещё выполняется.
+source pin/build/output и cancel/attention. [Оба Windows gates завершены](windows-delta-gate-2026-10-09.md): 40 native tests
+и три actual Debian → Windows one-file пары с build/output/cancel/attention.
+ZIP 2 367 994→193 bytes, publication median 1150.73→414.14 ms, observed import
+1834.00→1675.17 ms; полный target hash проверяется.

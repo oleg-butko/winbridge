@@ -41,6 +41,7 @@ async fn run() -> Result<(), String> {
             winbridge_protocol::Capability::TaskSubmit,
             winbridge_protocol::Capability::TaskCancel,
             winbridge_protocol::Capability::WorkspaceImport,
+            winbridge_protocol::Capability::WorkspaceDelta,
             winbridge_protocol::Capability::LogRead,
             winbridge_protocol::Capability::AttentionRequest,
             winbridge_protocol::Capability::AttentionTargets,

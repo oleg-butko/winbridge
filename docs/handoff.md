@@ -20,7 +20,7 @@ import/build/output/cancel через installed worker. [Baseline](performance-b
 `a6d886b28d8c4ecf50ba0ca80b8c14ecb78722d663d11570f1fd006be56b16cd`.
 Installed worker healthy/activeTaskCount=0, generation прежняя. Первая выбранная
 оптимизация — Git batch capture (518 files: capture 5.6 s, shared write 0.22 s).
-Не записывать как готовые delta/cache/resume/output batching/virtualization.
+Это baseline до delta. Завершённая delta/local source cache описана ниже; resume/output batching/virtualization ещё впереди.
 
 Git batch capture [завершён](performance-capture-gate-2026-10-09.md): один процесс,
 bounded header/body, streaming SHA, exact separator и kill/wait при раннем отказе.
@@ -32,15 +32,15 @@ Comparison `20261009T095122Z-095becc1`, report SHA-256
 `20261009T095310Z-d5a9d432`, report SHA-256
 `1b8d7e9d0ca0a7f95430a9cb31988b8cfe16f4113e5d69da4333228317d5ea2c`.
 Worker unchanged/healthy/activeTaskCount=0; desktop не нужен, TEST окон не было.
-Этап 6 не закрыт: дальше delta/content cache с сохранением immutable generations/
+Этап 6 не закрыт: delta/local source cache теперь завершена; дальше resume/output batching/virtualization с сохранением immutable generations/
 source verification/cancel/recovery. Общий pipeline speedup не заявляется на
 основании одного нового Windows repeat; raw timing variation сохранён в отчётах.
 
-Delta реализуется по [согласованному плану](snapshot-delta-plan.md): schema 2,
+Delta завершена по [согласованному плану](snapshot-delta-plan.md): schema 2,
 ZIP changed files, pinned local base, новый immutable target и full tree verification.
 Добавлены capability/RPC, CLI/MCP публикация/import, понятный preview/history и
-автоматический `--delta-only` gate без desktop. 131 workspace tests, browser delta/lost-ACK integration, Clippy, contracts, UI build и Windows all-targets cross-check проходят. При ревью также исправлена recovered import phase/summary после crash между publication и journal result. Windows
-gate ещё выполняется. Installed worker остаётся `58f3c14`, его runtime не меняется.
+автоматический `--delta-only` gate без desktop. 131 workspace tests, browser delta/lost-ACK integration, Clippy, contracts, UI build и Windows all-targets cross-check проходят. При ревью также исправлена recovered import phase/summary после crash между publication и journal result. [Windows gates завершены](windows-delta-gate-2026-10-09.md): native run `20261009-064716-ffce5995`, 40 tests, report SHA-256 `b34285db8c87586ff7655afb513ceea3c03fbc46bcd441d0b8043e25e1a660a8`; cross-host run `20261009T105909Z-c59b2060`, три fresh one-file commit, report SHA-256 `9cdab83a6c5420f99184fda0039393b684f419a536e3b381d5a0520ad837008b`.
+ZIP 2 367 994→193 bytes, Debian publication median 1150.73→414.14 ms; Windows observed import 1834.00→1675.17 ms. Full target hashes/build pins/Unicode output совпали. Cancel parent/child 102.88 ms, attention 52.75 ms; worker Info healthy. Installed worker остаётся `58f3c14`, его runtime не меняется.
 
 Ниже — история реализации и прежних версий до этого обновления.
 
@@ -248,7 +248,7 @@ tray/popup/sound/settings прошли gate, описанный в текуще�
 | UI | Пять native Windows шагов подтверждены пользователем. Новый fix формы сохраняет executable/argv/cwd/timeout/recipe по worker/project/root. Browser остаётся demo/report viewer; UI integration проверен на настоящем Unix worker. |
 | Tauri desktop | Native host запуск подтверждён. workerConfigPath в winbridge-desktop.local.json, форма в winbridge-desktop-state.local.json рядом с exe. worker_rpc, четыре local draft commands и desktop_build; close ждёт save ACK каждой изменённой command/delivery/workflow scope. Shared package select и delivery form restore проверены UI integration; пользователь принял их без нового подробного ручного gate. Сохранение формы и dev:ui дополнительно подтверждены пользователем на Windows. |
 | Local IPC/runtime tasks | User SID + instance named pipe, user-only protected DACL, exclusive journal и Windows Job Objects подтверждены Windows отчётом. Unix socket/private state также проверены; bounded frames/deadline/connections. |
-| HGFS delivery/import | Git commit capture, deterministic Stored ZIP, actual HGFS .part/readback/ready, durable worker import/lease/pinned build и UI реализованы. 16 actual Unix/HGFS/WebSocket gate checks и actual owned import crash/recovery проходят. 19 actual Windows import/build/run/cancel/NTFS junction checks пройдены 2026-10-06; delivery UX принята пользователем, подробная ручная проверка отложена. Dirty/incremental/benchmark ещё не реализованы. |
+| HGFS delivery/import | Git commit capture, deterministic Stored ZIP, actual HGFS .part/readback/ready, durable worker import/lease/pinned build и UI реализованы. 16 actual Unix/HGFS/WebSocket gate checks и actual owned import crash/recovery проходят. 19 actual Windows import/build/run/cancel/NTFS junction checks пройдены 2026-10-06; delivery UX принята пользователем, подробная ручная проверка отложена. Dirty source mode ещё не реализован; stage-6 baseline/Git batch/delta/local source cache и measurements завершены, resume/batching/virtualization ещё впереди. |
 | SQLite/process tree | Local WAL/FULL, durable acceptance, dedup, queue/cancel, launch intent/recovery, independent pipe drain/quota. Реальные Windows tree timeout/cancel/crash cleanup и сохранённый indeterminate без retry подтверждены. |
 | WebSocket | Versioned handshake/RPC/heartbeat/reconnect/watch реализованы; 14 session groups и UI integration проходят в Debian. Шесть групп Windows runtime gate прошли, включая прежний task/PID/generation после offline. Подключение и все три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. |
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
@@ -344,7 +344,7 @@ Runtime постоянный: `K:\_proj-26\winbridge\runtime`, runtimeDirectory 
 
 ## Готовый запрос для продолжения
 
-> Продолжи WinBridge в /home/user1/winbridge по AGENTS.md и docs/handoff.md. Этапы 1–5 завершены автоматическими Windows gates. Следующий этап — 6: измерить capture/pack/shared publication/Windows import/build и объёмы output/journal, затем выбрать оптимизации по baseline. Installed worker 1982de8 пока не заменён; controller 263ec63 запущен, доступность после новой сессии проверять заново. Новые Windows проверки выполнять автоматически в отдельных runtime, заранее объясняя TEST окна и нужные процессы; после сообщать, что можно закрыть. Сохраняй durable acceptance/dedup/cancel/recovery, прозрачность UI и принятый scope output retention. Не повторяй пройденные gates без причины; при неожиданной ошибке worker остановись и уточни.
+> Продолжи WinBridge в /home/user1/winbridge по AGENTS.md и docs/handoff.md. Этапы 1–5 завершены автоматическими Windows gates. Этап 6: baseline/Git batch/delta/local source cache и measured Debian → Windows one-file пары завершены; дальше resume/output batching/virtualization по измерениям. Installed worker 58f3c14 пока не заменён, новая delta проверена на отдельном efeaf65 test worker. Controller обновляется прежде нового worker из-за capability workspace_delta; доступность после новой сессии проверять заново. Новые Windows проверки выполнять автоматически в отдельных runtime, заранее объясняя TEST окна и нужные процессы; после сообщать, что можно закрыть. Сохраняй durable acceptance/dedup/cancel/recovery, прозрачность UI и принятый scope output retention. Не повторяй пройденные gates без причины; при неожиданной ошибке worker остановись и уточни.
 
 ## Завершение этапа 4 — 2026-10-06
 

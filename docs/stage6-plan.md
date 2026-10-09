@@ -37,8 +37,8 @@ Report публикуется create-only с bytes/SHA-256 readback и ready mar
 Изменять или удалять старые snapshots/reports/history нельзя.
 
 После baseline выбирается одна оптимизация с измеримой целью и той же regression
-проверкой. Delta/content cache/resume/batching/virtualization/SocketDelivery пока
-не считаются реализованными. Новый ручной Windows gate не нужен; unexpected
+проверкой. Baseline/Git batch и delta/local source cache теперь завершены;
+resume/batching/virtualization/SocketDelivery ещё не реализованы. Новый ручной Windows gate не нужен; unexpected
 worker behaviour требует остановки и уточнения по инструкции пользователя.
 
 ## Следующий сценарий — delta
@@ -46,5 +46,5 @@ worker behaviour требует остановки и уточнения по и
 2026-10-09 пользователь выбрал delta от проверенного snapshot как локального
 кэша. [Отдельный контракт](snapshot-delta-plan.md) зафиксирован до реализации;
 [инструкции](snapshot-delta.md). Baseline/Git batch завершены; новый schema 2
-проходит отдельные tests и automatic Windows gate. Resume/output batching/
+[прошёл отдельные tests и automatic Windows gates](windows-delta-gate-2026-10-09.md). Resume/output batching/
 virtualization/SocketDelivery остаются будущей работой.
