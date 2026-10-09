@@ -49,9 +49,13 @@ fn setup() -> (TempDir, WorkerConfig, ImportSubmission) {
             "fixture",
         ],
     );
+    let shared = std::env::var_os("WINBRIDGE_DELTA_GATE_SHARED")
+        .map(|p| Path::new(&p).join(format!("worker-{}", uuid::Uuid::new_v4())))
+        .unwrap_or_else(|| root.join("shared"));
+    fs::create_dir_all(&shared).unwrap();
     let delivery = DeliverySettings {
         adapter: "shared-folder".into(),
-        root: root.join("shared"),
+        root: shared,
         namespace: "WinBridge".into(),
         peer_root: None,
     };
@@ -526,4 +530,187 @@ fn schema_migration_takes_consistent_backup_and_preserves_accepted_commands() {
     );
     drop(worker);
     let _worker = Worker::open(config).unwrap();
+}
+
+#[test]
+fn delta_worker_dedup_recovery_build_and_source_pin() {
+    let (temp, config, base_request) = setup();
+    let worker = Worker::open(config.clone()).unwrap();
+    let base = accept(&worker, base_request.clone());
+    assert_eq!(wait(&worker, &base.import_id).status, TaskStatus::Succeeded);
+    let repo = temp.path().join("source");
+    fs::write(
+        repo.join("Привет.txt"),
+        "Проверенный delta commit → Windows build ✓",
+    )
+    .unwrap();
+    git(&repo, &["add", "."]);
+    git(
+        &repo,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@local",
+            "commit",
+            "-qm",
+            "delta build",
+        ],
+    );
+    let publication = sync::publish_delta_measured(
+        config.delivery.as_ref().unwrap(),
+        &repo,
+        &temp.path().join("capture-state"),
+        "fixture",
+        "HEAD",
+        &base_request.snapshot_id,
+    )
+    .unwrap();
+    let request = ImportSubmission {
+        protocol_version: 1,
+        request_id: "delta".into(),
+        project_id: "fixture".into(),
+        snapshot_id: publication.ready.snapshot_id.clone(),
+        manifest_sha256: publication.ready.manifest_sha256.clone(),
+        idempotency_key: "delta".into(),
+        timeout_ms: 90000,
+    };
+    let LocalResponse::Import { import: accepted } =
+        worker.handle(LocalRequest::ImportDeltaSnapshot {
+            request: request.clone(),
+        })
+    else {
+        panic!("Delta admission failed")
+    };
+    // Lost ACK and close/restart leave one durable import, never a second operation.
+    let LocalResponse::Import { import: repeat } =
+        worker.handle(LocalRequest::ImportDeltaSnapshot {
+            request: ImportSubmission {
+                request_id: "retry".into(),
+                ..request.clone()
+            },
+        })
+    else {
+        panic!()
+    };
+    assert_eq!(accepted.import_id, repeat.import_id);
+    drop(worker);
+    let worker = Worker::open(config.clone()).unwrap();
+    let finished = wait(&worker, &accepted.import_id);
+    assert_eq!(finished.status, TaskStatus::Succeeded, "{finished:?}");
+    assert!(finished
+        .events
+        .iter()
+        .any(|e| e.summary.contains("reuse_base")));
+    let workspace = &config.projects[0].workspace_root;
+    let cache = workspace.join("delta-build-cache");
+    let build = TaskSubmission {
+        protocol_version: 1,
+        request_id: "build-delta".into(),
+        project_id: "fixture".into(),
+        idempotency_key: "build-delta".into(),
+        timeout_ms: 90000,
+        snapshot_id: Some(request.snapshot_id.clone()),
+        command: CommandSource::Direct {
+            executable: if cfg!(windows) {
+                "cargo.exe".into()
+            } else {
+                "/home/user1/.local/bin/cargo".into()
+            },
+            arguments: vec![
+                "build".into(),
+                "--locked".into(),
+                "--offline".into(),
+                "--target-dir".into(),
+                cache.to_string_lossy().into(),
+            ],
+            working_directory: ".".into(),
+        },
+    };
+    let LocalResponse::Task { task } = worker.handle(LocalRequest::Submit {
+        request: build.clone(),
+    }) else {
+        panic!()
+    };
+    assert_eq!(
+        task.snapshot.as_ref().unwrap().manifest_sha256,
+        request.manifest_sha256
+    );
+    let wait_task = |id: &str| {
+        let deadline = Instant::now() + Duration::from_secs(100);
+        loop {
+            worker.schedule().unwrap();
+            let LocalResponse::Task { task } =
+                worker.handle(LocalRequest::GetTask { task_id: id.into() })
+            else {
+                panic!()
+            };
+            if task.status.is_terminal() {
+                return task;
+            }
+            assert!(Instant::now() < deadline);
+            thread::sleep(Duration::from_millis(20));
+        }
+    };
+    let built = wait_task(&task.task_id);
+    assert_eq!(built.status, TaskStatus::Succeeded, "{built:?}");
+    assert_eq!(built.exit_code, Some(0));
+    let executable = cache.join("debug").join(if cfg!(windows) {
+        "snapshot-fixture.exe"
+    } else {
+        "snapshot-fixture"
+    });
+    let output = Command::new(&executable).output().unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("Проверенный delta commit → Windows build ✓"));
+    // Each build checks the fully materialized target, even if its base was valid.
+    let LocalResponse::Task { task: tampered } = worker.handle(LocalRequest::Submit {
+        request: TaskSubmission {
+            idempotency_key: "tampered-delta".into(),
+            ..build
+        },
+    }) else {
+        panic!()
+    };
+    let generation = sync::generation_path(workspace, &request.snapshot_id).unwrap();
+    fs::write(generation.join("src/main.rs"), "tampered").unwrap();
+    let refused = wait_task(&tampered.task_id);
+    assert_eq!(refused.status, TaskStatus::Failed);
+    assert!(refused.process_id.is_none());
+    sync::verified_generation(
+        workspace,
+        "fixture",
+        &base_request.snapshot_id,
+        Some(&base_request.manifest_sha256),
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+    // Planned crash: complete bytes existed before the journal terminal transition.
+    while !worker.is_idle() {
+        thread::sleep(Duration::from_millis(5));
+    }
+    drop(worker);
+    fs::copy(repo.join("src/main.rs"), generation.join("src/main.rs")).unwrap();
+    let mut store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
+    let mut interrupted = store.get_import(&accepted.import_id).unwrap();
+    interrupted.status = TaskStatus::Running;
+    interrupted.phase = "publish_local".into();
+    interrupted.delta = None;
+    interrupted.finished_at_ms = None;
+    store.save_import(&interrupted).unwrap();
+    drop(store);
+    let recovered = Worker::open(config.clone()).unwrap();
+    let recovered_import = get(&recovered, &accepted.import_id);
+    assert_eq!(recovered_import.status, TaskStatus::Succeeded);
+    assert_eq!(recovered_import.phase, "verified");
+    assert!(recovered_import.delta.is_some());
+    if let Some(report) = std::env::var_os("WINBRIDGE_DELTA_GATE_SHARED") {
+        let proof = serde_json::json!({"platform":std::env::consts::OS,"baseImport":base,"deltaImport":finished,"duplicateImportId":repeat.import_id,"publication":publication,"build":built,"stdout":stdout,"tamperedBuild":refused,"recoveredImport":recovered_import,"basePreserved":true});
+        fs::write(
+            Path::new(&report).join("delta-worker-proof.json"),
+            serde_json::to_vec_pretty(&proof).unwrap(),
+        )
+        .unwrap();
+    }
 }

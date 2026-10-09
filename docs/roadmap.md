@@ -115,7 +115,7 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 - [x] [Baseline HGFS tree/archive и time-to-build](performance-baseline-2026-10-09.md) с fixture параметрами: 3 повтора, 59 actual Windows операций, output/control/cancel/storage evidence.
 - [x] [Первая измеренная оптимизация capture](performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
 - [ ] Измерить incremental после реализации delta; one-file full-package baseline сохранён.
-- [ ] Delta manifest и удаление только ранее управляемых sources, content cache и локальные Windows build caches.
+- [ ] [Delta от verified snapshot](snapshot-delta.md): реализация schema 2/pinned base/local cache готова, отдельный automatic Windows gate выполняется. Старые поколения сохраняются; удаление отражается новым составом.
 - [ ] Chunk/resume больших объектов, output batching и виртуализация длинных списков UI.
 - [ ] При необходимости SocketDelivery как другой adapter. Control session не блокируется большими данными.
 

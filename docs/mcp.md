@@ -15,7 +15,9 @@ controller, не создаёт listener, не меняет firewall/runtime con
 
 ## Контракт
 
-30 tools: 29 сетевых вариантов LocalRequest и `winbridge_publish`. Четыре новые
+32 tools: 30 сетевых вариантов LocalRequest и две публикации — `winbridge_publish`
+и `winbridge_publish_delta`. Delta import использует `winbridge_import_delta_snapshot`
+и требует `workspace_delta`; [формат и recovery](snapshot-delta.md). Четыре новые
 local-only maintenance операции в каталог не включены и controller их не пересылает.
 Каждая операция имеет
 отдельное имя, описание и inputSchema. Schemas генерируются через JsonSchema derive

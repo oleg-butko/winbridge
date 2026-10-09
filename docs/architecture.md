@@ -1,6 +1,6 @@
 # Архитектура WinBridge
 
-Статус 2026-10-09: этапы 1–5 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, delta/cache/resume ещё впереди. [Журнал внимания этапа 5](attention.md) и [settings/output retention](settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
+Статус 2026-10-09: этапы 1–5 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](snapshot-delta.md) реализуется и проходит отдельный gate; resume/batching ещё впереди. [Журнал внимания этапа 5](attention.md) и [settings/output retention](settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
 
 ## Назначение и среда
 
@@ -84,7 +84,7 @@ Delivery adapter отделён от orchestration. Первый adapter — sha
 
 Manifest фиксирует source mode (commit SHA или dirty snapshot), пути, hashes, размеры, состав обязательных build files. Staging и ready marker защищают от чтения неполного пакета. До выполнения worker проверяет manifest и содержимое. Сборка работает на стабильном поколении Windows, а caches остаются локальными и переиспользуемыми.
 
-На этапе 3 import создаёт новое immutable поколение и не удаляет файлы; cleanup/incremental sync ещё не реализованы. Runtime configs, secrets, пользовательские файлы, live databases, logs и результаты других программ не входят в source snapshot. Подробности в [shared-folders.md](shared-folders.md).
+На этапе 3 import создаёт новое immutable поколение и не удаляет файлы; [Delta этапа 6](snapshot-delta.md) добавляет reuse проверенного локального поколения в новом staging; удалённые пути отсутствуют в target, старые поколения сохраняются. Cleanup/resume ещё не реализованы. Runtime configs, secrets, пользовательские файлы, live databases, logs и результаты других программ не входят в source snapshot. Подробности в [shared-folders.md](shared-folders.md).
 
 ## Workflow и процессы приложений
 

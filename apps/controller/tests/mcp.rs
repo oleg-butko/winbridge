@@ -115,7 +115,7 @@ fn catalog_is_generated_from_tagged_protocol_and_has_only_reachable_definitions(
         serde_json::to_value(schemars::schema_for!(winbridge_protocol::LocalRequest)).unwrap();
     assert_eq!(
         tools.len(),
-        request["oneOf"].as_array().unwrap().len() + 1 - 4
+        request["oneOf"].as_array().unwrap().len() + 2 - 4
     );
     assert!(!tools
         .iter()
@@ -129,6 +129,11 @@ fn catalog_is_generated_from_tagged_protocol_and_has_only_reachable_definitions(
         assert!(!schema["required"]
             .as_array()
             .is_some_and(|r| r.contains(&json!("method"))));
+    }
+    for name in ["winbridge_import_delta_snapshot", "winbridge_publish_delta"] {
+        let delta = tools.iter().find(|t| t["name"] == name).unwrap();
+        assert_eq!(delta["annotations"]["idempotentHint"], true);
+        assert_eq!(delta["annotations"]["readOnlyHint"], false);
     }
     let info = tools
         .iter()

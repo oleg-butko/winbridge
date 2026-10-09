@@ -21,6 +21,38 @@ pub struct SnapshotFile {
     pub executable: bool,
 }
 
+/// Bounded read model: discovery pages never include the full reuse path map.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotDeltaSummary {
+    pub snapshot_id: String,
+    pub manifest_sha256: String,
+    pub reused_files: u64,
+    pub reused_bytes: u64,
+    pub payload_bytes: u64,
+}
+
+/// Target paths copied from a pinned, fully materialized local generation.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SnapshotReuse {
+    pub path: String,
+    pub base_path: String,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SnapshotDelta {
+    pub snapshot_id: String,
+    pub manifest_sha256: String,
+    pub reused_files: Vec<SnapshotReuse>,
+}
+
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -34,6 +66,9 @@ pub struct SnapshotManifest {
     pub payload_bytes: u64,
     pub payload_sha256: String,
     pub total_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub delta: Option<SnapshotDelta>,
     pub files: Vec<SnapshotFile>,
 }
 
@@ -73,6 +108,9 @@ pub struct ImportRecord {
     pub submission: ImportSubmission,
     pub status: crate::TaskStatus,
     pub phase: String,
+    #[serde(default)]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub delta: Option<SnapshotDeltaSummary>,
     pub accepted_at_ms: u64,
     pub finished_at_ms: Option<u64>,
     pub cancel_requested: bool,
@@ -105,6 +143,9 @@ pub struct SnapshotPreview {
     pub next_offset: Option<u64>,
     pub payload_verified: bool,
     pub peer_shared_path: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub delta: Option<SnapshotDeltaSummary>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -129,6 +170,9 @@ pub struct PublishedSnapshot {
     pub total_bytes: Option<u64>,
     pub payload_bytes: Option<u64>,
     pub metadata_error: Option<String>,
+    #[serde(default)]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub delta: Option<SnapshotDeltaSummary>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

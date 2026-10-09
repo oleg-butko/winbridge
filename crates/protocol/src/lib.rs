@@ -36,6 +36,7 @@ pub enum Capability {
     TaskSubmit,
     TaskCancel,
     WorkspaceImport,
+    WorkspaceDelta,
     LogRead,
     AttentionRequest,
     AttentionTargets,
@@ -285,6 +286,8 @@ pub struct WorkerInfo {
     #[serde(default)]
     pub snapshot_import_available: bool,
     #[serde(default)]
+    pub snapshot_delta_available: bool,
+    #[serde(default)]
     pub workflow_available: bool,
     #[serde(default)]
     pub workflow_features: Vec<String>,
@@ -386,6 +389,9 @@ pub enum LocalRequest {
         offset: u64,
     },
     ImportSnapshot {
+        request: ImportSubmission,
+    },
+    ImportDeltaSnapshot {
         request: ImportSubmission,
     },
     ListImports,

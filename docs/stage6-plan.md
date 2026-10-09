@@ -40,3 +40,11 @@ Report публикуется create-only с bytes/SHA-256 readback и ready mar
 проверкой. Delta/content cache/resume/batching/virtualization/SocketDelivery пока
 не считаются реализованными. Новый ручной Windows gate не нужен; unexpected
 worker behaviour требует остановки и уточнения по инструкции пользователя.
+
+## Следующий сценарий — delta
+
+2026-10-09 пользователь выбрал delta от проверенного snapshot как локального
+кэша. [Отдельный контракт](snapshot-delta-plan.md) зафиксирован до реализации;
+[инструкции](snapshot-delta.md). Baseline/Git batch завершены; новый schema 2
+проходит отдельные tests и automatic Windows gate. Resume/output batching/
+virtualization/SocketDelivery остаются будущей работой.

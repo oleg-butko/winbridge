@@ -43,6 +43,30 @@ pub fn publish_measured(
     )
 }
 
+pub fn publish_delta_measured(
+    config: &ControllerConfig,
+    project: &str,
+    revision: &str,
+    base: &str,
+) -> Result<winbridge_workspace_sync::PublicationMeasurement> {
+    let source = config
+        .projects
+        .iter()
+        .find(|p| p.id == project)
+        .ok_or("Source project is not registered in controller JSON")?;
+    winbridge_workspace_sync::publish_delta_measured(
+        config
+            .delivery
+            .as_ref()
+            .ok_or("Configure delivery in controller local JSON")?,
+        &source.source_root,
+        &config.state_directory,
+        project,
+        revision,
+        base,
+    )
+}
+
 struct Session {
     sender: RpcSender,
     id: String,
@@ -114,7 +138,10 @@ impl Controller {
                 if matches!(request,LocalRequest::SubmitWorkflow {..}|LocalRequest::ListWorkflows|LocalRequest::GetWorkflow {..}|LocalRequest::CancelWorkflow {..}|LocalRequest::ListApplications|LocalRequest::GetApplication {..}|LocalRequest::StopApplication {..}|LocalRequest::ReadApplicationLog {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::LogRead)) {
                     return Err("Worker does not advertise stage-4 workflow/log support; update the fixed runtime with the combined release".into());
                 }
-                if matches!(request, LocalRequest::ImportSnapshot {..} | LocalRequest::ListImports | LocalRequest::GetImport {..} | LocalRequest::CancelImport {..} | LocalRequest::PreviewSnapshot {..} | LocalRequest::ListSnapshots {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::WorkspaceImport)) {
+                if matches!(request, LocalRequest::ImportDeltaSnapshot {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::WorkspaceDelta)) {
+                    return Err("Worker does not support delta snapshots; update worker or import a full package".into());
+                }
+                if matches!(request, LocalRequest::ImportSnapshot {..} | LocalRequest::ImportDeltaSnapshot {..} | LocalRequest::ListImports | LocalRequest::GetImport {..} | LocalRequest::CancelImport {..} | LocalRequest::PreviewSnapshot {..} | LocalRequest::ListSnapshots {..}) && !state.last_peer.as_ref().is_some_and(|(p,_)|p.capabilities.contains(&Capability::WorkspaceImport)) {
                     return Err("Worker does not advertise workspace_import; update the fixed runtime and configure delivery in local JSON".into());
                 }
                 (session.sender.clone(), session.id.clone(), state.last_peer.as_ref().map(|(_, address)| address.to_string()))
@@ -335,6 +362,7 @@ fn request_method(request: &LocalRequest) -> &'static str {
         LocalRequest::ReadApplicationLog { .. } => "read_application_log",
         LocalRequest::ListSnapshots { .. } => "list_snapshots",
         LocalRequest::ImportSnapshot { .. } => "import_snapshot",
+        LocalRequest::ImportDeltaSnapshot { .. } => "import_delta_snapshot",
         LocalRequest::ListImports => "list_imports",
         LocalRequest::GetImport { .. } => "get_import",
         LocalRequest::CancelImport { .. } => "cancel_import",

@@ -25,6 +25,7 @@ async fn run() -> Result<(), String> {
             winbridge_protocol::Capability::TaskSubmit,
             winbridge_protocol::Capability::TaskCancel,
             winbridge_protocol::Capability::WorkspaceImport,
+            winbridge_protocol::Capability::WorkspaceDelta,
             winbridge_protocol::Capability::LogRead,
             winbridge_protocol::Capability::AttentionRequest,
             winbridge_protocol::Capability::AttentionTargets,
@@ -170,6 +171,13 @@ async fn run() -> Result<(), String> {
                     project_id: project.clone(),
                     snapshot_id: snapshot.clone(),
                     offset: 0,
+                },
+                [name, path] if name == "import-delta" => LocalRequest::ImportDeltaSnapshot {
+                    request: serde_json::from_slice(&winbridge_workspace_sync::read_bounded(
+                        Path::new(path),
+                        65536,
+                    )?)
+                    .map_err(|_| "Invalid import request JSON")?,
                 },
                 [name, path] if name == "import" => LocalRequest::ImportSnapshot {
                     request: serde_json::from_slice(&winbridge_workspace_sync::read_bounded(

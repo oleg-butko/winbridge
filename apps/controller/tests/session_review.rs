@@ -106,6 +106,22 @@ async fn next_request(client: &mut Client) -> SessionMessage {
 }
 
 #[tokio::test]
+async fn delta_requires_capability_before_transmission_to_full_only_worker() {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let (_root, controller, listener) = pair().await;
+        let (actor, mut client) = connect_with_capabilities(&controller, &listener, vec![Capability::TaskSubmit, Capability::TaskCancel, Capability::WorkspaceImport]).await;
+        let submission = winbridge_protocol::ImportSubmission { protocol_version: 1, request_id: "delta".into(), project_id: "fixture".into(), snapshot_id: "delta".into(), manifest_sha256: "f".repeat(64), idempotency_key: "delta".into(), timeout_ms: 10000 };
+        assert!(matches!(controller.call(LocalRequest::ImportDeltaSnapshot { request: submission }).await, LocalResponse::Error {message} if message.contains("does not support delta")));
+        let caller=Arc::clone(&controller);
+        let pending=tokio::spawn(async move {caller.call(LocalRequest::ListImports).await});
+        let SessionMessage::Request {id,request:LocalRequest::ListImports}=next_request(&mut client).await else {panic!("Delta was transmitted to an older worker")};
+        ws::send(&mut client,&SessionMessage::Response {id,response:LocalResponse::Imports {imports:vec![]}}).await.unwrap();
+        assert!(matches!(pending.await.unwrap(),LocalResponse::Imports {..}));
+        actor.abort();let _=actor.await;
+    }).await.unwrap();
+}
+
+#[tokio::test]
 async fn history_requests_are_refused_without_transmission_to_older_workers() {
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         let (_root, controller, listener) = pair().await;

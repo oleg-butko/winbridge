@@ -26,8 +26,8 @@ fn identifier(value: &str) -> Result<()> {
     validate_relative(value)
 }
 fn version(value: u16) -> Result<()> {
-    if value != SNAPSHOT_SCHEMA_VERSION {
-        return Err("Unsupported snapshot schemaVersion; expected 1".into());
+    if !matches!(value, 1 | 2) {
+        return Err("Unsupported snapshot schemaVersion; expected 1 (full) or 2 (delta)".into());
     }
     Ok(())
 }
@@ -94,6 +94,36 @@ pub fn validate_manifest(manifest: &SnapshotManifest) -> Result<()> {
     let SnapshotSource::GitCommit { commit } = &manifest.source;
     if !hex(commit, 20) && !hex(commit, 32) {
         return Err("Snapshot source must name a full lowercase Git commit hash".into());
+    }
+    match (manifest.schema_version, &manifest.delta) {
+        (1, None) => {}
+        (2, Some(delta)) => {
+            identifier(&delta.snapshot_id)?;
+            if delta.snapshot_id == manifest.snapshot_id || !hex(&delta.manifest_sha256, 32) {
+                return Err(
+                    "Delta requires a distinct base snapshot and valid manifest SHA-256".into(),
+                );
+            }
+            if delta.reused_files.len() > manifest.files.len() {
+                return Err("Delta reuse count exceeds target file count".into());
+            }
+            let targets: HashMap<_, _> = manifest
+                .files
+                .iter()
+                .map(|f| (f.path.as_str(), f))
+                .collect();
+            let mut seen = std::collections::HashSet::new();
+            for entry in &delta.reused_files {
+                file_path(&entry.path)?;
+                file_path(&entry.base_path)?;
+                if !targets.contains_key(entry.path.as_str()) || !seen.insert(&entry.path) {
+                    return Err("Delta reuse paths must be unique target manifest files".into());
+                }
+            }
+        }
+        _ => {
+            return Err("Schema 1 requires a full package; schema 2 requires delta metadata".into())
+        }
     }
     payload(manifest.payload_bytes, &manifest.payload_sha256)?;
     if manifest.files.is_empty() || manifest.files.len() > MAX_FILES {
@@ -181,7 +211,8 @@ pub fn validate_ready_matches_manifest(
 ) -> Result<()> {
     validate_manifest(manifest)?;
     validate_ready(ready)?;
-    if ready.project_id != manifest.project_id
+    if ready.schema_version != manifest.schema_version
+        || ready.project_id != manifest.project_id
         || ready.snapshot_id != manifest.snapshot_id
         || ready.payload_bytes != manifest.payload_bytes
         || ready.payload_sha256 != manifest.payload_sha256
@@ -207,6 +238,7 @@ mod tests {
             payload_bytes: 20,
             payload_sha256: "b".repeat(64),
             total_bytes: 3,
+            delta: None,
             files: vec![SnapshotFile {
                 path: "src/Привет.txt".into(),
                 bytes: 3,
@@ -214,6 +246,60 @@ mod tests {
                 executable: false,
             }],
         }
+    }
+    #[test]
+    fn delta_reuse_paths_and_schema_agreement_fail_closed() {
+        use winbridge_protocol::{SnapshotDelta, SnapshotReuse};
+        let mut value = manifest();
+        value.schema_version = 2;
+        assert!(validate_manifest(&value).is_err());
+        value.delta = Some(SnapshotDelta {
+            snapshot_id: "base".into(),
+            manifest_sha256: "e".repeat(64),
+            reused_files: vec![SnapshotReuse {
+                path: value.files[0].path.clone(),
+                base_path: "original.txt".into(),
+            }],
+        });
+        assert!(validate_manifest(&value).is_ok());
+        let ready = SnapshotReady {
+            schema_version: 1,
+            project_id: value.project_id.clone(),
+            snapshot_id: value.snapshot_id.clone(),
+            manifest_sha256: "d".repeat(64),
+            payload_sha256: value.payload_sha256.clone(),
+            payload_bytes: value.payload_bytes,
+        };
+        assert!(validate_ready_matches_manifest(&ready, &value).is_err());
+        for path in [
+            "../escape",
+            "CON.txt",
+            ".winbridge/verified.json",
+            "other.txt",
+        ] {
+            let mut bad = value.clone();
+            bad.delta.as_mut().unwrap().reused_files[0].path = path.into();
+            assert!(validate_manifest(&bad).is_err());
+        }
+        for path in [
+            "../escape",
+            "CON.txt",
+            ".winbridge/verified.json",
+            "dir\\file",
+        ] {
+            let mut bad = value.clone();
+            bad.delta.as_mut().unwrap().reused_files[0].base_path = path.into();
+            assert!(validate_manifest(&bad).is_err());
+        }
+        let mut bad = value.clone();
+        bad.delta.as_mut().unwrap().snapshot_id = bad.snapshot_id.clone();
+        assert!(validate_manifest(&bad).is_err());
+        let mut bad = value.clone();
+        let reused = bad.delta.as_ref().unwrap().reused_files[0].clone();
+        bad.delta.as_mut().unwrap().reused_files.push(reused);
+        assert!(validate_manifest(&bad).is_err());
+        value.schema_version = 1;
+        assert!(validate_manifest(&value).is_err());
     }
     #[test]
     fn bounded_strict_metadata_and_ready_identity() {

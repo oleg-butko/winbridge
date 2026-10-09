@@ -19,6 +19,7 @@ fn metadata(method: &str) -> (&'static str, bool, bool) {
         "list_tasks" => ("Read the ten most recent task summaries; use history for older operations.", true, true),
         "read_output" => ("Read saved output bytes after a sequence cursor; decode each stream as UTF-8 across chunk boundaries.", true, true),
         "cancel" => ("Explicitly cancel the owned task and its managed process tree. Closing MCP or desktop does not cancel a task.", false, true),
+        "import_delta_snapshot" => ("Accept a delta package using its pinned, verified local base. Requires workspace_delta capability. Copies and hashes reused files into a new generation; missing/corrupt base requires an explicit full import. Reconcile a lost ACK with the same method and idempotencyKey.", false, true),
         "import_snapshot" => ("Accept verified snapshot import into local Windows workspace. Preserve idempotencyKey on reconciliation; acceptance is not completion.", false, true),
         "list_imports" => ("Read the ten most recent import summaries.", true, true),
         "get_import" => ("Read exact import progress and verified outcome by Import ID.", true, true),
@@ -121,6 +122,9 @@ pub fn tools() -> Result<Vec<Value>, String> {
     }
     tools.push(json!({"name":"winbridge_publish","description":"Publish a committed Git revision from a configured source project into shared using the same CLI handler; does not import or build. Dirty working-tree files are excluded.",
         "inputSchema":{"type":"object","properties":{"projectId":{"type":"string"},"revision":{"type":"string"}},"required":["projectId","revision"],"additionalProperties":false},
+        "annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
+    tools.push(json!({"name":"winbridge_publish_delta","description":"Publish a committed Git revision as a delta against an explicit ready base snapshot. Reads and hashes actual Git blobs; the base manifest SHA-256 is pinned. Does not import or build, and does not replace old packages.",
+        "inputSchema":{"type":"object","properties":{"projectId":{"type":"string"},"revision":{"type":"string"},"baseSnapshotId":{"type":"string"}},"required":["projectId","revision","baseSnapshotId"],"additionalProperties":false},
         "annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
     tools.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     Ok(tools)
@@ -257,24 +261,29 @@ async fn handle(
                     "Unknown tool argument; inspect tools/list",
                 ));
             }
-            let value = if name == "winbridge_publish" {
+            let value = if matches!(name, "winbridge_publish" | "winbridge_publish_delta") {
                 let Some(project) = args["projectId"].as_str().map(str::to_owned) else {
                     return Some(error(id, -32602, "projectId must be a string"));
                 };
                 let Some(revision) = args["revision"].as_str().map(str::to_owned) else {
                     return Some(error(id, -32602, "revision must be a string"));
                 };
-                if args
-                    .as_object()
-                    .unwrap()
-                    .keys()
-                    .any(|k| !matches!(k.as_str(), "projectId" | "revision"))
-                {
-                    return Some(error(id, -32602, "Unknown publish parameter"));
-                }
+                let base = if name == "winbridge_publish_delta" {
+                    let Some(base) = args["baseSnapshotId"].as_str() else {
+                        return Some(error(id, -32602, "baseSnapshotId must be a string"));
+                    };
+                    Some(base.to_owned())
+                } else {
+                    None
+                };
                 let config = config.clone();
                 match tokio::task::spawn_blocking(move || {
-                    super::publish(&config, &project, &revision)
+                    if let Some(base) = base {
+                        super::publish_delta_measured(&config, &project, &revision, &base)
+                            .map(|m| m.ready)
+                    } else {
+                        super::publish(&config, &project, &revision)
+                    }
                 })
                 .await
                 {

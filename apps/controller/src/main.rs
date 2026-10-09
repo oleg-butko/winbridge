@@ -31,7 +31,7 @@ async fn run() -> Result<(), String> {
         }
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH measure-publish PROJECT REVISION (monotonic stage timings)\n  --config PATH validate | serve | mcp | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
+        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH measure-publish PROJECT REVISION (monotonic stage timings)\n  --config PATH publish-delta PROJECT REVISION BASE_SNAPSHOT (pinned base, measured)\n  --config PATH import-delta REQUEST.json\n  --config PATH validate | serve | mcp | status | info | list\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -66,6 +66,9 @@ async fn run() -> Result<(), String> {
             "Valid local pair {}: ws://{}; worker {}; snapshot import available when delivery is configured",
             config.instance_id, config.controller.listen_address, config.controller.worker_node_id
         ),
+        [name,project,revision,base] if name=="publish-delta" => {
+            println!("{}",serde_json::to_string_pretty(&winbridge_controller::publish_delta_measured(&config,project,revision,base)?).map_err(|e|e.to_string())?);
+        }
         [name,project,revision] if name=="publish" => {
             let ready=winbridge_controller::publish(&config,project,revision)?;
             println!("{}",serde_json::to_string(&ready).map_err(|e|e.to_string())?);
@@ -109,6 +112,7 @@ async fn run() -> Result<(), String> {
                 [name, id] if name == "get-import" => LocalRequest::GetImport {import_id:id.clone()},
                 [name, id] if name == "cancel-import" => LocalRequest::CancelImport {import_id:id.clone()},
                 [name, project, snapshot] if name == "preview" => LocalRequest::PreviewSnapshot {project_id:project.clone(),snapshot_id:snapshot.clone(),offset:0},
+                [name, path] if name == "import-delta" => LocalRequest::ImportDeltaSnapshot {request:serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),65536)?).map_err(|_|"Invalid import request JSON")?},
                 [name, path] if name == "import" => LocalRequest::ImportSnapshot {request:serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),65536)?).map_err(|_|"Invalid import request JSON")?},
                 [name] if name == "status" => LocalRequest::ControllerStatus,
                 [name] if name == "info" => LocalRequest::Info,

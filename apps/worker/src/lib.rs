@@ -156,6 +156,7 @@ impl Worker {
             LocalRequest::Submit { .. }
                 | LocalRequest::SubmitWorkflow { .. }
                 | LocalRequest::ImportSnapshot { .. }
+                | LocalRequest::ImportDeltaSnapshot { .. }
         ) {
             if let Some(reason) = self.journal_recovery_required()? {
                 return Err(reason);
@@ -397,6 +398,7 @@ impl Worker {
                         .into(),
                         projects: self.config.public_projects(),
                         snapshot_import_available: self.config.delivery.is_some(),
+                        snapshot_delta_available: self.config.delivery.is_some(),
                         workflow_available: self.config.delivery.is_some(),
                         controller_connection: self
                             .controller_connection
@@ -406,7 +408,8 @@ impl Worker {
                     }),
                 })
             }
-            LocalRequest::ImportSnapshot { request } => {
+            LocalRequest::ImportSnapshot { request }
+            | LocalRequest::ImportDeltaSnapshot { request } => {
                 if self.stop.load(Ordering::Acquire) {
                     return Err("Worker stopping; import not accepted".into());
                 }

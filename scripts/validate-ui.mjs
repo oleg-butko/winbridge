@@ -129,14 +129,16 @@ try {
   let loseDiagnosticSaveAck=false;
   let loseSettingsSaveAck=false;
   let loseCleanupAck=false;
+  const deltaImportCalls=[];
   const settingsCalls=[];const cleanupCalls=[];
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
-      const response = await call(request, ["submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
+      const response = await call(request, ["import_delta_snapshot", "submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
       if(request.method==="save_runtime_settings") {settingsCalls.push(request);if(loseSettingsSaveAck&&response.kind==="settings_saved"){loseSettingsSaveAck=false;throw new Error("Test: settings save ACK lost");}}
       if(request.method==="apply_output_cleanup") {cleanupCalls.push(request);if(loseCleanupAck&&response.kind==="output_cleanup_result"){loseCleanupAck=false;throw new Error("Test: cleanup ACK lost");}}
       if (request.method === "submit" && loseFirstAck) { loseFirstAck = false; submittedId = response.task.taskId; throw new Error("Test: acceptance response was lost"); }
-      if (request.method === "import_snapshot" && loseFirstImportAck) { loseFirstImportAck = false; importedId = response.import.importId; throw new Error("Test: import ACK lost"); }
+      if(request.method==="import_delta_snapshot") deltaImportCalls.push(request);
+      if (["import_snapshot", "import_delta_snapshot"].includes(request.method) && loseFirstImportAck) { loseFirstImportAck = false; importedId = response.import.importId; throw new Error("Test: import ACK lost"); }
       if (request.method === "submit_workflow" && loseFirstWorkflowAck && response.kind === "workflow") { loseFirstWorkflowAck = false; acceptedWorkflowId = response.workflow.workflowId; throw new Error("Test: workflow ACK lost"); }
       if (request.method === "request_attention" && loseFirstAttentionAck && response.kind === "attention") { loseFirstAttentionAck = false; throw new Error("Test: attention acceptance ACK lost"); }
       if (["acknowledge_attention","acknowledge_attention_event"].includes(request.method) && loseFirstAttentionConfirmation && ["attention","attention_event"].includes(response.kind)) { loseFirstAttentionConfirmation = false; throw new Error("Test: attention confirmation ACK lost"); }
@@ -331,6 +333,27 @@ try {
   await exec("git", ["-C",source,"add","."]);
   await exec("git", ["-C",source,"-c","user.name=Fixture","-c","user.email=fixture@local","commit","-qm","second snapshot"]);
   const secondPublished = JSON.parse((await exec(controllerExe,["--config",controllerConfig,"publish","fixture","HEAD"])).stdout);
+  const deltaPublished=JSON.parse((await exec(controllerExe,["--config",controllerConfig,"publish-delta","fixture","HEAD",published.snapshotId])).stdout);
+  assert.equal(deltaPublished.ready.schemaVersion,2);
+  await page.getByRole("button",{name:"Обновить список пакетов",exact:true}).click();
+  await deliverySnapshot.fill(deltaPublished.ready.snapshotId);
+  await page.getByRole("option",{name:new RegExp(`^${deltaPublished.ready.snapshotId} · commit`)}).click();
+  await page.getByRole("button",{name:"Посмотреть состав snapshot",exact:true}).click();
+  await page.getByText("Delta от проверенного snapshot",{exact:true}).waitFor();
+  await page.getByText(`База: ${published.snapshotId}`,{exact:true}).waitFor();
+  loseFirstImportAck=true;
+  const beforeDelta=(await call({method:"list_imports"})).imports.length;
+  await page.getByRole("button",{name:"Импортировать пакет",exact:true}).click();
+  await page.getByText("Приём импорта не подтверждён",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Проверить приём импорта",exact:true}).click();
+  await page.getByText("Готово для сборки",{exact:true}).waitFor();
+  assert.equal(deltaImportCalls.length,2);assert.deepEqual(deltaImportCalls[0],deltaImportCalls[1]);
+  assert.equal((await call({method:"list_imports"})).imports.length,beforeDelta+1);
+  const deltaImported=(await call({method:"get_import",importId:importedId})).import;
+  assert.equal(deltaImported.status,"succeeded");
+  assert.equal(await readFile(join(deltaImported.workspacePath,"Привет.txt"),"utf8"),"UI second snapshot ✓");
+  assert.equal(await readFile(join(imported.workspacePath,"Привет.txt"),"utf8"),"UI snapshot ✓");
+
   await page.getByRole("button", {name:"Обновить список пакетов",exact:true}).click();
   draftSaveDelay = 250;
   const lastArgv = '["long", "last edit before close ✓"]';
@@ -358,7 +381,7 @@ try {
   await restoredPage.getByText(/Выбор восстановлен из локального файла/).waitFor();
   assert.equal(await restoredPage.getByRole("textbox", {name:"Проект доставки", exact:true}).inputValue(), "fixture");
   assert.ok((await restoredPage.getByRole("textbox", {name:"Snapshot ID опубликованного пакета", exact:true}).inputValue()).startsWith(secondPublished.snapshotId));
-  assert.equal((await call({method:"list_imports"})).imports.length, 1, "delivery restore started an import");
+  assert.equal((await call({method:"list_imports"})).imports.length, beforeDelta+1, "delivery restore started an import");
   assert.deepEqual((await call({ method: "list_tasks" })).tasks.map((task) => task.taskId), tasksBeforeRestore, "form restore submitted a task");
   failDeliverySaves = true;
   await restoredPage.getByRole("textbox", {name:"Snapshot ID опубликованного пакета", exact:true}).fill(published.snapshotId);
@@ -635,7 +658,7 @@ try {
   await workflowPage.evaluate(() => { window.__validation.enabled=false; });
   await until(async()=>!await validationBanner.isVisible(),"Validation banner did not clear");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences and exact popup targets. History: paging/keyboard/redacted editable diagnostics. Settings/retention: keyboard navigation, unsaved close guard, exact reviewed config, save ACK loss with same ID, preview/actual output cleanup and same-key reconciliation; task history/keys retained. Native windows and diagnostic publication are validated separately on Windows.");
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup, pinned-base delta preview/import and same-method lost ACK; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences and exact popup targets. History: paging/keyboard/redacted editable diagnostics. Settings/retention: keyboard navigation, unsaved close guard, exact reviewed config, save ACK loss with same ID, preview/actual output cleanup and same-key reconciliation; task history/keys retained. Native windows and diagnostic publication are validated separately on Windows.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

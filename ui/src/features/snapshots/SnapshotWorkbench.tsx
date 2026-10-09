@@ -5,7 +5,7 @@ import type { DeliveryDraft, ImportRecord, ImportSubmission, PublishedSnapshotPa
 import { statuses } from "../tasks/TaskDetail";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
 
-const phases: Record<string, string> = { queued: "Ожидает свободного проекта", validate: "Проверка пакета", copy_payload: "Копирование ZIP на локальный диск", extract: "Распаковка и проверка файлов", verify_local: "Проверка локальных исходников", publish_local: "Публикация поколения", verified: "Готово для сборки" };
+const phases: Record<string, string> = { queued: "Ожидает свободного проекта", validate: "Проверка пакета", copy_payload: "Копирование ZIP на локальный диск", extract: "Распаковка и проверка файлов", reuse_base: "Копирование и проверка файлов из базового snapshot", verify_local: "Проверка локальных исходников", publish_local: "Публикация поколения", verified: "Готово для сборки" };
 export function SnapshotWorkbench({ navigation, info, connected, closing, drafts, persist, onWorkflowSnapshot }: {
   navigation?: {sequence:number;importId:string}|null;
   info: WorkerInfo; connected: boolean; closing: boolean; drafts: DeliveryDraft[] | null;
@@ -29,6 +29,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
   const [selected, setSelected] = useState<string | null>(null);
   useEffect(()=>{if(navigation){setSelected(navigation.importId);setRecord(null);}},[navigation]);
   const [record, setRecord] = useState<ImportRecord | null>(null);
+  const [pendingDelta, setPendingDelta] = useState(false);
   const [pending, setPending] = useState<ImportSubmission | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
@@ -99,10 +100,10 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
     } catch (error) { setError(String(error)); }
     finally { setBusy(false); }
   }
-  async function send(request: ImportSubmission) {
-    setPending(request); setBusy(true); setError(null);
+  async function send(request: ImportSubmission, delta = false) {
+    setPending(request); setPendingDelta(delta); setBusy(true); setError(null);
     try {
-      const response = await workerCall({ method: "import_snapshot", request });
+      const response = await workerCall({ method: delta ? "import_delta_snapshot" : "import_snapshot", request });
       if (response.kind === "error") { setPending(null); throw new Error(response.message); }
       const importRecord = expectResult(response, "import").import;
       setSelected(importRecord.importId); setRecord(importRecord); setPending(null);
@@ -121,7 +122,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
   const visiblePage = pageScope.current === scopeKey ? page : null;
   const packages = visiblePage?.projectId === project ? visiblePage.snapshots : [];
   const packageOptions = packages.map((s) => ({ value: s.snapshotId, label: s.metadataError ? `${s.snapshotId} · ошибка метаданных`
-    : `${s.snapshotId} · commit ${s.source?.commit.slice(0, 8)} · ${s.totalFiles} файлов · ZIP ${s.payloadBytes?.toLocaleString()} байт` }));
+    : `${s.snapshotId} · commit ${s.source?.commit.slice(0, 8)} · ${s.totalFiles} файлов · ZIP ${s.payloadBytes?.toLocaleString()} байт${s.delta ? " · delta" : ""}` }));
   if (snapshot && !packages.some((s) => s.snapshotId === snapshot)) packageOptions.unshift({ value: snapshot, label: `${snapshot} · сохранённый выбор, нет в загруженном списке` });
   const chosen = packages.find((s) => s.snapshotId === snapshot);
   return <Card id="native-import-detail" tabIndex={-1} withBorder><Stack>
@@ -144,6 +145,13 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
       <Text size="sm">Debian shared: {preview.peerSharedPath ?? "Укажите delivery.peerRoot в локальном worker JSON"}</Text>
       <Text size="sm">Windows shared: {preview.sharedPath}</Text><Text size="sm">Локальные исходники: {preview.workspacePath}</Text>
       <Text size="sm">{preview.totalFiles} файлов · {preview.totalBytes} байт исходников · ZIP {preview.payloadBytes} байт</Text>
+      {preview.delta && <Alert color="blue" title="Delta от проверенного snapshot">
+        <Text size="sm">База: {preview.delta.snapshotId}</Text>
+        <Text size="xs">SHA-256 manifest базы: {preview.delta.manifestSha256}</Text>
+        <Text size="sm">{preview.delta.reusedFiles} файлов копируются из локальной базы с проверкой SHA-256; {preview.totalFiles - preview.delta.reusedFiles} файлов передаются в ZIP. Полный состав нового поколения показан ниже.</Text>
+        <Text size="sm">Прежнее поколение сохраняется. При отсутствии или повреждении базы нужен явный полный импорт.</Text>
+      </Alert>}
+      {preview.delta && !info.snapshotDeltaAvailable && <Alert color="yellow">Этот worker не поддерживает delta. Обновите worker или выберите полный пакет.</Alert>}
       <Text size="xs">Manifest SHA-256: {preview.manifestSha256}</Text>
       <Alert color="blue">Это предварительный состав. Проверка ZIP и всех файлов выполняется при импорте; сборка запускается отдельной командой.</Alert>
       {onWorkflowSnapshot && <Button variant="light" onClick={() => onWorkflowSnapshot({ projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256 })} disabled={busy || closing}>Использовать в workflow</Button>}
@@ -151,10 +159,10 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
         {preview.files.map((file) => <Table.Tr key={file.path}><Table.Td>{file.path}</Table.Td><Table.Td>{file.bytes}</Table.Td><Table.Td><Code>{file.sha256}</Code></Table.Td></Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>
       {preview.nextOffset !== null && <Button variant="light" onClick={() => void inspect(preview.nextOffset!)} disabled={!connected || busy || closing}>Следующие 100 файлов</Button>}
-      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 })} disabled={!connected || !!info.journalRecoveryRequired || busy || pending !== null || closing}>Импортировать пакет</Button>
+      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 }, !!preview.delta)} disabled={!!preview.delta && !info.snapshotDeltaAvailable || !connected || !!info.journalRecoveryRequired || busy || pending !== null || closing}>Импортировать пакет</Button>
     </>}
     {pending && <Alert color="yellow" title="Приём импорта не подтверждён">Повтор отправит прежние параметры и ключ.
-      <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || closing}>Проверить приём импорта</Button>
+      <Button onClick={() => void send(pending, pendingDelta)} loading={busy} disabled={!connected || closing}>Проверить приём импорта</Button>
     </Alert>}
     {pollError && <Alert color="yellow" title="Нет свежего подтверждения worker">{pollError}</Alert>}
     {error && <Alert color="yellow" title="Нет свежего результата операции">{error}</Alert>}
@@ -163,6 +171,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
       <Group><Badge color={statuses[record.status].color}>{statuses[record.status].label}</Badge><Text>{phases[record.phase] ?? record.phase}</Text></Group>
       <Text size="xs">Import ID: {record.importId} · подтверждение: {confirmedAt === null ? "ожидается" : new Date(confirmedAt).toLocaleTimeString()}</Text>
       {!connected && <Text c="yellow">Worker недоступен. Показано последнее подтверждение; импорт не запускается повторно.</Text>}
+      {record.delta && <Text size="sm">Delta: база {record.delta.snapshotId} · {record.delta.reusedFiles} файлов / {record.delta.reusedBytes} байт из локальной базы · ZIP {record.delta.payloadBytes} байт. SHA-256 manifest базы: {record.delta.manifestSha256}</Text>}
       <Text>Snapshot: {record.submission.snapshotId} · commit: {record.commit ?? "ещё не проверен"}</Text>
       <Text size="sm">Из: {record.sharedPath}</Text><Text size="sm">В: {record.workspacePath}</Text>
       <Text size="sm">{record.completedFiles} / {record.totalFiles ?? "?"} файлов · {record.completedBytes} байт {copying ? "ZIP" : "исходников"}</Text>

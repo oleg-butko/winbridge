@@ -128,3 +128,14 @@ Source export содержит точный manifest всех source files с ha
 Расширенный прогон этапа 4 включает readiness IPC tests и [изолированный Netwatch](netwatch-validation.md). Опция `--netwatch-profile` передаёт подготовленный frozen профиль дополнительному test worker. Не запускайте эти test scripts вручную для обычного обновления приложения.
 
 Прогон завершения этапа 4: 41 native test, Windows desktop check и изолированный Netwatch cycle passed; [IDs, hashes и ограничения](windows-workflow-gate-2026-10-06.md). Test report reader использует явный UTF-8 для CLI stdout/stderr, сохраняя кириллицу независимо от консольной code page.
+
+## Delta этапа 6 без новых окон
+
+`validate-workflow-native.py --delta-only --controller-config ... --archive ...`
+запускает новые core/sync/worker tests через installed worker. Desktop не нужен.
+Cargo собирает изолированные tests offline; пакеты проверяются на actual HGFS
+в новом shared run, workspace/SQLite/build cache находятся на local disk.
+`delta-delivery-proof.json` сохраняет full/delta hashes/bytes/timings,
+`delta-worker-proof.json` — import/dedup/recovery/build/Unicode/tamper evidence.
+`report.ready.json` подтверждает размеры и hashes artifacts. Installed exe/config
+не заменяются. После завершения desktop можно оставить закрытым, worker оставить.

@@ -136,3 +136,5 @@ Baseline (59 Windows operations) и [Git batch capture](docs/performance-capture
 завершены: 13.58× ускорение capture в matched comparison, hashes прежние,
 21 новая Windows операция прошла. Весь этап 6 ещё не закрыт.
 Delta/resume/batching/virtualization пока не реализованы.
+
+Delta этапа 6: [формат, публикация, импорт и автоматическая проверка](docs/snapshot-delta.md). Используется проверенное локальное поколение; прежние snapshots сохраняются.

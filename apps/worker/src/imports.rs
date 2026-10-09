@@ -46,6 +46,7 @@ impl Store {
             submission: request.clone(),
             status: TaskStatus::Queued,
             phase: "queued".into(),
+            delta: None,
             accepted_at_ms: now_ms(),
             finished_at_ms: None,
             cancel_requested: false,
@@ -196,6 +197,7 @@ impl Worker {
         }
         let end = (offset + 100).min(manifest.files.len());
         Ok(SnapshotPreview {
+            delta: sync::delta_summary(&manifest),
             project_id: project.into(),
             snapshot_id: snapshot.into(),
             manifest_sha256: ready.manifest_sha256,
@@ -303,6 +305,7 @@ impl Worker {
         ) {
             let mut store = self.store()?;
             let mut record = store.get_import(&id)?;
+            record.delta = sync::delta_summary(&manifest);
             record.total_files = Some(manifest.files.len() as u64);
             record.total_bytes = Some(manifest.total_bytes);
             let SnapshotSource::GitCommit { commit } = manifest.source;
@@ -348,6 +351,7 @@ impl Worker {
         match result {
             Ok(manifest) => {
                 let mut record = store.get_import(&id)?;
+                record.delta = sync::delta_summary(&manifest);
                 record.phase = "verified".into();
                 record.completed_files = manifest.files.len() as u64;
                 record.completed_bytes = manifest.total_bytes;
@@ -389,7 +393,7 @@ impl Worker {
                 .projects
                 .iter()
                 .find(|p| p.id == import.submission.project_id)
-                .is_some_and(|p| {
+                .and_then(|p| {
                     sync::verified_generation(
                         &p.workspace_root,
                         &p.id,
@@ -397,10 +401,20 @@ impl Worker {
                         Some(&import.submission.manifest_sha256),
                         |_, _, _| Ok(()),
                     )
-                    .is_ok()
+                    .ok()
                 });
             let mut store = self.store()?;
-            if verified {
+            if let Some(manifest) = verified {
+                let mut recovered = store.get_import(&import.import_id)?;
+                recovered.phase = "verified".into();
+                recovered.delta = sync::delta_summary(&manifest);
+                recovered.completed_files = manifest.files.len() as u64;
+                recovered.completed_bytes = manifest.total_bytes;
+                recovered.total_files = Some(recovered.completed_files);
+                recovered.total_bytes = Some(recovered.completed_bytes);
+                let SnapshotSource::GitCommit { commit } = manifest.source;
+                recovered.commit = Some(commit);
+                store.save_import(&recovered)?;
                 store.finish_import(&import.import_id,TaskStatus::Succeeded,"Recovered a fully verified local generation after worker restart; no build was repeated")?;
             } else {
                 store.finish_import(&import.import_id,TaskStatus::Interrupted,"Worker restarted during import; staging is not buildable. Retry requires a new explicit key")?;

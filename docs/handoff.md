@@ -36,6 +36,12 @@ Worker unchanged/healthy/activeTaskCount=0; desktop не нужен, TEST око
 source verification/cancel/recovery. Общий pipeline speedup не заявляется на
 основании одного нового Windows repeat; raw timing variation сохранён в отчётах.
 
+Delta реализуется по [согласованному плану](snapshot-delta-plan.md): schema 2,
+ZIP changed files, pinned local base, новый immutable target и full tree verification.
+Добавлены capability/RPC, CLI/MCP публикация/import, понятный preview/history и
+автоматический `--delta-only` gate без desktop. 131 workspace tests, browser delta/lost-ACK integration, Clippy, contracts, UI build и Windows all-targets cross-check проходят. При ревью также исправлена recovered import phase/summary после crash между publication и journal result. Windows
+gate ещё выполняется. Installed worker остаётся `58f3c14`, его runtime не меняется.
+
 Ниже — история реализации и прежних версий до этого обновления.
 
 Debian перезапущена; пользователь обновил Windows из

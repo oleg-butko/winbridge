@@ -47,6 +47,7 @@ def main():
     parser.add_argument('--controller-config', type=Path, required=True)
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--project', default='snapshot-fixture')
+    parser.add_argument('--delta-only', action='store_true', help='Check pinned-base delta on actual HGFS with isolated journal/build, without desktop windows')
     parser.add_argument('--attention-only', action='store_true', help='Run the stage-5 attention tests without repeating the completed workflow gate')
     parser.add_argument('--workflow-attention-only', action='store_true', help='Check workflow/application attention and native workflow target navigation')
     parser.add_argument('--history-diagnostics-only', action='store_true', help='Check history, task diagnostics and the native preview/save UI')
@@ -54,11 +55,13 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only)) > 1:
         parser.error('Choose one isolated scenario: task attention, workflow attention, companion, history diagnostics or Netwatch')
     config = json.loads(args.controller_config.read_text())
     endpoint = Path(config['stateDirectory']) / ('controller-' + config['instanceId'] + '.sock')
     info = call(endpoint, {'method': 'info'})['info']
+    if info.get('journalRecoveryRequired') or info.get('maintenanceError') or info.get('activeTaskCount') != 0:
+        raise RuntimeError('Native validation requires a healthy, idle installed worker; do not interrupt user work')
     if info['platform'] != 'windows':
         raise RuntimeError('A connected actual Windows worker is required')
     project = next(p for p in info['projects'] if p['id'] == args.project and p['allowDirectCommands'])
@@ -72,6 +75,8 @@ def main():
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
     extra = ''
     profile_argument = ''
+    if args.delta_only:
+        profile_argument = ' -DeltaOnly'
     if args.attention_only:
         profile_argument = ' -AttentionOnly'
     if args.companion_only:
@@ -166,6 +171,10 @@ exit $LASTEXITCODE
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
+    final_info = call(endpoint, {'method':'info'})['info']
+    if final_info['generation'] != info['generation'] or final_info.get('journalRecoveryRequired') or final_info.get('maintenanceError') or final_info.get('activeTaskCount') != 0:
+        raise RuntimeError('Installed worker health/generation changed unexpectedly; inspect retained task/report')
+    (local_report / 'worker-proof.json').write_text(json.dumps({'initial':{k:v for k,v in info.items() if k!='projects'},'final':{k:v for k,v in final_info.items() if k!='projects'}},indent=2))
     print(json.dumps({'passed': True, 'platform': 'windows', 'taskId': task_id, 'reportDirectory': str(report), 'reportSha256': hashlib.sha256((report / 'report.json').read_bytes()).hexdigest(), 'commands': result['commands']}), flush=True)
 
 

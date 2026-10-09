@@ -12,6 +12,7 @@ use winbridge_core::{config::DeliverySettings, snapshot::*};
 use winbridge_protocol::*;
 use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 pub type Result<T> = std::result::Result<T, String>;
+mod delta;
 mod git_batch;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
@@ -120,6 +121,25 @@ pub fn generation_path(root: &Path, snapshot: &str) -> Result<PathBuf> {
     Ok(root.join("snapshots").join(snapshot))
 }
 
+/// Compact metadata for UI/history; excludes the potentially large path map.
+pub fn delta_summary(manifest: &SnapshotManifest) -> Option<SnapshotDeltaSummary> {
+    manifest.delta.as_ref().map(|delta| {
+        let paths: HashSet<_> = delta.reused_files.iter().map(|r| r.path.as_str()).collect();
+        SnapshotDeltaSummary {
+            snapshot_id: delta.snapshot_id.clone(),
+            manifest_sha256: delta.manifest_sha256.clone(),
+            reused_files: delta.reused_files.len() as u64,
+            reused_bytes: manifest
+                .files
+                .iter()
+                .filter(|f| paths.contains(f.path.as_str()))
+                .map(|f| f.bytes)
+                .sum(),
+            payload_bytes: manifest.payload_bytes,
+        }
+    })
+}
+
 /// Enumerate only the configured project's immediate package directories. No payload
 /// is read, no directory is created, and linked candidates fail metadata validation.
 pub fn list_snapshots(
@@ -165,6 +185,7 @@ pub fn list_snapshots(
         .map(|id| match metadata(delivery, project, id, None) {
             Ok((manifest, _, _)) => PublishedSnapshot {
                 snapshot_id: id.clone(),
+                delta: delta_summary(&manifest),
                 source: Some(manifest.source),
                 total_files: Some(manifest.files.len() as u64),
                 total_bytes: Some(manifest.total_bytes),
@@ -177,6 +198,7 @@ pub fn list_snapshots(
                 total_files: None,
                 total_bytes: None,
                 payload_bytes: None,
+                delta: None,
                 metadata_error: Some(reason),
             },
         })
@@ -280,23 +302,19 @@ fn zip_directory_bound(file: &mut File) -> Result<()> {
 }
 fn extract(
     payload: &Path,
-    manifest: &SnapshotManifest,
+    files: &[SnapshotFile],
     root: &Path,
     progress: &mut impl FnMut(&str, u64, u64) -> Result<()>,
 ) -> Result<()> {
     let mut file = File::open(payload).map_err(error)?;
     zip_directory_bound(&mut file)?;
     let mut archive = ZipArchive::new(file).map_err(error)?;
-    if archive.len() != manifest.files.len() {
+    if archive.len() != files.len() {
         return Err(
             "ZIP entry count differs from manifest; extra entries/directories are refused".into(),
         );
     }
-    let expected: HashMap<_, _> = manifest
-        .files
-        .iter()
-        .map(|f| (f.path.as_str(), f))
-        .collect();
+    let expected: HashMap<_, _> = files.iter().map(|f| (f.path.as_str(), f)).collect();
     let mut seen = HashSet::new();
     let mut completed = 0;
     let mut bytes = 0;
@@ -499,7 +517,21 @@ pub fn import(
     drop(payload);
     let source = stage.join("source");
     create_directory(&source)?;
-    extract(&payload_path, &manifest, &source, &mut progress)?;
+    delta::copy_base(root, &manifest, &source, &mut progress)?;
+    let reused: HashSet<_> = manifest
+        .delta
+        .as_ref()
+        .into_iter()
+        .flat_map(|d| &d.reused_files)
+        .map(|r| r.path.as_str())
+        .collect();
+    let changed: Vec<_> = manifest
+        .files
+        .iter()
+        .filter(|f| !reused.contains(f.path.as_str()))
+        .cloned()
+        .collect();
+    extract(&payload_path, &changed, &source, &mut progress)?;
     verify_tree(&source, &manifest, &mut progress)?;
     create_directory(&source.join(".winbridge"))?;
     write_new(&source.join(".winbridge/manifest.json"), &manifest_bytes)?;
@@ -601,6 +633,35 @@ pub fn publish_measured(
     project: &str,
     revision: &str,
 ) -> Result<PublicationMeasurement> {
+    publish_inner(delivery, source_root, local_state, project, revision, None)
+}
+
+/// Explicit delta publication; base metadata is pinned in the resulting package.
+pub fn publish_delta_measured(
+    delivery: &DeliverySettings,
+    source_root: &Path,
+    local_state: &Path,
+    project: &str,
+    revision: &str,
+    base_snapshot: &str,
+) -> Result<PublicationMeasurement> {
+    publish_inner(
+        delivery,
+        source_root,
+        local_state,
+        project,
+        revision,
+        Some(base_snapshot),
+    )
+}
+fn publish_inner(
+    delivery: &DeliverySettings,
+    source_root: &Path,
+    local_state: &Path,
+    project: &str,
+    revision: &str,
+    base_snapshot: Option<&str>,
+) -> Result<PublicationMeasurement> {
     let started = Instant::now();
     let mut timings = PublicationTimings::default();
     validate_delivery(delivery)?;
@@ -634,9 +695,27 @@ pub fn publish_measured(
     .map_err(error)?
     .trim()
     .to_string();
-    let snapshot = format!("s-{commit}");
+    let base = base_snapshot
+        .map(|id| metadata(delivery, project, id, None))
+        .transpose()?;
+    let snapshot = if let Some((base, _, ready)) = &base {
+        format!(
+            "d-{}",
+            sha256(
+                &serde_json::to_vec(&(project, &commit, &base.snapshot_id, &ready.manifest_sha256))
+                    .map_err(error)?
+            )
+        )
+    } else {
+        format!("s-{commit}")
+    };
+    let base_objects = base
+        .as_ref()
+        .map(|(base, _, _)| delta::base_objects(source_root, base))
+        .transpose()?
+        .unwrap_or_default();
     let mut manifest = SnapshotManifest {
-        schema_version: 1,
+        schema_version: if base.is_some() { 2 } else { 1 },
         project_id: project.into(),
         snapshot_id: snapshot.clone(),
         source: SnapshotSource::GitCommit {
@@ -645,6 +724,11 @@ pub fn publish_measured(
         payload_bytes: 1,
         payload_sha256: "0".repeat(64),
         total_bytes: 0,
+        delta: base.as_ref().map(|(manifest, _, ready)| SnapshotDelta {
+            snapshot_id: manifest.snapshot_id.clone(),
+            manifest_sha256: ready.manifest_sha256.clone(),
+            reused_files: Vec::new(),
+        }),
         files: Vec::new(),
     };
     let tree = git_output(
@@ -692,16 +776,34 @@ pub fn publish_measured(
             return Err("Git source exceeds unpacked limit".into());
         }
         record.bytes = size;
-        archive
-            .start_file(
-                &record.path,
-                SimpleFileOptions::default()
-                    .last_modified_time(zip::DateTime::default())
-                    .compression_method(zip::CompressionMethod::Stored)
-                    .unix_permissions(if record.executable { 0o755 } else { 0o644 }),
-            )
-            .map_err(error)?;
-        record.sha256 = blobs.copy_blob(&mut archive)?;
+        if let Some(base_file) = base_objects.get(&object) {
+            record.sha256 = blobs.copy_blob(&mut std::io::sink())?;
+            if record.bytes != base_file.bytes || record.sha256 != base_file.sha256 {
+                return Err(
+                    "Base manifest disagrees with actual Git blob; publish a full snapshot".into(),
+                );
+            }
+            manifest
+                .delta
+                .as_mut()
+                .ok_or("Delta base missing")?
+                .reused_files
+                .push(SnapshotReuse {
+                    path: record.path.clone(),
+                    base_path: base_file.path.clone(),
+                });
+        } else {
+            archive
+                .start_file(
+                    &record.path,
+                    SimpleFileOptions::default()
+                        .last_modified_time(zip::DateTime::default())
+                        .compression_method(zip::CompressionMethod::Stored)
+                        .unix_permissions(if record.executable { 0o755 } else { 0o644 }),
+                )
+                .map_err(error)?;
+            record.sha256 = blobs.copy_blob(&mut archive)?;
+        }
         if archive
             .get_ref()
             .ok_or("ZIP writer closed")?
@@ -731,7 +833,7 @@ pub fn publish_measured(
     let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(error)?;
     parse_manifest(&manifest_bytes)?;
     let ready = SnapshotReady {
-        schema_version: 1,
+        schema_version: manifest.schema_version,
         project_id: project.into(),
         snapshot_id: snapshot.clone(),
         manifest_sha256: sha256(&manifest_bytes),

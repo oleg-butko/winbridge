@@ -1,6 +1,6 @@
 # Snapshot format и runtime этапа 3
 
-Реализованы capture commit → Stored ZIP → verified shared publication → durable worker import → explicit build из проверенного локального поколения. [Windows gate](windows-snapshot-validation.md) ещё требуется. Unix/HGFS/WebSocket проверки не закрывают Windows этап автоматически.
+Реализованы capture commit → Stored ZIP → verified shared publication → durable worker import → explicit build из проверенного локального поколения. [Windows gate этапа 3](windows-snapshot-gate-2026-10-06.md) завершён; новый delta-сценарий проверяется отдельно.
 
 Контракт: [protocol/snapshot.rs](../crates/protocol/src/snapshot.rs), pure metadata policy: [core/snapshot.rs](../crates/core/src/snapshot.rs), Git/filesystem adapter: [workspace-sync](../modules/workspace-sync/src/lib.rs). Core не содержит HGFS путей. TypeScript генерируется из Rust.
 
@@ -32,10 +32,10 @@ Manifest задаёт source git_commit, IDs, размер/hash payload.zip и �
 
 ## Валидация и import
 
-- Manifest до 1 MiB, ready до 8 KiB, strict schema 1/known fields. 1–10000 files, ZIP до 512 MiB, content до 1 GiB, checked size sums.
+- Manifest до 1 MiB, ready до 8 KiB, strict schema 1 (full) / 2 (delta), known fields. 1–10000 files, ZIP до 512 MiB, content до 1 GiB, checked size sums.
 - Path до 1024 UTF-16 units, component до 255, depth до 64. Traversal, absolute/drive/UNC/device/ADS, backslash/dot components, trailing dots/spaces, reserved names/controls, duplicate/case/file-directory collisions отклоняются.
 - Git data, `.winbridge`, `node_modules`, `target`, `.env*` и `*.local.json` запрещены в payload. Snapshot не переносит runtime настройки, SQLite или caches.
-- Перед ZIP parser ограничены EOCD entry count и central directory bytes; ZIP64/multipart/compressed archives не поддерживаются в schema 1. ZIP должен содержать ровно files manifest, без дополнительных directory/link/special entries.
+- Перед ZIP parser ограничены EOCD entry count и central directory bytes; ZIP64/multipart/compressed archives не поддерживаются в schema 1. ZIP должен содержать ровно передаваемые files manifest (в delta — без переиспользуемых файлов), без дополнительных directory/link/special entries.
 - Worker копирует payload на локальный диск и проверяет bytes/hash, распаковывает только manifest paths с CreateNew, ограничивает декодируемые bytes, проверяет file hashes и итоговое дерево. Symlink, NTFS junction/reparse, special files и hard links отклоняются на actual filesystem.
 - Final source rename выполняется только на локальном fixed disk после verified marker. Interrupted staging не используется как cwd. Неожиданные дополнительные файлы в поколении тоже блокируют build; outputs/cache должны записываться отдельно.
 
@@ -85,3 +85,19 @@ Schema 2 добавляет imports table к journal schema 1. Перед migrat
 48 Rust tests, actual Unix builds, WebSocket/HGFS gate, active 64 MiB cancel, actual owned process crash/recovery и UI checks проходят. [Windows runtime gate](windows-snapshot-gate-2026-10-06.md) прошёл 19 actual checks. Windows all-targets compile и standalone desktop также проходят; native UI новых delivery fixes принята пользователем; подробная ручная проверка отложена. [Инструкция](windows-snapshot-validation.md).
 
 Dirty snapshots, chunk resume, incremental sync, cleanup/retention и benchmarks остаются следующими расширениями. Импорт не удаляет пользовательские файлы и не обновляет runtime/source generation in-place.
+
+## Формат 2: delta
+
+[Контракт и инструкции](snapshot-delta.md). Manifest содержит `delta` с
+`snapshotId`, `manifestSha256` базы и `reusedFiles: [{path, basePath}]`.
+`files` по-прежнему описывает полный target tree. Ready.schemaVersion должен
+совпадать с manifest.schemaVersion. ZIP содержит остальные файлы; пустой Stored
+ZIP допустим, но его bytes/hash проверяются. База и target различаются; traversal,
+повтор target path и неизвестные paths отклоняются. Прежний формат 1 не содержит
+`delta`; его сериализация и hashes сохранены.
+
+Base metadata читается только из verified local generation этого project; pin
+обязателен. Size/SHA каждого используемого base файла совпадает с target manifest
+и actual copied bytes. Затем всё новое дерево проверяется обычным verifier.
+Удаление означает отсутствие path в новом дереве, без удаления прежних snapshots.
+Preview/list/history возвращают компактную summary, а не полный reuse path map.

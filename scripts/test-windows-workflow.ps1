@@ -26,6 +26,9 @@ SHA-256 исходного ZIP, из которого распакованы и�
 .PARAMETER SettingsRetentionOnly
 Проверяет локальные настройки, сохранение без влияния на активный процесс, перезапуск
 отдельного worker, preview/atomic очистку output и включаемую automatic policy.
+.PARAMETER DeltaOnly
+Проверяет full/delta на настоящем HGFS, отдельный worker journal, dedup/recovery
+и offline build с проверенным source pin. Desktop и тестовые окна не открываются.
 .PARAMETER CompanionOnly
 Собирает отдельный desktop/worker и проверяет tray, popup, звук, переход к задаче и restart.
 Требует source archive с --include-built-ui; рабочие exe не заменяет.
@@ -44,6 +47,7 @@ param(
     [switch]$WorkflowAttentionOnly,
     [switch]$HistoryDiagnosticsOnly,
     [switch]$SettingsRetentionOnly,
+    [switch]$DeltaOnly,
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -82,6 +86,7 @@ $reportPath = Join-Path $ReportDirectory 'report.json'
 $oldTarget = $env:CARGO_TARGET_DIR
 $oldTemp = $env:TEMP
 $oldTmp = $env:TMP
+$oldDeltaShared = $env:WINBRIDGE_DELTA_GATE_SHARED
 $oldLocation = Get-Location
 try {
     foreach ($file in $manifest.files) {
@@ -103,7 +108,17 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($DeltaOnly) {
+        if ($NetwatchProfile) { throw 'DeltaOnly requires an isolated scenario' }
+        # Only newly owned run directories are used; actual HGFS bytes are verified.
+        $env:WINBRIDGE_DELTA_GATE_SHARED = $ReportDirectory
+        $groups = @(
+            @{ name='delta-metadata-and-path-policy'; arguments=@('test','-p','winbridge-core','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='delta-hgfs-full-equivalence-cancel-and-base-verification'; arguments=@('test','-p','winbridge-workspace-sync','--lib','--test','delta','--test','delivery','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='delta-worker-dedup-recovery-build-source-pin'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','snapshots','delta_worker_','--locked','--offline','--','--test-threads=1','--nocapture') }
+        )
+    }
     if ($SettingsRetentionOnly) {
         if ($NetwatchProfile -or -not $manifest.includesBuiltUi) { throw 'Settings retention validation needs built UI and an isolated scenario' }
         $groups = @(
@@ -179,6 +194,7 @@ try {
     $env:CARGO_TARGET_DIR = $oldTarget
     $env:TEMP = $oldTemp
     $env:TMP = $oldTmp
+    $env:WINBRIDGE_DELTA_GATE_SHARED = $oldDeltaShared
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {
