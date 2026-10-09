@@ -72,7 +72,7 @@ export function HistoryPanel({info,connected,closing,onOpen}: {info:WorkerInfo;c
         </Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>
       {page && !page.records.length && <Text>Записи по этим фильтрам не найдены.</Text>}
-      <Group><Button variant="subtle" onClick={()=>{setBefore(null);setRevision((v)=>v+1);}} disabled={!connected}>Свежие записи</Button><Button data-testid="history-older" variant="light" disabled={!connected||!page?.hasMore} onClick={()=>{if(page){setBefore(page.nextCursor);setPage(null);}}}>Более ранние 50</Button>{page && <Text size="xs">Прочитано: {new Date(page.observedAtMs).toLocaleTimeString()}. Состояния могут изменяться.</Text>}</Group>
+      <Group><Button variant="subtle" onClick={()=>{setBefore(null);setPage(null);setRevision((v)=>v+1);}} disabled={!connected}>Свежие записи</Button><Button data-testid="history-older" variant="light" disabled={!connected||!page?.hasMore} onClick={()=>{if(page){setBefore(page.nextCursor);setPage(null);}}}>Более ранние 50</Button>{page && <Text size="xs">Прочитано: {new Date(page.observedAtMs).toLocaleTimeString()}. Состояния могут изменяться.</Text>}</Group>
       {usage && <Alert color="blue" title="Размер журнала и квота output">
         Tasks: {usage.taskCount} · imports: {usage.importCount} · workflow: {usage.workflowCount} · приложения: {usage.applicationCount} · attention: {usage.attentionCount} ({usage.pendingAttentionCount} ждут подтверждения)
         <Text size="sm">Output: {usage.storedOutputBytes} байт · SQLite: {usage.journalBytes} байт · WAL: {usage.walBytes} байт. Квота output одной task: {usage.outputLimitBytesPerTask} байт. Эта панель только читает размеры.</Text>

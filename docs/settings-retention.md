@@ -2,7 +2,9 @@
 
 Реализовано по [плану](settings-retention-plan.md), выбор пользователя 2026-10-09:
 config применяется после ручного restart, automatic output cleanup включается явно.
-Native Windows gate ещё ожидается; рабочий runtime пользователя не заменяется тестами.
+[Native Windows gate](windows-settings-retention-gate-2026-10-09.md) пройден:
+36 backend tests, actual UI save/restart и 19 verified artifacts. Рабочий runtime
+пользователя не заменён тестами.
 
 ## Настройки в desktop
 
@@ -12,6 +14,8 @@ worker, включая snapshot-конфиг, который может отли
 controller URL, projects/root/direct permission, recipes/delivery в JSON, квоту
 output и политику хранения. Новая папка проекта должна уже существовать на локальном
 диске. Убрать project из config не означает удалить его files/history.
+Для Git publication sourceRoot этого проекта регистрируется отдельно в локальном
+конфиге Debian controller; Windows registration сразу позволяет выполнять команды.
 
 Instance ID, node ID и stateDirectory редактор не меняет. CLI `--config PATH serve`
 закрепляет источник конфигурации; Worker::open без файла даёт actionable read error.

@@ -31,10 +31,23 @@ Opt-in automatic pass раз в 60 секунд фоновый; failures вид�
 117 workspace tests и два добавленных теста batches/controller refusal прошли.
 Workspace/desktop Clippy, contracts/typecheck/build также прошли. Actual browser UI проверил config/cleanup
 lost ACK, same-key reconciliation, dirty close guard и сохранение task metadata.
-Windows all-targets compile и native desktop check прошли; новый native gate
-ещё не запущен. `--settings-retention-only` собирает отдельный TEST desktop и
-проверяет save при прежнем PID, затем restart только тестового worker и active policy.
-Roadmap этапа 5 остаётся открытым до этого gate.
+Windows all-targets compile и native desktop check прошли.
+[Settings/retention native gate](windows-settings-retention-gate-2026-10-09.md)
+успешен: clean source adbda09, run `20261009-042415-34160b98`, task
+`56ee9fa9-b87d-4392-84c9-efcfd70a70c6` succeeded/exit 0; report SHA-256
+`1bfb9e0e9b59ff58d4a050e4a3ec29b24819b1c50ba723b2209d21ba783de5df`.
+36 backend tests, два actual UI запуска, 19 verified artifacts; save оставил
+PID 19068, restart только тестового worker применил quota/automatic policy.
+Cleanup без ошибок. Installed worker по-прежнему 1982de8, generation прежняя,
+healthy/activeTaskCount=0. Пользователю сообщено: TEST окна закрылись, desktop можно
+завершить, рабочий worker оставить работать. `--settings-retention-only` — единый
+изолированный автоматический сценарий; ручной gate не требуется.
+Этап 5 завершён в согласованном scope output retention + сохранение metadata/dedup.
+Следующая работа — этап 6, измерения существующих capture/publish/import/build и
+размеров output/journal до выбора delta/resume/batching/virtualization.
+Финальная browser проверка поймала старый history cursor во время refresh;
+page теперь сбрасывается до ответа, pagination disabled. Повтор прошёл с новой
+keyboard navigation/config/cleanup checks; новый native gate не требовался.
 
 ## Предыдущая сессия — 2026-10-08
 

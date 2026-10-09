@@ -85,23 +85,23 @@ dedup и acknowledgements сохраняются у worker; UI раскрыва�
 исправлены обозначение тестового окна, защита close и публикация отчёта.
 Workflow/app attention реализованы по [плану](workflow-attention-plan.md) и
 [прошли автоматический Windows gate](windows-workflow-attention-gate-2026-10-08.md):
-19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, [автоматический Windows gate](windows-history-gate-2026-10-08.md) пройден. [MCP adapter](mcp.md) также прошёл actual Windows gate; этап не закрыт для projects/connection settings и полной retention policy.
+19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, [автоматический Windows gate](windows-history-gate-2026-10-08.md) пройден. [MCP adapter](mcp.md) также прошёл actual Windows gate; projects/connection settings и согласованная output retention также прошли [native gate](windows-settings-retention-gate-2026-10-09.md).
 [Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
 [Ревью](review-attention-2026-10-07.md) исправило fresh running после failed result commit.
 Сценарий [tray/popup/sound/preferences](tray-plan.md) завершён; план был зафиксирован
 коммитом `bbba964` до реализации. План workflow/app attention зафиксирован `aeae684`
-до реализации; сценарий завершён. [История/диагностика](history-diagnostics.md) добавляет keyset pages, старые IDs, keyboard actions, redacted editable task report и storage usage; [Windows gate](windows-history-gate-2026-10-08.md) пройден: 13 tests, actual UI и 17 artifacts. Далее — [MCP](mcp-plan.md) и retention/settings.
+до реализации; сценарий завершён. [История/диагностика](history-diagnostics.md) добавляет keyset pages, старые IDs, keyboard actions, redacted editable task report и storage usage; [Windows gate](windows-history-gate-2026-10-08.md) пройден: 13 tests, actual UI и 17 artifacts. [MCP](mcp-plan.md) и settings/output retention также завершены.
 
 - [x] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [x] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
 - [x] Workflow/application attention: typed targets, единый сигнал родительского workflow, атомарная запись и native target navigation gate.
 - [x] История task/import/workflow/application, поиск/фильтры/keyset pages, точные старые IDs, быстрые действия и keyboard shortcuts.
-- [ ] Projects/connection settings и полная доступность UI с клавиатуры.
+- [x] Projects/connection settings, навигация разделов/controls с клавиатуры и защита незаписанных правок.
 - [x] Editable task diagnostic с redaction, default omission, create-only save и проверкой readback/SHA-256.
 - [x] Output paging/quota, recovery без UI и read-only размеры журнала.
-- [ ] Полная retention policy и её настройки; automatic deletion пока выключен.
+- [x] Согласованная output retention policy и настройки: preview/atomic cleanup, protected targets, durable results и opt-in automatic cleanup. Metadata/history/dedup не удаляются.
 - [x] [MCP stdio adapter](mcp.md): 30 typed tools над теми же RPC/handler; contract, actual Unix lost ACK и [Windows gate](windows-mcp-gate-2026-10-08.md) прошли.
 
 Критерий: пользователь понимает, что сделал агент, получает уместный сигнал, открывает причину и может продолжить работу. Рутинные разрешённые действия не требуют повторяющихся confirmations.
@@ -124,19 +124,21 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 
 Критерий: следующий проект подключается конфигурацией/модулем, сохраняет journal/cancel/recovery и получает понятный UI.
 
+Этап 5 завершён 2026-10-09: [Windows settings/retention gate](windows-settings-retention-gate-2026-10-09.md)
+подтвердил 36 backend tests, два native UI запуска и 19 artifacts.
+Пользователь выбрал manual restart для config и включаемую automatic output cleanup;
+история/ключи/attention/snapshots/reports остаются. Все сценарии этапа 5 прошли
+автоматические Windows gates; новый ручной gate не назначается.
+
 ## Следующий конкретный шаг
 
-Этап 5: attention/tray, typed workflow/app events, history/diagnostic и MCP прошли
-автоматические Windows gates. Далее — удобные projects/connection settings и
-полная retention policy с явными лимитами; автоматического удаления нет.
-Размеры/quota уже видны, старые snapshots/reports/history не очищать.
-2026-10-09 [settings/output retention](settings-retention.md) реализованы по выбору
-пользователя: config действует после ручного restart, automatic cleanup включается
-явно. Actual browser/backend проверки прошли; единый native gate ещё ожидается.
+Этап 6: снять воспроизводимый baseline capture/pack/shared publication/Windows
+import/build и объёмов output/journal. Только после измерений выбирать delta,
+cache/resume/batching/virtualization. Старые snapshots/reports/history не очищать.
 2026-10-09 пользователь обновил installed worker до clean `1982de8`;
 HistoryRead/typed attention и здоровый журнал подтверждены read-only Info.
 Debian controller снова запущен. [Ревью](review-stage5-2026-10-09.md) исправило
-неограниченный readback diagnostic collision; settings/retention остаются.
+неограниченный readback diagnostic collision; settings/retention завершены.
 Новых мелких ручных UI gates не назначать. Если подключённый worker даёт неожиданную
 ошибку, остановиться и уточнить по инструкции пользователя. Dirty source mode и
 performance extensions остаются будущими задачами.

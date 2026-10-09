@@ -100,4 +100,7 @@ Tray показывает активные задачи и attention count. За
 переход к точным старым ID, Ctrl+K/Ctrl+Shift+P и размеры журнала. Command/output
 в отчёте исключены по умолчанию; перед отдельным сохранением виден editable preview
 с маскированием. UI подтверждает файл только после readback bytes/SHA-256; lost ACK
-не считается успехом. Automatic retention пока выключен.
+не считается успехом. [Настройки/retention](settings-retention.md) позволяют
+сохранить checked worker config с ручным restart и очистить только старый output
+после preview. Automatic cleanup default off и включается явно. Незаписанные
+правки удерживают окно открытым; Tab/Enter доступны в навигации разделов и controls.
