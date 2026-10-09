@@ -6,7 +6,7 @@ Called by test-windows-workflow.ps1 -CompanionOnly after offline builds. Each de
 phase uses its actual Tauri windows and React actions. No debugger/listening control port.
 Only this script's child PIDs are stopped during cleanup; reports and runtime are retained.
 #>
-param([Parameter(Mandatory)][string]$SourceDirectory, [Parameter(Mandatory)][string]$ReportDirectory, [switch]$WorkflowAttention, [switch]$HistoryDiagnostics)
+param([Parameter(Mandatory)][string]$SourceDirectory, [Parameter(Mandatory)][string]$ReportDirectory, [switch]$WorkflowAttention, [switch]$HistoryDiagnostics, [switch]$SettingsRetention)
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 . (Join-Path $PSScriptRoot 'worker-cli.ps1')
@@ -82,10 +82,17 @@ try {
         catch { if ([DateTime]::UtcNow -ge $deadline) { throw }; Start-Sleep -Milliseconds 100 }
     } while ($true)
     if (-not $info.attentionAvailable -or $info.instanceId -ne $instance) { throw 'Wrong isolated worker or unsupported attention capability' }
-    $phases = if ($HistoryDiagnostics) { @('history') } elseif ($WorkflowAttention) { @('targets') } else { @('initial','restart') }
+    $phases = if ($SettingsRetention) { @('settings','settings-restart') } elseif ($HistoryDiagnostics) { @('history') } elseif ($WorkflowAttention) { @('targets') } else { @('initial','restart') }
     foreach ($phase in $phases) {
         $phaseReport = Join-Path $localReports ('companion-' + $phase + '.json')
-        $mode = if ($phase -eq 'history') { '--validate-history-diagnostics' } elseif ($phase -eq 'targets') { '--validate-workflow-attention' } elseif ($phase -eq 'initial') { '--validate-companion' } else { '--validate-companion-restart' }
+        if ($phase -eq 'settings-restart') {
+            Complete-Captured $workerCapture $true
+            $workerCapture = Start-Captured $worker @('--config',$configPath,'serve') 'worker-settings-restarted'
+            $ready=$false
+            for ($i=0; $i -lt 100; $i++) { try { $null=Invoke-WorkerJson -Executable $worker -ConfigPath $configPath -Arguments @('info'); $ready=$true; break } catch { Start-Sleep -Milliseconds 100 } }
+            if (-not $ready) { throw 'Restarted test worker unavailable' }
+        }
+        $mode = if ($phase -eq 'settings') { '--validate-settings-retention' } elseif ($phase -eq 'settings-restart') { '--validate-settings-retention-restart' } elseif ($phase -eq 'history') { '--validate-history-diagnostics' } elseif ($phase -eq 'targets') { '--validate-workflow-attention' } elseif ($phase -eq 'initial') { '--validate-companion' } else { '--validate-companion-restart' }
         Write-Output "Opening isolated TEST desktop ($phase). Keep the installed worker running; do not interact with the test window."
         $capture = Start-Captured $desktop @($mode, $phaseReport) ('companion-' + $phase)
         if (-not $capture.Process.WaitForExit(240000)) { throw "Native companion $phase exceeded deadline; last step retained in progress.json" }

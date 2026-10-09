@@ -1,5 +1,5 @@
 //! Configuration and project policy; no process execution or fixed deployment paths.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fs,
@@ -101,7 +101,7 @@ pub(crate) fn read_config<T: serde::de::DeserializeOwned>(path: &Path) -> Result
     serde_json::from_slice(&bytes).map_err(|e| format!("config {}: {e}", path.display()))
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkerConfig {
     pub schema_version: u16,
@@ -113,19 +113,36 @@ pub struct WorkerConfig {
     pub projects: Vec<ProjectConfig>,
     #[serde(default = "default_output_limit")]
     pub max_output_bytes_per_task: u64,
+    #[serde(default)]
+    pub output_retention: OutputRetention,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OutputRetention {
+    pub automatic: bool,
+    pub older_than_days: u16,
+}
+impl Default for OutputRetention {
+    fn default() -> Self {
+        Self {
+            automatic: false,
+            older_than_days: 30,
+        }
+    }
 }
 fn default_output_limit() -> u64 {
     16 * 1024 * 1024
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkerSettings {
     pub controller_url: Option<String>,
     pub keep_running_on_ui_exit: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DeliverySettings {
     pub adapter: String,
@@ -135,7 +152,7 @@ pub struct DeliverySettings {
     pub peer_root: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProjectConfig {
     pub id: String,
@@ -145,7 +162,7 @@ pub struct ProjectConfig {
     pub recipes: Vec<RecipeConfig>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RecipeConfig {
     pub id: String,
@@ -183,6 +200,9 @@ impl WorkerConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
+        if !(1..=3650).contains(&self.output_retention.older_than_days) {
+            return Err("outputRetention.olderThanDays must be 1–3650 days".into());
+        }
         if let Some(delivery) = &self.delivery {
             delivery.validate()?;
         }

@@ -486,7 +486,7 @@ fn schema_migration_takes_consistent_backup_and_preserves_accepted_commands() {
     let path = config.state_directory.join("journal.sqlite");
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute_batch("DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
+        .execute_batch("DROP TABLE output_cleanup; DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
         .unwrap();
     drop(connection);
     let worker = Worker::open(config.clone()).unwrap();

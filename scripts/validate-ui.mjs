@@ -127,9 +127,14 @@ try {
   await mkdir(diagnosticsDirectory);
   const diagnosticSaves=[];
   let loseDiagnosticSaveAck=false;
+  let loseSettingsSaveAck=false;
+  let loseCleanupAck=false;
+  const settingsCalls=[];const cleanupCalls=[];
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
       const response = await call(request, ["submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
+      if(request.method==="save_runtime_settings") {settingsCalls.push(request);if(loseSettingsSaveAck&&response.kind==="settings_saved"){loseSettingsSaveAck=false;throw new Error("Test: settings save ACK lost");}}
+      if(request.method==="apply_output_cleanup") {cleanupCalls.push(request);if(loseCleanupAck&&response.kind==="output_cleanup_result"){loseCleanupAck=false;throw new Error("Test: cleanup ACK lost");}}
       if (request.method === "submit" && loseFirstAck) { loseFirstAck = false; submittedId = response.task.taskId; throw new Error("Test: acceptance response was lost"); }
       if (request.method === "import_snapshot" && loseFirstImportAck) { loseFirstImportAck = false; importedId = response.import.importId; throw new Error("Test: import ACK lost"); }
       if (request.method === "submit_workflow" && loseFirstWorkflowAck && response.kind === "workflow") { loseFirstWorkflowAck = false; acceptedWorkflowId = response.workflow.workflowId; throw new Error("Test: workflow ACK lost"); }
@@ -569,7 +574,24 @@ try {
   const usageAfter=(await call({method:"storage_usage"})).usage;
   assert.equal(usageBefore.taskCount,usageAfter.taskCount,"History/report UI executed a task");
   assert.equal(usageBefore.pendingAttentionCount,usageAfter.pendingAttentionCount,"History/report UI acknowledged an event");
-    // A real journal failure must block new launches without presenting stale running as fresh.
+  const settings=workflowPage.locator("#native-settings");
+  await workflowPage.getByRole("navigation",{name:"Разделы рабочего окна"}).getByRole("button",{name:"Настройки",exact:true}).focus();await workflowPage.keyboard.press("Enter");assert.equal(await settings.evaluate(e=>e===document.activeElement),true);
+  const settingsJson=settings.getByTestId("settings-json");await settingsJson.waitFor();
+  const settingsBefore=await readFile(config,"utf8");const settingsEdit=JSON.parse(settingsBefore);settingsEdit.maxOutputBytesPerTask=8192;settingsEdit.outputRetention={automatic:false,olderThanDays:30};
+  const settingsPreview=JSON.stringify(settingsEdit,null,2);await settingsJson.fill(settingsPreview);
+  await workflowPage.getByTestId("companion-quit").click();await workflowPage.getByText(/Сохраните или отмените изменения конфигурации/).waitFor();
+  loseSettingsSaveAck=true;await settings.getByTestId("settings-save").click();await settings.getByText(/settings save ACK lost/).waitFor();
+  assert.equal(await settings.getByTestId("settings-saved").count(),0);await settings.getByTestId("settings-save").click();await settings.getByTestId("settings-saved").waitFor();
+  assert.equal(settingsCalls.at(-1).request.requestId,settingsCalls.at(-2).request.requestId);assert.equal(await readFile(config,"utf8"),settingsPreview);
+  const runtimeSettings=(await call({method:"get_runtime_settings"})).settings;assert.equal(runtimeSettings.restartRequired,true);assert.notEqual(JSON.parse(runtimeSettings.activeJson).maxOutputBytesPerTask,8192);
+  await exec("python3",["-c","import sqlite3,sys,json,time; c=sqlite3.connect(sys.argv[1]); raw=c.execute('SELECT record FROM tasks WHERE id=?',(sys.argv[2],)).fetchone()[0]; t=json.loads(raw); t['finishedAtMs']=int(time.time()*1000)-40*86400000; c.execute('UPDATE tasks SET record=? WHERE id=?',(json.dumps(t),sys.argv[2])); c.commit()",join(run,"state/journal.sqlite"),historical.taskId]);
+  await settings.getByTestId("cleanup-preview").click();await settings.getByTestId("cleanup-summary").filter({hasText:"1 задач"}).waitFor();
+  const cleanupBefore=(await call({method:"get_task",taskId:historical.taskId})).task;loseCleanupAck=true;
+  await settings.getByTestId("cleanup-apply").click();await settings.getByText(/cleanup ACK lost/).waitFor();assert.equal(await settings.getByTestId("cleanup-result").count(),0);
+  await settings.getByTestId("cleanup-apply").click();await settings.getByTestId("cleanup-result").waitFor();assert.equal(cleanupCalls.at(-1).request.idempotencyKey,cleanupCalls.at(-2).request.idempotencyKey);
+  const cleanupAfter=(await call({method:"get_task",taskId:historical.taskId})).task;assert.equal(cleanupAfter.status,cleanupBefore.status);assert.equal(cleanupAfter.submission.idempotencyKey,cleanupBefore.submission.idempotencyKey);assert.ok(cleanupAfter.outputRemovedAtMs);assert.equal((await call({method:"read_output",taskId:historical.taskId,afterSequence:0})).chunks.length,0);
+  await history.getByTestId("diagnostic-prepare").click();await until(async()=>JSON.parse(await history.getByTestId("diagnostic-preview").inputValue()).task.outputRemovedAtMs,"Diagnostic hid output cleanup");
+  // A real journal failure must block new launches without presenting stale running as fresh.
   await exec("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"CREATE TRIGGER reject_outcome BEFORE INSERT ON attention WHEN NEW.origin='task_outcome' BEGIN SELECT RAISE(ABORT,'expected UI journal fault'); END\"); c.commit()", join(run,"state/journal.sqlite")]);
   const uncommitted=(await call({method:"submit",request:{protocolVersion:1,requestId:"journal-fault-ui",projectId:"other-fixture",idempotencyKey:"journal-fault-ui",timeoutMs:5000,command:{kind:"direct",executable:"/deliberately-missing/fixture",arguments:[],workingDirectory:"."}}})).task;
   await workflowPage.getByText("Результат операции не записан · новые запуски приостановлены",{exact:true}).waitFor();
@@ -598,7 +620,7 @@ try {
   await workflowPage.evaluate(() => { window.__validation.enabled=false; });
   await until(async()=>!await validationBanner.isVisible(),"Validation banner did not clear");
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences, save/hide/quit, missing tray and popup task/workflow/application navigation, including targets outside the recent ten. History: old-page cursor, exact ID navigation, keyboard actions, redacted editable diagnostics, lost save ACK with same-ID retry and immutable previous files. Native tray/popup/sound and actual diagnostic publication are validated separately on Windows.");
+  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences and exact popup targets. History: paging/keyboard/redacted editable diagnostics. Settings/retention: keyboard navigation, unsaved close guard, exact reviewed config, save ACK loss with same ID, preview/actual output cleanup and same-key reconciliation; task history/keys retained. Native windows and diagnostic publication are validated separately on Windows.");
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

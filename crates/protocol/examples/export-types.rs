@@ -8,6 +8,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        RuntimeSettings::decl(&config),
+        SaveRuntimeSettings::decl(&config),
+        SettingsSaved::decl(&config),
+        OutputCleanupQuery::decl(&config),
+        OutputCleanupEntry::decl(&config),
+        OutputCleanupPlan::decl(&config),
+        OutputCleanupPreview::decl(&config),
+        ApplyOutputCleanup::decl(&config),
+        OutputCleanupResult::decl(&config),
         HistoryKind::decl(&config),
         HistoryCursor::decl(&config),
         HistoryQuery::decl(&config),

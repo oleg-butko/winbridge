@@ -8,7 +8,7 @@ export function CompanionPanel({ status, preferences: p, closing, error, compani
   status: CompanionStatus | null; preferences: NotificationPreferences | null; closing: boolean;
   error: string | null; companionError: string | null; preferencesStatus: string; persist: (p: NotificationPreferences) => void; close: (quit: boolean) => void;
 }) {
-  return <Card withBorder><Stack>
+  return <Card id="native-companion" tabIndex={-1} withBorder><Stack>
     <Title order={3}>Tray и уведомления</Title>
     <Text size="sm">Закрытие окна сохраняет формы и скрывает desktop. Worker выполняет принятые задачи независимо от интерфейса. Сигналы читает фоновый Rust-процесс даже при скрытом окне.</Text>
     <Text size="sm">Tray: {status?.trayReady ? "готов" : "ещё не подтверждён"} · непрочитанное внимание: {status?.pendingCount ?? "неизвестно"} · в очереди / выполняются: {status?.activeTaskCount ?? "неизвестно"}</Text>

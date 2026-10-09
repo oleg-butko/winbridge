@@ -49,7 +49,7 @@ export function AttentionInbox({ info, connected, onTarget }: {
     } catch (error) { setAckError({ id, message: `Ответ на подтверждение не получен: ${String(error)}. Повтор использует то же событие и сохраняет время первого подтверждения.` }); }
     finally { setAcknowledging(null); }
   }
-  return <Card withBorder><Stack>
+  return <Card id="native-attention" tabIndex={-1} withBorder><Stack>
     <Group justify="space-between"><Title order={3}>Требует внимания</Title>
       <Badge color={page?.pendingCount ? "orange" : "gray"}>{!info.attentionAvailable ? "Требуется обновление" : page ? `${page.pendingCount} неподтверждённых` : "Читается журнал"}</Badge>
     </Group>

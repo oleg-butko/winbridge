@@ -15,7 +15,9 @@ controller, не создаёт listener, не меняет firewall/runtime con
 
 ## Контракт
 
-30 tools: 29 вариантов LocalRequest и `winbridge_publish`. Каждая операция имеет
+30 tools: 29 сетевых вариантов LocalRequest и `winbridge_publish`. Четыре новые
+local-only maintenance операции в каталог не включены и controller их не пересылает.
+Каждая операция имеет
 отдельное имя, описание и inputSchema. Schemas генерируются через JsonSchema derive
 из `crates/protocol`; nested definitions включаются только когда используются.
 Явный draft-07 соответствует

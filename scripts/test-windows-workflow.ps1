@@ -23,6 +23,9 @@ SHA-256 исходного ZIP, из которого распакованы и�
 Проверяет новые workflow/application events, миграцию и native popup → workflow navigation.
 .PARAMETER HistoryDiagnosticsOnly
 Проверяет историю, восстановление journal, redaction и native UI → диагностический файл.
+.PARAMETER SettingsRetentionOnly
+Проверяет локальные настройки, сохранение без влияния на активный процесс, перезапуск
+отдельного worker, preview/atomic очистку output и включаемую automatic policy.
 .PARAMETER CompanionOnly
 Собирает отдельный desktop/worker и проверяет tray, popup, звук, переход к задаче и restart.
 Требует source archive с --include-built-ui; рабочие exe не заменяет.
@@ -40,6 +43,7 @@ param(
     [switch]$CompanionOnly,
     [switch]$WorkflowAttentionOnly,
     [switch]$HistoryDiagnosticsOnly,
+    [switch]$SettingsRetentionOnly,
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -99,7 +103,17 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($SettingsRetentionOnly) {
+        if ($NetwatchProfile -or -not $manifest.includesBuiltUi) { throw 'Settings retention validation needs built UI and an isolated scenario' }
+        $groups = @(
+            @{ name='settings-retention-transactions-and-recovery'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','maintenance','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='config-policy-and-preservation'; arguments=@('test','-p','winbridge-core','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='diagnostic-bounded-readback-review'; arguments=@('test','-p','winbridge-platform','reports::','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='companion-worker-build'; arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite','--bins','--locked','--offline') },
+            @{ name='companion-desktop-build'; arguments=@('build','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--features','custom-protocol','--locked','--offline') }
+        )
+    }
     if ($HistoryDiagnosticsOnly) {
         if ($NetwatchProfile) { throw 'HistoryDiagnosticsOnly cannot be combined with a Netwatch profile' }
         if (-not $manifest.includesBuiltUi) { throw 'History UI validation requires --include-built-ui' }
@@ -151,8 +165,8 @@ try {
         $report.netwatch = Get-Content -LiteralPath (Join-Path $ReportDirectory 'netwatch-report.json') -Raw | ConvertFrom-Json
         if (-not $report.netwatch.passed) { throw 'Isolated Netwatch workflow check failed' }
     }
-    if ($CompanionOnly -or $WorkflowAttentionOnly -or $HistoryDiagnosticsOnly) {
-        & (Join-Path $source 'scripts/test-companion-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -WorkflowAttention:$WorkflowAttentionOnly -HistoryDiagnostics:$HistoryDiagnosticsOnly
+    if ($CompanionOnly -or $WorkflowAttentionOnly -or $HistoryDiagnosticsOnly -or $SettingsRetentionOnly) {
+        & (Join-Path $source 'scripts/test-companion-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -WorkflowAttention:$WorkflowAttentionOnly -HistoryDiagnostics:$HistoryDiagnosticsOnly -SettingsRetention:$SettingsRetentionOnly
         $report.companion = Get-Content -LiteralPath (Join-Path $ReportDirectory 'companion-report.json') -Raw | ConvertFrom-Json
         if (-not $report.companion.passed) { throw 'Isolated companion check failed' }
     }

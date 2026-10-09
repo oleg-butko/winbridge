@@ -113,7 +113,14 @@ fn catalog_is_generated_from_tagged_protocol_and_has_only_reachable_definitions(
     let tools = mcp::tools().unwrap();
     let request =
         serde_json::to_value(schemars::schema_for!(winbridge_protocol::LocalRequest)).unwrap();
-    assert_eq!(tools.len(), request["oneOf"].as_array().unwrap().len() + 1);
+    assert_eq!(
+        tools.len(),
+        request["oneOf"].as_array().unwrap().len() + 1 - 4
+    );
+    assert!(!tools
+        .iter()
+        .any(|t| t["name"] == "winbridge_save_runtime_settings"
+            || t["name"] == "winbridge_apply_output_cleanup"));
     for tool in &tools {
         let schema = &tool["inputSchema"];
         assert_eq!(schema["type"], "object");
@@ -145,4 +152,26 @@ fn catalog_is_generated_from_tagged_protocol_and_has_only_reachable_definitions(
         .is_none());
     assert_eq!(submit["annotations"]["openWorldHint"], true);
     assert!(serde_json::to_vec(&tools).unwrap().len() < 100_000);
+}
+
+#[tokio::test]
+async fn local_maintenance_requests_are_refused_without_a_worker_session() {
+    let temp = tempfile::tempdir().unwrap();
+    let controller = winbridge_controller::Controller::new(config(&temp)).unwrap();
+    for request in [
+        winbridge_protocol::LocalRequest::GetRuntimeSettings,
+        winbridge_protocol::LocalRequest::PreviewOutputCleanup {
+            query: winbridge_protocol::OutputCleanupQuery {
+                older_than_days: 30,
+                project_id: None,
+            },
+        },
+    ] {
+        let winbridge_protocol::LocalResponse::Error { message } = controller.call(request).await
+        else {
+            panic!("Local maintenance must not be forwarded")
+        };
+        assert!(message.contains("not transmitted"));
+        assert!(message.contains("local IPC"));
+    }
 }

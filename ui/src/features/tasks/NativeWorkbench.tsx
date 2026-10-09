@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { SettingsPanel } from "../settings/SettingsPanel";
 import { AttentionInbox } from "../attention/AttentionInbox";
 import { CompanionPanel } from "../attention/CompanionPanel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -31,7 +32,8 @@ function TaskSession({ id }: { id: string }) {
         const page = expectResult(await workerCall({ method: "read_output", taskId: id, afterSequence }), "output").chunks;
         if (disposed) return;
         setTask(record); setConfirmedAt(Date.now()); setError(null);
-        if (page.length) { afterSequence = page.at(-1)!.sequence; setChunks((previous) => [...previous, ...page]); }
+        if(record.outputRemovedAtMs){afterSequence=0;setChunks([]);}
+        else if (page.length) { afterSequence = page.at(-1)!.sequence; setChunks((previous) => [...previous, ...page]); }
       } catch (error) { if (!disposed) setError(String(error)); }
       if (!disposed) timer = setTimeout(() => void poll(), 750);
     }
@@ -102,6 +104,8 @@ export function NativeWorkbench() {
   const closingRef = useRef(false);
   const closeQuit = useRef(false);
   const closeHandler = useRef<(quit: boolean) => Promise<void>>(async () => {});
+  const settingsBlocked = useRef(false);
+  const blockSettingsClose = useCallback((blocked:boolean)=>{settingsBlocked.current=blocked;},[]);
   const [companion, setCompanion] = useState<CompanionStatus | null>(null);
   const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
@@ -138,6 +142,7 @@ export function NativeWorkbench() {
     if (closingRef.current) return;
     closingRef.current = true; closeQuit.current = quit; setClosing(true);
     try {
+      if(settingsBlocked.current)throw new Error("Сохраните или отмените изменения конфигурации и дождитесь завершения очистки в разделе «Проекты, соединение и хранение».");
       await Promise.all(scopedSaves.current.values());
       await invoke("companion_close", { quit });
       setCloseError(null);
@@ -267,6 +272,9 @@ export function NativeWorkbench() {
     } catch (error) { setError(String(error)); }
   }
   return <Stack gap="lg" data-close-ready={closeReady}>
+    <nav aria-label="Разделы рабочего окна"><Group gap="xs">{[
+      ["native-command","Команда"],["native-attention","Внимание"],["native-history","История"],["native-settings","Настройки"],["native-companion","Tray и уведомления"]
+    ].map(([id,label])=><Button key={id} variant="subtle" size="xs" onClick={()=>{const target=document.getElementById(id);target?.scrollIntoView({block:"start"});target?.focus({preventScroll:true});}}>{label}</Button>)}</Group></nav>
     <Alert color={connected ? "teal" : "yellow"} title={connected ? `Worker подключён · ${info?.platform} · ${info?.instanceId}` : "Worker недоступен"}>
       {connected ? "Данные поступают из локального журнала worker. Закрытие окна не отменяет принятую задачу." : connectionError ?? "Ожидается соединение с локальным worker."}
       {info && <Text size="xs" mt="xs">{info.runtimeValidation}</Text>}
@@ -284,11 +292,12 @@ export function NativeWorkbench() {
     </Alert>
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}
     {info && <HistoryPanel key={`history:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onOpen={(entry)=>void openHistory(entry)} />}
+    {info && <SettingsPanel key={`settings:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onBlocked={blockSettingsClose} />}
     <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} />
     {info?.journalRecoveryRequired && <Alert color="red" title="Результат операции не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
     {info?.snapshotImportAvailable && <SnapshotWorkbench navigation={importNavigation} info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
     {info?.workflowAvailable && <WorkflowWorkbench navigation={workflowNavigation} info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
-    <Card withBorder><Stack>
+    <Card id="native-command" tabIndex={-1} withBorder><Stack>
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />
       {project && <Text size="xs" c="dimmed">Рабочий корень: {project.workspaceRoot}</Text>}

@@ -124,3 +124,10 @@ Task diagnostic строится в одной read transaction; redaction пр�
 генерируются из protocol DTO; adapter не исполняет команды и не держит execution
 queue. CLI/MCP publication используют общий handler. Потеря ответа не приводит
 к automatic replay; accepted task переживает закрытие stdio.
+
+[Настройки/retention](settings-retention.md), 2026-10-09: local desktop IPC читает
+config actual worker и сохраняет reviewed файл с conflict guard; running config
+immutable до ручного restart. Controller/WebSocket maintenance не выполняют.
+SQLite schema 6 хранит durable cleanup results, consistent v5 backup перед upgrade.
+Только старый terminal stdout/stderr, с защитой active/unknown и pending attention;
+task history/dedup/snapshots/reports сохраняются. Automatic policy opt-in/off by default.

@@ -6,6 +6,8 @@ mod attention;
 pub use attention::*;
 mod history;
 pub use history::*;
+mod maintenance;
+pub use maintenance::*;
 
 mod session;
 pub use session::*;
@@ -197,6 +199,10 @@ pub struct TaskRecord {
     pub cancel_requested: bool,
     pub output_bytes: u64,
     pub output_truncated: bool,
+    #[serde(default)]
+    pub output_removed_at_ms: Option<u64>,
+    #[serde(default)]
+    pub removed_output_bytes: u64,
     pub events: Vec<JournalEvent>,
 }
 
@@ -289,6 +295,10 @@ pub struct WorkerInfo {
     #[serde(default)]
     pub history_available: bool,
     #[serde(default)]
+    pub maintenance_available: bool,
+    #[serde(default)]
+    pub maintenance_error: Option<String>,
+    #[serde(default)]
     pub journal_recovery_required: Option<String>,
     /// Queued/running tasks across the entire journal; None when unavailable or stale.
     #[serde(default)]
@@ -302,6 +312,16 @@ pub struct WorkerInfo {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LocalRequest {
+    GetRuntimeSettings,
+    SaveRuntimeSettings {
+        request: SaveRuntimeSettings,
+    },
+    PreviewOutputCleanup {
+        query: OutputCleanupQuery,
+    },
+    ApplyOutputCleanup {
+        request: ApplyOutputCleanup,
+    },
     History {
         query: HistoryQuery,
     },
@@ -411,6 +431,18 @@ pub enum LocalRequest {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LocalResponse {
+    RuntimeSettings {
+        settings: RuntimeSettings,
+    },
+    SettingsSaved {
+        saved: SettingsSaved,
+    },
+    OutputCleanupPreview {
+        preview: OutputCleanupPreview,
+    },
+    OutputCleanupResult {
+        result: OutputCleanupResult,
+    },
     History {
         page: HistoryPage,
     },
@@ -477,6 +509,18 @@ pub enum LocalResponse {
     ControllerStatus {
         status: ControllerStatus,
     },
+}
+
+impl LocalRequest {
+    pub fn local_maintenance_only(&self) -> bool {
+        matches!(
+            self,
+            Self::GetRuntimeSettings
+                | Self::SaveRuntimeSettings { .. }
+                | Self::PreviewOutputCleanup { .. }
+                | Self::ApplyOutputCleanup { .. }
+        )
+    }
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

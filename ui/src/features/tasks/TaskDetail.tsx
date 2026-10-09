@@ -68,7 +68,8 @@ export function TaskDetail({ task, chunks }: { task: TaskRecord; chunks: OutputC
       </Timeline></Card></Tabs.Panel>
       <Tabs.Panel value="output" pt="md"><Stack>
         {task.outputTruncated && <Alert color="yellow">Достигнута квота сохранения вывода. Часть байтов отброшена; worker продолжил читать оба потока.</Alert>}
-        <Text size="sm" c="dimmed">Сохранено worker: {task.outputBytes} байт · загружено: {chunks.reduce((n, c) => n + c.bytes.length, 0)} байт · UTF-8</Text>
+        {task.outputRemovedAtMs && <Alert color="yellow">Сохранённый stdout/stderr очищен политикой хранения {new Date(task.outputRemovedAtMs).toLocaleString()} · {task.removedOutputBytes} байт. Команда, результат и история сохранены.</Alert>}
+        <Text size="sm" c="dimmed">Сохранено worker сейчас: {Math.max(0,task.outputBytes-(task.removedOutputBytes??0))} байт · загружено: {chunks.reduce((n, c) => n + c.bytes.length, 0)} байт · UTF-8</Text>
         {(["stdout", "stderr"] as const).map((stream) => <Card key={stream} withBorder><Text fw={600} mb="xs">{stream}</Text>
           <OutputView key={task.taskId} text={output[stream]} label={stream} empty="Нет сохранённого вывода" />
         </Card>)}

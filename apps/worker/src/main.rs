@@ -48,7 +48,7 @@ async fn run() -> Result<(), String> {
             Ok(())
         }
         [name] if name == "serve" => {
-            winbridge_worker::serve(winbridge_worker::Worker::open(config)?).await
+            winbridge_worker::serve(winbridge_worker::Worker::open_file(Path::new(&args[1]))?).await
         }
         _ => {
             let request = match operation {

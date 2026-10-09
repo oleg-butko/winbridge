@@ -20,6 +20,22 @@ diagnostic файла. Проверены сохранение/collision/Unicode
 desktop для текущего backend ревью не требуется. Installed runtime/config/state
 не менять в автоматических тестах. Предыдущие gates не повторять без причины.
 
+[Настройки и output retention](settings-retention.md) реализованы по согласованному
+плану: actual config path, active/saved JSON, SHA/generation conflict guard,
+create-only previous version и atomic replace/readback, ручной restart; identity/state
+закреплены. Четыре maintenance RPC local-only, controller и worker WebSocket
+отклоняют их, MCP не объявляет. Schema 6 добавляет durable cleanup keys/results
+с consistent v5 backup. Preview/apply до 50 tasks защищает pending attention и
+active/indeterminate workflow/app; удаления snapshots/reports/history нет.
+Opt-in automatic pass раз в 60 секунд фоновый; failures видны в Info/UI.
+117 workspace tests и два добавленных теста batches/controller refusal прошли.
+Workspace/desktop Clippy, contracts/typecheck/build также прошли. Actual browser UI проверил config/cleanup
+lost ACK, same-key reconciliation, dirty close guard и сохранение task metadata.
+Windows all-targets compile и native desktop check прошли; новый native gate
+ещё не запущен. `--settings-retention-only` собирает отдельный TEST desktop и
+проверяет save при прежнем PID, затем restart только тестового worker и active policy.
+Roadmap этапа 5 остаётся открытым до этого gate.
+
 ## Предыдущая сессия — 2026-10-08
 
 Debian перезапущена. Пользователь распаковал clean archive

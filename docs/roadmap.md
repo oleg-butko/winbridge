@@ -130,6 +130,9 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 автоматические Windows gates. Далее — удобные projects/connection settings и
 полная retention policy с явными лимитами; автоматического удаления нет.
 Размеры/quota уже видны, старые snapshots/reports/history не очищать.
+2026-10-09 [settings/output retention](settings-retention.md) реализованы по выбору
+пользователя: config действует после ручного restart, automatic cleanup включается
+явно. Actual browser/backend проверки прошли; единый native gate ещё ожидается.
 2026-10-09 пользователь обновил installed worker до clean `1982de8`;
 HistoryRead/typed attention и здоровый журнал подтверждены read-only Info.
 Debian controller снова запущен. [Ревью](review-stage5-2026-10-09.md) исправило

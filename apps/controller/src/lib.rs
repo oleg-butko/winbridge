@@ -83,6 +83,9 @@ impl Controller {
         })
     }
     pub async fn call(&self, request: LocalRequest) -> LocalResponse {
+        if request.local_maintenance_only() {
+            return LocalResponse::Error { message: "Settings/output cleanup require Windows desktop local IPC; request was not transmitted".into() };
+        }
         let result = async {
             if matches!(request, LocalRequest::ControllerStatus) {
                 return Ok(LocalResponse::ControllerStatus { status: self.status()? });
@@ -302,6 +305,10 @@ impl Drop for ConnectionGuard {
 }
 fn request_method(request: &LocalRequest) -> &'static str {
     match request {
+        LocalRequest::GetRuntimeSettings => "get_runtime_settings",
+        LocalRequest::SaveRuntimeSettings { .. } => "save_runtime_settings",
+        LocalRequest::PreviewOutputCleanup { .. } => "preview_output_cleanup",
+        LocalRequest::ApplyOutputCleanup { .. } => "apply_output_cleanup",
         LocalRequest::History { .. } => "history",
         LocalRequest::PrepareTaskDiagnostic { .. } => "prepare_task_diagnostic",
         LocalRequest::StorageUsage => "storage_usage",

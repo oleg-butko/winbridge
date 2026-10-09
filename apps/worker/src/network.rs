@@ -145,7 +145,10 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                     active_ids.insert(id.clone());
                     let worker = Arc::clone(&worker);
                     handlers.spawn(async move {
-                        let result = tokio::time::timeout(ws::RPC_TIMEOUT, tokio::task::spawn_blocking(move || worker.handle(request))).await;
+                        let result = tokio::time::timeout(ws::RPC_TIMEOUT, tokio::task::spawn_blocking(move || {
+                            if request.local_maintenance_only() { LocalResponse::Error { message: "Runtime settings and output cleanup are available through local desktop IPC only".into() } }
+                            else { worker.handle(request) }
+                        })).await;
                         let response = match result {
                             Ok(Ok(response)) => response,
                             Ok(Err(error)) => LocalResponse::Error { message: format!("Worker handler failed: {error}; reconcile the same task/key") },

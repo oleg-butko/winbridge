@@ -12,6 +12,8 @@
     "namespace": "WinBridge"
   },
   "stateDirectory": "K:\\WinBridge\\state",
+  "maxOutputBytesPerTask": 16777216,
+  "outputRetention": { "automatic": false, "olderThanDays": 30 },
   "projects": [
     {
       "id": "netwatch",

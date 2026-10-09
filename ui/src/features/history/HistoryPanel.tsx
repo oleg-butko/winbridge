@@ -73,7 +73,7 @@ export function HistoryPanel({info,connected,closing,onOpen}: {info:WorkerInfo;c
       </Table.Tbody></Table></Table.ScrollContainer>
       {page && !page.records.length && <Text>Записи по этим фильтрам не найдены.</Text>}
       <Group><Button variant="subtle" onClick={()=>{setBefore(null);setRevision((v)=>v+1);}} disabled={!connected}>Свежие записи</Button><Button data-testid="history-older" variant="light" disabled={!connected||!page?.hasMore} onClick={()=>{if(page){setBefore(page.nextCursor);setPage(null);}}}>Более ранние 50</Button>{page && <Text size="xs">Прочитано: {new Date(page.observedAtMs).toLocaleTimeString()}. Состояния могут изменяться.</Text>}</Group>
-      {usage && <Alert color="blue" title="Размер журнала · автоматическое удаление выключено">
+      {usage && <Alert color="blue" title="Размер журнала и квота output">
         Tasks: {usage.taskCount} · imports: {usage.importCount} · workflow: {usage.workflowCount} · приложения: {usage.applicationCount} · attention: {usage.attentionCount} ({usage.pendingAttentionCount} ждут подтверждения)
         <Text size="sm">Output: {usage.storedOutputBytes} байт · SQLite: {usage.journalBytes} байт · WAL: {usage.walBytes} байт. Квота output одной task: {usage.outputLimitBytesPerTask} байт. Эта панель только читает размеры.</Text>
       </Alert>}
@@ -84,7 +84,7 @@ export function HistoryPanel({info,connected,closing,onOpen}: {info:WorkerInfo;c
       <Button data-testid="diagnostic-prepare" onClick={()=>void prepare()} loading={busy} disabled={!connected||!taskId||closing}>Подготовить предпросмотр</Button>
       {preview && <>
         <Text size="sm">Task ID: {preview.taskId} · данные на {new Date(preview.observedAtMs).toLocaleString()} · параметры: {preview.commandIncluded?"включены с маскированием":"исключены"} · output: {preview.outputIncluded?"включён":"исключён"}</Text>
-        {preview.outputTruncated && <Alert color="yellow">Output неполон: квота worker или предел отчёта 64 KiB / 128 chunks. Журнал и процесс не изменялись.</Alert>}
+        {preview.outputTruncated && <Alert color="yellow">Output неполон: квота worker, очистка по политике хранения или предел отчёта 64 KiB / 128 chunks. Предпросмотр не меняет журнал и процесс.</Alert>}
         <Textarea label="Редактируемый предпросмотр отчёта" data-testid="diagnostic-preview" value={text} readOnly={busy} onChange={(e)=>{setText(e.currentTarget.value);setSaveId(null);setSaved(null);}} autosize minRows={8} maxRows={20} spellCheck={false} />
         <Text size="xs">Каталог из локального desktop config: {directory??"недоступен"}</Text>
         <Button data-testid="diagnostic-save" onClick={()=>void save()} loading={busy} disabled={!directory||!text||closing}>Сохранить показанный JSON</Button>

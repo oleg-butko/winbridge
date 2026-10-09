@@ -80,6 +80,15 @@ pub fn tools() -> Result<Vec<Value>, String> {
         let method = branch["properties"]["method"]["enum"][0]
             .as_str()
             .ok_or("Request schema method tag")?;
+        if matches!(
+            method,
+            "get_runtime_settings"
+                | "save_runtime_settings"
+                | "preview_output_cleanup"
+                | "apply_output_cleanup"
+        ) {
+            continue;
+        }
         let mut input = branch.clone();
         input["properties"]
             .as_object_mut()

@@ -32,8 +32,8 @@ impl Store {
         let version: u32 = connection
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
-        if version > 5 {
-            return Err(format!("journal schema {version} is unsupported; expected 5; keep the database and use a compatible worker"));
+        if version > 6 {
+            return Err(format!("journal schema {version} is unsupported; expected 6; keep the database and use a compatible worker"));
         }
         if version == 0 {
             let tables: u32 = connection.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0)).map_err(sql)?;
@@ -126,6 +126,22 @@ impl Store {
                 CREATE INDEX attention_pending ON attention(acknowledged,sequence);
                 PRAGMA user_version=5; COMMIT;").map_err(sql)?;
         }
+        if version <= 5 {
+            if version == 5 {
+                let backup = path.with_file_name(format!(
+                    "journal-v5-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            connection.execute_batch("BEGIN IMMEDIATE;
+                CREATE TABLE output_cleanup (key TEXT PRIMARY KEY, payload TEXT NOT NULL, record TEXT NOT NULL);
+                PRAGMA user_version=6; COMMIT;").map_err(sql)?;
+        }
         Ok(Self { connection })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {
@@ -180,6 +196,8 @@ impl Store {
             cancel_requested: false,
             output_bytes: 0,
             output_truncated: false,
+            output_removed_at_ms: None,
+            removed_output_bytes: 0,
             events: vec![JournalEvent {
                 sequence: 1,
                 occurred_at_ms: now,

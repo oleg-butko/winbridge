@@ -4,6 +4,8 @@ mod attention;
 mod history;
 mod imports;
 mod network;
+mod retention;
+mod settings;
 pub mod store;
 mod workflows;
 use fs2::FileExt;
@@ -28,6 +30,9 @@ use winbridge_protocol::{
 
 pub type Result<T> = std::result::Result<T, String>;
 pub struct Worker {
+    config_path: Mutex<Option<std::path::PathBuf>>,
+    maintenance: Mutex<(u64, Option<String>)>,
+    maintenance_running: AtomicBool,
     pub config: WorkerConfig,
     pub generation: String,
     store: Mutex<Store>,
@@ -42,6 +47,12 @@ pub struct Worker {
 }
 impl Worker {
     pub fn open(config: WorkerConfig) -> Result<Arc<Self>> {
+        Self::open_inner(config, None)
+    }
+    fn open_inner(
+        config: WorkerConfig,
+        config_path: Option<std::path::PathBuf>,
+    ) -> Result<Arc<Self>> {
         config.validate()?;
         ensure_local_state(&config.state_directory)?;
         winbridge_platform::require_local_disk(&config.state_directory)
@@ -110,6 +121,9 @@ impl Worker {
             }
         });
         let worker = Arc::new(Self {
+            config_path: Mutex::new(config_path),
+            maintenance: Mutex::new((0, None)),
+            maintenance_running: AtomicBool::new(false),
             config,
             generation: uuid::Uuid::new_v4().to_string(),
             store: Mutex::new(store),
@@ -148,6 +162,30 @@ impl Worker {
             }
         }
         match request {
+            LocalRequest::GetRuntimeSettings => Ok(LocalResponse::RuntimeSettings {
+                settings: self.runtime_settings()?,
+            }),
+            LocalRequest::SaveRuntimeSettings { request } => Ok(LocalResponse::SettingsSaved {
+                saved: self.save_runtime_settings(&request)?,
+            }),
+            LocalRequest::PreviewOutputCleanup { query } => {
+                let store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
+                Ok(LocalResponse::OutputCleanupPreview {
+                    preview: store.preview_output_cleanup(&query)?,
+                })
+            }
+            LocalRequest::ApplyOutputCleanup { request } => {
+                let mut store = self.store()?;
+                if let Some(reason) = self.journal_recovery_required()? {
+                    return Err(reason);
+                }
+                Ok(LocalResponse::OutputCleanupResult {
+                    result: store.apply_output_cleanup(&request)?,
+                })
+            }
             LocalRequest::History { query } => {
                 let store = self.store()?;
                 if let Some(reason) = self.journal_recovery_required()? {
@@ -337,6 +375,13 @@ impl Worker {
                         attention_available: true,
                         attention_targets_available: true,
                         history_available: true,
+                        maintenance_available: true,
+                        maintenance_error: self
+                            .maintenance
+                            .lock()
+                            .map_err(|_| "Maintenance state lock poisoned")?
+                            .1
+                            .clone(),
                         journal_recovery_required: recovery,
                         active_task_count,
                         protocol_version: PROTOCOL_VERSION,
@@ -476,6 +521,7 @@ impl Worker {
         if self.stop.load(Ordering::Acquire) || self.journal_recovery_required()?.is_some() {
             return Ok(());
         }
+        self.automatic_output_cleanup()?;
         let mut active = self
             .active_projects
             .lock()

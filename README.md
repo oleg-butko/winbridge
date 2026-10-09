@@ -121,3 +121,9 @@ export PATH=/home/user1/.nvm/versions/node/v24.19.0/bin:/home/user1/.local/bin:$
 Предыдущее предложение из Netwatch перенесено в [исторический контекст](docs/context/README.md); оно не определяет текущие решения.
 
 Этап 4: [изолированный Netwatch cycle](docs/netwatch-validation.md), editable profiles/drafts рядом с desktop, результаты сборки с SHA-256/source commit, фильтрация stdout/stderr/log и build identity worker/desktop. Принятый workflow остаётся frozen в journal; редактирование или восстановление профиля не запускает команду.
+
+Этап 5: [настройки проектов/соединения и output retention](docs/settings-retention.md).
+Desktop различает действующий config и сохранённый файл; изменения применяются
+после ручного restart worker. Очистка только старого stdout/stderr, с preview и
+защитой active/unknown/pending attention. Automatic policy включается явно;
+history/dedup/snapshots/reports сохраняются. Единый native gate ещё ожидается.

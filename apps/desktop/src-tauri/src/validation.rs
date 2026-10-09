@@ -263,6 +263,9 @@ async fn task_page(app: &tauri::AppHandle, id: &str) -> Result<(), String> {
     Err("Confirmed worker task page was not opened".into())
 }
 
+#[path = "validation_settings.rs"]
+mod settings;
+#[allow(clippy::too_many_arguments)]
 pub fn start(
     app: tauri::AppHandle,
     address: Result<String, String>,
@@ -271,9 +274,12 @@ pub fn start(
     restart: bool,
     targets: bool,
     history: bool,
+    maintenance: bool,
 ) {
     tauri::async_runtime::spawn(async move {
-        let result = if history {
+        let result = if maintenance {
+            settings::run(&app, address, restart).await
+        } else if history {
             run_history(&app, address).await
         } else if targets {
             run_targets(&app, address, store).await

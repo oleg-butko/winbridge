@@ -50,10 +50,11 @@ def main():
     parser.add_argument('--attention-only', action='store_true', help='Run the stage-5 attention tests without repeating the completed workflow gate')
     parser.add_argument('--workflow-attention-only', action='store_true', help='Check workflow/application attention and native workflow target navigation')
     parser.add_argument('--history-diagnostics-only', action='store_true', help='Check history, task diagnostics and the native preview/save UI')
+    parser.add_argument('--settings-retention-only', action='store_true', help='Check local configuration, output cleanup and native save/restart UI')
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.netwatch_profile)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile)) > 1:
         parser.error('Choose one isolated scenario: task attention, workflow attention, companion, history diagnostics or Netwatch')
     config = json.loads(args.controller_config.read_text())
     endpoint = Path(config['stateDirectory']) / ('controller-' + config['instanceId'] + '.sock')
@@ -79,6 +80,8 @@ def main():
         profile_argument = ' -WorkflowAttentionOnly'
     if args.history_diagnostics_only:
         profile_argument = ' -HistoryDiagnosticsOnly'
+    if args.settings_retention_only:
+        profile_argument = ' -SettingsRetentionOnly'
     if args.netwatch_profile:
         profile = json.loads(args.netwatch_profile.read_text())
         if not profile.get('readiness', {}).get('netwatch', {}).get('instanceId', '').startswith('winbridge-'):
