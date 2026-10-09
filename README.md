@@ -128,3 +128,8 @@ Desktop различает действующий config и сохранённы
 защитой active/unknown/pending attention. Automatic policy включается явно;
 history/dedup/snapshots/reports сохраняются. [Единый native gate](docs/windows-settings-retention-gate-2026-10-09.md)
 пройден: 36 backend tests, два UI запуска, 19 artifacts; этап 5 завершён.
+
+Этап 6: [автоматический baseline](docs/performance-baseline.md) существующей
+Git/ZIP/HGFS доставки, Windows import/build и output/journal. Измерения выполняются
+через работающий worker; desktop и обновление installed runtime не требуются.
+Delta/resume/batching/virtualization пока не реализованы.

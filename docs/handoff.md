@@ -13,6 +13,11 @@ JSON types в settings UI; backend maintenance regression проходит. Сл
 работа по [плану этапа 6](stage6-plan.md) — baseline без изменения installed runtime.
 Desktop не требуется; рабочий worker оставить запущенным.
 
+Этап 6 реализует [автоматический baseline](performance-baseline.md): monotonic
+publisher timings без изменения ready/RPC, commit fixtures/tree I/O/Windows
+import/build/output/cancel через installed worker. Native baseline пока не выполнен;
+не записывать как готовые delta/cache/resume/batching/virtualization.
+
 Ниже — история реализации и прежних версий до этого обновления.
 
 Debian перезапущена; пользователь обновил Windows из

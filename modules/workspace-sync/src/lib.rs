@@ -6,6 +6,7 @@ use std::{
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    time::Instant,
 };
 use winbridge_core::{config::DeliverySettings, snapshot::*};
 use winbridge_protocol::*;
@@ -560,6 +561,47 @@ pub fn publish(
     project: &str,
     revision: &str,
 ) -> Result<SnapshotReady> {
+    Ok(publish_measured(delivery, source_root, local_state, project, revision)?.ready)
+}
+
+/// Local measurement result, not a wire/ready-marker extension. All durations
+/// use this host's monotonic clock; capture and ZIP writing are interleaved.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationMeasurement {
+    pub schema_version: u16,
+    pub ready: SnapshotReady,
+    pub file_count: usize,
+    pub source_bytes: u64,
+    pub reused_package: bool,
+    pub timings: PublicationTimings,
+}
+
+#[derive(Debug, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PublicationTimings {
+    pub enumerate_ms: f64,
+    pub capture_pack_ms: f64,
+    pub local_verify_ms: f64,
+    pub shared_write_ms: f64,
+    pub shared_readback_ms: f64,
+    pub publish_ready_ms: f64,
+    pub total_ms: f64,
+}
+
+fn elapsed_ms(start: Instant) -> f64 {
+    start.elapsed().as_secs_f64() * 1000.0
+}
+
+pub fn publish_measured(
+    delivery: &DeliverySettings,
+    source_root: &Path,
+    local_state: &Path,
+    project: &str,
+    revision: &str,
+) -> Result<PublicationMeasurement> {
+    let started = Instant::now();
+    let mut timings = PublicationTimings::default();
     validate_delivery(delivery)?;
     validate_ids(project, "snapshot")?;
     directory(source_root)?;
@@ -629,6 +671,8 @@ pub fn publish(
         objects.push(fields[2].to_string());
     }
     validate_manifest(&manifest)?; // Check paths before any content is packed.
+    timings.enumerate_ms = elapsed_ms(started);
+    let capture_started = Instant::now();
     create_directory(&local_state.join("capture"))?;
     let stage = local_state
         .join("capture")
@@ -697,6 +741,8 @@ pub fn publish(
     }
     let mut payload = archive.finish().map_err(error)?;
     payload.sync_all().map_err(error)?;
+    timings.capture_pack_ms = elapsed_ms(capture_started);
+    let local_verify_started = Instant::now();
     manifest.payload_bytes = payload.metadata().map_err(error)?.len();
     payload.rewind().map_err(error)?;
     manifest.payload_sha256 = transfer(
@@ -718,6 +764,8 @@ pub fn publish(
         payload_bytes: manifest.payload_bytes,
     };
     let final_path = package_path(delivery, project, &snapshot)?;
+    timings.local_verify_ms = elapsed_ms(local_verify_started);
+    let shared_started = Instant::now();
     if final_path.exists() {
         let (_, _, existing) =
             metadata(delivery, project, &snapshot, Some(&ready.manifest_sha256))?;
@@ -730,7 +778,16 @@ pub fn publish(
             Some(&manifest.payload_sha256),
             |_| Ok(()),
         )?;
-        return Ok(existing);
+        timings.shared_readback_ms = elapsed_ms(shared_started);
+        timings.total_ms = elapsed_ms(started);
+        return Ok(PublicationMeasurement {
+            schema_version: 1,
+            ready: existing,
+            file_count: manifest.files.len(),
+            source_bytes: manifest.total_bytes,
+            reused_package: true,
+            timings,
+        });
     }
     create_directory(final_path.parent().ok_or("Missing shared package parent")?)?;
     safe_path(&final_path)?;
@@ -754,6 +811,8 @@ pub fn publish(
     )?;
     shared_payload.sync_all().map_err(error)?;
     drop(shared_payload);
+    timings.shared_write_ms = elapsed_ms(shared_started);
+    let readback_started = Instant::now();
     safe_path(&partial)?;
     let mut copied = File::open(&partial).map_err(error)?;
     transfer(
@@ -764,6 +823,8 @@ pub fn publish(
         |_| Ok(()),
     )?;
     drop(copied);
+    timings.shared_readback_ms = elapsed_ms(readback_started);
+    let ready_started = Instant::now();
     fs::rename(&partial, final_path.join("payload.zip"))
         .map_err(|e| format!("Shared payload file rename: {e}"))?;
     let partial_manifest = final_path.join("manifest.json.part");
@@ -778,5 +839,14 @@ pub fn publish(
         &serde_json::to_vec_pretty(&ready).map_err(error)?,
     )?;
     metadata(delivery, project, &snapshot, Some(&ready.manifest_sha256))?;
-    Ok(ready)
+    timings.publish_ready_ms = elapsed_ms(ready_started);
+    timings.total_ms = elapsed_ms(started);
+    Ok(PublicationMeasurement {
+        schema_version: 1,
+        ready,
+        file_count: manifest.files.len(),
+        source_bytes: manifest.total_bytes,
+        reused_package: false,
+        timings,
+    })
 }

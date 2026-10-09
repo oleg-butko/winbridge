@@ -18,12 +18,20 @@ pub fn publish(
     project: &str,
     revision: &str,
 ) -> Result<winbridge_protocol::SnapshotReady> {
+    Ok(publish_measured(config, project, revision)?.ready)
+}
+
+pub fn publish_measured(
+    config: &ControllerConfig,
+    project: &str,
+    revision: &str,
+) -> Result<winbridge_workspace_sync::PublicationMeasurement> {
     let source = config
         .projects
         .iter()
         .find(|p| p.id == project)
         .ok_or("Source project is not registered in controller JSON")?;
-    winbridge_workspace_sync::publish(
+    winbridge_workspace_sync::publish_measured(
         config
             .delivery
             .as_ref()

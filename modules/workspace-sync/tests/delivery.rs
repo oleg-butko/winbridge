@@ -53,6 +53,60 @@ fn setup() -> (TempDir, DeliverySettings, SnapshotReady, ImportSubmission) {
     };
     (temp, delivery, ready, request)
 }
+
+#[test]
+fn publication_measurements_distinguish_new_bytes_from_verified_reuse() {
+    let (temp, delivery, ready, _) = setup();
+    let measure = || {
+        publish_measured(
+            &delivery,
+            &temp.path().join("git"),
+            &temp.path().join("state"),
+            "fixture",
+            "HEAD",
+        )
+    };
+    let repeat = measure().unwrap();
+    assert!(repeat.reused_package);
+    assert_eq!(repeat.ready, ready);
+    assert_eq!(repeat.timings.shared_write_ms, 0.0);
+    assert_eq!(repeat.timings.publish_ready_ms, 0.0);
+    fs::write(temp.path().join("git/additional.dat"), b"new bytes").unwrap();
+    git(&temp.path().join("git"), &["add", "."]);
+    git(
+        &temp.path().join("git"),
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@local",
+            "commit",
+            "-qm",
+            "new measurement fixture",
+        ],
+    );
+    let fresh = measure().unwrap();
+    assert!(!fresh.reused_package);
+    assert_eq!(fresh.file_count, repeat.file_count + 1);
+    assert_eq!(fresh.source_bytes, repeat.source_bytes + 9);
+    assert_ne!(fresh.ready.snapshot_id, repeat.ready.snapshot_id);
+    let t = &fresh.timings;
+    assert!(
+        t.total_ms
+            >= t.enumerate_ms
+                + t.capture_pack_ms
+                + t.local_verify_ms
+                + t.shared_write_ms
+                + t.shared_readback_ms
+                + t.publish_ready_ms
+    );
+    let payload = package_path(&delivery, "fixture", &fresh.ready.snapshot_id)
+        .unwrap()
+        .join("payload.zip");
+    fs::write(&payload, b"corrupt").unwrap();
+    assert!(measure().is_err());
+    assert_eq!(fs::read(payload).unwrap(), b"corrupt");
+}
 #[test]
 fn discovery_pages_metadata_without_verifying_payload_or_creating_directories() {
     let (temp, delivery, ready, _) = setup();

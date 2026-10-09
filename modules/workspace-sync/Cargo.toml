@@ -9,6 +9,7 @@ winbridge-core.workspace = true
 winbridge-protocol.workspace = true
 winbridge-platform.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 sha2 = "0.10.9"
 zip = { version = "8.6", default-features = false }
 uuid = { version = "1", features = ["v4"] }
