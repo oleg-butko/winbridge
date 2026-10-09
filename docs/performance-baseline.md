@@ -65,3 +65,19 @@ OS/HGFS cache не очищается; «первый build» означает �
 task. Metadata/attention/background могут менять эти числа; SQLite free pages
 переиспользуются и физический файл может расти иначе, чем output. История и dedup
 сохраняются. Выбор delta/resume/batching/virtualization делается после baseline.
+
+## Сравнение Git capture
+
+`scripts/compare-capture.py --baseline-report <local performance-report.json>
+--reference-controller <original binary>` alternates original/new publisher на
+точно тех же commits и сверяет весь ready с immutable baseline package. Оба
+алгоритма заново capture/pack перед проверкой существующего shared payload; reuse
+не выдаётся за новый transfer. Сравнивается только `capturePackMs`, 3 pairs на каждый
+из 3 исходных many-files commits. Source repo HEAD может быть уже изменён — запрос
+использует сохранённый commit, не mutable HEAD. Comparison report сохраняется с
+readback/SHA-256/ready; Windows команды не отправляются.
+
+Git batch читает один bounded header/body за раз, проверяет blob object/type/size,
+вычисляет прежний SHA-256 и требует точный newline separator. Empty/binary bytes
+не интерпретируются как строки. Размеры файлов/aggregate и ZIP bounds сохранены;
+при раннем отказе процесс Git закрывается/kill/wait, partial stage не публикуется.

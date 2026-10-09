@@ -22,6 +22,11 @@ Installed worker healthy/activeTaskCount=0, generation прежняя. Перв�
 оптимизация — Git batch capture (518 files: capture 5.6 s, shared write 0.22 s).
 Не записывать как готовые delta/cache/resume/output batching/virtualization.
 
+Git batch capture реализован: один процесс, bounded header/body, streaming SHA,
+exact separator и kill/wait при раннем отказе. 123 workspace tests, включая empty/
+binary/repeated objects и malformed/truncated frames, проходят; Windows compile
+прошёл. Matched old/new сравнение и Windows repeat ещё нужны перед readiness.
+
 Ниже — история реализации и прежних версий до этого обновления.
 
 Debian перезапущена; пользователь обновил Windows из

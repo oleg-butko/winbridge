@@ -12,6 +12,7 @@ use winbridge_core::{config::DeliverySettings, snapshot::*};
 use winbridge_protocol::*;
 use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 pub type Result<T> = std::result::Result<T, String>;
+mod git_batch;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -680,12 +681,9 @@ pub fn publish_measured(
     create_directory(&stage)?;
     let path = stage.join("payload.zip");
     let mut archive = ZipWriter::new(create_file(&path)?);
+    let mut blobs = git_batch::GitBatch::open(source_root)?;
     for (record, object) in manifest.files.iter_mut().zip(objects) {
-        let size = String::from_utf8(git_output(source_root, &["cat-file", "-s", &object], 32)?)
-            .map_err(error)?
-            .trim()
-            .parse::<u64>()
-            .map_err(error)?;
+        let size = blobs.size(&object)?;
         manifest.total_bytes = manifest
             .total_bytes
             .checked_add(size)
@@ -703,31 +701,7 @@ pub fn publish_measured(
                     .unix_permissions(if record.executable { 0o755 } else { 0o644 }),
             )
             .map_err(error)?;
-        let mut child = Command::new("git")
-            .arg("--no-replace-objects")
-            .arg("-C")
-            .arg(source_root)
-            .args(["cat-file", "blob", &object])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .spawn()
-            .map_err(error)?;
-        let result = transfer(
-            &mut child.stdout.take().ok_or("Missing Git stdout")?,
-            &mut archive,
-            size,
-            None,
-            |_| Ok(()),
-        );
-        if result.is_err() {
-            let _ = child.kill();
-        }
-        let status = child.wait().map_err(error)?;
-        record.sha256 = result?;
-        if !status.success() {
-            return Err("Git blob capture failed".into());
-        }
+        record.sha256 = blobs.copy_blob(&mut archive)?;
         if archive
             .get_ref()
             .ok_or("ZIP writer closed")?
@@ -739,6 +713,7 @@ pub fn publish_measured(
             return Err("ZIP payload exceeds limit".into());
         }
     }
+    blobs.finish()?;
     let mut payload = archive.finish().map_err(error)?;
     payload.sync_all().map_err(error)?;
     timings.capture_pack_ms = elapsed_ms(capture_started);

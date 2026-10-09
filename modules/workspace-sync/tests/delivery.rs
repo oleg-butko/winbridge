@@ -107,6 +107,58 @@ fn publication_measurements_distinguish_new_bytes_from_verified_reuse() {
     assert!(measure().is_err());
     assert_eq!(fs::read(payload).unwrap(), b"corrupt");
 }
+
+#[test]
+fn git_batch_captures_empty_binary_and_repeated_objects_without_framing_leaks() {
+    let (temp, delivery, _, _) = setup();
+    let repo = temp.path().join("git");
+    let content = b"\0\nblob header-like content\xff\0\n";
+    fs::write(repo.join("empty.dat"), []).unwrap();
+    fs::write(repo.join("binary.dat"), content).unwrap();
+    fs::write(repo.join("duplicate.dat"), content).unwrap();
+    git(&repo, &["add", "."]);
+    git(
+        &repo,
+        &[
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@local",
+            "commit",
+            "-qm",
+            "binary batch fixture",
+        ],
+    );
+    let ready = publish(
+        &delivery,
+        &repo,
+        &temp.path().join("state"),
+        "fixture",
+        "HEAD",
+    )
+    .unwrap();
+    let request = ImportSubmission {
+        protocol_version: 1,
+        request_id: "binary".into(),
+        project_id: "fixture".into(),
+        snapshot_id: ready.snapshot_id.clone(),
+        manifest_sha256: ready.manifest_sha256,
+        idempotency_key: "binary".into(),
+        timeout_ms: 10000,
+    };
+    import(
+        &delivery,
+        &temp.path().join("local"),
+        &request,
+        "binary",
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+    let root = generation_path(&temp.path().join("local"), &request.snapshot_id).unwrap();
+    assert!(fs::read(root.join("empty.dat")).unwrap().is_empty());
+    assert_eq!(fs::read(root.join("binary.dat")).unwrap(), content);
+    assert_eq!(fs::read(root.join("duplicate.dat")).unwrap(), content);
+}
 #[test]
 fn discovery_pages_metadata_without_verifying_payload_or_creating_directories() {
     let (temp, delivery, ready, _) = setup();
