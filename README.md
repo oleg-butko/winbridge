@@ -132,4 +132,7 @@ history/dedup/snapshots/reports сохраняются. [Единый native gat
 Этап 6: [автоматический baseline](docs/performance-baseline.md) существующей
 Git/ZIP/HGFS доставки, Windows import/build и output/journal. Измерения выполняются
 через работающий worker; desktop и обновление installed runtime не требуются.
+Baseline (59 Windows operations) и [Git batch capture](docs/performance-capture-gate-2026-10-09.md)
+завершены: 13.58× ускорение capture в matched comparison, hashes прежние,
+21 новая Windows операция прошла. Весь этап 6 ещё не закрыт.
 Delta/resume/batching/virtualization пока не реализованы.

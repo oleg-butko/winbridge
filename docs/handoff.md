@@ -22,10 +22,19 @@ Installed worker healthy/activeTaskCount=0, generation прежняя. Перв�
 оптимизация — Git batch capture (518 files: capture 5.6 s, shared write 0.22 s).
 Не записывать как готовые delta/cache/resume/output batching/virtualization.
 
-Git batch capture реализован: один процесс, bounded header/body, streaming SHA,
-exact separator и kill/wait при раннем отказе. 123 workspace tests, включая empty/
-binary/repeated objects и malformed/truncated frames, проходят; Windows compile
-прошёл. Matched old/new сравнение и Windows repeat ещё нужны перед readiness.
+Git batch capture [завершён](performance-capture-gate-2026-10-09.md): один процесс,
+bounded header/body, streaming SHA, exact separator и kill/wait при раннем отказе.
+123 workspace tests/Clippy/Windows compile проходят. Девять matched pairs на
+исходных commits: capture median 7004.6→515.6 ms, 13.58×, все ready/hashes совпали.
+Comparison `20261009T095122Z-095becc1`, report SHA-256
+`59043c75788028b202f4dc3fe722bac3201f24e7c1b35e86fe098d2832ffe7c2`.
+Новый clean b4d355a publisher прошёл 21 Windows operation, run
+`20261009T095310Z-d5a9d432`, report SHA-256
+`1b8d7e9d0ca0a7f95430a9cb31988b8cfe16f4113e5d69da4333228317d5ea2c`.
+Worker unchanged/healthy/activeTaskCount=0; desktop не нужен, TEST окон не было.
+Этап 6 не закрыт: дальше delta/content cache с сохранением immutable generations/
+source verification/cancel/recovery. Общий pipeline speedup не заявляется на
+основании одного нового Windows repeat; raw timing variation сохранён в отчётах.
 
 Ниже — история реализации и прежних версий до этого обновления.
 

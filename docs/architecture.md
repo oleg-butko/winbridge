@@ -1,6 +1,6 @@
 # Архитектура WinBridge
 
-Статус 2026-10-09: этапы 1–5 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. [Журнал внимания этапа 5](attention.md) и [settings/output retention](settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
+Статус 2026-10-09: этапы 1–5 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, delta/cache/resume ещё впереди. [Журнал внимания этапа 5](attention.md) и [settings/output retention](settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
 
 ## Назначение и среда
 

@@ -113,7 +113,7 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 после ревью этапа 5; performance extensions пока не реализованы.
 
 - [x] [Baseline HGFS tree/archive и time-to-build](performance-baseline-2026-10-09.md) с fixture параметрами: 3 повтора, 59 actual Windows операций, output/control/cancel/storage evidence.
-- [ ] Первая измеренная оптимизация capture: bounded Git batch; matched comparison и Windows repeat без изменения wire/ready.
+- [x] [Первая измеренная оптимизация capture](performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
 - [ ] Измерить incremental после реализации delta; one-file full-package baseline сохранён.
 - [ ] Delta manifest и удаление только ранее управляемых sources, content cache и локальные Windows build caches.
 - [ ] Chunk/resume больших объектов, output batching и виртуализация длинных списков UI.
@@ -138,9 +138,11 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 
 ## Следующий конкретный шаг
 
-Этап 6: снять воспроизводимый baseline capture/pack/shared publication/Windows
-import/build и объёмов output/journal. Только после измерений выбирать delta,
-cache/resume/batching/virtualization. Старые snapshots/reports/history не очищать.
+Этап 6: baseline capture/pack/shared publication/Windows import/build/output/journal
+и первая Git batch оптимизация завершены. Дальше — отдельный measured delta/content
+cache сценарий с неизменной verified generation/source scope/cancel/recovery policy.
+Resume/output batching/virtualization/другой adapter ещё не реализованы.
+Старые snapshots/reports/history не очищать.
 2026-10-09 пользователь обновил installed worker до clean `58f3c14`;
 HistoryRead/typed attention/maintenance и здоровый журнал подтверждены read-only Info.
 Debian controller снова запущен. [Ревью](review-stage5-2026-10-09.md) исправило
