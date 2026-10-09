@@ -60,5 +60,8 @@ HGFS пакеты в новом shared report. Installed runtime/config/journal 
 отсутствующая база, cancellation, durable dedup, restart recovery, offline build,
 Unicode output и отказ запуска после tamper. Отчёт содержит hashes и timings.
 
-Проверки Linux, browser UI и Windows cross-check проходят. Actual Windows gate
-для этой реализации ещё выполняется; baseline предыдущих этапов не заменяет его.
+Проверки Linux, browser UI и Windows cross-check проходят. Native gate clean `efeaf65` прошёл: 40 tests, run `20261009-064716-ffce5995`.
+Дополнительный `validate-delta-delivery.py --native-run RUN --controller-config ...`
+публикует три one-file commits в Debian и использует уже проверенный test worker
+без повторной сборки WinBridge. Новый isolated runtime проверяет actual imports,
+source pin/build/output и cancel/attention. Cross-host gate ещё выполняется.
