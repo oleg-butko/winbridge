@@ -2,8 +2,9 @@
 
 Этап 7 проверяет следующий реальный проект после Netwatch: сам WinBridge worker
 как изолированное приложение. Оба проекта используют один [профиль сборки](../examples/service-profile.json)
-и прежние runner/sync/workflow handlers. Проверка пока подготовлена; native gate
-ещё не выполнен. Installed runtime и основной Netwatch не меняются.
+и прежние runner/sync/workflow handlers. [Native gate прошёл](windows-projects-gate-2026-10-10.md):
+59 Rust tests, оба application cycles и 15 verified artifacts. Этап 7 завершён.
+Installed runtime и основной Netwatch не меняются.
 
 ## Что задаёт проект
 

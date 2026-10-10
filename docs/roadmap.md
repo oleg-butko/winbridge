@@ -129,12 +129,15 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 workflow recipe definitions сохраняются до ACK; queued workflow с изменённым
 рецептом не начинает новые import/build/start. [Automatic Windows gate](windows-profiles-gate-2026-10-10.md)
 passed: 68 native tests, five verified artifacts; 152 workspace tests и full
-browser integration проходят. Первый сценарий завершён; весь этап 7 пока не закрыт.
+browser integration проходят. [Второй прикладной сценарий](windows-projects-gate-2026-10-10.md)
+прошёл: isolated Netwatch и WinBridge используют общий профиль, 59 native Rust
+tests и оба application cycles, 15 verified artifacts. 153 workspace tests;
+**этап 7 завершён 2026-10-10**.
 
-- [ ] Стабилизировать handler interfaces после runner и workspace-sync, которые уже работают.
+- [x] Статические handler interfaces runner/workspace-sync закреплены [контрактами](project-integration.md) и проверены на двух реальных проектах; ACK/journal/processes остаются у worker.
 - [x] Project profiles и reusable recipes; общий UI renderer событий и capability metadata.
-- [ ] Подключить второе приложение/module без изменений transport и без копирования task service.
-- [ ] Лишь при необходимости выделить SDK/package versioning. Динамические plugins и другие ОС — отдельные запросы.
+- [x] Второе приложение: WinBridge worker рядом с isolated Netwatch, без изменений transport/RPC и копирования task service; actual IPC/log/artifacts/managed stop/restart подтверждены.
+- [x] Необходимость SDK/package versioning оценена: оба consumer используют статический workspace contract, отдельный SDK не нужен. Динамические plugins и другие ОС — отдельные запросы.
 
 Критерий: следующий проект подключается конфигурацией/модулем, сохраняет journal/cancel/recovery и получает понятный UI.
 
@@ -144,15 +147,12 @@ browser integration проходят. Первый сценарий заверш
 история/ключи/attention/snapshots/reports остаются. Все сценарии этапа 5 прошли
 автоматические Windows gates; новый ручной gate не назначается.
 
-## Следующий конкретный шаг
+## После основного roadmap
 
-Этап 7: следующий прикладной проект/module должен использовать проверенные
-recipe profiles и статический handler contract без копирования transport/journal/
-cancel/recovery. CommandHandler/runner для двух проектов, workflow recipe pins и
-общий timeline уже прошли [automatic Windows gate](windows-profiles-gate-2026-10-10.md).
-Следующий потребитель выбран: isolated WinBridge worker рядом с Netwatch, через
-общий build recipe profile и прежние sync/runner/journal interfaces. [Сценарий](project-integration.md), [план и ревью](review-projects-2026-10-10.md);
-native gate этого сценария ещё не выполнен. Не вводить SDK/plugins без необходимости. Native-tested code
-fa7e4d7 доступен в source archive из handoff; пользователь обновил installed worker
-до этой версии, controller запущен после reboot. Старые snapshots/reports/history
-не очищать; актуальную связь проверить заново.
+Этапы 0–7 завершены. Следующий проект подключается по [готовой инструкции](project-integration.md)
+через registry/recipe profile и прежний workflow/journal/cancel/recovery. Native
+evidence и актуальный source archive находятся в handoff. Новые возможности
+выбираются по следующей пользовательской задаче: dirty snapshots, source-cache
+cleanup или другой delivery adapter остаются отдельными расширениями с собственными
+критериями. SDK/plugins без потребителя не вводить. Старые snapshots/reports/history
+не очищать; после reboot заново проверять связь и build identity.

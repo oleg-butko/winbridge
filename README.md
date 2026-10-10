@@ -44,7 +44,7 @@ crates/
   platform/         Process tree/Job Object и local disk adapters
 modules/
   workspace-sync/   Снимки, manifest, импорт из shared папки
-  runner/           Рецепты, direct commands, lifecycle процессов
+  runner/           Раскрытие recipe/direct и path policy; процессы у worker
   log-reader/       Чтение и tail зарегистрированных логов
   attention/        События внимания, popup, звук
 ui/src/
@@ -148,6 +148,7 @@ schema 3 с pinned блоками ZIP и явным повтором import по
 Источник task и определения workflow recipes сохраняются до ACK, изменения
 конфига применяются после ручного restart. [68 native Windows tests](docs/windows-profiles-gate-2026-10-10.md) прошли автоматически; первый сценарий этапа завершён.
 
-Следующий сценарий этапа 7 подготовлен: [реальные Netwatch и WinBridge projects](docs/project-integration.md)
-с общим build profile, private IPC, managed process stop и journal recovery.
-Новый native gate ещё не выполнен; рабочие runtime/Netwatch не меняются.
+Этап 7 завершён: [реальные Netwatch и WinBridge projects](docs/project-integration.md)
+с общим build profile, private IPC, managed process stop и journal recovery прошли
+[automatic gate](docs/windows-projects-gate-2026-10-10.md): 59 native Rust tests,
+два application cycles и 15 verified artifacts. Рабочие runtime/Netwatch не менялись.

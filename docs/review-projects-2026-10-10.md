@@ -61,3 +61,18 @@ ACK, lease, journal, cancel и recovery. Новая очередь, transport/RP
 plugin loader и SDK не нужны этому потребителю. Этап не считается завершённым
 до проверенного native report. Проверки отмены/crash/profile edits предыдущего
 сценария переиспользуются как regression.
+
+## Результат
+
+[Финальный Windows gate](windows-projects-gate-2026-10-10.md) passed: 59 native Rust
+tests, два реальных application cycles, private worker IPC, nested tree stop,
+indeterminate recovery с прежним ID и coordinator history restart. 15 artifacts
+сверены по actual bytes/SHA-256. Working worker healthy/idle, прежняя generation;
+все test processes остановлены. Этап 7 завершён, SDK не нужен этому consumer.
+
+153 workspace Rust tests, Clippy, Windows all-targets/final protocol check,
+fmt, DTO/scaffold, TypeScript/UI build прошли. UI при отсутствии commit сообщает
+«происхождение исходников не подтверждено»: conservative sourceDirty не выдаётся
+за доказательство конкретных правок. Этот небольшой text fix проверен TypeScript/
+build; новую native визуальную проверку не заявляем. Пользовательские configs и
+user-dirty sources не меняли, backups не требовались.

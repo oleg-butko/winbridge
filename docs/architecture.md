@@ -1,8 +1,14 @@
 # Архитектура WinBridge
 
-Статус 2026-10-10: этапы 1–6 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](windows-output-gate-2026-10-10.md) и [pinned chunk resume](windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](attention.md) и [settings/output retention](settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
+Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](windows-output-gate-2026-10-10.md) и [pinned chunk resume](windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](attention.md) и [settings/output retention](settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
 
 ## Назначение и среда
+
+Этап 7 также завершён: [второй прикладной проект](project-integration.md) использует
+закреплённые runner/sync interfaces, общий профиль и прежние journal/process owner.
+[Windows gate](windows-projects-gate-2026-10-10.md) подтвердил оба service cycles,
+private IPC, nested tree stop и recovery. Независимого SDK consumer нет;
+protocol/config версии и статический workspace contract остаются прежними.
 
 Одна Windows машина, её Debian VM в VMware и несколько зарегистрированных проектов. ИИ агент работает внутри Debian и обращается к CLI/controller. Пользователь на Windows видит действия агента, output, причины сбоев и состояние процессов. Netwatch — отдельный проект и возможный первый сценарий сборки, а не зависимость WinBridge.
 
