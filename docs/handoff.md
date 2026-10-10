@@ -28,6 +28,23 @@ Static interfaces закреплены следующим consumer; отдель
 а не считать deferred dirty snapshots/source cleanup незавершённым текущим этапом.
 Пользовательские configs/user-dirty sources/runtime не меняли; backups не требовались.
 
+Готовый archive с built UI:
+`K:\VMs\shared\WinBridge\sources\winbridge-20261010T223803Z-e6e2b2e-5ee765aa.zip`.
+Clean e6e2b2e, 263 files/3 647 444 bytes, SHA-256
+`7f989e1dec88cd5a42e2a1a66b43fd73a718190785d9446040464cd0e93c39e0`.
+ZIP и hashes всех manifest files проверены readback. Rust/runtime/scripts совпадают
+с native-tested 6e38c55; добавлены docs и UI unknown provenance text. Для следующего
+обычного обновления Windows использовать этот archive и prepare-windows-snapshot.ps1;
+повторный ручной gate не требуется. Installed Windows worker остаётся fa7e4d7.
+
+Controller после gate собран clean e6e2b2e, build ID 1791671885109194347,
+serve exec 6415, generation 149ba1b3-0a9a-4f1c-882e-bb6e7f6041d1;
+session 6011e826-d858-4f9a-97ee-2d7b694586b6, peer 192.168.44.1:14256.
+Reconnect прошёл, working worker прежней generation/healthy/idle, activity log
+droppedRecords=0/lastError=null. Config/listen/IPC/log rotation прежние.
+Последний handoff commit записывает receipt, runtime code не меняет. После reboot
+эти IDs считать историей и заново проверять live status.
+
 ## Этап 7 — общие профили рецептов, 2026-10-10
 
 [Ревью](review-stage7-2026-10-10.md) выполнено; важная ошибка queued workflow
