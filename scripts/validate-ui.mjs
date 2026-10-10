@@ -130,10 +130,16 @@ try {
   let loseSettingsSaveAck=false;
   let loseCleanupAck=false;
   const deltaImportCalls=[];
+  let loseOutputReadAck = false;
+  const outputReadCalls = [];
   const settingsCalls=[];const cleanupCalls=[];
   async function attachNative(nativePage) {
     await nativePage.exposeFunction("workerBridge", async (request) => {
       const response = await call(request, ["import_delta_snapshot", "submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
+      if (request.method === "read_output") {
+        outputReadCalls.push(request);
+        if (loseOutputReadAck && response.kind === "output" && response.chunks.length) { loseOutputReadAck = false; throw new Error("Test: output page response lost"); }
+      }
       if(request.method==="save_runtime_settings") {settingsCalls.push(request);if(loseSettingsSaveAck&&response.kind==="settings_saved"){loseSettingsSaveAck=false;throw new Error("Test: settings save ACK lost");}}
       if(request.method==="apply_output_cleanup") {cleanupCalls.push(request);if(loseCleanupAck&&response.kind==="output_cleanup_result"){loseCleanupAck=false;throw new Error("Test: cleanup ACK lost");}}
       if (request.method === "submit" && loseFirstAck) { loseFirstAck = false; submittedId = response.task.taskId; throw new Error("Test: acceptance response was lost"); }
@@ -254,6 +260,30 @@ try {
   const chunks = (await call({ method: "read_output", taskId: submittedId, afterSequence: 0 })).chunks;
   const reportPath = join(run, "success.task-report.json");
   await writeFile(reportPath, JSON.stringify({ schemaVersion: 1, platform: "linux", task: record, output: chunks, outputComplete: true }));
+
+  // Real large output: bounded incremental tails, virtual rows and immediate paging.
+  loseOutputReadAck = true;
+  const outputCallsBefore = outputReadCalls.length;
+  await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill('["lines"]');
+  await page.getByRole("button", { name: "Передать задачу worker", exact: true }).click();
+  await until(async () => { const task = await latestTask(); return task.submission.command.arguments[0] === "lines" && task.status === "succeeded"; }, "large lines task did not finish");
+  const linesTask = await latestTask();
+  await page.getByRole("tab", { name: "stdout / stderr", exact: true }).click();
+  await page.getByTestId("output-loaded").filter({ hasText: "чтение завершено" }).waitFor();
+  assert.ok((await page.getByTestId("output-loaded").innerText()).includes(`загружено: ${linesTask.outputBytes} байт`));
+  const lineReadCalls = outputReadCalls.slice(outputCallsBefore).filter((request) => request.taskId === linesTask.taskId);
+  assert.ok(lineReadCalls.some((request, index) => index > 0 && request.afterSequence === lineReadCalls[index - 1].afterSequence), "Lost output page must retry the unchanged read cursor");
+  const viewport = page.getByTestId("output-viewport-stdout");
+  assert.ok(Number(await viewport.getAttribute("data-total-lines")) > 1000);
+  assert.ok(await viewport.locator("[data-output-row]").count() <= 28);
+  await viewport.getByText("line 19999 Привет ✓ 🚀", { exact: true }).waitFor();
+  await viewport.focus(); await page.keyboard.press("Home");
+  await page.getByLabel("Фильтр stdout", { exact: true }).fill("line 19999");
+  assert.equal(await viewport.getAttribute("data-total-lines"), "1");
+  await page.getByRole("button", { name: "Приостановить просмотр stdout", exact: true }).click();
+  await page.getByLabel("Фильтр stdout", { exact: true }).fill("");
+  assert.ok(await viewport.locator("[data-output-row]").count() <= 28);
+  await page.getByRole("button", { name: "Продолжить просмотр stdout", exact: true }).click();
 
   await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill('["tree"]');
   await page.getByRole("button", { name: "Передать задачу worker", exact: true }).click();

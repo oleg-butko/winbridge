@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, Button, FileButton, Stack, Text } from "@mantine/core";
 import type { TaskReport } from "../../runtime/contracts";
 import { TaskDetail, statuses } from "./TaskDetail";
+import { OutputBuffer } from "./outputBuffer";
 
 function parseReport(text: string): TaskReport {
   const report = JSON.parse(text) as TaskReport;
@@ -22,6 +23,8 @@ function parseReport(text: string): TaskReport {
     previous = chunk.sequence;
   }
   if (report.outputComplete && report.output.reduce((n, chunk) => n + chunk.bytes.length, 0) !== task.outputBytes) throw new Error("Полный отчёт не содержит заявленное количество сохранённых байтов");
+  const buffer = new OutputBuffer(); buffer.append(report.output);
+  if (report.outputComplete && buffer.snapshot().hasGaps) throw new Error("Полный отчёт содержит пропуски sequence или byte offsets");
   return report;
 }
 export function ReportWorkbench() {

@@ -38,7 +38,8 @@ Report публикуется create-only с bytes/SHA-256 readback и ready mar
 
 После baseline выбирается одна оптимизация с измеримой целью и той же regression
 проверкой. Baseline/Git batch и delta/local source cache теперь завершены;
-resume/batching/virtualization/SocketDelivery ещё не реализованы. Новый ручной Windows gate не нужен; unexpected
+resume/SocketDelivery ещё не реализованы. [Output batching/virtualization](output-batching-plan.md)
+выбраны 2026-10-10 и проходят automatic gates. Новый ручной Windows gate не нужен; unexpected
 worker behaviour требует остановки и уточнения по инструкции пользователя.
 
 ## Следующий сценарий — delta

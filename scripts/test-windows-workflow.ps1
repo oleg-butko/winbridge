@@ -29,6 +29,12 @@ SHA-256 исходного ZIP, из которого распакованы и�
 .PARAMETER DeltaOnly
 Проверяет full/delta на настоящем HGFS, отдельный worker journal, dedup/recovery
 и offline build с проверенным source pin. Desktop и тестовые окна не открываются.
+.PARAMETER OutputOnly
+Проверяет bounded output pages, настоящий IPC, hashes обоих потоков, dedup,
+cursor restart и cancel/attention. Desktop и тестовые окна не открываются.
+.PARAMETER OutputReferenceWorker
+Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
+state directory. Рабочий процесс, конфиг и журнал не изменяются.
 .PARAMETER CompanionOnly
 Собирает отдельный desktop/worker и проверяет tray, popup, звук, переход к задаче и restart.
 Требует source archive с --include-built-ui; рабочие exe не заменяет.
@@ -48,6 +54,8 @@ param(
     [switch]$HistoryDiagnosticsOnly,
     [switch]$SettingsRetentionOnly,
     [switch]$DeltaOnly,
+    [switch]$OutputOnly,
+    [string]$OutputReferenceWorker = '',
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
@@ -87,6 +95,8 @@ $oldTarget = $env:CARGO_TARGET_DIR
 $oldTemp = $env:TEMP
 $oldTmp = $env:TMP
 $oldDeltaShared = $env:WINBRIDGE_DELTA_GATE_SHARED
+$oldOutputReport = $env:WINBRIDGE_OUTPUT_GATE_REPORT
+$oldOutputReference = $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER
 $oldLocation = Get-Location
 try {
     foreach ($file in $manifest.files) {
@@ -108,7 +118,16 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($OutputOnly) {
+        if ($NetwatchProfile -or -not $OutputReferenceWorker) { throw 'OutputOnly needs an explicit read-only reference worker path and isolated scenario' }
+        $env:WINBRIDGE_OUTPUT_GATE_REPORT = $ReportDirectory
+        $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER = (Resolve-Path -LiteralPath $OutputReferenceWorker).Path
+        $groups = @(
+            @{ name='output-bounds-native-ipc-cursor-control'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','output','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='output-quota-tree-timeout-regression'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','runtime','--locked','--offline','--','--test-threads=1','--nocapture') }
+        )
+    }
     if ($DeltaOnly) {
         if ($NetwatchProfile) { throw 'DeltaOnly requires an isolated scenario' }
         # Only newly owned run directories are used; actual HGFS bytes are verified.
@@ -195,6 +214,8 @@ try {
     $env:TEMP = $oldTemp
     $env:TMP = $oldTmp
     $env:WINBRIDGE_DELTA_GATE_SHARED = $oldDeltaShared
+    $env:WINBRIDGE_OUTPUT_GATE_REPORT = $oldOutputReport
+    $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER = $oldOutputReference
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {

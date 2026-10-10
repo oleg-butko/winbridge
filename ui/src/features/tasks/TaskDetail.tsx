@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Accordion, Alert, Badge, Button, Card, Code, Grid, Group, Stack, Tabs, Text, Timeline, Title } from "@mantine/core";
 import type { OutputChunk, TaskRecord, TaskStatus } from "../../runtime/contracts";
-import { decodeOutput } from "../../runtime/adapter";
+import { OutputBuffer } from "./outputBuffer";
+import type { OutputState } from "./outputBuffer";
 import { OutputView } from "./OutputView";
 import { powerShellScript } from "./commandPresentation";
 
@@ -11,13 +12,14 @@ export const statuses: Record<TaskStatus, { label: string; color: string }> = {
   cancelled: { label: "Отменено", color: "gray" }, interrupted: { label: "Прервано", color: "orange" },
   indeterminate: { label: "Результат неизвестен", color: "yellow" },
 };
-export function TaskDetail({ task, chunks }: { task: TaskRecord; chunks: OutputChunk[] }) {
+export function TaskDetail({ task, chunks = [], outputState }: { task: TaskRecord; chunks?: OutputChunk[]; outputState?: OutputState }) {
   const [copyState, setCopyState] = useState<string | null>(null);
   const status = statuses[task.status];
   const shell = useMemo(() => powerShellScript(task.resolvedCommand), [task.resolvedCommand]);
   const loadedBytes = chunks.reduce((n, chunk) => n + chunk.bytes.length, 0);
-  const finalOutput = !["queued", "running"].includes(task.status) && loadedBytes === task.outputBytes;
-  const output = useMemo(() => decodeOutput(chunks, finalOutput), [chunks, finalOutput]);
+  const finalOutput = !["queued", "running"].includes(task.status) && loadedBytes === task.outputBytes - (task.removedOutputBytes ?? 0);
+  const decoded = useMemo(() => { const buffer = new OutputBuffer(); buffer.append(chunks); if (finalOutput) buffer.finish(); return buffer.snapshot(); }, [chunks, finalOutput]);
+  const output = outputState ?? decoded;
   async function copy() {
     try { await navigator.clipboard.writeText(JSON.stringify(task.resolvedCommand, null, 2)); setCopyState("Параметры скопированы"); }
     catch { setCopyState("Копирование недоступно; параметры можно выделить ниже"); }
@@ -69,9 +71,10 @@ export function TaskDetail({ task, chunks }: { task: TaskRecord; chunks: OutputC
       <Tabs.Panel value="output" pt="md"><Stack>
         {task.outputTruncated && <Alert color="yellow">Достигнута квота сохранения вывода. Часть байтов отброшена; worker продолжил читать оба потока.</Alert>}
         {task.outputRemovedAtMs && <Alert color="yellow">Сохранённый stdout/stderr очищен политикой хранения {new Date(task.outputRemovedAtMs).toLocaleString()} · {task.removedOutputBytes} байт. Команда, результат и история сохранены.</Alert>}
-        <Text size="sm" c="dimmed">Сохранено worker сейчас: {Math.max(0,task.outputBytes-(task.removedOutputBytes??0))} байт · загружено: {chunks.reduce((n, c) => n + c.bytes.length, 0)} байт · UTF-8</Text>
+        {output.hasGaps && <Alert color="yellow">В загруженном output есть пропуски sequence или byte offsets. Разделённые фрагменты UTF-8 не склеиваются; этот просмотр не подтверждает полный вывод.</Alert>}
+        <Text size="sm" c="dimmed" data-testid="output-loaded">Сохранено worker сейчас: {Math.max(0,task.outputBytes-(task.removedOutputBytes??0))} байт · загружено: {output.loadedBytes} байт · UTF-8 · {output.complete ? "чтение завершено" : "чтение продолжается"}</Text>
         {(["stdout", "stderr"] as const).map((stream) => <Card key={stream} withBorder><Text fw={600} mb="xs">{stream}</Text>
-          <OutputView key={task.taskId} text={output[stream]} label={stream} empty="Нет сохранённого вывода" />
+          <OutputView key={task.taskId} text={output[stream]} omittedCharacters={output.omittedCharacters[stream]} label={stream} empty="Нет сохранённого вывода" />
         </Card>)}
       </Stack></Tabs.Panel>
     </Tabs>

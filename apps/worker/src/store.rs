@@ -396,7 +396,11 @@ impl Store {
         if after_sequence > i64::MAX as u64 {
             return Err("afterSequence exceeds journal range".into());
         }
-        let mut statement = self.connection.prepare("SELECT sequence,stream,offset,bytes FROM output WHERE task=?1 AND sequence>?2 ORDER BY sequence LIMIT 16").map_err(sql)?;
+        // Bound bytes and JSON, rather than making small pipe reads cost an RPC each.
+        // Cursors still identify individual durable rows; never skip an unreturned row.
+        const RAW_BUDGET: usize = 192 * 1024;
+        const JSON_BUDGET: usize = 900 * 1024;
+        let mut statement = self.connection.prepare("SELECT sequence,stream,offset,bytes FROM output WHERE task=?1 AND sequence>?2 ORDER BY sequence LIMIT 1024").map_err(sql)?;
         let rows = statement
             .query_map(params![id, after_sequence as i64], |row| {
                 Ok(OutputChunk {
@@ -411,6 +415,41 @@ impl Store {
                 })
             })
             .map_err(sql)?;
-        rows.map(|r| r.map_err(sql)).collect()
+        let mut chunks = Vec::new();
+        let mut raw_bytes = 0;
+        let mut json_bytes = 2; // JSON array brackets.
+        for row in rows {
+            let chunk = row.map_err(sql)?;
+            // Conservative JSON size: decimal byte + comma, and <=128 bytes for
+            // fixed field names, stream, two u64 values, punctuation and array comma.
+            // Avoid serializing every row twice just to measure the page.
+            let encoded = 128
+                + chunk
+                    .bytes
+                    .iter()
+                    .map(|byte| {
+                        if *byte < 10 {
+                            2
+                        } else if *byte < 100 {
+                            3
+                        } else {
+                            4
+                        }
+                    })
+                    .sum::<usize>();
+            if !chunks.is_empty()
+                && (raw_bytes + chunk.bytes.len() > RAW_BUDGET
+                    || json_bytes + encoded > JSON_BUDGET)
+            {
+                break;
+            }
+            if json_bytes + encoded > JSON_BUDGET {
+                return Err("A saved output row exceeds the bounded IPC page; use a task diagnostic to inspect it".into());
+            }
+            raw_bytes += chunk.bytes.len();
+            json_bytes += encoded;
+            chunks.push(chunk);
+        }
+        Ok(chunks)
     }
 }

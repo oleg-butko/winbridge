@@ -48,6 +48,8 @@ def main():
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--project', default='snapshot-fixture')
     parser.add_argument('--delta-only', action='store_true', help='Check pinned-base delta on actual HGFS with isolated journal/build, without desktop windows')
+    parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
+    parser.add_argument('--output-reference-worker', help='Read-only path to the installed worker exe, used with a NEW isolated config/state for matched output samples')
     parser.add_argument('--attention-only', action='store_true', help='Run the stage-5 attention tests without repeating the completed workflow gate')
     parser.add_argument('--workflow-attention-only', action='store_true', help='Check workflow/application attention and native workflow target navigation')
     parser.add_argument('--history-diagnostics-only', action='store_true', help='Check history, task diagnostics and the native preview/save UI')
@@ -55,8 +57,10 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only)) > 1:
         parser.error('Choose one isolated scenario: task attention, workflow attention, companion, history diagnostics or Netwatch')
+    if args.output_only and not args.output_reference_worker:
+        parser.error('--output-only requires --output-reference-worker')
     config = json.loads(args.controller_config.read_text())
     endpoint = Path(config['stateDirectory']) / ('controller-' + config['instanceId'] + '.sock')
     info = call(endpoint, {'method': 'info'})['info']
@@ -75,6 +79,8 @@ def main():
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
     extra = ''
     profile_argument = ''
+    if args.output_only:
+        profile_argument = ' -OutputOnly -OutputReferenceWorker ' + ps_string(args.output_reference_worker)
     if args.delta_only:
         profile_argument = ' -DeltaOnly'
     if args.attention_only:
@@ -171,6 +177,17 @@ exit $LASTEXITCODE
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
+    if args.output_only:
+        proof = json.loads((report / 'output-proof.json').read_text())
+        reference = [case for case in proof['cases'] if case.get('version') == 'reference' and 'measurement' in case]
+        current = [case for case in proof['cases'] if case.get('version') == 'current' and 'measurement' in case]
+        if not proof['passed'] or proof['platform'] != 'windows' or len(reference) != 3 or len(current) != 3:
+            raise RuntimeError('Incomplete matched native output gate')
+        for old, new in zip(reference, current):
+            if old['build']['sourceCommit'] != info['build']['sourceCommit'] or old['build']['sourceDirty'] or new['build']['sourceCommit'] != result['sourceCommit'] or new['build']['sourceDirty']:
+                raise RuntimeError('Output comparison source identity mismatch')
+            if old['bodySha256'] != new['bodySha256'] or old['stderrBytes'] != 1048576 or new['stderrBytes'] != 1048576 or new['measurement']['pages'] >= old['measurement']['pages']:
+                raise RuntimeError('Output hashes/counts or page reduction did not match')
     final_info = call(endpoint, {'method':'info'})['info']
     if final_info['generation'] != info['generation'] or final_info.get('journalRecoveryRequired') or final_info.get('maintenanceError') or final_info.get('activeTaskCount') != 0:
         raise RuntimeError('Installed worker health/generation changed unexpectedly; inspect retained task/report')

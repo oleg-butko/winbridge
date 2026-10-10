@@ -8,7 +8,8 @@ import { Alert, Button, Card, Code, Group, NumberInput, Select, Stack, Text, Tex
 import { expectResult, workerCall } from "../../runtime/adapter";
 import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, saveDeliveryDraft, saveWorkflowProfile } from "../../runtime/commandDrafts";
 import type { CommandForm } from "../../runtime/commandDrafts";
-import type { CommandDraft, DeliveryDraft, OutputChunk, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
+import type { CommandDraft, DeliveryDraft, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
+import { OutputBuffer } from "./outputBuffer";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
 import { HistoryPanel } from "../history/HistoryPanel";
@@ -18,24 +19,27 @@ import { TaskDetail, statuses } from "./TaskDetail";
 
 function TaskSession({ id }: { id: string }) {
   const [task, setTask] = useState<TaskRecord | null>(null);
-  const [chunks, setChunks] = useState<OutputChunk[]>([]);
+  const [output, setOutput] = useState(() => new OutputBuffer().snapshot());
   const [error, setError] = useState<string | null>(null);
   const [confirmedAt, setConfirmedAt] = useState<number | null>(null);
   const [cancelling, setCancelling] = useState(false);
   useEffect(() => {
     let disposed = false;
-    let afterSequence = 0;
+    let buffer = new OutputBuffer();
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
+      let backlog = false;
       try {
         const record = expectResult(await workerCall({ method: "get_task", taskId: id }), "task").task;
-        const page = expectResult(await workerCall({ method: "read_output", taskId: id, afterSequence }), "output").chunks;
+        const page = expectResult(await workerCall({ method: "read_output", taskId: id, afterSequence: buffer.snapshot().afterSequence }), "output").chunks;
         if (disposed) return;
         setTask(record); setConfirmedAt(Date.now()); setError(null);
-        if(record.outputRemovedAtMs){afterSequence=0;setChunks([]);}
-        else if (page.length) { afterSequence = page.at(-1)!.sequence; setChunks((previous) => [...previous, ...page]); }
+        if (record.outputRemovedAtMs) buffer = new OutputBuffer();
+        else { buffer.append(page); backlog = page.length > 0; }
+        if (!backlog && !["queued", "running"].includes(record.status)) buffer.finish();
+        setOutput(buffer.snapshot());
       } catch (error) { if (!disposed) setError(String(error)); }
-      if (!disposed) timer = setTimeout(() => void poll(), 750);
+      if (!disposed) timer = setTimeout(() => void poll(), backlog ? 10 : 750);
     }
     void poll();
     return () => { disposed = true; clearTimeout(timer); };
@@ -52,7 +56,7 @@ function TaskSession({ id }: { id: string }) {
       <Group justify="space-between"><Text size="xs" c="dimmed">Последнее подтверждение: {confirmedAt && new Date(confirmedAt).toLocaleTimeString()}</Text>
         <Button color="orange" variant="light" disabled={!["queued", "running"].includes(task.status) || task.cancelRequested} loading={cancelling} onClick={() => void cancel()}>Отменить задачу</Button>
       </Group>
-      <TaskDetail task={task} chunks={chunks} />
+      <TaskDetail task={task} outputState={output} />
     </> : <Text>Читается сохранённая задача…</Text>}
   </Stack>;
 }

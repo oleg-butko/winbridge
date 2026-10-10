@@ -38,6 +38,13 @@ fn main() -> ExitCode {
             }
             ExitCode::SUCCESS
         }
+        "lines" => {
+            for index in 0..20000 {
+                println!("line {index:05} Привет ✓ 🚀");
+                eprintln!("error {index:05} Привет ✓ 🚀");
+            }
+            ExitCode::SUCCESS
+        }
         "tree" => {
             let mut child = Command::new(std::env::current_exe().unwrap())
                 .arg("child")

@@ -116,7 +116,8 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 - [x] [Первая измеренная оптимизация capture](performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
 - [x] [Incremental full/delta](windows-delta-gate-2026-10-09.md): три fresh Debian → Windows one-file commit; ZIP 2 367 994→193 bytes, publication/import timings и actual build/output/control/cancel/attention.
 - [x] [Delta от verified snapshot](snapshot-delta.md): schema 2/pinned base/local source cache, full target verification, CLI/MCP/UI; 40 native tests и cross-host gate прошли. Старые поколения сохраняются; удаление отражается новым составом.
-- [ ] Chunk/resume больших объектов, output batching и виртуализация длинных списков UI.
+- [ ] [Пакетное чтение output и виртуализация строк](output-batching-plan.md): код реализован, automatic Windows gate ещё требуется.
+- [ ] Chunk/resume больших объектов; дальнейшая виртуализация списков по измерениям.
 - [ ] При необходимости SocketDelivery как другой adapter. Control session не блокируется большими данными.
 
 Критерий: измеряемое улучшение выбранного сценария, отсутствие регрессии cancel/attention latency, корректное восстановление после прерывания. Не менять транспорт ради обещания абстрактной скорости.
@@ -140,8 +141,9 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 
 Этап 6: baseline capture/pack/shared publication/Windows import/build/output/journal
 и первая Git batch оптимизация завершены. Delta/local source cache и три measured one-file пары также [завершены](windows-delta-gate-2026-10-09.md).
-Дальше — выбрать первый resume/output batching/virtualization сценарий по сохранённым measurements.
-Resume/output batching/virtualization/другой adapter ещё не реализованы.
+2026-10-10 после ревью выбран [output batching/virtualization](output-batching-plan.md):
+код и локальные проверки готовы; automatic Windows gate выполняется до закрытия сценария.
+Resume больших объектов/другой adapter ещё не реализованы.
 Старые snapshots/reports/history не очищать.
 2026-10-09 пользователь обновил installed worker до clean `58f3c14`;
 HistoryRead/typed attention/maintenance и здоровый журнал подтверждены read-only Info.

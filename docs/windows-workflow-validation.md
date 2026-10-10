@@ -1,5 +1,17 @@
 # Автоматические Windows проверки workflow
 
+Сценарий `--output-only` / `-OutputOnly` проверяет [пакетный output](output-batching-plan.md)
+без desktop. Агент передаёт `--output-reference-worker` с путём installed worker.exe:
+этот exe запускается только с новым тестовым config/state для сравнения с новой
+сборкой. Три пары flood output проверяют actual bytes/SHA-256, число страниц,
+Info latency, cancel/attention и restart чтения прежнего cursor без повторного процесса.
+Проверки byte/JSON bounds, tiny rows и quota/drain включены в тот же прогон.
+Рабочий worker должен оставаться запущенным; desktop закрыт, новых окон не будет.
+Настоящий native UI визуально этим сценарием не проверяется: incremental buffer,
+scroll/filter/pause и ограниченный DOM отдельно проверяет browser integration с
+реальным Unix worker. Reports/ready сохраняют source identity и raw timings;
+сравнение Windows IPC не подменяет end-to-end WebSocket measurement.
+
 Сценарий `--settings-retention-only` (агент Debian) / `-SettingsRetentionOnly`
 (PowerShell) проверяет [настройки и очистку output](settings-retention.md) одной
 партией backend tests и двумя последовательными TEST окнами desktop. Первое

@@ -1,6 +1,26 @@
 # Следующей сессии: продолжение WinBridge
 
-## Текущая сессия — 2026-10-09
+## Текущая сессия — 2026-10-10
+
+Debian перезапущена. Пользователь обновил Windows из
+`winbridge-20261009T110529Z-af90ec0-59c18ec0.zip`, закрыл desktop и оставил worker.
+Controller запущен: exec session 15995, generation
+`1a3c0c7c-998a-4d35-8ec2-4572c218eb4e`, session
+`80e475d8-26b3-4c44-866a-f2a6ccaf6ea6`, connected=true.
+Read-only Windows Info подтвердил clean `af90ec036e641e630583f8753fa92e8f8fba6f04`,
+manifest `a36e9f8329cff23c0760063fc66e1c07670f77ddfcb6a4e7c1b831520bf5b528`,
+generation `c182793f-5391-4bf8-9e70-9c94b8b24a5c`, delta available,
+activeTaskCount=0, maintenanceError/journalRecoveryRequired=null.
+
+[Ревью](review-stage6-2026-10-10.md) не обнаружило новых важных ошибок delta;
+исправляются неограниченный desktop output buffer и склейка UTF-8 через gaps.
+Следующий сценарий выбран по baseline 2 MiB output: [batching/virtualization](output-batching-plan.md).
+Код реализован; 135 workspace tests, Clippy и Windows all-targets compile прошли.
+Browser integration с actual output/lost read ACK/virtualization прошла; native
+gate выполняется до объявления готовности. Windows desktop не
+требуется, новых окон не будет; installed runtime не заменяется.
+
+## Предыдущая сессия — 2026-10-09
 
 Пользователь обновил Windows из `winbridge-20261009T084236Z-58f3c14-eb872418.zip`.
 Read-only Info: source `58f3c143d41bf5a2137aad45dc9d7650b4bdde94`, clean,
