@@ -188,3 +188,28 @@ Debian; source commit/dirty/archive identity сверяются с native worker
 worker exe/config/state и прежние shared reports не меняются. После завершения
 нужно оставить рабочий worker; desktop можно держать закрытым. Новый ручной gate
 не нужен. [Формат и настройка profiles](project-profiles.md).
+
+## Узкая проверка версии сборки
+
+Для изменений только в определении build identity используйте из Debian:
+
+```bash
+python3 scripts/validate-workflow-native.py \
+  --controller-config .winbridge/controller-snapshot.local.json \
+  --archive /mnt/hgfs/shared/WinBridge/sources/ИМЯ-АРХИВА.zip \
+  --identity-only
+```
+
+Должен работать установленный Windows worker; desktop не нужен. Сценарий проверяет
+ZIP и manifest, распаковывает новую копию на локальном диске Windows и передаёт
+`-IdentityOnly` в `test-windows-workflow.ps1`. Выполняются только protocol tests:
+настоящий Git checkout, Unicode paths, parent checkout и скрытые изменения через
+`assume-unchanged`/`skip-worktree`. Тестовые worker/desktop и окна не запускаются.
+Отчёт и logs проверяются по `report.ready.json`; версии и состояние установленного
+worker сверяются до/после. После прогона desktop можно открыть или закрыть,
+рабочий worker оставить запущенным. Повтор прикладных сценариев не требуется.
+
+Debian-проверка экспорта: `python3 scripts/test-export-source.py`. Метка clean
+требует совпадения реально экспортированных путей/байтов с закреплённым Git commit,
+а не только пустого `git status`. Для Git-сборки со скрытыми index entries runtime
+консервативно сообщает `sourceDirty=true`: отсутствие изменений не подтверждено.

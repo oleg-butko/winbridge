@@ -82,6 +82,7 @@ snapshot-конфигурации команда в Debian:
 cargo test --workspace --locked
 cargo check --workspace --locked
 cargo fmt --all -- --check
+python3 scripts/test-export-source.py
 cargo run -p winbridge-controller --locked -- --describe
 cargo run -p winbridge-worker --locked -- --help
 npm ci
@@ -136,14 +137,14 @@ Git/ZIP/HGFS доставки, Windows import/build и output/journal. Изме�
 Baseline (59 Windows operations) и [Git batch capture](docs/performance-capture-gate-2026-10-09.md)
 завершены: 13.58× ускорение capture в matched comparison, hashes прежние,
 21 новая Windows операция прошла.
-[Delta](docs/windows-delta-gate-2026-10-09.md), [output batching/virtualization](docs/windows-output-gate-2026-10-10.md) и [pinned chunk resume](docs/windows-resume-gate-2026-10-10.md) прошли automatic gates. Этап 6 завершён; следующий — interfaces/profiles этапа 7.
+[Delta](docs/windows-delta-gate-2026-10-09.md), [output batching/virtualization](docs/windows-output-gate-2026-10-10.md) и [pinned chunk resume](docs/windows-resume-gate-2026-10-10.md) прошли automatic gates. Этап 6 завершён; interfaces/profiles этапа 7 также завершены.
 
 Delta этапа 6: [формат, публикация, импорт и автоматическая проверка](docs/snapshot-delta.md). Используется проверенное локальное поколение; прежние snapshots сохраняются. [Оба автоматических Windows gates пройдены](docs/windows-delta-gate-2026-10-09.md); native desktop заново не открывался.
 
 Продолжение этапа 6: [snapshot chunk/resume](docs/snapshot-resume.md) — opt-in
 schema 3 с pinned блоками ZIP и явным повтором import после обрыва. [Automatic Windows gate](docs/windows-resume-gate-2026-10-10.md) пройден; существующие full/delta packages сохраняют формат.
 
-Этап 7 начат: [общие профили рецептов и статический runner](docs/project-profiles.md).
+Этап 7: [общие профили рецептов и статический runner](docs/project-profiles.md).
 Два проекта используют один профиль; journal/cancel/recovery остаются у worker.
 Источник task и определения workflow recipes сохраняются до ACK, изменения
 конфига применяются после ручного restart. [68 native Windows tests](docs/windows-profiles-gate-2026-10-10.md) прошли автоматически; первый сценарий этапа завершён.

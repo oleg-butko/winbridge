@@ -24,8 +24,25 @@ fn git_identity(root: &Path) -> Option<(String, bool)> {
         return None;
     }
     let commit = git(root, &["rev-parse", "HEAD"])?;
-    let dirty = git(root, &["status", "--porcelain"]).is_none_or(|s| !s.is_empty());
+    let dirty = git(root, &["status", "--porcelain"]).is_none_or(|s| !s.is_empty())
+        || hidden_index_entries(root).unwrap_or(true);
     Some((commit, dirty))
+}
+
+fn hidden_index_entries(root: &Path) -> Option<bool> {
+    let output = Command::new("git")
+        .args(["ls-files", "-v", "-z"])
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())?;
+    // Lowercase tags suppress stat checks (assume-unchanged); S/s marks
+    // skip-worktree. Status alone cannot attest to these files' actual bytes.
+    Some(output.stdout.split(|b| *b == 0).any(|entry| {
+        entry
+            .first()
+            .is_some_and(|tag| tag.is_ascii_lowercase() || *tag == b'S')
+    }))
 }
 
 fn git_files(root: &Path) -> Option<Vec<String>> {
@@ -156,6 +173,47 @@ mod tests {
             .unwrap()
             .success());
         assert_eq!(git_files(root), Some(vec![unicode.into()]));
+        assert!(Command::new("git")
+            .args([
+                "-c",
+                "user.name=Validation",
+                "-c",
+                "user.email=validation@local",
+                "commit",
+                "--quiet",
+                "-m",
+                "tracked input",
+            ])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success());
+        assert!(!git_identity(root).unwrap().1);
+        for flag in ["--assume-unchanged", "--skip-worktree"] {
+            assert!(Command::new("git")
+                .args(["update-index", flag, "--", unicode])
+                .current_dir(root)
+                .status()
+                .unwrap()
+                .success());
+            fs::write(root.join(unicode), "hidden build edit").unwrap();
+            assert_eq!(git(root, &["status", "--porcelain"]), Some(String::new()));
+            assert!(git_identity(root).unwrap().1);
+            fs::write(root.join(unicode), "build input").unwrap();
+            assert!(Command::new("git")
+                .args([
+                    "update-index",
+                    "--no-assume-unchanged",
+                    "--no-skip-worktree",
+                    "--",
+                    unicode
+                ])
+                .current_dir(root)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let commit = git(root, &["rev-parse", "HEAD"]).unwrap();
         let generation = root.join("workspaces/project/snapshots/s-example");
         fs::create_dir_all(&generation).unwrap();
         // Plain `git rev-parse HEAD` succeeds here but describes the parent.

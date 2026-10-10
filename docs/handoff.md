@@ -1,3 +1,16 @@
+## Ревью source identity после roadmap, 2026-10-10
+
+[Целевое ревью](review-source-identity-2026-10-10.md): воспроизведён и исправлен
+false-clean export при скрытых index changes/изменении байтов во время capture.
+Exporter сравнивает actual bytes/path set с закреплённым commit, Git build identity
+консервативна при assume-unchanged/skip-worktree. Parent checkout/source path
+symlinks/duplicate export manifest отклоняются. 8 Python regressions, 153 workspace
+Rust tests, Clippy/Windows protocol all-targets/fmt/parser/scaffold проходят.
+Узкий automatic Windows `--identity-only` готов; native результат ещё не получен.
+Этапы 0–7 завершены; новое продуктовое расширение пока не выбрано пользователем.
+Working worker clean fa7e4d7, прежней generation/healthy/idle; configs/runtime не
+заменялись. Для gate нужен только worker, desktop/test windows не используются.
+
 ## Этап 7 завершён — два прикладных проекта, 2026-10-10
 
 Пользователь обновил Windows из winbridge-20261010T100754Z-fa7e4d7-827eab23.zip

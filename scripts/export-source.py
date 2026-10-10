@@ -13,7 +13,52 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def git(*args):
-    return subprocess.check_output(['git', '-C', str(ROOT), *args])
+    return subprocess.check_output(['git', '--no-replace-objects', '-C', str(ROOT), *args])
+
+
+def capture_sources():
+    if Path(git('rev-parse', '--show-toplevel').decode().strip()).resolve() != ROOT.resolve():
+        raise ValueError('Source export requires its own Git checkout, not a parent repository')
+    commit = git('rev-parse', 'HEAD').decode().strip()
+    dirty = bool(git('status', '--porcelain'))
+    # Status can hide assume-unchanged/skip-worktree edits, and the worktree may
+    # change after status was read. Compare the bytes actually captured with
+    # this pinned commit, independently of the index and Git status hints.
+    tree = {}
+    for entry in git('ls-tree', '-r', '-z', '--full-tree', commit).split(b'\0'):
+        if entry:
+            metadata, name = entry.split(b'\t', 1)
+            mode, kind, oid = metadata.split()
+            if kind != b'blob' or mode not in (b'100644', b'100755'):
+                raise ValueError('Source export supports regular files only; no symlinks/submodules')
+            tree[name.decode()] = oid.decode()
+    algorithm = git('rev-parse', '--show-object-format').decode().strip()
+    if algorithm not in ('sha1', 'sha256'):
+        raise ValueError('Unsupported Git object format')
+    names = sorted(set(git('ls-files', '--cached', '--others', '--exclude-standard', '-z').decode().split('\0')) - {''})
+    files = []
+    for name in names:
+        path = PurePosixPath(name)
+        if path.is_absolute() or '..' in path.parts or any(part in {'.git', '.winbridge', 'target', 'node_modules', 'dist'} for part in path.parts):
+            raise ValueError(f'Unexpected runtime/generated path: {name}')
+        if path.name.startswith('.env') or path.name.endswith('.local.json') or name == 'winbridge-source-manifest.json':
+            raise ValueError(f'Local settings or an earlier export manifest cannot be exported: {name}')
+        source = ROOT
+        for part in path.parts:
+            source /= part
+            if source.is_symlink():
+                raise ValueError(f'Source path contains a symlink: {name}')
+        if not source.exists():  # tracked deletion in an explicitly dirty export
+            continue
+        if not source.is_file():
+            raise ValueError(f'Source must be a regular file: {name}')
+        data = source.read_bytes()
+        blob = hashlib.new(algorithm, b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+        dirty |= tree.get(name) != blob
+        files.append((name, data))
+    dirty |= {name for name, _ in files} != set(tree)
+    dirty |= bool(git('status', '--porcelain')) or git('rev-parse', 'HEAD').decode().strip() != commit
+    return commit, dirty, files
 
 
 def main():
@@ -21,23 +66,7 @@ def main():
     parser.add_argument('--output-directory', type=Path, required=True)
     parser.add_argument('--include-built-ui', action='store_true', help='Include the locally built web-dist for isolated native desktop validation without Windows npm installation')
     args = parser.parse_args()
-    commit = git('rev-parse', 'HEAD').decode().strip()
-    dirty = bool(git('status', '--porcelain'))
-    names = sorted(set(git('ls-files', '--cached', '--others', '--exclude-standard', '-z').decode().split('\0')) - {''})
-    files = []
-    for name in names:
-        path = PurePosixPath(name)
-        if path.is_absolute() or '..' in path.parts or any(part in {'.git', '.winbridge', 'target', 'node_modules', 'dist'} for part in path.parts):
-            raise ValueError(f'Unexpected runtime/generated path: {name}')
-        if path.name.startswith('.env') or path.name.endswith('.local.json'):
-            raise ValueError(f'Local settings cannot be exported: {name}')
-        source = ROOT / name
-        if not source.exists():  # tracked deletion in an explicitly dirty export
-            continue
-        if source.is_symlink() or not source.is_file():
-            raise ValueError(f'Source must be a regular file: {name}')
-        data = source.read_bytes()
-        files.append((name, data))
+    commit, dirty, files = capture_sources()
     if args.include_built_ui:
         frontend = ROOT / 'web-dist'
         if not (frontend / 'index.html').is_file():

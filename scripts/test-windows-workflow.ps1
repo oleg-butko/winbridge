@@ -42,6 +42,9 @@ cancel tree, crash/restart и frozen command/provenance. Desktop не откры
 .PARAMETER ProjectsOnly
 Проверяет реальные Netwatch/WinBridge snapshots с общим build profile, private IPC,
 artifact/log, managed stop и journal restart. Desktop и сетевые соединения не нужны.
+.PARAMETER IdentityOnly
+Проверяет build identity на настоящей Windows/Git: parent checkout, Unicode paths
+и скрытые index flags. Запускает только protocol tests, без desktop/test worker.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -68,6 +71,7 @@ param(
     [switch]$ResumeOnly,
     [switch]$ProfilesOnly,
     [switch]$ProjectsOnly,
+    [switch]$IdentityOnly,
     [string]$ProjectsPreparation = '',
     [string]$ProjectsPreparationSha256 = '',
     [string]$ResumeDeliveryRoot = '',
@@ -139,7 +143,13 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($IdentityOnly) {
+        if ($NetwatchProfile) { throw 'IdentityOnly requires an isolated scenario' }
+        $groups = @(
+            @{ name='source-build-identity-and-protocol'; arguments=@('test','-p','winbridge-protocol','--locked','--offline','--','--test-threads=1','--nocapture') }
+        )
+    }
     if ($ProjectsOnly) {
         if ($NetwatchProfile -or -not $ProjectsPreparation -or -not $ProjectsPreparationSha256) { throw 'ProjectsOnly needs a pinned preparation file and isolated scenario' }
         if ((Get-FileHash -LiteralPath $ProjectsPreparation -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ProjectsPreparationSha256) { throw 'Project preparation SHA-256 mismatch' }
