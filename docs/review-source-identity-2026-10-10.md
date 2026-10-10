@@ -42,14 +42,42 @@ ownership двух прикладных сценариев не обнаруже
   Python compile, PowerShell parser и Markdown/scaffold проходят.
 - Подготовлен узкий `--identity-only` / `-IdentityOnly` через прежний approved native
   harness: только protocol tests на настоящей Windows/Git, без test worker/desktop.
-  Native результат на момент подготовки коммита ещё не получен.
+  Native gate пройден: 5 protocol tests, включая actual build-script Git regression.
 
-Этапы 0–7 остаются завершёнными. Продолжение этой проверки — автоматический Windows
-gate с exact archive SHA-256 и сохранённым request key; исходы мутаций не повторять
-автоматически при неизвестном результате. Новое продуктовое расширение выбирается
+## Automatic Windows gate
+
+Native-tested commit `ef4dd2621c47b0c137bcc1b46dfba9980d7e39fb`.
+Archive `K:\VMs\shared\WinBridge\sources\winbridge-20261010T225241Z-ef4dd26-9cc9a527.zip`:
+clean, 265 files, 3 654 320 bytes, SHA-256
+`591b18c61016cd850ac635c1605c3699fcbb576cbbb85f6412381ba13bd0551c`.
+ZIP и все source manifest files проверены readback, duplicate entries отсутствуют.
+
+Run `20261010-185249-d913cb3f`, outer task
+`ca1d5c9c-6ea0-4a80-a41e-c96aeee23f70`, succeeded/exit 0.
+Shared report: `K:\VMs\shared\WinBridge\workflow-validation\20261010-185249-d913cb3f`.
+Cargo group `source-build-identity-and-protocol` прошла offline на настоящей Windows:
+1 build identity regression + 4 wire contract tests. Никакие тестовые worker/desktop
+не запускались; проверены checkout/index semantics Windows Git, а не visual UI.
+
+Readback SHA-256:
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| report.json | 802 | 7ada477b60c10f70ddee31997f2d71700c4ef16e2e1998eeefdc22cb4a05d4e6 |
+| source-build-identity-and-protocol.log | 2540 | b3e926a8d357bb2f6f2ea467a816b137015181dda3ebad356f452137257c8fd5 |
+| report.ready.json | 420 | 23253ea5fe7e1f0c71b05fc463821c3ea3d0e4f2c407840595d75ebb19702d74 |
+
+Installed worker до/после — прежняя generation
+`372266b6-3dee-4d87-9de2-ccab896dbcf8`, maintenanceError/journalRecoveryRequired=null,
+activeTaskCount=0. Request/task/worker proof сохранены локально в
+`.winbridge/workflow-validation/20261010-185249-d913cb3f`; мутации не повторялись.
+
+Этапы 0–7 остаются завершёнными. Автоматический Windows gate с exact archive SHA-256
+и сохранённым request key завершён. Новое продуктовое расширение выбирается
 отдельно: пользователю предложены dirty snapshots, следующий реальный проект или
 просмотр/управление source cache. Runtime dirty snapshot в этой правке не добавлен.
 
 Рабочие configs/журналы/runtime и original Netwatch не менялись; important user-dirty
-files отсутствовали, backups не требовались. После прогона указать, что desktop
-можно открыть/закрыть и какой worker оставить работающим.
+files отсутствовали, backups не требовались. Пользователю сообщено: desktop можно
+открыть/закрыть; установленный рабочий worker оставить работающим. Code archive
+готов для обычного ручного обновления; повторного ручного gate не требуется.

@@ -6,10 +6,21 @@ Exporter сравнивает actual bytes/path set с закреплённым 
 консервативна при assume-unchanged/skip-worktree. Parent checkout/source path
 symlinks/duplicate export manifest отклоняются. 8 Python regressions, 153 workspace
 Rust tests, Clippy/Windows protocol all-targets/fmt/parser/scaffold проходят.
-Узкий automatic Windows `--identity-only` готов; native результат ещё не получен.
+Узкий automatic Windows `--identity-only` passed: 5 protocol tests, 2 verified
+artifacts. Run `20261010-185249-d913cb3f`, task
+`ca1d5c9c-6ea0-4a80-a41e-c96aeee23f70` succeeded/exit 0; report SHA-256
+`7ada477b60c10f70ddee31997f2d71700c4ef16e2e1998eeefdc22cb4a05d4e6`.
+Native-tested clean ef4dd26 archive:
+`K:\VMs\shared\WinBridge\sources\winbridge-20261010T225241Z-ef4dd26-9cc9a527.zip`,
+265 files/3 654 320 bytes, SHA-256
+`591b18c61016cd850ac635c1605c3699fcbb576cbbb85f6412381ba13bd0551c`.
+ZIP/source files/report/log проверены readback; последующий commit меняет только docs.
 Этапы 0–7 завершены; новое продуктовое расширение пока не выбрано пользователем.
 Working worker clean fa7e4d7, прежней generation/healthy/idle; configs/runtime не
-заменялись. Для gate нужен только worker, desktop/test windows не используются.
+заменялись. Gate завершён без test windows: desktop можно открыть/закрыть,
+working worker оставить работать. Controller жив, прежний session/peer; новый
+manual gate не требуется. Для обычного обновления использовать archive выше
+и prepare-windows-snapshot.ps1; новые runtime configs не нужны.
 
 ## Этап 7 завершён — два прикладных проекта, 2026-10-10
 
