@@ -31,6 +31,15 @@ Installed generation/source прежние, healthy/activeTaskCount=0. Тест�
 browser regression и отказ полного отчёта с gaps прошли. Это UI изменение не
 меняет native backend b980ac0; повтор backend gate не требуется.
 
+Архив рабочего обновления с финальным UI:
+`/mnt/hgfs/shared/WinBridge/sources/winbridge-20261010T083346Z-1055485-519596ba.zip`,
+clean `10554850942dac0c6fb2d888bb3914ce328327ad`, 237 files, built UI,
+SHA-256 `50ef318f71056fb1b5755cf7a730e6b196cd7a58e3e39e46c88b124d0fe60110`.
+Installed worker остаётся af90ec0; обновление runtime автоматическим gate не
+выполнялось. Для нового UI используется обычный `prepare-windows-snapshot.ps1`.
+Новых ручных проверок не назначено. Позднейший docs-only commit фиксирует архив;
+код и native proof остаются указанными выше.
+
 ## Предыдущая сессия — 2026-10-09
 
 Пользователь обновил Windows из `winbridge-20261009T084236Z-58f3c14-eb872418.zip`.
