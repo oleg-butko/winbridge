@@ -12,7 +12,7 @@
 - Snapshot runtime: точный Git commit, verified HGFS package, durable import, общий project lease и explicit build из локального поколения. Native UI: manifest/mapping/progress/history/cancel. [Формат](docs/snapshot-format.md); [Windows runtime gate пройден](docs/windows-snapshot-gate-2026-10-06.md); UI исправления приняты пользователем, этап 3 завершён.
 - Workflow import/build/start/stdout readiness/log, frozen профиль и step IDs, отдельный registry приложений, byte cursor с rotation/truncation. [Описание](docs/workflows.md); [автоматические Windows проверки](docs/windows-workflow-validation.md), [37 native tests пройдены](docs/windows-workflow-gate-2026-10-06.md).
 - SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
-- Этап 6: [delta/local source cache](docs/snapshot-delta.md) и [пакетный output](docs/windows-output-gate-2026-10-10.md) проверены автоматически. UI хранит ограниченный Unicode tail и отрисовывает до 28 строк output; полный журнал остаётся у worker. Resume больших payload ещё предстоит.
+- Этап 6 завершён: [delta/local source cache](docs/snapshot-delta.md), [пакетный output](docs/windows-output-gate-2026-10-10.md) и [resume больших payload](docs/windows-resume-gate-2026-10-10.md) проверены автоматически. UI хранит ограниченный Unicode tail и отрисовывает до 28 строк output; полный журнал остаётся у worker.
 - Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
 - User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.
 - Тесты контракта команд: Windows пути и отдельные аргументы, отклонение неизвестных режимов и полей.
@@ -135,7 +135,7 @@ Git/ZIP/HGFS доставки, Windows import/build и output/journal. Изме�
 через работающий worker; desktop и обновление installed runtime не требуются.
 Baseline (59 Windows operations) и [Git batch capture](docs/performance-capture-gate-2026-10-09.md)
 завершены: 13.58× ускорение capture в matched comparison, hashes прежние,
-21 новая Windows операция прошла. Весь этап 6 ещё не закрыт.
+21 новая Windows операция прошла.
 [Delta](docs/windows-delta-gate-2026-10-09.md), [output batching/virtualization](docs/windows-output-gate-2026-10-10.md) и [pinned chunk resume](docs/windows-resume-gate-2026-10-10.md) прошли automatic gates. Этап 6 завершён; следующий — interfaces/profiles этапа 7.
 
 Delta этапа 6: [формат, публикация, импорт и автоматическая проверка](docs/snapshot-delta.md). Используется проверенное локальное поколение; прежние snapshots сохраняются. [Оба автоматических Windows gates пройдены](docs/windows-delta-gate-2026-10-09.md); native desktop заново не открывался.
