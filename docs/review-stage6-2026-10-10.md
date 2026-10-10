@@ -62,3 +62,8 @@ Actual native Windows resume gate ещё ожидается. Никакие ра
 Также native test instances теперь имеют unique suffix, чтобы глобальные
 named pipes одного пользователя не пересекались с другим test run. Старый
 report сохранён; запускается новый явный gate с новым task/key/run directory.
+
+[Исправленный native resume gate](windows-resume-gate-2026-10-10.md) завершён:
+39 tests, exact Debian pins, shared bytes 33 555 078 → 8 389 254, explicit recovery
+и offline build; installed worker healthy/idle прежней generation. Это закрывает
+выбранный сценарий и этап 6. Сведения о прежнем failed run сохранены.

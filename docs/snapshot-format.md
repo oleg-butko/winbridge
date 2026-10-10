@@ -84,7 +84,7 @@ Schema 2 добавляет imports table к journal schema 1. Перед migrat
 
 48 Rust tests, actual Unix builds, WebSocket/HGFS gate, active 64 MiB cancel, actual owned process crash/recovery и UI checks проходят. [Windows runtime gate](windows-snapshot-gate-2026-10-06.md) прошёл 19 actual checks. Windows all-targets compile и standalone desktop также проходят; native UI новых delivery fixes принята пользователем; подробная ручная проверка отложена. [Инструкция](windows-snapshot-validation.md).
 
-Dirty snapshots, chunk resume, incremental sync, cleanup/retention и benchmarks остаются следующими расширениями. Импорт не удаляет пользовательские файлы и не обновляет runtime/source generation in-place.
+[Delta schema 2](snapshot-delta.md), [pinned chunk/resume schema 3](snapshot-resume.md) и [baseline](performance-baseline-2026-10-09.md) реализованы. Dirty snapshots и source-cache cleanup/retention остаются следующими расширениями. Импорт не удаляет пользовательские файлы и не обновляет runtime/source generation in-place.
 
 ## Формат 2: delta
 

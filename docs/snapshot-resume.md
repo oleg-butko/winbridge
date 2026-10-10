@@ -1,6 +1,6 @@
 # Явное возобновление доставки snapshot
 
-Реализация 2026-10-10; automatic Windows gate пока ожидается.
+Реализация 2026-10-10; [automatic Windows gate пройден](windows-resume-gate-2026-10-10.md).
 [Контракт и проверки](snapshot-resume-plan.md).
 
 ```sh
@@ -32,8 +32,7 @@ Manifest schema 3 содержит `payloadChunks: {chunkBytes: 1048576, sha256:
 После обрыва выберите тот же пакет и нажмите «Импортировать пакет»:
 новый key создаёт новый Import ID и повторно проверяет сохранённые блоки.
 Старый key возвращает старый статус/ID, даже если это cancelled/interrupted.
-Ни startup worker, ни восстановление UI, ни reconnect не возобновляют принятый
-running filesystem
+Ни startup worker, ни восстановление UI, ни reconnect не возобновляют прерванный работающий import: filesystem
 mutation автоматически. Перед extract проверяется assembled ZIP SHA-256;
 перед publication проверяются все target files и delta base. Сборка остаётся явной.
 

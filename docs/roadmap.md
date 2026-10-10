@@ -108,17 +108,17 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 
 ## Этап 6 — скорость и объёмы после измерений
 
-Первый сценарий: [воспроизводимый baseline](stage6-plan.md) существующей доставки,
+Статус 2026-10-10: этап 6 завершён [automatic chunk/resume gate](windows-resume-gate-2026-10-10.md). Первый сценарий: [воспроизводимый baseline](stage6-plan.md) существующей доставки,
 Windows import/build, HGFS tree/archive и объёмов output/journal. План зафиксирован
-после ревью этапа 5; performance extensions пока не реализованы.
+после ревью этапа 5; выбранные расширения теперь измерены и проверены.
 
 - [x] [Baseline HGFS tree/archive и time-to-build](performance-baseline-2026-10-09.md) с fixture параметрами: 3 повтора, 59 actual Windows операций, output/control/cancel/storage evidence.
 - [x] [Первая измеренная оптимизация capture](performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
 - [x] [Incremental full/delta](windows-delta-gate-2026-10-09.md): три fresh Debian → Windows one-file commit; ZIP 2 367 994→193 bytes, publication/import timings и actual build/output/control/cancel/attention.
 - [x] [Delta от verified snapshot](snapshot-delta.md): schema 2/pinned base/local source cache, full target verification, CLI/MCP/UI; 40 native tests и cross-host gate прошли. Старые поколения сохраняются; удаление отражается новым составом.
 - [x] [Пакетное чтение output и виртуализация строк](windows-output-gate-2026-10-10.md): bounded pages/cursors/tails, не более 28 DOM rows; 11 Windows tests, три native IPC пары, hashes/dedup/restart/control и browser integration.
-- [ ] [Chunk/resume больших объектов](snapshot-resume.md): реализация и Linux owned crash/cancel/restart добавлены; automatic Windows gate ожидается. Дальнейшая виртуализация списков — по измерениям.
-- [ ] При необходимости SocketDelivery как другой adapter. Control session не блокируется большими данными.
+- [x] [Chunk/resume больших объектов](windows-resume-gate-2026-10-10.md): manifest-pinned 1 MiB blocks, explicit import после cancel/crash, exact Debian pins и offline build; 39 native tests, shared ZIP bytes на 75% меньше.
+- [x] Оценена необходимость SocketDelivery/дальнейшей list virtualization: текущие gates не выявили необходимости. Shared resume и bounded output/history достаточно для измеренных сценариев; другой adapter и дополнительная виртуализация выбираются при новых данных.
 
 Критерий: измеряемое улучшение выбранного сценария, отсутствие регрессии cancel/attention latency, корректное восстановление после прерывания. Не менять транспорт ради обещания абстрактной скорости.
 
@@ -139,18 +139,11 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 
 ## Следующий конкретный шаг
 
-Этап 6: baseline capture/pack/shared publication/Windows import/build/output/journal
-и первая Git batch оптимизация завершены. Delta/local source cache и три measured one-file пары также [завершены](windows-delta-gate-2026-10-09.md).
-2026-10-10 после ревью [output batching/virtualization](windows-output-gate-2026-10-10.md)
-завершены: страницы 17→11 при тех же bytes, bounded UI и автоматические проверки.
-Дальше — chunk/resume больших snapshot payload после прерывания, без потери pins,
-без изменения старых поколений и без автоматического повторного запуска команд.
-Resume больших объектов/другой adapter ещё не реализованы.
-Старые snapshots/reports/history не очищать.
-2026-10-09 пользователь обновил installed worker до clean `58f3c14`;
-HistoryRead/typed attention/maintenance и здоровый журнал подтверждены read-only Info.
-Debian controller снова запущен. [Ревью](review-stage5-2026-10-09.md) исправило
-неограниченный readback diagnostic collision; settings/retention завершены.
-Новых мелких ручных UI gates не назначать. Если подключённый worker даёт неожиданную
-ошибку, остановиться и уточнить по инструкции пользователя. Dirty source mode и
-performance extensions остаются будущими задачами.
+Этап 7: закрепить handler/module interfaces после проверенных runner/sync/log/attention,
+чтобы следующий проект подключался profile/recipe и модулем без изменения transport
+и копирования journal/cancel/recovery. Сначала сверить реальные coupling points и
+выбрать один вертикальный сценарий; не добавлять абстракции без потребителя.
+Этапы 1–6 завершены; installed worker остаётся af90ec0, новый native resume code
+38f4e5d проверен в isolated runtime. Для использования новых функций нужен общий
+update worker/desktop из готового source archive, без повторного ручного gate.
+Старые snapshots/reports/history не очищать; актуальную связь проверить заново.
