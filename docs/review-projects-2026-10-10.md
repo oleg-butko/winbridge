@@ -27,6 +27,16 @@ Windows submit ещё не выполнялся; каталог подготов
 проверяет имя с кириллицей, знаком ✓ и начальным пробелом. Ошибка чтения списка
 inputs не выдаётся за clean build. Это исправление provenance, не смена runtime.
 
+Первый actual Windows pair run `20261010-181812-f65b8114` прошёл policy/profile/
+workflow regression и оба реальных import/build/artifact/start/readiness/log/stop.
+Завершился ошибкой нового harness: он сохранил running task до записи PID, затем
+передал null в Get-Process. Running обозначает durable launch intent, а не наличие
+процесса. Wait-ChildTask теперь ждёт status **и** non-null PID для process assertions;
+ошибки сохраняют PositionMessage/ScriptStackTrace. 11 report artifacts проверены
+по bytes/SHA-256 и сохранены, результат остаётся failed. Installed worker здоров,
+activeTaskCount=0, generation прежняя. Новый run выполняется с новым explicit key;
+unknown command не повторяется. Это harness race, обновление рабочего worker не требуется.
+
 ## Следующий сценарий этапа 7
 
 Второй реальный потребитель после Netwatch — сам WinBridge worker. Два отдельных

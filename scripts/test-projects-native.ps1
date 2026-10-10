@@ -55,7 +55,9 @@ function Wait-ChildTask([string]$Executable, [string]$ConfigPath, [string]$TaskI
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     do {
         $task = (Invoke-WorkerJson -Executable $Executable -ConfigPath $ConfigPath -Arguments @('get', $TaskId)).task
-        if ($task.status -eq $Status) { return $task }
+        # Running is durable launch intent; PID may still be absent until
+        # process creation is committed. A process assertion must wait for both.
+        if ($task.status -eq $Status -and ($Status -ne 'running' -or $null -ne $task.processId)) { return $task }
         if ($task.status -notin @('queued', 'running') -or [DateTime]::UtcNow -ge $deadline) {
             throw "Child task did not reach ${Status}: $($task.reason)"
         }
@@ -204,6 +206,8 @@ try {
     $result.passed = $true
 } catch {
     $result.error = $_.Exception.Message
+    $result['errorPosition'] = $_.InvocationInfo.PositionMessage
+    $result['errorStack'] = $_.ScriptStackTrace
     throw
 } finally {
     # Only this script's coordinator PID is stopped; its Job Objects own all test
