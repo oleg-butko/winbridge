@@ -1,3 +1,19 @@
+## Этап 7 — новая сессия и второй прикладной проект, 2026-10-10
+
+Пользователь обновил Windows из winbridge-20261010T100754Z-fa7e4d7-827eab23.zip
+и оставил worker, desktop закрыт. После reboot controller запущен заново
+с .winbridge/controller-snapshot.local.json (exec 16587), generation
+f5e6273b-1e7f-490a-bba0-95b648c278a2, session 3cf5eb0b-99a6-440e-a143-27ca028d8340.
+Worker clean fa7e4d7, build ID 1791669115612660300, manifest SHA-256
+26b0ebb7371588c40579dadd163172ecc128fb5628c7c5b088fa57919a52a11b,
+generation 372266b6-3dee-4d87-9de2-ccab896dbcf8; healthy/idle.
+
+[Ревью и план](review-projects-2026-10-10.md): исправлен чужой parent Git commit
+в build identity, неизвестные исходники не объявляются clean. Targeted regression
+прошла. Следующий прикладной сценарий — isolated Netwatch + WinBridge worker через
+общий build profile, без новой transport/queue. Native gate ещё не выполнен;
+этап 7 остаётся открытым. Пользовательские configs/runtime не меняются.
+
 ## Этап 7 — общие профили рецептов, 2026-10-10
 
 [Ревью](review-stage7-2026-10-10.md) выполнено; важная ошибка queued workflow

@@ -19,6 +19,8 @@ required-features = ["typescript"]
 
 [dev-dependencies]
 serde_json.workspace = true
+sha2 = "0.10.9"
+tempfile = "3"
 
 [build-dependencies]
 serde_json.workspace = true

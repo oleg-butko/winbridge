@@ -150,9 +150,9 @@ browser integration проходят. Первый сценарий заверш
 recipe profiles и статический handler contract без копирования transport/journal/
 cancel/recovery. CommandHandler/runner для двух проектов, workflow recipe pins и
 общий timeline уже прошли [automatic Windows gate](windows-profiles-gate-2026-10-10.md).
-Следующий шаг — выбрать конкретного потребителя и проверить его полный cycle через
-общие interfaces; не вводить SDK/plugins без необходимости. Native-tested code
-fa7e4d7 доступен в source archive из handoff; installed worker пока af90ec0,
-controller обновлён до clean fa7e4d7. Для применения новых функций нужен общий
-update worker/desktop, без нового ручного gate. Старые snapshots/reports/history
+Следующий потребитель выбран: isolated WinBridge worker рядом с Netwatch, через
+общий build recipe profile и прежние sync/runner/journal interfaces. [План и ревью](review-projects-2026-10-10.md);
+native gate этого сценария ещё не выполнен. Не вводить SDK/plugins без необходимости. Native-tested code
+fa7e4d7 доступен в source archive из handoff; пользователь обновил installed worker
+до этой версии, controller запущен после reboot. Старые snapshots/reports/history
 не очищать; актуальную связь проверить заново.

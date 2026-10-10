@@ -1,27 +1,40 @@
 use sha2::{Digest, Sha256};
 use std::{
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
 
+fn git(root: &Path, args: &[&str]) -> Option<String> {
+    Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+fn git_identity(root: &Path) -> Option<(String, bool)> {
+    // Git searches ancestors. An imported generation must never inherit the
+    // identity of a checkout containing its workspace/cache.
+    let top = git(root, &["rev-parse", "--show-toplevel"])?;
+    if fs::canonicalize(root).ok()? != fs::canonicalize(top).ok()? {
+        return None;
+    }
+    let commit = git(root, &["rev-parse", "HEAD"])?;
+    let dirty = git(root, &["status", "--porcelain"]).is_none_or(|s| !s.is_empty());
+    Some((commit, dirty))
+}
+
 fn main() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../..");
-    let git = |args: &[&str]| {
-        Command::new("git")
-            .args(args)
-            .current_dir(&root)
-            .output()
-            .ok()
-            .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-    };
     let manifest_path = root.join("winbridge-source-manifest.json");
     println!("cargo:rerun-if-changed={}", manifest_path.display());
     let manifest = fs::read(&manifest_path).ok();
     let mut commit = String::new();
-    let mut dirty = false;
+    let mut dirty = true;
     let mut hash = String::new();
     if let Some(bytes) = manifest {
         let value: serde_json::Value =
@@ -48,9 +61,9 @@ fn main() {
             }
         }
         hash = format!("{:x}", Sha256::digest(bytes));
-    } else if let Some(head) = git(&["rev-parse", "HEAD"]) {
+    } else if let Some((head, git_dirty)) = git_identity(&root) {
         commit = head;
-        dirty = git(&["status", "--porcelain"]).is_none_or(|s| !s.is_empty());
+        dirty = git_dirty;
         println!(
             "cargo:rerun-if-changed={}",
             root.join(".git/HEAD").display()
@@ -59,12 +72,12 @@ fn main() {
             "cargo:rerun-if-changed={}",
             root.join(".git/index").display()
         );
-        if let Some(names) = git(&["ls-files"]) {
+        if let Some(names) = git(&root, &["ls-files"]) {
             for name in names.lines() {
                 println!("cargo:rerun-if-changed={}", root.join(name).display());
             }
         }
-        if let Some(reference) = git(&["symbolic-ref", "-q", "HEAD"]) {
+        if let Some(reference) = git(&root, &["symbolic-ref", "-q", "HEAD"]) {
             println!(
                 "cargo:rerun-if-changed={}",
                 root.join(".git").join(reference).display()
@@ -81,4 +94,48 @@ fn main() {
             .unwrap()
             .as_nanos()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn git_identity_requires_own_checkout_and_preserves_dirty_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        for args in [
+            vec!["init", "--quiet"],
+            vec![
+                "-c",
+                "user.name=Validation",
+                "-c",
+                "user.email=validation@local",
+                "commit",
+                "--allow-empty",
+                "--quiet",
+                "-m",
+                "identity",
+            ],
+        ] {
+            assert!(Command::new("git")
+                .args(args)
+                .current_dir(root)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let (commit, dirty) = git_identity(root).unwrap();
+        assert_eq!(commit, git(root, &["rev-parse", "HEAD"]).unwrap());
+        assert!(!dirty);
+        let generation = root.join("workspaces/project/snapshots/s-example");
+        fs::create_dir_all(&generation).unwrap();
+        // Plain `git rev-parse HEAD` succeeds here but describes the parent.
+        assert_eq!(git(&generation, &["rev-parse", "HEAD"]), Some(commit));
+        assert_eq!(git_identity(&generation), None);
+        fs::write(generation.join("source.txt"), "untracked source").unwrap();
+        assert!(git_identity(root).unwrap().1);
+        let unversioned = tempfile::tempdir().unwrap();
+        assert_eq!(git_identity(unversioned.path()), None);
+    }
 }
