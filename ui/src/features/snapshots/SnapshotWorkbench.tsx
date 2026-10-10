@@ -117,17 +117,18 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
     catch (error) { setError(String(error)); }
     finally { setBusy(false); }
   }
-  const copying = record?.phase === "copy_payload";
+  const copying = ["copy_payload", "verify_cached_payload", "assemble_payload", "payload_checkpoint", "verify_payload"].includes(record?.phase ?? "");
   const progressKnown = record?.totalBytes != null && !copying;
   const visiblePage = pageScope.current === scopeKey ? page : null;
   const packages = visiblePage?.projectId === project ? visiblePage.snapshots : [];
   const packageOptions = packages.map((s) => ({ value: s.snapshotId, label: s.metadataError ? `${s.snapshotId} · ошибка метаданных`
-    : `${s.snapshotId} · commit ${s.source?.commit.slice(0, 8)} · ${s.totalFiles} файлов · ZIP ${s.payloadBytes?.toLocaleString()} байт${s.delta ? " · delta" : ""}` }));
+    : `${s.snapshotId} · commit ${s.source?.commit.slice(0, 8)} · ${s.totalFiles} файлов · ZIP ${s.payloadBytes?.toLocaleString()} байт${s.delta ? " · delta" : ""}${s.resumable ? " · resume" : ""}` }));
   if (snapshot && !packages.some((s) => s.snapshotId === snapshot)) packageOptions.unshift({ value: snapshot, label: `${snapshot} · сохранённый выбор, нет в загруженном списке` });
   const chosen = packages.find((s) => s.snapshotId === snapshot);
   return <Card id="native-import-detail" tabIndex={-1} withBorder><Stack>
     <Title order={3}>Доставка исходников</Title>
     <Text size="sm">Controller публикует точный Git commit в shared. Worker проверяет пакет и создаёт отдельное поколение на локальном диске Windows.</Text>
+    {info.snapshotResumeAvailable && <Text size="sm">Пакеты с блоками поддерживают возобновление: новый явный импорт проверит локальные блоки и получит недостающие из shared. Прежний ключ возвращает прежний Import ID. Сборка запускается отдельно.</Text>}
     <Select label="Проект доставки" data={info.projects.map((p) => p.id)} value={project} onChange={(id) => choose(id)} disabled={busy || listBusy || pending !== null || closing || drafts === null} allowDeselect={false} />
     <Select label="Snapshot ID опубликованного пакета" description="Список из shared-папки worker. Поиск по ID или commit. Метаданные не подтверждают целостность ZIP." searchable clearable nothingFoundMessage="Пакет не найден в загруженном списке" data={packageOptions} value={snapshot} onChange={(id) => choose(project, id)} disabled={busy || listBusy || pending !== null || closing || !selection} />
     <Group><Button variant="light" onClick={() => setRefresh((r) => r + 1)} loading={listBusy} disabled={!connected || !project || closing}>Обновить список пакетов</Button>
@@ -152,6 +153,9 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
         <Text size="sm">Прежнее поколение сохраняется. При отсутствии или повреждении базы нужен явный полный импорт.</Text>
       </Alert>}
       {preview.delta && !info.snapshotDeltaAvailable && <Alert color="yellow">Этот worker не поддерживает delta. Обновите worker или выберите полный пакет.</Alert>}
+      {preview.resumable && <Alert color={info.snapshotResumeAvailable ? "blue" : "yellow"} title="Пакет с возобновлением передачи">
+        {info.snapshotResumeAvailable ? "Блоки ZIP по 1 МиБ проверяются по хэшам manifest и сохраняются на локальном диске. После обрыва нажмите «Импортировать пакет»: новый импорт использует проверенные блоки. Восстановление интерфейса ничего не запускает." : "Этот worker не поддерживает resume. Обновите worker или выберите прежний полный пакет."}
+      </Alert>}
       <Text size="xs">Manifest SHA-256: {preview.manifestSha256}</Text>
       <Alert color="blue">Это предварительный состав. Проверка ZIP и всех файлов выполняется при импорте; сборка запускается отдельной командой.</Alert>
       {onWorkflowSnapshot && <Button variant="light" onClick={() => onWorkflowSnapshot({ projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256 })} disabled={busy || closing}>Использовать в workflow</Button>}
@@ -159,7 +163,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
         {preview.files.map((file) => <Table.Tr key={file.path}><Table.Td>{file.path}</Table.Td><Table.Td>{file.bytes}</Table.Td><Table.Td><Code>{file.sha256}</Code></Table.Td></Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>
       {preview.nextOffset !== null && <Button variant="light" onClick={() => void inspect(preview.nextOffset!)} disabled={!connected || busy || closing}>Следующие 100 файлов</Button>}
-      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 }, !!preview.delta)} disabled={!!preview.delta && !info.snapshotDeltaAvailable || !connected || !!info.journalRecoveryRequired || busy || pending !== null || closing}>Импортировать пакет</Button>
+      <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 }, !!preview.delta)} disabled={!!preview.resumable && !info.snapshotResumeAvailable || !!preview.delta && !info.snapshotDeltaAvailable || !connected || !!info.journalRecoveryRequired || busy || pending !== null || closing}>Импортировать пакет</Button>
     </>}
     {pending && <Alert color="yellow" title="Приём импорта не подтверждён">Повтор отправит прежние параметры и ключ.
       <Button onClick={() => void send(pending, pendingDelta)} loading={busy} disabled={!connected || closing}>Проверить приём импорта</Button>
@@ -168,10 +172,11 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
     {error && <Alert color="yellow" title="Нет свежего результата операции">{error}</Alert>}
     <Select label="Последние 10 импортов" value={selected ?? record?.importId ?? null} onChange={setSelected} data={(record&&!imports.some((r)=>r.importId===record.importId)?[record,...imports]:imports).map((r) => ({ value: r.importId, label: `${r.submission.projectId} · ${statuses[r.status].label} · ${r.importId}` }))} />
     {record && <Stack gap="xs" data-confirmed-import-id={record.importId}>
-      <Group><Badge color={statuses[record.status].color}>{statuses[record.status].label}</Badge><Text>{phases[record.phase] ?? record.phase}</Text></Group>
+      <Group><Badge color={statuses[record.status].color}>{statuses[record.status].label}</Badge><Text>{({ verify_cached_payload: "Проверка локальных блоков ZIP", assemble_payload: "Сборка ZIP на локальном диске", payload_checkpoint: "Блок сохранён и проверен", verify_payload: "Проверка полного ZIP" } as Record<string, string>)[record.phase] ?? phases[record.phase] ?? record.phase}</Text></Group>
       <Text size="xs">Import ID: {record.importId} · подтверждение: {confirmedAt === null ? "ожидается" : new Date(confirmedAt).toLocaleTimeString()}</Text>
       {!connected && <Text c="yellow">Worker недоступен. Показано последнее подтверждение; импорт не запускается повторно.</Text>}
       {record.delta && <Text size="sm">Delta: база {record.delta.snapshotId} · {record.delta.reusedFiles} файлов / {record.delta.reusedBytes} байт из локальной базы · ZIP {record.delta.payloadBytes} байт. SHA-256 manifest базы: {record.delta.manifestSha256}</Text>}
+      {record.transfer && <Text size="sm">Передача ZIP: {record.transfer.payloadBytes} байт · проверено из локального кэша {record.transfer.reusedBytes} байт · получено и проверено из shared {record.transfer.sharedBytes} байт. Размер блока: {record.transfer.chunkBytes} байт.</Text>}
       <Text>Snapshot: {record.submission.snapshotId} · commit: {record.commit ?? "ещё не проверен"}</Text>
       <Text size="sm">Из: {record.sharedPath}</Text><Text size="sm">В: {record.workspacePath}</Text>
       <Text size="sm">{record.completedFiles} / {record.totalFiles ?? "?"} файлов · {record.completedBytes} байт {copying ? "ZIP" : "исходников"}</Text>

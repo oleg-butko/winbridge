@@ -35,6 +35,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         SnapshotReuse::decl(&config),
         SnapshotDelta::decl(&config),
         SnapshotDeltaSummary::decl(&config),
+        SnapshotPayloadChunks::decl(&config),
+        SnapshotTransfer::decl(&config),
         SnapshotManifest::decl(&config),
         SnapshotReady::decl(&config),
         ImportSubmission::decl(&config),

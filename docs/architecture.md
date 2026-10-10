@@ -131,3 +131,12 @@ immutable до ручного restart. Controller/WebSocket maintenance не в�
 SQLite schema 6 хранит durable cleanup results, consistent v5 backup перед upgrade.
 Только старый terminal stdout/stderr, с защитой active/unknown и pending attention;
 task history/dedup/snapshots/reports сохраняются. Automatic policy opt-in/off by default.
+
+### Manifest-pinned payload blocks (этап 6)
+
+Opt-in [schema 3/resume](snapshot-resume.md) сохраняет legacy schema 1/2.
+Каждый ZIP block имеет SHA-256 в manifest; cache key — manifest SHA-256,
+cache/staging/source находятся на local disk. Новый явный import проверяет cache
+и читает только недостающие blocks из shared. Все прежние whole ZIP/file/base pins,
+leases, terminal records/dedup и immutable publication сохраняются. Restart/close
+не возобновляют мутации. Cache cleanup не входит в output retention policy.

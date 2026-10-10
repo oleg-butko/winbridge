@@ -239,6 +239,28 @@ try {
   assert.equal(imported.status,"succeeded");
   assert.equal((await call({method:"list_imports"})).imports.length,1);
   assert.equal(await readFile(join(imported.workspacePath,"Привет.txt"),"utf8"),"UI snapshot ✓");
+
+  // The same import RPC carries schema 3; lost ACK reconciles the same durable key.
+  const resumePublished=JSON.parse((await exec(controllerExe,["--config",controllerConfig,"publish-resumable","fixture","HEAD"])).stdout);
+  assert.equal(resumePublished.ready.schemaVersion,3);
+  await page.getByRole("button",{name:"Обновить список пакетов",exact:true}).click();
+  await deliverySnapshot.fill(resumePublished.ready.snapshotId);
+  await page.getByRole("option",{name:new RegExp(`^${resumePublished.ready.snapshotId} · commit`)}).click();
+  await page.getByRole("button",{name:"Посмотреть состав snapshot",exact:true}).click();
+  await page.getByText("Пакет с возобновлением передачи",{exact:true}).waitFor();
+  await page.getByText(/После обрыва нажмите «Импортировать пакет»/).waitFor();
+  loseFirstImportAck=true;
+  const beforeResume=(await call({method:"list_imports"})).imports.length;
+  await page.getByRole("button",{name:"Импортировать пакет",exact:true}).click();
+  await page.getByText("Приём импорта не подтверждён",{exact:true}).waitFor();
+  await page.getByRole("button",{name:"Проверить приём импорта",exact:true}).click();
+  await page.getByText("Готово для сборки",{exact:true}).waitFor();
+  const resumeImported=(await call({method:"get_import",importId:importedId})).import;
+  assert.equal(resumeImported.status,"succeeded");
+  assert.equal(resumeImported.transfer.sharedBytes,resumePublished.ready.payloadBytes);
+  assert.equal(resumeImported.transfer.reusedBytes,0);
+  assert.equal((await call({method:"list_imports"})).imports.length,beforeResume+1);
+  await page.getByText(new RegExp(`Передача ZIP: ${resumePublished.ready.payloadBytes} байт`)).waitFor();
   await page.getByLabel("Snapshot ID для сборки",{exact:true}).fill(published.snapshotId);
   await page.getByText(/Поля сохранены\. Восстановление/).waitFor();
   assert.equal(JSON.parse(await readFile(preferencesPath,"utf8")).drafts.at(-1).snapshotId,published.snapshotId);
@@ -364,7 +386,7 @@ try {
   assert.equal(await deliverySnapshot.inputValue(), "");
   await page.getByRole("textbox", {name:"Проект доставки", exact:true}).click();
   await page.getByRole("option", {name:"fixture",exact:true}).click();
-  await until(async () => (await deliverySnapshot.inputValue()).startsWith(published.snapshotId), "per-project delivery snapshot was not restored");
+  await until(async () => (await deliverySnapshot.inputValue()).startsWith(resumePublished.ready.snapshotId), "per-project delivery snapshot was not restored");
   await writeFile(join(source, "Привет.txt"), "UI second snapshot ✓");
   await exec("git", ["-C",source,"add","."]);
   await exec("git", ["-C",source,"-c","user.name=Fixture","-c","user.email=fixture@local","commit","-qm","second snapshot"]);

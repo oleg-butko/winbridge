@@ -15,8 +15,8 @@ controller, не создаёт listener, не меняет firewall/runtime con
 
 ## Контракт
 
-32 tools: 30 сетевых вариантов LocalRequest и две публикации — `winbridge_publish`
-и `winbridge_publish_delta`. Delta import использует `winbridge_import_delta_snapshot`
+33 tools: 30 сетевых вариантов LocalRequest и три публикации — `winbridge_publish`
+`winbridge_publish_delta` и `winbridge_publish_resumable`. Resume publication использует pinned blocks schema 3 и необязательную delta base; import остаётся прежним RPC. Delta import использует `winbridge_import_delta_snapshot`
 и требует `workspace_delta`; [формат и recovery](snapshot-delta.md). Четыре новые
 local-only maintenance операции в каталог не включены и controller их не пересылает.
 Каждая операция имеет

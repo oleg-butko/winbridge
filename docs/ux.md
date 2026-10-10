@@ -113,3 +113,11 @@ Preview показывает полный целевой состав и отд�
 из базового snapshot» видна в import history вместе с сохранённой summary базы.
 Недоступная база объясняет необходимость явного полного импорта. Lost ACK
 повторяет прежний delta-метод/параметры/ключ; выбор snapshot не выполняет импорт.
+
+### Возобновление доставки
+
+Preview обозначает resume-capable package и объясняет explicit new import после
+обрыва. Старый key только сверяет прежний результат. Worker Info определяет
+поддержку; UI не предлагает schema 3 import старому worker. Import detail отдельно
+показывает проверенные ZIP bytes из local cache и shared, фазу проверки/сборки ZIP
+и точную ошибку блока. Resume не обозначается успехом до verified generation.

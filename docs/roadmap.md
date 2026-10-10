@@ -117,7 +117,7 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 - [x] [Incremental full/delta](windows-delta-gate-2026-10-09.md): три fresh Debian → Windows one-file commit; ZIP 2 367 994→193 bytes, publication/import timings и actual build/output/control/cancel/attention.
 - [x] [Delta от verified snapshot](snapshot-delta.md): schema 2/pinned base/local source cache, full target verification, CLI/MCP/UI; 40 native tests и cross-host gate прошли. Старые поколения сохраняются; удаление отражается новым составом.
 - [x] [Пакетное чтение output и виртуализация строк](windows-output-gate-2026-10-10.md): bounded pages/cursors/tails, не более 28 DOM rows; 11 Windows tests, три native IPC пары, hashes/dedup/restart/control и browser integration.
-- [ ] Chunk/resume больших объектов; дальнейшая виртуализация списков по измерениям.
+- [ ] [Chunk/resume больших объектов](snapshot-resume.md): реализация и Linux owned crash/cancel/restart добавлены; automatic Windows gate ожидается. Дальнейшая виртуализация списков — по измерениям.
 - [ ] При необходимости SocketDelivery как другой adapter. Control session не блокируется большими данными.
 
 Критерий: измеряемое улучшение выбранного сценария, отсутствие регрессии cancel/attention latency, корректное восстановление после прерывания. Не менять транспорт ради обещания абстрактной скорости.

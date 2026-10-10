@@ -7,10 +7,42 @@ import json
 from pathlib import Path, PureWindowsPath
 import socket
 import struct
+import subprocess
 import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def prepare_resume_package(config, shared, run_id):
+    """Fresh committed Debian fixture; Windows must import precisely these pinned bytes."""
+    local = ROOT / '.winbridge' / 'resume-validation' / run_id
+    source = local / 'source'
+    source.mkdir(parents=True)
+    (source / 'src').mkdir()
+    (source / 'Cargo.toml').write_text('[package]\nname = "resume-fixture"\nversion = "0.1.0"\nedition = "2021"\n')
+    (source / 'Cargo.lock').write_text('version = 3\n[[package]]\nname = "resume-fixture"\nversion = "0.1.0"\n')
+    (source / 'src' / 'main.rs').write_text('fn main(){println!("Проверенный resume → Windows build ✓");}\n')
+    blob = bytes([0xB6]) * (32*1024*1024+31)
+    (source / 'blob.dat').write_bytes(blob)
+    for arguments in (['init', '-q'], ['add', '.'], ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@local', 'commit', '-qm', 'Cross-host resume fixture']):
+        subprocess.run(['git', '-C', str(source), *arguments], check=True, capture_output=True)
+    delivery_root = shared / config['delivery']['namespace'] / 'resume-validation' / run_id
+    delivery_root.mkdir(parents=True)
+    publication_config = dict(config, stateDirectory=str(local / 'capture'),
+                              projects=[{'id':'fixture', 'sourceRoot':str(source), 'sourceMode':'commit'}],
+                              delivery=dict(config['delivery'], root=str(delivery_root)))
+    config_path = local / 'publisher.local.json'
+    config_path.write_text(json.dumps(publication_config, indent=2))
+    process = subprocess.run([str(ROOT / 'target/debug/winbridge-controller'), '--config', str(config_path), 'publish-resumable', 'fixture', 'HEAD'], check=True, capture_output=True, text=True)
+    publication = json.loads(process.stdout)
+    if publication['ready']['schemaVersion'] != 3 or publication['reusedPackage']:
+        raise RuntimeError('Resume gate requires a fresh Debian schema-3 publication')
+    measurement = delivery_root / 'debian-publication.json'
+    with measurement.open('x') as stream:
+        json.dump(publication, stream, indent=2)
+    windows_root = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(delivery_root.relative_to(shared)).replace('/', '\\')
+    return publication, hashlib.sha256(blob).hexdigest(), windows_root, windows_root + '\\debian-publication.json'
 
 
 def exact(stream, count):
@@ -48,6 +80,7 @@ def main():
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--project', default='snapshot-fixture')
     parser.add_argument('--delta-only', action='store_true', help='Check pinned-base delta on actual HGFS with isolated journal/build, without desktop windows')
+    parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
     parser.add_argument('--output-reference-worker', help='Read-only path to the installed worker exe, used with a NEW isolated config/state for matched output samples')
     parser.add_argument('--attention-only', action='store_true', help='Run the stage-5 attention tests without repeating the completed workflow gate')
@@ -57,7 +90,7 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only)) > 1:
         parser.error('Choose one isolated scenario: task attention, workflow attention, companion, history diagnostics or Netwatch')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
@@ -79,6 +112,10 @@ def main():
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
     extra = ''
     profile_argument = ''
+    resume_publication = None
+    if args.resume_only:
+        resume_publication, resume_blob_sha, resume_delivery, resume_measurement = prepare_resume_package(config, shared, run_id)
+        profile_argument = ' -ResumeOnly -ResumeDeliveryRoot ' + ps_string(resume_delivery) + ' -ResumePublicationFile ' + ps_string(resume_measurement)
     if args.output_only:
         profile_argument = ' -OutputOnly -OutputReferenceWorker ' + ps_string(args.output_reference_worker)
     if args.delta_only:
@@ -188,6 +225,19 @@ exit $LASTEXITCODE
                 raise RuntimeError('Output comparison source identity mismatch')
             if old['bodySha256'] != new['bodySha256'] or old['stderrBytes'] != 1048576 or new['stderrBytes'] != 1048576 or new['measurement']['pages'] >= old['measurement']['pages']:
                 raise RuntimeError('Output hashes/counts or page reduction did not match')
+    if args.resume_only:
+        proof = json.loads((report / 'resume-proof.json').read_text())
+        baseline = proof['baseline']['import']
+        resumed = proof['resumed']['import']
+        transfer = resumed['transfer']
+        if not proof['passed'] or proof['platform'] != 'windows' or proof['build']['sourceCommit'] != result['sourceCommit'] or proof['build']['sourceDirty']:
+            raise RuntimeError('Native resume source identity/proof mismatch')
+        if proof['ready'] != resume_publication['ready'] or proof['blobSha256'] != resume_blob_sha:
+            raise RuntimeError('Native resume did not import the exact pinned Debian fixture')
+        if baseline['transfer']['reusedBytes'] != 0 or baseline['transfer']['sharedBytes'] != transfer['payloadBytes'] or transfer['reusedBytes'] < 4*1024*1024 or transfer['sharedBytes']+transfer['reusedBytes'] != transfer['payloadBytes']:
+            raise RuntimeError('Native resume did not reduce verified shared bytes')
+        if proof['recovered']['status'] != 'interrupted' or resumed['status'] != 'succeeded' or proof['buildTask']['status'] != 'succeeded' or proof['buildTask']['snapshot']['manifestSha256'] != proof['ready']['manifestSha256']:
+            raise RuntimeError('Native resume recovery/build pin mismatch')
     final_info = call(endpoint, {'method':'info'})['info']
     if final_info['generation'] != info['generation'] or final_info.get('journalRecoveryRequired') or final_info.get('maintenanceError') or final_info.get('activeTaskCount') != 0:
         raise RuntimeError('Installed worker health/generation changed unexpectedly; inspect retained task/report')

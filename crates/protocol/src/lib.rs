@@ -288,6 +288,8 @@ pub struct WorkerInfo {
     #[serde(default)]
     pub snapshot_delta_available: bool,
     #[serde(default)]
+    pub snapshot_resume_available: bool,
+    #[serde(default)]
     pub workflow_available: bool,
     #[serde(default)]
     pub workflow_features: Vec<String>,

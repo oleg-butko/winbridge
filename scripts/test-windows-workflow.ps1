@@ -32,6 +32,10 @@ SHA-256 исходного ZIP, из которого распакованы и�
 .PARAMETER OutputOnly
 Проверяет bounded output pages, настоящий IPC, hashes обоих потоков, dedup,
 cursor restart и cancel/attention. Desktop и тестовые окна не открываются.
+.PARAMETER ResumeOnly
+Проверяет manifest-pinned blocks на настоящем HGFS, cancel/corruption и actual
+crash/restart отдельного worker, dedup, explicit resume и offline pinned build.
+Рабочие exe/state не меняются; desktop и тестовые окна не открываются.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -55,6 +59,9 @@ param(
     [switch]$SettingsRetentionOnly,
     [switch]$DeltaOnly,
     [switch]$OutputOnly,
+    [switch]$ResumeOnly,
+    [string]$ResumeDeliveryRoot = '',
+    [string]$ResumePublicationFile = '',
     [string]$OutputReferenceWorker = '',
     [switch]$Help
 )
@@ -97,6 +104,9 @@ $oldTmp = $env:TMP
 $oldDeltaShared = $env:WINBRIDGE_DELTA_GATE_SHARED
 $oldOutputReport = $env:WINBRIDGE_OUTPUT_GATE_REPORT
 $oldOutputReference = $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER
+$oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
+$oldResumeDelivery = $env:WINBRIDGE_RESUME_GATE_DELIVERY
+$oldResumePublication = $env:WINBRIDGE_RESUME_GATE_PUBLICATION
 $oldLocation = Get-Location
 try {
     foreach ($file in $manifest.files) {
@@ -118,7 +128,25 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($ResumeOnly) {
+        if ($NetwatchProfile) { throw 'ResumeOnly requires an isolated scenario' }
+        $env:WINBRIDGE_RESUME_GATE_SHARED = $ReportDirectory
+        if ([bool]$ResumeDeliveryRoot -ne [bool]$ResumePublicationFile) { throw 'Cross-host resume needs both delivery root and pinned publication file' }
+        if ($ResumeDeliveryRoot) {
+            $env:WINBRIDGE_RESUME_GATE_DELIVERY = (Resolve-Path -LiteralPath $ResumeDeliveryRoot).Path
+            $env:WINBRIDGE_RESUME_GATE_PUBLICATION = (Resolve-Path -LiteralPath $ResumePublicationFile).Path
+        } else {
+            $env:WINBRIDGE_RESUME_GATE_DELIVERY = $null
+            $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $null
+        }
+        $groups = @(
+            @{ name='resume-metadata-policy'; arguments=@('test','-p','winbridge-core','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='resume-hgfs-blocks-corruption-cancel-delta'; arguments=@('test','-p','winbridge-workspace-sync','--test','resume','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='resume-native-worker-crash-restart-dedup-pinned-build'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','resume','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='resume-tree-timeout-regression'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','runtime','--locked','--offline','--','--test-threads=1','--nocapture') }
+        )
+    }
     if ($OutputOnly) {
         if ($NetwatchProfile -or -not $OutputReferenceWorker) { throw 'OutputOnly needs an explicit read-only reference worker path and isolated scenario' }
         $env:WINBRIDGE_OUTPUT_GATE_REPORT = $ReportDirectory
@@ -216,6 +244,9 @@ try {
     $env:WINBRIDGE_DELTA_GATE_SHARED = $oldDeltaShared
     $env:WINBRIDGE_OUTPUT_GATE_REPORT = $oldOutputReport
     $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER = $oldOutputReference
+    $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
+    $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
+    $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $oldResumePublication
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {

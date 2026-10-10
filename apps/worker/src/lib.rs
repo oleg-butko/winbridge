@@ -399,6 +399,7 @@ impl Worker {
                         projects: self.config.public_projects(),
                         snapshot_import_available: self.config.delivery.is_some(),
                         snapshot_delta_available: self.config.delivery.is_some(),
+                        snapshot_resume_available: self.config.delivery.is_some(),
                         workflow_available: self.config.delivery.is_some(),
                         controller_connection: self
                             .controller_connection

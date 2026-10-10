@@ -67,6 +67,30 @@ pub fn publish_delta_measured(
     )
 }
 
+pub fn publish_resumable_measured(
+    config: &ControllerConfig,
+    project: &str,
+    revision: &str,
+    base: Option<&str>,
+) -> Result<winbridge_workspace_sync::PublicationMeasurement> {
+    let source = config
+        .projects
+        .iter()
+        .find(|p| p.id == project)
+        .ok_or("Source project is not registered in controller JSON")?;
+    winbridge_workspace_sync::publish_resumable_measured(
+        config
+            .delivery
+            .as_ref()
+            .ok_or("Configure delivery in controller local JSON")?,
+        &source.source_root,
+        &config.state_directory,
+        project,
+        revision,
+        base,
+    )
+}
+
 struct Session {
     sender: RpcSender,
     id: String,

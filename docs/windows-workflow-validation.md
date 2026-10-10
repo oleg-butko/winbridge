@@ -151,3 +151,15 @@ Cargo собирает изолированные tests offline; пакеты п
 `delta-worker-proof.json` — import/dedup/recovery/build/Unicode/tamper evidence.
 `report.ready.json` подтверждает размеры и hashes artifacts. Installed exe/config
 не заменяются. После завершения desktop можно оставить закрытым, worker оставить.
+
+## Resume gate без ручных действий
+
+`scripts/validate-workflow-native.py --controller-config CONFIG --archive ZIP --resume-only`
+запускает `test-windows-workflow.ps1 -ResumeOnly` через рабочий Windows worker.
+Desktop закрыт; новых окон нет. Тесты собирают новую версию в собственном runtime
+и проверяют actual HGFS blocks/cancel/corruption/delta, NTFS junction, owned worker
+crash/restart, same-key reconciliation, explicit resume, pinned offline build и
+process tree/timeout regression. Fixture публикуется в Debian, Windows проверяет
+тот же ready/manifest/blob pin и использует его после planned crash. Installed exe/config/journal не заменяются.
+`resume-proof.json` и logs включаются в checksummed report с ready последним.
+После проверки тестовые worker остановлены; рабочий worker оставьте запущенным.

@@ -1,3 +1,17 @@
+## Продолжение 2026-10-10 — snapshot chunk/resume в работе
+
+Связь повторно проверена: installed worker clean af90ec0, generation
+`c182793f-5391-4bf8-9e70-9c94b8b24a5c`, healthy/idle; controller прежней
+running generation `1a3c0c7c-998a-4d35-8ec2-4572c218eb4e` подключён.
+Desktop закрыт, для backend проверки нужен только рабочий worker.
+
+[План resume](snapshot-resume-plan.md) и [контракт](snapshot-resume.md): opt-in
+schema 3, manifest-pinned 1 MiB blocks, отдельный local cache и новый явный
+import/key после cancel/crash. Прежние key/record/staging сохраняются; automatic
+retry/build/cleanup не добавлены. Core/sync/worker/CLI/MCP/UI реализация добавлена;
+Linux owned crash/restart, cancelled same-key и offline pinned build проходят.
+Automatic native Windows gate ещё не выполнен; этап 6 не закрыт.
+
 # Следующей сессии: продолжение WinBridge
 
 ## Текущая сессия — 2026-10-10

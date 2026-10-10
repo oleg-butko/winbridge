@@ -36,3 +36,20 @@ actual 20 000 Unicode lines на поток, lost read ACK с прежним cur
 11 tests, три пары reference/current, same bytes, pages 17→11, restart/dedup/control.
 Дополнительная browser проверка frozen cleanup и malformed complete report
 прошла после заключительного UI fix. Cross-compile не обозначается Windows run.
+
+## Продолжение ревью — pinned chunk/resume
+
+Новая schema 3 закрепляет все block hashes в manifest pin; непроверенные/частичные
+блоки остаются в staging. Каждый cache read повторно проверяет actual bytes;
+whole ZIP и file/base hashes проверяются до immutable publication. Отмена/timeout
+во время cache verification сохраняют свою точную причину. Во время ревью устранены
+два риска: journal events могли разрастаться при смене фаз каждого блока, а
+chunk index ошибочно попадал бы в счётчик source files. История фиксирует первое
+появление каждой фазы, payload progress не выдаётся за число source files.
+
+143 workspace tests прошли; final Clippy/Windows all-targets/DTO/TypeScript/build
+и browser integration проходят. В новой UI проверке исправлено устаревшее
+ожидание теста: после выбора resume package сохранён именно новый выбранный ID.
+Это ошибка тестового ожидания, восстановление формы работает корректно.
+Actual native Windows resume gate ещё ожидается. Никакие рабочие exe/state
+или прежние shared packages/reports не менялись; исходный Git tree был чистым.

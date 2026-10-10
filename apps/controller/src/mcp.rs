@@ -126,6 +126,9 @@ pub fn tools() -> Result<Vec<Value>, String> {
     tools.push(json!({"name":"winbridge_publish_delta","description":"Publish a committed Git revision as a delta against an explicit ready base snapshot. Reads and hashes actual Git blobs; the base manifest SHA-256 is pinned. Does not import or build, and does not replace old packages.",
         "inputSchema":{"type":"object","properties":{"projectId":{"type":"string"},"revision":{"type":"string"},"baseSnapshotId":{"type":"string"}},"required":["projectId","revision","baseSnapshotId"],"additionalProperties":false},
         "annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
+    tools.push(json!({"name":"winbridge_publish_resumable","description":"Publish schema 3 with manifest-pinned 1 MiB payload blocks for explicit resumed imports. Optional baseSnapshotId selects delta. Requires a resume-capable worker for import; legacy publish remains the full fallback. Does not import/build or remove caches.",
+        "inputSchema":{"type":"object","properties":{"projectId":{"type":"string"},"revision":{"type":"string"},"baseSnapshotId":{"type":"string"}},"required":["projectId","revision"],"additionalProperties":false},
+        "annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
     tools.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     Ok(tools)
 }
@@ -261,14 +264,20 @@ async fn handle(
                     "Unknown tool argument; inspect tools/list",
                 ));
             }
-            let value = if matches!(name, "winbridge_publish" | "winbridge_publish_delta") {
+            let value = if matches!(
+                name,
+                "winbridge_publish" | "winbridge_publish_delta" | "winbridge_publish_resumable"
+            ) {
                 let Some(project) = args["projectId"].as_str().map(str::to_owned) else {
                     return Some(error(id, -32602, "projectId must be a string"));
                 };
                 let Some(revision) = args["revision"].as_str().map(str::to_owned) else {
                     return Some(error(id, -32602, "revision must be a string"));
                 };
-                let base = if name == "winbridge_publish_delta" {
+                let resumable = name == "winbridge_publish_resumable";
+                let base = if name == "winbridge_publish_delta"
+                    || resumable && args.get("baseSnapshotId").is_some()
+                {
                     let Some(base) = args["baseSnapshotId"].as_str() else {
                         return Some(error(id, -32602, "baseSnapshotId must be a string"));
                     };
@@ -278,7 +287,15 @@ async fn handle(
                 };
                 let config = config.clone();
                 match tokio::task::spawn_blocking(move || {
-                    if let Some(base) = base {
+                    if resumable {
+                        super::publish_resumable_measured(
+                            &config,
+                            &project,
+                            &revision,
+                            base.as_deref(),
+                        )
+                        .map(|m| m.ready)
+                    } else if let Some(base) = base {
                         super::publish_delta_measured(&config, &project, &revision, &base)
                             .map(|m| m.ready)
                     } else {

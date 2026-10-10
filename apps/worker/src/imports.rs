@@ -47,6 +47,7 @@ impl Store {
             status: TaskStatus::Queued,
             phase: "queued".into(),
             delta: None,
+            transfer: None,
             accepted_at_ms: now_ms(),
             finished_at_ms: None,
             cancel_requested: false,
@@ -197,6 +198,7 @@ impl Worker {
         }
         let end = (offset + 100).min(manifest.files.len());
         Ok(SnapshotPreview {
+            resumable: manifest.payload_chunks.is_some(),
             delta: sync::delta_summary(&manifest),
             project_id: project.into(),
             snapshot_id: snapshot.into(),
@@ -315,6 +317,7 @@ impl Worker {
         let started = Instant::now();
         let mut persisted = Instant::now() - Duration::from_secs(1);
         let mut last_phase = String::new();
+        let mut visited_phases = std::collections::HashSet::new();
         let mut checkpoint = |phase: &str, files: u64, bytes: u64| -> Result<()> {
             if self.stop.load(Ordering::Acquire) {
                 return Err("Worker stopping; import staging remains unbuildable".into());
@@ -329,7 +332,9 @@ impl Worker {
             }
             if persisted.elapsed() >= Duration::from_millis(150) || last_phase != phase {
                 if last_phase != phase {
-                    Store::import_event(&mut record, format!("Snapshot phase: {phase}"));
+                    if visited_phases.insert(phase.to_owned()) {
+                        Store::import_event(&mut record, format!("Snapshot phase: {phase}"));
+                    }
                     last_phase = phase.into();
                 }
                 record.phase = phase.into();
@@ -340,12 +345,18 @@ impl Worker {
             }
             Ok(())
         };
-        let result = sync::import(
+        let result = sync::import_with_transfer(
             delivery,
             &project.workspace_root,
             &import.submission,
             &id,
             &mut checkpoint,
+            |transfer| {
+                let mut store = self.store()?;
+                let mut record = store.get_import(&id)?;
+                record.transfer = Some(transfer.clone());
+                store.save_import(&record)
+            },
         );
         let mut store = self.store()?;
         match result {

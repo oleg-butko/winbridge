@@ -139,3 +139,7 @@ Baseline (59 Windows operations) и [Git batch capture](docs/performance-capture
 Delta/resume/batching/virtualization пока не реализованы.
 
 Delta этапа 6: [формат, публикация, импорт и автоматическая проверка](docs/snapshot-delta.md). Используется проверенное локальное поколение; прежние snapshots сохраняются. [Оба автоматических Windows gates пройдены](docs/windows-delta-gate-2026-10-09.md); native desktop заново не открывался.
+
+Продолжение этапа 6: [snapshot chunk/resume](docs/snapshot-resume.md) — opt-in
+schema 3 с pinned блоками ZIP и явным повтором import после обрыва. Automatic
+Windows gate пока ожидается; существующие full/delta packages сохраняют формат.

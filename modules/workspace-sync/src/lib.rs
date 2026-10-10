@@ -14,6 +14,7 @@ use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 pub type Result<T> = std::result::Result<T, String>;
 mod delta;
 mod git_batch;
+mod resume;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -184,6 +185,7 @@ pub fn list_snapshots(
         .iter()
         .map(|id| match metadata(delivery, project, id, None) {
             Ok((manifest, _, _)) => PublishedSnapshot {
+                resumable: manifest.payload_chunks.is_some(),
                 snapshot_id: id.clone(),
                 delta: delta_summary(&manifest),
                 source: Some(manifest.source),
@@ -193,6 +195,7 @@ pub fn list_snapshots(
                 metadata_error: None,
             },
             Err(reason) => PublishedSnapshot {
+                resumable: false,
                 snapshot_id: id.clone(),
                 source: None,
                 total_files: None,
@@ -470,7 +473,18 @@ pub fn import(
     root: &Path,
     request: &ImportSubmission,
     operation_id: &str,
+    progress: impl FnMut(&str, u64, u64) -> Result<()>,
+) -> Result<SnapshotManifest> {
+    import_with_transfer(delivery, root, request, operation_id, progress, |_| Ok(()))
+}
+
+pub fn import_with_transfer(
+    delivery: &DeliverySettings,
+    root: &Path,
+    request: &ImportSubmission,
+    operation_id: &str,
     mut progress: impl FnMut(&str, u64, u64) -> Result<()>,
+    mut on_transfer: impl FnMut(&SnapshotTransfer) -> Result<()>,
 ) -> Result<SnapshotManifest> {
     validate_submission(request)?;
     validate_ids("operation", operation_id)?;
@@ -503,16 +517,28 @@ pub fn import(
     let shared =
         package_path(delivery, &request.project_id, &request.snapshot_id)?.join("payload.zip");
     safe_path(&shared)?;
-    let mut input =
-        File::open(&shared).map_err(|e| format!("Shared payload {}: {e}", shared.display()))?;
     let mut payload = create_file(&payload_path)?;
-    transfer(
-        &mut input,
-        &mut payload,
-        manifest.payload_bytes,
-        Some(&manifest.payload_sha256),
-        |n| progress("copy_payload", 0, n),
-    )?;
+    if manifest.payload_chunks.is_some() {
+        resume::copy(
+            (root, &stage),
+            &shared,
+            &manifest,
+            &ready,
+            &mut payload,
+            &mut progress,
+            &mut on_transfer,
+        )?;
+    } else {
+        let mut input =
+            File::open(&shared).map_err(|e| format!("Shared payload {}: {e}", shared.display()))?;
+        transfer(
+            &mut input,
+            &mut payload,
+            manifest.payload_bytes,
+            Some(&manifest.payload_sha256),
+            |n| progress("copy_payload", 0, n),
+        )?;
+    }
     payload.sync_all().map_err(error)?;
     drop(payload);
     let source = stage.join("source");
@@ -599,7 +625,7 @@ pub fn publish(
 
 /// Local measurement result, not a wire/ready-marker extension. All durations
 /// use this host's monotonic clock; capture and ZIP writing are interleaved.
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicationMeasurement {
     pub schema_version: u16,
@@ -610,7 +636,7 @@ pub struct PublicationMeasurement {
     pub timings: PublicationTimings,
 }
 
-#[derive(Debug, Default, serde::Serialize)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublicationTimings {
     pub enumerate_ms: f64,
@@ -633,7 +659,15 @@ pub fn publish_measured(
     project: &str,
     revision: &str,
 ) -> Result<PublicationMeasurement> {
-    publish_inner(delivery, source_root, local_state, project, revision, None)
+    publish_inner(
+        delivery,
+        source_root,
+        local_state,
+        project,
+        revision,
+        None,
+        false,
+    )
 }
 
 /// Explicit delta publication; base metadata is pinned in the resulting package.
@@ -652,6 +686,25 @@ pub fn publish_delta_measured(
         project,
         revision,
         Some(base_snapshot),
+        false,
+    )
+}
+pub fn publish_resumable_measured(
+    delivery: &DeliverySettings,
+    source_root: &Path,
+    local_state: &Path,
+    project: &str,
+    revision: &str,
+    base_snapshot: Option<&str>,
+) -> Result<PublicationMeasurement> {
+    publish_inner(
+        delivery,
+        source_root,
+        local_state,
+        project,
+        revision,
+        base_snapshot,
+        true,
     )
 }
 fn publish_inner(
@@ -661,6 +714,7 @@ fn publish_inner(
     project: &str,
     revision: &str,
     base_snapshot: Option<&str>,
+    resumable: bool,
 ) -> Result<PublicationMeasurement> {
     let started = Instant::now();
     let mut timings = PublicationTimings::default();
@@ -698,7 +752,20 @@ fn publish_inner(
     let base = base_snapshot
         .map(|id| metadata(delivery, project, id, None))
         .transpose()?;
-    let snapshot = if let Some((base, _, ready)) = &base {
+    let snapshot = if resumable {
+        format!(
+            "r-{}",
+            sha256(
+                &serde_json::to_vec(&(
+                    project,
+                    &commit,
+                    base.as_ref()
+                        .map(|(m, _, r)| (&m.snapshot_id, &r.manifest_sha256))
+                ))
+                .map_err(error)?
+            )
+        )
+    } else if let Some((base, _, ready)) = &base {
         format!(
             "d-{}",
             sha256(
@@ -723,6 +790,7 @@ fn publish_inner(
         },
         payload_bytes: 1,
         payload_sha256: "0".repeat(64),
+        payload_chunks: None,
         total_bytes: 0,
         delta: base.as_ref().map(|(manifest, _, ready)| SnapshotDelta {
             snapshot_id: manifest.snapshot_id.clone(),
@@ -822,13 +890,20 @@ fn publish_inner(
     let local_verify_started = Instant::now();
     manifest.payload_bytes = payload.metadata().map_err(error)?.len();
     payload.rewind().map_err(error)?;
-    manifest.payload_sha256 = transfer(
-        &mut payload,
-        &mut std::io::sink(),
-        manifest.payload_bytes,
-        None,
-        |_| Ok(()),
-    )?;
+    if resumable {
+        let (hash, chunks) = resume::describe(&mut payload, manifest.payload_bytes)?;
+        manifest.payload_sha256 = hash;
+        manifest.payload_chunks = Some(chunks);
+        manifest.schema_version = 3;
+    } else {
+        manifest.payload_sha256 = transfer(
+            &mut payload,
+            &mut std::io::sink(),
+            manifest.payload_bytes,
+            None,
+            |_| Ok(()),
+        )?;
+    }
     validate_manifest(&manifest)?;
     let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(error)?;
     parse_manifest(&manifest_bytes)?;

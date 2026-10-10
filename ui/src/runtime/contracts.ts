@@ -34,16 +34,18 @@ path: string, bytes: number, sha256: string, executable: boolean, };
 export type SnapshotReuse = { path: string, basePath: string, };
 export type SnapshotDelta = { snapshotId: string, manifestSha256: string, reusedFiles: Array<SnapshotReuse>, };
 export type SnapshotDeltaSummary = { snapshotId: string, manifestSha256: string, reusedFiles: number, reusedBytes: number, payloadBytes: number, };
+export type SnapshotPayloadChunks = { chunkBytes: number, sha256: Array<string>, };
+export type SnapshotTransfer = { payloadBytes: number, chunkBytes: number, reusedBytes: number, sharedBytes: number, };
 export type SnapshotManifest = { schemaVersion: number, projectId: string, snapshotId: string, source: SnapshotSource,
 /**
  * payload.zip is fixed by the format; no caller-supplied filesystem path.
  */
-payloadBytes: number, payloadSha256: string, totalBytes: number, delta?: SnapshotDelta, files: Array<SnapshotFile>, };
+payloadBytes: number, payloadSha256: string, payloadChunks?: SnapshotPayloadChunks, totalBytes: number, delta?: SnapshotDelta, files: Array<SnapshotFile>, };
 export type SnapshotReady = { schemaVersion: number, projectId: string, snapshotId: string, manifestSha256: string, payloadSha256: string, payloadBytes: number, };
 export type ImportSubmission = { protocolVersion: number, requestId: string, projectId: string, snapshotId: string, manifestSha256: string, idempotencyKey: string, timeoutMs: number, };
-export type ImportRecord = { importId: string, submission: ImportSubmission, status: TaskStatus, phase: string, delta?: SnapshotDeltaSummary, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, completedFiles: number, completedBytes: number, totalFiles: number | null, totalBytes: number | null, commit: string | null, sharedPath: string, workspacePath: string, reason: string | null, events: Array<JournalEvent>, };
-export type SnapshotPreview = { projectId: string, snapshotId: string, manifestSha256: string, source: SnapshotSource, totalFiles: number, totalBytes: number, payloadBytes: number, sharedPath: string, workspacePath: string, files: Array<SnapshotFile>, nextOffset: number | null, payloadVerified: boolean, peerSharedPath: string | null, delta?: SnapshotDeltaSummary, };
-export type PublishedSnapshot = { snapshotId: string, source: SnapshotSource | null, totalFiles: number | null, totalBytes: number | null, payloadBytes: number | null, metadataError: string | null, delta?: SnapshotDeltaSummary, };
+export type ImportRecord = { importId: string, submission: ImportSubmission, status: TaskStatus, phase: string, delta?: SnapshotDeltaSummary, transfer?: SnapshotTransfer, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, completedFiles: number, completedBytes: number, totalFiles: number | null, totalBytes: number | null, commit: string | null, sharedPath: string, workspacePath: string, reason: string | null, events: Array<JournalEvent>, };
+export type SnapshotPreview = { resumable: boolean, projectId: string, snapshotId: string, manifestSha256: string, source: SnapshotSource, totalFiles: number, totalBytes: number, payloadBytes: number, sharedPath: string, workspacePath: string, files: Array<SnapshotFile>, nextOffset: number | null, payloadVerified: boolean, peerSharedPath: string | null, delta?: SnapshotDeltaSummary, };
+export type PublishedSnapshot = { resumable: boolean, snapshotId: string, source: SnapshotSource | null, totalFiles: number | null, totalBytes: number | null, payloadBytes: number | null, metadataError: string | null, delta?: SnapshotDeltaSummary, };
 export type PublishedSnapshotPage = { projectId: string, sharedPath: string, snapshots: Array<PublishedSnapshot>, nextOffset: number | null, };
 export type VerifiedSnapshotRef = { snapshotId: string, manifestSha256: string, source: SnapshotSource, };
 export type TaskStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted" | "indeterminate";
@@ -69,7 +71,7 @@ export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type ControllerConnection = { url: string, state: ConnectionState, sessionId: string | null, controllerNodeId: string | null, controllerGeneration: string | null, lastConfirmedAtMs: number | null, error: string | null, };
 export type ActivityLogStatus = { path: string, maxFileBytes: number, retainedArchives: number, droppedRecords: number, lastError: string | null, };
 export type ControllerStatus = { instanceId: string, nodeId: string, generation: string, listenAddress: string, connected: boolean, sessionId: string | null, workerNodeId: string | null, workerGeneration: string | null, workerAddress: string | null, lastError: string | null, activityLog: ActivityLogStatus | null, };
-export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
+export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
 /**
  * Queued/running tasks across the entire journal; None when unavailable or stale.
  */

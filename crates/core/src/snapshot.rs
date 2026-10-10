@@ -9,6 +9,7 @@ pub const MAX_MANIFEST_BYTES: usize = 1024 * 1024;
 pub const MAX_READY_BYTES: usize = 8192;
 pub const MAX_FILES: usize = 10_000;
 pub const MAX_PAYLOAD_BYTES: u64 = 512 * 1024 * 1024;
+pub const PAYLOAD_CHUNK_BYTES: u64 = 1024 * 1024;
 pub const MAX_UNPACKED_BYTES: u64 = 1024 * 1024 * 1024;
 pub const MAX_RELATIVE_PATH_UNITS: usize = 1024;
 pub const MAX_PATH_DEPTH: usize = 64;
@@ -26,8 +27,11 @@ fn identifier(value: &str) -> Result<()> {
     validate_relative(value)
 }
 fn version(value: u16) -> Result<()> {
-    if !matches!(value, 1 | 2) {
-        return Err("Unsupported snapshot schemaVersion; expected 1 (full) or 2 (delta)".into());
+    if !matches!(value, 1..=3) {
+        return Err(
+            "Unsupported snapshot schemaVersion; expected 1 (full), 2 (delta) or 3 (resumable)"
+                .into(),
+        );
     }
     Ok(())
 }
@@ -96,8 +100,8 @@ pub fn validate_manifest(manifest: &SnapshotManifest) -> Result<()> {
         return Err("Snapshot source must name a full lowercase Git commit hash".into());
     }
     match (manifest.schema_version, &manifest.delta) {
-        (1, None) => {}
-        (2, Some(delta)) => {
+        (1 | 3, None) => {}
+        (2 | 3, Some(delta)) => {
             identifier(&delta.snapshot_id)?;
             if delta.snapshot_id == manifest.snapshot_id || !hex(&delta.manifest_sha256, 32) {
                 return Err(
@@ -126,6 +130,13 @@ pub fn validate_manifest(manifest: &SnapshotManifest) -> Result<()> {
         }
     }
     payload(manifest.payload_bytes, &manifest.payload_sha256)?;
+    match (manifest.schema_version, &manifest.payload_chunks) {
+        (1 | 2, None) => {}
+        (3, Some(chunks)) if chunks.chunk_bytes == PAYLOAD_CHUNK_BYTES
+            && chunks.sha256.len() as u64 == manifest.payload_bytes.div_ceil(PAYLOAD_CHUNK_BYTES)
+            && chunks.sha256.iter().all(|h| hex(h, 32)) => {}
+        _ => return Err("Schema 3 requires exactly one SHA-256 per 1 MiB payload block; schema 1/2 exclude chunk metadata".into()),
+    }
     if manifest.files.is_empty() || manifest.files.len() > MAX_FILES {
         return Err("Snapshot must contain 1-10000 files".into());
     }
@@ -237,6 +248,7 @@ mod tests {
             },
             payload_bytes: 20,
             payload_sha256: "b".repeat(64),
+            payload_chunks: None,
             total_bytes: 3,
             delta: None,
             files: vec![SnapshotFile {
@@ -246,6 +258,43 @@ mod tests {
                 executable: false,
             }],
         }
+    }
+    #[test]
+    fn resumable_blocks_are_pinned_bounded_and_cover_the_exact_payload() {
+        use winbridge_protocol::SnapshotPayloadChunks;
+        let mut value = manifest();
+        value.schema_version = 3;
+        assert!(validate_manifest(&value).is_err());
+        value.payload_chunks = Some(SnapshotPayloadChunks {
+            chunk_bytes: PAYLOAD_CHUNK_BYTES,
+            sha256: vec!["d".repeat(64)],
+        });
+        assert!(validate_manifest(&value).is_ok());
+        for size in [0, 65536, u64::MAX] {
+            let mut bad = value.clone();
+            bad.payload_chunks.as_mut().unwrap().chunk_bytes = size;
+            assert!(validate_manifest(&bad).is_err());
+        }
+        let mut bad = value.clone();
+        bad.payload_chunks
+            .as_mut()
+            .unwrap()
+            .sha256
+            .push("e".repeat(64));
+        assert!(validate_manifest(&bad).is_err());
+        bad.payload_chunks.as_mut().unwrap().sha256 = vec!["A".repeat(64)];
+        assert!(validate_manifest(&bad).is_err());
+        value.payload_bytes = PAYLOAD_CHUNK_BYTES + 1;
+        assert!(validate_manifest(&value).is_err());
+        value
+            .payload_chunks
+            .as_mut()
+            .unwrap()
+            .sha256
+            .push("e".repeat(64));
+        assert!(validate_manifest(&value).is_ok());
+        value.schema_version = 1;
+        assert!(validate_manifest(&value).is_err());
     }
     #[test]
     fn delta_reuse_paths_and_schema_agreement_fail_closed() {

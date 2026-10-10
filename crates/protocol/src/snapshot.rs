@@ -57,6 +57,26 @@ pub struct SnapshotDelta {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SnapshotPayloadChunks {
+    pub chunk_bytes: u64,
+    pub sha256: Vec<String>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnapshotTransfer {
+    pub payload_bytes: u64,
+    pub chunk_bytes: u64,
+    pub reused_bytes: u64,
+    pub shared_bytes: u64,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SnapshotManifest {
     pub schema_version: u16,
     pub project_id: String,
@@ -65,6 +85,9 @@ pub struct SnapshotManifest {
     /// payload.zip is fixed by the format; no caller-supplied filesystem path.
     pub payload_bytes: u64,
     pub payload_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub payload_chunks: Option<SnapshotPayloadChunks>,
     pub total_bytes: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "typescript", ts(optional))]
@@ -111,6 +134,9 @@ pub struct ImportRecord {
     #[serde(default)]
     #[cfg_attr(feature = "typescript", ts(optional))]
     pub delta: Option<SnapshotDeltaSummary>,
+    #[serde(default)]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub transfer: Option<SnapshotTransfer>,
     pub accepted_at_ms: u64,
     pub finished_at_ms: Option<u64>,
     pub cancel_requested: bool,
@@ -130,6 +156,8 @@ pub struct ImportRecord {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotPreview {
+    #[serde(default)]
+    pub resumable: bool,
     pub project_id: String,
     pub snapshot_id: String,
     pub manifest_sha256: String,
@@ -164,6 +192,8 @@ pub struct VerifiedSnapshotRef {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PublishedSnapshot {
+    #[serde(default)]
+    pub resumable: bool,
     pub snapshot_id: String,
     pub source: Option<SnapshotSource>,
     pub total_files: Option<u64>,
