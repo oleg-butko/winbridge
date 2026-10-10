@@ -357,9 +357,9 @@ fn junction_cache_is_rejected_without_touching_the_retained_blocks() {
     let retained = f.temp.path().join("retained-cache");
     fs::rename(&cache, &retained).unwrap();
     let output = Command::new("cmd.exe")
-        .args(["/C", "mklink", "/J"])
-        .arg(&cache)
-        .arg(&retained)
+        .args(["/D", "/C", "mklink", "/J"])
+        .arg(cache.to_string_lossy().replace('/', "\\"))
+        .arg(retained.to_string_lossy().replace('/', "\\"))
         .output()
         .unwrap();
     assert!(

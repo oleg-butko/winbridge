@@ -204,6 +204,9 @@ async fn payload_checkpoint(server: &Server, id: &str, minimum: u64) -> ImportRe
 async fn native_crash_explicit_resume_dedup_pin_and_offline_build() {
     let temp = TempDir::new().unwrap();
     let root = temp.path();
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let baseline_instance = format!("resume-baseline-{}", &suffix[..8]);
+    let resumed_instance = format!("resume-crash-{}", &suffix[..8]);
     let repo = root.join("source");
     fs::create_dir(&repo).unwrap();
     fs::create_dir(repo.join("src")).unwrap();
@@ -281,7 +284,7 @@ async fn native_crash_explicit_resume_dedup_pin_and_offline_build() {
         idempotency_key: "baseline".into(),
         timeout_ms: 180000,
     };
-    let baseline = start(&root.join("baseline"), &delivery, "resume-baseline").await;
+    let baseline = start(&root.join("baseline"), &delivery, &baseline_instance).await;
     let baseline_attention = seed_attention_task(&baseline).await;
     let started = Instant::now();
     let full = imported(
@@ -305,7 +308,7 @@ async fn native_crash_explicit_resume_dedup_pin_and_offline_build() {
     drop(baseline);
 
     let local = root.join("resumed");
-    let mut server = start(&local, &delivery, "resume-crash").await;
+    let mut server = start(&local, &delivery, &resumed_instance).await;
     let resumed_attention = seed_attention_task(&server).await;
     let mut cancellation = request.clone();
     cancellation.request_id = "cancel".into();
@@ -362,7 +365,7 @@ async fn native_crash_explicit_resume_dedup_pin_and_offline_build() {
     assert!(!sync::generation_path(&local, &request.snapshot_id)
         .unwrap()
         .exists());
-    let server = start(&local, &delivery, "resume-crash").await;
+    let server = start(&local, &delivery, &resumed_instance).await;
     let recovered = get(&server, &accepted.import_id).await;
     assert_eq!(recovered.status, TaskStatus::Interrupted, "{recovered:?}");
     let duplicate = imported(

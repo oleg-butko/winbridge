@@ -53,3 +53,12 @@ chunk index ошибочно попадал бы в счётчик source files.
 Это ошибка тестового ожидания, восстановление формы работает корректно.
 Actual native Windows resume gate ещё ожидается. Никакие рабочие exe/state
 или прежние shared packages/reports не менялись; исходный Git tree был чистым.
+
+Первый Windows resume run `20261010-051248-8c1f0d94` остановился на создании
+тестового junction: `cmd.exe mklink` трактовал '/' в mixed-separator pathname
+как switch. Пять других HGFS tests прошли; actual working worker корректно
+вернул exit 101, remained healthy/idle той же generation. Исправлен **test harness**:
+пути для cmd нормализованы в Windows separators; junction check не пропускается.
+Также native test instances теперь имеют unique suffix, чтобы глобальные
+named pipes одного пользователя не пересекались с другим test run. Старый
+report сохранён; запускается новый явный gate с новым task/key/run directory.
