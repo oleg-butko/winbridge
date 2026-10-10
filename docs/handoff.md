@@ -1,5 +1,14 @@
 ## Закрытие этапа 6 — 2026-10-10
 
+Готовый общий release worker/desktop с built UI:
+`K:\VMs\shared\WinBridge\sources\winbridge-20261010T092801Z-ff64ebb-5223a958.zip`.
+SHA-256 `d06bfe08d593e829ef196d545475b4272a21d6e2f45a1f243e3e0ed92b736fb1`,
+243 files, 3 594 138 bytes, clean ff64ebb. Runtime Rust/UI/scripts code совпадает
+с native-tested 38f4e5d; после gate менялась только документация. Последний
+handoff commit ниже в истории только записывает этот release, archive не переписывается.
+Для установки остановить desktop/worker и выполнить prepare-windows-snapshot.ps1
+из распакованных исходников; тесты вручную повторять не требуется.
+
 [Automatic Windows resume gate](windows-resume-gate-2026-10-10.md) прошёл:
 39 native tests, exact Debian ready/manifest/blob pin, actual cancel/crash/restart,
 explicit resumed import и offline pinned build. ZIP read из shared уменьшился
