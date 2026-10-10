@@ -118,6 +118,8 @@ export PATH=/home/user1/.nvm/versions/node/v24.19.0/bin:/home/user1/.local/bin:$
 
 ## Навигация
 
+Для пользователя: [краткое руководство v1](docs/user-friendly-guide-v1/README.md) — готовые возможности, интерфейс и состояния, подключение проектов и MCP.
+
 Начать с [handoff](docs/handoff.md) и [инструкций агента](AGENTS.md). Далее: [архитектура](docs/architecture.md), [доставка через HGFS](docs/shared-folders.md), [поэтапный план](docs/roadmap.md), [UI/UX](docs/ux.md), [границы модулей](docs/structure.md), [решения пользователя](docs/decisions/README.md).
 
 Предыдущее предложение из Netwatch перенесено в [исторический контекст](docs/context/README.md); оно не определяет текущие решения.
