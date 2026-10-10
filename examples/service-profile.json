@@ -1,0 +1,19 @@
+{
+  "id": "rust-service",
+  "label": "Сборка проверенного Rust service",
+  "description": "Проект предоставляет build script; runtime, logs и cache остаются вне snapshot.",
+  "recipes": [
+    {
+      "id": "build-service",
+      "executable": "pwsh.exe",
+      "arguments": [
+        "-NoProfile", "-File", "./winbridge-service-build.ps1",
+        "-RuntimeDirectory", "${workspaceRoot}/application/runtime",
+        "-LogDirectory", "${workspaceRoot}/application/logs",
+        "-TargetDirectory", "${workspaceRoot}/build-cache"
+      ],
+      "workingDirectory": ".",
+      "timeoutMs": 900000
+    }
+  ]
+}

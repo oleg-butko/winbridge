@@ -57,7 +57,7 @@ tests/fixtures/     Локальные fixtures для следующих эта
 docs/               Архитектура, UX, roadmap, ADR и handoff
 ```
 
-`transport` и `platform` входят в workspace. Desktop — отдельный package в `apps/desktop/src-tauri` со своим lockfile, чтобы workspace проверки не требовали GUI SDK. Runner service сейчас находится в worker; `modules` описывает будущие границы. Core и protocol не зависят от Tauri, конкретной VM или соседнего Netwatch repository.
+`transport` и `platform` входят в workspace. Desktop — отдельный package в `apps/desktop/src-tauri` со своим lockfile, чтобы workspace проверки не требовали GUI SDK. Worker владеет journal/queue/processes; runner, workspace-sync и log-reader реализованы отдельными modules. Core и protocol не зависят от Tauri, конкретной VM или соседнего Netwatch repository.
 
 ## Проверка и запуск
 
@@ -147,3 +147,7 @@ schema 3 с pinned блоками ZIP и явным повтором import по
 Два проекта используют один профиль; journal/cancel/recovery остаются у worker.
 Источник task и определения workflow recipes сохраняются до ACK, изменения
 конфига применяются после ручного restart. [68 native Windows tests](docs/windows-profiles-gate-2026-10-10.md) прошли автоматически; первый сценарий этапа завершён.
+
+Следующий сценарий этапа 7 подготовлен: [реальные Netwatch и WinBridge projects](docs/project-integration.md)
+с общим build profile, private IPC, managed process stop и journal recovery.
+Новый native gate ещё не выполнен; рабочие runtime/Netwatch не меняются.

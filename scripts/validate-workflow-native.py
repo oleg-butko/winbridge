@@ -3,6 +3,7 @@
 import argparse
 import base64
 import hashlib
+import importlib.util
 import json
 from pathlib import Path, PureWindowsPath
 import socket
@@ -81,6 +82,7 @@ def main():
     parser.add_argument('--project', default='snapshot-fixture')
     parser.add_argument('--delta-only', action='store_true', help='Check pinned-base delta on actual HGFS with isolated journal/build, without desktop windows')
     parser.add_argument('--profiles-only', action='store_true', help='Check two registered projects with a reusable recipe profile, real IPC, cancel and crash/restart; no desktop windows')
+    parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
     parser.add_argument('--output-reference-worker', help='Read-only path to the installed worker exe, used with a NEW isolated config/state for matched output samples')
@@ -91,7 +93,7 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only)) > 1:
         parser.error('Choose one isolated scenario: task attention, workflow attention, companion, history diagnostics or Netwatch')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
@@ -114,6 +116,17 @@ def main():
     extra = ''
     profile_argument = ''
     resume_publication = None
+    projects_preparation = None
+    if args.projects_only:
+        spec = importlib.util.spec_from_file_location('projects', ROOT / 'scripts/prepare-projects.py')
+        projects = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(projects)
+        projects_preparation = projects.prepare(config, local, run_id)
+        data = (ROOT / '.winbridge/projects-validation' / run_id / 'prepared.json').read_bytes()
+        preparation_sha = hashlib.sha256(data).hexdigest()
+        shared_preparation = str(PureWindowsPath(projects_preparation['delivery']['root']) / 'preparation/prepared.json')
+        extra = f"$preparationPath = Join-Path $local 'projects-preparation.json'\nCopy-Item -LiteralPath {ps_string(shared_preparation)} -Destination $preparationPath\n"
+        profile_argument = ' -ProjectsOnly -ProjectsPreparation $preparationPath -ProjectsPreparationSha256 ' + ps_string(preparation_sha)
     if args.profiles_only:
         profile_argument = ' -ProfilesOnly'
     if args.resume_only:
@@ -253,6 +266,24 @@ exit $LASTEXITCODE
             raise RuntimeError('Native resume did not reduce verified shared bytes')
         if proof['recovered']['status'] != 'interrupted' or resumed['status'] != 'succeeded' or proof['buildTask']['status'] != 'succeeded' or proof['buildTask']['snapshot']['manifestSha256'] != proof['ready']['manifestSha256']:
             raise RuntimeError('Native resume recovery/build pin mismatch')
+    if args.projects_only:
+        proof = json.loads((report / 'projects-proof.json').read_text(encoding='utf-8-sig'))
+        if not proof['passed'] or proof['platform'] != 'windows' or len(proof['projects']) != 2:
+            raise RuntimeError('Incomplete real-project native proof')
+        if proof['build']['sourceCommit'] != result['sourceCommit'] or proof['build']['sourceDirty']:
+            raise RuntimeError('Project coordinator source identity mismatch')
+        sources = {s['projectId']: s for s in projects_preparation['sources']}
+        for record in proof['projects']:
+            flow, build, app = record['workflow'], record['buildTask'], record['application']
+            ready_pin = sources[record['projectId']]['ready']
+            if flow['status'] != 'succeeded' or app['status'] != 'stopped' or build['status'] != 'succeeded' or build['exitCode'] != 0:
+                raise RuntimeError('Real-project cycle/stop incomplete')
+            if build['snapshot']['manifestSha256'] != ready_pin['manifestSha256'] or flow['submission']['snapshotId'] != ready_pin['snapshotId']:
+                raise RuntimeError('Project source differs from pinned Debian publication')
+            if build['recipeOrigin']['profileId'] != 'rust-service' or record['repeatedWorkflowId'] != flow['workflowId']:
+                raise RuntimeError('Common profile provenance/dedup proof missing')
+        if proof['initialGeneration'] == proof['restartedGeneration'] or proof['child']['recoveredTree']['status'] != 'indeterminate' or proof['child']['success']['status'] != 'succeeded':
+            raise RuntimeError('Real-project restart/recovery proof missing')
     final_info = call(endpoint, {'method':'info'})['info']
     if final_info['generation'] != info['generation'] or final_info.get('journalRecoveryRequired') or final_info.get('maintenanceError') or final_info.get('activeTaskCount') != 0:
         raise RuntimeError('Installed worker health/generation changed unexpectedly; inspect retained task/report')

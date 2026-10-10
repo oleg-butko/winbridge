@@ -10,7 +10,7 @@ generation 372266b6-3dee-4d87-9de2-ccab896dbcf8; healthy/idle.
 
 [Ревью и план](review-projects-2026-10-10.md): исправлен чужой parent Git commit
 в build identity, неизвестные исходники не объявляются clean. Targeted regression
-прошла. Следующий прикладной сценарий — isolated Netwatch + WinBridge worker через
+прошла. [Прикладной сценарий](project-integration.md) prepared: isolated Netwatch + WinBridge worker через
 общий build profile, без новой transport/queue. Native gate ещё не выполнен;
 этап 7 остаётся открытым. Пользовательские configs/runtime не меняются.
 

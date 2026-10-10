@@ -1,3 +1,7 @@
 # Capabilities
 
-Статически подключаемые handlers. Сейчас здесь описания границ; Cargo packages создавать по реальным этапам. Каждый handler определяет DTO, policy, task/events/result, cancel/recovery, read model и UI renderer. Не создавать отдельную очередь для каждой capability.
+Статически подключаемые handlers: runner, workspace-sync и log-reader реализованы
+Cargo packages. Attention journal остаётся у worker/core, native presentation —
+в desktop. [Контракты и следующий проект](../docs/project-integration.md) описывают
+inputs/policy, callbacks и единое владение journal/cancel/recovery. Не создавать
+отдельную очередь для каждой capability и не вводить SDK без внешнего потребителя.

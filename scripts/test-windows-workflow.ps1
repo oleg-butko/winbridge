@@ -39,6 +39,9 @@ crash/restart отдельного worker, dedup, explicit resume и offline pin
 .PARAMETER ProfilesOnly
 Проверяет общий профиль для двух проектов: реальные argv/cwd, запрет direct, dedup,
 cancel tree, crash/restart и frozen command/provenance. Desktop не открывается.
+.PARAMETER ProjectsOnly
+Проверяет реальные Netwatch/WinBridge snapshots с общим build profile, private IPC,
+artifact/log, managed stop и journal restart. Desktop и сетевые соединения не нужны.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -64,6 +67,9 @@ param(
     [switch]$OutputOnly,
     [switch]$ResumeOnly,
     [switch]$ProfilesOnly,
+    [switch]$ProjectsOnly,
+    [string]$ProjectsPreparation = '',
+    [string]$ProjectsPreparationSha256 = '',
     [string]$ResumeDeliveryRoot = '',
     [string]$ResumePublicationFile = '',
     [string]$OutputReferenceWorker = '',
@@ -133,7 +139,16 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($ProjectsOnly) {
+        if ($NetwatchProfile -or -not $ProjectsPreparation -or -not $ProjectsPreparationSha256) { throw 'ProjectsOnly needs a pinned preparation file and isolated scenario' }
+        if ((Get-FileHash -LiteralPath $ProjectsPreparation -Algorithm SHA256).Hash.ToLowerInvariant() -ne $ProjectsPreparationSha256) { throw 'Project preparation SHA-256 mismatch' }
+        $groups = @(
+            @{ name='projects-config-runner-identity-policy'; arguments=@('test','-p','winbridge-core','-p','winbridge-runner','-p','winbridge-protocol','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='projects-profiles-workflow-regression'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','profiles','--test','workflows','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='projects-coordinator-build'; arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite','--bins','--locked','--offline') }
+        )
+    }
     if ($ProfilesOnly) {
         if ($NetwatchProfile) { throw 'ProfilesOnly requires an isolated scenario' }
         $env:WINBRIDGE_PROFILE_GATE_REPORT = $ReportDirectory
@@ -235,6 +250,12 @@ try {
         $code = $LASTEXITCODE
         $report.commands += [ordered]@{ name = $group.name; executable = $cargo; arguments = $commandArgs; exitCode = $code; log = (Split-Path $log -Leaf) }
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
+    }
+    if ($ProjectsOnly) {
+        & (Join-Path $source 'scripts/test-projects-native.ps1') -ReportDirectory $ReportDirectory -PreparationPath $ProjectsPreparation
+        $proof = Get-Content -LiteralPath (Join-Path $ReportDirectory 'projects-proof.json') -Raw | ConvertFrom-Json
+        if (-not $proof.passed) { throw 'Two real project workflows failed' }
+        $report.projects = @{ passed = $proof.passed; projects = $proof.projects.projectId; proof = 'projects-proof.json'; preparationSha256 = $ProjectsPreparationSha256 }
     }
     if ($NetwatchProfile) {
         & (Join-Path $source 'scripts/test-netwatch-native.ps1') -SourceDirectory $source -ReportDirectory $ReportDirectory -ProfilePath $NetwatchProfile

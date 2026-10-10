@@ -151,7 +151,7 @@ recipe profiles и статический handler contract без копиров
 cancel/recovery. CommandHandler/runner для двух проектов, workflow recipe pins и
 общий timeline уже прошли [automatic Windows gate](windows-profiles-gate-2026-10-10.md).
 Следующий потребитель выбран: isolated WinBridge worker рядом с Netwatch, через
-общий build recipe profile и прежние sync/runner/journal interfaces. [План и ревью](review-projects-2026-10-10.md);
+общий build recipe profile и прежние sync/runner/journal interfaces. [Сценарий](project-integration.md), [план и ревью](review-projects-2026-10-10.md);
 native gate этого сценария ещё не выполнен. Не вводить SDK/plugins без необходимости. Native-tested code
 fa7e4d7 доступен в source archive из handoff; пользователь обновил installed worker
 до этой версии, controller запущен после reboot. Старые snapshots/reports/history

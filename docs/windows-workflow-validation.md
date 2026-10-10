@@ -1,5 +1,14 @@
 # Автоматические Windows проверки workflow
 
+Этап 7: `--projects-only` / `-ProjectsOnly` выполняет [два реальных проекта](project-integration.md)
+Netwatch/WinBridge через общий build profile и прежний task service. Driver сам
+готовит отдельные Git clones, validation commits/diffs и pinned Debian packages,
+передаёт preparation file с SHA-256. Проверяются import/build/artifacts/start/
+readiness/log, private worker IPC, nested tree stop и journal recovery. Нужен
+только рабочий Windows worker; desktop закрыт, окон и network connections тестовых
+экземпляров нет. Полные исходники, caches и journals теста находятся на local disk;
+reports и подготовленные immutable packages — в новом namespace WinBridge/shared.
+
 Сценарий `--output-only` / `-OutputOnly` проверяет [пакетный output](output-batching-plan.md)
 без desktop. Агент передаёт `--output-reference-worker` с путём installed worker.exe:
 этот exe запускается только с новым тестовым config/state для сравнения с новой
