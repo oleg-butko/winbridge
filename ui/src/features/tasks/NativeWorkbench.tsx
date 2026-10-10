@@ -305,6 +305,9 @@ export function NativeWorkbench() {
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />
       {project && <Text size="xs" c="dimmed">Рабочий корень: {project.workspaceRoot}</Text>}
+      {project?.recipeProfile && <Alert color="blue" title={`Общий профиль: ${project.recipeProfile.label}`}><Text size="sm">{project.recipeProfile.description}</Text><Text size="xs">ID: {project.recipeProfile.id}. Изменения конфигурации применяются после ручного перезапуска worker.</Text></Alert>}
+      {(info?.commandHandlers?.length ?? 0) > 0 && <Text size="sm">{info?.commandHandlers?.find((handler) => handler.id === (recipeId ? "recipe" : "direct"))?.description}</Text>}
+      {recipeId && <Text data-testid="recipe-origin" size="sm">Источник рецепта: {project?.recipes.find((r) => r.id === recipeId)?.origin?.profileLabel ?? "локальная конфигурация проекта"}. Ниже раскрыты параметры; cwd задаётся относительно выбранного корня или snapshot.</Text>}
       {info?.snapshotImportAvailable && <TextInput label="Snapshot ID для сборки" description="Пустое поле использует корень проекта. Для snapshot worker проверит исходники перед запуском; cwd задаётся внутри поколения." value={form.snapshotId ?? ""} onChange={(e) => updateForm({snapshotId:e.currentTarget.value || undefined})} disabled={pending !== null || !formReady || closing} />}
       <Select label="Способ запуска" value={recipeId ? `recipe:${recipeId}` : "direct"} onChange={(id) => updateForm({ recipeId: id?.startsWith("recipe:") ? id.slice(7) : null })} data={[
         ...(project?.allowDirectCommands ? [{ value: "direct", label: "Прямая команда" }] : []),

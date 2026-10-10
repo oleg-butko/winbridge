@@ -973,6 +973,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "winbridge-runner"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "winbridge-core",
+ "winbridge-protocol",
+]
+
+[[package]]
 name = "winbridge-transport"
 version = "0.1.0"
 dependencies = [
@@ -1001,6 +1011,7 @@ dependencies = [
  "winbridge-log-reader",
  "winbridge-platform",
  "winbridge-protocol",
+ "winbridge-runner",
  "winbridge-transport",
  "winbridge-workspace-sync",
 ]

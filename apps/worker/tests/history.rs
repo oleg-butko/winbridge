@@ -34,7 +34,11 @@ fn cursor_ties_filters_literal_wildcards_and_restart_cover_the_entire_history() 
     for n in 0..65 {
         let r = request(&format!("history-{n}"));
         let mut task = store
-            .accept(r.clone(), config.resolve(&r).unwrap(), None)
+            .accept(
+                r.clone(),
+                winbridge_runner::resolve(&config, &r).unwrap(),
+                None,
+            )
             .unwrap();
         task.accepted_at_ms = 100;
         task.resolved_command.executable = if n == 0 {
@@ -94,7 +98,11 @@ fn diagnostic_defaults_exclude_command_and_output_and_do_not_mutate_task() {
         ];
     }
     let task = store
-        .accept(r.clone(), config.resolve(&r).unwrap(), None)
+        .accept(
+            r.clone(),
+            winbridge_runner::resolve(&config, &r).unwrap(),
+            None,
+        )
         .unwrap();
     store
         .append_output(
@@ -140,7 +148,11 @@ fn diagnostic_preserves_split_unicode_and_marks_output_and_quota_limits() {
     let mut store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
     let r = request("unicode");
     let task = store
-        .accept(r.clone(), config.resolve(&r).unwrap(), None)
+        .accept(
+            r.clone(),
+            winbridge_runner::resolve(&config, &r).unwrap(),
+            None,
+        )
         .unwrap();
     let unicode = "Привет ✓".as_bytes();
     for (index, byte) in unicode.iter().enumerate() {

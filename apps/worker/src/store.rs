@@ -177,6 +177,15 @@ impl Store {
         command: ResolvedCommand,
         snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
     ) -> Result<TaskRecord> {
+        self.accept_with_origin(request, command, snapshot, None)
+    }
+    pub fn accept_with_origin(
+        &mut self,
+        request: TaskSubmission,
+        command: ResolvedCommand,
+        snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
+        recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
+    ) -> Result<TaskRecord> {
         if let Some(task) = self.existing(&request)? {
             return Ok(task);
         }
@@ -185,6 +194,7 @@ impl Store {
             task_id: Uuid::new_v4().to_string(),
             submission: request,
             resolved_command: command,
+            recipe_origin,
             snapshot,
             status: TaskStatus::Queued,
             accepted_at_ms: now,

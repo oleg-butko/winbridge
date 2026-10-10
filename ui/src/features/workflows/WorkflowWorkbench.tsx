@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Badge, Button, Card, Code, Group, Select, Stack, Table, Text, Textarea, TextInput, Timeline, Title } from "@mantine/core";
+import { Alert, Badge, Button, Card, Code, Group, Select, Stack, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { expectResult, workerCall } from "../../runtime/adapter";
 import type { ApplicationRecord, ApplicationStatus, LogCursor, WorkerInfo, WorkflowProfile, WorkflowRecord, WorkflowStepStatus, WorkflowSubmission } from "../../runtime/contracts";
 import { OutputView } from "../tasks/OutputView";
+import { JournalTimeline } from "../tasks/JournalTimeline";
 import { statuses } from "../tasks/TaskDetail";
 
 export type WorkflowSnapshot = { projectId: string; snapshotId: string; manifestSha256: string };
@@ -196,6 +197,9 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
       {record.artifacts?.length > 0 && <Stack gap="xs"><Title order={4}>Результаты сборки</Title><Text size="xs">Файлы проверены перед запуском. Это запись на указанное время; последующая сборка может изменить файл по тому же пути.</Text>
         {record.artifacts.map((a) => <Card withBorder key={a.path}><Text>{a.name} · {a.bytes} байт</Text><Code block>{a.path}</Code><Text size="xs">SHA-256: {a.sha256}</Text><Text size="xs">Commit {a.sourceCommit} · build task {a.buildTaskId} · {new Date(a.recordedAtMs).toLocaleString()}</Text></Card>)}
       </Stack>}
+      {(record.recipePins?.length ?? 0) > 0 && <Stack gap="xs"><Text fw={600}>Определения рецептов, сохранённые при принятии workflow</Text>
+        {record.recipePins?.map((pin)=><Card withBorder key={pin.stepName}><Text size="sm">{steps[pin.stepName] ?? pin.stepName}: {pin.recipeId} · {pin.origin.profileLabel ?? "локальная конфигурация проекта"}</Text><Code block>{JSON.stringify(pin.command,null,2)}</Code><Text size="xs">Cwd относительный; фактическая команда появится в задаче шага после проверки snapshot. Изменённый рецепт требует нового явного workflow.</Text></Card>)}
+      </Stack>}
       {record.reason && <Alert color={statuses[record.status].color}>{record.reason}</Alert>}
       <Group><Button variant="light" onClick={restoreProfile} disabled={busy || pending !== null || closing}>Заполнить профиль из workflow</Button>
         <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || busy || record.cancelRequested || !["queued", "running"].includes(record.status) || closing}>Отменить workflow</Button></Group>
@@ -206,7 +210,7 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
           {step.operationId && ["build", "start"].includes(step.name) && <Button size="xs" variant="light" onClick={() => onTask(step.operationId!)}>Открыть задачу {step.name}</Button>}
         </Table.Td></Table.Tr>)}
       </Table.Tbody></Table></Table.ScrollContainer>
-      <Timeline active={record.events.length - 1}>{record.events.map((event) => <Timeline.Item key={event.sequence} title={statuses[event.status].label}><Text size="sm">{event.summary}</Text></Timeline.Item>)}</Timeline>
+      <JournalTimeline events={record.events} />
     </Stack>}
     <Title order={4}>Приложения</Title>
     <Select label="Последние 10 приложений" value={appId ?? application?.applicationId ?? null} onChange={setAppId} data={(application && !applications.some((a)=>a.applicationId===application.applicationId) ? [application,...applications] : applications).map((a) => ({ value: a.applicationId, label: `${a.projectId} · ${appStates[a.status].label} · ${a.applicationId}` }))} />

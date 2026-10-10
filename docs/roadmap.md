@@ -124,6 +124,12 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 
 ## Этап 7 — каркас для следующих проектов
 
+Первый вертикальный сценарий реализован: [общие recipe profiles](project-profiles.md),
+статический CommandHandler/runner, metadata и общий JournalTimeline. Task origin и
+workflow recipe definitions сохраняются до ACK; queued workflow с изменённым
+рецептом не начинает import/build/start. Проверка двух проектов/автоматический
+Windows gate — в работе; весь этап 7 пока не закрыт.
+
 - [ ] Стабилизировать handler interfaces после runner и workspace-sync, которые уже работают.
 - [ ] Project profiles и reusable recipes; общий UI renderer событий и capability metadata.
 - [ ] Подключить второе приложение/module без изменений transport и без копирования task service.

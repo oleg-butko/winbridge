@@ -142,3 +142,8 @@ Delta этапа 6: [формат, публикация, импорт и авт�
 
 Продолжение этапа 6: [snapshot chunk/resume](docs/snapshot-resume.md) — opt-in
 schema 3 с pinned блоками ZIP и явным повтором import после обрыва. [Automatic Windows gate](docs/windows-resume-gate-2026-10-10.md) пройден; существующие full/delta packages сохраняют формат.
+
+Этап 7 начат: [общие профили рецептов и статический runner](docs/project-profiles.md).
+Два проекта используют один профиль; journal/cancel/recovery остаются у worker.
+Источник task и определения workflow recipes сохраняются до ACK, изменения
+конфига применяются после ручного restart. Native gate выполняется автоматически.

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Badge, Button, Card, Code, Group, Progress, Select, Stack, Table, Text, Timeline, Title } from "@mantine/core";
+import { Alert, Badge, Button, Card, Code, Group, Progress, Select, Stack, Table, Text, Title } from "@mantine/core";
 import { expectResult, workerCall } from "../../runtime/adapter";
 import type { DeliveryDraft, ImportRecord, ImportSubmission, PublishedSnapshotPage, SnapshotPreview, WorkerInfo } from "../../runtime/contracts";
+import { JournalTimeline } from "../tasks/JournalTimeline";
 import { statuses } from "../tasks/TaskDetail";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
 
@@ -184,7 +185,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
       {record.reason && <Alert color={statuses[record.status].color}>{record.reason}</Alert>}
       {record.cancelRequested && !record.finishedAtMs && <Text>Отмена запрошена; ожидается ближайшая проверка worker.</Text>}
       <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || busy || closing || record.cancelRequested || !["queued", "running"].includes(record.status)}>Отменить импорт</Button>
-      <Timeline active={record.events.length - 1}>{record.events.map((event) => <Timeline.Item key={event.sequence} title={statuses[event.status].label}><Text size="sm">{event.summary}</Text></Timeline.Item>)}</Timeline>
+      <JournalTimeline events={record.events} />
     </Stack>}
   </Stack></Card>;
 }

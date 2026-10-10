@@ -85,13 +85,14 @@ pub fn validate(config: &WorkerConfig, request: &WorkflowSubmission) -> Result<(
         .iter()
         .find(|p| p.id == request.project_id)
         .ok_or("Workflow project is not registered")?;
+    let recipes = config.project_recipes(project)?;
     for command in [&request.build, &request.start] {
         match command {
             CommandSource::Recipe {
                 recipe_id,
                 arguments,
             } => {
-                if !arguments.is_empty() || !project.recipes.iter().any(|r| r.id == *recipe_id) {
+                if !arguments.is_empty() || !recipes.iter().any(|r| r.id == *recipe_id) {
                     return Err("Workflow recipe must exist and use its fixed arguments".into());
                 }
             }
@@ -107,6 +108,64 @@ pub fn validate(config: &WorkerConfig, request: &WorkflowSubmission) -> Result<(
                 validate_relative(working_directory)?;
             }
         }
+    }
+    Ok(())
+}
+
+/// Freeze recipes before ACK, including profiles. No generation filesystem is required.
+pub fn recipe_pins(
+    config: &WorkerConfig,
+    request: &WorkflowSubmission,
+) -> Result<Vec<winbridge_protocol::WorkflowRecipePin>, String> {
+    let project = config
+        .projects
+        .iter()
+        .find(|project| project.id == request.project_id)
+        .ok_or("Workflow project is not registered")?;
+    let recipes = config.project_recipes(project)?;
+    let mut pins = Vec::new();
+    for (step_name, source) in [("build", &request.build), ("start", &request.start)] {
+        if let CommandSource::Recipe { recipe_id, .. } = source {
+            let recipe = recipes
+                .iter()
+                .find(|recipe| recipe.id == *recipe_id)
+                .ok_or("Workflow recipe is not registered")?;
+            pins.push(winbridge_protocol::WorkflowRecipePin {
+                step_name: step_name.into(),
+                recipe_id: recipe_id.clone(),
+                origin: config.recipe_origin(project, recipe_id)?,
+                command: winbridge_protocol::ResolvedCommand {
+                    executable: recipe.executable.clone(),
+                    arguments: recipe.arguments.clone(),
+                    working_directory: recipe.working_directory.clone(),
+                    timeout_ms: recipe.timeout_ms,
+                },
+            });
+        }
+    }
+    Ok(pins)
+}
+pub fn validate_recipe_pins(
+    config: &WorkerConfig,
+    workflow: &winbridge_protocol::WorkflowRecord,
+) -> Result<(), String> {
+    let Some(pins) = &workflow.recipe_pins else {
+        if matches!(workflow.submission.build, CommandSource::Recipe { .. })
+            || matches!(workflow.submission.start, CommandSource::Recipe { .. })
+        {
+            return Err("Legacy workflow has no frozen recipe definitions; review the current configuration and submit a new explicit workflow. No further child operation was launched".into());
+        }
+        return Ok(());
+    };
+    let current = recipe_pins(config, &workflow.submission)?;
+    if pins.len() != current.len()
+        || pins.iter().zip(&current).any(|(old, new)| {
+            old.step_name != new.step_name
+                || old.recipe_id != new.recipe_id
+                || old.command != new.command
+        })
+    {
+        return Err("Workflow recipe changed since acceptance; no further import/build/start was launched. Review the current profile and submit a new explicit workflow".into());
     }
     Ok(())
 }

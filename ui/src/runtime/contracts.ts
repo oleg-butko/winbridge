@@ -57,7 +57,7 @@ workingDirectory: string, };
 export type TaskSubmission = { protocolVersion: number, requestId: string, projectId: string, idempotencyKey: string, timeoutMs: number, snapshotId?: string, command: CommandSource, };
 export type ResolvedCommand = { executable: string, arguments: Array<string>, workingDirectory: string, timeoutMs: number, };
 export type JournalEvent = { sequence: number, occurredAtMs: number, status: TaskStatus, summary: string, };
-export type TaskRecord = { taskId: string, submission: TaskSubmission, resolvedCommand: ResolvedCommand, snapshot: VerifiedSnapshotRef | null, status: TaskStatus, acceptedAtMs: number, startedAtMs: number | null, finishedAtMs: number | null, processId: number | null, exitCode: number | null, reason: string | null, cancelRequested: boolean, outputBytes: number, outputTruncated: boolean, outputRemovedAtMs: number | null, removedOutputBytes: number, events: Array<JournalEvent>, };
+export type TaskRecord = { taskId: string, submission: TaskSubmission, resolvedCommand: ResolvedCommand, recipeOrigin?: RecipeOrigin, snapshot: VerifiedSnapshotRef | null, status: TaskStatus, acceptedAtMs: number, startedAtMs: number | null, finishedAtMs: number | null, processId: number | null, exitCode: number | null, reason: string | null, cancelRequested: boolean, outputBytes: number, outputTruncated: boolean, outputRemovedAtMs: number | null, removedOutputBytes: number, events: Array<JournalEvent>, };
 export type TaskSummary = { taskId: string, projectId: string, status: TaskStatus, acceptedAtMs: number, };
 export type OutputStream = "stdout" | "stderr";
 export type OutputChunk = { sequence: number, stream: OutputStream, offset: number,
@@ -65,13 +65,16 @@ export type OutputChunk = { sequence: number, stream: OutputStream, offset: numb
  * Raw bytes: UI decodes each stream incrementally, without splitting UTF-8 characters.
  */
 bytes: Array<number>, };
-export type RecipeInfo = { id: string, command: ResolvedCommand, };
-export type ProjectInfo = { id: string, workspaceRoot: string, allowDirectCommands: boolean, recipes: Array<RecipeInfo>, };
+export type RecipeInfo = { id: string, command: ResolvedCommand, origin?: RecipeOrigin, };
+export type RecipeOrigin = { recipeId: string, profileId: string | null, profileLabel: string | null, };
+export type RecipeProfileInfo = { id: string, label: string, description: string, };
+export type CommandHandlerInfo = { id: string, label: string, description: string, };
+export type ProjectInfo = { id: string, workspaceRoot: string, allowDirectCommands: boolean, recipes: Array<RecipeInfo>, recipeProfile?: RecipeProfileInfo, };
 export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type ControllerConnection = { url: string, state: ConnectionState, sessionId: string | null, controllerNodeId: string | null, controllerGeneration: string | null, lastConfirmedAtMs: number | null, error: string | null, };
 export type ActivityLogStatus = { path: string, maxFileBytes: number, retainedArchives: number, droppedRecords: number, lastError: string | null, };
 export type ControllerStatus = { instanceId: string, nodeId: string, generation: string, listenAddress: string, connected: boolean, sessionId: string | null, workerNodeId: string | null, workerGeneration: string | null, workerAddress: string | null, lastError: string | null, activityLog: ActivityLogStatus | null, };
-export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
+export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, commandHandlers?: Array<CommandHandlerInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
 /**
  * Queued/running tasks across the entire journal; None when unavailable or stale.
  */
@@ -99,6 +102,11 @@ export type AttentionEvent = { attentionId: string, sequence: number, projectId:
 export type AttentionEventPage = { records: Array<AttentionEvent>, nextSequence: number, hasMore: boolean, pendingCount: number, };
 export type DesktopValidationStatus = { enabled: boolean, phase: string, step: string, completed: boolean, error: string | null, };
 export type WorkflowProfile = { workerInstanceId: string, projectId: string, workspaceRoot: string, name: string, parametersJson: string, };
+export type WorkflowRecipePin = { stepName: string, recipeId: string,
+/**
+ * Definition at acceptance. Cwd is relative until the generation is imported.
+ */
+command: ResolvedCommand, origin: RecipeOrigin, };
 export type ReadinessProbe = { stdoutContains?: string, timeoutMs: number, netwatch?: NetwatchProbe, };
 export type NetwatchProbe = { instanceId: string, runtimeDirectory: string, };
 export type ArtifactSpec = { name: string,
@@ -114,7 +122,7 @@ export type WorkflowSubmission = { protocolVersion: number, requestId: string, i
 logPath: string, artifacts?: Array<ArtifactSpec>, };
 export type WorkflowStepStatus = "pending" | "running" | "succeeded" | "failed" | "cancelled" | "skipped" | "indeterminate";
 export type WorkflowStep = { stepId: string, name: string, status: WorkflowStepStatus, operationId: string | null, startedAtMs: number | null, finishedAtMs: number | null, reason: string | null, };
-export type WorkflowRecord = { workflowId: string, submission: WorkflowSubmission, status: TaskStatus, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, reason: string | null, applicationId: string | null, steps: Array<WorkflowStep>, events: Array<JournalEvent>, artifacts: Array<BuildArtifact>, };
+export type WorkflowRecord = { workflowId: string, submission: WorkflowSubmission, recipePins?: Array<WorkflowRecipePin>, status: TaskStatus, acceptedAtMs: number, finishedAtMs: number | null, cancelRequested: boolean, reason: string | null, applicationId: string | null, steps: Array<WorkflowStep>, events: Array<JournalEvent>, artifacts: Array<BuildArtifact>, };
 export type ApplicationStatus = "starting" | "ready" | "stopping" | "stopped" | "exited" | "failed" | "indeterminate";
 export type ApplicationRecord = { applicationId: string, workflowId: string, projectId: string, taskId: string, status: ApplicationStatus, processId: number | null, createdAtMs: number, readyAtMs: number | null, finishedAtMs: number | null, logPath: string, reason: string | null, failureReason: string | null, };
 export type LogCursor = { fileIdentity: string, offset: number, prefixBytes: number, prefixSha256: string, };

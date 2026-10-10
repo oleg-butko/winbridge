@@ -6,9 +6,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
 };
-use winbridge_protocol::{
-    CommandSource, ProjectInfo, RecipeInfo, ResolvedCommand, TaskSubmission, PROTOCOL_VERSION,
-};
+use winbridge_protocol::{ProjectInfo, RecipeInfo, ResolvedCommand};
 
 pub type Result<T> = std::result::Result<T, String>;
 
@@ -111,6 +109,8 @@ pub struct WorkerConfig {
     pub worker: WorkerSettings,
     pub delivery: Option<DeliverySettings>,
     pub projects: Vec<ProjectConfig>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recipe_profiles: Vec<crate::profiles::RecipeProfileConfig>,
     #[serde(default = "default_output_limit")]
     pub max_output_bytes_per_task: u64,
     #[serde(default)]
@@ -160,6 +160,8 @@ pub struct ProjectConfig {
     pub allow_direct_commands: bool,
     pub max_concurrent_mutations: u16,
     pub recipes: Vec<RecipeConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipe_profile: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -230,6 +232,7 @@ impl WorkerConfig {
         if self.projects.is_empty() || self.projects.len() > 32 {
             return Err("projects must contain 1–32 registered projects".into());
         }
+        self.validate_recipe_profiles()?;
         let mut ids = HashSet::new();
         let mut roots: Vec<PathBuf> = Vec::new();
         for project in &self.projects {
@@ -272,7 +275,7 @@ impl WorkerConfig {
             }
             roots.push(root);
             let mut recipe_ids = HashSet::new();
-            for recipe in &project.recipes {
+            for recipe in &self.project_recipes(project)? {
                 if !valid_id(&recipe.id) || !recipe_ids.insert(&recipe.id) {
                     return Err(format!(
                         "project {}: invalid/duplicate recipe ID {:?}",
@@ -296,124 +299,50 @@ impl WorkerConfig {
                 }
             }
         }
+        self.public_projects()?;
         Ok(())
     }
 
-    pub fn resolve(&self, request: &TaskSubmission) -> Result<ResolvedCommand> {
-        if request.protocol_version != PROTOCOL_VERSION {
-            return Err(format!("protocolVersion must be {PROTOCOL_VERSION}"));
-        }
-        for (name, value) in [
-            ("requestId", &request.request_id),
-            ("idempotencyKey", &request.idempotency_key),
-        ] {
-            if value.is_empty() || value.len() > 160 || value.chars().any(char::is_control) {
-                return Err(format!(
-                    "{name} must contain 1–160 characters without control characters"
-                ));
-            }
-        }
-        validate_timeout(request.timeout_ms)?;
-        let project = self
-            .projects
-            .iter()
-            .find(|p| p.id == request.project_id)
-            .ok_or_else(|| format!("projectId {:?} is not registered", request.project_id))?;
-        let (executable, arguments, cwd, timeout) = match &request.command {
-            CommandSource::Direct {
-                executable,
-                arguments,
-                working_directory,
-            } => {
-                if !project.allow_direct_commands {
-                    return Err(format!(
-                        "project {} does not allow direct commands; use a registered recipe",
-                        project.id
-                    ));
-                }
-                (
-                    executable.clone(),
-                    arguments.clone(),
-                    working_directory.clone(),
-                    request.timeout_ms,
-                )
-            }
-            CommandSource::Recipe {
-                recipe_id,
-                arguments,
-            } => {
-                let recipe = project
-                    .recipes
-                    .iter()
-                    .find(|r| r.id == *recipe_id)
-                    .ok_or_else(|| {
-                        format!(
-                            "recipeId {recipe_id:?} is not registered in project {}",
-                            project.id
-                        )
-                    })?;
-                if !arguments.is_empty() {
-                    return Err("recipe arguments must be empty: stage 1 recipes have fixed parameters; use direct mode for custom arguments".into());
-                }
-                (
-                    recipe.executable.clone(),
-                    recipe.arguments.clone(),
-                    recipe.working_directory.clone(),
-                    request.timeout_ms.min(recipe.timeout_ms),
-                )
-            }
-        };
-        validate_arguments(&executable, &arguments)?;
-        let working_directory = scoped_directory(&project.workspace_root, &cwd)?
-            .to_string_lossy()
-            .into_owned();
-        // Relative executable paths belong to the registered project; bare names use PATH.
-        let executable =
-            if executable.contains(['/', '\\']) && !Path::new(&executable).is_absolute() {
-                validate_relative(&executable)?;
-                let root = fs::canonicalize(&project.workspace_root).map_err(|e| e.to_string())?;
-                let path = fs::canonicalize(root.join(&executable))
-                    .map_err(|e| format!("executable {executable:?}: {e}"))?;
-                if !contains_path(&root, &path) {
-                    return Err(
-                    "relative executable escapes the registered project through a symlink/junction"
-                        .into(),
-                );
-                }
-                path.to_string_lossy().into_owned()
-            } else {
-                executable
-            };
-        Ok(ResolvedCommand {
-            executable,
-            arguments,
-            working_directory,
-            timeout_ms: timeout,
-        })
-    }
-
-    pub fn public_projects(&self) -> Vec<ProjectInfo> {
-        self.projects
-            .iter()
-            .map(|p| ProjectInfo {
+    pub fn public_projects(&self) -> Result<Vec<ProjectInfo>> {
+        let projects = self.projects.iter().map(|p| -> Result<ProjectInfo> {
+            Ok(ProjectInfo {
                 id: p.id.clone(),
                 workspace_root: p.workspace_root.to_string_lossy().into_owned(),
                 allow_direct_commands: p.allow_direct_commands,
-                recipes: p
-                    .recipes
+                recipe_profile: self.profile_for(p)?.map(|profile| profile.info()),
+                recipes: self
+                    .project_recipes(p)?
                     .iter()
-                    .map(|r| RecipeInfo {
-                        id: r.id.clone(),
-                        command: ResolvedCommand {
-                            executable: r.executable.clone(),
-                            arguments: r.arguments.clone(),
-                            working_directory: r.working_directory.clone(),
-                            timeout_ms: r.timeout_ms,
-                        },
+                    .map(|r| {
+                        Ok(RecipeInfo {
+                            id: r.id.clone(),
+                            origin: Some(self.recipe_origin(p, &r.id)?),
+                            command: ResolvedCommand {
+                                executable: r.executable.clone(),
+                                arguments: r.arguments.clone(),
+                                working_directory: r.working_directory.clone(),
+                                timeout_ms: r.timeout_ms,
+                            },
+                        })
                     })
-                    .collect(),
+                    .collect::<Result<Vec<_>>>()?,
             })
-            .collect()
+        });
+        // Reuse can expand a small config into a much larger read model. Keep
+        // Info below the transport frame budget, including JSON escaping.
+        let mut result = Vec::new();
+        let mut bytes = 0;
+        for project in projects {
+            let project = project?;
+            bytes += serde_json::to_vec(&project)
+                .map_err(|e| e.to_string())?
+                .len();
+            if bytes > 512 * 1024 {
+                return Err("Expanded project/recipe metadata exceeds 512 KiB; reduce recipes/arguments before saving".into());
+            }
+            result.push(project);
+        }
+        Ok(result)
     }
 }
 
@@ -427,13 +356,13 @@ fn paths_overlap(a: &Path, b: &Path) -> bool {
     let (a, b) = (normalized(a), normalized(b));
     a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
 }
-fn validate_timeout(ms: u64) -> Result<()> {
+pub fn validate_timeout(ms: u64) -> Result<()> {
     if !(100..=24 * 60 * 60 * 1000).contains(&ms) {
         return Err("timeoutMs must be between 100 and 86400000 (24 hours)".into());
     }
     Ok(())
 }
-pub(crate) fn validate_arguments(executable: &str, arguments: &[String]) -> Result<()> {
+pub fn validate_arguments(executable: &str, arguments: &[String]) -> Result<()> {
     if executable.is_empty() || executable.len() > 32768 || executable.contains('\0') {
         return Err("executable must be nonempty and contain no NUL".into());
     }

@@ -1,3 +1,29 @@
+## Этап 7 — общие профили рецептов, 2026-10-10
+
+[Ревью](review-stage7-2026-10-10.md) выполнено; важная ошибка queued workflow
+исправлена: recipe definitions/provenance закрепляются до ACK, изменение recipes
+после restart не может незаметно изменить принятый build/start. Legacy queued
+recipe workflow без definitions требует нового явного запроса. История/keys
+сохраняются, source/cache cleanup не добавлена. README больше не противоречит
+готовности этапа 6.
+
+[Первый сценарий](project-profiles.md) реализован: статический core CommandHandler,
+modules/runner для обычных tasks и workflow steps, config recipeProfiles, один
+профиль на проект, fixed argv с workspaceRoot/projectId bindings. Проекты могут
+добавлять локальные recipes; collisions отклоняются. Bindings используют registered
+root даже при snapshot cwd; shell/environment evaluation отсутствует. Expanded
+Info ограничен 512 KiB. Task origin сохранён атомарно с acceptance. UI показывает
+profile/metadata/origin, Settings позволяет выбрать профиль, JournalTimeline общий.
+
+151 workspace Rust tests, Clippy и Windows all-targets compile проходят; DTO/
+TypeScript/build/scaffold/fmt проходят; final 24 workflow tests также прошли,
+включая восстановление между импортом и ещё не принятой сборкой. Full browser
+integration с profile/build/provenance и malformed Settings JSON прошла. Новый ProfilesOnly automatic
+Windows gate подготовлен: isolated runtime, два проекта, IPC/dedup/cancel/crash,
+frozen commands/origin и snapshot/workflow regressions. Native gate ещё не выполнен;
+весь этап 7 не закрыт. Working Windows worker af90ec0 healthy/idle прежней generation,
+desktop закрыт. Runtime configs и user-dirty files не менялись, backups не требовались.
+
 ## Закрытие этапа 6 — 2026-10-10
 
 Готовый общий release worker/desktop с built UI:

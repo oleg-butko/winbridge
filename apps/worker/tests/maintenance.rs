@@ -26,7 +26,11 @@ fn request(key: &str, mode: &str) -> TaskSubmission {
 fn old_task(store: &mut Store, config: &WorkerConfig, key: &str) -> TaskRecord {
     let r = request(key, "success");
     let task = store
-        .accept(r.clone(), config.resolve(&r).unwrap(), None)
+        .accept(
+            r.clone(),
+            winbridge_runner::resolve(config, &r).unwrap(),
+            None,
+        )
         .unwrap();
     store
         .append_output(

@@ -278,8 +278,9 @@ impl Worker {
                 if store.workflows(false)?.len() >= 128 {
                     return Err("Workflow queue limit reached (128)".into());
                 }
+                let pins = winbridge_core::workflow::recipe_pins(&self.config, &request)?;
                 Ok(LocalResponse::Workflow {
-                    workflow: Box::new(store.accept_workflow(*request)?),
+                    workflow: Box::new(store.accept_workflow_with_pins(*request, Some(pins))?),
                 })
             }
             LocalRequest::ListWorkflows => {
@@ -396,7 +397,8 @@ impl Worker {
                             "Локальное выполнение через Unix adapter разработки"
                         }
                         .into(),
-                        projects: self.config.public_projects(),
+                        projects: self.config.public_projects()?,
+                        command_handlers: Some(winbridge_runner::metadata()),
                         snapshot_import_available: self.config.delivery.is_some(),
                         snapshot_delta_available: self.config.delivery.is_some(),
                         snapshot_resume_available: self.config.delivery.is_some(),
@@ -482,11 +484,13 @@ impl Worker {
                     });
                 }
                 let command = self.resolve_task(&request)?;
+                let origin = winbridge_runner::recipe_origin(&self.config, &request)?;
                 Ok(LocalResponse::Task {
-                    task: Box::new(store.accept(
+                    task: Box::new(store.accept_with_origin(
                         request.clone(),
                         command,
                         self.snapshot_reference(&request)?,
+                        origin,
                     )?),
                 })
             }

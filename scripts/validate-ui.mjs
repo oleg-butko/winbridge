@@ -42,8 +42,9 @@ await mkdir(project);
 await mkdir(otherProject);
 await mkdir(join(project, "nested"));
 await writeFile(config, JSON.stringify({ schemaVersion: 1, instanceId: "ui-test", nodeId: "linux-ui-test", stateDirectory: join(run, "state"),
-  delivery: {adapter:"shared-folder",root:shared,namespace:"WinBridge",peerRoot:shared}, worker: { keepRunningOnUiExit: true, controllerUrl: `ws://127.0.0.1:${controllerPort}` }, projects: [{ id: "fixture", workspaceRoot: project, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [{ id: "direct", executable: fixture, arguments: ["success"], workingDirectory: ".", timeoutMs: 10000 }] },
-    { id: "other-fixture", workspaceRoot: otherProject, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [] }] }));
+  delivery: {adapter:"shared-folder",root:shared,namespace:"WinBridge",peerRoot:shared}, worker: { keepRunningOnUiExit: true, controllerUrl: `ws://127.0.0.1:${controllerPort}` }, projects: [{ id: "fixture", workspaceRoot: project, recipeProfile:"common", allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [{ id: "direct", executable: fixture, arguments: ["success"], workingDirectory: ".", timeoutMs: 10000 }] },
+    { id: "other-fixture", workspaceRoot: otherProject, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [], recipeProfile:"common" }],
+  recipeProfiles:[{id:"common",label:"Общие команды ✓",description:"Профиль двух проектов",recipes:[{id:"shared-success",executable:fixture,arguments:["success"],workingDirectory:".",timeoutMs:10000},{id:"shared-build",executable:"cargo",arguments:["build","--locked","--offline","--target-dir","${workspaceRoot}/build-cache"],workingDirectory:".",timeoutMs:180000}]}] }));
 
 function call(request, endpoint = socket) {
   return new Promise((resolve, reject) => {
@@ -356,9 +357,12 @@ try {
   await reportPage.getByText(/Файл не соответствует формату TaskReport/).waitFor();
   assert.deepEqual(errors, []);
   await page.getByRole("textbox", { name: "Способ запуска", exact: true }).click();
-  await page.getByRole("option", { name: "Рецепт: direct", exact: true }).click();
+  await page.getByRole("option", { name: "Рецепт: shared-success", exact: true }).click();
   await page.getByRole("button", { name: "Передать задачу worker", exact: true }).click();
-  await until(async () => { const task = await latestTask(); return task.submission.command.kind === "recipe" && task.submission.command.recipeId === "direct" && task.status === "succeeded"; }, "recipe did not use the shared command service");
+  await until(async () => { const task = await latestTask(); return task.submission.command.kind === "recipe" && task.submission.command.recipeId === "shared-success" && task.status === "succeeded"; }, "recipe did not use the shared command service");
+  await until(async()=> (await page.getByTestId("recipe-origin").textContent()).includes("Общие команды ✓"),"Recipe profile preview not displayed");
+  await until(async()=> (await page.getByTestId("task-recipe-origin").textContent()).includes("Общие команды ✓"),"Frozen recipe provenance not displayed");
+  assert.equal((await latestTask()).recipeOrigin.profileId,"common");
 
   await page.getByRole("textbox", { name: "Способ запуска", exact: true }).click();
   await page.getByRole("option", { name: "Прямая команда", exact: true }).click();
@@ -477,6 +481,7 @@ try {
   await workflowPage.getByRole("button", { name: "Использовать в workflow", exact: true }).click();
   const profileField = workflowPage.getByLabel("Параметры workflow — JSON", { exact: true });
   const configured = JSON.parse(await profileField.inputValue());
+  configured.build = {kind:"recipe",recipeId:"shared-build",arguments:[]};
   configured.artifacts = [{ name: "fixture executable", path: "build-cache/debug/snapshot-fixture" }];
   await profileField.fill(JSON.stringify(configured, null, 2));
   await workflowPage.getByLabel("Имя профиля", { exact: true }).fill("fixture profile");
@@ -498,6 +503,8 @@ try {
   await workflowPage.getByText(/start pid=\d+ · Привет ✓/).waitFor();
   const completedWorkflow = (await call({ method: "get_workflow", workflowId: acceptedWorkflowId })).workflow;
   assert.equal(completedWorkflow.status, "succeeded");
+  assert.equal(completedWorkflow.recipePins[0].origin.profileId,"common");
+  await workflowPage.getByText("Определения рецептов, сохранённые при принятии workflow",{exact:true}).waitFor();
   assert.equal(completedWorkflow.submission.snapshotId, secondPublished.snapshotId);
   assert.equal(completedWorkflow.steps.length, 5);
   assert.ok(completedWorkflow.steps.every((s) => s.status === "succeeded"));
@@ -664,6 +671,9 @@ try {
   for (const malformed of [
     {...settingsEdit,worker:"invalid"},
     {...settingsEdit,projects:[{...settingsEdit.projects[0],recipes:{length:{invalid:true}}}]},
+    {...settingsEdit,recipeProfiles:{invalid:true}},
+    {...settingsEdit,recipeProfiles:[{id:"broken",label:{invalid:true},description:"x"}]},
+    {...settingsEdit,projects:[{...settingsEdit.projects[0],recipeProfile:{invalid:true}}]},
     {...settingsEdit,outputRetention:{automatic:{invalid:true},olderThanDays:30}},
   ]) {
     const text=JSON.stringify(malformed);await settingsJson.fill(text);
@@ -705,10 +715,13 @@ try {
   await stopWorker(); await startWorker();
   await until(async()=>!(await call({method:"info"})).info.journalRecoveryRequired,"worker journal recovery did not clear fault");
   assert.equal((await call({method:"get_task",taskId:uncommitted.taskId})).task.status,"indeterminate");
+  const recoveredGeneration=(await call({method:"info"})).info.generation;
+  await until(async()=>await settings.getAttribute("data-settings-generation")===recoveredGeneration && await settings.getAttribute("data-settings-busy")==="false","Settings did not finish reloading after worker restart");
   // Loss of tray keeps the window accessible; explicit quit is still available.
   await workflowPage.evaluate(() => { window.__companion.trayReady=false; });
   await workflowPage.evaluate(() => window.__testClose());
   await workflowPage.getByText("Окно осталось открытым: закрытие не подтверждено",{exact:true}).waitFor();
+  await workflowPage.getByText(/Tray unavailable/).waitFor();
   assert.equal(await workflowPage.evaluate(() => window.__hidden),false);
   await workflowPage.getByRole("button",{name:"Завершить интерфейс",exact:true}).click();
   await until(async () => await workflowPage.evaluate(() => window.__destroyed),"explicit companion quit did not exit");

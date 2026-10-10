@@ -106,6 +106,9 @@ pub struct WorkflowStep {
 pub struct WorkflowRecord {
     pub workflow_id: String,
     pub submission: WorkflowSubmission,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub recipe_pins: Option<Vec<WorkflowRecipePin>>,
     pub status: TaskStatus,
     pub accepted_at_ms: u64,
     pub finished_at_ms: Option<u64>,
@@ -116,6 +119,18 @@ pub struct WorkflowRecord {
     pub events: Vec<JournalEvent>,
     #[serde(default)]
     pub artifacts: Vec<BuildArtifact>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowRecipePin {
+    pub step_name: String,
+    pub recipe_id: String,
+    /// Definition at acceptance. Cwd is relative until the generation is imported.
+    pub command: crate::ResolvedCommand,
+    pub origin: crate::RecipeOrigin,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

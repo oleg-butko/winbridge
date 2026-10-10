@@ -227,7 +227,7 @@ impl Worker {
     }
     pub(crate) fn resolve_task(&self, request: &TaskSubmission) -> Result<ResolvedCommand> {
         let Some(snapshot) = &request.snapshot_id else {
-            let command = self.config.resolve(request)?;
+            let command = winbridge_runner::resolve(&self.config, request)?;
             let project = self
                 .config
                 .projects
@@ -243,10 +243,10 @@ impl Worker {
             }
             return Ok(command);
         };
-        let mut config = self.config.clone();
-        let project = config
+        let project = self
+            .config
             .projects
-            .iter_mut()
+            .iter()
             .find(|p| p.id == request.project_id)
             .ok_or("Project is not registered")?;
         // Fast admission checks only the local marker. Full source hashes are checked under
@@ -262,8 +262,7 @@ impl Worker {
         if ready.project_id != project.id || ready.snapshot_id != *snapshot {
             return Err("Verified generation IDs mismatch".into());
         }
-        project.workspace_root = generation;
-        config.resolve(request)
+        winbridge_runner::resolve_for_generation(&self.config, request, &generation)
     }
     pub(crate) fn snapshot_reference(
         &self,

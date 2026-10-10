@@ -1,17 +1,14 @@
 import { useMemo, useState } from "react";
-import { Accordion, Alert, Badge, Button, Card, Code, Grid, Group, Stack, Tabs, Text, Timeline, Title } from "@mantine/core";
-import type { OutputChunk, TaskRecord, TaskStatus } from "../../runtime/contracts";
+import { Accordion, Alert, Badge, Button, Card, Code, Grid, Group, Stack, Tabs, Text, Title } from "@mantine/core";
+import type { OutputChunk, TaskRecord } from "../../runtime/contracts";
 import { OutputBuffer } from "./outputBuffer";
 import type { OutputState } from "./outputBuffer";
+import { JournalTimeline } from "./JournalTimeline";
 import { OutputView } from "./OutputView";
 import { powerShellScript } from "./commandPresentation";
 
-export const statuses: Record<TaskStatus, { label: string; color: string }> = {
-  queued: { label: "В очереди", color: "gray" }, running: { label: "Выполняется", color: "blue" },
-  succeeded: { label: "Завершено", color: "teal" }, failed: { label: "Ошибка", color: "red" },
-  cancelled: { label: "Отменено", color: "gray" }, interrupted: { label: "Прервано", color: "orange" },
-  indeterminate: { label: "Результат неизвестен", color: "yellow" },
-};
+export { statuses } from "./taskStatus";
+import { statuses } from "./taskStatus";
 export function TaskDetail({ task, chunks = [], outputState }: { task: TaskRecord; chunks?: OutputChunk[]; outputState?: OutputState }) {
   const [copyState, setCopyState] = useState<string | null>(null);
   const status = statuses[task.status];
@@ -26,6 +23,7 @@ export function TaskDetail({ task, chunks = [], outputState }: { task: TaskRecor
   }
   return <Stack gap="lg">
     <Group justify="space-between"><Title order={2}>Команда в проекте {task.submission.projectId}</Title><Badge color={status.color}>{status.label}</Badge></Group>
+    {task.recipeOrigin && <Text data-testid="task-recipe-origin" size="sm">Рецепт: {task.recipeOrigin.recipeId} · {task.recipeOrigin.profileId ? `профиль «${task.recipeOrigin.profileLabel}» (${task.recipeOrigin.profileId})` : "локальная конфигурация проекта"}. Источник сохранён при принятии задачи; параметры ниже взяты из журнала.</Text>}
     <Text size="sm" c="dimmed">Task ID: {task.taskId}</Text>
     <Alert color={status.color} title={task.exitCode === null ? status.label : `Exit code: ${task.exitCode}`}>
       {task.reason ?? (task.status === "queued" ? "Задача сохранена; ожидает свободного проекта." : task.processId === null ? "Worker готовит запуск команды; процесс ещё не подтверждён." : "Worker выполняет команду; результат ещё не подтверждён.")}
@@ -63,11 +61,7 @@ export function TaskDetail({ task, chunks = [], outputState }: { task: TaskRecor
       </Stack></Card></Grid.Col>
     </Grid>
     <Tabs defaultValue="timeline"><Tabs.List><Tabs.Tab value="timeline">Ход выполнения</Tabs.Tab><Tabs.Tab value="output">stdout / stderr</Tabs.Tab></Tabs.List>
-      <Tabs.Panel value="timeline" pt="md"><Card withBorder><Timeline active={task.events.length - 1}>
-        {task.events.map((event) => <Timeline.Item key={event.sequence} title={statuses[event.status].label} color={statuses[event.status].color}>
-          <Text size="sm">{event.summary}</Text><Text size="xs" c="dimmed">{new Date(event.occurredAtMs).toLocaleString()} · событие {event.sequence}</Text>
-        </Timeline.Item>)}
-      </Timeline></Card></Tabs.Panel>
+      <Tabs.Panel value="timeline" pt="md"><Card withBorder><JournalTimeline events={task.events} /></Card></Tabs.Panel>
       <Tabs.Panel value="output" pt="md"><Stack>
         {task.outputTruncated && <Alert color="yellow">Достигнута квота сохранения вывода. Часть байтов отброшена; worker продолжил читать оба потока.</Alert>}
         {task.outputRemovedAtMs && <Alert color="yellow">Сохранённый stdout/stderr очищен политикой хранения {new Date(task.outputRemovedAtMs).toLocaleString()} · {task.removedOutputBytes} байт. Команда, результат и история сохранены.</Alert>}

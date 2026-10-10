@@ -1,11 +1,13 @@
 //! Project/config policy and the controller scaffold entry point. No OS execution here.
 
 pub mod attention;
+pub mod commands;
 pub mod config;
 pub mod controller_config;
 pub mod desktop_state;
 pub mod diagnostics;
 pub mod notifications;
+pub mod profiles;
 pub mod snapshot;
 pub mod workflow;
 

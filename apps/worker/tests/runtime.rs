@@ -239,7 +239,7 @@ fn launch_intent_recovery_is_indeterminate_and_queued_survives() {
     let root = TempDir::new().unwrap();
     let cfg = config(root.path(), 16384);
     let request = submission("recovery", "success", 5000);
-    let command = cfg.resolve(&request).unwrap();
+    let command = winbridge_runner::resolve(&cfg, &request).unwrap();
     let path = root.path().join("journal.sqlite");
     let mut store = Store::open(&path).unwrap();
     let mut accepted = store.accept(request.clone(), command, None).unwrap();
@@ -249,7 +249,7 @@ fn launch_intent_recovery_is_indeterminate_and_queued_survives() {
     let queued = store
         .accept(
             submission("queued", "success", 5000),
-            cfg.resolve(&submission("queued", "success", 5000)).unwrap(),
+            winbridge_runner::resolve(&cfg, &submission("queued", "success", 5000)).unwrap(),
             None,
         )
         .unwrap();
@@ -293,7 +293,7 @@ fn path_and_config_policy_rejects_traversal_unknown_fields_and_invalid_permissio
     assert!(cfg.validate().unwrap_err().contains("schemaVersion"));
     cfg.schema_version = 1;
     cfg.projects[0].allow_direct_commands = false;
-    assert!(cfg.resolve(&submission("denied", "success", 1000)).is_err());
+    assert!(winbridge_runner::resolve(&cfg, &submission("denied", "success", 1000)).is_err());
     let mut value = serde_json::json!({"schemaVersion":1});
     value["typo"] = serde_json::Value::Bool(true);
     assert!(serde_json::from_value::<WorkerConfig>(value).is_err());

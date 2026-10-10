@@ -188,6 +188,9 @@ pub struct TaskRecord {
     pub task_id: String,
     pub submission: TaskSubmission,
     pub resolved_command: ResolvedCommand,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub recipe_origin: Option<RecipeOrigin>,
     #[serde(default)]
     pub snapshot: Option<VerifiedSnapshotRef>,
     pub status: TaskStatus,
@@ -256,6 +259,39 @@ pub struct OutputChunk {
 pub struct RecipeInfo {
     pub id: String,
     pub command: ResolvedCommand,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub origin: Option<RecipeOrigin>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeOrigin {
+    pub recipe_id: String,
+    pub profile_id: Option<String>,
+    pub profile_label: Option<String>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecipeProfileInfo {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandHandlerInfo {
+    pub id: String,
+    pub label: String,
+    pub description: String,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -267,6 +303,9 @@ pub struct ProjectInfo {
     pub workspace_root: String,
     pub allow_direct_commands: bool,
     pub recipes: Vec<RecipeInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub recipe_profile: Option<RecipeProfileInfo>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -281,6 +320,9 @@ pub struct WorkerInfo {
     pub platform: String,
     pub runtime_validation: String,
     pub projects: Vec<ProjectInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub command_handlers: Option<Vec<CommandHandlerInfo>>,
     #[serde(default)]
     pub controller_connection: Option<ControllerConnection>,
     #[serde(default)]

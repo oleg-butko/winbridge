@@ -1140,3 +1140,230 @@ fn attention_recovered_launch_intent_is_warning_without_another_external_start()
     );
     assert_eq!(fs::read(&log).unwrap(), before);
 }
+
+#[test]
+fn queued_workflow_pins_recipe_before_ack_and_refuses_changed_profile_before_import() {
+    let (_temp, mut config, mut request) = setup();
+    config.recipe_profiles=serde_json::from_value(serde_json::json!([{"id":"rust-local","label":"Original profile","description":"Frozen recipe check","recipes":[{"id":"build","executable":"cargo","arguments":["build","--locked","--offline","--target-dir","${workspaceRoot}/build-cache"],"workingDirectory":".","timeoutMs":30000}]}])).unwrap();
+    config.projects[0].recipe_profile = Some("rust-local".into());
+    request.build = CommandSource::Recipe {
+        recipe_id: "build".into(),
+        arguments: vec![],
+    };
+    let worker = Worker::open(config.clone()).unwrap();
+    let accepted = accept(&worker, request.clone());
+    let pin = &accepted.recipe_pins.as_ref().unwrap()[0];
+    assert_eq!(
+        pin.origin.profile_label.as_deref(),
+        Some("Original profile")
+    );
+    assert!(pin
+        .command
+        .arguments
+        .last()
+        .unwrap()
+        .ends_with("/build-cache"));
+    worker.stop();
+    drop(worker);
+    config.recipe_profiles[0].recipes[0]
+        .arguments
+        .push("--release".into());
+    config.recipe_profiles[0].label = "Changed profile".into();
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    assert_eq!(accept(&worker, request).workflow_id, accepted.workflow_id);
+    let failed = complete(&worker, &accepted.workflow_id);
+    assert_eq!(failed.status, TaskStatus::Failed);
+    assert!(failed
+        .reason
+        .as_ref()
+        .unwrap()
+        .contains("recipe changed since acceptance"));
+    assert!(failed.steps.iter().all(|step| step.operation_id.is_none()));
+    let LocalResponse::Imports { imports } = worker.handle(LocalRequest::ListImports) else {
+        panic!("imports")
+    };
+    assert!(imports.is_empty());
+    let LocalResponse::Tasks { tasks } = worker.handle(LocalRequest::ListTasks) else {
+        panic!("tasks")
+    };
+    assert!(tasks.is_empty());
+    assert_eq!(
+        failed.recipe_pins.unwrap()[0]
+            .origin
+            .profile_label
+            .as_deref(),
+        Some("Original profile")
+    );
+}
+
+#[test]
+fn workflow_profile_recipe_uses_shared_runner_and_commits_build_provenance() {
+    let (_temp, mut config, mut request) = setup();
+    let CommandSource::Direct {
+        executable,
+        arguments,
+        working_directory,
+    } = &request.build
+    else {
+        panic!("fixture build")
+    };
+    config.recipe_profiles=serde_json::from_value(serde_json::json!([{"id":"rust-local","label":"Rust build profile","description":"Shared workflow runner","recipes":[{"id":"build","executable":executable,"arguments":arguments,"workingDirectory":working_directory,"timeoutMs":30000}]}])).unwrap();
+    config.projects[0].recipe_profile = Some("rust-local".into());
+    request.build = CommandSource::Recipe {
+        recipe_id: "build".into(),
+        arguments: vec![],
+    };
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let accepted = accept(&worker, request);
+    let done = complete(&worker, &accepted.workflow_id);
+    assert_eq!(done.status, TaskStatus::Succeeded);
+    let LocalResponse::Task { task } = worker.handle(LocalRequest::GetTask {
+        task_id: done.steps[1].operation_id.clone().unwrap(),
+    }) else {
+        panic!("build")
+    };
+    assert_eq!(task.status, TaskStatus::Succeeded);
+    assert_eq!(
+        task.recipe_origin.as_ref().unwrap().profile_id.as_deref(),
+        Some("rust-local")
+    );
+    assert_eq!(
+        task.recipe_origin.as_ref().unwrap(),
+        &accepted.recipe_pins.as_ref().unwrap()[0].origin
+    );
+}
+
+#[test]
+fn legacy_queued_recipe_is_readable_but_requires_explicit_new_workflow() {
+    let (_temp, mut config, mut request) = setup();
+    let CommandSource::Direct {
+        executable,
+        arguments,
+        working_directory,
+    } = &request.build
+    else {
+        panic!("build")
+    };
+    config.projects[0].recipes.push(serde_json::from_value(serde_json::json!({"id":"build","executable":executable,"arguments":arguments,"workingDirectory":working_directory,"timeoutMs":30000})).unwrap());
+    request.build = CommandSource::Recipe {
+        recipe_id: "build".into(),
+        arguments: vec![],
+    };
+    let worker = Worker::open(config.clone()).unwrap();
+    worker.stop();
+    drop(worker);
+    let accepted = {
+        let mut store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
+        store.accept_workflow(request.clone()).unwrap()
+    };
+    assert!(accepted.recipe_pins.is_none());
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    assert_eq!(accept(&worker, request).workflow_id, accepted.workflow_id);
+    let failed = complete(&worker, &accepted.workflow_id);
+    assert_eq!(failed.status, TaskStatus::Failed);
+    assert!(failed
+        .reason
+        .as_ref()
+        .unwrap()
+        .contains("no frozen recipe definitions"));
+    assert!(failed.steps.iter().all(|step| step.operation_id.is_none()));
+}
+
+#[test]
+fn recovered_running_workflow_reconciles_import_but_does_not_expand_changed_build_recipe() {
+    let (_temp, mut config, mut request) = setup();
+    let CommandSource::Direct {
+        executable,
+        arguments,
+        working_directory,
+    } = &request.build
+    else {
+        panic!("build")
+    };
+    config.projects[0].recipes.push(serde_json::from_value(serde_json::json!({"id":"build","executable":executable,"arguments":arguments,"workingDirectory":working_directory,"timeoutMs":30000})).unwrap());
+    request.build = CommandSource::Recipe {
+        recipe_id: "build".into(),
+        arguments: vec![],
+    };
+    let worker = Worker::open(config.clone()).unwrap();
+    let mut accepted = accept(&worker, request.clone());
+    worker.stop();
+    drop(worker);
+    let import_request = ImportSubmission {
+        protocol_version: 1,
+        request_id: accepted.steps[0].step_id.clone(),
+        project_id: request.project_id.clone(),
+        snapshot_id: request.snapshot_id.clone(),
+        manifest_sha256: request.manifest_sha256.clone(),
+        idempotency_key: format!(
+            "workflow:{}:{}",
+            accepted.workflow_id, accepted.steps[0].step_id
+        ),
+        timeout_ms: 30000,
+    };
+    let delivery = config.delivery.as_ref().unwrap();
+    let project = &config.projects[0];
+    winbridge_workspace_sync::import(
+        delivery,
+        &project.workspace_root,
+        &import_request,
+        "recovered-import",
+        |_, _, _| Ok(()),
+    )
+    .unwrap();
+    let database = config.state_directory.join("journal.sqlite");
+    {
+        let mut store = Store::open(&database).unwrap();
+        let imported = store
+            .accept_import(
+                import_request,
+                "shared".into(),
+                "verified generation".into(),
+            )
+            .unwrap();
+        store
+            .finish_import(
+                &imported.import_id,
+                TaskStatus::Succeeded,
+                "Actual immutable import completed",
+            )
+            .unwrap();
+        accepted.steps[0].operation_id = Some(imported.import_id);
+        accepted.steps[0].status = WorkflowStepStatus::Succeeded;
+    }
+    // Model the exact persisted crash window: import committed, no build accepted.
+    accepted.status = TaskStatus::Running;
+    {
+        let connection = rusqlite::Connection::open(&database).unwrap();
+        connection
+            .execute(
+                "UPDATE workflows SET record=?2 WHERE id=?1",
+                rusqlite::params![
+                    accepted.workflow_id,
+                    serde_json::to_string(&accepted).unwrap()
+                ],
+            )
+            .unwrap();
+    }
+    config.projects[0].recipes[0]
+        .arguments
+        .push("--release".into());
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let failed = complete(&worker, &accepted.workflow_id);
+    assert_eq!(failed.status, TaskStatus::Failed);
+    assert!(failed
+        .reason
+        .as_ref()
+        .unwrap()
+        .contains("recipe changed since acceptance"));
+    assert!(failed.steps[1].operation_id.is_none());
+    let LocalResponse::Tasks { tasks } = worker.handle(LocalRequest::ListTasks) else {
+        panic!("tasks")
+    };
+    assert!(tasks.is_empty());
+    let LocalResponse::Imports { imports } = worker.handle(LocalRequest::ListImports) else {
+        panic!("imports")
+    };
+    assert_eq!(imports.len(), 1);
+    assert_eq!(imports[0].status, TaskStatus::Succeeded);
+}

@@ -163,3 +163,19 @@ process tree/timeout regression. Fixture публикуется в Debian, Windo
 тот же ready/manifest/blob pin и использует его после planned crash. Installed exe/config/journal не заменяются.
 `resume-proof.json` и logs включаются в checksummed report с ready последним.
 После проверки тестовые worker остановлены; рабочий worker оставьте запущенным.
+
+## Общие профили рецептов (этап 7)
+
+`validate-workflow-native.py --profiles-only` передаёт `-ProfilesOnly` в
+`test-windows-workflow.ps1`. Рабочий worker должен быть запущен; desktop не нужен,
+тестовых окон нет. Сценарий собирает отдельные exe в новом local runtime и проверяет
+два проекта с общим профилем, literal argv/Unicode, dedup/conflict, запрет direct,
+cancel tree, crash/restart, frozen origin и queued command guard. Регрессии
+snapshot/workflow включают закрепление recipe definitions до workflow ACK:
+изменённый профиль и legacy queued recipe workflow не запускают дочерние операции.
+
+`profiles-proof.json`, `report.json` и logs проверяются по `report.ready.json` из
+Debian; source commit/dirty/archive identity сверяются с native worker. Installed
+worker exe/config/state и прежние shared reports не меняются. После завершения
+нужно оставить рабочий worker; desktop можно держать закрытым. Новый ручной gate
+не нужен. [Формат и настройка profiles](project-profiles.md).

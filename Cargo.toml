@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/protocol", "crates/core", "crates/platform", "crates/transport", "apps/controller", "apps/worker", "modules/workspace-sync", "modules/log-reader"]
+members = ["crates/protocol", "crates/core", "crates/platform", "crates/transport", "apps/controller", "apps/worker", "modules/workspace-sync", "modules/log-reader", "modules/runner"]
 exclude = ["apps/desktop/src-tauri"]
 resolver = "2"
 
@@ -20,3 +20,4 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 
 winbridge-workspace-sync = { path = "modules/workspace-sync" }
 winbridge-log-reader = { path = "modules/log-reader" }
+winbridge-runner = { path = "modules/runner" }

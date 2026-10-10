@@ -36,6 +36,13 @@ impl Store {
         }
     }
     pub fn accept_workflow(&mut self, request: WorkflowSubmission) -> Result<WorkflowRecord> {
+        self.accept_workflow_with_pins(request, None)
+    }
+    pub fn accept_workflow_with_pins(
+        &mut self,
+        request: WorkflowSubmission,
+        recipe_pins: Option<Vec<WorkflowRecipePin>>,
+    ) -> Result<WorkflowRecord> {
         if let Some(existing) = self.existing_workflow(&request)? {
             return Ok(existing);
         }
@@ -44,6 +51,7 @@ impl Store {
         let mut workflow = WorkflowRecord {
             workflow_id: uuid::Uuid::new_v4().to_string(),
             submission: request,
+            recipe_pins,
             status: TaskStatus::Queued,
             accepted_at_ms: now_ms(),
             finished_at_ms: None,
@@ -333,6 +341,17 @@ impl Worker {
                     }
                     continue;
                 }
+                if let Err(reason) =
+                    winbridge_core::workflow::validate_recipe_pins(&self.config, &flow)
+                {
+                    if let Err(error) =
+                        store.finish_workflow(&mut flow, TaskStatus::Failed, &reason)
+                    {
+                        self.record_journal_fault(&flow.workflow_id, &reason, &error);
+                        return Err(error);
+                    }
+                    continue;
+                }
                 if store
                     .applications(false)?
                     .iter()
@@ -503,6 +522,11 @@ impl Worker {
                 let import = if let Some(existing) = store.existing_import(&request)? {
                     existing
                 } else {
+                    if let Err(reason) =
+                        winbridge_core::workflow::validate_recipe_pins(&self.config, flow)
+                    {
+                        return store.finish_workflow(flow, TaskStatus::Failed, &reason);
+                    }
                     store.accept_import(
                         request,
                         shared.to_string_lossy().into(),
@@ -581,11 +605,30 @@ impl Worker {
                 let task = if let Some(task) = store.existing(&request)? {
                     task
                 } else {
+                    if let Err(reason) =
+                        winbridge_core::workflow::validate_recipe_pins(&self.config, flow)
+                    {
+                        return store.finish_workflow(flow, TaskStatus::Failed, &reason);
+                    }
                     match self.resolve_task(&request).and_then(|command| {
                         self.snapshot_reference(&request)
                             .map(|snapshot| (command, snapshot))
                     }) {
-                        Ok((command, snapshot)) => store.accept(request, command, snapshot)?,
+                        Ok((command, snapshot)) => {
+                            let origin = flow
+                                .recipe_pins
+                                .as_ref()
+                                .and_then(|pins| {
+                                    pins.iter()
+                                        .find(|pin| pin.step_name == flow.steps[index].name)
+                                })
+                                .map(|pin| pin.origin.clone());
+                            let origin = match origin {
+                                Some(origin) => Some(origin),
+                                None => winbridge_runner::recipe_origin(&self.config, &request)?,
+                            };
+                            store.accept_with_origin(request, command, snapshot, origin)?
+                        }
                         Err(reason) => {
                             update_step(flow, index, WorkflowStepStatus::Failed, &reason);
                             return store.finish_workflow(flow, TaskStatus::Failed, &reason);

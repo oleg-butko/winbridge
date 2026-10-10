@@ -40,7 +40,11 @@ fn seed(root: &Path) -> (Store, String) {
     let mut store = Store::open(&root.join("journal.sqlite")).unwrap();
     let request = request("seed", "success");
     let task = store
-        .accept(request.clone(), config.resolve(&request).unwrap(), None)
+        .accept(
+            request.clone(),
+            winbridge_runner::resolve(&config, &request).unwrap(),
+            None,
+        )
         .unwrap();
     (store, task.task_id)
 }

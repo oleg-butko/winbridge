@@ -9,6 +9,7 @@ publish.workspace = true
 bundled-sqlite = ["rusqlite/bundled"]
 
 [dependencies]
+winbridge-runner.workspace = true
 winbridge-workspace-sync.workspace = true
 winbridge-log-reader.workspace = true
 winbridge-core.workspace = true

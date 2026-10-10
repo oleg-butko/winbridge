@@ -1,6 +1,6 @@
 # Структура и правила расширения
 
-Папки отражают границы изменений. Этап 1 добавил transport/platform crates, local worker runtime и отдельный Tauri package. Modules пока описывает следующие границы; первая runner orchestration и SQLite Store находятся в worker, project policy — в core.
+Папки отражают границы изменений. Этап 1 добавил transport/platform crates, local worker runtime и отдельный Tauri package. Runner orchestration и SQLite Store находятся в worker, project policy — в core. Этап 7 вынес общий direct/recipe resolver в modules/runner; sync и log-reader также реализованы отдельными crates. [Профили и контракт runner](project-profiles.md).
 
 | Путь | Владелец логики | Допустимые зависимости |
 | --- | --- | --- |

@@ -80,6 +80,7 @@ def main():
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--project', default='snapshot-fixture')
     parser.add_argument('--delta-only', action='store_true', help='Check pinned-base delta on actual HGFS with isolated journal/build, without desktop windows')
+    parser.add_argument('--profiles-only', action='store_true', help='Check two registered projects with a reusable recipe profile, real IPC, cancel and crash/restart; no desktop windows')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
     parser.add_argument('--output-reference-worker', help='Read-only path to the installed worker exe, used with a NEW isolated config/state for matched output samples')
@@ -90,7 +91,7 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only)) > 1:
         parser.error('Choose one isolated scenario: task attention, workflow attention, companion, history diagnostics or Netwatch')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
@@ -113,6 +114,8 @@ def main():
     extra = ''
     profile_argument = ''
     resume_publication = None
+    if args.profiles_only:
+        profile_argument = ' -ProfilesOnly'
     if args.resume_only:
         resume_publication, resume_blob_sha, resume_delivery, resume_measurement = prepare_resume_package(config, shared, run_id)
         profile_argument = ' -ResumeOnly -ResumeDeliveryRoot ' + ps_string(resume_delivery) + ' -ResumePublicationFile ' + ps_string(resume_measurement)
@@ -214,6 +217,18 @@ exit $LASTEXITCODE
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
+    if args.profiles_only:
+        proof = json.loads((report / 'profiles-proof.json').read_text())
+        tasks = proof['completed']
+        if not proof['passed'] or proof['platform'] != 'windows' or len(tasks) != 2 or tasks[0]['taskId'] == tasks[1]['taskId']:
+            raise RuntimeError('Incomplete native two-project profile proof')
+        if proof['build']['sourceCommit'] != result['sourceCommit'] or proof['build']['sourceDirty']:
+            raise RuntimeError('Profile test worker source identity mismatch')
+        for record in tasks:
+            if record['status'] != 'succeeded' or record['exitCode'] != 0 or record['recipeOrigin']['profileId'] != 'common':
+                raise RuntimeError('Profile command/provenance was not committed')
+        if proof['cancelled']['status'] != 'cancelled' or proof['recovered']['status'] != 'indeterminate' or proof['blockedQueued']['status'] != 'failed' or proof['explicitNewProfile']['status'] != 'succeeded':
+            raise RuntimeError('Profile cancel/recovery/explicit retry proof incomplete')
     if args.output_only:
         proof = json.loads((report / 'output-proof.json').read_text())
         reference = [case for case in proof['cases'] if case.get('version') == 'reference' and 'measurement' in case]

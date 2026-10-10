@@ -36,6 +36,9 @@ cursor restart и cancel/attention. Desktop и тестовые окна не о
 Проверяет manifest-pinned blocks на настоящем HGFS, cancel/corruption и actual
 crash/restart отдельного worker, dedup, explicit resume и offline pinned build.
 Рабочие exe/state не меняются; desktop и тестовые окна не открываются.
+.PARAMETER ProfilesOnly
+Проверяет общий профиль для двух проектов: реальные argv/cwd, запрет direct, dedup,
+cancel tree, crash/restart и frozen command/provenance. Desktop не открывается.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -60,6 +63,7 @@ param(
     [switch]$DeltaOnly,
     [switch]$OutputOnly,
     [switch]$ResumeOnly,
+    [switch]$ProfilesOnly,
     [string]$ResumeDeliveryRoot = '',
     [string]$ResumePublicationFile = '',
     [string]$OutputReferenceWorker = '',
@@ -104,6 +108,7 @@ $oldTmp = $env:TMP
 $oldDeltaShared = $env:WINBRIDGE_DELTA_GATE_SHARED
 $oldOutputReport = $env:WINBRIDGE_OUTPUT_GATE_REPORT
 $oldOutputReference = $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER
+$oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
 $oldResumeDelivery = $env:WINBRIDGE_RESUME_GATE_DELIVERY
 $oldResumePublication = $env:WINBRIDGE_RESUME_GATE_PUBLICATION
@@ -128,7 +133,16 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($ProfilesOnly) {
+        if ($NetwatchProfile) { throw 'ProfilesOnly requires an isolated scenario' }
+        $env:WINBRIDGE_PROFILE_GATE_REPORT = $ReportDirectory
+        $groups = @(
+            @{ name='profile-config-policy'; arguments=@('test','-p','winbridge-core','-p','winbridge-runner','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='profile-native-ipc-projects-dedup-cancel-recovery'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='profile-runner-snapshot-workflow-regression'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','runtime','--test','snapshots','--test','workflows','--locked','--offline','--','--test-threads=1','--nocapture') }
+        )
+    }
     if ($ResumeOnly) {
         if ($NetwatchProfile) { throw 'ResumeOnly requires an isolated scenario' }
         $env:WINBRIDGE_RESUME_GATE_SHARED = $ReportDirectory
@@ -244,6 +258,7 @@ try {
     $env:WINBRIDGE_DELTA_GATE_SHARED = $oldDeltaShared
     $env:WINBRIDGE_OUTPUT_GATE_REPORT = $oldOutputReport
     $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER = $oldOutputReference
+    $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
     $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
     $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $oldResumePublication
