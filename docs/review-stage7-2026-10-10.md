@@ -55,3 +55,8 @@ Settings ещё перечитывал generation. Harness теперь ждёт
 и окончание чтения, затем проверяет именно отказ tray. Дополнительный ошибочный
 case-sensitive текст ожидания исправлен; финальный прогон passed. Тестовая
 синхронизация не подменяет проверку close; новых Windows ручных действий нет.
+
+Итог: 152 full workspace tests проходят. [Automatic Windows gate](windows-profiles-gate-2026-10-10.md)
+passed: 68 native tests, пять проверенных по SHA-256 artifacts, source clean fa7e4d7.
+Installed worker healthy/idle прежней generation. Controller обновлён до этого
+проверенного кода после gate, reconnect успешен. Первый сценарий этапа 7 завершён.

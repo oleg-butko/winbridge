@@ -74,3 +74,7 @@ metadata добавлена в read-only Info, transport/Hello/RPC не изме
 direct, cancel, owned crash/restart и provenance. Проверяются также прежние
 snapshot/workflow/tree/timeout tests. Desktop не требуется, окон не появляется.
 Report/ready/proof пишутся только в новый shared run и проверяются из Debian.
+
+[Automatic Windows gate](windows-profiles-gate-2026-10-10.md) прошёл: 68 native
+tests и пять verified artifacts. 152 workspace tests и full browser integration
+также прошли. Первый сценарий этапа 7 завершён; работающий runtime не обновлялся.

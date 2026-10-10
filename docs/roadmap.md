@@ -127,11 +127,12 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 Первый вертикальный сценарий реализован: [общие recipe profiles](project-profiles.md),
 статический CommandHandler/runner, metadata и общий JournalTimeline. Task origin и
 workflow recipe definitions сохраняются до ACK; queued workflow с изменённым
-рецептом не начинает import/build/start. Проверка двух проектов/автоматический
-Windows gate — в работе; весь этап 7 пока не закрыт.
+рецептом не начинает новые import/build/start. [Automatic Windows gate](windows-profiles-gate-2026-10-10.md)
+passed: 68 native tests, five verified artifacts; 152 workspace tests и full
+browser integration проходят. Первый сценарий завершён; весь этап 7 пока не закрыт.
 
 - [ ] Стабилизировать handler interfaces после runner и workspace-sync, которые уже работают.
-- [ ] Project profiles и reusable recipes; общий UI renderer событий и capability metadata.
+- [x] Project profiles и reusable recipes; общий UI renderer событий и capability metadata.
 - [ ] Подключить второе приложение/module без изменений transport и без копирования task service.
 - [ ] Лишь при необходимости выделить SDK/package versioning. Динамические plugins и другие ОС — отдельные запросы.
 
@@ -145,11 +146,13 @@ Windows gate — в работе; весь этап 7 пока не закрыт
 
 ## Следующий конкретный шаг
 
-Этап 7: закрепить handler/module interfaces после проверенных runner/sync/log/attention,
-чтобы следующий проект подключался profile/recipe и модулем без изменения transport
-и копирования journal/cancel/recovery. Сначала сверить реальные coupling points и
-выбрать один вертикальный сценарий; не добавлять абстракции без потребителя.
-Этапы 1–6 завершены; installed worker остаётся af90ec0, новый native resume code
-38f4e5d проверен в isolated runtime. Для использования новых функций нужен общий
-update worker/desktop из готового source archive, без повторного ручного gate.
-Старые snapshots/reports/history не очищать; актуальную связь проверить заново.
+Этап 7: следующий прикладной проект/module должен использовать проверенные
+recipe profiles и статический handler contract без копирования transport/journal/
+cancel/recovery. CommandHandler/runner для двух проектов, workflow recipe pins и
+общий timeline уже прошли [automatic Windows gate](windows-profiles-gate-2026-10-10.md).
+Следующий шаг — выбрать конкретного потребителя и проверить его полный cycle через
+общие interfaces; не вводить SDK/plugins без необходимости. Native-tested code
+fa7e4d7 доступен в source archive из handoff; installed worker пока af90ec0,
+controller обновлён до clean fa7e4d7. Для применения новых функций нужен общий
+update worker/desktop, без нового ручного gate. Старые snapshots/reports/history
+не очищать; актуальную связь проверить заново.

@@ -15,14 +15,30 @@ root даже при snapshot cwd; shell/environment evaluation отсутств
 Info ограничен 512 KiB. Task origin сохранён атомарно с acceptance. UI показывает
 profile/metadata/origin, Settings позволяет выбрать профиль, JournalTimeline общий.
 
-151 workspace Rust tests, Clippy и Windows all-targets compile проходят; DTO/
-TypeScript/build/scaffold/fmt проходят; final 24 workflow tests также прошли,
-включая восстановление между импортом и ещё не принятой сборкой. Full browser
-integration с profile/build/provenance и malformed Settings JSON прошла. Новый ProfilesOnly automatic
-Windows gate подготовлен: isolated runtime, два проекта, IPC/dedup/cancel/crash,
-frozen commands/origin и snapshot/workflow regressions. Native gate ещё не выполнен;
-весь этап 7 не закрыт. Working Windows worker af90ec0 healthy/idle прежней generation,
-desktop закрыт. Runtime configs и user-dirty files не менялись, backups не требовались.
+152 full workspace Rust tests, Clippy/Windows all-targets, DTO/TypeScript/build/
+scaffold/fmt и full browser integration проходят. [Automatic Windows gate](windows-profiles-gate-2026-10-10.md)
+passed: 68 native tests, five checksum-verified artifacts. Run
+`20261010-060810-0996d143`, outer task `6ef13e91-8cc2-4766-ac25-b6a6097e01b2`,
+report SHA-256 `6f8d1abcaa472a0e20a51b2b364d29a675b3de9dd148651f220e93bd399a6581`.
+Первый сценарий этапа 7 завершён; весь этап пока не закрыт. Working Windows worker
+clean af90ec0 healthy/idle прежней generation; desktop закрыт. Installed runtime
+не заменялся, пользовательских runtime configs/user-dirty files не меняли;
+backups не требовались.
+
+Source archive: `K:\VMs\shared\WinBridge\sources\winbridge-20261010T100754Z-fa7e4d7-827eab23.zip`,
+clean fa7e4d7, built UI, 253 files/3 619 262 bytes, SHA-256
+`422d9f07948f5d4833ef54a9c71a05161c46794d3647daa4cc0ce612fb109f77`.
+После native gate меняется только документация; runtime code совпадает с archive.
+Для применения новых profiles/output/resume нужен общий update worker/desktop
+обычным prepare-windows-snapshot.ps1; повторный ручной gate не требуется.
+
+Controller после gate обновлён до clean fa7e4d7: exec session 18450, generation
+`eb0d1da7-2c20-4f21-b8da-e61eae5d9bbc`, session
+`91e23903-e429-4637-8125-111b76493bb1`, Windows `192.168.44.1:7798`. Installed
+worker generation `c182793f-5391-4bf8-9e70-9c94b8b24a5c` прежняя, connected=true,
+maintenanceError/journalRecoveryRequired=null, activeTaskCount=0. Listen/IPC/
+activity log/config прежние; source IP filtering не добавлен. После новой сессии
+проверить live status заново.
 
 ## Закрытие этапа 6 — 2026-10-10
 
@@ -383,6 +399,7 @@ tray/popup/sound/settings прошли gate, описанный в текуще�
 | --- | --- |
 | Git repository и структура | Созданы; история начинается с commit подготовки. Точный hash смотреть в git log. |
 | Rust protocol/core/controller/worker | Worker runtime/CLI и platform/transport crates прошли Windows gate; worker capabilities: task_submit/task_cancel, а workspace_import объявляется при delivery config; native snapshot runtime gate пройден 2026-10-06. Controller CLI submit/get/list/output/cancel/watch реально проверен с Windows worker; runtime и native UI gate этапа 2 пройдены, этап завершён. |
+| Stage 7 runner/profiles | Static CommandHandler и общий resolver, reusable config recipes, bounded metadata, durable task origin/workflow pins и общий UI timeline. [68 native Windows tests](windows-profiles-gate-2026-10-10.md), 152 workspace tests и full browser integration прошли. Первый сценарий завершён; следующий прикладной module/проект ещё не подключён. |
 | DTO и config | Strict schemaVersion 1 loader, registry/recipes/direct/cwd/timeout policy. LocalRequest/Response, TaskRecord/Summary, output byte pages. TS генерируется из Rust; check:contracts проверяет drift. |
 | UI | Пять native Windows шагов подтверждены пользователем. Новый fix формы сохраняет executable/argv/cwd/timeout/recipe по worker/project/root. Browser остаётся demo/report viewer; UI integration проверен на настоящем Unix worker. |
 | Tauri desktop | Native host запуск подтверждён. workerConfigPath в winbridge-desktop.local.json, форма в winbridge-desktop-state.local.json рядом с exe. worker_rpc, четыре local draft commands и desktop_build; close ждёт save ACK каждой изменённой command/delivery/workflow scope. Shared package select и delivery form restore проверены UI integration; пользователь принял их без нового подробного ручного gate. Сохранение формы и dev:ui дополнительно подтверждены пользователем на Windows. |
@@ -451,7 +468,7 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
 ## План прежней сессии — 2026-10-06
 
-Следующий этап сейчас — 6 (измерения); актуальная готовность описана в начале.
+Следующий этап сейчас — 7 (profiles/module interfaces); актуальная готовность описана в начале.
 Ниже сохранён исторический план этапа 4.
 
 Текущий рабочий этап — этап 4. Этап 3 закрыт по решению пользователя 2026-10-06; новые UI исправления приняты, подробная ручная проверка отложена. Этап 2 завершён: [Windows runtime и native UI gate](windows-session-gate-2026-10-05.md) пройдены. Пользователь подтвердил задачи из Debian, потерю связи при продолжающейся задаче, новый session с прежним Task ID после reconnect и отмену. 14 групп настоящих session checks, 29 Rust tests, UI integration, Windows all-targets compile и standalone Linux desktop check проходят. [Ревью](review-stage2-2026-10-05.md) исправило cleanup прерванной сессии, oversized requests, отражение входящего JSON, Welcome capabilities и handshake budget. Адреса пары подтверждены; не задавать вопрос повторно. IP Windows не блокируется.

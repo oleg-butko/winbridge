@@ -146,4 +146,4 @@ schema 3 с pinned блоками ZIP и явным повтором import по
 Этап 7 начат: [общие профили рецептов и статический runner](docs/project-profiles.md).
 Два проекта используют один профиль; journal/cancel/recovery остаются у worker.
 Источник task и определения workflow recipes сохраняются до ACK, изменения
-конфига применяются после ручного restart. Native gate выполняется автоматически.
+конфига применяются после ручного restart. [68 native Windows tests](docs/windows-profiles-gate-2026-10-10.md) прошли автоматически; первый сценарий этапа завершён.
