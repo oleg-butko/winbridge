@@ -74,7 +74,7 @@ export function TaskDetail({ task, chunks = [], outputState }: { task: TaskRecor
         {output.hasGaps && <Alert color="yellow">В загруженном output есть пропуски sequence или byte offsets. Разделённые фрагменты UTF-8 не склеиваются; этот просмотр не подтверждает полный вывод.</Alert>}
         <Text size="sm" c="dimmed" data-testid="output-loaded">Сохранено worker сейчас: {Math.max(0,task.outputBytes-(task.removedOutputBytes??0))} байт · загружено: {output.loadedBytes} байт · UTF-8 · {output.complete ? "чтение завершено" : "чтение продолжается"}</Text>
         {(["stdout", "stderr"] as const).map((stream) => <Card key={stream} withBorder><Text fw={600} mb="xs">{stream}</Text>
-          <OutputView key={task.taskId} text={output[stream]} omittedCharacters={output.omittedCharacters[stream]} label={stream} empty="Нет сохранённого вывода" />
+          <OutputView key={`${task.taskId}:${task.outputRemovedAtMs ?? 0}`} text={output[stream]} omittedCharacters={output.omittedCharacters[stream]} label={stream} empty="Нет сохранённого вывода" />
         </Card>)}
       </Stack></Tabs.Panel>
     </Tabs>

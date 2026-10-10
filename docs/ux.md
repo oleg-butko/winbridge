@@ -44,7 +44,7 @@ tray. Явный quit сохраняет их по тому же правилу.
 
 Форма запоминает executable, исходный текст JSON argv, cwd, timeout и выбранный рецепт отдельно для worker/project/root. После открытия desktop заполняет прежние поля, включая незавершённую правку JSON, и выбирает последний использованный зарегистрированный проект. Видны состояния сохранения и ошибка; закрытие окна ждёт записи последних правок. Восстановление не запускает команду. Файл `winbridge-desktop-state.local.json` хранится рядом с exe; worker config остаётся отдельно.
 
-Output: независимые stdout/stderr, поиск, severity filters, pause autoscroll, новые фрагменты, byte offset и признаки gaps. Virtualization и paging появляются до больших logs. Копирование/экспорт показывает, что выбрано: весь сохранённый output или фильтрованная часть.
+Output: независимые stdout/stderr, поиск, severity filters, pause autoscroll, новые фрагменты, byte offset и признаки gaps. Task output читается bounded pages с sequence cursor; desktop удерживает последние 65 536 Unicode символов каждого потока, точный loaded byte count и явные gaps. Virtual scroll отрисовывает до 28 строк, включая overscan; фильтр и pause относятся к загруженному хвосту. Очистка worker output сбрасывает также frozen view. Копирование/экспорт показывает, что выбрано: весь сохранённый output или фильтрованная часть. Application logs пока используют прежний bounded tail.
 
 Доставка: capture, pack, shared write, validation/import и ready for build — отдельные шаги. Progress bytes/files точный, если известен размер; иначе indeterminate progress без придуманного процента. Пользователь может увидеть snapshot manifest и какие files будут заменены.
 

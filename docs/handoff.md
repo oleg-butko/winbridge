@@ -13,12 +13,23 @@ generation `c182793f-5391-4bf8-9e70-9c94b8b24a5c`, delta available,
 activeTaskCount=0, maintenanceError/journalRecoveryRequired=null.
 
 [Ревью](review-stage6-2026-10-10.md) не обнаружило новых важных ошибок delta;
-исправляются неограниченный desktop output buffer и склейка UTF-8 через gaps.
+исправлены неограниченный desktop output buffer и склейка UTF-8 через gaps.
 Следующий сценарий выбран по baseline 2 MiB output: [batching/virtualization](output-batching-plan.md).
 Код реализован; 135 workspace tests, Clippy и Windows all-targets compile прошли.
-Browser integration с actual output/lost read ACK/virtualization прошла; native
-gate выполняется до объявления готовности. Windows desktop не
-требуется, новых окон не будет; installed runtime не заменяется.
+Browser integration с actual output/lost read ACK/virtualization прошла;
+[native gate завершён](windows-output-gate-2026-10-10.md): run
+`20261010-042006-6c67052d`, task `ddf23ba0-c6b3-4eb8-ae3d-14511f320a79`, 11 tests,
+четыре verified artifacts, report SHA-256
+`a73633f445734e78bceb9ee28799c74fec97a5db9db478b30d31472f09c9629c`.
+Clean b980ac0 backend сравнён с af90ec0 в отдельных state directories: страницы
+17→11, median Read RPC 1960.72→1900.94 ms, hashes совпали. Три пары/одиночные
+control samples не доказывают общий pipeline speedup; raw timings сохранены.
+Installed generation/source прежние, healthy/activeTaskCount=0. Тестовые runtime
+завершены, новых окон не было; рабочий worker оставить запущенным, desktop закрыт.
+Этап 6 не закрыт: следующий сценарий — snapshot chunk/resume.
+Заключительный UI fix сбрасывает frozen view после output cleanup; дополнительная
+browser regression и отказ полного отчёта с gaps прошли. Это UI изменение не
+меняет native backend b980ac0; повтор backend gate не требуется.
 
 ## Предыдущая сессия — 2026-10-09
 
@@ -283,6 +294,7 @@ tray/popup/sound/settings прошли gate, описанный в текуще�
 | Local IPC/runtime tasks | User SID + instance named pipe, user-only protected DACL, exclusive journal и Windows Job Objects подтверждены Windows отчётом. Unix socket/private state также проверены; bounded frames/deadline/connections. |
 | HGFS delivery/import | Git commit capture, deterministic Stored ZIP, actual HGFS .part/readback/ready, durable worker import/lease/pinned build и UI реализованы. 16 actual Unix/HGFS/WebSocket gate checks и actual owned import crash/recovery проходят. 19 actual Windows import/build/run/cancel/NTFS junction checks пройдены 2026-10-06; delivery UX принята пользователем, подробная ручная проверка отложена. Dirty source mode ещё не реализован; stage-6 baseline/Git batch/delta/local source cache и measurements завершены, resume/batching/virtualization ещё впереди. |
 | SQLite/process tree | Local WAL/FULL, durable acceptance, dedup, queue/cancel, launch intent/recovery, independent pipe drain/quota. Реальные Windows tree timeout/cancel/crash cleanup и сохранённый indeterminate без retry подтверждены. |
+| Task output | Bounded byte/JSON/row pages с прежним cursor; incremental Unicode tails 65 536 characters/stream, gap markers и не более 28 DOM rows. [11 native Windows tests и matched IPC samples](windows-output-gate-2026-10-10.md), browser lost read ACK/filter/pause/loaded bytes проходят. Delivery resume остаётся будущим сценарием. |
 | WebSocket | Versioned handshake/RPC/heartbeat/reconnect/watch реализованы; 14 session groups и UI integration проходят в Debian. Шесть групп Windows runtime gate прошли, включая прежний task/PID/generation после offline. Подключение и все три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. |
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
 | Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite workflows/applications (schema 3), текущая schema 6 с typed attention/cleanup; consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
@@ -377,7 +389,7 @@ Runtime постоянный: `K:\_proj-26\winbridge\runtime`, runtimeDirectory 
 
 ## Готовый запрос для продолжения
 
-> Продолжи WinBridge в /home/user1/winbridge по AGENTS.md и docs/handoff.md. Этапы 1–5 завершены автоматическими Windows gates. Этап 6: baseline/Git batch/delta/local source cache и measured Debian → Windows one-file пары завершены; дальше resume/output batching/virtualization по измерениям. Installed worker 58f3c14 пока не заменён, новая delta проверена на отдельном efeaf65 test worker. Controller обновляется прежде нового worker из-за capability workspace_delta; доступность после новой сессии проверять заново. Новые Windows проверки выполнять автоматически в отдельных runtime, заранее объясняя TEST окна и нужные процессы; после сообщать, что можно закрыть. Сохраняй durable acceptance/dedup/cancel/recovery, прозрачность UI и принятый scope output retention. Не повторяй пройденные gates без причины; при неожиданной ошибке worker остановись и уточни.
+> Продолжи WinBridge в /home/user1/winbridge по AGENTS.md и docs/handoff.md. Этапы 1–5 завершены автоматическими Windows gates. Этап 6: baseline/Git batch/delta/local source cache/output batching и virtual output rows завершены; следующий сценарий — chunk/resume больших snapshot payload с проверкой pins/actual bytes и сохранением immutable generations. Installed worker clean af90ec0 подтверждён 2026-10-10; новый output backend clean b980ac0 проверен в отдельном Windows runtime, installed exe/state не заменялись. Актуальную связь/source identity после перезапуска проверять заново. Новые Windows проверки выполнять автоматически в отдельных runtime, заранее объясняя TEST окна и нужные процессы; после сообщать, что можно закрыть. Сохраняй durable acceptance/dedup/cancel/recovery, прозрачность UI и принятый scope output retention. Не повторяй пройденные gates без причины; при неожиданной ошибке worker остановись и уточни.
 
 ## Завершение этапа 4 — 2026-10-06
 

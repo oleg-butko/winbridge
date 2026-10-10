@@ -39,7 +39,8 @@ Report публикуется create-only с bytes/SHA-256 readback и ready mar
 После baseline выбирается одна оптимизация с измеримой целью и той же regression
 проверкой. Baseline/Git batch и delta/local source cache теперь завершены;
 resume/SocketDelivery ещё не реализованы. [Output batching/virtualization](output-batching-plan.md)
-выбраны 2026-10-10 и проходят automatic gates. Новый ручной Windows gate не нужен; unexpected
+выбраны 2026-10-10 и [прошли automatic gate](windows-output-gate-2026-10-10.md).
+Следующий сценарий — resume больших snapshot payload. Новый ручной Windows gate не нужен; unexpected
 worker behaviour требует остановки и уточнения по инструкции пользователя.
 
 ## Следующий сценарий — delta
@@ -47,5 +48,5 @@ worker behaviour требует остановки и уточнения по и
 2026-10-09 пользователь выбрал delta от проверенного snapshot как локального
 кэша. [Отдельный контракт](snapshot-delta-plan.md) зафиксирован до реализации;
 [инструкции](snapshot-delta.md). Baseline/Git batch завершены; новый schema 2
-[прошёл отдельные tests и automatic Windows gates](windows-delta-gate-2026-10-09.md). Resume/output batching/
-virtualization/SocketDelivery остаются будущей работой.
+[прошёл отдельные tests и automatic Windows gates](windows-delta-gate-2026-10-09.md).
+Output batching/virtualization также завершены; resume/SocketDelivery остаются будущей работой.

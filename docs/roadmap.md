@@ -116,7 +116,7 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 - [x] [Первая измеренная оптимизация capture](performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
 - [x] [Incremental full/delta](windows-delta-gate-2026-10-09.md): три fresh Debian → Windows one-file commit; ZIP 2 367 994→193 bytes, publication/import timings и actual build/output/control/cancel/attention.
 - [x] [Delta от verified snapshot](snapshot-delta.md): schema 2/pinned base/local source cache, full target verification, CLI/MCP/UI; 40 native tests и cross-host gate прошли. Старые поколения сохраняются; удаление отражается новым составом.
-- [ ] [Пакетное чтение output и виртуализация строк](output-batching-plan.md): код реализован, automatic Windows gate ещё требуется.
+- [x] [Пакетное чтение output и виртуализация строк](windows-output-gate-2026-10-10.md): bounded pages/cursors/tails, не более 28 DOM rows; 11 Windows tests, три native IPC пары, hashes/dedup/restart/control и browser integration.
 - [ ] Chunk/resume больших объектов; дальнейшая виртуализация списков по измерениям.
 - [ ] При необходимости SocketDelivery как другой adapter. Control session не блокируется большими данными.
 
@@ -141,8 +141,10 @@ Windows import/build, HGFS tree/archive и объёмов output/journal. Пла
 
 Этап 6: baseline capture/pack/shared publication/Windows import/build/output/journal
 и первая Git batch оптимизация завершены. Delta/local source cache и три measured one-file пары также [завершены](windows-delta-gate-2026-10-09.md).
-2026-10-10 после ревью выбран [output batching/virtualization](output-batching-plan.md):
-код и локальные проверки готовы; automatic Windows gate выполняется до закрытия сценария.
+2026-10-10 после ревью [output batching/virtualization](windows-output-gate-2026-10-10.md)
+завершены: страницы 17→11 при тех же bytes, bounded UI и автоматические проверки.
+Дальше — chunk/resume больших snapshot payload после прерывания, без потери pins,
+без изменения старых поколений и без автоматического повторного запуска команд.
 Resume больших объектов/другой adapter ещё не реализованы.
 Старые snapshots/reports/history не очищать.
 2026-10-09 пользователь обновил installed worker до clean `58f3c14`;

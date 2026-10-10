@@ -20,6 +20,8 @@ target не зависит от сохранности shared/base. Regression t
   склеить разделённые bytes в другой Unicode символ. Теперь gaps обозначаются
   явно и сбрасывают decoder; malformed page не меняет cursor, а отчёт с заявленным
   полным output и gaps отвергается до render.
+- Frozen output оставался виден после retention cleanup. При новом
+  outputRemovedAtMs view теперь пересоздаётся вместе с filter/pause state.
 
 Продолжение этапа 6 — [пакетное чтение и виртуализация output](output-batching-plan.md).
 ReadOutput DTO/sequence semantics сохраняются; byte/JSON/row budgets ограничивают
@@ -30,5 +32,7 @@ Resume snapshot delivery остаётся незавершённым.
 135 workspace tests, Clippy с `-D warnings`, Windows all-targets compilation,
 TypeScript и unit checks Unicode buffer прошли. Browser integration также прошла:
 actual 20 000 Unicode lines на поток, lost read ACK с прежним cursor, bounded tails,
-не более 28 DOM rows, filter/pause. Native gate публикуется после завершения;
-cross-compile не обозначается Windows run.
+не более 28 DOM rows, filter/pause. [Native gate завершён](windows-output-gate-2026-10-10.md):
+11 tests, три пары reference/current, same bytes, pages 17→11, restart/dedup/control.
+Дополнительная browser проверка frozen cleanup и malformed complete report
+прошла после заключительного UI fix. Cross-compile не обозначается Windows run.

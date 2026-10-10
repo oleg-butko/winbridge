@@ -323,6 +323,12 @@ try {
   await reportPage.getByRole("tab", { name: "stdout / stderr", exact: true }).first().click();
   await reportPage.getByText(/stdout: success Привет ✓/).waitFor();
   const invalidReport = join(run, "invalid.json");
+  const gapReport = { schemaVersion: 1, platform: "linux", task: record, output: structuredClone(chunks), outputComplete: true };
+  gapReport.output[0].offset += 1;
+  const gapReportPath = join(run, "gap-report.json");
+  await writeFile(gapReportPath, JSON.stringify(gapReport));
+  await reportPage.locator('input[type="file"]').setInputFiles(gapReportPath);
+  await reportPage.getByText(/Полный отчёт содержит пропуски sequence или byte offsets/).waitFor();
   await writeFile(invalidReport, '{"schemaVersion":999}');
   await reportPage.locator('input[type="file"]').setInputFiles(invalidReport);
   await reportPage.getByText(/Файл не соответствует формату TaskReport/).waitFor();
@@ -655,9 +661,17 @@ try {
   await exec("python3",["-c","import sqlite3,sys,json,time; c=sqlite3.connect(sys.argv[1]); raw=c.execute('SELECT record FROM tasks WHERE id=?',(sys.argv[2],)).fetchone()[0]; t=json.loads(raw); t['finishedAtMs']=int(time.time()*1000)-40*86400000; c.execute('UPDATE tasks SET record=? WHERE id=?',(json.dumps(t),sys.argv[2])); c.commit()",join(run,"state/journal.sqlite"),historical.taskId]);
   await settings.getByTestId("cleanup-preview").click();await settings.getByTestId("cleanup-summary").filter({hasText:"1 задач"}).waitFor();
   const cleanupBefore=(await call({method:"get_task",taskId:historical.taskId})).task;loseCleanupAck=true;
+  await history.getByTestId(`history-open-${historical.taskId}`).click();
+  const cleanedTaskView = workflowPage.locator(`[data-confirmed-task-id="${historical.taskId}"]`);
+  await cleanedTaskView.waitFor();
+  await cleanedTaskView.getByRole("tab", { name: "stdout / stderr", exact: true }).click();
+  await cleanedTaskView.getByTestId("output-loaded").filter({ hasText: "чтение завершено" }).waitFor();
+  await cleanedTaskView.getByRole("button", { name: "Приостановить просмотр stdout", exact: true }).click();
   await settings.getByTestId("cleanup-apply").click();await settings.getByText(/cleanup ACK lost/).waitFor();assert.equal(await settings.getByTestId("cleanup-result").count(),0);
   await settings.getByTestId("cleanup-apply").click();await settings.getByTestId("cleanup-result").waitFor();assert.equal(cleanupCalls.at(-1).request.idempotencyKey,cleanupCalls.at(-2).request.idempotencyKey);
   const cleanupAfter=(await call({method:"get_task",taskId:historical.taskId})).task;assert.equal(cleanupAfter.status,cleanupBefore.status);assert.equal(cleanupAfter.submission.idempotencyKey,cleanupBefore.submission.idempotencyKey);assert.ok(cleanupAfter.outputRemovedAtMs);assert.equal((await call({method:"read_output",taskId:historical.taskId,afterSequence:0})).chunks.length,0);
+  await until(async () => await cleanedTaskView.getByText("Нет сохранённого вывода", { exact: true }).count() === 2, "Output cleanup left frozen bytes visible");
+  assert.equal(await cleanedTaskView.getByRole("button", { name: "Продолжить просмотр stdout", exact: true }).count(), 0);
   await history.getByTestId("diagnostic-prepare").click();await until(async()=>JSON.parse(await history.getByTestId("diagnostic-preview").inputValue()).task.outputRemovedAtMs,"Diagnostic hid output cleanup");
   // A real journal failure must block new launches without presenting stale running as fresh.
   await exec("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"CREATE TRIGGER reject_outcome BEFORE INSERT ON attention WHEN NEW.origin='task_outcome' BEGIN SELECT RAISE(ABORT,'expected UI journal fault'); END\"); c.commit()", join(run,"state/journal.sqlite")]);

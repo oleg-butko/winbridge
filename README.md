@@ -12,6 +12,7 @@
 - Snapshot runtime: точный Git commit, verified HGFS package, durable import, общий project lease и explicit build из локального поколения. Native UI: manifest/mapping/progress/history/cancel. [Формат](docs/snapshot-format.md); [Windows runtime gate пройден](docs/windows-snapshot-gate-2026-10-06.md); UI исправления приняты пользователем, этап 3 завершён.
 - Workflow import/build/start/stdout readiness/log, frozen профиль и step IDs, отдельный registry приложений, byte cursor с rotation/truncation. [Описание](docs/workflows.md); [автоматические Windows проверки](docs/windows-workflow-validation.md), [37 native tests пройдены](docs/windows-workflow-gate-2026-10-06.md).
 - SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
+- Этап 6: [delta/local source cache](docs/snapshot-delta.md) и [пакетный output](docs/windows-output-gate-2026-10-10.md) проверены автоматически. UI хранит ограниченный Unicode tail и отрисовывает до 28 строк output; полный журнал остаётся у worker. Resume больших payload ещё предстоит.
 - Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
 - User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.
 - Тесты контракта команд: Windows пути и отдельные аргументы, отклонение неизвестных режимов и полей.
