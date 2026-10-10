@@ -18,6 +18,15 @@ same-key lookup до новой child acceptance, restart/config-change и фа�
 не считается clean. Regression компилирует настоящий build.rs и проверяет own
 checkout, dirty changes, вложенный generation и unversioned directory.
 
+Во время подготовки первого pair gate `20261010-181635-261550f8` обнаружена ошибка
+нового сценария: line-based `git ls-files` возвращает quoted кириллические имена.
+Windows submit ещё не выполнялся; каталог подготовки сохранён. Подготовка теперь
+читает NUL-separated paths. Тот же дефект найден в build.rs rerun inputs: Cargo
+получал quoted имя вместо существующего Unicode файла и мог не обновить identity
+после его правки. Actual build script также читает `ls-files -z`; regression
+проверяет имя с кириллицей, знаком ✓ и начальным пробелом. Ошибка чтения списка
+inputs не выдаётся за clean build. Это исправление provenance, не смена runtime.
+
 ## Следующий сценарий этапа 7
 
 Второй реальный потребитель после Netwatch — сам WinBridge worker. Два отдельных

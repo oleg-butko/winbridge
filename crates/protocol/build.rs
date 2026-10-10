@@ -28,6 +28,23 @@ fn git_identity(root: &Path) -> Option<(String, bool)> {
     Some((commit, dirty))
 }
 
+fn git_files(root: &Path) -> Option<Vec<String>> {
+    let output = Command::new("git")
+        .args(["ls-files", "-z"])
+        .current_dir(root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())?;
+    Some(
+        String::from_utf8(output.stdout)
+            .ok()?
+            .split('\0')
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect(),
+    )
+}
+
 fn main() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../..");
     let manifest_path = root.join("winbridge-source-manifest.json");
@@ -72,10 +89,12 @@ fn main() {
             "cargo:rerun-if-changed={}",
             root.join(".git/index").display()
         );
-        if let Some(names) = git(&root, &["ls-files"]) {
-            for name in names.lines() {
+        if let Some(names) = git_files(&root) {
+            for name in names {
                 println!("cargo:rerun-if-changed={}", root.join(name).display());
             }
+        } else {
+            dirty = true;
         }
         if let Some(reference) = git(&root, &["symbolic-ref", "-q", "HEAD"]) {
             println!(
@@ -128,6 +147,15 @@ mod tests {
         let (commit, dirty) = git_identity(root).unwrap();
         assert_eq!(commit, git(root, &["rev-parse", "HEAD"]).unwrap());
         assert!(!dirty);
+        let unicode = " Привет ✓.txt";
+        fs::write(root.join(unicode), "build input").unwrap();
+        assert!(Command::new("git")
+            .args(["add", "--", unicode])
+            .current_dir(root)
+            .status()
+            .unwrap()
+            .success());
+        assert_eq!(git_files(root), Some(vec![unicode.into()]));
         let generation = root.join("workspaces/project/snapshots/s-example");
         fs::create_dir_all(&generation).unwrap();
         // Plain `git rev-parse HEAD` succeeds here but describes the parent.

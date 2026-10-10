@@ -38,7 +38,7 @@ def prepare(config, windows_run, run_id):
             shutil.copyfile(ROOT / 'fixtures/worker-project/start.ps1', source / 'winbridge-service-start.ps1')
             # The runtime identifies the base code plus explicit validation edits.
             # Do not pretend this additional commit is the unmodified release.
-            names = command('git', '-C', str(source), 'ls-files').splitlines()
+            names = subprocess.check_output(['git', '-C', str(source), 'ls-files', '-z']).decode().split('\0')[:-1]
             names += ['winbridge-service-build.ps1', 'winbridge-service-start.ps1']
             identity = {'schemaVersion': 1, 'sourceCommit': original, 'dirty': True,
                         'files': [{'path': name, 'bytes': (source / name).stat().st_size,
