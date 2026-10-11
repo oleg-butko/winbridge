@@ -5,6 +5,10 @@
 
 [Практический сценарий WinBridge v1](user-friendly-guide-v1/winbridge-v1/README.md): один Windows `src`, постоянный `runtime`, MCP, звук/UI и ручная проверка обновления.
 
+[Анализ Netwatch через WinBridge](analysis/netwatch-agent-pipeline/README.md): сценарий
+внешнего агента, тестирование фич на Windows, ограничения архитектуры и предложения
+по развитию pipeline. Готовые возможности отделены от будущих расширений.
+
 ## Основные документы
 
 | Документ | Для чего читать |
