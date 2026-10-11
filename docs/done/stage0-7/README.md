@@ -42,6 +42,8 @@
 | Windows gates | [Внимание](stage5/windows-attention-gate-2026-10-07.md), [companion](stage5/windows-companion-gate-2026-10-07.md), [workflow attention](stage5/windows-workflow-attention-gate-2026-10-08.md), [история](stage5/windows-history-gate-2026-10-08.md), [MCP](stage5/windows-mcp-gate-2026-10-08.md), [настройки/retention](stage5/windows-settings-retention-gate-2026-10-09.md): результаты конкретных native прогонов. |
 | Незавершённый прогон | [Companion attempt](stage5/windows-companion-attempt-2026-10-07.md): сохранённая неудачная попытка, объяснение и разрешённый повтор; это не успешный gate. |
 
+Дополнение после roadmap: [закрытие desktop и диагностический лог](stage5/windows-desktop-diagnostics-gate-2026-10-10.md) — исправления project undo, save timeout и popup hide, результаты автоматических Windows прогонов.
+
 ## Этап 6 — производительность и доставка
 
 | Группа | Что за файлы |

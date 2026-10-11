@@ -73,6 +73,11 @@
 
 ## Этап 5 — внимание пользователя и нормальная ежедневная работа
 
+Дополнение 2026-10-10: исправлены ложная dirty configuration после undo проекта,
+неограниченное ожидание закрытия и no-op popup hide. [Диагностический desktop log](guides/desktop-diagnostics.md)
+и [42 Windows tests + два native UI запуска](done/stage0-7/stage5/windows-desktop-diagnostics-gate-2026-10-10.md)
+проверены автоматически; это исправления завершённого этапа, отдельный manual gate не требуется.
+
 План и порядок реализации согласованы 2026-10-07: [объяснение этапа 5](done/stage0-7/stage5/stage5-plan.md).
 Первый сценарий — читаемый PowerShell и долговечный список внимания с acknowledgement.
 

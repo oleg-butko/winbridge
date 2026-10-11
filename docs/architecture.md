@@ -84,6 +84,12 @@ Windows journal — источник истины по исполнению. SQL
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 
+[Desktop diagnostic log](guides/desktop-diagnostics.md) находится рядом с exe в `logs/`,
+пишет только lifecycle metadata через ограниченную неблокирующую очередь и отдельный
+writer. Native dispatch watchdog работает независимо от WebView/async IPC. Desktop
+state I/O выполняется вне native GUI loop; закрытие ограничивает ожидание ACK,
+сохраняя честное «результат не подтверждён» при timeout.
+
 ## Доставка снимков
 
 Delivery adapter отделён от orchestration. Первый adapter — shared-folder delivery. Controller публикует snapshot в namespace WinBridge внутри `/mnt/hgfs/shared`; worker читает тот же пакет через `K:\VMs\shared` и импортирует его в собственный локальный workspace.

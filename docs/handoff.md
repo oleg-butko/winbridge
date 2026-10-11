@@ -15,15 +15,19 @@
 окно видно. Win32 SW_SHOWNOACTIVATE не обновляет Tao visibility cache, поэтому
 Tauri hide — no-op. Popup show/hide теперь используют парные Win32 операции;
 hide проверяет actual visibility, popup крестик и навигация используют тот же helper.
-Workspace Rust tests, UI integration (включая зависший save/native ACK),
+157 workspace Rust tests, UI integration (включая зависший save/native ACK),
 TypeScript/build/scaffold/Clippy, desktop cargo check/Clippy и Windows platform
-all-targets cross-check проходят. Отдельный native Windows companion gate
-первый прогон `20261010-210454-db98e4e5` прошёл 42 backend tests и desktop build,
-но остановился в новом тесте `save-deferred`. Native/WebView heartbeats продолжались;
-нет свидетельства зависания worker. Ненадёжная подмена WebView invoke/NumberInput
-заменена одноразовым удержанием ACK уже записанной формы в validation-only runtime
-и обычным редактированием textarea. Windows UI результат пока не заявлен.
-Working worker clean fa7e4d7, healthy/idle; runtime/configs не заменялись.
+all-targets cross-check проходят. [Native Windows gate](done/stage0-7/stage5/windows-desktop-diagnostics-gate-2026-10-10.md)
+passed: 42 Rust tests, два native UI запуска, 17 verified artifacts. Run
+`20261010-212047-c983fced`, task `9755a19a-8a79-490b-869d-d9ba739c7641`
+succeeded/exit 0; report SHA-256
+`defa5e348fb31f071289e7ae985035720d774751e3af2e71e1b3f47a1f6cd4d9`.
+Native-tested source clean 3d759b3; два неудачных прогона объяснены в receipt.
+ACK barrier включается только отдельным validation scenario после реальной записи;
+normal launch его не использует. Working worker clean fa7e4d7, healthy/idle прежней
+generation/session; runtime/configs не заменялись. Test windows закрыты, рабочий
+desktop можно открыть/закрыть, working worker оставить. Новый ручной gate не требуется;
+для применения нужен update runtime.
 
 ## Ревью source identity после roadmap, 2026-10-10
 
