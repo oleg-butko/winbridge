@@ -54,7 +54,7 @@ state directory. Рабочий процесс, конфиг и журнал н�
 .EXAMPLE
 .\scripts\test-windows-workflow.ps1 -Help
 .NOTES
-Полная инструкция: docs/windows-workflow-validation.md.
+Полная инструкция: docs/validation/windows-workflow-validation.md.
 #>
 param(
     [string]$SourceDirectory = '',
@@ -98,7 +98,7 @@ test-windows-workflow.ps1 — автоматические Windows тесты Wi
   -SourceArchiveSha256  SHA-256 исходного ZIP для связи отчёта с проверенной версией.
 
 Тесты агент запускает автоматически; повтор вручную для обновления не нужен.
-Объяснение и примеры: docs/windows-workflow-validation.md
+Объяснение и примеры: docs/validation/windows-workflow-validation.md
 '@
     if ($Help) { exit 0 }
     Write-Host 'Тесты не запущены: укажите ReportDirectory и SourceArchiveSha256 или используйте команду обновления выше.'

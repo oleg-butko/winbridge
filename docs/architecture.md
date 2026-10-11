@@ -1,12 +1,12 @@
 # Архитектура WinBridge
 
-Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](windows-output-gate-2026-10-10.md) и [pinned chunk resume](windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](attention.md) и [settings/output retention](settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](windows-workflow-attention-gate-2026-10-08.md).
+Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
 ## Назначение и среда
 
-Этап 7 также завершён: [второй прикладной проект](project-integration.md) использует
+Этап 7 также завершён: [второй прикладной проект](guides/project-integration.md) использует
 закреплённые runner/sync interfaces, общий профиль и прежние journal/process owner.
-[Windows gate](windows-projects-gate-2026-10-10.md) подтвердил оба service cycles,
+[Windows gate](done/stage0-7/stage7/windows-projects-gate-2026-10-10.md) подтвердил оба service cycles,
 private IPC, nested tree stop и recovery. Независимого SDK consumer нет;
 protocol/config версии и статический workspace contract остаются прежними.
 
@@ -56,7 +56,7 @@ Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, спис
 
 Controller `submit/get/list/output/cancel` вызывает тот же worker handler, что и desktop. `watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]` — подписка CLI через polling journal/output каждые 500 ms; курсоры исключают повторы при reconnect. Output читается страницами, `outputComplete` появляется после terminal task и пустой следующей страницы. Отдельная server-push очередь пока не нужна. `watch` не отправляет submit; неизвестный результат мутации требует того же key/ID. Controller не копирует Windows SQLite и не кеширует неподтверждённый task success.
 
-Transport использует tokio-tungstenite с отключёнными TLS features и явными bounds. [Windows runtime/native UI gate локальной сессии](windows-session-gate-2026-10-05.md) пройден. Snapshot runtime работает по [формату этапа 3](snapshot-format.md); [Windows gate пройден](windows-snapshot-gate-2026-10-06.md). Новые workflow RPC передаются только peer с log_read; старый worker получает понятный отказ без разрыва совместимой сессии.
+Transport использует tokio-tungstenite с отключёнными TLS features и явными bounds. [Windows runtime/native UI gate локальной сессии](done/stage0-7/stage2/windows-session-gate-2026-10-05.md) пройден. Snapshot runtime работает по [формату этапа 3](reference/snapshot-format.md); [Windows gate пройден](done/stage0-7/stage3/windows-snapshot-gate-2026-10-06.md). Новые workflow RPC передаются только peer с log_read; старый worker получает понятный отказ без разрыва совместимой сессии.
 
 Heartbeat отвечает за свежесть соединения; task status отвечает за выполнение. Offline controller, закрытый UI и неизвестный результат команды — разные состояния. Bounded buffers, timeout, cancellation и backpressure проектируются до непрерывного stdout stream.
 
@@ -90,13 +90,13 @@ Delivery adapter отделён от orchestration. Первый adapter — sha
 
 Manifest фиксирует Git commit SHA, пути, hashes, размеры и полный состав target files; dirty snapshot остаётся будущим source mode. Staging и ready marker защищают от чтения неполного пакета. До выполнения worker проверяет manifest и содержимое. Сборка работает на стабильном поколении Windows, а caches остаются локальными и переиспользуемыми.
 
-На этапе 3 import создаёт новое immutable поколение и не удаляет файлы; [Delta этапа 6](snapshot-delta.md) добавляет reuse проверенного локального поколения в новом staging; удалённые пути отсутствуют в target, старые поколения сохраняются. [Resume schema 3](snapshot-resume.md) сохраняет проверенные ZIP blocks для нового явного импорта после обрыва. Source cleanup ещё не реализована. Runtime configs, secrets, пользовательские файлы, live databases, logs и результаты других программ не входят в source snapshot. Подробности в [shared-folders.md](shared-folders.md).
+На этапе 3 import создаёт новое immutable поколение и не удаляет файлы; [Delta этапа 6](guides/snapshot-delta.md) добавляет reuse проверенного локального поколения в новом staging; удалённые пути отсутствуют в target, старые поколения сохраняются. [Resume schema 3](guides/snapshot-resume.md) сохраняет проверенные ZIP blocks для нового явного импорта после обрыва. Source cleanup ещё не реализована. Runtime configs, secrets, пользовательские файлы, live databases, logs и результаты других программ не входят в source snapshot. Подробности в [shared-folders.md](reference/shared-folders.md).
 
 ## Workflow и процессы приложений
 
 Worker сохраняет frozen профиль и step IDs до ACK, затем связывает durable import/build/start с readiness/log. SQLite schema 3 добавляет workflows/applications; перед upgrade существующей базы выполняется consistent backup. Общая project reservation защищает startup; после готовности приложение продолжает жить под управлением worker, отдельно от mutation lease. Старый процесс снимает только собственную lease по operation ID. Startup deadline не ограничивает последующую жизнь приложения.
 
-Readiness подтверждается stdout token именно запущенного процесса либо изолированным Netwatch IPC probe с проверкой PID владельца. Readable UTF-8 log находится вне snapshots; byte cursor обнаруживает rotate/truncate/prefix rewrite. App lifecycle отделён от исторического результата запуска; неизвестный исход после crash не повторяется. Подробные границы и CLI/UI описаны в [workflows](workflows.md).
+Readiness подтверждается stdout token именно запущенного процесса либо изолированным Netwatch IPC probe с проверкой PID владельца. Readable UTF-8 log находится вне snapshots; byte cursor обнаруживает rotate/truncate/prefix rewrite. App lifecycle отделён от исторического результата запуска; неизвестный исход после crash не повторяется. Подробные границы и CLI/UI описаны в [workflows](guides/workflows.md).
 
 Этап 5 использует SQLite schema 5: typed task/workflow/application attention хранится
 у worker, explicit key дедуплицируется, acknowledgement переживает restart. Terminal
@@ -106,13 +106,13 @@ IDs, ACK и sequence high-water сохраняются. При ошибке comm
 состояние и приостанавливает admission/queue до восстановления. Native presentation
 использует journal и сохранённый cursor; tray/quiet hours управляют только сигналом.
 Additive attention_targets capability защищает старые peers от неизвестных RPC.
-[Контракт и границы](attention.md).
+[Контракт и границы](guides/attention.md).
 
 HistoryRead добавляет read-only history и storage usage без новой схемы SQLite.
 Task diagnostic строится в одной read transaction; redaction применяется к строкам
 до JSON encoding. Desktop показывает редактируемый preview и сохраняет именно его
 в configured reportDirectory с create-only write/readback/SHA-256. Старые peers
-защищены capability guard. [Контракт](history-diagnostics.md).
+защищены capability guard. [Контракт](guides/history-diagnostics.md).
 
 ## UI и расширение
 
@@ -122,7 +122,7 @@ Task diagnostic строится в одной read transaction; redaction пр�
 
 Добавление возможности проходит через DTO → core handler → platform/delivery adapter → journal/read model → UI → проверку восстановления. Добавление другого проекта в первую очередь требует project configuration/recipes; новая capability нужна только для новых действий. Обобщать interfaces после появления второго реального handler, а не создавать пустую систему plugins заранее.
 
-Первый сценарий этапа 7 — [локальные общие recipe profiles](project-profiles.md).
+Первый сценарий этапа 7 — [локальные общие recipe profiles](guides/project-profiles.md).
 Core задаёт статический CommandHandler contract, modules/runner реализует direct/
 recipe expansion и filesystem scope; worker сохраняет единое владение ACK/journal/
 processes. Bindings используют зарегистрированный root, snapshot cwd разрешается
@@ -134,12 +134,12 @@ workflow с изменённым рецептом отклоняется до д
 
 Этап 4: editable profiles/drafts принадлежат desktop state, frozen accepted profile — worker journal. Artifact hashes снимаются после build перед start в фоновой работе, с исторической привязкой к source/build task. Изолированный Netwatch readiness adapter сверяет владельца IPC и health PID; он не подключается к production pipe. Расширенные workflow поля согласуются через WorkerInfo.workflowFeatures, без изменения Hello старого worker. Build identity содержит commit/dirty/build ID и SHA source manifest при сборке из ZIP.
 
-[MCP stdio](mcp.md) — вход в существующий controller IPC. Schemas инструментов
+[MCP stdio](guides/mcp.md) — вход в существующий controller IPC. Schemas инструментов
 генерируются из protocol DTO; adapter не исполняет команды и не держит execution
 queue. CLI/MCP publication используют общий handler. Потеря ответа не приводит
 к automatic replay; accepted task переживает закрытие stdio.
 
-[Настройки/retention](settings-retention.md), 2026-10-09: local desktop IPC читает
+[Настройки/retention](guides/settings-retention.md), 2026-10-09: local desktop IPC читает
 config actual worker и сохраняет reviewed файл с conflict guard; running config
 immutable до ручного restart. Controller/WebSocket maintenance не выполняют.
 SQLite schema 6 хранит durable cleanup results, consistent v5 backup перед upgrade.
@@ -148,7 +148,7 @@ task history/dedup/snapshots/reports сохраняются. Automatic policy op
 
 ### Manifest-pinned payload blocks (этап 6)
 
-Opt-in [schema 3/resume](snapshot-resume.md) сохраняет legacy schema 1/2.
+Opt-in [schema 3/resume](guides/snapshot-resume.md) сохраняет legacy schema 1/2.
 Каждый ZIP block имеет SHA-256 в manifest; cache key — manifest SHA-256,
 cache/staging/source находятся на local disk. Новый явный import проверяет cache
 и читает только недостающие blocks из shared. Все прежние whole ZIP/file/base pins,

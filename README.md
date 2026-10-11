@@ -9,18 +9,18 @@
 - Собирающийся Rust workspace: общие DTO, core entry point и отдельные binaries controller/worker.
 - Worker CLI: config validation, serve, submit/get/list/output/cancel через local IPC. Controller CLI передаёт запросы по локальному ws:// и читает результаты worker.
 - Controller записывает адреса сетевой активности в JSONL с ротацией; блокировки по IP в текущей локальной разработке нет.
-- Snapshot runtime: точный Git commit, verified HGFS package, durable import, общий project lease и explicit build из локального поколения. Native UI: manifest/mapping/progress/history/cancel. [Формат](docs/snapshot-format.md); [Windows runtime gate пройден](docs/windows-snapshot-gate-2026-10-06.md); UI исправления приняты пользователем, этап 3 завершён.
-- Workflow import/build/start/stdout readiness/log, frozen профиль и step IDs, отдельный registry приложений, byte cursor с rotation/truncation. [Описание](docs/workflows.md); [автоматические Windows проверки](docs/windows-workflow-validation.md), [37 native tests пройдены](docs/windows-workflow-gate-2026-10-06.md).
+- Snapshot runtime: точный Git commit, verified HGFS package, durable import, общий project lease и explicit build из локального поколения. Native UI: manifest/mapping/progress/history/cancel. [Формат](docs/reference/snapshot-format.md); [Windows runtime gate пройден](docs/done/stage0-7/stage3/windows-snapshot-gate-2026-10-06.md); UI исправления приняты пользователем, этап 3 завершён.
+- Workflow import/build/start/stdout readiness/log, frozen профиль и step IDs, отдельный registry приложений, byte cursor с rotation/truncation. [Описание](docs/guides/workflows.md); [автоматические Windows проверки](docs/validation/windows-workflow-validation.md), [37 native tests пройдены](docs/done/stage0-7/stage4/windows-workflow-gate-2026-10-06.md).
 - SQLite task/output journal с сохранением до ACK, дедупликацией и indeterminate recovery; одна команда на project, независимые stdout/stderr и квота.
-- Этап 6 завершён: [delta/local source cache](docs/snapshot-delta.md), [пакетный output](docs/windows-output-gate-2026-10-10.md) и [resume больших payload](docs/windows-resume-gate-2026-10-10.md) проверены автоматически. UI хранит ограниченный Unicode tail и отрисовывает до 28 строк output; полный журнал остаётся у worker.
+- Этап 6 завершён: [delta/local source cache](docs/guides/snapshot-delta.md), [пакетный output](docs/done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [resume больших payload](docs/done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) проверены автоматически. UI хранит ограниченный Unicode tail и отрисовывает до 28 строк output; полный журнал остаётся у worker.
 - Windows process adapter с suspended launch → Job Object → resume, timeout/cancel дерева; Unix development adapter проверен реальным исполнением.
 - User SID + instance named pipe с явным DACL; Unix socket для локальной разработки. Tauri shell и UI adapter подключают журнал и отправку задач.
 - Тесты контракта команд: Windows пути и отдельные аргументы, отклонение неизвестных режимов и полей.
 - Connected UI: форма команды, recent tasks, timeline, output/exit code, cancel и независимая свежесть соединения. Browser: явно помеченная демонстрация и просмотр сохранённого отчёта worker.
 - Архитектура, поэтапный roadmap, UX требования, ADR, примеры конфигурации и инструкции следующему агенту.
-- Этап 5: читаемый PowerShell EncodedCommand и долговечный журнал внимания с task/workflow/application links, dedup и явным подтверждением. [Что реализовано и что дальше](docs/attention.md); [tray/popup/sound](docs/companion.md) прошли автоматический Windows gate.
+- Этап 5: читаемый PowerShell EncodedCommand и долговечный журнал внимания с task/workflow/application links, dedup и явным подтверждением. [Что реализовано и что дальше](docs/guides/attention.md); [tray/popup/sound](docs/guides/companion.md) прошли автоматический Windows gate.
 
-**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Snapshot runtime прошёл 19 Windows checks 2026-10-06; package select/delivery form restore приняты пользователем без нового ручного gate; workflow/log tail реализованы на fixture; Named profiles, output filters, artifact catalog и отдельный Netwatch IPC probe добавлены; полный Windows Netwatch сценарий прошёл автоматически: 41 native test и desktop check, этап 4 завершён. Этап 5 начат с журнала внимания; tray/popup/sound прошли автоматический native gate; workflow/app attention прошли автоматический native gate; [история/диагностика](docs/history-diagnostics.md) реализованы, [Windows gate](docs/windows-history-gate-2026-10-08.md) пройден; [MCP](docs/mcp.md) прошёл автоматический Windows gate; [настройки/retention](docs/settings-retention.md) прошли [Windows gate](docs/windows-settings-retention-gate-2026-10-09.md); этап 5 завершён. Browser сам команды не выполняет.
+**Этап 1 завершён 2026-10-05:** десять Windows runtime checks и пять native UI шагов подтверждены. [Доказательства](docs/done/stage0-7/stage1/windows-gate-2026-10-05.md). **Windows runtime gate этапа 2 пройден:** Debian отправляет реальные Windows команды, получает output, отменяет дерево и восстанавливает ту же task/PID после reconnect. [Отчёт](docs/done/stage0-7/stage2/windows-session-gate-2026-10-05.md); все три новых native UI наблюдения подтверждены пользователем. Этап 2 завершён 2026-10-05. Desktop сохраняет форму рядом с exe. Snapshot runtime прошёл 19 Windows checks 2026-10-06; package select/delivery form restore приняты пользователем без нового ручного gate; workflow/log tail реализованы на fixture; Named profiles, output filters, artifact catalog и отдельный Netwatch IPC probe добавлены; полный Windows Netwatch сценарий прошёл автоматически: 41 native test и desktop check, этап 4 завершён. Этап 5 начат с журнала внимания; tray/popup/sound прошли автоматический native gate; workflow/app attention прошли автоматический native gate; [история/диагностика](docs/guides/history-diagnostics.md) реализованы, [Windows gate](docs/done/stage0-7/stage5/windows-history-gate-2026-10-08.md) пройден; [MCP](docs/guides/mcp.md) прошёл автоматический Windows gate; [настройки/retention](docs/guides/settings-retention.md) прошли [Windows gate](docs/done/stage0-7/stage5/windows-settings-retention-gate-2026-10-09.md); этап 5 завершён. Browser сам команды не выполняет.
 
 ## Принятые решения
 
@@ -65,7 +65,7 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.
 Сценарий соберёт и обновит постоянный runtime, сохранит настройки/журнал и запустит
 worker/desktop. `test-windows-workflow.ps1` предназначен для автоматических тестов;
-[назначение сценариев и параметры](docs/windows-workflow-validation.md).
+[назначение сценариев и параметры](docs/validation/windows-workflow-validation.md).
 
 После перезапуска Debian controller нужно снова запустить. Для уже подготовленной
 snapshot-конфигурации команда в Debian:
@@ -93,7 +93,7 @@ npm run build:ui
 npm run dev:ui
 ```
 
-UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка этапа 1: [сценарий](docs/windows-validation.md). Этап 2: [локальная сессия Debian ↔ Windows](docs/windows-session-validation.md). Snapshot gate завершён; новые runtime проверки: [автоматический workflow сценарий](docs/windows-workflow-validation.md). Её runtime по умолчанию — постоянный `K:\_proj-26\winbridge\runtime`, задаваемый локальным runtimeDirectory; повторная подготовка сохраняет configs, форму и journal. Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
+UI dev server слушает только `127.0.0.1`; сборка в `web-dist/`. Windows сборка и проверка этапа 1: [сценарий](docs/validation/windows-validation.md). Этап 2: [локальная сессия Debian ↔ Windows](docs/validation/windows-session-validation.md). Snapshot gate завершён; новые runtime проверки: [автоматический workflow сценарий](docs/validation/windows-workflow-validation.md). Её runtime по умолчанию — постоянный `K:\_proj-26\winbridge\runtime`, задаваемый локальным runtimeDirectory; повторная подготовка сохраняет configs, форму и journal. Worker не устанавливается как service; явный `--config PATH serve` запускает его в пользовательском процессе.
 
 Реальные проверки Unix development adapter (сначала `cargo build --workspace --locked`):
 
@@ -106,7 +106,7 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 
 UI integration test использует headless Chromium с sandbox и временный транспортный shim к настоящему Unix worker. Он требует `/usr/bin/chromium`, `WINBRIDGE_BROWSER` или установленный Playwright Chromium. Сам browser UI не получает command endpoint. [Скриншот реального Linux результата](docs/screenshots/local-worker-linux.png).
 
-Пример интерфейса: [task workbench](docs/screenshots/task-workbench.png). Результаты подготовки: [validation](docs/validation.md).
+Пример интерфейса: [task workbench](docs/screenshots/task-workbench.png). Результаты подготовки: [validation](docs/done/stage0-7/stage0/validation.md).
 
 В этой Debian среде при отсутствии инструментов в PATH:
 
@@ -120,38 +120,38 @@ export PATH=/home/user1/.nvm/versions/node/v24.19.0/bin:/home/user1/.local/bin:$
 
 Для пользователя: [краткое руководство v1](docs/user-friendly-guide-v1/README.md) — готовые возможности, интерфейс и состояния, подключение проектов и MCP.
 
-Начать с [handoff](docs/handoff.md) и [инструкций агента](AGENTS.md). Далее: [архитектура](docs/architecture.md), [доставка через HGFS](docs/shared-folders.md), [поэтапный план](docs/roadmap.md), [UI/UX](docs/ux.md), [границы модулей](docs/structure.md), [решения пользователя](docs/decisions/README.md).
+Все разделы собраны в [оглавлении документации](docs/README.md). Для продолжения разработки читать [handoff](docs/handoff.md) и [инструкции агента](AGENTS.md). Промежуточные планы, ревью и отчёты находятся в [архиве этапов 0–7](docs/done/stage0-7/README.md).
 
 Предыдущее предложение из Netwatch перенесено в [исторический контекст](docs/context/README.md); оно не определяет текущие решения.
 
-Этап 4: [изолированный Netwatch cycle](docs/netwatch-validation.md), editable profiles/drafts рядом с desktop, результаты сборки с SHA-256/source commit, фильтрация stdout/stderr/log и build identity worker/desktop. Принятый workflow остаётся frozen в journal; редактирование или восстановление профиля не запускает команду.
+Этап 4: [изолированный Netwatch cycle](docs/validation/netwatch-validation.md), editable profiles/drafts рядом с desktop, результаты сборки с SHA-256/source commit, фильтрация stdout/stderr/log и build identity worker/desktop. Принятый workflow остаётся frozen в journal; редактирование или восстановление профиля не запускает команду.
 
-Этап 5: [настройки проектов/соединения и output retention](docs/settings-retention.md).
+Этап 5: [настройки проектов/соединения и output retention](docs/guides/settings-retention.md).
 Desktop различает действующий config и сохранённый файл; изменения применяются
 после ручного restart worker. Очистка только старого stdout/stderr, с preview и
 защитой active/unknown/pending attention. Automatic policy включается явно;
-history/dedup/snapshots/reports сохраняются. [Единый native gate](docs/windows-settings-retention-gate-2026-10-09.md)
+history/dedup/snapshots/reports сохраняются. [Единый native gate](docs/done/stage0-7/stage5/windows-settings-retention-gate-2026-10-09.md)
 пройден: 36 backend tests, два UI запуска, 19 artifacts; этап 5 завершён.
 
-Этап 6: [автоматический baseline](docs/performance-baseline.md) существующей
+Этап 6: [автоматический baseline](docs/validation/performance-baseline.md) существующей
 Git/ZIP/HGFS доставки, Windows import/build и output/journal. Измерения выполняются
 через работающий worker; desktop и обновление installed runtime не требуются.
-Baseline (59 Windows operations) и [Git batch capture](docs/performance-capture-gate-2026-10-09.md)
+Baseline (59 Windows operations) и [Git batch capture](docs/done/stage0-7/stage6/performance-capture-gate-2026-10-09.md)
 завершены: 13.58× ускорение capture в matched comparison, hashes прежние,
 21 новая Windows операция прошла.
-[Delta](docs/windows-delta-gate-2026-10-09.md), [output batching/virtualization](docs/windows-output-gate-2026-10-10.md) и [pinned chunk resume](docs/windows-resume-gate-2026-10-10.md) прошли automatic gates. Этап 6 завершён; interfaces/profiles этапа 7 также завершены.
+[Delta](docs/done/stage0-7/stage6/windows-delta-gate-2026-10-09.md), [output batching/virtualization](docs/done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](docs/done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) прошли automatic gates. Этап 6 завершён; interfaces/profiles этапа 7 также завершены.
 
-Delta этапа 6: [формат, публикация, импорт и автоматическая проверка](docs/snapshot-delta.md). Используется проверенное локальное поколение; прежние snapshots сохраняются. [Оба автоматических Windows gates пройдены](docs/windows-delta-gate-2026-10-09.md); native desktop заново не открывался.
+Delta этапа 6: [формат, публикация, импорт и автоматическая проверка](docs/guides/snapshot-delta.md). Используется проверенное локальное поколение; прежние snapshots сохраняются. [Оба автоматических Windows gates пройдены](docs/done/stage0-7/stage6/windows-delta-gate-2026-10-09.md); native desktop заново не открывался.
 
-Продолжение этапа 6: [snapshot chunk/resume](docs/snapshot-resume.md) — opt-in
-schema 3 с pinned блоками ZIP и явным повтором import после обрыва. [Automatic Windows gate](docs/windows-resume-gate-2026-10-10.md) пройден; существующие full/delta packages сохраняют формат.
+Продолжение этапа 6: [snapshot chunk/resume](docs/guides/snapshot-resume.md) — opt-in
+schema 3 с pinned блоками ZIP и явным повтором import после обрыва. [Automatic Windows gate](docs/done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) пройден; существующие full/delta packages сохраняют формат.
 
-Этап 7: [общие профили рецептов и статический runner](docs/project-profiles.md).
+Этап 7: [общие профили рецептов и статический runner](docs/guides/project-profiles.md).
 Два проекта используют один профиль; journal/cancel/recovery остаются у worker.
 Источник task и определения workflow recipes сохраняются до ACK, изменения
-конфига применяются после ручного restart. [68 native Windows tests](docs/windows-profiles-gate-2026-10-10.md) прошли автоматически; первый сценарий этапа завершён.
+конфига применяются после ручного restart. [68 native Windows tests](docs/done/stage0-7/stage7/windows-profiles-gate-2026-10-10.md) прошли автоматически; первый сценарий этапа завершён.
 
-Этап 7 завершён: [реальные Netwatch и WinBridge projects](docs/project-integration.md)
+Этап 7 завершён: [реальные Netwatch и WinBridge projects](docs/guides/project-integration.md)
 с общим build profile, private IPC, managed process stop и journal recovery прошли
-[automatic gate](docs/windows-projects-gate-2026-10-10.md): 59 native Rust tests,
+[automatic gate](docs/done/stage0-7/stage7/windows-projects-gate-2026-10-10.md): 59 native Rust tests,
 два application cycles и 15 verified artifacts. Рабочие runtime/Netwatch не менялись.

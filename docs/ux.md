@@ -8,7 +8,7 @@ Tray companion скрывает окно только после сохране�
 tray. Явный quit сохраняет их по тому же правилу. Popup не забирает focus и открывает
 конкретную task/workflow/application page; открытие/скрытие не подменяет «Прочитано». Offline/неизвестные
 счётчики показываются явно, ошибка cursor/presentation остаётся видимой.
-Поведение и defaults описаны в [companion](companion.md).
+Поведение и defaults описаны в [companion](guides/companion.md).
 
 ## Информационная архитектура
 
@@ -67,14 +67,14 @@ Last known status + connection freshness — два независимых по�
 
 Popup/звук содержит проект, короткую причину и действие «Открыть задачу», «Открыть workflow» или «Открыть приложение». Нормальная успешная сборка может быть тихой; blocked workflow требует внимания по настройке пользователя. Повторяющиеся события объединяются. Quiet hours, volume, severity, acknowledged и missed attention доступны в UI.
 
-Первый реализованный сценарий 2026-10-07 — [журнал внимания](attention.md): pending count,
+Первый реализованный сценарий 2026-10-07 — [журнал внимания](guides/attention.md): pending count,
 страницы по 50, severity/причина/проект и task link, отдельная кнопка «Прочитано».
 Открытие задачи не подтверждает просмотр; acknowledgement живёт у worker и сохраняется
 после перезапуска UI. Tray/popup/sound/quiet hours прошли автоматический Windows gate.
 Workflow/application events добавлены 2026-10-08: ошибка import не требует Task ID,
 workflow failure показывает шаг/причину, runtime crash не переписывает успешный
 startup. Target открывается по точному ID, даже вне recent list.
-[Новый native gate](windows-workflow-attention-gate-2026-10-08.md) пройден автоматически.
+[Новый native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md) пройден автоматически.
 
 Tray показывает активные задачи и attention count. Закрытие окна скрывает UI. «Закрыть интерфейс» и «Остановить worker» — разные команды; остановка показывает последствия для текущих tasks. Не требовать admin права для обычного runtime.
 
@@ -86,21 +86,21 @@ Tray показывает активные задачи и attention count. За
 
 ## Что уже можно посмотреть
 
-`npm run dev:ui` открывает browser prototype и просмотр сохранённого TaskReport на localhost. Fixtures явно подписаны; browser не выполняет команды. Tauri использует worker adapter: форма project/recipe/direct, recent tasks, реальные параметры/timestamps, journal timeline, output paging и cancel. При потере ответа submit сохраняет исходные параметры/key для безопасного повторного запроса. Соединение и последний task status отображаются независимо. [Native Windows gate пройден](windows-gate-2026-10-05.md); UI integration test дополнительно проверяет сохранение формы и закрытие через файловый IPC shim к настоящему Unix worker.
+`npm run dev:ui` открывает browser prototype и просмотр сохранённого TaskReport на localhost. Fixtures явно подписаны; browser не выполняет команды. Tauri использует worker adapter: форма project/recipe/direct, recent tasks, реальные параметры/timestamps, journal timeline, output paging и cancel. При потере ответа submit сохраняет исходные параметры/key для безопасного повторного запроса. Соединение и последний task status отображаются независимо. [Native Windows gate пройден](done/stage0-7/stage1/windows-gate-2026-10-05.md); UI integration test дополнительно проверяет сохранение формы и закрытие через файловый IPC shim к настоящему Unix worker.
 
-На этапе 2 native UI дополнительно показывает controller URL/node/session, connected/connecting/disconnected, время последнего heartbeat и точную ошибку handshake/timeout. При недоступном local worker эти данные помечены как последние известные; task status остаётся независимым. Stop/restart controller с running task проверен UI integration на настоящей WebSocket сессии в Debian. Windows runtime gate и три новых native UI наблюдения подтверждены пользователем: этап 2 завершён, [доказательства](windows-session-gate-2026-10-05.md).
+На этапе 2 native UI дополнительно показывает controller URL/node/session, connected/connecting/disconnected, время последнего heartbeat и точную ошибку handshake/timeout. При недоступном local worker эти данные помечены как последние известные; task status остаётся независимым. Stop/restart controller с running task проверен UI integration на настоящей WebSocket сессии в Debian. Windows runtime gate и три новых native UI наблюдения подтверждены пользователем: этап 2 завершён, [доказательства](done/stage0-7/stage2/windows-session-gate-2026-10-05.md).
 
 На этапе 3 native workbench показывает preview manifest (100 files/page), commit, обе mapping стороны, local generation, durable imports с phases/progress/reasons/cancel. Command form сохраняет optional snapshot ID и выполняет explicit pinned build; preview честно отделён от actual verified import. Capture/publish вызывается CLI агента; browser demo остаётся read-only. Windows runtime gate пройден, UI исправления приняты пользователем, этап закрыт.
 
 На этапе 4 «Цикл разработки» связывает выбранный snapshot с editable JSON профилем import/build/start/readiness/log. Принятый профиль, step IDs, operation links и события читаются из worker journal. Потеря ACK предлагает повтор frozen запроса; восстановление профиля не исполняет команду. UI отделяет завершённый startup от состояния приложения, показывает PID/readiness/error и явную остановку. Log panel хранит byte cursor, декодирует UTF-8 incrementally, показывает reset при rotate/truncate/rewrite и время последнего чтения. Недоступность worker обозначает последние известные данные. Незаконченный JSON workflow draft и именованные editable profiles сохраняются по worker/project/root; каталог artifacts показывает проверенные файлы, source commit и SHA-256. stdout/stderr/log можно фильтровать и приостановить просмотр. Worker/desktop показывают build identity отдельно от generation; native визуальную проверку пользователь отложил.
 
-Исправления 2026-10-06: published snapshot выбирается из списка worker с поиском по ID/commit, размером ZIP, metadata errors, refresh и страницами по 100. Delivery project/snapshot сохраняются по worker/project/root отдельно от command form; восстановление не запускает операции. Close дожидается всех изменённых форм; failed save удерживает окно открытым. Непроверенная сборка объясняет необходимость успешного импорта и сохраняет техническую причину. `snapshot-build` выводит диагностику компиляции; Unicode результат fixture находится в отдельной задаче запуска, на вкладке stdout/stderr. [Windows runtime evidence](windows-snapshot-gate-2026-10-06.md); новые UI исправления проверены Unix integration и ожидают native подтверждения.
+Исправления 2026-10-06: published snapshot выбирается из списка worker с поиском по ID/commit, размером ZIP, metadata errors, refresh и страницами по 100. Delivery project/snapshot сохраняются по worker/project/root отдельно от command form; восстановление не запускает операции. Close дожидается всех изменённых форм; failed save удерживает окно открытым. Непроверенная сборка объясняет необходимость успешного импорта и сохраняет техническую причину. `snapshot-build` выводит диагностику компиляции; Unicode результат fixture находится в отдельной задаче запуска, на вкладке stdout/stderr. [Windows runtime evidence](done/stage0-7/stage3/windows-snapshot-gate-2026-10-06.md); новые UI исправления проверены Unix integration и ожидают native подтверждения.
 
-Реализованы [история и task diagnostic](history-diagnostics.md): поиск/фильтры,
+Реализованы [история и task diagnostic](guides/history-diagnostics.md): поиск/фильтры,
 переход к точным старым ID, Ctrl+K/Ctrl+Shift+P и размеры журнала. Command/output
 в отчёте исключены по умолчанию; перед отдельным сохранением виден editable preview
 с маскированием. UI подтверждает файл только после readback bytes/SHA-256; lost ACK
-не считается успехом. [Настройки/retention](settings-retention.md) позволяют
+не считается успехом. [Настройки/retention](guides/settings-retention.md) позволяют
 сохранить checked worker config с ручным restart и очистить только старый output
 после preview. Automatic cleanup default off и включается явно. Незаписанные
 правки удерживают окно открытым; Tab/Enter доступны в навигации разделов и controls.

@@ -11,4 +11,4 @@ resolver. Snapshot cwd меняется отдельно от bindings заре�
 Worker по-прежнему владеет schedule/acceptance/process tree, Store —
 `apps/worker/src/store.rs`. Модуль не создаёт вторую очередь и не отправляет ACK.
 Добавление проекта с общим recipe profile не меняет transport или task service.
-[Контракт, UI и автоматическая проверка](../../docs/project-profiles.md).
+[Контракт, UI и автоматическая проверка](../../docs/guides/project-profiles.md).

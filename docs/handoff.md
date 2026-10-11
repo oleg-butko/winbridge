@@ -1,6 +1,9 @@
+[Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
+Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
+
 ## Ревью source identity после roadmap, 2026-10-10
 
-[Целевое ревью](review-source-identity-2026-10-10.md): воспроизведён и исправлен
+[Целевое ревью](done/stage0-7/stage7/review-source-identity-2026-10-10.md): воспроизведён и исправлен
 false-clean export при скрытых index changes/изменении байтов во время capture.
 Exporter сравнивает actual bytes/path set с закреплённым commit, Git build identity
 консервативна при assume-unchanged/skip-worktree. Parent checkout/source path
@@ -32,10 +35,10 @@ Worker clean fa7e4d7, build ID 1791669115612660300, manifest SHA-256
 26b0ebb7371588c40579dadd163172ecc128fb5628c7c5b088fa57919a52a11b,
 generation 372266b6-3dee-4d87-9de2-ccab896dbcf8; healthy/idle.
 
-[Ревью и план](review-projects-2026-10-10.md): исправлен чужой parent Git commit
+[Ревью и план](done/stage0-7/stage7/review-projects-2026-10-10.md): исправлен чужой parent Git commit
 в build identity, неизвестные исходники не объявляются clean. Targeted regression
-прошла. [Прикладной сценарий](project-integration.md) completed: isolated Netwatch + WinBridge worker через
-общий build profile, без новой transport/queue. [Native gate](windows-projects-gate-2026-10-10.md)
+прошла. [Прикладной сценарий](guides/project-integration.md) completed: isolated Netwatch + WinBridge worker через
+общий build profile, без новой transport/queue. [Native gate](done/stage0-7/stage7/windows-projects-gate-2026-10-10.md)
 passed: 59 Rust tests, два real application cycles, nested tree stop/private IPC/
 indeterminate recovery/coordinator restart, 15 verified artifacts. Run
 20261010-182417-737310b6, outer task 3f8a8caa-14cc-464d-b8c3-00c7ab2ade24,
@@ -71,14 +74,14 @@ droppedRecords=0/lastError=null. Config/listen/IPC/log rotation прежние.
 
 ## Этап 7 — общие профили рецептов, 2026-10-10
 
-[Ревью](review-stage7-2026-10-10.md) выполнено; важная ошибка queued workflow
+[Ревью](done/stage0-7/stage7/review-stage7-2026-10-10.md) выполнено; важная ошибка queued workflow
 исправлена: recipe definitions/provenance закрепляются до ACK, изменение recipes
 после restart не может незаметно изменить принятый build/start. Legacy queued
 recipe workflow без definitions требует нового явного запроса. История/keys
 сохраняются, source/cache cleanup не добавлена. README больше не противоречит
 готовности этапа 6.
 
-[Первый сценарий](project-profiles.md) реализован: статический core CommandHandler,
+[Первый сценарий](guides/project-profiles.md) реализован: статический core CommandHandler,
 modules/runner для обычных tasks и workflow steps, config recipeProfiles, один
 профиль на проект, fixed argv с workspaceRoot/projectId bindings. Проекты могут
 добавлять локальные recipes; collisions отклоняются. Bindings используют registered
@@ -87,7 +90,7 @@ Info ограничен 512 KiB. Task origin сохранён атомарно �
 profile/metadata/origin, Settings позволяет выбрать профиль, JournalTimeline общий.
 
 152 full workspace Rust tests, Clippy/Windows all-targets, DTO/TypeScript/build/
-scaffold/fmt и full browser integration проходят. [Automatic Windows gate](windows-profiles-gate-2026-10-10.md)
+scaffold/fmt и full browser integration проходят. [Automatic Windows gate](done/stage0-7/stage7/windows-profiles-gate-2026-10-10.md)
 passed: 68 native tests, five checksum-verified artifacts. Run
 `20261010-060810-0996d143`, outer task `6ef13e91-8cc2-4766-ac25-b6a6097e01b2`,
 report SHA-256 `6f8d1abcaa472a0e20a51b2b364d29a675b3de9dd148651f220e93bd399a6581`.
@@ -122,7 +125,7 @@ handoff commit ниже в истории только записывает эт
 Для установки остановить desktop/worker и выполнить prepare-windows-snapshot.ps1
 из распакованных исходников; тесты вручную повторять не требуется.
 
-[Automatic Windows resume gate](windows-resume-gate-2026-10-10.md) прошёл:
+[Automatic Windows resume gate](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) прошёл:
 39 native tests, exact Debian ready/manifest/blob pin, actual cancel/crash/restart,
 explicit resumed import и offline pinned build. ZIP read из shared уменьшился
 33 555 078 → 8 389 254 bytes; 24 MiB rehashed из local cache. Observed one-pair
@@ -164,7 +167,7 @@ connected session `2277c073-9c1e-4678-a124-66f2dd6c1c05`, Windows
 running generation `1a3c0c7c-998a-4d35-8ec2-4572c218eb4e` подключён.
 Desktop закрыт, для backend проверки нужен только рабочий worker.
 
-[План resume](snapshot-resume-plan.md) и [контракт](snapshot-resume.md): opt-in
+[План resume](done/stage0-7/stage6/snapshot-resume-plan.md) и [контракт](guides/snapshot-resume.md): opt-in
 schema 3, manifest-pinned 1 MiB blocks, отдельный local cache и новый явный
 import/key после cancel/crash. Прежние key/record/staging сохраняются; automatic
 retry/build/cleanup не добавлены. Core/sync/worker/CLI/MCP/UI реализация добавлена;
@@ -185,12 +188,12 @@ manifest `a36e9f8329cff23c0760063fc66e1c07670f77ddfcb6a4e7c1b831520bf5b528`,
 generation `c182793f-5391-4bf8-9e70-9c94b8b24a5c`, delta available,
 activeTaskCount=0, maintenanceError/journalRecoveryRequired=null.
 
-[Ревью](review-stage6-2026-10-10.md) не обнаружило новых важных ошибок delta;
+[Ревью](done/stage0-7/stage6/review-stage6-2026-10-10.md) не обнаружило новых важных ошибок delta;
 исправлены неограниченный desktop output buffer и склейка UTF-8 через gaps.
-Следующий сценарий выбран по baseline 2 MiB output: [batching/virtualization](output-batching-plan.md).
+Следующий сценарий выбран по baseline 2 MiB output: [batching/virtualization](done/stage0-7/stage6/output-batching-plan.md).
 Код реализован; 135 workspace tests, Clippy и Windows all-targets compile прошли.
 Browser integration с actual output/lost read ACK/virtualization прошла;
-[native gate завершён](windows-output-gate-2026-10-10.md): run
+[native gate завершён](done/stage0-7/stage6/windows-output-gate-2026-10-10.md): run
 `20261010-042006-6c67052d`, task `ddf23ba0-c6b3-4eb8-ae3d-14511f320a79`, 11 tests,
 четыре verified artifacts, report SHA-256
 `a73633f445734e78bceb9ee28799c74fec97a5db9db478b30d31472f09c9629c`.
@@ -224,20 +227,20 @@ session 57048, generation `95fd938e-feb3-4854-8299-91adf7c7638f`,
 worker session `0731567c-81fe-4813-9c52-7d8443671613`, connected=true.
 Прежний controller exec session 55195 завершён штатно; worker generation прежняя.
 Пользователь поручил ревью и продолжение. Исправлена обработка неверных nested
-JSON types в settings UI; backend maintenance regression проходит. Работа по [плану этапа 6](stage6-plan.md): baseline/Git batch/delta завершены;
+JSON types в settings UI; backend maintenance regression проходит. Работа по [плану этапа 6](done/stage0-7/stage6/stage6-plan.md): baseline/Git batch/delta завершены;
 следующий сценарий resume/output batching/virtualization выбирается по measurements.
 Desktop не требуется; рабочий worker оставить запущенным.
 
-Этап 6 реализует [автоматический baseline](performance-baseline.md): monotonic
+Этап 6 реализует [автоматический baseline](validation/performance-baseline.md): monotonic
 publisher timings без изменения ready/RPC, commit fixtures/tree I/O/Windows
-import/build/output/cancel через installed worker. [Baseline](performance-baseline-2026-10-09.md)
+import/build/output/cancel через installed worker. [Baseline](done/stage0-7/stage6/performance-baseline-2026-10-09.md)
 прошёл: run `20261009T093357Z-0dd53063`, 12 samples/59 operations, report SHA-256
 `a6d886b28d8c4ecf50ba0ca80b8c14ecb78722d663d11570f1fd006be56b16cd`.
 Installed worker healthy/activeTaskCount=0, generation прежняя. Первая выбранная
 оптимизация — Git batch capture (518 files: capture 5.6 s, shared write 0.22 s).
 Это baseline до delta. Завершённая delta/local source cache описана ниже; resume/output batching/virtualization ещё впереди.
 
-Git batch capture [завершён](performance-capture-gate-2026-10-09.md): один процесс,
+Git batch capture [завершён](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md): один процесс,
 bounded header/body, streaming SHA, exact separator и kill/wait при раннем отказе.
 123 workspace tests/Clippy/Windows compile проходят. Девять matched pairs на
 исходных commits: capture median 7004.6→515.6 ms, 13.58×, все ready/hashes совпали.
@@ -251,10 +254,10 @@ Worker unchanged/healthy/activeTaskCount=0; desktop не нужен, TEST око
 source verification/cancel/recovery. Общий pipeline speedup не заявляется на
 основании одного нового Windows repeat; raw timing variation сохранён в отчётах.
 
-Delta завершена по [согласованному плану](snapshot-delta-plan.md): schema 2,
+Delta завершена по [согласованному плану](done/stage0-7/stage6/snapshot-delta-plan.md): schema 2,
 ZIP changed files, pinned local base, новый immutable target и full tree verification.
 Добавлены capability/RPC, CLI/MCP публикация/import, понятный preview/history и
-автоматический `--delta-only` gate без desktop. 131 workspace tests, browser delta/lost-ACK integration, Clippy, contracts, UI build и Windows all-targets cross-check проходят. При ревью также исправлена recovered import phase/summary после crash между publication и journal result. [Windows gates завершены](windows-delta-gate-2026-10-09.md): native run `20261009-064716-ffce5995`, 40 tests, report SHA-256 `b34285db8c87586ff7655afb513ceea3c03fbc46bcd441d0b8043e25e1a660a8`; cross-host run `20261009T105909Z-c59b2060`, три fresh one-file commit, report SHA-256 `9cdab83a6c5420f99184fda0039393b684f419a536e3b381d5a0520ad837008b`.
+автоматический `--delta-only` gate без desktop. 131 workspace tests, browser delta/lost-ACK integration, Clippy, contracts, UI build и Windows all-targets cross-check проходят. При ревью также исправлена recovered import phase/summary после crash между publication и journal result. [Windows gates завершены](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md): native run `20261009-064716-ffce5995`, 40 tests, report SHA-256 `b34285db8c87586ff7655afb513ceea3c03fbc46bcd441d0b8043e25e1a660a8`; cross-host run `20261009T105909Z-c59b2060`, три fresh one-file commit, report SHA-256 `9cdab83a6c5420f99184fda0039393b684f419a536e3b381d5a0520ad837008b`.
 ZIP 2 367 994→193 bytes, Debian publication median 1150.73→414.14 ms; Windows observed import 1834.00→1675.17 ms. Full target hashes/build pins/Unicode output совпали. Cancel parent/child 102.88 ms, attention 52.75 ms; worker Info healthy. Installed worker остаётся `58f3c14`, его runtime не меняется.
 
 Архив для рабочего Windows update:
@@ -281,15 +284,15 @@ manifest SHA-256 `491b40038ddcdca97199a30cd21c91c7f574a5b4e554341d48e479633d8614
 generation `750f3499-f4a9-42c6-aa43-13d248abb245`;
 session `ef6c0389-e5c0-4968-ac58-55b28820fdd3`, connected=true.
 HistoryRead/typed attention доступны; journalRecoveryRequired=null, activeTaskCount=0.
-[Ревью](review-stage5-2026-10-09.md) исправило неограниченный readback существующего
+[Ревью](done/stage0-7/stage5/review-stage5-2026-10-09.md) исправило неограниченный readback существующего
 diagnostic файла. Проверены сохранение/collision/Unicode и MCP contracts.
 Проекты/соединение и output retention остаются работой этапа 5. Пользователь выбрал
 ручной restart после config save и включаемую automatic output cleanup;
-[план](settings-retention-plan.md) фиксируется до реализации. Рабочий worker оставить запущенным,
+[план](done/stage0-7/stage5/settings-retention-plan.md) фиксируется до реализации. Рабочий worker оставить запущенным,
 desktop для текущего backend ревью не требуется. Installed runtime/config/state
 не менять в автоматических тестах. Предыдущие gates не повторять без причины.
 
-[Настройки и output retention](settings-retention.md) реализованы по согласованному
+[Настройки и output retention](guides/settings-retention.md) реализованы по согласованному
 плану: actual config path, active/saved JSON, SHA/generation conflict guard,
 create-only previous version и atomic replace/readback, ручной restart; identity/state
 закреплены. Четыре maintenance RPC local-only, controller и worker WebSocket
@@ -301,7 +304,7 @@ Opt-in automatic pass раз в 60 секунд фоновый; failures вид�
 Workspace/desktop Clippy, contracts/typecheck/build также прошли. Actual browser UI проверил config/cleanup
 lost ACK, same-key reconciliation, dirty close guard и сохранение task metadata.
 Windows all-targets compile и native desktop check прошли.
-[Settings/retention native gate](windows-settings-retention-gate-2026-10-09.md)
+[Settings/retention native gate](done/stage0-7/stage5/windows-settings-retention-gate-2026-10-09.md)
 успешен: clean source adbda09, run `20261009-042415-34160b98`, task
 `56ee9fa9-b87d-4392-84c9-efcfd70a70c6` succeeded/exit 0; report SHA-256
 `1bfb9e0e9b59ff58d4a050e4a3ec29b24819b1c50ba723b2209d21ba783de5df`.
@@ -339,13 +342,13 @@ read-only Info по WebSocket успешен. Старые exec session IDs по
 через «Завершить интерфейс»; крестик скрывает его в tray. Worker оставить запущенным.
 Восстановление соединения само по себе не требует повторения пройденных gates.
 План workflow/app attention зафиксирован коммитом `aeae684` до реализации:
-[workflow-attention-plan](workflow-attention-plan.md). Реализованы typed targets и
+[workflow-attention-plan](done/stage0-7/stage5/workflow-attention-plan.md). Реализованы typed targets и
 additive feed/ACK/capability, schema 5 с consistent v4 backup и сохранением sequence,
 единый parent workflow event, отдельные runtime outcomes приложения, quiet stop/cancel.
 Terminal record/event атомарны; journal fault блокирует stale reads и admission.
-UI открывает точный workflow/application ID вне recent 10. [Ревью и исправления](review-workflow-attention-2026-10-08.md).
+UI открывает точный workflow/application ID вне recent 10. [Ревью и исправления](done/stage0-7/stage5/review-workflow-attention-2026-10-08.md).
 89 workspace Rust tests, Clippy и browser integration прошли.
-[Windows gate](windows-workflow-attention-gate-2026-10-08.md) завершён:
+[Windows gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md) завершён:
 clean source `3c59351`, run `20261008-060121-324c2ef1`, task
 `7e2cc850-e9ae-4205-a12f-ea27d399efb2` succeeded/exit 0, report SHA-256
 `f5512e89434690ec036636e6f7f03226d78eee1b4e3f2dadbdc3c13c10a39988`.
@@ -356,15 +359,15 @@ worker прежний, healthy, activeTaskCount=0. Тестовые окна з�
 необязателен; --workflow-attention-only собирает отдельный заметный тестовый desktop.
 Installed runtime/config/state не заменять. Следующие сценарии — история/диагностика, MCP.
 
-Продолжение этапа 5: [ревью](review-stage5-history-2026-10-08.md) исправило stale
+Продолжение этапа 5: [ревью](done/stage0-7/stage5/review-stage5-history-2026-10-08.md) исправило stale
 application read после child result fault; commit `8f9ee71` фиксирует исправление и
-[план истории/диагностики](history-diagnostics-plan.md) до реализации.
-[История и task diagnostic](history-diagnostics.md) реализованы: additive HistoryRead,
+[план истории/диагностики](done/stage0-7/stage5/history-diagnostics-plan.md) до реализации.
+[История и task diagnostic](guides/history-diagnostics.md) реализованы: additive HistoryRead,
 50-record keyset pages/filter/search, точные старые IDs, keyboard actions, read-only
 storage usage и editable redacted preview/save. Дополнительно исправлен незаписанный
 import result: fault/lease сохраняются до recovery. 103 workspace Rust tests, Clippy, Windows all-targets compile, standalone desktop
 check/Clippy, contracts/typecheck/build и actual browser integration прошли;
-[Windows history gate](windows-history-gate-2026-10-08.md) завершён: source a64caf7,
+[Windows history gate](done/stage0-7/stage5/windows-history-gate-2026-10-08.md) завершён: source a64caf7,
 run `20261008-065054-f727f7bb`, task `04cf615b-0510-451e-bfd3-e3f8721cc87a`,
 succeeded/exit 0, report SHA-256
 `d7f39ff0217399261f629992d1814c7a071dd53ff1330dab74d8684820c868b9`.
@@ -372,13 +375,13 @@ succeeded/exit 0, report SHA-256
 Cleanup без ошибок; installed worker healthy/activeTaskCount=0, generation прежняя.
 Пользователю сообщено, что тестовое окно закрылось, desktop можно завершить, worker оставить. Рабочий runtime остаётся f7c4878; новый сценарий
 `--history-diagnostics-only` выполняется в отдельном runtime через установленный worker.
-Новые ручные Windows наблюдения не требуются. MCP начинается по [плану](mcp-plan.md),
+Новые ручные Windows наблюдения не требуются. MCP начинается по [плану](done/stage0-7/stage5/mcp-plan.md),
 зафиксированному до реализации коммитом `ab0eae0`; retention/settings остаются.
-[MCP adapter](mcp.md) реализован: 30 typed tools с schemas из DTO, bounded stdio
+[MCP adapter](guides/mcp.md) реализован: 30 typed tools с schemas из DTO, bounded stdio
 lifecycle и forwarding в existing controller IPC. Четыре contract tests и actual
 Unix pipeline/lost ACK/dedup/output/history/diagnostic/client exit/cancel прошли.
 107 workspace tests, Clippy, Windows all-targets compile и contracts/typecheck прошли.
-[Windows MCP gate](windows-mcp-gate-2026-10-08.md) завершён:
+[Windows MCP gate](done/stage0-7/stage5/windows-mcp-gate-2026-10-08.md) завершён:
 run `20261008-072201-391f141c`, report SHA-256
 `e401fa6a6b063090c53eb61bde1c78f47f80c87f662346a2ee51ff795e0af2c1`.
 Setup/success tasks succeeded, repeat key сохранил task/PID, client exit сохранил
@@ -391,7 +394,7 @@ projects/connection settings и полная retention policy; stage 5 пока 
 ## Завершённый сценарий — 2026-10-07
 
 **Native tray/popup/settings gate пройден автоматически на Windows.**
-[Доказательства](windows-companion-gate-2026-10-07.md): clean source `f7c4878`,
+[Доказательства](done/stage0-7/stage5/windows-companion-gate-2026-10-07.md): clean source `f7c4878`,
 run `20261007-063240-8e63081e`, task `f4d7db75-db65-4e15-8a75-7d05bd2e21d1`
 succeeded/exit 0, report SHA-256
 `5b2fa9985438efcab6006ce73c13a8f2bb96a6e2b2cccf988060e54b2af93c86`.
@@ -401,7 +404,7 @@ UI запуска с exit 0 и все 16 checksum artifacts подтвержде
 точная task page без implicit ACK, rate aggregation/deferred ACK и restart cursor/settings
 прошли. Тестовые процессы завершены, рабочий worker `523fc5b`/generation прежние.
 
-[Первый прерванный прогон](windows-companion-attempt-2026-10-07.md) сохранён как история.
+[Первый прерванный прогон](done/stage0-7/stage5/windows-companion-attempt-2026-10-07.md) сохранён как история.
 По разрешению пользователя исправлены UX тестового окна, args/PID/exit/checkpoints,
 CreateNoWindow, local concurrent output drain и publication bytes/SHA из одного массива.
 Перед каждым Windows прогоном объяснять необходимые worker/desktop и появление тестовых
@@ -409,7 +412,7 @@ CreateNoWindow, local concurrent output drain и publication bytes/SHA из од
 worker, рабочий desktop необязателен. Пользователю уже сообщено: desktop можно закрыть,
 worker оставить работающим. Это правило закреплено также в AGENTS.md.
 
-[Tray companion](companion.md) реализован и проверен; рабочий runtime ещё не обновлён,
+[Tray companion](guides/companion.md) реализован и проверен; рабочий runtime ещё не обновлён,
 новые worker/desktop собрать вместе при следующем согласованном обновлении.
 Локально прошли standalone desktop Clippy, 20 core tests, contracts/typecheck/UI build,
 PowerShell parser/capture smoke и browser integration с настоящим Unix worker.
@@ -418,7 +421,7 @@ Workflow/app attention, history/export/MCP остаются незавершён
 Новое ревью исправило незаписанный process result: journalRecoveryRequired,
 stale GetTask/cancel error, остановка admission/queue и сохранение lease до recovery.
 72 workspace tests, Clippy, Windows compile и TypeScript прошли.
-[Ревью](review-attention-2026-10-07.md), [следующий сценарий](tray-plan.md).
+[Ревью](done/stage0-7/stage5/review-attention-2026-10-07.md), [следующий сценарий](done/stage0-7/stage5/tray-plan.md).
 Installed worker `523fc5b` остаётся здоровым; новые native проверки выполнять в
 отдельном runtime. План tray/quiet/sound/close фиксируется перед реализацией.
 
@@ -428,7 +431,7 @@ features artifacts/netwatch_health и connected controller. Controller generatio
 `381e409f-8949-413c-a439-7d0622159614`, session `7fa9c4d3-eae9-42d1-8d83-966e2d79bd13`.
 Предыдущие записи runtime ниже — история; доступность всегда проверять заново.
 
-Начинается [этап 5](stage5-plan.md). Замечание пользователя: Base64 `-EncodedCommand`
+Начинается [этап 5](done/stage0-7/stage5/stage5-plan.md). Замечание пользователя: Base64 `-EncodedCommand`
 не объясняет действие. Первым исправлением будет decoded PowerShell script с пояснением
 и отдельными точными аргументами. Затем durable attention/acknowledgement, tray/settings,
 history/export и MCP. План фиксируется до реализации по инструкции пользователя.
@@ -438,10 +441,10 @@ Windows gates не назначать.
 Первый сценарий этапа 5 реализован: decoded PowerShell с исходными argv отдельно,
 worker attention journal (schema 4, consistent v3 migration backup), task outcome
 attention и explicit request/dedup/acknowledgement, paged list, capability guards,
-CLI и UI task links/explicit confirmation. [Контракт и границы](attention.md).
+CLI и UI task links/explicit confirmation. [Контракт и границы](guides/attention.md).
 71 workspace Rust tests, Clippy -D warnings, Windows all-targets compile,
 TypeScript/UI build, standalone desktop check и browser integration прошли, включая
-generation cursor reset. [Windows attention-only прогон](windows-attention-gate-2026-10-07.md)
+generation cursor reset. [Windows attention-only прогон](done/stage0-7/stage5/windows-attention-gate-2026-10-07.md)
 успешен: 7 native tests, task `719111f4-cdfd-4ac4-8926-f6bc548eeed2`, report
 `workflow-validation/20261007-044046-eebbd202`, SHA-256
 `006784bf39af25640bed803eee08d27668ee2855427e0d6df758605e7c000f3f`.
@@ -470,24 +473,24 @@ tray/popup/sound/settings прошли gate, описанный в текуще�
 | --- | --- |
 | Git repository и структура | Созданы; история начинается с commit подготовки. Точный hash смотреть в git log. |
 | Rust protocol/core/controller/worker | Worker runtime/CLI и platform/transport crates прошли Windows gate; worker capabilities: task_submit/task_cancel, а workspace_import объявляется при delivery config; native snapshot runtime gate пройден 2026-10-06. Controller CLI submit/get/list/output/cancel/watch реально проверен с Windows worker; runtime и native UI gate этапа 2 пройдены, этап завершён. |
-| Stage 7 runner/profiles | Static CommandHandler и общий resolver, reusable recipes, bounded metadata, durable task origin/workflow pins, общий UI timeline. Первый gate: [68 native tests](windows-profiles-gate-2026-10-10.md) + browser. Второй: [реальные Netwatch/WinBridge cycles](windows-projects-gate-2026-10-10.md), 59 native tests/15 artifacts, private IPC/nested stop/recovery/history; 153 workspace tests. Этап завершён, SDK не нужен текущим consumer. |
+| Stage 7 runner/profiles | Static CommandHandler и общий resolver, reusable recipes, bounded metadata, durable task origin/workflow pins, общий UI timeline. Первый gate: [68 native tests](done/stage0-7/stage7/windows-profiles-gate-2026-10-10.md) + browser. Второй: [реальные Netwatch/WinBridge cycles](done/stage0-7/stage7/windows-projects-gate-2026-10-10.md), 59 native tests/15 artifacts, private IPC/nested stop/recovery/history; 153 workspace tests. Этап завершён, SDK не нужен текущим consumer. |
 | DTO и config | Strict schemaVersion 1 loader, registry/recipes/direct/cwd/timeout policy. LocalRequest/Response, TaskRecord/Summary, output byte pages. TS генерируется из Rust; check:contracts проверяет drift. |
 | UI | Пять native Windows шагов подтверждены пользователем. Новый fix формы сохраняет executable/argv/cwd/timeout/recipe по worker/project/root. Browser остаётся demo/report viewer; UI integration проверен на настоящем Unix worker. |
 | Tauri desktop | Native host запуск подтверждён. workerConfigPath в winbridge-desktop.local.json, форма в winbridge-desktop-state.local.json рядом с exe. worker_rpc, четыре local draft commands и desktop_build; close ждёт save ACK каждой изменённой command/delivery/workflow scope. Shared package select и delivery form restore проверены UI integration; пользователь принял их без нового подробного ручного gate. Сохранение формы и dev:ui дополнительно подтверждены пользователем на Windows. |
 | Local IPC/runtime tasks | User SID + instance named pipe, user-only protected DACL, exclusive journal и Windows Job Objects подтверждены Windows отчётом. Unix socket/private state также проверены; bounded frames/deadline/connections. |
-| HGFS delivery/import | Git commit capture, deterministic Stored ZIP, actual HGFS .part/readback/ready, durable worker import/lease/pinned build и UI реализованы. 16 actual Unix/HGFS/WebSocket gate checks и actual owned import crash/recovery проходят. 19 actual Windows import/build/run/cancel/NTFS junction checks пройдены 2026-10-06; delivery UX принята пользователем, подробная ручная проверка отложена. Dirty source mode ещё не реализован; stage-6 baseline/Git batch/delta/local source cache/output batching/virtualization и [pinned chunk resume](windows-resume-gate-2026-10-10.md) завершены с automatic native gates. |
+| HGFS delivery/import | Git commit capture, deterministic Stored ZIP, actual HGFS .part/readback/ready, durable worker import/lease/pinned build и UI реализованы. 16 actual Unix/HGFS/WebSocket gate checks и actual owned import crash/recovery проходят. 19 actual Windows import/build/run/cancel/NTFS junction checks пройдены 2026-10-06; delivery UX принята пользователем, подробная ручная проверка отложена. Dirty source mode ещё не реализован; stage-6 baseline/Git batch/delta/local source cache/output batching/virtualization и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) завершены с automatic native gates. |
 | SQLite/process tree | Local WAL/FULL, durable acceptance, dedup, queue/cancel, launch intent/recovery, independent pipe drain/quota. Реальные Windows tree timeout/cancel/crash cleanup и сохранённый indeterminate без retry подтверждены. |
-| Task output | Bounded byte/JSON/row pages с прежним cursor; incremental Unicode tails 65 536 characters/stream, gap markers и не более 28 DOM rows. [11 native Windows tests и matched IPC samples](windows-output-gate-2026-10-10.md), browser lost read ACK/filter/pause/loaded bytes проходят. [Delivery resume](windows-resume-gate-2026-10-10.md) прошёл automatic gate. |
+| Task output | Bounded byte/JSON/row pages с прежним cursor; incremental Unicode tails 65 536 characters/stream, gap markers и не более 28 DOM rows. [11 native Windows tests и matched IPC samples](done/stage0-7/stage6/windows-output-gate-2026-10-10.md), browser lost read ACK/filter/pause/loaded bytes проходят. [Delivery resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) прошёл automatic gate. |
 | WebSocket | Versioned handshake/RPC/heartbeat/reconnect/watch реализованы; 14 session groups и UI integration проходят в Debian. Шесть групп Windows runtime gate прошли, включая прежний task/PID/generation после offline. Подключение и все три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. |
 | Журнал controller | Входящие IP не фильтруются (решение пользователя 2026-10-05). activity.jsonl в stateDirectory, 1 MiB + пять архивов, bounded writer; droppedRecords/lastError видны в CLI status. Legacy allowedWorkerAddresses игнорируется. |
-| Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite workflows/applications (schema 3), текущая schema 6 с typed attention/cleanup; consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](workflows.md). |
+| Workflow/process/log | Реализованы: durable import/build/start/stdout readiness/log, SQLite workflows/applications (schema 3), текущая schema 6 с typed attention/cleanup; consistent upgrade backup, app registry/explicit stop, operation-owned leases, byte cursor rotate/truncate/prefix rewrite. UI steps/timeline/task links/profile restore/log. Actual Windows automatic regression; подробная native UI проверка отложена. См. [workflows](guides/workflows.md). |
 | Netwatch profile | Named profiles/drafts, output filters, artifact catalog и build identity реализованы. Этап 4 завершён по общему Windows Netwatch прогону; native визуальная проверка отложена. |
-| History/diagnostic/MCP | Mixed 50-record keyset pages, filters/search, exact old IDs, keyboard palette, editable redacted create-only reports и read-only storage usage. History native Windows gate: 13 tests + actual UI + 17 artifacts. MCP: 30 typed tools над controller IPC; actual Unix lost ACK и Windows submit/dedup/client exit/cancel подтверждены. [History](history-diagnostics.md), [MCP](mcp.md). |
-| Attention | Durable task outcome/request attention, dedup/acknowledgement, schema 5 + consistent v3/v4 backups, capability guards, CLI и paged UI/typed targets. Tray/popup/sound/settings прошли автоматический native gate с двумя UI запусками. Workflow/app attention прошли автоматический Windows gate: 19 tests и native popup/target/ACK. [Journal](attention.md), [companion](companion.md). |
-| Settings/output retention | Local-only active/saved config, checked atomic save/manual restart; schema 6 cleanup preview/apply/durable results, protected targets, opt-in automatic policy. 36 backend Windows tests, два actual UI запуска и 19 verified artifacts; [gate](windows-settings-retention-gate-2026-10-09.md). Этап 5 завершён. |
+| History/diagnostic/MCP | Mixed 50-record keyset pages, filters/search, exact old IDs, keyboard palette, editable redacted create-only reports и read-only storage usage. History native Windows gate: 13 tests + actual UI + 17 artifacts. MCP: 30 typed tools над controller IPC; actual Unix lost ACK и Windows submit/dedup/client exit/cancel подтверждены. [History](guides/history-diagnostics.md), [MCP](guides/mcp.md). |
+| Attention | Durable task outcome/request attention, dedup/acknowledgement, schema 5 + consistent v3/v4 backups, capability guards, CLI и paged UI/typed targets. Tray/popup/sound/settings прошли автоматический native gate с двумя UI запусками. Workflow/app attention прошли автоматический Windows gate: 19 tests и native popup/target/ACK. [Journal](guides/attention.md), [companion](guides/companion.md). |
+| Settings/output retention | Local-only active/saved config, checked atomic save/manual restart; schema 6 cleanup preview/apply/durable results, protected targets, opt-in automatic policy. 36 backend Windows tests, два actual UI запуска и 19 verified artifacts; [gate](done/stage0-7/stage5/windows-settings-retention-gate-2026-10-09.md). Этап 5 завершён. |
 | Родительский Netwatch | Исправления закоммичены отдельно: 39409e5. Его working tree после commit чистый. |
 
-**Этап 1 завершён 2026-10-05.** [Доказательства](windows-gate-2026-10-05.md): прогон `20261005-161827-c8deef84`, все 10 checks passed, ipcAclVerified true; пять native UI шагов подтверждены пользователем, включая отдельно уточнённый stop/restart worker. JSON uiVerified остаётся false, потому что ручные шаги не оцениваются скриптом; shared report не менялся. Worker --describe возвращает scaffold false и task_submit/task_cancel, в коммите этапа 1 controller оставался scaffold. Теперь controller реализует task_submit/task_cancel через worker; readiness этапа 2 требует отдельного Windows gate.
+**Этап 1 завершён 2026-10-05.** [Доказательства](done/stage0-7/stage1/windows-gate-2026-10-05.md): прогон `20261005-161827-c8deef84`, все 10 checks passed, ipcAclVerified true; пять native UI шагов подтверждены пользователем, включая отдельно уточнённый stop/restart worker. JSON uiVerified остаётся false, потому что ручные шаги не оцениваются скриптом; shared report не менялся. Worker --describe возвращает scaffold false и task_submit/task_cancel, в коммите этапа 1 controller оставался scaffold. Теперь controller реализует task_submit/task_cancel через worker; readiness этапа 2 требует отдельного Windows gate.
 
 ## Среда и полезные факты
 
@@ -506,9 +509,9 @@ tray/popup/sound/settings прошли gate, описанный в текуще�
 
 ## Workflow сессия 2026-10-06
 
-Review fixes закоммичены `700ddd5`: bounded config/desktop state и journal link/reparse guards. Основной цикл этапа 4 реализован и проверен: [контракт](workflows.md), [37 native Windows tests](windows-workflow-gate-2026-10-06.md), [автоматический сценарий](windows-workflow-validation.md). Report run `20261006-132034-a57beb0d`, task `fc247059-8df0-4005-9253-377d328a0fac`, SHA-256 `914c7e54e90ddac912079d6a543c4cc0cc5c0a257f7aaf3c19eea79cba8ba46a`. 59 Unix tests, 15 session groups, actual UI integration, Windows compile/Clippy/contracts/build/standalone desktop проходят. Подробная native UI проверка отложена пользователем; не назначать новый ручной gate для мелких изменений.
+Review fixes закоммичены `700ddd5`: bounded config/desktop state и journal link/reparse guards. Основной цикл этапа 4 реализован и проверен: [контракт](guides/workflows.md), [37 native Windows tests](done/stage0-7/stage4/windows-workflow-gate-2026-10-06.md), [автоматический сценарий](validation/windows-workflow-validation.md). Report run `20261006-132034-a57beb0d`, task `fc247059-8df0-4005-9253-377d328a0fac`, SHA-256 `914c7e54e90ddac912079d6a543c4cc0cc5c0a257f7aaf3c19eea79cba8ba46a`. 59 Unix tests, 15 session groups, actual UI integration, Windows compile/Clippy/contracts/build/standalone desktop проходят. Подробная native UI проверка отложена пользователем; не назначать новый ручной gate для мелких изменений.
 
-Пользователь обновил рабочий Windows runtime выпуском `652635b` через `prepare-windows-snapshot.ps1`; новая generation `210bd4b6-e35f-48e1-85a6-81c973c79605`, workflowAvailable=true, соединение подтверждено. Controller generation `ca6e5e43-3739-4f2a-819c-11e8e8ce63e0`, exec session 9142; доступность проверять status. Не повторять прежний gate; для новых stage-4 features требуется совместимый выпуск. По новой инструкции пользователя при неожиданной ошибке worker остановиться и запросить update. 37 native tests выполнены ранее в isolated source/cache/state через старый worker; дополнительно установленный runtime прошёл actual WebSocket import/build/start/readiness/log/dedup/stop без ручной проверки пользователя. Shared report `workflow-validation/installed-20261006-155439-827cbbac`, SHA-256 `466334303cfa8a2e28483d79a3b6e87c85341f293ad661647d246b6fd4babb8b`; [IDs и доказательства](windows-workflow-gate-2026-10-06.md). Тестовое приложение остановлено, worker оставлен работающим.
+Пользователь обновил рабочий Windows runtime выпуском `652635b` через `prepare-windows-snapshot.ps1`; новая generation `210bd4b6-e35f-48e1-85a6-81c973c79605`, workflowAvailable=true, соединение подтверждено. Controller generation `ca6e5e43-3739-4f2a-819c-11e8e8ce63e0`, exec session 9142; доступность проверять status. Не повторять прежний gate; для новых stage-4 features требуется совместимый выпуск. По новой инструкции пользователя при неожиданной ошибке worker остановиться и запросить update. 37 native tests выполнены ранее в isolated source/cache/state через старый worker; дополнительно установленный runtime прошёл actual WebSocket import/build/start/readiness/log/dedup/stop без ручной проверки пользователя. Shared report `workflow-validation/installed-20261006-155439-827cbbac`, SHA-256 `466334303cfa8a2e28483d79a3b6e87c85341f293ad661647d246b6fd4babb8b`; [IDs и доказательства](done/stage0-7/stage4/windows-workflow-gate-2026-10-06.md). Тестовое приложение остановлено, worker оставлен работающим.
 
 Committed fixture `s-e0ee0e50ee6c6de17a487199ca09689dec8f6abd`, manifest `474f1188ec53f7b0492e6a20ec8e5c17295c7c281cdc148706e904547cfb0cb1`; frozen request `.winbridge/workflow-fixture/20261006-131804-d59a5488/workflow.request.json` уже выполнен как workflow `be3004e6-8056-4e50-a5e5-58a41fde2c75`. Повтор key возвращает историю, не запускает приложение снова. `prepare-workflow.py` создаёт новый fixture/config/profile отдельно при необходимости нового цикла. Новые ручные UI checks по мелким исправлениям не назначать.
 
@@ -542,15 +545,15 @@ cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
 Этап 7 завершён; актуальная готовность описана в начале. Ниже — план прежней сессии.
 Ниже сохранён исторический план этапа 4.
 
-Текущий рабочий этап — этап 4. Этап 3 закрыт по решению пользователя 2026-10-06; новые UI исправления приняты, подробная ручная проверка отложена. Этап 2 завершён: [Windows runtime и native UI gate](windows-session-gate-2026-10-05.md) пройдены. Пользователь подтвердил задачи из Debian, потерю связи при продолжающейся задаче, новый session с прежним Task ID после reconnect и отмену. 14 групп настоящих session checks, 29 Rust tests, UI integration, Windows all-targets compile и standalone Linux desktop check проходят. [Ревью](review-stage2-2026-10-05.md) исправило cleanup прерванной сессии, oversized requests, отражение входящего JSON, Welcome capabilities и handshake budget. Адреса пары подтверждены; не задавать вопрос повторно. IP Windows не блокируется.
+Текущий рабочий этап — этап 4. Этап 3 закрыт по решению пользователя 2026-10-06; новые UI исправления приняты, подробная ручная проверка отложена. Этап 2 завершён: [Windows runtime и native UI gate](done/stage0-7/stage2/windows-session-gate-2026-10-05.md) пройдены. Пользователь подтвердил задачи из Debian, потерю связи при продолжающейся задаче, новый session с прежним Task ID после reconnect и отмену. 14 групп настоящих session checks, 29 Rust tests, UI integration, Windows all-targets compile и standalone Linux desktop check проходят. [Ревью](done/stage0-7/stage2/review-stage2-2026-10-05.md) исправило cleanup прерванной сессии, oversized requests, отражение входящего JSON, Welcome capabilities и handshake budget. Адреса пары подтверждены; не задавать вопрос повторно. IP Windows не блокируется.
 
-[Snapshot runtime](snapshot-format.md) реализован. Protocol: manifest/ready/import/preview/ref DTO и optional TaskSubmission.snapshotId; generated TS. Module workspace-sync: точный Git root/commit (без replacement objects), Stored ZIP, .part files/readback/ready-last на HGFS, bounded ZIP parser, actual hashes, local immutable generation, filesystem link/reparse/hardlink guards. Worker SQLite schema 2, consistent v1 migration backup, durable import dedup/cancel/recovery и одна lease для imports/commands. TaskRecord сохраняет accepted snapshot/commit/manifest hash; под lease перед запуском сверяются этот hash и всё дерево, включая unexpected files. Caches/output должны находиться вне snapshots. Native UI: preview, mapping, phases/progress/history/cancel и сохранённый snapshot field.
+[Snapshot runtime](reference/snapshot-format.md) реализован. Protocol: manifest/ready/import/preview/ref DTO и optional TaskSubmission.snapshotId; generated TS. Module workspace-sync: точный Git root/commit (без replacement objects), Stored ZIP, .part files/readback/ready-last на HGFS, bounded ZIP parser, actual hashes, local immutable generation, filesystem link/reparse/hardlink guards. Worker SQLite schema 2, consistent v1 migration backup, durable import dedup/cancel/recovery и одна lease для imports/commands. TaskRecord сохраняет accepted snapshot/commit/manifest hash; под lease перед запуском сверяются этот hash и всё дерево, включая unexpected files. Caches/output должны находиться вне snapshots. Native UI: preview, mapping, phases/progress/history/cancel и сохранённый snapshot field.
 
 44 Rust tests, Clippy/fmt, Windows all-targets compile, contracts/TypeScript/UI build, 14 существующих session groups, новые UI checks и standalone Linux desktop check проходят. Реальный HGFS gate `debian-20261005-183623-f32e6b76`: 16 checks, platform linux, passed true, пять ImportRecord и два TaskRecord. Report SHA-256 `bca344044caa6fcad6d99bab6701ed035e12d134090ce1117cb82df4d20491dc`; в shared `WinBridge/snapshot-validation`, report.ready.json содержит checksums. Actual owned crash/recovery: `.winbridge/sg/c07bd640/crash-report.json`, killed during copy_payload, тот же Import ID `d34f270a-40dd-4bd3-8140-511edc6a5926` recovered interrupted, no final source и no auto build. Прогон выполнен после bound-manifest fix.
 
 Найдено actual HGFS ограничение: rename непустого package directory возвращает ENOENT. Исправлено на per-file .part/readback/rename и ready last. Два первых .part directory оставлены как evidence, не удалять автоматически. Shared ready package исходного fixture: `deliveries/snapshot-fixture/s-9c3799cf4a9a4c658b222158dc319b2fb0718279`, manifest hash `51305c76dd251b4edf27b217634eaef66d72d14ed8a9bb61222ae9a812461131`, payload 885 bytes. Дополнительные 64 MiB gate packages и owned staging сохранены; retention ещё не реализован.
 
-[Windows snapshot runtime gate пройден](windows-snapshot-gate-2026-10-06.md): `debian-20261006-115911-c3629b0a`, actual platform windows, passed true, 19 checks. SHA-256 report `fa10b55472d8df70512637c4918da405d26b2fd09efb9e489800a5783636f7d6`; все пять экспортированных файлов сверены с report.ready.json. Подготовка пользователя `20261006-181804-b74b6c4b`, worker generation `69c79c25-93d2-475b-93ce-53e3af67a92e`. Task build `0f9646e9-86b2-4786-8993-b58caaddabb2`; task run `102d9bb3-434a-4df7-9bd5-3952d38e3772`, оба exit 0, запуск вывел Unicode строку. Пользователь подтвердил import/preview/build/failure/history и command form restore. Найдены UX неудобства: shared package ID был текстом, delivery project/snapshot не сохранялись. Исправлены read-only paged discovery/select, независимый delivery draft в том же локальном файле, общий close flush и понятный отказ непроверенной сборки. 48 Rust tests, UI integration, Windows compile/standalone desktop проходят. **Этап 3 закрыт по решению пользователя 2026-10-06: UI исправления приняты, подробная ручная проверка отложена.** Повторять 19 runtime checks не требуется. Подготовлены create-only `.winbridge/controller-snapshot.local.json`, committed fixture Git root и `prepare-windows-snapshot.ps1`. Windows script сохраняет исходный worker/desktop config, создаёт дополнительный `winbridge-worker.snapshot.local.json` в том же fixed runtime/instance/state, добавляет snapshot-fixture и cargo build-cache recipe. Agent gate `validate-snapshot.py` требует actual platform windows и дополнительно проверяет NTFS junction/canary. Native Linux proof не подменяет эти наблюдения. Следующее действие — review fixes и workflow этапа 4; меньше ручных Windows проверок, автоматические сценарии через уже подключённый worker. Не повторять предыдущие Windows gates.
+[Windows snapshot runtime gate пройден](done/stage0-7/stage3/windows-snapshot-gate-2026-10-06.md): `debian-20261006-115911-c3629b0a`, actual platform windows, passed true, 19 checks. SHA-256 report `fa10b55472d8df70512637c4918da405d26b2fd09efb9e489800a5783636f7d6`; все пять экспортированных файлов сверены с report.ready.json. Подготовка пользователя `20261006-181804-b74b6c4b`, worker generation `69c79c25-93d2-475b-93ce-53e3af67a92e`. Task build `0f9646e9-86b2-4786-8993-b58caaddabb2`; task run `102d9bb3-434a-4df7-9bd5-3952d38e3772`, оба exit 0, запуск вывел Unicode строку. Пользователь подтвердил import/preview/build/failure/history и command form restore. Найдены UX неудобства: shared package ID был текстом, delivery project/snapshot не сохранялись. Исправлены read-only paged discovery/select, независимый delivery draft в том же локальном файле, общий close flush и понятный отказ непроверенной сборки. 48 Rust tests, UI integration, Windows compile/standalone desktop проходят. **Этап 3 закрыт по решению пользователя 2026-10-06: UI исправления приняты, подробная ручная проверка отложена.** Повторять 19 runtime checks не требуется. Подготовлены create-only `.winbridge/controller-snapshot.local.json`, committed fixture Git root и `prepare-windows-snapshot.ps1`. Windows script сохраняет исходный worker/desktop config, создаёт дополнительный `winbridge-worker.snapshot.local.json` в том же fixed runtime/instance/state, добавляет snapshot-fixture и cargo build-cache recipe. Agent gate `validate-snapshot.py` требует actual platform windows и дополнительно проверяет NTFS junction/canary. Native Linux proof не подменяет эти наблюдения. Следующее действие — review fixes и workflow этапа 4; меньше ручных Windows проверок, автоматические сценарии через уже подключённый worker. Не повторять предыдущие Windows gates.
 
 В текущей сессии listener уже запущен на выбранном IP; актуальную доступность проверить командой `controller --config .winbridge/controller-snapshot.local.json status`. Runtime config исключён из Git.
 
@@ -560,7 +563,7 @@ Runtime постоянный: `K:\_proj-26\winbridge\runtime`, runtimeDirectory 
 
 Попытка Windows `20261005-224617-fe7ed534` дала TCP/handshake timeout во время запроса файервола, затем socket permission denied 10013. Пользователь сообщил о файерволе с разрешением для каждого нового пути exe. Его Test-NetConnection из pwsh подтвердил доступ к Debian: True, source 192.168.44.1; activity.jsonl содержит tcp_accepted с этого IP. Это подтверждает TCP для PowerShell, но не выполнение Windows worker. Worker теперь различает TCP, WebSocket upgrade и Hello/Welcome в ошибках, а 10013 включает actual exe path. После исправления постоянного пути подключение и gate прошли; firewall/VMware не менялись агентом.
 
-После обновления desktop пользователь подтвердил сохранение формы и dev:ui на Windows: «все проверил включая dev:ui, все работает». [Windows инструкция](windows-validation.md) остаётся для повторных прогонов. Этап 1 закрыт полностью; повторять его gate с нуля не требуется.
+После обновления desktop пользователь подтвердил сохранение формы и dev:ui на Windows: «все проверил включая dev:ui, все работает». [Windows инструкция](validation/windows-validation.md) остаётся для повторных прогонов. Этап 1 закрыт полностью; повторять его gate с нуля не требуется.
 
 Не повторять подготовку или пройденный gate с нуля. Не запускать production Netwatch для проверки этого service; fixture executable достаточен. Новые capabilities включать по фактическим доказательствам.
 
@@ -582,7 +585,7 @@ Runtime постоянный: `K:\_proj-26\winbridge\runtime`, runtimeDirectory 
 старые stdout workflow fingerprints сохраняются. Controller/UI проверяют workflowFeatures
 перед отправкой новых полей. Оригинальный Netwatch repository не меняется.
 
-Пользователь согласовал отдельный clone Netwatch с instance ID. [Сценарий](netwatch-validation.md):
+Пользователь согласовал отдельный clone Netwatch с instance ID. [Сценарий](validation/netwatch-validation.md):
 исходный commit 39409e56a26ef438adab3488afea504ef40f1363, validation commit
 e295806456a5715510918dc178ff1e7975e8626b, manifest
 b9a2cb5d1740057566452ad5acfe5f6c19be45390182a58ceaa470a1b06700ed.

@@ -4,4 +4,4 @@
 
 Domain task status и queue находятся в worker; разрыв клиента не отменяет сохранённую задачу. Plain WebSocket controller↔worker, handshake/heartbeat/event replay — этап 2. Никаких TLS или Netwatch endpoint names.
 
-WebSocket с plain TCP добавлен на этапе 2: JSON handshake/version/pair/capabilities, correlation, 1 MiB bounds, 5 s handshake, 2 s write, 8 s RPC и heartbeat с единым deadline. Worker reconnect не повторяет команды. [Архитектура](../../docs/architecture.md), [Windows session проверка](../../docs/windows-session-validation.md).
+WebSocket с plain TCP добавлен на этапе 2: JSON handshake/version/pair/capabilities, correlation, 1 MiB bounds, 5 s handshake, 2 s write, 8 s RPC и heartbeat с единым deadline. Worker reconnect не повторяет команды. [Архитектура](../../docs/architecture.md), [Windows session проверка](../../docs/validation/windows-session-validation.md).

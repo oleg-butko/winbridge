@@ -325,7 +325,7 @@ try {
 
   Write-Host "Runtime checks passed. Shared reports: $reportRoot"
   Write-Host "For the UI check, start worker with: & '$workerExe' --config '$configPath' serve"
-  Write-Host "Desktop reads winbridge-desktop.local.json beside its exe. Run npm run build:desktop; see docs/windows-validation.md."
+  Write-Host "Desktop reads winbridge-desktop.local.json beside its exe. Run npm run build:desktop; see docs/validation/windows-validation.md."
 } catch {
   $results.Add(@{ check = 'exception'; passed = $false; message = $_.Exception.Message; detail = ($_ | Out-String) })
   Write-Host "Validation failed: $($_.Exception.Message). Report directory: $reportRoot"

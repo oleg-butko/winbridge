@@ -9,3 +9,8 @@ Netwatch commit `39409e5` содержит пять исправлений по�
 Полезные места Netwatch для изучения, а не runtime dependencies: agent IPC, launcher supervisor/runtime, source unpacker и их tests. Перед переносом учитывать busy pipe retry, общий heartbeat deadline, bounded pong writes, junction rejection и ownership backup при rollback. Windows runtime проверка этих веток всё ещё нужна.
 
 [Снимки перед переносом и команды восстановления](migration-recovery.md) записаны отдельно. Backups не изменялись после создания.
+
+Пути в старых командах восстановления сохранены как исторические записи. После
+реорганизации документации актуальное расположение планов/отчётов смотрите в
+[архиве этапов 0–7](../done/stage0-7/README.md), руководств и инструкций — в
+[общем оглавлении](../README.md).

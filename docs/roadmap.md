@@ -14,7 +14,7 @@
 
 ## Этап 1 — одна команда и реальный журнал на Windows
 
-Статус 2026-10-05: этап завершён по [Windows отчёту и пяти подтверждённым native UI шагам](windows-gate-2026-10-05.md). Worker объявляет implementedCapabilities `task_submit`, `task_cancel`; на момент коммита этапа 1 controller оставался scaffold. Настройки validation и desktop находятся рядом с exe, отчёты — в shared. Дополнительно исправлено сохранение формы команды при повторном открытии окна; этот UI fix проверен Rust storage tests, browser integration и дополнительно подтверждён пользователем на Windows вместе с dev:ui.
+Статус 2026-10-05: этап завершён по [Windows отчёту и пяти подтверждённым native UI шагам](done/stage0-7/stage1/windows-gate-2026-10-05.md). Worker объявляет implementedCapabilities `task_submit`, `task_cancel`; на момент коммита этапа 1 controller оставался scaffold. Настройки validation и desktop находятся рядом с exe, отчёты — в shared. Дополнительно исправлено сохранение формы команды при повторном открытии окна; этот UI fix проверен Rust storage tests, browser integration и дополнительно подтверждён пользователем на Windows вместе с dev:ui.
 
 - [x] Runtime config loader: один project, разрешённые recipes/direct, относительный cwd, timeout. Версионирование и actionable validation errors.
 - [x] Windows worker выполняет команду в локальном fixture project. Direct executable одновременно читает stdout/stderr; recipe использует тот же service.
@@ -27,7 +27,7 @@
 
 ## Этап 2 — Debian управляет Windows по локальной сессии
 
-Статус 2026-10-05: [настоящий Windows runtime gate](windows-session-gate-2026-10-05.md) пройден: шесть групп, включая Debian→Windows execution, cancel, dedup и reconnect с тем же PID. Подключение и три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. Адреса VMnet8: VM 192.168.44.203, host 192.168.44.1. [Windows инструкция](windows-session-validation.md).
+Статус 2026-10-05: [настоящий Windows runtime gate](done/stage0-7/stage2/windows-session-gate-2026-10-05.md) пройден: шесть групп, включая Debian→Windows execution, cancel, dedup и reconnect с тем же PID. Подключение и три новых native UI наблюдения подтверждены пользователем; этап 2 завершён. Адреса VMnet8: VM 192.168.44.203, host 192.168.44.1. [Windows инструкция](validation/windows-session-validation.md).
 
 - [x] Plain `ws://` listener на выбранном локальном IP Debian, Windows outbound connection; никаких TLS/certificates/relay.
 - [x] Входящие IP не блокируются; источники активности записываются в JSONL с ротацией и видимыми ошибками записи (решение 2026-10-05).
@@ -41,7 +41,7 @@
 
 ## Этап 3 — готовый snapshot через VMware Shared Folders
 
-Статус 2026-10-06: [Windows runtime gate пройден](windows-snapshot-gate-2026-10-06.md), 19 actual import/build/run/cancel/junction checks. Пользователь подтвердил imports/preview/build/failure/history в native UI. По его замечаниям добавлены shared package select, сохранение delivery form и понятный отказ сборки непроверенного snapshot; 48 Rust tests и реальная UI integration проходят. Этап 3 завершён по решению пользователя: UI исправления приняты, подробная ручная проверка отложена. Это принятие не обозначается как дополнительный выполненный Windows UI test.
+Статус 2026-10-06: [Windows runtime gate пройден](done/stage0-7/stage3/windows-snapshot-gate-2026-10-06.md), 19 actual import/build/run/cancel/junction checks. Пользователь подтвердил imports/preview/build/failure/history в native UI. По его замечаниям добавлены shared package select, сохранение delivery form и понятный отказ сборки непроверенного snapshot; 48 Rust tests и реальная UI integration проходят. Этап 3 завершён по решению пользователя: UI исправления приняты, подробная ручная проверка отложена. Это принятие не обозначается как дополнительный выполненный Windows UI test.
 
 - [x] Общие Rust/TypeScript DTO manifest/ready и bounded metadata preflight: Windows пути, case collisions, file/directory conflicts, hashes/size syntax и byte counts.
 - [x] Выбор mapping `/mnt/hgfs/shared` ↔ `K:\VMs\shared` и отдельного Windows workspace root.
@@ -58,7 +58,7 @@
 
 ## Этап 4 — первый полный цикл разработки
 
-Статус 2026-10-06: этап завершён. Автоматический Windows прогон `20261006-163840-a97da6e3` подтвердил 41 native test, native desktop check и полный import/build/artifact/start/IPC/log/dedup/stop на отдельном Netwatch clone. [Доказательства](windows-workflow-gate-2026-10-06.md), [изоляция](netwatch-validation.md). Editable profiles/drafts, output filters и artifact UI проверены browser integration; подробные ручные Windows UI наблюдения отложены пользователем. Пользователь обновил runtime до 523fc5b; source commit и features подтверждены read-only запросом 2026-10-07.
+Статус 2026-10-06: этап завершён. Автоматический Windows прогон `20261006-163840-a97da6e3` подтвердил 41 native test, native desktop check и полный import/build/artifact/start/IPC/log/dedup/stop на отдельном Netwatch clone. [Доказательства](done/stage0-7/stage4/windows-workflow-gate-2026-10-06.md), [изоляция](validation/netwatch-validation.md). Editable profiles/drafts, output filters и artifact UI проверены browser integration; подробные ручные Windows UI наблюдения отложены пользователем. Пользователь обновил runtime до 523fc5b; source commit и features подтверждены read-only запросом 2026-10-07.
 
 - [x] Workflow fixture: выбрать SHA → publish/import → build → start → stdout readiness → log tail.
 - [x] Принятый профиль и step IDs в journal; ошибка сборки блокирует запуск следующего шага, dedup не создаёт повторный процесс.
@@ -73,26 +73,26 @@
 
 ## Этап 5 — внимание пользователя и нормальная ежедневная работа
 
-План и порядок реализации согласованы 2026-10-07: [объяснение этапа 5](stage5-plan.md).
+План и порядок реализации согласованы 2026-10-07: [объяснение этапа 5](done/stage0-7/stage5/stage5-plan.md).
 Первый сценарий — читаемый PowerShell и долговечный список внимания с acknowledgement.
 
-Первый сценарий реализован: [журнал внимания и границы](attention.md). Task outcomes,
+Первый сценарий реализован: [журнал внимания и границы](guides/attention.md). Task outcomes,
 dedup и acknowledgements сохраняются у worker; UI раскрывает EncodedCommand и
-предлагает task links/explicit acknowledgement. [Tray/popup/sound/preferences](companion.md)
-реализованы и [прошли автоматический Windows gate](windows-companion-gate-2026-10-07.md):
+предлагает task links/explicit acknowledgement. [Tray/popup/sound/preferences](guides/companion.md)
+реализованы и [прошли автоматический Windows gate](done/stage0-7/stage5/windows-companion-gate-2026-10-07.md):
 21 core + 9 attention tests, два native UI запуска, 16 verified artifacts.
-[Первый прерванный прогон](windows-companion-attempt-2026-10-07.md) остаётся историей;
+[Первый прерванный прогон](done/stage0-7/stage5/windows-companion-attempt-2026-10-07.md) остаётся историей;
 исправлены обозначение тестового окна, защита close и публикация отчёта.
-Workflow/app attention реализованы по [плану](workflow-attention-plan.md) и
-[прошли автоматический Windows gate](windows-workflow-attention-gate-2026-10-08.md):
-19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, [автоматический Windows gate](windows-history-gate-2026-10-08.md) пройден. [MCP adapter](mcp.md) также прошёл actual Windows gate; projects/connection settings и согласованная output retention также прошли [native gate](windows-settings-retention-gate-2026-10-09.md).
-[Автоматические Windows проверки](windows-attention-gate-2026-10-07.md): 7 native tests
+Workflow/app attention реализованы по [плану](done/stage0-7/stage5/workflow-attention-plan.md) и
+[прошли автоматический Windows gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md):
+19 backend tests, actual popup → точный workflow → явный UI ACK, 12 verified artifacts. История/диагностика реализованы, [автоматический Windows gate](done/stage0-7/stage5/windows-history-gate-2026-10-08.md) пройден. [MCP adapter](guides/mcp.md) также прошёл actual Windows gate; projects/connection settings и согласованная output retention также прошли [native gate](done/stage0-7/stage5/windows-settings-retention-gate-2026-10-09.md).
+[Автоматические Windows проверки](done/stage0-7/stage5/windows-attention-gate-2026-10-07.md): 7 native tests
 прошли через установленный worker без повторения завершённого workflow gate.
 
-[Ревью](review-attention-2026-10-07.md) исправило fresh running после failed result commit.
-Сценарий [tray/popup/sound/preferences](tray-plan.md) завершён; план был зафиксирован
+[Ревью](done/stage0-7/stage5/review-attention-2026-10-07.md) исправило fresh running после failed result commit.
+Сценарий [tray/popup/sound/preferences](done/stage0-7/stage5/tray-plan.md) завершён; план был зафиксирован
 коммитом `bbba964` до реализации. План workflow/app attention зафиксирован `aeae684`
-до реализации; сценарий завершён. [История/диагностика](history-diagnostics.md) добавляет keyset pages, старые IDs, keyboard actions, redacted editable task report и storage usage; [Windows gate](windows-history-gate-2026-10-08.md) пройден: 13 tests, actual UI и 17 artifacts. [MCP](mcp-plan.md) и settings/output retention также завершены.
+до реализации; сценарий завершён. [История/диагностика](guides/history-diagnostics.md) добавляет keyset pages, старые IDs, keyboard actions, redacted editable task report и storage usage; [Windows gate](done/stage0-7/stage5/windows-history-gate-2026-10-08.md) пройден: 13 tests, actual UI и 17 artifacts. [MCP](done/stage0-7/stage5/mcp-plan.md) и settings/output retention также завершены.
 
 - [x] Attention event → Tauri popup/tray badge/встроенный звук. Dedup, rate limit, quiet hours, severity.
 - [x] Открытие нужной task page из уведомления, acknowledged state; pending attention при закрытом companion.
@@ -102,46 +102,46 @@ Workflow/app attention реализованы по [плану](workflow-attenti
 - [x] Editable task diagnostic с redaction, default omission, create-only save и проверкой readback/SHA-256.
 - [x] Output paging/quota, recovery без UI и read-only размеры журнала.
 - [x] Согласованная output retention policy и настройки: preview/atomic cleanup, protected targets, durable results и opt-in automatic cleanup. Metadata/history/dedup не удаляются.
-- [x] [MCP stdio adapter](mcp.md): 30 typed tools над теми же RPC/handler; contract, actual Unix lost ACK и [Windows gate](windows-mcp-gate-2026-10-08.md) прошли.
+- [x] [MCP stdio adapter](guides/mcp.md): 30 typed tools над теми же RPC/handler; contract, actual Unix lost ACK и [Windows gate](done/stage0-7/stage5/windows-mcp-gate-2026-10-08.md) прошли.
 
 Критерий: пользователь понимает, что сделал агент, получает уместный сигнал, открывает причину и может продолжить работу. Рутинные разрешённые действия не требуют повторяющихся confirmations.
 
 ## Этап 6 — скорость и объёмы после измерений
 
-Статус 2026-10-10: этап 6 завершён [automatic chunk/resume gate](windows-resume-gate-2026-10-10.md). Первый сценарий: [воспроизводимый baseline](stage6-plan.md) существующей доставки,
+Статус 2026-10-10: этап 6 завершён [automatic chunk/resume gate](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md). Первый сценарий: [воспроизводимый baseline](done/stage0-7/stage6/stage6-plan.md) существующей доставки,
 Windows import/build, HGFS tree/archive и объёмов output/journal. План зафиксирован
 после ревью этапа 5; выбранные расширения теперь измерены и проверены.
 
-- [x] [Baseline HGFS tree/archive и time-to-build](performance-baseline-2026-10-09.md) с fixture параметрами: 3 повтора, 59 actual Windows операций, output/control/cancel/storage evidence.
-- [x] [Первая измеренная оптимизация capture](performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
-- [x] [Incremental full/delta](windows-delta-gate-2026-10-09.md): три fresh Debian → Windows one-file commit; ZIP 2 367 994→193 bytes, publication/import timings и actual build/output/control/cancel/attention.
-- [x] [Delta от verified snapshot](snapshot-delta.md): schema 2/pinned base/local source cache, full target verification, CLI/MCP/UI; 40 native tests и cross-host gate прошли. Старые поколения сохраняются; удаление отражается новым составом.
-- [x] [Пакетное чтение output и виртуализация строк](windows-output-gate-2026-10-10.md): bounded pages/cursors/tails, не более 28 DOM rows; 11 Windows tests, три native IPC пары, hashes/dedup/restart/control и browser integration.
-- [x] [Chunk/resume больших объектов](windows-resume-gate-2026-10-10.md): manifest-pinned 1 MiB blocks, explicit import после cancel/crash, exact Debian pins и offline build; 39 native tests, shared ZIP bytes на 75% меньше.
+- [x] [Baseline HGFS tree/archive и time-to-build](done/stage0-7/stage6/performance-baseline-2026-10-09.md) с fixture параметрами: 3 повтора, 59 actual Windows операций, output/control/cancel/storage evidence.
+- [x] [Первая измеренная оптимизация capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md): bounded Git batch, 13.58× в 9 matched pairs, identical hashes и 21 Windows operation без изменения wire/ready.
+- [x] [Incremental full/delta](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md): три fresh Debian → Windows one-file commit; ZIP 2 367 994→193 bytes, publication/import timings и actual build/output/control/cancel/attention.
+- [x] [Delta от verified snapshot](guides/snapshot-delta.md): schema 2/pinned base/local source cache, full target verification, CLI/MCP/UI; 40 native tests и cross-host gate прошли. Старые поколения сохраняются; удаление отражается новым составом.
+- [x] [Пакетное чтение output и виртуализация строк](done/stage0-7/stage6/windows-output-gate-2026-10-10.md): bounded pages/cursors/tails, не более 28 DOM rows; 11 Windows tests, три native IPC пары, hashes/dedup/restart/control и browser integration.
+- [x] [Chunk/resume больших объектов](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md): manifest-pinned 1 MiB blocks, explicit import после cancel/crash, exact Debian pins и offline build; 39 native tests, shared ZIP bytes на 75% меньше.
 - [x] Оценена необходимость SocketDelivery/дальнейшей list virtualization: текущие gates не выявили необходимости. Shared resume и bounded output/history достаточно для измеренных сценариев; другой adapter и дополнительная виртуализация выбираются при новых данных.
 
 Критерий: измеряемое улучшение выбранного сценария, отсутствие регрессии cancel/attention latency, корректное восстановление после прерывания. Не менять транспорт ради обещания абстрактной скорости.
 
 ## Этап 7 — каркас для следующих проектов
 
-Первый вертикальный сценарий реализован: [общие recipe profiles](project-profiles.md),
+Первый вертикальный сценарий реализован: [общие recipe profiles](guides/project-profiles.md),
 статический CommandHandler/runner, metadata и общий JournalTimeline. Task origin и
 workflow recipe definitions сохраняются до ACK; queued workflow с изменённым
-рецептом не начинает новые import/build/start. [Automatic Windows gate](windows-profiles-gate-2026-10-10.md)
+рецептом не начинает новые import/build/start. [Automatic Windows gate](done/stage0-7/stage7/windows-profiles-gate-2026-10-10.md)
 passed: 68 native tests, five verified artifacts; 152 workspace tests и full
-browser integration проходят. [Второй прикладной сценарий](windows-projects-gate-2026-10-10.md)
+browser integration проходят. [Второй прикладной сценарий](done/stage0-7/stage7/windows-projects-gate-2026-10-10.md)
 прошёл: isolated Netwatch и WinBridge используют общий профиль, 59 native Rust
 tests и оба application cycles, 15 verified artifacts. 153 workspace tests;
 **этап 7 завершён 2026-10-10**.
 
-- [x] Статические handler interfaces runner/workspace-sync закреплены [контрактами](project-integration.md) и проверены на двух реальных проектах; ACK/journal/processes остаются у worker.
+- [x] Статические handler interfaces runner/workspace-sync закреплены [контрактами](guides/project-integration.md) и проверены на двух реальных проектах; ACK/journal/processes остаются у worker.
 - [x] Project profiles и reusable recipes; общий UI renderer событий и capability metadata.
 - [x] Второе приложение: WinBridge worker рядом с isolated Netwatch, без изменений transport/RPC и копирования task service; actual IPC/log/artifacts/managed stop/restart подтверждены.
 - [x] Необходимость SDK/package versioning оценена: оба consumer используют статический workspace contract, отдельный SDK не нужен. Динамические plugins и другие ОС — отдельные запросы.
 
 Критерий: следующий проект подключается конфигурацией/модулем, сохраняет journal/cancel/recovery и получает понятный UI.
 
-Этап 5 завершён 2026-10-09: [Windows settings/retention gate](windows-settings-retention-gate-2026-10-09.md)
+Этап 5 завершён 2026-10-09: [Windows settings/retention gate](done/stage0-7/stage5/windows-settings-retention-gate-2026-10-09.md)
 подтвердил 36 backend tests, два native UI запуска и 19 artifacts.
 Пользователь выбрал manual restart для config и включаемую automatic output cleanup;
 история/ключи/attention/snapshots/reports остаются. Все сценарии этапа 5 прошли
@@ -149,7 +149,7 @@ tests и оба application cycles, 15 verified artifacts. 153 workspace tests;
 
 ## После основного roadmap
 
-Этапы 0–7 завершены. Следующий проект подключается по [готовой инструкции](project-integration.md)
+Этапы 0–7 завершены. Следующий проект подключается по [готовой инструкции](guides/project-integration.md)
 через registry/recipe profile и прежний workflow/journal/cancel/recovery. Native
 evidence и актуальный source archive находятся в handoff. Новые возможности
 выбираются по следующей пользовательской задаче: dirty snapshots, source-cache

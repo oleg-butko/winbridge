@@ -1,6 +1,6 @@
 # Структура и правила расширения
 
-Папки отражают границы изменений. Этап 1 добавил transport/platform crates, local worker runtime и отдельный Tauri package. Runner orchestration и SQLite Store находятся в worker, project policy — в core. Этап 7 вынес общий direct/recipe resolver в modules/runner; sync и log-reader также реализованы отдельными crates. [Профили и контракт runner](project-profiles.md).
+Папки отражают границы изменений. Этап 1 добавил transport/platform crates, local worker runtime и отдельный Tauri package. Runner orchestration и SQLite Store находятся в worker, project policy — в core. Этап 7 вынес общий direct/recipe resolver в modules/runner; sync и log-reader также реализованы отдельными crates. [Профили и контракт runner](guides/project-profiles.md).
 
 | Путь | Владелец логики | Допустимые зависимости |
 | --- | --- | --- |
@@ -29,7 +29,7 @@ Project configuration + зарегистрированные recipes, source all
 
 Protocol DTO находятся только в protocol. `npm run generate:contracts` генерирует `ui/src/runtime/contracts.ts` из Rust через optional feature `typescript`; `npm run check:contracts` проверяет отсутствие drift. UI fixtures имеют собственные demo types и не являются wire schema. Tauri передаёт LocalRequest в worker; policy не дублируется в desktop/UI. Browser отчёт проходит проверку формата перед отображением.
 
-App version начинается с 0.1.0; protocolVersion = 1, config schemaVersion = 1. Они развиваются независимо. Cargo workspace, package.json и Tauri config задают app version. После [Windows gate](windows-gate-2026-10-05.md) worker объявляет `task_submit`/`task_cancel`; controller теперь объявляет эти capabilities как dispatch к worker через bounded WebSocket сессию. Handshake передаёт wire version, appVersion, pair/node/generation и capabilities; native Windows runtime/UI gate этапа 2 пройден, [доказательства](windows-session-gate-2026-10-05.md).
+App version начинается с 0.1.0; protocolVersion = 1, config schemaVersion = 1. Они развиваются независимо. Cargo workspace, package.json и Tauri config задают app version. После [Windows gate](done/stage0-7/stage1/windows-gate-2026-10-05.md) worker объявляет `task_submit`/`task_cancel`; controller теперь объявляет эти capabilities как dispatch к worker через bounded WebSocket сессию. Handshake передаёт wire version, appVersion, pair/node/generation и capabilities; native Windows runtime/UI gate этапа 2 пройден, [доказательства](done/stage0-7/stage2/windows-session-gate-2026-10-05.md).
 
 ## Данные вне исходников
 

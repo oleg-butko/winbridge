@@ -68,7 +68,7 @@ WinBridge позволяет агенту в Debian выполнять рабо�
 
 **Профиль рецептов** объединяет общие команды нескольких проектов; **профиль workflow** хранит параметры цикла. Обычно достаточно конфигурации и build script. Специальная проверка готовности может потребовать дополнительного обработчика.
 
-Примеры: [worker config](../../examples/worker.config.json), [controller config](../../examples/controller.config.json), [общие рецепты](../project-profiles.md), [подключение проекта подробно](../project-integration.md).
+Примеры: [worker config](../../examples/worker.config.json), [controller config](../../examples/controller.config.json), [общие рецепты](../guides/project-profiles.md), [подключение проекта подробно](../guides/project-integration.md).
 
 ## 4. Что агент получает через MCP
 
@@ -94,4 +94,4 @@ MCP-клиент запускает адаптер в Debian; controller и Wind
 ./target/debug/winbridge-controller --config .winbridge/controller-snapshot.local.json mcp
 ```
 
-Настройка этого запуска в клиенте делает инструменты доступными агенту. [Полный контракт MCP](../mcp.md).
+Настройка этого запуска в клиенте делает инструменты доступными агенту. [Полный контракт MCP](../guides/mcp.md).
