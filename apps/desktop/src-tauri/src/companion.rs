@@ -371,7 +371,7 @@ fn update_tray(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-fn show_popup(app: &tauri::AppHandle) -> Result<(), String> {
+pub(super) fn show_popup(app: &tauri::AppHandle) -> Result<(), String> {
     super::diagnostics::event(app, "popup.show.begin", serde_json::json!({}));
     let popup = if let Some(window) = app.get_webview_window("attention-popup") {
         window
@@ -424,6 +424,42 @@ fn show_popup(app: &tauri::AppHandle) -> Result<(), String> {
     popup.show().map_err(|e| e.to_string())?;
     super::diagnostics::event(app, "popup.show.end", serde_json::json!({}));
     Ok(())
+}
+
+pub(super) fn hide_popup(window: &tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != "attention-popup" {
+        return Err("Dismiss is available in the attention popup only".into());
+    }
+    super::diagnostics::event(
+        window.app_handle(),
+        "popup.dismiss.begin",
+        serde_json::json!({}),
+    );
+    // Popup uses Win32 SW_SHOWNOACTIVATE. Tao's cached visibility stays false,
+    // so its set_visible(false) skips the hide. Use the same native API for both
+    // directions and check real visibility, rather than trusting a no-op ACK.
+    #[cfg(windows)]
+    let result = (|| {
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as _;
+        unsafe {
+            windows_sys::Win32::UI::WindowsAndMessaging::ShowWindow(
+                hwnd,
+                windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE,
+            );
+            if windows_sys::Win32::UI::WindowsAndMessaging::IsWindowVisible(hwnd) != 0 {
+                return Err("Windows popup remained visible after hide".into());
+            }
+        }
+        Ok(())
+    })();
+    #[cfg(not(windows))]
+    let result = window.hide().map_err(|e| e.to_string());
+    super::diagnostics::event(
+        window.app_handle(),
+        "popup.dismiss.end",
+        serde_json::json!({"ok":result.is_ok()}),
+    );
+    result
 }
 
 pub fn play_sound(volume: u8) -> Result<(), String> {
@@ -536,23 +572,14 @@ pub async fn companion_open_task(app: tauri::AppHandle) -> Result<(), String> {
     }
     show_main(&app)?;
     if let Some(popup) = app.get_webview_window("attention-popup") {
-        companion_dismiss(app, popup).await?;
+        companion_dismiss(popup).await?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub async fn companion_dismiss(
-    app: tauri::AppHandle,
-    window: tauri::WebviewWindow,
-) -> Result<(), String> {
-    if window.label() != "attention-popup" {
-        return Err("Dismiss is available in the attention popup only".into());
-    }
-    super::diagnostics::event(&app, "popup.dismiss.begin", serde_json::json!({}));
-    window.hide().map_err(|e| e.to_string())?;
-    super::diagnostics::event(&app, "popup.dismiss.end", serde_json::json!({}));
-    Ok(())
+pub async fn companion_dismiss(window: tauri::WebviewWindow) -> Result<(), String> {
+    hide_popup(&window)
 }
 
 #[tauri::command]

@@ -619,7 +619,7 @@ async fn run(
         return Err("Dismissing popup acknowledged attention".into());
     }
     // Reopen the same notification to exercise the existing task navigation path.
-    popup.show().map_err(|e| e.to_string())?;
+    super::companion::show_popup(app)?;
     click(app, "attention-popup", "popup-open-task").await?;
     wait("popup action reopened main", || {
         main.is_visible().map_err(|e| e.to_string())
@@ -904,7 +904,7 @@ async fn run_targets(
             pause().await;
         }
         if let Some(popup) = app.get_webview_window("attention-popup") {
-            super::companion::companion_dismiss(app.clone(), popup).await?;
+            super::companion::companion_dismiss(popup).await?;
         }
         workflow_ids.push(id);
         event_ids.push(event.attention_id);

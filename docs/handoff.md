@@ -10,8 +10,11 @@
 перенесён к tray, save/native ACK ограничены 10 секундами, поздний save не скрывает
 окно. State I/O вынесен из native GUI loop; popup hide/open стали async commands.
 Добавлен [локальный JSONL desktop log с ротацией](guides/desktop-diagnostics.md),
-неблокирующей очередью и независимой проверкой native dispatch. Прежний случай
-popup по журналу старой версии не подтверждается: раньше такого журнала не было.
+неблокирующей очередью и независимой проверкой native dispatch. Во втором native
+прогоне `20261010-211212-f58ced85` popup bug воспроизведён: hide ACK успешен, но
+окно видно. Win32 SW_SHOWNOACTIVATE не обновляет Tao visibility cache, поэтому
+Tauri hide — no-op. Popup show/hide теперь используют парные Win32 операции;
+hide проверяет actual visibility, popup крестик и навигация используют тот же helper.
 Workspace Rust tests, UI integration (включая зависший save/native ACK),
 TypeScript/build/scaffold/Clippy, desktop cargo check/Clippy и Windows platform
 all-targets cross-check проходят. Отдельный native Windows companion gate

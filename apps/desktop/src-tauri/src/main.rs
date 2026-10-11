@@ -335,7 +335,9 @@ fn main() {
                     );
                 }
                 if window.label() == "attention-popup" {
-                    let _ = window.hide();
+                    if let Some(popup) = window.app_handle().get_webview_window("attention-popup") {
+                        let _ = companion::hide_popup(&popup);
+                    }
                 }
             }
         })
