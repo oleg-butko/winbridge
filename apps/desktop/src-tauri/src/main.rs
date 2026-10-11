@@ -127,7 +127,14 @@ async fn save_command_draft(
     draft: CommandDraft,
 ) -> Result<(), String> {
     main_only(&window)?;
-    draft_operation(app, &state, "command", move |store| store.save(draft)).await
+    let result = draft_operation(app.clone(), &state, "command", move |store| {
+        store.save(draft)
+    })
+    .await;
+    if result.is_ok() {
+        app.state::<validation::Validation>().hold_save_ack().await;
+    }
+    result
 }
 
 #[tauri::command]

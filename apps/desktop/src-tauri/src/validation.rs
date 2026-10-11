@@ -26,6 +26,9 @@ pub struct Validation {
     history: Mutex<Vec<serde_json::Value>>,
     pub allow_close: AtomicBool,
     aborted: AtomicBool,
+    hold_next_save_ack: AtomicBool,
+    save_ack_waiting: AtomicBool,
+    save_ack_release: tokio::sync::Notify,
 }
 impl Validation {
     pub fn new(report: Option<&PathBuf>, restart: bool) -> Self {
@@ -64,6 +67,16 @@ impl Validation {
             return Err("Идёт автоматическая проверка. Для остановки используйте «Прервать проверку» в жёлтом блоке.".into());
         }
         Ok(())
+    }
+    /// Only the isolated native scenario can arm this one-shot lost-ACK simulation.
+    /// The real write has already completed; normal desktop launches never wait here.
+    pub async fn hold_save_ack(&self) {
+        if self.enabled && self.hold_next_save_ack.swap(false, Ordering::SeqCst) {
+            let released = self.save_ack_release.notified();
+            self.save_ack_waiting.store(true, Ordering::SeqCst);
+            released.await;
+            self.save_ack_waiting.store(false, Ordering::SeqCst);
+        }
     }
 }
 
@@ -449,26 +462,28 @@ async fn run(
         "Зависший save ACK: timeout закрытия, доступные кнопки и позднее сохранение",
         None,
     );
-    js(app,"main","defer-save",r#"
-      window.__wbOriginalInvoke=window.__TAURI_INTERNALS__.invoke;
-      window.__wbDeferredSave=null;
-      window.__TAURI_INTERNALS__.invoke=function(command,args) {
-        if(command==='save_command_draft') return new Promise((resolve,reject)=>{window.__wbDeferredSave=()=>window.__wbOriginalInvoke(command,args).then(resolve,reject);});
-        return window.__wbOriginalInvoke(command,args);
-      };
-      const label=Array.from(document.querySelectorAll('label')).find(e=>e.textContent==='Timeout, секунд');
-      const input=document.getElementById(label.getAttribute('for'));
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'121');
-      input.dispatchEvent(new Event('input',{bubbles:true}));
-      return true;
-    "#).await?;
-    ui_value(app, "save-deferred", "return !!window.__wbDeferredSave;").await?;
+    app.state::<Validation>()
+        .hold_next_save_ack
+        .store(true, Ordering::SeqCst);
+    set_text(
+        app,
+        "command-arguments",
+        "[\"success\", \"late native save ACK ✓\"]",
+    )
+    .await?;
+    wait("save ACK held", || {
+        Ok(app
+            .state::<Validation>()
+            .save_ack_waiting
+            .load(Ordering::SeqCst))
+    })
+    .await?;
     click(app, "main", "companion-hide").await?;
     ui_value(app,"close-timeout-visible","return document.body.textContent.includes('Сохранение форм не подтвердилось за 10 секунд') && !document.querySelector('[data-testid=\"companion-hide\"]').disabled && !document.querySelector('[data-testid=\"companion-quit\"]').disabled;").await?;
     if !main.is_visible().map_err(|e| e.to_string())? {
         return Err("Unconfirmed save hid native main window".into());
     }
-    js(app,"main","release-save","window.__TAURI_INTERNALS__.invoke=window.__wbOriginalInvoke; window.__wbDeferredSave(); return true;").await?;
+    app.state::<Validation>().save_ack_release.notify_one();
     ui_value(
         app,
         "late-save-confirmed",

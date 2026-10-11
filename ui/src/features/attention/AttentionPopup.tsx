@@ -23,7 +23,7 @@ export function AttentionPopup() {
     setBusy(true); setError(null);
     desktopEvent(command === "companion_dismiss" ? "popup.hide" : "popup.open", "popup");
     try { await closeDeadline(invoke(command), "native"); desktopEvent("popup.done", "popup"); }
-    catch { setError("Действие popup не подтверждено. Можно повторить попытку; подробности — в журнале desktop."); desktopEvent("popup.failed", "popup"); }
+    catch (error) { setError(`Действие popup не подтверждено: ${String(error)}. Можно повторить попытку; подробности — в журнале desktop.`); desktopEvent("popup.failed", "popup"); }
     finally { setBusy(false); }
   }
   const record = status?.latestAttention;

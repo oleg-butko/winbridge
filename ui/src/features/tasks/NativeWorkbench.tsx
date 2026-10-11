@@ -344,7 +344,7 @@ export function NativeWorkbench() {
       ]} disabled={submitting || pending !== null || !formReady || closing} />
       {recipeId ? <Code block>{JSON.stringify(project?.recipes.find((r) => r.id === recipeId)?.command, null, 2)}</Code> : <>
         <TextInput label="Executable" placeholder="powershell.exe или полный путь к .exe" value={executable} onChange={(e) => updateForm({ executable: e.currentTarget.value })} disabled={pending !== null || !formReady || closing} />
-        <Textarea label="Аргументы — JSON-массив строк" value={argv} onChange={(e) => updateForm({ argumentsJson: e.currentTarget.value })} autosize minRows={2} disabled={pending !== null || !formReady || closing} />
+        <Textarea data-testid="command-arguments" label="Аргументы — JSON-массив строк" value={argv} onChange={(e) => updateForm({ argumentsJson: e.currentTarget.value })} autosize minRows={2} disabled={pending !== null || !formReady || closing} />
         <TextInput label="Рабочая папка относительно корня проекта" value={cwd} onChange={(e) => updateForm({ workingDirectory: e.currentTarget.value })} disabled={pending !== null || !formReady || closing} />
       </>}
       <NumberInput label="Timeout, секунд" value={timeout} onChange={(value) => updateForm({ timeoutSeconds: String(value) })} min={0.1} max={86400} disabled={pending !== null || !formReady || closing} />

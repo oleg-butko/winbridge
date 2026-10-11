@@ -15,7 +15,11 @@ popup по журналу старой версии не подтверждае�
 Workspace Rust tests, UI integration (включая зависший save/native ACK),
 TypeScript/build/scaffold/Clippy, desktop cargo check/Clippy и Windows platform
 all-targets cross-check проходят. Отдельный native Windows companion gate
-подготовлен; Windows результат пока не заявлен.
+первый прогон `20261010-210454-db98e4e5` прошёл 42 backend tests и desktop build,
+но остановился в новом тесте `save-deferred`. Native/WebView heartbeats продолжались;
+нет свидетельства зависания worker. Ненадёжная подмена WebView invoke/NumberInput
+заменена одноразовым удержанием ACK уже записанной формы в validation-only runtime
+и обычным редактированием textarea. Windows UI результат пока не заявлен.
 Working worker clean fa7e4d7, healthy/idle; runtime/configs не заменялись.
 
 ## Ревью source identity после roadmap, 2026-10-10
