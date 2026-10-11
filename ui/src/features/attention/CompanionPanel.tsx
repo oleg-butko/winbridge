@@ -1,18 +1,22 @@
 import { Alert, Button, Card, Checkbox, Group, NumberInput, Select, Stack, Text, TextInput, Title } from "@mantine/core";
 import type { CompanionStatus, NotificationPreferences } from "../../runtime/contracts";
+import type { DesktopLogStatus } from "../../runtime/desktopEvents";
 
 const time = (minute: number) => `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 const minute = (value: string) => { const [h, m] = value.split(":").map(Number); return h * 60 + m; };
 
-export function CompanionPanel({ status, preferences: p, closing, error, companionError, preferencesStatus, persist, close }: {
+export function CompanionPanel({ status, preferences: p, closing, error, companionError, preferencesStatus, persist, close, desktopLog }: {
   status: CompanionStatus | null; preferences: NotificationPreferences | null; closing: boolean;
   error: string | null; companionError: string | null; preferencesStatus: string; persist: (p: NotificationPreferences) => void; close: (quit: boolean) => void;
+  desktopLog: DesktopLogStatus | null;
 }) {
   return <Card id="native-companion" tabIndex={-1} withBorder><Stack>
     <Title order={3}>Tray и уведомления</Title>
     <Text size="sm">Закрытие окна сохраняет формы и скрывает desktop. Worker выполняет принятые задачи независимо от интерфейса. Сигналы читает фоновый Rust-процесс даже при скрытом окне.</Text>
     <Text size="sm">Tray: {status?.trayReady ? "готов" : "ещё не подтверждён"} · непрочитанное внимание: {status?.pendingCount ?? "неизвестно"} · в очереди / выполняются: {status?.activeTaskCount ?? "неизвестно"}</Text>
     <Text size="xs" c="dimmed">Фоновое подтверждение worker: {status?.lastConfirmedAtMs ? new Date(status.lastConfirmedAtMs).toLocaleString() : "ещё не получено"}{status && !status.workerConnected ? " · нет свежего соединения" : ""}</Text>
+    {desktopLog?.path && <Text size="xs">Журнал desktop: {desktopLog.path} · пропущено событий: {desktopLog.droppedRecords}</Text>}
+    {desktopLog?.error && <Alert color="yellow" title="Журнал desktop недоступен">{desktopLog.error}</Alert>}
     {status?.error && <Alert color="yellow" title="Фоновый companion требует внимания">{status.error}</Alert>}
     {companionError && <Alert color="yellow" title="Нет свежего состояния companion">{companionError}</Alert>}
     {p && <Stack gap="sm">

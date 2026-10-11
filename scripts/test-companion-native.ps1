@@ -107,6 +107,18 @@ try {
         if ($info.instanceId -ne $instance) { throw 'Worker identity changed after desktop quit' }
     }
     $result.workerSurvivesQuit = $true
+    $desktopLog = Join-Path $runtime 'logs\desktop.jsonl'
+    if (-not (Test-Path -LiteralPath $desktopLog)) { throw 'Desktop diagnostic log was not created' }
+    $events = @(Get-Content -LiteralPath $desktopLog -Encoding utf8 | ForEach-Object { ($_ | ConvertFrom-Json).event })
+    foreach ($required in @('native.start','ui.close.request','native.exit.requested')) {
+        if ($required -notin $events) { throw "Desktop diagnostics missed required event: $required" }
+    }
+    if (-not ($WorkflowAttention -or $HistoryDiagnostics -or $SettingsRetention)) {
+        foreach ($required in @('window.close_requested','native.hide.done','ui.close.timeout','popup.dismiss.begin','popup.dismiss.end')) {
+            if ($required -notin $events) { throw "Desktop recovery diagnostics missed event: $required" }
+        }
+    }
+    $result.desktopDiagnosticsVerified = $true
     $result.passed = $true
 } catch {
     $result.error = $_.Exception.Message
@@ -118,6 +130,11 @@ try {
         finally { $capture.Process.Dispose() }
     }
     $result | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $localReports 'companion-report.json') -Encoding utf8
+    if (Test-Path -LiteralPath (Join-Path $runtime 'logs')) {
+        Get-ChildItem -LiteralPath (Join-Path $runtime 'logs') -Filter '*.jsonl' -File | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $localReports ('desktop-' + $_.Name))
+        }
+    }
     # These files are immutable now; outer script hashes actual bytes, not cached HGFS stat.
     Get-ChildItem -LiteralPath $localReports -File | Copy-Item -Destination $ReportDirectory
     Write-Output 'Isolated test desktop/worker cleanup finished. The installed worker should remain running; the working desktop may be closed.'

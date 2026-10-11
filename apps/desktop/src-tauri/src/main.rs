@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod companion;
+mod diagnostics;
 mod validation;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -83,47 +84,78 @@ fn desktop_build() -> winbridge_protocol::BuildIdentity {
     winbridge_protocol::build_identity()
 }
 
+async fn draft_operation<T: Send + 'static>(
+    app: tauri::AppHandle,
+    state: &DesktopState,
+    operation: &'static str,
+    action: impl FnOnce(Arc<DesktopDraftStore>) -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let store = state.0.as_ref().map_err(Clone::clone)?.clone();
+    let started = std::time::Instant::now();
+    diagnostics::event(
+        &app,
+        "state.begin",
+        serde_json::json!({"operation":operation}),
+    );
+    let result = tauri::async_runtime::spawn_blocking(move || action(store))
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|value| value);
+    diagnostics::event(
+        &app,
+        "state.end",
+        serde_json::json!({"operation":operation,"ok":result.is_ok(),"elapsedMs":started.elapsed().as_millis()}),
+    );
+    result
+}
+
 #[tauri::command]
-fn load_command_drafts(
+async fn load_command_drafts(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, DesktopState>,
 ) -> Result<DesktopDraftState, String> {
     main_only(&window)?;
-    state.0.as_ref().map_err(Clone::clone)?.load()
+    draft_operation(app, &state, "load", |store| store.load()).await
 }
 
 #[tauri::command]
-fn save_command_draft(
+async fn save_command_draft(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, DesktopState>,
     draft: CommandDraft,
 ) -> Result<(), String> {
     main_only(&window)?;
-    state.0.as_ref().map_err(Clone::clone)?.save(draft)
+    draft_operation(app, &state, "command", move |store| store.save(draft)).await
 }
 
 #[tauri::command]
-fn save_delivery_draft(
+async fn save_delivery_draft(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, DesktopState>,
     draft: DeliveryDraft,
 ) -> Result<(), String> {
     main_only(&window)?;
-    state.0.as_ref().map_err(Clone::clone)?.save_delivery(draft)
+    draft_operation(app, &state, "delivery", move |store| {
+        store.save_delivery(draft)
+    })
+    .await
 }
 
 #[tauri::command]
-fn save_workflow_profile(
+async fn save_workflow_profile(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, DesktopState>,
     profile: WorkflowProfile,
 ) -> Result<(), String> {
     main_only(&window)?;
-    state
-        .0
-        .as_ref()
-        .map_err(Clone::clone)?
-        .save_workflow(profile)
+    draft_operation(app, &state, "workflow", move |store| {
+        store.save_workflow(profile)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -187,6 +219,16 @@ fn main() {
         Sha256::digest(directory.to_string_lossy().as_bytes())
     );
     context.config_mut().identifier = format!("local.winbridge.desktop.{}", &identity[..16]);
+    let diagnostics = diagnostics::Diagnostics::new(&directory);
+    diagnostics.record("native.start",serde_json::json!({"build":winbridge_protocol::build_identity(),"endpointReady":endpoint.is_ok(),"stateReady":drafts.is_ok()}));
+    if let Ok(log) = &diagnostics.log {
+        let log = log.clone();
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic| {
+            log.record("native.panic",serde_json::json!({"file":panic.location().map(|location|location.file()),"line":panic.location().map(|location|location.line())}));
+            previous(panic);
+        }));
+    }
     let background_endpoint = endpoint.clone();
     let background_drafts = drafts.clone();
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -225,10 +267,12 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Err(e) = companion::show_main(app) {
+                diagnostics::event(app,"native.reopen.failed",serde_json::json!({}));
                 eprintln!("{e}");
             }
         }))
         .manage(WorkerEndpoint(endpoint))
+        .manage(diagnostics)
         .manage(DesktopState(drafts))
         .manage(DiagnosticDirectory(report_directory))
         .manage(companion::Companion::new())
@@ -245,6 +289,8 @@ fn main() {
             }
         })
         .setup(move |app| {
+            diagnostics::event(app.handle(),"native.setup",serde_json::json!({}));
+            diagnostics::watchdog(app.handle().clone());
             companion::setup(
                 app.handle(),
                 background_endpoint.clone(),
@@ -265,7 +311,14 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            match event {
+                tauri::WindowEvent::Focused(focused)=>diagnostics::event(window.app_handle(),"window.focused",serde_json::json!({"window":window.label(),"focused":focused})),
+                tauri::WindowEvent::Resized(size)=>diagnostics::event(window.app_handle(),"window.resized",serde_json::json!({"window":window.label(),"width":size.width,"height":size.height})),
+                tauri::WindowEvent::Destroyed=>diagnostics::event(window.app_handle(),"window.destroyed",serde_json::json!({"window":window.label()})),
+                _=>{}
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                diagnostics::event(window.app_handle(),"window.close_requested",serde_json::json!({"window":window.label()}));
                 api.prevent_close();
                 let state = window.app_handle().state::<validation::Validation>();
                 if state.enabled {
@@ -281,6 +334,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_build,
+            diagnostics::desktop_log_status,
+            diagnostics::desktop_ui_event,
             diagnostic_directory,
             save_diagnostic,
             worker_rpc,

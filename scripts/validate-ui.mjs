@@ -203,11 +203,13 @@ try {
           if (["diagnostic_directory","save_diagnostic"].includes(command)) return window.diagnosticBridge(command,args);
           if (command === "worker_rpc") return window.workerBridge(args.request);
           if (command === "desktop_build") return Promise.resolve({ version: "0.1.0", sourceCommit: "browser-test", sourceDirty: false, sourceManifestSha256: null, buildId: "test-shell" });
+          if (command === "desktop_log_status") return Promise.resolve({path:"test-runtime/logs/desktop.jsonl",error:null,droppedRecords:0});
+          if (command === "desktop_ui_event") { (window.__desktopEvents ??= []).push(args); return Promise.resolve(); }
           if (["load_command_drafts", "save_command_draft", "save_delivery_draft", "save_workflow_profile", "save_notification_preferences"].includes(command)) return window.draftBridge(command, args);
           if (command === "desktop_validation_status") return Promise.resolve(structuredClone(window.__validation ?? {enabled:false,phase:"",step:"",completed:false,error:null}));
           if (command === "abort_desktop_validation") { window.__aborted=true; return Promise.resolve(); }
           if (command === "companion_status") return Promise.resolve(window.__companion);
-          if (command === "companion_close") { if (args.quit) window.__destroyed = true; else { if (!window.__companion.trayReady) return Promise.reject("Tray unavailable"); window.__hidden = true; } return Promise.resolve(); }
+          if (command === "companion_close") { if (window.__stallClose) return new Promise(()=>{}); if (args.quit) window.__destroyed = true; else { if (!window.__companion.trayReady) return Promise.reject("Tray unavailable"); window.__hidden = true; } return Promise.resolve(); }
           if (command === "plugin:event|listen") { const id = args.handler; listeners.set(id, args); return Promise.resolve(id); }
           if (command === "plugin:event|unlisten") { listeners.delete(args.eventId); return Promise.resolve(); }
           if (command === "plugin:window|destroy") { window.__destroyed = true; return Promise.resolve(); }
@@ -417,6 +419,32 @@ try {
   assert.equal(await readFile(join(imported.workspacePath,"Привет.txt"),"utf8"),"UI snapshot ✓");
 
   await page.getByRole("button", {name:"Обновить список пакетов",exact:true}).click();
+  // Adding then removing a project must restore the original compact/CRLF JSON,
+  // not strand all close routes on a formatting-only configuration change.
+  const originalSettings = await page.getByTestId("settings-json").inputValue();
+  await page.getByRole("button", {name:"Добавить проект",exact:true}).click();
+  await page.getByRole("button", {name:"Убрать проект из конфигурации",exact:true}).click();
+  assert.equal(await page.getByTestId("settings-json").inputValue(), originalSettings);
+
+  // A slow save times out without falsely closing, losing the queued write, or
+  // disabling every close button forever. Its late completion must not hide UI.
+  draftSaveDelay = 12000;
+  const delayedArgv = '["long", "delayed save ✓"]';
+  await page.getByLabel("Аргументы — JSON-массив строк", {exact:true}).fill(delayedArgv);
+  await page.evaluate(() => window.__testClose());
+  await page.getByText(/Сохранение форм не подтвердилось за 10 секунд/).waitFor();
+  assert.equal(await page.evaluate(() => window.__hidden), false);
+  assert.equal(await page.getByTestId("companion-hide").isEnabled(), true);
+  assert.equal(await page.getByTestId("companion-quit").isEnabled(), true);
+  await until(async()=>JSON.parse(await readFile(preferencesPath,"utf8")).drafts.at(-1).argumentsJson===delayedArgv,"late draft save was lost");
+  assert.equal(await page.evaluate(() => window.__hidden), false,"late save must not resume an expired close attempt");
+  assert.ok(await page.evaluate(()=>window.__desktopEvents.some(e=>e.event==="close.timeout"&&e.phase==="saves")));
+
+  await page.evaluate(() => { window.__stallClose = true; });
+  await page.getByTestId("companion-hide").click();
+  await page.getByText(/Закрытие интерфейса не подтвердилось за 10 секунд/).waitFor();
+  assert.equal(await page.getByTestId("companion-quit").isEnabled(), true);
+  await page.evaluate(() => { window.__stallClose = false; });
   draftSaveDelay = 250;
   const lastArgv = '["long", "last edit before close ✓"]';
   await page.getByLabel("Громкость сигнала, %", {exact:true}).fill("30");

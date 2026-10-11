@@ -31,12 +31,15 @@ impl Companion {
 }
 
 pub fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
+    super::diagnostics::event(app, "native.show.begin", serde_json::json!({}));
     let window = app
         .get_webview_window("main")
         .ok_or("Main window unavailable")?;
     window.show().map_err(|e| e.to_string())?;
     window.unminimize().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())
+    window.set_focus().map_err(|e| e.to_string())?;
+    super::diagnostics::event(app, "native.show.end", serde_json::json!({}));
+    Ok(())
 }
 
 pub fn setup(
@@ -67,6 +70,11 @@ pub fn setup(
             .menu(&menu)
             .show_menu_on_left_click(false)
             .on_menu_event(|app, event| {
+                super::diagnostics::event(
+                    app,
+                    "tray.menu",
+                    serde_json::json!({"item":event.id.as_ref()}),
+                );
                 if event.id.as_ref() == "quit" {
                     if let Ok(mut s) = app.state::<Companion>().status.lock() {
                         s.quit_request_sequence += 1;
@@ -85,6 +93,11 @@ pub fn setup(
                         ..
                     }
                 ) {
+                    super::diagnostics::event(
+                        tray.app_handle(),
+                        "tray.click",
+                        serde_json::json!({}),
+                    );
                     if let Err(e) = show_main(tray.app_handle()) {
                         report_error(tray.app_handle(), e);
                     }
@@ -94,7 +107,10 @@ pub fn setup(
         Ok(())
     })();
     match result {
-        Ok(()) => app.state::<Companion>().status.lock().unwrap().tray_ready = true,
+        Ok(()) => {
+            app.state::<Companion>().status.lock().unwrap().tray_ready = true;
+            super::diagnostics::event(app, "tray.ready", serde_json::json!({}));
+        }
         Err(e) => {
             let message = format!("Tray unavailable; window cannot be hidden: {e}");
             *app.state::<Companion>().tray_error.lock().unwrap() = Some(message.clone());
@@ -129,6 +145,7 @@ pub fn setup(
 }
 
 fn report_error(app: &tauri::AppHandle, error: String) {
+    super::diagnostics::event(app, "companion.error", serde_json::json!({}));
     if let Ok(mut s) = app.state::<Companion>().status.lock() {
         s.error = Some(error);
     }
@@ -355,6 +372,7 @@ fn update_tray(app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 fn show_popup(app: &tauri::AppHandle) -> Result<(), String> {
+    super::diagnostics::event(app, "popup.show.begin", serde_json::json!({}));
     let popup = if let Some(window) = app.get_webview_window("attention-popup") {
         window
     } else {
@@ -404,6 +422,7 @@ fn show_popup(app: &tauri::AppHandle) -> Result<(), String> {
     }
     #[cfg(not(windows))]
     popup.show().map_err(|e| e.to_string())?;
+    super::diagnostics::event(app, "popup.show.end", serde_json::json!({}));
     Ok(())
 }
 
@@ -462,14 +481,28 @@ pub fn companion_status(state: tauri::State<'_, Companion>) -> Result<CompanionS
 }
 
 #[tauri::command]
-pub fn companion_close(
+pub async fn companion_close(
     app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     quit: bool,
 ) -> Result<(), String> {
     super::main_only(&window)?;
+    super::diagnostics::event(&app, "native.close.begin", serde_json::json!({"quit":quit}));
     app.state::<super::validation::Validation>().guard_close()?;
     if quit {
+        super::diagnostics::event(&app, "native.exit.requested", serde_json::json!({}));
+        let log = app
+            .state::<super::diagnostics::Diagnostics>()
+            .log
+            .as_ref()
+            .ok()
+            .cloned();
+        if let Some(log) = log {
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                log.flush(std::time::Duration::from_millis(500))
+            })
+            .await;
+        }
         app.exit(0);
         return Ok(());
     }
@@ -478,11 +511,13 @@ pub fn companion_close(
             "Tray unavailable: window stays open. Use ‘Завершить интерфейс’ to exit".into(),
         );
     }
-    window.hide().map_err(|e| e.to_string())
+    window.hide().map_err(|e| e.to_string())?;
+    super::diagnostics::event(&app, "native.hide.done", serde_json::json!({}));
+    Ok(())
 }
 
 #[tauri::command]
-pub fn companion_open_task(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn companion_open_task(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<Companion>();
     {
         let mut s = state.status.lock().map_err(|_| "Companion lock poisoned")?;
@@ -500,27 +535,36 @@ pub fn companion_open_task(app: tauri::AppHandle) -> Result<(), String> {
         s.open_task_sequence += 1;
     }
     show_main(&app)?;
-    companion_dismiss(app)
-}
-
-#[tauri::command]
-pub fn companion_dismiss(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(popup) = app.get_webview_window("attention-popup") {
-        popup.hide().map_err(|e| e.to_string())?;
+        companion_dismiss(app, popup).await?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn save_notification_preferences(
+pub async fn companion_dismiss(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+) -> Result<(), String> {
+    if window.label() != "attention-popup" {
+        return Err("Dismiss is available in the attention popup only".into());
+    }
+    super::diagnostics::event(&app, "popup.dismiss.begin", serde_json::json!({}));
+    window.hide().map_err(|e| e.to_string())?;
+    super::diagnostics::event(&app, "popup.dismiss.end", serde_json::json!({}));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn save_notification_preferences(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, super::DesktopState>,
     preferences: NotificationPreferences,
 ) -> Result<(), String> {
     super::main_only(&window)?;
-    state
-        .0
-        .as_ref()
-        .map_err(Clone::clone)?
-        .save_preferences(preferences)
+    super::draft_operation(app, &state, "preferences", move |store| {
+        store.save_preferences(preferences)
+    })
+    .await
 }

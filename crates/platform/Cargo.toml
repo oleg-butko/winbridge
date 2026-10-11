@@ -7,6 +7,8 @@ publish.workspace = true
 [dependencies]
 winbridge-protocol.workspace = true
 sha2 = "0.10.9"
+serde_json = "1"
+fs2 = "0.4.3"
 
 [dev-dependencies]
 tempfile = "3"

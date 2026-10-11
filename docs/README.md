@@ -27,6 +27,7 @@
 | [MCP](guides/mcp.md) | Инструменты агента, запуск адаптера и правила повторных запросов. |
 | [Внимание](guides/attention.md) | Уведомления о задачах, workflow и приложениях. |
 | [Tray и уведомления](guides/companion.md) | Фоновый интерфейс, popup, звук и тихие часы. |
+| [Диагностика desktop](guides/desktop-diagnostics.md) | Кнопки закрытия, тайм-ауты и передача журналов из Windows. |
 | [История и диагностика](guides/history-diagnostics.md) | Поиск операций и подготовка отчёта. |
 | [Настройки и хранение вывода](guides/settings-retention.md) | Конфигурация, ручной restart и очистка stdout/stderr. |
 

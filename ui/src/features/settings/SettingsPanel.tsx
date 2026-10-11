@@ -43,7 +43,12 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
   }
   useEffect(()=>{if(info.maintenanceAvailable && connected && (!settings||(!dirty&&settings.generation!==info.generation)))void load();},[info.maintenanceAvailable,connected,info.generation]);
   function change(value:string){setJson(value);setSaveRequest(null);setSaved(null);setBackup(null);}
-  function update(edit:(value:Config)=>void){if(config){const copy=structuredClone(config);edit(copy);change(JSON.stringify(copy,null,2));}}
+  function update(edit:(value:Config)=>void){if(config){const copy=structuredClone(config);edit(copy);
+    // Friendly controls can undo an edit. Restore the original bytes too, rather
+    // than treating indentation/CRLF introduced by our formatter as user changes.
+    let sameAsSaved=false;try{sameAsSaved=!!settings && JSON.stringify(copy)===JSON.stringify(JSON.parse(settings.savedJson));}catch{/* Raw invalid saved JSON remains repairable. */}
+    change(sameAsSaved && settings ? settings.savedJson : JSON.stringify(copy,null,2));
+  }}
   const project=config?.projects?.[Number(projectIndex)];
   async function save(){
     if(!settings)return;setBusy(true);setError(null);setSaved(null);
@@ -84,7 +89,7 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
             <Checkbox label="Разрешить произвольные команды агента в этом проекте" checked={project.allowDirectCommands} disabled={disabled} onChange={(e)=>{const value=e.currentTarget.checked;update((c)=>{c.projects[Number(projectIndex)].allowDirectCommands=value;});}} />
             <Text size="sm">Рецепты: {project.recipes?.length??0}. Их executable, argv, cwd и timeout доступны в JSON ниже.</Text>
           </>}
-          <Group><Button variant="light" disabled={disabled||config.projects.length>=32} onClick={()=>{const index=config!.projects.length;update((c)=>{let n=index+1;while(c.projects.some((p)=>p.id===`project-${n}`))n++;c.projects.push({id:`project-${n}`,workspaceRoot:"",allowDirectCommands:false,maxConcurrentMutations:1,recipes:[]});});setProjectIndex(String(index));}}>Добавить проект</Button><Button variant="subtle" color="orange" disabled={disabled||config.projects.length<=1} onClick={()=>{update((c)=>{c.projects.splice(Number(projectIndex),1);});setProjectIndex("0");}}>Убрать проект из конфигурации</Button></Group>
+          <Group><Button data-testid="settings-add-project" variant="light" disabled={disabled||config.projects.length>=32} onClick={()=>{const index=config!.projects.length;update((c)=>{let n=index+1;while(c.projects.some((p)=>p.id===`project-${n}`))n++;c.projects.push({id:`project-${n}`,workspaceRoot:"",allowDirectCommands:false,maxConcurrentMutations:1,recipes:[]});});setProjectIndex(String(index));}}>Добавить проект</Button><Button data-testid="settings-remove-project" variant="subtle" color="orange" disabled={disabled||config.projects.length<=1} onClick={()=>{update((c)=>{c.projects.splice(Number(projectIndex),1);});setProjectIndex("0");}}>Убрать проект из конфигурации</Button></Group>
           <NumberInput label="Квота сохранённого stdout/stderr одной задачи, байт" value={config.maxOutputBytesPerTask??16777216} min={4096} max={268435456} allowDecimal={false} disabled={disabled} onChange={(v)=>update((c)=>{c.maxOutputBytesPerTask=Number(v);})} />
           <Checkbox data-testid="settings-automatic-cleanup" label="После перезапуска автоматически очищать старый output" checked={config.outputRetention?.automatic??false} disabled={disabled} onChange={(e)=>{const value=e.currentTarget.checked;update((c)=>{c.outputRetention={automatic:value,olderThanDays:c.outputRetention?.olderThanDays??30};});}} />
           <NumberInput label="Возраст output для автоматической очистки, дней" value={config.outputRetention?.olderThanDays??30} min={1} max={3650} allowDecimal={false} disabled={disabled} onChange={(v)=>update((c)=>{c.outputRetention={automatic:c.outputRetention?.automatic??false,olderThanDays:Number(v)};})} />

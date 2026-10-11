@@ -5,6 +5,7 @@ use std::{
 };
 use winbridge_protocol::ResolvedCommand;
 
+pub mod event_log;
 pub mod reports;
 #[cfg(windows)]
 mod windows;

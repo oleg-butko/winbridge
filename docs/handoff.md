@@ -1,6 +1,23 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
+## Исправления закрытия desktop, 2026-10-10
+
+По сообщению пользователя остальные controls работали, close/hide/quit перестали
+отвечать после добавления и удаления проекта; отдельно не работала внутренняя
+кнопка «Скрыть» в popup. Воспроизведена ложная dirty configuration из-за JSON
+форматирования: friendly undo теперь восстанавливает saved bytes. Отказ закрытия
+перенесён к tray, save/native ACK ограничены 10 секундами, поздний save не скрывает
+окно. State I/O вынесен из native GUI loop; popup hide/open стали async commands.
+Добавлен [локальный JSONL desktop log с ротацией](guides/desktop-diagnostics.md),
+неблокирующей очередью и независимой проверкой native dispatch. Прежний случай
+popup по журналу старой версии не подтверждается: раньше такого журнала не было.
+Workspace Rust tests, UI integration (включая зависший save/native ACK),
+TypeScript/build/scaffold/Clippy, desktop cargo check/Clippy и Windows platform
+all-targets cross-check проходят. Отдельный native Windows companion gate
+подготовлен; Windows результат пока не заявлен.
+Working worker clean fa7e4d7, healthy/idle; runtime/configs не заменялись.
+
 ## Ревью source identity после roadmap, 2026-10-10
 
 [Целевое ревью](done/stage0-7/stage7/review-source-identity-2026-10-10.md): воспроизведён и исправлен

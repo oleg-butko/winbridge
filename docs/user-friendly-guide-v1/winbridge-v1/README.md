@@ -239,6 +239,8 @@ Get-Process -Name winbridge-worker,winbridge-desktop | Select-Object ProcessName
 
 Ожидаются exe из `K:\_proj-26\winbridge\runtime`. Отчёт подготовки записывается в shared: `K:\VMs\shared\WinBridge\snapshot-validation\<run>\setup-report.json`; агент может прочитать его из Debian.
 
+Desktop можно запускать без параметров: `K:\_proj-26\winbridge\runtime\winbridge-desktop.exe`. Если скрытие или завершение не сработало, после обновления на исправления от 2026-10-10 передайте `runtime\logs\desktop*.jsonl` и время сбоя. [Инструкция диагностики](../../guides/desktop-diagnostics.md) объясняет сообщения, ротацию и копирование журналов в shared.
+
 ## 6. Что считать успешной ручной проверкой
 
 - Windows HEAD совпадает с выбранным Debian commit; повторный цикл обновляет прежний `src`, включая удаления файлов.

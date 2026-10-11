@@ -414,6 +414,70 @@ async fn run(
     if !close_ready {
         return Err("Main close listener was not installed".into());
     }
+    app.state::<Validation>().progress(
+        "Отмена добавления проекта без ложной блокировки закрытия",
+        None,
+    );
+    ui_value(app,"settings-ready-for-undo","return !!document.querySelector('[data-testid=\"settings-json\"]')?.value && !document.querySelector('[data-testid=\"settings-add-project\"]')?.disabled;").await?;
+    let original_settings = js(
+        app,
+        "main",
+        "settings-before-undo",
+        "return document.querySelector('[data-testid=\"settings-json\"]').value;",
+    )
+    .await?;
+    click(app, "main", "settings-add-project").await?;
+    ui_value(
+        app,
+        "settings-added",
+        "return !document.querySelector('[data-testid=\"settings-remove-project\"]')?.disabled;",
+    )
+    .await?;
+    click(app, "main", "settings-remove-project").await?;
+    let restored_settings = js(
+        app,
+        "main",
+        "settings-after-undo",
+        "return document.querySelector('[data-testid=\"settings-json\"]').value;",
+    )
+    .await?;
+    if original_settings != restored_settings {
+        return Err("Adding/removing project left formatting-only unsaved settings".into());
+    }
+
+    app.state::<Validation>().progress(
+        "Зависший save ACK: timeout закрытия, доступные кнопки и позднее сохранение",
+        None,
+    );
+    js(app,"main","defer-save",r#"
+      window.__wbOriginalInvoke=window.__TAURI_INTERNALS__.invoke;
+      window.__wbDeferredSave=null;
+      window.__TAURI_INTERNALS__.invoke=function(command,args) {
+        if(command==='save_command_draft') return new Promise((resolve,reject)=>{window.__wbDeferredSave=()=>window.__wbOriginalInvoke(command,args).then(resolve,reject);});
+        return window.__wbOriginalInvoke(command,args);
+      };
+      const label=Array.from(document.querySelectorAll('label')).find(e=>e.textContent==='Timeout, секунд');
+      const input=document.getElementById(label.getAttribute('for'));
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'121');
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+      return true;
+    "#).await?;
+    ui_value(app, "save-deferred", "return !!window.__wbDeferredSave;").await?;
+    click(app, "main", "companion-hide").await?;
+    ui_value(app,"close-timeout-visible","return document.body.textContent.includes('Сохранение форм не подтвердилось за 10 секунд') && !document.querySelector('[data-testid=\"companion-hide\"]').disabled && !document.querySelector('[data-testid=\"companion-quit\"]').disabled;").await?;
+    if !main.is_visible().map_err(|e| e.to_string())? {
+        return Err("Unconfirmed save hid native main window".into());
+    }
+    js(app,"main","release-save","window.__TAURI_INTERNALS__.invoke=window.__wbOriginalInvoke; window.__wbDeferredSave(); return true;").await?;
+    ui_value(
+        app,
+        "late-save-confirmed",
+        "return document.body.textContent.includes('Поля сохранены. Восстановление');",
+    )
+    .await?;
+    if !main.is_visible().map_err(|e| e.to_string())? {
+        return Err("Late save resumed expired close request".into());
+    }
     app.state::<Validation>()
         .progress("Защита от случайного закрытия тестового окна", None);
     main.close().map_err(|e| e.to_string())?;
@@ -520,6 +584,27 @@ async fn run(
     }
     app.state::<Validation>()
         .progress("Открытие точной страницы задачи из popup", None);
+    click(app, "attention-popup", "popup-hide").await?;
+    wait("popup dismissed", || {
+        Ok(!popup.is_visible().map_err(|e| e.to_string())?)
+    })
+    .await?;
+    let LocalResponse::AttentionList { page } = call(
+        &address,
+        LocalRequest::ListAttention {
+            after_sequence: 0,
+            pending_only: true,
+        },
+    )
+    .await?
+    else {
+        return Err("Attention after dismiss".into());
+    };
+    if !page.records.iter().any(|event| event.attention_id == first) {
+        return Err("Dismissing popup acknowledged attention".into());
+    }
+    // Reopen the same notification to exercise the existing task navigation path.
+    popup.show().map_err(|e| e.to_string())?;
     click(app, "attention-popup", "popup-open-task").await?;
     wait("popup action reopened main", || {
         main.is_visible().map_err(|e| e.to_string())
@@ -586,7 +671,7 @@ async fn run(
         return Err("Opening popup acknowledged worker attention".into());
     }
     Ok(
-        serde_json::json!({"trayReady":true,"accidentalCloseBlocked":true,"hideKeepsProcess":true,"singleInstanceReopens":true,"backgroundPopup":true,"noFocusSteal":true,"nativeSoundApiSucceeded":true,"taskPage":task_id,"previousTaskPage":baseline,"openingDoesNotAcknowledge":true,"deferredAckSuppressed":true,"burstAggregated":true,"signals":signals,"pendingCount":pending}),
+        serde_json::json!({"trayReady":true,"configUndoRestoresBytes":true,"closeSaveTimeoutRecovers":true,"lateSaveDoesNotHide":true,"popupDismissWithoutAck":true,"accidentalCloseBlocked":true,"hideKeepsProcess":true,"singleInstanceReopens":true,"backgroundPopup":true,"noFocusSteal":true,"nativeSoundApiSucceeded":true,"taskPage":task_id,"previousTaskPage":baseline,"openingDoesNotAcknowledge":true,"deferredAckSuppressed":true,"burstAggregated":true,"signals":signals,"pendingCount":pending}),
     )
 }
 
@@ -803,7 +888,9 @@ async fn run_targets(
             }
             pause().await;
         }
-        super::companion::companion_dismiss(app.clone())?;
+        if let Some(popup) = app.get_webview_window("attention-popup") {
+            super::companion::companion_dismiss(app.clone(), popup).await?;
+        }
         workflow_ids.push(id);
         event_ids.push(event.attention_id);
     }

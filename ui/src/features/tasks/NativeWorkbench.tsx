@@ -15,6 +15,8 @@ import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
 import { HistoryPanel } from "../history/HistoryPanel";
 import type { HistoryEntry } from "../../runtime/contracts";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
+import { closeDeadline, CloseTimeout, desktopEvent } from "../../runtime/desktopEvents";
+import type { ClosePhase, CloseSource, DesktopLogStatus } from "../../runtime/desktopEvents";
 import { TaskDetail, statuses } from "./TaskDetail";
 
 function TaskSession({ id }: { id: string }) {
@@ -107,7 +109,8 @@ export function NativeWorkbench() {
   const [closeReady, setCloseReady] = useState(false);
   const closingRef = useRef(false);
   const closeQuit = useRef(false);
-  const closeHandler = useRef<(quit: boolean) => Promise<void>>(async () => {});
+  const closeHandler = useRef<(quit: boolean, source: CloseSource) => Promise<void>>(async () => {});
+  const [desktopLog, setDesktopLog] = useState<DesktopLogStatus | null>(null);
   const settingsBlocked = useRef(false);
   const blockSettingsClose = useCallback((blocked:boolean)=>{settingsBlocked.current=blocked;},[]);
   const [companion, setCompanion] = useState<CompanionStatus | null>(null);
@@ -122,6 +125,17 @@ export function NativeWorkbench() {
   const [submitting, setSubmitting] = useState(false);
   const [pending, setPending] = useState<TaskSubmission | null>(null);
   const selectedRef = useRef(selectedId); selectedRef.current = selectedId;
+  useEffect(() => {
+    let disposed = false;
+    const heartbeat = () => {
+      desktopEvent("heartbeat");
+      void invoke<DesktopLogStatus>("desktop_log_status").then((status) => { if (!disposed) setDesktopLog(status); }).catch(() => {});
+    };
+    const error = () => desktopEvent("error");
+    heartbeat(); const timer = setInterval(heartbeat, 10000);
+    window.addEventListener("error", error); window.addEventListener("unhandledrejection", error);
+    return () => { disposed = true; clearInterval(timer); window.removeEventListener("error", error); window.removeEventListener("unhandledrejection", error); };
+  }, []);
   useEffect(() => { let disposed = false; void invoke<import("../../runtime/contracts").BuildIdentity>("desktop_build").then((build) => { if (!disposed) setDesktopBuild(build); }).catch(() => {}); return () => { disposed = true; }; }, []);
   useEffect(() => {
     let disposed = false;
@@ -137,20 +151,32 @@ export function NativeWorkbench() {
     let unlisten: (() => void) | undefined;
     void getCurrentWindow().onCloseRequested(async (event) => {
       event.preventDefault();
-      await closeHandler.current(false);
+      await closeHandler.current(false, "titlebar");
     }).then((stop) => { if (disposed) stop(); else { unlisten = stop; setCloseReady(true); } })
       .catch((error) => { if (!disposed) setSaveError(String(error)); });
     return () => { disposed = true; unlisten?.(); };
   }, []);
-  async function requestClose(quit: boolean) {
-    if (closingRef.current) return;
+  async function requestClose(quit: boolean, source: CloseSource = "panel", skipSaves = false) {
+    desktopEvent(skipSaves ? "close.force" : "close.request", source, quit);
+    if (closingRef.current) { desktopEvent("close.busy", source, quit); return; }
     closingRef.current = true; closeQuit.current = quit; setClosing(true);
+    const started = performance.now(); let phase: ClosePhase = "settings";
     try {
-      if(settingsBlocked.current)throw new Error("Сохраните или отмените изменения конфигурации и дождитесь завершения очистки в разделе «Проекты, соединение и хранение».");
-      await Promise.all(scopedSaves.current.values());
-      await invoke("companion_close", { quit });
+      if(!skipSaves && settingsBlocked.current)throw new Error("Сохраните или отмените изменения конфигурации и дождитесь завершения очистки в разделе «Проекты, соединение и хранение».");
+      if (!skipSaves) {
+        phase = "saves"; desktopEvent("close.wait", source, quit, phase, scopedSaves.current.size);
+        await closeDeadline(Promise.all(scopedSaves.current.values()), "saves");
+        desktopEvent("close.saved", source, quit, phase);
+      }
+      phase = "native"; desktopEvent("close.invoke", source, quit, phase);
+      await closeDeadline(invoke("companion_close", { quit }), "native");
+      desktopEvent("close.done", source, quit, phase, 0, Math.round(performance.now() - started));
       setCloseError(null);
-    } catch (error) { setCloseError(String(error)); }
+    } catch (error) {
+      desktopEvent(error instanceof CloseTimeout ? "close.timeout" : "close.failed", source, quit, phase, 0, Math.round(performance.now() - started));
+      setCloseError(String(error));
+      requestAnimationFrame(() => document.getElementById("desktop-close-error")?.scrollIntoView({ block: "center" }));
+    }
     finally { closingRef.current = false; setClosing(false); }
   }
   closeHandler.current = requestClose;
@@ -167,7 +193,7 @@ export function NativeWorkbench() {
           const target = status.openTarget ?? (status.openTaskId ? {kind:"task" as const,taskId:status.openTaskId} : null);
           if (target) openAttention(target);
         }
-        if (status.quitRequestSequence > quitSequence) { quitSequence = status.quitRequestSequence; await closeHandler.current(true); }
+        if (status.quitRequestSequence > quitSequence) { quitSequence = status.quitRequestSequence; void closeHandler.current(true, "tray"); }
       } catch (error) { if (!disposed) setCompanionError(String(error)); }
       if (!disposed) timer = setTimeout(() => void poll(), 750);
     }
@@ -297,7 +323,10 @@ export function NativeWorkbench() {
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}
     {info && <HistoryPanel key={`history:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onOpen={(entry)=>void openHistory(entry)} />}
     {info && <SettingsPanel key={`settings:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onBlocked={blockSettingsClose} />}
-    <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} />
+    {closeError && <Alert id="desktop-close-error" color="yellow" title="Окно осталось открытым: закрытие не подтверждено">{closeError}
+      <Button mt="sm" variant="light" disabled={closing} onClick={() => void requestClose(closeQuit.current, "recovery", true)}>Закрыть без сохранения</Button>
+    </Alert>}
+    <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} desktopLog={desktopLog} />
     {info?.journalRecoveryRequired && <Alert color="red" title="Результат операции не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
     {info?.snapshotImportAvailable && <SnapshotWorkbench navigation={importNavigation} info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
     {info?.workflowAvailable && <WorkflowWorkbench navigation={workflowNavigation} info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
@@ -321,9 +350,6 @@ export function NativeWorkbench() {
       <NumberInput label="Timeout, секунд" value={timeout} onChange={(value) => updateForm({ timeoutSeconds: String(value) })} min={0.1} max={86400} disabled={pending !== null || !formReady || closing} />
       <Text size="xs" c="dimmed">{saveStatus}. Восстановление формы не запускает команду.</Text>
       {saveError && <Alert color="yellow" title="Не удалось сохранить поля команды">{saveError}</Alert>}
-      {closeError && <Alert color="yellow" title="Окно осталось открытым: закрытие не подтверждено">{closeError}
-        <Button mt="sm" variant="light" onClick={() => { void invoke("companion_close", {quit:closeQuit.current}).catch((error) => setCloseError(String(error))); }}>Закрыть без сохранения</Button>
-      </Alert>}
       {error && connected && <Alert color="red" title="Запрос не завершён">{error}</Alert>}
       {pending && !submitting && <Alert color="yellow" title="Приём задачи не подтверждён">
         Worker мог сохранить задачу до потери ответа. Повтор отправит прежние параметры и тот же ключ, чтобы получить ту же задачу.

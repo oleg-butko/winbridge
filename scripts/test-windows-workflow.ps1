@@ -237,7 +237,7 @@ try {
         if ($AttentionOnly -or $NetwatchProfile) { throw 'CompanionOnly cannot be combined with another scenario' }
         if (-not $manifest.includesBuiltUi) { throw 'Companion validation requires a source archive with --include-built-ui' }
         $groups = @(
-            @{ name = 'companion-policy-and-persistence'; arguments = @('test', '-p', 'winbridge-core', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
+            @{ name = 'companion-policy-and-persistence'; arguments = @('test', '-p', 'winbridge-core', '-p', 'winbridge-platform', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
             @{ name = 'worker-attention'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
             @{ name = 'companion-worker-build'; arguments = @('build', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--bins', '--locked', '--offline') },
             @{ name = 'companion-desktop-build'; arguments = @('build', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--features', 'custom-protocol', '--locked', '--offline') }
