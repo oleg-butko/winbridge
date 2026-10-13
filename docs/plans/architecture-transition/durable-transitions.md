@@ -3,7 +3,8 @@
 Дата: 2026-10-13. База: завершённый A1, `60c841f`.
 Статус: **A2.1 task revisions/CAS завершён**, implementation `8f631dd`;
 [107 native Windows tests passed](windows-task-cas-gate-2026-10-13.md).
-A2.2: [domain revisions и atomic links](domain-transitions.md) реализованы, native gate pending.
+A2.2: [domain revisions и atomic links](domain-transitions.md) завершены,
+[125 native tests passed](windows-domain-cas-gate-2026-10-13.md).
 Весь A2 пока не завершён: ownership/epochs/incarnation/reconciliation ещё впереди.
 
 ## Зачем нужна первая поставка
@@ -16,7 +17,7 @@ owners на акторов. SQLite остаётся единственным aut
 
 ## Инвентаризация writers
 
-| Область | Текущие точки записи | Реализовано A2.1 / A2.2 (native pending) | Осталось в A2 |
+| Область | Текущие точки записи | Реализовано A2.1 / A2.2 | Осталось в A2 |
 | --- | --- | --- | --- |
 | Task admission | Store::accept_with_origin, UNIQUE(project,key), frozen payload | Dedup/read/insert в одной immediate transaction; INSERT обязан сохранить одну row. | Journal incarnation, durable operation/attempt context. |
 | Task lifecycle | transition, PID, cancel, finish, recover | Pure FSM + revision CAS + terminal attention в одной transaction. | Owner/attempt/epoch guards и recovery admission. |
@@ -29,7 +30,7 @@ owners на акторов. SQLite остаётся единственным aut
 | Runtime settings | settings.rs и core file storage, manual restart | SQLite не используется; прежний checked file/atomic save. | Связь config generation с admission/resource policy; без hot reload. |
 | Controller/desktop state | Dispatch/connection freshness и локальные формы | Исполнительного authority не получают. | OperationRef/discovery A3; connection UUID не становится epoch. |
 
-Все domain UPDATE guards реализованы в A2.2; их native gate пока не подтверждён.
+Все domain UPDATE guards реализованы в A2.2; native gate passed.
 Исходные application/process callbacks и файловые эффекты пока у прежних owners.
 
 ## Контракт A2.1
@@ -120,7 +121,7 @@ Candidate и reference используют изолированные config/st
 
 ## Последовательность оставшегося A2
 
-1. A2.2 (реализация готова, native pending): versioned import, workflow/step/application и explicit attention writers;
+1. A2.2 (завершён, native passed): versioned import, workflow/step/application и explicit attention writers;
    DB transaction объединяет child association, event и resource decision.
    До изменения каждого домена расширить исторические fixtures и fault matrix.
 2. A2.3: journal incarnation, durable OperationRef/attempt IDs и owner epochs;

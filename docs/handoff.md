@@ -1,7 +1,7 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
-## A2.2 domain revisions/atomic links — native pending, 2026-10-13
+## A2.2 domain revisions/atomic links — завершён, 2026-10-13
 
 База `5f3c007`; [контракт и ревью](plans/architecture-transition/domain-transitions.md).
 Schema 8: revisions imports/workflows/applications/attention, все writers CAS;
@@ -13,10 +13,16 @@ raw records/payloads/keys/cursors/attention sequence сохраняются. Wir
 Local gate: 213 workspace tests passed, reference test ignored; Windows-target
 workspace/worker tests, Clippy/fmt/AST/Python syntax/argument guard/scaffold passed.
 16 new SQLite regressions; `--task-cas-only` расширен до domain CAS/resume/profiles
-и actual schema-8 отказа reference worker с отдельной DB. Native ещё не выполнен.
+и actual schema-8 отказа reference worker с отдельной DB. Implementation `df978dc`; [native gate](plans/architecture-transition/windows-domain-cas-gate-2026-10-13.md)
+passed: 125 tests, четыре cargo groups exit 0, task 9c994702-e113-4932-b21b-21fc2f3fc762
+succeeded/exit 0/PID 5352, run 20261013-105937-b33d858a, шесть verified artifacts.
+Actual schema-6 binary отказал schema 8, test journal byte-identical.
 Установленный worker b5d39f9 connected/idle на старой schema 6, прежние generation/
-session; desktop закрыт/не нужен. Working runtime/config/DB не обновлялись.
-Полный A2 открыт; A2.3 owner epoch/incarnation, A2.4 physical reconciliation впереди.
+session; desktop закрыт/не нужен. Working runtime/config/DB не обновлялись. Post-gate info: connected/idle,
+activeTaskCount=0, maintenanceError/journalRecoveryRequired отсутствуют; прежние
+generation 02939593-8adf-4878-a346-473092697a4a, session 631c2e63-edc8-44f8-8cce-89abec7caf8b
+и build identity. Рабочий journal получил одну обычную gate task. Desktop можно
+закрыть, worker оставить запущенным. Полный A2 открыт; A2.3 owner epoch/incarnation, A2.4 physical reconciliation впереди.
 
 ## A2.1 task revisions/CAS — завершён, 2026-10-13
 

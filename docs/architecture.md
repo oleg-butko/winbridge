@@ -102,8 +102,9 @@ consistent backup; старый schema-6 binary отказывает новой 
 эти writers; child admission/link/registry, readiness/step и application stop/task
 cancel сохраняются атомарно. ACK внимания монотонен и проверяет durable row.
 Миграция сохраняет raw records/payloads/keys и делает consistent backup исходной
-schema 7. Native gate пока pending; owner epoch/incarnation/reconciliation остаются
-следующими частями A2. Wire/UI/MCP JSON не меняются.
+schema 7. Native gate passed: 125 tests, включая real resume/crash и byte-identical
+refusal старого binary. Owner epoch/incarnation/reconciliation остаются следующими
+частями A2. Wire/UI/MCP JSON не меняются.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 

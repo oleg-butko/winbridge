@@ -19,8 +19,8 @@
 [A2.1 task revisions/CAS](durable-transitions.md) завершён: 197 workspace и
 [107 native tests](windows-task-cas-gate-2026-10-13.md) passed; общий A2 и A3–A9
 ещё не завершены.
-[A2.2 domain transitions](domain-transitions.md) реализованы; local/native gate
-и закрытие пакета пока pending. Далее A2.3 owner epochs и A2.4 reconciliation.
+[A2.2 domain transitions](domain-transitions.md) завершены: 213 workspace и
+[125 native Windows tests](windows-domain-cas-gate-2026-10-13.md) passed. Далее A2.3 owner epochs и A2.4 reconciliation.
 
 ## Результат для пользователя и проектов
 

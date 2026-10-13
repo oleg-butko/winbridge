@@ -1,7 +1,8 @@
 # A2.2 — версии imports, workflows, applications и attention
 
 Дата: 2026-10-13. База: A2.1, `5f3c007`.
-Статус: local gate passed; автоматический native gate pending, весь A2 открыт.
+Статус: **A2.2 завершён**, implementation `df978dc`;
+[125 native Windows tests passed](windows-domain-cas-gate-2026-10-13.md). Весь A2 открыт.
 
 ## Что меняется
 
@@ -106,4 +107,5 @@ argument guard, PowerShell AST и scaffold/local links passed.
 native snapshot/resume/profile/workflow regressions и actual отказ старого worker
 schema 8 с побайтной проверкой test journal. Историческое имя флага сохранено.
 Worker нужен, desktop необязателен, UI-окон не будет. Один пакет заменяет отдельные
-ручные проверки; завершение A2.2 требует проверенного native receipt.
+ручные проверки; A2.2 завершён с verified native receipt. Working worker connected/idle, без journal
+fault; installed runtime/config/DB не заменялись. Далее A2.3–A2.4.
