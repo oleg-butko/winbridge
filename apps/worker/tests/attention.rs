@@ -117,10 +117,15 @@ fn uncommitted_process_result_is_not_reported_fresh_and_new_launches_wait_for_re
         panic!()
     };
     assert_eq!(info.active_task_count, None);
-    assert!(info
-        .journal_recovery_required
-        .unwrap()
-        .contains("uncommitted"));
+    let recovery = info.journal_recovery_required.unwrap();
+    // Identify the operation and injected storage fault instead of depending
+    // on a particular English label for the recovery state.
+    assert!(recovery.contains(&failed.task_id), "{recovery}");
+    assert!(
+        recovery.contains("expected outcome persistence failure"),
+        "{recovery}"
+    );
+    assert!(recovery.contains("suspended"), "{recovery}");
     assert!(
         matches!(worker.handle(LocalRequest::GetTask {task_id:failed.task_id.clone()}),LocalResponse::Error {message} if message.contains("status is stale"))
     );
