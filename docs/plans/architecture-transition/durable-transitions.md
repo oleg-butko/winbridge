@@ -1,7 +1,8 @@
 # A2 — durable переходы: первая поставка и оставшаяся работа
 
 Дата: 2026-10-13. База: завершённый A1, `60c841f`.
-Статус: **A2.1 task revisions/CAS реализован; native gate pending**.
+Статус: **A2.1 task revisions/CAS завершён**, implementation `8f631dd`;
+[107 native Windows tests passed](windows-task-cas-gate-2026-10-13.md).
 Весь A2 пока не завершён: ownership/epochs и остальные домены ещё впереди.
 
 ## Зачем нужна первая поставка
@@ -113,7 +114,8 @@ maintenance/snapshots/workflows/attention и actual older-binary refusal. Driver
 проверяет report hashes и candidate/reference build identities.
 Worker должен быть запущен, desktop необязателен, тестовых UI-окон не будет.
 Candidate и reference используют изолированные config/state/cache/workspaces;
-установленные exe/configs не заменяются. Native receipt добавляется после gate.
+установленные exe/configs не заменяются. Native receipt подтверждает task exit 0,
+107 tests и шесть verified artifacts, включая реальный отказ old binary новой схеме.
 
 ## Последовательность оставшегося A2
 

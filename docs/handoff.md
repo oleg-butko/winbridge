@@ -1,7 +1,7 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
-## A2.1 task revisions/CAS — реализация, 2026-10-13
+## A2.1 task revisions/CAS — завершён, 2026-10-13
 
 База A1 `60c841f`. [Writer inventory и оставшийся A2](plans/architecture-transition/durable-transitions.md).
 Schema 7: task revision, SQLite update guard, все task writers через общий CAS;
@@ -15,9 +15,15 @@ native `--task-cas-only` обязан запустить старый exe в о�
 подтвердить отказ schema 7. 197 workspace tests passed, reference check ignored;
 Windows-target workspace/tests, Clippy/fmt/AST/Python syntax/arg guards/scaffold passed.
 Synthetic snapshot restart fixture теперь bounded waits actual instance lock release,
-production lock неизменна. Native gate pending.
-Controller/installed worker из A1 подключены и idle; рабочие Windows exe/config/DB
-ещё не обновлялись. Desktop для этого gate не нужен, UI-окон нет.
+production lock неизменна. Implementation `8f631dd`; [native gate](plans/architecture-transition/windows-task-cas-gate-2026-10-13.md)
+passed: 107 tests, task eecd118f-c11c-411d-9ac3-f7ebd8850526 succeeded/exit 0,
+shared run 20261013-095922-543e9452, шесть verified artifacts. Reference worker
+b5d39f9 с отдельным новым state действительно отказал schema 7, journal byte-identical.
+Post-gate installed info: connected/idle, прежние generation/session/build из A1,
+maintenanceError/journalRecoveryRequired отсутствуют. Установленные exe/config/DB
+не обновлялись; рабочий journal получил одну task gate. Desktop можно закрыть,
+worker оставить. A2.1 закрыт, A2 нет; следующий A2.2 — versioned import/workflow/
+application/explicit attention writers, затем ownership/epoch/incarnation/reconciliation.
 
 ## A1 Task FSM — завершён, 2026-10-13
 

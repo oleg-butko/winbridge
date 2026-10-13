@@ -93,7 +93,8 @@ Native Windows gate A1 пройден: 66 tests; подробности в linke
 [A2.1](plans/architecture-transition/durable-transitions.md) вводит schema 7 с
 внутренним task revision и общим CAS для lifecycle/output/retention writers.
 Wire record не меняется. Schema migration сохраняет legacy JSON/keys и делает
-consistent backup; старый schema-6 binary отказывает новой БД. Native gate pending.
+consistent backup; старый schema-6 binary отказывает новой БД. Native gate passed:
+107 tests, включая actual старый executable и побайтную сохранность test journal.
 Этот пакет ещё не вводит durable owner epochs/attempts и guards других доменов.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
