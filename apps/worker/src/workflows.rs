@@ -48,10 +48,8 @@ impl Store {
         request: WorkflowSubmission,
         recipe_pins: Option<Vec<WorkflowRecipePin>>,
     ) -> Result<WorkflowRecord> {
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        self.guard_callback(None, None)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(existing) = Self::existing_workflow_on(&transaction, &request)? {
             return Ok(existing);
         }
@@ -118,7 +116,8 @@ impl Store {
             .collect()
     }
     pub fn save_workflow(&mut self, record: &mut JournalSnapshot<WorkflowRecord>) -> Result<()> {
-        let transaction = self.connection.transaction().map_err(sql)?;
+        self.guard_callback(None, None)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Deferred)?;
         Self::write_domain(&transaction, record)?;
         crate::attention::workflow_outcome(&transaction, record)?;
         transaction.commit().map_err(sql)?;
@@ -163,6 +162,7 @@ impl Store {
         self.save_workflow(record)
     }
     pub fn cancel_workflow(&mut self, id: &str) -> Result<WorkflowRecord> {
+        self.guard_callback(None, None)?;
         let mut record = self.workflow_snapshot(id)?;
         if record.status.is_terminal() || record.cancel_requested {
             return Ok(record.record);
@@ -210,7 +210,8 @@ impl Store {
             .collect()
     }
     pub fn save_application(&mut self, app: &mut JournalSnapshot<ApplicationRecord>) -> Result<()> {
-        let transaction = self.connection.transaction().map_err(sql)?;
+        self.guard_callback(None, None)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Deferred)?;
         Self::write_domain(&transaction, app)?;
         crate::attention::application_outcome(&transaction, app)?;
         transaction.commit().map_err(sql)?;
@@ -269,10 +270,8 @@ impl Store {
         shared: String,
         workspace: String,
     ) -> Result<()> {
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        self.guard_callback(None, None)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if flow.status.is_terminal()
             || flow.cancel_requested
             || flow.steps[0].operation_id.is_some()
@@ -306,13 +305,11 @@ impl Store {
         snapshot: Option<VerifiedSnapshotRef>,
         origin: Option<RecipeOrigin>,
     ) -> Result<()> {
+        self.guard_callback(None, None)?;
         if !matches!(index, 1 | 2) {
             return Err("local journal: invalid child step".into());
         }
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if flow.status.is_terminal()
             || flow.cancel_requested
             || flow.steps[index].operation_id.is_some()
@@ -373,16 +370,14 @@ impl Store {
         app: &mut JournalSnapshot<ApplicationRecord>,
         cancel_task: bool,
     ) -> Result<()> {
+        self.guard_callback(None, None)?;
         if app.workflow_id != flow.workflow_id
             || flow.application_id.as_ref() != Some(&app.application_id)
             || flow.steps[2].operation_id.as_ref() != Some(&app.task_id)
         {
             return Err("local journal: workflow/application association mismatch".into());
         }
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if cancel_task {
             Self::transition_task_on(
                 &transaction,
@@ -400,14 +395,12 @@ impl Store {
         flow.committed()
     }
     pub fn stop_application(&mut self, id: &str) -> Result<ApplicationRecord> {
+        self.guard_callback(None, None)?;
         let mut app = self.application_snapshot(id)?;
         if !app.status.is_terminal() {
             app.status = ApplicationStatus::Stopping;
             app.reason = Some("Stop requested; awaiting managed process tree termination".into());
-            let transaction = self
-                .connection
-                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-                .map_err(sql)?;
+            let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
             Self::transition_task_on(
                 &transaction,
                 &app.task_id,

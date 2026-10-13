@@ -109,6 +109,7 @@ impl Worker {
             )?;
         }
         let mut store = Store::open(&db_path)?;
+        store.begin_authority()?;
         store.recover()?;
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
@@ -141,9 +142,12 @@ impl Worker {
         Ok(worker)
     }
     fn store(&self) -> Result<std::sync::MutexGuard<'_, Store>> {
-        self.store
+        let store = self
+            .store
             .lock()
-            .map_err(|_| "journal lock was poisoned; restart worker and reconcile tasks".into())
+            .map_err(|_| "journal lock was poisoned; restart worker and reconcile tasks")?;
+        store.check_authority()?;
+        Ok(store)
     }
     pub fn handle(&self, request: LocalRequest) -> LocalResponse {
         match self.dispatch(request) {
@@ -549,7 +553,7 @@ impl Worker {
             .filter(|r| r.status == TaskStatus::Queued)
             .cloned()
         {
-            let mut import = store.import_snapshot(&import.import_id)?;
+            let import = store.import_snapshot(&import.import_id)?;
             let project = import.submission.project_id.clone();
             if active.contains_key(&project)
                 || workflows::reserved_for_other(&workflows, &project, &import.import_id)
@@ -562,25 +566,21 @@ impl Worker {
             {
                 continue;
             }
-            import.status = TaskStatus::Running;
-            import.phase = "validate".into();
-            Store::import_event(
-                &mut import,
-                "Import lease acquired; validating immutable delivery",
-            );
-            store.save_import(&mut import)?;
+            let (import, token) = store.claim_import(&import.import_id)?;
             active.insert(project.clone(), import.import_id.clone());
             self.active_jobs.fetch_add(1, Ordering::AcqRel);
             let worker = Arc::clone(self);
             thread::spawn(move || {
-                if let Err(error) = worker.execute_import(import.record.clone()) {
+                if let Err(error) = worker.execute_import(import.clone(), token.clone()) {
                     match worker.store() {
                         Ok(mut store) => {
-                            if let Err(recovery) = store.finish_import(
-                                &import.import_id,
-                                TaskStatus::Indeterminate,
-                                &error,
-                            ) {
+                            if let Err(recovery) = store.with_execution(&token, |store| {
+                                store.finish_import(
+                                    &import.import_id,
+                                    TaskStatus::Indeterminate,
+                                    &error,
+                                )
+                            }) {
                                 worker.record_journal_fault(&import.import_id, &error, &recovery);
                             }
                         }
@@ -624,7 +624,7 @@ impl Worker {
                     continue;
                 }
             }
-            let decision = store.transition(&task.task_id, TaskEvent::LaunchIntent)?;
+            let (decision, token) = store.claim_task(&task.task_id)?;
             if decision.effect != TaskEffect::ExecuteAcceptedCommand {
                 return Err("Task launch did not produce a committed execution decision".into());
             }
@@ -635,15 +635,15 @@ impl Worker {
             thread::spawn(move || {
                 let id = task.task_id.clone();
                 let project = task.submission.project_id.clone();
-                if let Err(error) = worker.execute(task) {
+                if let Err(error) = worker.execute(task, token.clone()) {
                     eprintln!("task {id}: {error}; outcome requires reconciliation");
                     // Publish the fault before releasing the journal lock. Admission
                     // rechecks while holding it, so it cannot race the failed commit.
                     match worker.store() {
                         Ok(mut store) => {
-                            if let Err(recovery_error) =
+                            if let Err(recovery_error) = store.with_execution(&token, |store| {
                                 store.finish(&id, TaskStatus::Indeterminate, None, &error)
-                            {
+                            }) {
                                 worker.record_journal_fault(&id, &error, &recovery_error);
                             }
                         }
@@ -713,15 +713,28 @@ impl Worker {
             faults.insert(id.into(), reason);
         }
     }
-    fn execute(self: &Arc<Self>, task: TaskRecord) -> Result<()> {
+    fn execution_store<T>(
+        &self,
+        token: &store::ExecutionToken,
+        callback: impl FnOnce(&mut Store) -> Result<T>,
+    ) -> Result<T> {
+        self.store()?.with_execution(token, callback)
+    }
+    fn execute(self: &Arc<Self>, task: TaskRecord, token: store::ExecutionToken) -> Result<()> {
         let id = task.task_id.clone();
-        if self.stop.load(Ordering::Acquire) || self.store()?.get(&id)?.cancel_requested {
-            self.store()?.finish(
-                &id,
-                TaskStatus::Cancelled,
-                None,
-                "Cancelled before process creation",
-            )?;
+        if self.stop.load(Ordering::Acquire)
+            || self
+                .execution_store(&token, |store| store.get(&id))?
+                .cancel_requested
+        {
+            self.execution_store(&token, |store| {
+                store.finish(
+                    &id,
+                    TaskStatus::Cancelled,
+                    None,
+                    "Cancelled before process creation",
+                )
+            })?;
             return Ok(());
         }
         if let Some(snapshot) = &task.submission.snapshot_id {
@@ -730,12 +743,14 @@ impl Worker {
                 .as_ref()
                 .is_none_or(|r| r.snapshot_id != *snapshot)
             {
-                self.store()?.finish(
-                    &id,
-                    TaskStatus::Failed,
-                    None,
-                    "Task lacks a bound accepted snapshot manifest; submit a new explicit task",
-                )?;
+                self.execution_store(&token, |store| {
+                    store.finish(
+                        &id,
+                        TaskStatus::Failed,
+                        None,
+                        "Task lacks a bound accepted snapshot manifest; submit a new explicit task",
+                    )
+                })?;
                 return Ok(());
             }
             let project = self
@@ -750,7 +765,10 @@ impl Worker {
                 snapshot,
                 task.snapshot.as_ref().map(|r| r.manifest_sha256.as_str()),
                 |_, _, _| {
-                    if self.stop.load(Ordering::Acquire) || self.store()?.get(&id)?.cancel_requested
+                    if self.stop.load(Ordering::Acquire)
+                        || self
+                            .execution_store(&token, |store| store.get(&id))?
+                            .cancel_requested
                     {
                         return Err("Cancelled during snapshot source verification".into());
                     }
@@ -758,44 +776,53 @@ impl Worker {
                 },
             );
             if let Err(reason) = result {
-                let cancelled =
-                    self.stop.load(Ordering::Acquire) || self.store()?.get(&id)?.cancel_requested;
-                self.store()?.finish(
-                    &id,
-                    if cancelled {
-                        TaskStatus::Cancelled
-                    } else {
-                        TaskStatus::Failed
-                    },
-                    None,
-                    &reason,
-                )?;
+                let cancelled = self.stop.load(Ordering::Acquire)
+                    || self
+                        .execution_store(&token, |store| store.get(&id))?
+                        .cancel_requested;
+                self.execution_store(&token, |store| {
+                    store.finish(
+                        &id,
+                        if cancelled {
+                            TaskStatus::Cancelled
+                        } else {
+                            TaskStatus::Failed
+                        },
+                        None,
+                        &reason,
+                    )
+                })?;
                 return Ok(());
             }
         }
+        self.execution_store(&token, |_| Ok(()))?;
         let (mut child, stdout, stderr) = match ManagedChild::spawn(&task.resolved_command) {
             Ok(child) => child,
             Err(error) => {
-                self.store()?.finish(
-                    &id,
-                    TaskStatus::Failed,
-                    None,
-                    &format!(
-                        "Could not launch executable {:?}: {error}",
-                        task.resolved_command.executable
-                    ),
-                )?;
+                self.execution_store(&token, |store| {
+                    store.finish(
+                        &id,
+                        TaskStatus::Failed,
+                        None,
+                        &format!(
+                            "Could not launch executable {:?}: {error}",
+                            task.resolved_command.executable
+                        ),
+                    )
+                })?;
                 return Ok(());
             }
         };
         {
             let mut store = self.store()?;
-            store.transition(
-                &id,
-                TaskEvent::ProcessStarted {
-                    process_id: child.id(),
-                },
-            )?;
+            store.with_execution(&token, |store| {
+                store.transition(
+                    &id,
+                    TaskEvent::ProcessStarted {
+                        process_id: child.id(),
+                    },
+                )
+            })?;
         }
         let fault = Arc::new(AtomicBool::new(false));
         let readers: Vec<_> = [
@@ -807,6 +834,7 @@ impl Worker {
             let worker = Arc::clone(self);
             let id = id.clone();
             let fault = Arc::clone(&fault);
+            let token = token.clone();
             thread::spawn(move || {
                 let mut bytes = [0u8; 8192];
                 let mut offset = 0;
@@ -815,7 +843,7 @@ impl Worker {
                         Ok(0) => break,
                         Ok(length) => {
                             if !fault.load(Ordering::Acquire) {
-                                let result = worker.store().and_then(|mut store| {
+                                let result = worker.execution_store(&token, |store| {
                                     store.append_output(
                                         &id,
                                         stream,
@@ -862,7 +890,7 @@ impl Worker {
                     ),
                 );
             }
-            let current = self.store()?.get(&id)?;
+            let current = self.execution_store(&token, |store| store.get(&id))?;
             let stop = self.stop.load(Ordering::Acquire);
             let error = fault.load(Ordering::Acquire);
             if stop
@@ -918,7 +946,9 @@ impl Worker {
         } else {
             (status, reason)
         };
-        self.store()?.finish(&id, status, exit_code, &reason)?;
+        self.execution_store(&token, |store| {
+            store.finish(&id, status, exit_code, &reason)
+        })?;
         Ok(())
     }
     pub fn stop(&self) {

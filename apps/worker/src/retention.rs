@@ -97,6 +97,7 @@ impl Store {
         &mut self,
         request: &ApplyOutputCleanup,
     ) -> Result<OutputCleanupResult> {
+        self.guard_callback(None, None)?;
         if !winbridge_core::config::valid_id(&request.idempotency_key)
             || request.plan.task_ids.len() > 50
             || request.plan.sha256.len() != 64
@@ -104,10 +105,7 @@ impl Store {
             return Err("Invalid cleanup key/plan; preview a batch first".into());
         }
         let payload = serde_json::to_string(&request.plan).map_err(|e| e.to_string())?;
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         let existing: Option<(String, String)> = transaction
             .query_row(
                 "SELECT payload,record FROM output_cleanup WHERE key=?1",

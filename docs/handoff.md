@@ -1,6 +1,26 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
+
+## A2.3.1 authority/attempt tokens — native gate ожидается, 2026-10-13
+
+База `6b1959e`; [контракт и оставшаяся работа](plans/architecture-transition/ownership-context.md).
+Schema 9 добавляет journal incarnation, owner epoch/UUID и retained execution attempts.
+Worker активирует owner после exclusive OS lock; common write transaction защищает
+все domain writers. Task/import claim + attempt атомарны; PID/output/progress/result
+и fallback проверяют token. Terminal task/import и attempt completion атомарны;
+late callback не стирает cancel/output/result. Snapshot authority читается с record
+одним SELECT. Legacy bytes/keys неизменны; migration consistent backup/rollback.
+16 новых regressions, включая competing claims и real tree cleanup после fault.
+Local gate: 229 workspace tests passed, reference test ignored; Windows-target
+workspace/worker tests, Clippy/fmt/AST/Python syntax/argument guards/scaffold passed.
+Native `--task-cas-only` расширен новым target ownership и реальным отказом schema 9
+reference binary на отдельной DB. Рабочий installed worker b5d39f9 connected/idle,
+generation 02939593-8adf-4878-a346-473092697a4a, session 631c2e63-edc8-44f8-8cce-89abec7caf8b.
+На Windows требуется только этот worker, desktop/test UI windows не нужны.
+Durable project/resource leases (A2.3.2), physical reconciliation/restore mode
+(A2.4) ещё не реализованы; A2 остаётся открытым.
+
 ## A2.2 domain revisions/atomic links — завершён, 2026-10-13
 
 База `5f3c007`; [контракт и ревью](plans/architecture-transition/domain-transitions.md).

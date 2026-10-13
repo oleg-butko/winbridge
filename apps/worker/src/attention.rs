@@ -222,15 +222,13 @@ pub(crate) fn task_outcome(
 
 impl Store {
     pub fn request_attention(&mut self, request: &AttentionSubmission) -> Result<AttentionRecord> {
+        self.guard_callback(None, None)?;
         winbridge_core::attention::validate(request)?;
         let mut frozen = request.clone();
         frozen.request_id.clear();
         let payload = serde_json::to_string(&frozen).map_err(|e| e.to_string())?;
         let task = self.get(&request.task_id)?;
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         let existing: Option<(String, String)> = transaction
             .query_row(
                 "SELECT id,payload FROM attention WHERE origin='agent_request' AND key=?1",
@@ -294,10 +292,8 @@ impl Store {
         expected: Option<u64>,
         legacy: bool,
     ) -> Result<AttentionEvent> {
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        self.guard_callback(None, None)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if legacy {
             Self::read_attention(&transaction, id)?;
         }

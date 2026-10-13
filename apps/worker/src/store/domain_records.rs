@@ -1,5 +1,5 @@
 //! Versioned local journal observations. None of these fields change wire v1.
-use super::{sql, Result, Store};
+use super::{sql, JournalAuthority, Result, Store};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{de::DeserializeOwned, Serialize};
 use std::ops::{Deref, DerefMut};
@@ -100,6 +100,7 @@ pub struct JournalSnapshot<T> {
     raw: String,
     identity: String,
     terminal: bool,
+    authority: JournalAuthority,
 }
 impl<T> Deref for JournalSnapshot<T> {
     type Target = T;
@@ -129,15 +130,15 @@ impl Store {
         connection: &Connection,
         id: &str,
     ) -> Result<JournalSnapshot<T>> {
-        let row: Option<(String, i64)> = connection
+        let row: Option<(String, i64, String, i64, String)> = connection
             .query_row(
-                &format!("SELECT record,revision FROM {} WHERE id=?1", T::TABLE),
+                &format!("SELECT d.record,d.revision,a.incarnation,a.epoch,a.authority FROM {} d CROSS JOIN journal_authority a WHERE d.id=?1 AND a.singleton=1", T::TABLE),
                 [id],
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .optional()
             .map_err(sql)?;
-        let (raw, revision) =
+        let (raw, revision, incarnation, epoch, authority_id) =
             row.ok_or_else(|| format!("local journal: {} ID {id:?} not found", T::TABLE))?;
         let record: T = serde_json::from_str(&raw).map_err(|e| format!("local journal: {e}"))?;
         if record.id() != id || revision < 0 {
@@ -152,12 +153,14 @@ impl Store {
             raw,
             identity,
             terminal,
+            authority: Self::authority_from_parts(incarnation, epoch, authority_id)?,
         })
     }
     pub(crate) fn write_domain<T: JournalRecord>(
         connection: &Connection,
         observed: &JournalSnapshot<T>,
     ) -> Result<()> {
+        Self::assert_authority(connection, &observed.authority)?;
         if observed.record.id() != observed.id || observed.record.identity()? != observed.identity {
             return Err(
                 "local journal: immutable record identity changed; decision rejected".into(),

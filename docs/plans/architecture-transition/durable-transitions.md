@@ -5,7 +5,8 @@
 [107 native Windows tests passed](windows-task-cas-gate-2026-10-13.md).
 A2.2: [domain revisions и atomic links](domain-transitions.md) завершены,
 [125 native tests passed](windows-domain-cas-gate-2026-10-13.md).
-Весь A2 пока не завершён: ownership/epochs/incarnation/reconciliation ещё впереди.
+Весь A2 пока не завершён. [A2.3.1 authority/attempt context](ownership-context.md)
+реализован, native gate ожидается; durable leases и reconciliation ещё впереди.
 
 ## Зачем нужна первая поставка
 
@@ -124,9 +125,11 @@ Candidate и reference используют изолированные config/st
 1. A2.2 (завершён, native passed): versioned import, workflow/step/application и explicit attention writers;
    DB transaction объединяет child association, event и resource decision.
    До изменения каждого домена расширить исторические fixtures и fault matrix.
-2. A2.3: journal incarnation, durable OperationRef/attempt IDs и owner epochs;
-   атомарный admission/lease, checks process/import callbacks, все writers под
-   общим owner guard. Connection generation не заменяет durable epoch.
+2. A2.3.1: [journal incarnation, OperationRef/attempt IDs и owner epochs](ownership-context.md);
+   task/import claim и attempt одной transaction, token checks callbacks, все writers
+   под общим owner guard. Реализовано, native gate ожидается.
+   A2.3.2: durable project/resource leases и atomic operation association.
+   Connection generation не заменяет durable epoch.
 3. A2.4: startup reconciliation до нового admission, unresolved physical owners,
    понятный recovery read model и explicit restore recovery mode; paired native
    crash/takeover gate. Epoch не прекращает физическое исполнение: workspace

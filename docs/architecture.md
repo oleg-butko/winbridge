@@ -103,8 +103,16 @@ consistent backup; старый schema-6 binary отказывает новой 
 cancel сохраняются атомарно. ACK внимания монотонен и проверяет durable row.
 Миграция сохраняет raw records/payloads/keys и делает consistent backup исходной
 schema 7. Native gate passed: 125 tests, включая real resume/crash и byte-identical
-refusal старого binary. Owner epoch/incarnation/reconciliation остаются следующими
-частями A2. Wire/UI/MCP JSON не меняются.
+refusal старого binary. Wire/UI/MCP JSON не меняются.
+
+[A2.3.1](plans/architecture-transition/ownership-context.md) добавляет schema 9:
+journal incarnation, owner epoch/UUID и retained execution attempts. Активация
+под прежней instance lock; все writers проверяют owner в write transaction.
+Task/import claim и attempt атомарны; PID/output/progress/outcome/fallback получают
+operation/attempt token. Record revisions не подменяют authority. Snapshot читает
+record/revision/authority одним SELECT. Local guards реализованы, native gate ожидается.
+Durable project leases, physical reconciliation и explicit restore recovery mode
+остаются A2.3.2/A2.4; глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 

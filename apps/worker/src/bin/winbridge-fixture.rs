@@ -46,10 +46,14 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         "tree" => {
-            let mut child = Command::new(std::env::current_exe().unwrap())
-                .arg("child")
-                .spawn()
-                .expect("fixture child");
+            let mut command = Command::new(std::env::current_exe().unwrap());
+            command.arg("child");
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(0x08000000); // CREATE_NO_WINDOW for automated gates.
+            }
+            let mut child = command.spawn().expect("fixture child");
             println!("child pid={}", child.id());
             io::stdout().flush().unwrap();
             let _ = child.wait();

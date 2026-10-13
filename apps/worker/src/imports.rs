@@ -46,10 +46,8 @@ impl Store {
         shared_path: String,
         workspace_path: String,
     ) -> Result<ImportRecord> {
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        self.guard_callback(None, None)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         let import = Self::accept_import_on(&transaction, request, shared_path, workspace_path)?;
         transaction.commit().map_err(sql)?;
         Ok(import)
@@ -130,8 +128,20 @@ impl Store {
             .collect()
     }
     pub fn save_import(&mut self, import: &mut JournalSnapshot<ImportRecord>) -> Result<()> {
-        let transaction = self.connection.transaction().map_err(sql)?;
+        self.guard_callback(
+            Some(crate::store::OperationKind::Import),
+            Some(&import.import_id),
+        )?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Deferred)?;
         Self::write_domain(&transaction, import)?;
+        if import.status.is_terminal() {
+            Self::complete_attempt(
+                &transaction,
+                crate::store::OperationKind::Import,
+                &import.import_id,
+                import.status,
+            )?;
+        }
         transaction.commit().map_err(sql)?;
         import.committed()
     }
@@ -149,6 +159,7 @@ impl Store {
         status: TaskStatus,
         reason: &str,
     ) -> Result<ImportRecord> {
+        self.guard_callback(Some(crate::store::OperationKind::Import), Some(id))?;
         let mut import = self.import_snapshot(id)?;
         if import.status.is_terminal() {
             return Ok(import.record);
@@ -161,6 +172,7 @@ impl Store {
         Ok(import.record)
     }
     pub fn cancel_import(&mut self, id: &str) -> Result<ImportRecord> {
+        self.guard_callback(Some(crate::store::OperationKind::Import), Some(id))?;
         let mut import = self.import_snapshot(id)?;
         if import.status.is_terminal() || import.cancel_requested {
             return Ok(import.record);
@@ -306,7 +318,11 @@ impl Worker {
             source: manifest.source,
         }))
     }
-    pub(crate) fn execute_import(self: &Arc<Self>, import: ImportRecord) -> Result<()> {
+    pub(crate) fn execute_import(
+        self: &Arc<Self>,
+        import: ImportRecord,
+        token: crate::store::ExecutionToken,
+    ) -> Result<()> {
         let id = import.import_id.clone();
         let project = self
             .config
@@ -326,13 +342,14 @@ impl Worker {
             Some(&import.submission.manifest_sha256),
         ) {
             let mut store = self.store()?;
+            store.check_execution(&token)?;
             let mut record = store.import_snapshot(&id)?;
             record.delta = sync::delta_summary(&manifest);
             record.total_files = Some(manifest.files.len() as u64);
             record.total_bytes = Some(manifest.total_bytes);
             let SnapshotSource::GitCommit { commit } = manifest.source;
             record.commit = Some(commit);
-            store.save_import(&mut record)?;
+            store.with_execution(&token, |store| store.save_import(&mut record))?;
         }
         let started = Instant::now();
         let mut persisted = Instant::now() - Duration::from_secs(1);
@@ -343,6 +360,7 @@ impl Worker {
                 return Err("Worker stopping; import staging remains unbuildable".into());
             }
             let mut store = self.store()?;
+            store.check_execution(&token)?;
             let mut record = store.import_snapshot(&id)?;
             if record.cancel_requested {
                 return Err("Import cancelled at staging checkpoint".into());
@@ -360,7 +378,7 @@ impl Worker {
                 record.phase = phase.into();
                 record.completed_files = files;
                 record.completed_bytes = bytes;
-                store.save_import(&mut record)?;
+                store.with_execution(&token, |store| store.save_import(&mut record))?;
                 persisted = Instant::now();
             }
             Ok(())
@@ -373,12 +391,14 @@ impl Worker {
             &mut checkpoint,
             |transfer| {
                 let mut store = self.store()?;
+                store.check_execution(&token)?;
                 let mut record = store.import_snapshot(&id)?;
                 record.transfer = Some(transfer.clone());
-                store.save_import(&mut record)
+                store.with_execution(&token, |store| store.save_import(&mut record))
             },
         );
         let mut store = self.store()?;
+        store.check_execution(&token)?;
         match result {
             Ok(manifest) => {
                 let mut record = store.import_snapshot(&id)?;
@@ -390,25 +410,29 @@ impl Worker {
                 record.total_bytes = Some(manifest.total_bytes);
                 let SnapshotSource::GitCommit { commit } = manifest.source;
                 record.commit = Some(commit);
-                store.save_import(&mut record)?;
-                store.finish_import(
-                    &id,
-                    TaskStatus::Succeeded,
-                    "Local source generation verified; ready for explicit build",
-                )?;
+                store.with_execution(&token, |store| store.save_import(&mut record))?;
+                store.with_execution(&token, |store| {
+                    store.finish_import(
+                        &id,
+                        TaskStatus::Succeeded,
+                        "Local source generation verified; ready for explicit build",
+                    )
+                })?;
             }
             Err(reason) => {
                 let cancelled =
                     store.get_import(&id)?.cancel_requested || self.stop.load(Ordering::Acquire);
-                store.finish_import(
-                    &id,
-                    if cancelled {
-                        TaskStatus::Cancelled
-                    } else {
-                        TaskStatus::Failed
-                    },
-                    &reason,
-                )?;
+                store.with_execution(&token, |store| {
+                    store.finish_import(
+                        &id,
+                        if cancelled {
+                            TaskStatus::Cancelled
+                        } else {
+                            TaskStatus::Failed
+                        },
+                        &reason,
+                    )
+                })?;
             }
         }
         Ok(())

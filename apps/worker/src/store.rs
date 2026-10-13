@@ -10,11 +10,15 @@ use winbridge_protocol::{
     TaskSubmission,
 };
 
+mod ownership;
+pub use ownership::{
+    ExecutionAttempt, ExecutionToken, JournalAuthority, OperationKind, OperationRef,
+};
 mod domain_records;
 pub use domain_records::JournalSnapshot;
 mod task_records;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 8;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 9;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -28,11 +32,13 @@ pub(crate) fn sql(error: rusqlite::Error) -> String {
 }
 pub struct Store {
     pub(crate) connection: Connection,
+    authority: JournalAuthority,
+    callback_attempt: Option<ExecutionToken>,
 }
 
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
-        let connection = Connection::open(path).map_err(sql)?;
+        let mut connection = Connection::open(path).map_err(sql)?;
         connection
             .busy_timeout(std::time::Duration::from_secs(2))
             .map_err(sql)?;
@@ -191,7 +197,41 @@ impl Store {
                 CREATE TRIGGER attention_revision_guard BEFORE UPDATE ON attention WHEN NEW.revision != OLD.revision+1 OR NEW.id != OLD.id OR NEW.sequence != OLD.sequence OR NEW.project != OLD.project OR NEW.task IS NOT OLD.task OR NEW.target != OLD.target OR NEW.severity != OLD.severity OR NEW.message != OLD.message OR NEW.origin != OLD.origin OR NEW.key != OLD.key OR NEW.payload != OLD.payload OR NEW.created != OLD.created OR OLD.acknowledged IS NOT NULL OR NEW.acknowledged IS NULL BEGIN SELECT RAISE(ABORT,'Attention revision/identity/ack guard'); END;
                 PRAGMA user_version=8; COMMIT;").map_err(sql)?;
         }
-        Ok(Self { connection })
+        if version <= 8 {
+            if version == 8 {
+                let backup = path.with_file_name(format!(
+                    "journal-v8-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            migration.execute_batch("CREATE TABLE journal_authority(singleton INTEGER PRIMARY KEY CHECK(singleton=1), incarnation TEXT NOT NULL CHECK(length(incarnation)>0), epoch INTEGER NOT NULL CHECK(typeof(epoch)='integer' AND epoch>=0), authority TEXT NOT NULL CHECK(length(authority)>0));
+                CREATE TABLE execution_attempts(kind TEXT NOT NULL CHECK(kind IN ('task','import')), operation TEXT NOT NULL, project TEXT NOT NULL, attempt TEXT NOT NULL UNIQUE, incarnation TEXT NOT NULL, epoch INTEGER NOT NULL CHECK(typeof(epoch)='integer' AND epoch>0), authority TEXT NOT NULL, started INTEGER NOT NULL, completed INTEGER, outcome TEXT, PRIMARY KEY(kind,operation), CHECK((completed IS NULL AND outcome IS NULL) OR (completed IS NOT NULL AND outcome IS NOT NULL AND outcome IN ('succeeded','failed','cancelled','interrupted','indeterminate'))));
+                CREATE TRIGGER authority_epoch_guard BEFORE UPDATE ON journal_authority WHEN NEW.singleton != OLD.singleton OR NEW.epoch != OLD.epoch+1 OR NEW.authority=OLD.authority BEGIN SELECT RAISE(ABORT,'Authority activation requires next epoch and new identity'); END;
+                CREATE TRIGGER attempt_identity_guard BEFORE UPDATE ON execution_attempts WHEN NEW.kind != OLD.kind OR NEW.operation != OLD.operation OR NEW.project != OLD.project OR NEW.attempt != OLD.attempt OR NEW.incarnation != OLD.incarnation OR NEW.epoch != OLD.epoch OR NEW.authority != OLD.authority OR NEW.started != OLD.started OR OLD.completed IS NOT NULL OR NEW.completed IS NULL BEGIN SELECT RAISE(ABORT,'Attempt identity is immutable and completion is final'); END;
+                CREATE TRIGGER attempt_no_delete BEFORE DELETE ON execution_attempts BEGIN SELECT RAISE(ABORT,'Execution attempt history must be retained'); END;").map_err(sql)?;
+            let changed = migration.execute("INSERT INTO journal_authority(singleton,incarnation,epoch,authority) VALUES(1,?1,0,?2)",params![Uuid::new_v4().to_string(),Uuid::new_v4().to_string()]).map_err(sql)?;
+            if changed != 1 {
+                return Err("local journal: migration authority not stored".into());
+            }
+            migration
+                .pragma_update(None, "user_version", 9)
+                .map_err(sql)?;
+            migration.commit().map_err(sql)?;
+        }
+        let authority = Self::read_authority(&connection)?;
+        Ok(Self {
+            connection,
+            authority,
+            callback_attempt: None,
+        })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {
         let mut payload = request.clone();
@@ -240,10 +280,8 @@ impl Store {
         snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
         recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
     ) -> Result<TaskRecord> {
-        let transaction = self
-            .connection
-            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
-            .map_err(sql)?;
+        self.guard_callback(None, None)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         let task = Self::accept_task_on(&transaction, request, command, snapshot, recipe_origin)?;
         transaction.commit().map_err(sql)?;
         Ok(task)
@@ -369,7 +407,8 @@ impl Store {
         expected: Option<i64>,
         event: TaskEvent,
     ) -> Result<TaskTransition> {
-        let transaction = self.connection.transaction().map_err(sql)?;
+        self.guard_callback(Some(OperationKind::Task), Some(id))?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Deferred)?;
         let decision = Self::transition_task_on(&transaction, id, expected, event)?;
         transaction.commit().map_err(sql)?;
         Ok(decision)
@@ -404,6 +443,7 @@ impl Store {
             .map(|decision| decision.record)
     }
     pub fn recover(&mut self) -> Result<()> {
+        self.guard_callback(None, None)?;
         for task in self.all()? {
             if task.status == TaskStatus::Running {
                 self.transition(&task.task_id, TaskEvent::Recovered)?;
@@ -419,6 +459,7 @@ impl Store {
         bytes: &[u8],
         limit: u64,
     ) -> Result<()> {
+        self.guard_callback(Some(OperationKind::Task), Some(id))?;
         let observed = self.task_snapshot(id)?;
         let mut task = observed.record.clone();
         let was_truncated = task.output_truncated;
@@ -431,7 +472,7 @@ impl Store {
         if accepted == 0 && was_truncated {
             return Ok(());
         }
-        let transaction = self.connection.transaction().map_err(sql)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Deferred)?;
         if accepted > 0 {
             let sequence: i64 = transaction
                 .query_row(
