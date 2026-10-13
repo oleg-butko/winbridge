@@ -24,13 +24,16 @@ timeouts не увеличены. Reused cache сохранил новые test 
 run directories; осталось ~25.9 GiB на K:.
 Installed schema-6 worker остаётся прежним, desktop закрыт. Полный A2.4.2/A2 открыт:
 A2.4.2b — controlled new incarnation/admission после restore; rollback detection
-и безопасный выход из latched inspection ещё не реализованы. Требуется выбор
+и безопасный выход из latched inspection ещё не реализованы. Пользователь выбрал
 [restore/admission policy](plans/architecture-transition/restore-admission-options.md).
 Продолжение ревью: [request boundary](plans/architecture-transition/restore-boundary-review.md).
 Один новый instance ID не защищает старый payload после config reload; для новой
 пары request fence обязателен **до** admission. Windows pipe case aliases тоже
-не являются новой областью. Модель recovery ожидает ответа пользователя;
-до него persistent cutover/ledger не реализовывать, Windows gates не повторять.
+не являются новой областью. Выбор 2026-10-13: новая пара и новый журнал, прежняя
+история как архив, явное переподключение агентов и новый request contract.
+Реализация A2.4.2b начинается с request fence; далее archive preparation и
+проверяемый cutover. Independent admission ledger не нужен; установленный
+worker пока не менять. Full A2 остаётся открытым.
 
 ## A2.4.1 physical process reconciliation — завершён, 2026-10-13
 
