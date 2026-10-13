@@ -2,7 +2,7 @@
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
 
-## A2.4.1 physical process reconciliation — native gate ожидается, 2026-10-13
+## A2.4.1 physical process reconciliation — завершён, 2026-10-13
 
 База `899a7ab`; [контракт, ревью и ограничения](plans/architecture-transition/physical-reconciliation.md).
 Исправлен resume до PID commit. Schema 11 сохраняет immutable named Job Object
@@ -14,7 +14,13 @@ Local gate passed: 250 workspace tests, финальные 30 import/lease/recon
 и 40 FSM/ownership/lease/guard tests; real Unix worker browser gate (recovery inventory,
 verified import/timestamp, workflow, settings, history, retention) passed. Windows-target
 workspace/tests, Linux/Windows Clippy, UI typecheck/build/contracts, AST/export/scaffold
-passed; native gate ещё не завершён.
+passed. Implementation `5004f3d`, fixture correction `4da9af1`;
+[native gate](plans/architecture-transition/windows-reconciliation-gate-2026-10-13.md)
+passed: 164 tests (7+14+142+1), четыре cargo groups exit 0; task
+`d2d3d2ca-3d98-4a84-a504-cb476e57942f` succeeded/exit 0/PID 19616,
+run `20261013-152019-2ff8a535`, шесть artifacts verified. Actual schema-6 reference
+отказал schema 11 без изменения test journal. Installed worker remained connected/idle,
+build/generation/session прежние. Desktop можно оставить закрытым, worker оставить работать.
 Installed schema-6 worker не обновлять. Полный A2/A2.4 открыт:
 следующий пакет A2.4.2 — explicit restore/recovery mode и unresolved legacy owners.
 

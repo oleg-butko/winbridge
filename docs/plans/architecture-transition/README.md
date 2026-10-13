@@ -24,8 +24,8 @@
 [141 native Windows tests](windows-ownership-gate-2026-10-13.md) passed;
 [A2.3.2 durable leases](project-resource-leases.md) завершены: 245 workspace и
 [157 native tests](windows-resource-leases-gate-2026-10-13.md) passed;
-[A2.4.1 physical process reconciliation](physical-reconciliation.md) реализуется,
-native gate ожидается; explicit restore/recovery mode A2.4.2 ещё впереди.
+[A2.4.1 physical process reconciliation](physical-reconciliation.md) завершён,
+[164 native tests passed](windows-reconciliation-gate-2026-10-13.md); explicit restore/recovery mode A2.4.2 ещё впереди.
 
 ## Результат для пользователя и проектов
 
