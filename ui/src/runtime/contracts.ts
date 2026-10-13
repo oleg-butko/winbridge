@@ -74,7 +74,14 @@ export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type ControllerConnection = { url: string, state: ConnectionState, sessionId: string | null, controllerNodeId: string | null, controllerGeneration: string | null, lastConfirmedAtMs: number | null, error: string | null, };
 export type ActivityLogStatus = { path: string, maxFileBytes: number, retainedArchives: number, droppedRecords: number, lastError: string | null, };
 export type ControllerStatus = { instanceId: string, nodeId: string, generation: string, listenAddress: string, connected: boolean, sessionId: string | null, workerNodeId: string | null, workerGeneration: string | null, workerAddress: string | null, lastError: string | null, activityLog: ActivityLogStatus | null, };
+export type ResourceRecoveryEntry = { projectId: string, operationId: string, operationKind: string, physicalBinding: boolean, reason: string, };
+export type ResourceRecovery = { unresolvedCount: number, truncated: boolean, resources: Array<ResourceRecoveryEntry>, };
 export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, commandHandlers?: Array<CommandHandlerInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
+/**
+ * Physical ownership still unresolved; scoped to projects, not a global
+ * journal write failure. Absent in older workers and when no lease is uncertain.
+ */
+resourceRecovery?: ResourceRecovery,
 /**
  * Queued/running tasks across the entire journal; None when unavailable or stale.
  */

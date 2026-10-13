@@ -6,6 +6,7 @@ use std::{
 use winbridge_protocol::ResolvedCommand;
 
 pub mod event_log;
+pub mod process_identity;
 pub mod reports;
 #[cfg(windows)]
 mod windows;
@@ -14,6 +15,10 @@ pub struct ManagedChild {
     child: Child,
     #[cfg(windows)]
     job: windows::Job,
+    #[cfg(windows)]
+    identity: Option<process_identity::ProcessIdentity>,
+    #[cfg(windows)]
+    resumed: bool,
 }
 
 pub type OutputReader = Box<dyn Read + Send>;
@@ -152,6 +157,21 @@ impl ManagedChild {
     pub fn spawn(
         command: &ResolvedCommand,
     ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
+        let (mut child, stdout, stderr) = Self::prepare(command, None)?;
+        child.resume().map_err(|error| SpawnFailure {
+            no_process_created: false,
+            error,
+        })?;
+        Ok((child, stdout, stderr))
+    }
+    /// Windows remains suspended until the caller commits PID and physical ownership.
+    /// Unix is a development adapter and does not offer recoverable tree identity.
+    pub fn prepare(
+        command: &ResolvedCommand,
+        job_name: Option<&str>,
+    ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
+        #[cfg(not(windows))]
+        let _ = job_name;
         let mut builder = Command::new(&command.executable);
         builder
             .args(&command.arguments)
@@ -165,16 +185,21 @@ impl ManagedChild {
             builder.process_group(0);
         }
         #[cfg(windows)]
-        let job = {
+        let (job, host) = {
             use std::os::windows::process::CommandExt;
             use windows_sys::Win32::System::Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED};
             // No user code runs before the process belongs to the worker's Job Object.
             builder.creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
-            windows::Job::new()?
+            let host = if job_name.is_some() {
+                Some(windows::host_binding()?)
+            } else {
+                None
+            };
+            (windows::Job::new(job_name)?, host)
         };
         let child = builder.spawn()?;
         #[cfg(windows)]
-        if let Err(error) = job.assign_and_resume(&child) {
+        if let Err(error) = job.assign(&child) {
             let mut child = child;
             let _ = child.kill();
             let _ = child.wait();
@@ -189,7 +214,26 @@ impl ManagedChild {
             child,
             #[cfg(windows)]
             job,
+            #[cfg(windows)]
+            identity: None,
+            #[cfg(windows)]
+            resumed: false,
         };
+        #[cfg(windows)]
+        if let (Some(name), Some((host_id, session_id))) = (job_name, host) {
+            owner.identity = Some(process_identity::ProcessIdentity {
+                job_name: name.into(),
+                host_id,
+                session_id,
+                process_id: owner.id(),
+                creation_time: windows::creation_time(&owner.child).map_err(|error| {
+                    SpawnFailure {
+                        no_process_created: false,
+                        error,
+                    }
+                })?,
+            });
+        }
         let stdout = Box::new(owner.child.stdout.take().ok_or_else(|| SpawnFailure {
             no_process_created: false,
             error: io::Error::other("stdout pipe missing"),
@@ -199,6 +243,25 @@ impl ManagedChild {
             error: io::Error::other("stderr pipe missing"),
         })?);
         Ok((owner, stdout, stderr))
+    }
+
+    pub fn identity(&self) -> Option<&process_identity::ProcessIdentity> {
+        #[cfg(windows)]
+        {
+            self.identity.as_ref()
+        }
+        #[cfg(not(windows))]
+        {
+            None
+        }
+    }
+    pub fn resume(&mut self) -> io::Result<()> {
+        #[cfg(windows)]
+        if !self.resumed {
+            self.job.resume(&self.child)?;
+            self.resumed = true;
+        }
+        Ok(())
     }
 
     pub fn id(&self) -> u32 {

@@ -328,6 +328,15 @@ export function NativeWorkbench() {
     </Alert>}
     <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} desktopLog={desktopLog} />
     {info?.journalRecoveryRequired && <Alert color="red" title="Результат операции не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
+    {info?.resourceRecovery && <Alert id="resource-recovery" color="yellow" title={`Восстановление: ${info.resourceRecovery.unresolvedCount} ресурсов требуют проверки`}>
+      <Text size="sm">Остановка прежнего исполнителя не подтверждена. Новые операции в этих проектах ждут освобождения ресурса; прежние команды повторно не запускаются.</Text>
+      <Stack mt="xs" gap="xs">{info.resourceRecovery.resources.map((resource) => <div key={`${resource.operationKind}:${resource.operationId}`}>
+        <Text size="sm">Проект {resource.projectId} · {resource.operationKind === "import" ? "импорт" : "задача"} <Code>{resource.operationId}</Code></Text>
+        <Text size="sm">{resource.reason}</Text>
+        {!resource.physicalBinding && <Text size="xs" c="dimmed">Проверяемая принадлежность Windows-процесса не сохранена; одного PID недостаточно.</Text>}
+      </div>)}</Stack>
+      {info.resourceRecovery.truncated && <Text size="sm" mt="xs">Показаны первые 50 ресурсов.</Text>}
+    </Alert>}
     {info?.snapshotImportAvailable && <SnapshotWorkbench navigation={importNavigation} info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
     {info?.workflowAvailable && <WorkflowWorkbench navigation={workflowNavigation} info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card id="native-command" tabIndex={-1} withBorder><Stack>

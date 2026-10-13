@@ -2,6 +2,22 @@
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
 
+## A2.4.1 physical process reconciliation — native gate ожидается, 2026-10-13
+
+База `899a7ab`; [контракт, ревью и ограничения](plans/architecture-transition/physical-reconciliation.md).
+Исправлен resume до PID commit. Schema 11 сохраняет immutable named Job Object
+binding вместе с PID до resume; startup/повторная проверка освобождают прежнюю
+lease только после подтверждённого отсутствия дерева на том же host/session.
+Unknown command остаётся indeterminate; старый key не создаёт новый процесс.
+Optional bounded recovery inventory виден в Info/UI; legacy без binding ждёт.
+Local gate passed: 250 workspace tests, финальные 30 import/lease/reconciliation
+и 40 FSM/ownership/lease/guard tests; real Unix worker browser gate (recovery inventory,
+verified import/timestamp, workflow, settings, history, retention) passed. Windows-target
+workspace/tests, Linux/Windows Clippy, UI typecheck/build/contracts, AST/export/scaffold
+passed; native gate ещё не завершён.
+Installed schema-6 worker не обновлять. Полный A2/A2.4 открыт:
+следующий пакет A2.4.2 — explicit restore/recovery mode и unresolved legacy owners.
+
 ## A2.3.2 durable project/resource leases — завершён, 2026-10-13
 
 База `dd04276`; [контракт, ревью и проверки](plans/architecture-transition/project-resource-leases.md).

@@ -312,6 +312,28 @@ pub struct ProjectInfo {
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ResourceRecoveryEntry {
+    pub project_id: String,
+    pub operation_id: String,
+    pub operation_kind: String,
+    pub physical_binding: bool,
+    pub reason: String,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceRecovery {
+    pub unresolved_count: u64,
+    pub truncated: bool,
+    pub resources: Vec<ResourceRecoveryEntry>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkerInfo {
     pub protocol_version: u16,
     pub instance_id: String,
@@ -347,6 +369,11 @@ pub struct WorkerInfo {
     pub maintenance_error: Option<String>,
     #[serde(default)]
     pub journal_recovery_required: Option<String>,
+    /// Physical ownership still unresolved; scoped to projects, not a global
+    /// journal write failure. Absent in older workers and when no lease is uncertain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub resource_recovery: Option<ResourceRecovery>,
     /// Queued/running tasks across the entire journal; None when unavailable or stale.
     #[serde(default)]
     pub active_task_count: Option<u64>,

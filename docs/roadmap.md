@@ -22,7 +22,8 @@
 - [ ] A9: расширение FSM/контрактов; дальнейшие изменения по доказанной потребности.
 
 A0, A1, A2.1, A2.2, A2.3.1 и A2.3.2 завершены;
-следующий пакет — A2.4 physical reconciliation и restore recovery. До native gates process/runtime
+текущий пакет — [A2.4.1 physical process reconciliation](plans/architecture-transition/physical-reconciliation.md), native gate ожидается;
+затем A2.4.2 explicit restore/recovery mode. До native gates process/runtime
 изменения не считаются готовыми.
 
 ## Этап 0 — подготовка репозитория

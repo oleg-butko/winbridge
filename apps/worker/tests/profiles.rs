@@ -265,24 +265,34 @@ async fn profile_projects_preserve_command_origin_dedup_cancel_and_crash_recover
     )
     .await;
     tokio::time::sleep(Duration::from_millis(150)).await;
-    let uncertain = get(&server, &uncertain.task_id).await;
-    assert_eq!(uncertain.status, TaskStatus::Queued);
-    assert!(uncertain
-        .reason
-        .as_deref()
-        .unwrap()
-        .contains(&crashed.task_id));
-    assert!(uncertain.process_id.is_none());
-    let cancelled_wait = task(
-        rpc(
-            &server,
-            LocalRequest::Cancel {
-                task_id: uncertain.task_id,
-            },
-        )
-        .await,
-    );
-    assert_eq!(cancelled_wait.status, TaskStatus::Cancelled);
+    #[cfg(windows)]
+    {
+        // Only a physically reconciled, journal-bound Job Object permits a new
+        // explicit request. The crashed operation above stays indeterminate.
+        let recovered_next = wait(&server, &uncertain.task_id, true).await;
+        assert_eq!(recovered_next.status, TaskStatus::Succeeded);
+    }
+    #[cfg(not(windows))]
+    {
+        let uncertain = get(&server, &uncertain.task_id).await;
+        assert_eq!(uncertain.status, TaskStatus::Queued);
+        assert!(uncertain
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains(&crashed.task_id));
+        assert!(uncertain.process_id.is_none());
+        let cancelled_wait = task(
+            rpc(
+                &server,
+                LocalRequest::Cancel {
+                    task_id: uncertain.task_id,
+                },
+            )
+            .await,
+        );
+        assert_eq!(cancelled_wait.status, TaskStatus::Cancelled);
+    }
     // The crash blocks only its project. A healthy independent project can
     // execute the changed profile without treating a new epoch as cleanup proof.
     let next = submit(&server, request("first", "explicit-new-profile", "inspect")).await;

@@ -45,7 +45,7 @@ fn main() -> ExitCode {
             }
             ExitCode::SUCCESS
         }
-        "tree" => {
+        "tree" | "tree-parent-exits" => {
             let mut command = Command::new(std::env::current_exe().unwrap());
             command.arg("child");
             #[cfg(windows)]
@@ -53,10 +53,15 @@ fn main() -> ExitCode {
                 use std::os::windows::process::CommandExt;
                 command.creation_flags(0x08000000); // CREATE_NO_WINDOW for automated gates.
             }
+            // tree-parent-exits deliberately leaves a descendant owned by the
+            // caller's Windows Job Object, to test root-PID absence during recovery.
+            #[allow(clippy::zombie_processes)]
             let mut child = command.spawn().expect("fixture child");
             println!("child pid={}", child.id());
             io::stdout().flush().unwrap();
-            let _ = child.wait();
+            if mode == "tree" {
+                let _ = child.wait();
+            }
             ExitCode::SUCCESS
         }
         "long" | "child" => loop {

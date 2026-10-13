@@ -351,16 +351,35 @@ fn import_completion_releases_only_its_project_and_rejects_task_proofs() {
         ))
         .is_err());
     assert_eq!(store.resource_leases(true).unwrap()[0].cleanup_proof, None);
-    store
+    let completed = store
         .with_execution(&token, |s| {
             s.finish_import_execution(&token, TaskStatus::Failed, "copy stopped")
         })
         .unwrap();
+    assert!(completed.finished_at_ms.is_some());
     assert_eq!(
         store.resource_leases(false).unwrap()[0].cleanup_proof,
         Some(CleanupProof::ImportThreadStopped)
     );
     store.claim_task(&next.task_id).unwrap();
+    let ready = import(&mut store, "second", "verified-import");
+    let (_, ready_token) = store.claim_import(&ready.import_id).unwrap();
+    store
+        .with_execution(&ready_token, |s| {
+            let mut record = s.import_snapshot(&ready.import_id)?;
+            record.phase = "verified".into();
+            record.commit = Some("verified-commit".into());
+            s.save_import(&mut record)
+        })
+        .unwrap();
+    let ready = store
+        .with_execution(&ready_token, |s| {
+            s.finish_import_execution(&ready_token, TaskStatus::Succeeded, "ready for build")
+        })
+        .unwrap();
+    assert_eq!(ready.phase, "verified");
+    assert_eq!(ready.commit.as_deref(), Some("verified-commit"));
+    assert!(ready.finished_at_ms.is_some());
 }
 
 #[test]

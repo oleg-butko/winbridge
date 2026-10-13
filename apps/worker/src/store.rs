@@ -20,7 +20,7 @@ mod domain_records;
 pub use domain_records::JournalSnapshot;
 mod task_records;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 10;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 11;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -250,6 +250,26 @@ impl Store {
             migration
                 .pragma_update(None, "user_version", 10)
                 .map_err(sql)?;
+            migration.commit().map_err(sql)?;
+        }
+        if version < 11 {
+            if version == 10 {
+                let backup = path.with_file_name(format!(
+                    "journal-v10-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            migration.execute_batch("ALTER TABLE resource_leases ADD COLUMN physical TEXT CHECK(physical IS NULL OR (json_valid(physical) AND kind='task' AND attempt IS NOT NULL AND (proof IS NULL OR proof='process_tree_empty')));
+                CREATE TRIGGER resource_physical_guard BEFORE UPDATE ON resource_leases WHEN (OLD.physical IS NOT NULL AND NEW.physical IS NOT OLD.physical) OR (OLD.physical IS NULL AND NEW.physical IS NOT NULL AND (OLD.kind!='task' OR OLD.attempt IS NULL OR OLD.state!='held' OR NEW.state!='held' OR OLD.proof IS NOT NULL OR NEW.proof IS NOT NULL)) BEGIN SELECT RAISE(ABORT,'Physical execution identity is immutable and may bind only to an active task'); END;
+                PRAGMA user_version=11;").map_err(sql)?;
             migration.commit().map_err(sql)?;
         }
         let authority = Self::read_authority(&connection)?;

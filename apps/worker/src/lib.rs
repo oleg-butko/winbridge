@@ -23,7 +23,7 @@ use std::{
 };
 use store::Store;
 use winbridge_core::config::WorkerConfig;
-use winbridge_core::task::{TaskEffect, TaskEvent};
+use winbridge_core::task::TaskEffect;
 use winbridge_platform::ManagedChild;
 use winbridge_protocol::{
     LocalRequest, LocalResponse, OutputStream, TaskRecord, TaskStatus, WorkerInfo, PROTOCOL_VERSION,
@@ -96,6 +96,7 @@ pub struct Worker {
     active_projects: Mutex<HashMap<String, String>>,
     active_jobs: AtomicUsize,
     readiness_scans: Mutex<HashMap<String, (u64, Vec<u8>)>>,
+    recovery_scan: Mutex<Instant>,
     checks: Mutex<HashMap<String, Option<Result<workflows::CheckResult>>>>,
     stop: AtomicBool,
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
@@ -168,6 +169,7 @@ impl Worker {
         store.begin_authority()?;
         store.recover_resource_leases()?;
         store.capture_legacy_resources()?;
+        store.reconcile_process_resources()?;
         store.recover()?;
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
@@ -190,6 +192,7 @@ impl Worker {
             active_projects: Mutex::new(HashMap::new()),
             active_jobs: AtomicUsize::new(0),
             readiness_scans: Mutex::new(HashMap::new()),
+            recovery_scan: Mutex::new(Instant::now()),
             checks: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
@@ -436,6 +439,7 @@ impl Worker {
                 };
                 Ok(LocalResponse::Info {
                     info: Box::new(WorkerInfo {
+                        resource_recovery: store.resource_recovery_summary()?,
                         build: Some(winbridge_protocol::build_identity()),
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
@@ -594,6 +598,24 @@ impl Worker {
             return Ok(());
         }
         self.automatic_output_cleanup()?;
+        {
+            let mut last = self
+                .recovery_scan
+                .lock()
+                .map_err(|_| "recovery scan lock poisoned")?;
+            if last.elapsed() >= Duration::from_secs(1) {
+                let result = self.store()?.reconcile_process_resources();
+                if let Err(error) = result {
+                    self.record_journal_fault(
+                        "physical-reconciliation",
+                        "physical cleanup result was not committed",
+                        &error,
+                    );
+                    return Ok(());
+                }
+                *last = Instant::now();
+            }
+        }
         let mut active = self
             .active_projects
             .lock()
@@ -895,7 +917,11 @@ impl Worker {
         *cleanup
             .lock()
             .map_err(|_| "process cleanup receipt poisoned")? = None;
-        let (child, stdout, stderr) = match ManagedChild::spawn(&task.resolved_command) {
+        let job_name = Store::execution_job_name(&token)?;
+        let (child, stdout, stderr) = match ManagedChild::prepare(
+            &task.resolved_command,
+            Some(&job_name),
+        ) {
             Ok(child) => child,
             Err(error) => {
                 if !error.no_process_created {
@@ -931,12 +957,7 @@ impl Worker {
         {
             let mut store = self.store()?;
             store.with_execution(&token, |store| {
-                store.transition(
-                    &id,
-                    TaskEvent::ProcessStarted {
-                        process_id: child.id(),
-                    },
-                )
+                store.bind_task_process(&token, child.id(), child.identity())
             })?;
         }
         let fault = Arc::new(AtomicBool::new(false));
@@ -985,6 +1006,26 @@ impl Worker {
             })
         })
         .collect();
+        // Recheck fencing immediately before resuming. A failed binding or owner
+        // check drops ProcessOwner and kills the still-suspended managed tree.
+        let current = self.execution_store(&token, |store| store.get(&id))?;
+        if self.stop.load(Ordering::Acquire) || current.cancel_requested {
+            child.cleanup()?;
+            child.drain_readers();
+            self.execution_store(&token, |store| {
+                store.finish_task_execution(
+                    &token,
+                    TaskStatus::Cancelled,
+                    None,
+                    "Command cancelled before resuming journal-bound process",
+                    store::CleanupProof::ProcessTreeEmpty,
+                )
+            })?;
+            return Ok(());
+        }
+        child
+            .resume()
+            .map_err(|error| format!("Could not resume journal-bound process: {error}"))?;
         let deadline = if self.store()?.application_for_task(&id)?.is_some() {
             None
         } else {

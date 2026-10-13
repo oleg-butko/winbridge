@@ -269,7 +269,7 @@ pub fn reduce(
             append_event(
                 &mut record,
                 now_ms,
-                format!("Process {process_id} started; stdout/stderr are drained independently"),
+                format!("Process {process_id} observed; stdout/stderr are drained independently"),
             );
             TaskEffect::RecordObservation
         }

@@ -38,12 +38,15 @@ await writeFile(controllerConfig, JSON.stringify({ schemaVersion: 1, instanceId:
 const fixture = join(root, "target/debug/winbridge-fixture");
 const preferencesPath = join(run, "winbridge-desktop-state.local.json");
 const otherProject = join(run, "second project");
+const recoveryProject = join(run, "recovery project");
 await mkdir(project);
 await mkdir(otherProject);
+await mkdir(recoveryProject);
 await mkdir(join(project, "nested"));
 await writeFile(config, JSON.stringify({ schemaVersion: 1, instanceId: "ui-test", nodeId: "linux-ui-test", stateDirectory: join(run, "state"),
   delivery: {adapter:"shared-folder",root:shared,namespace:"WinBridge",peerRoot:shared}, worker: { keepRunningOnUiExit: true, controllerUrl: `ws://127.0.0.1:${controllerPort}` }, projects: [{ id: "fixture", workspaceRoot: project, recipeProfile:"common", allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [{ id: "direct", executable: fixture, arguments: ["success"], workingDirectory: ".", timeoutMs: 10000 }] },
-    { id: "other-fixture", workspaceRoot: otherProject, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [], recipeProfile:"common" }],
+    { id: "other-fixture", workspaceRoot: otherProject, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [], recipeProfile:"common" },
+    { id: "recovery-fixture", workspaceRoot: recoveryProject, allowDirectCommands: true, maxConcurrentMutations: 1, recipes: [] }],
   recipeProfiles:[{id:"common",label:"Общие команды ✓",description:"Профиль двух проектов",recipes:[{id:"shared-success",executable:fixture,arguments:["success"],workingDirectory:".",timeoutMs:10000},{id:"shared-build",executable:"cargo",arguments:["build","--locked","--offline","--target-dir","${workspaceRoot}/build-cache"],workingDirectory:".",timeoutMs:180000}]}] }));
 
 function call(request, endpoint = socket) {
@@ -72,11 +75,13 @@ async function until(check, message) {
 let worker;
 let controller;
 let browser;
+let page;
+let workerLog = "";
 let server;
 let crashedPid;
 async function startWorker() {
   worker = spawn(workerExe, ["--config", config, "serve"], { stdio: ["ignore", "ignore", "pipe"] });
-  worker.stderr.on("data", () => {});
+  worker.stderr.on("data", (bytes) => { workerLog = (workerLog + bytes.toString()).slice(-8192); });
   await until(async () => (await call({ method: "info" })).kind === "info", "worker unavailable");
 }
 async function startController() {
@@ -110,7 +115,7 @@ try {
   const url = `http://127.0.0.1:${address.port}`;
   const executablePath = process.env.WINBRIDGE_BROWSER ?? (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined);
   browser = await chromium.launch({ executablePath, chromiumSandbox: true });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
+  page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   let loseFirstAck = true;
@@ -239,6 +244,7 @@ try {
   await page.getByRole("button",{name:"Проверить приём импорта",exact:true}).click();
   await page.getByText("Готово для сборки",{exact:true}).waitFor();
   const imported=(await call({method:"get_import",importId:importedId})).import;
+  assert.ok(imported.finishedAtMs, "terminal import lost its completion timestamp");
   assert.equal(imported.status,"succeeded");
   assert.equal((await call({method:"list_imports"})).imports.length,1);
   assert.equal(await readFile(join(imported.workspacePath,"Привет.txt"),"utf8"),"UI snapshot ✓");
@@ -318,6 +324,11 @@ try {
   await until(async () => (await call({ method: "get_task", taskId: tree.taskId })).task.status === "cancelled", "tree was not cancelled");
   await page.locator('#native-task-detail .mantine-Badge-root').filter({ hasText: "Отменено" }).waitFor();
 
+  // Unix cannot physically reconcile the crashed tree. Keep its unknown lease
+  // in a dedicated project so subsequent independent project tests can proceed.
+  await page.getByRole("textbox", { name: "Зарегистрированный проект", exact: true }).click();
+  await page.getByRole("option", { name: "recovery-fixture", exact: true }).click();
+  await page.getByLabel("Executable", { exact: true }).fill(fixture);
   await page.getByLabel("Аргументы — JSON-массив строк", { exact: true }).fill('["long"]');
   await page.getByRole("button", { name: "Передать задачу worker", exact: true }).click();
   await until(async () => { const task = await latestTask(); return task.submission.command.arguments[0] === "long" && task.status === "running" && task.processId !== null; }, "long command did not start");
@@ -339,6 +350,11 @@ try {
   await startWorker();
   await page.locator('#native-task-detail .mantine-Badge-root').filter({ hasText: "Результат неизвестен" }).waitFor();
   assert.equal((await call({ method: "get_task", taskId: long.taskId })).task.status, "indeterminate");
+  await page.locator("#resource-recovery").waitFor();
+  assert.ok((await page.locator("#resource-recovery").innerText()).includes(long.taskId), "recovery panel lost the blocked operation identity");
+  assert.ok((await page.locator("#resource-recovery").innerText()).includes("одного PID недостаточно"), "Unix recovery falsely promised physical verification");
+  await page.getByRole("textbox", { name: "Зарегистрированный проект", exact: true }).click();
+  await page.getByRole("option", { name: "fixture", exact: true }).click();
 
   const reportPage = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
   reportPage.on("pageerror", (error) => errors.push(error.message));
@@ -718,7 +734,7 @@ try {
   assert.equal(await settings.getByTestId("settings-saved").count(),0);await settings.getByTestId("settings-save").click();await settings.getByTestId("settings-saved").waitFor();
   assert.equal(settingsCalls.at(-1).request.requestId,settingsCalls.at(-2).request.requestId);assert.equal(await readFile(config,"utf8"),settingsPreview);
   const runtimeSettings=(await call({method:"get_runtime_settings"})).settings;assert.equal(runtimeSettings.restartRequired,true);assert.notEqual(JSON.parse(runtimeSettings.activeJson).maxOutputBytesPerTask,8192);
-  await exec("python3",["-c","import sqlite3,sys,json,time; c=sqlite3.connect(sys.argv[1]); raw=c.execute('SELECT record FROM tasks WHERE id=?',(sys.argv[2],)).fetchone()[0]; t=json.loads(raw); t['finishedAtMs']=int(time.time()*1000)-40*86400000; c.execute('UPDATE tasks SET record=? WHERE id=?',(json.dumps(t),sys.argv[2])); c.commit()",join(run,"state/journal.sqlite"),historical.taskId]);
+  await exec("python3",["-c","import sqlite3,sys,json,time; c=sqlite3.connect(sys.argv[1]); raw=c.execute('SELECT record FROM tasks WHERE id=?',(sys.argv[2],)).fetchone()[0]; t=json.loads(raw); t['finishedAtMs']=int(time.time()*1000)-40*86400000; c.execute('UPDATE tasks SET record=?,revision=revision+1 WHERE id=?',(json.dumps(t),sys.argv[2])); c.commit()",join(run,"state/journal.sqlite"),historical.taskId]);
   await settings.getByTestId("cleanup-preview").click();await settings.getByTestId("cleanup-summary").filter({hasText:"1 задач"}).waitFor();
   const cleanupBefore=(await call({method:"get_task",taskId:historical.taskId})).task;loseCleanupAck=true;
   await history.getByTestId(`history-open-${historical.taskId}`).click();
@@ -766,6 +782,14 @@ try {
   await until(async()=>!await validationBanner.isVisible(),"Validation banner did not clear");
   assert.deepEqual(errors, []);
   console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup, pinned-base delta preview/import and same-method lost ACK; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences and exact popup targets. History: paging/keyboard/redacted editable diagnostics. Settings/retention: keyboard navigation, unsaved close guard, exact reviewed config, save ACK loss with same ID, preview/actual output cleanup and same-key reconciliation; task history/keys retained. Native windows and diagnostic publication are validated separately on Windows.");
+} catch (error) {
+  const diagnostics = await Promise.allSettled([
+    call({ method: "info" }), call({ method: "list_imports" }), call({ method: "list_tasks" }),
+    page?.locator("body").innerText(),
+  ]);
+  console.error("Isolated UI gate diagnostics:", JSON.stringify(diagnostics));
+  console.error("Isolated UI worker log:", workerLog);
+  throw error;
 } finally {
   if (crashedPid) { try { process.kill(-crashedPid, "SIGKILL"); } catch {} }
   await browser?.close();

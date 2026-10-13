@@ -117,7 +117,11 @@ refusal прежнего binary.
 добавляют schema 10: mutation/application scopes, atomic claim, readiness handoff
 и освобождение только с physical receipt. [Native gate](plans/architecture-transition/windows-resource-leases-gate-2026-10-13.md)
 passed: 157 tests, actual schema-10 refusal не меняет test journal.
-Physical reconciliation и explicit restore recovery mode остаются A2.4; глобальный параллелизм и actor migration не включены.
+[A2.4.1](plans/architecture-transition/physical-reconciliation.md) добавляет schema 11:
+приостановленный Windows process, immutable named Job binding/PID commit до resume,
+read-only physical reconciliation и bounded unresolved inventory в Info/UI.
+Native gate ожидается; installed worker остаётся schema 6. Explicit restore
+recovery mode — A2.4.2; глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 

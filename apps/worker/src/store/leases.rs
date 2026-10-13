@@ -1,6 +1,7 @@
 //! Durable project execution ownership. A terminal result is not a cleanup proof.
 use super::{now_ms, sql, ExecutionToken, JournalAuthority, OperationKind, Result, Store};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use winbridge_platform::process_identity::{ProcessIdentity, ProcessObservation};
 use winbridge_protocol::{
     ApplicationRecord, ApplicationStatus, ImportRecord, TaskStatus, WorkflowRecord,
     WorkflowStepStatus,
@@ -54,10 +55,18 @@ pub struct ResourceLease {
     pub scope: LeaseScope,
     pub cleanup_proof: Option<CleanupProof>,
     pub legacy_members: String,
+    pub physical: Option<ProcessIdentity>,
+    pub reason: Option<String>,
     revision: i64,
 }
 const LEASE_COLUMNS: &str =
-    "id,project,kind,operation,attempt,incarnation,epoch,authority,state,proof,members,revision,scope";
+    "id,project,kind,operation,attempt,incarnation,epoch,authority,state,proof,members,revision,scope,physical,reason";
+fn job_name(incarnation: &str, attempt: &str) -> Result<String> {
+    let incarnation =
+        uuid::Uuid::parse_str(incarnation).map_err(|_| "local journal: invalid incarnation")?;
+    let attempt = uuid::Uuid::parse_str(attempt).map_err(|_| "local journal: invalid attempt")?;
+    Ok(format!("Local\\WinBridge-{incarnation}-{attempt}"))
+}
 fn lease_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ResourceLease> {
     let epoch: i64 = row.get(6)?;
     let kind: String = row.get(2)?;
@@ -92,6 +101,11 @@ fn lease_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ResourceLease> {
             _ => return Err(rusqlite::Error::InvalidQuery),
         },
         legacy_members: row.get(10)?,
+        physical: row
+            .get::<_, Option<String>>(13)?
+            .map(|raw| serde_json::from_str(&raw).map_err(|_| rusqlite::Error::InvalidQuery))
+            .transpose()?,
+        reason: row.get(14)?,
         revision: row.get(11)?,
         scope: match row.get::<_, String>(12)?.as_str() {
             "project_mutation" => LeaseScope::ProjectMutation,
@@ -101,6 +115,169 @@ fn lease_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ResourceLease> {
     })
 }
 impl Store {
+    pub fn resource_recovery_summary(
+        &self,
+    ) -> Result<Option<winbridge_protocol::ResourceRecovery>> {
+        let count: i64 = self
+            .connection
+            .query_row(
+                "SELECT count(*) FROM resource_leases WHERE state='uncertain'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(sql)?;
+        let count = u64::try_from(count).map_err(|_| "local journal: invalid resource count")?;
+        if count == 0 {
+            return Ok(None);
+        }
+        let mut statement = self.connection.prepare(&format!("SELECT {LEASE_COLUMNS} FROM resource_leases WHERE state='uncertain' ORDER BY rowid LIMIT 50")).map_err(sql)?;
+        let resources = statement
+            .query_map([], lease_row)
+            .map_err(sql)?
+            .map(|row| {
+                let lease = row.map_err(sql)?;
+                Ok(winbridge_protocol::ResourceRecoveryEntry {
+                    project_id: lease.project_id,
+                    operation_id: lease.operation_id,
+                    operation_kind: lease.kind.as_str().into(),
+                    physical_binding: lease.physical.is_some(),
+                    reason: lease
+                        .reason
+                        .unwrap_or_else(|| "Остановка прежнего исполнителя не подтверждена".into())
+                        .chars()
+                        .take(512)
+                        .collect(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Some(winbridge_protocol::ResourceRecovery {
+            unresolved_count: count,
+            truncated: count > resources.len() as u64,
+            resources,
+        }))
+    }
+    pub fn execution_job_name(token: &ExecutionToken) -> Result<String> {
+        job_name(&token.authority.incarnation, &token.attempt_id)
+    }
+
+    /// The suspended Windows process and its immutable physical binding become
+    /// durable together. Only after this transaction may the caller resume it.
+    pub fn bind_task_process(
+        &mut self,
+        token: &ExecutionToken,
+        process_id: u32,
+        identity: Option<&ProcessIdentity>,
+    ) -> Result<()> {
+        self.guard_callback(
+            Some(OperationKind::Task),
+            Some(&token.operation.operation_id),
+        )?;
+        self.check_execution(token)?;
+        if token.operation.kind != OperationKind::Task || process_id == 0 {
+            return Err("local journal: invalid task process binding".into());
+        }
+        if let Some(identity) = identity {
+            if identity.job_name != Self::execution_job_name(token)?
+                || identity.process_id != process_id
+                || identity.creation_time == 0
+                || identity.host_id.len() != 64
+                || !identity.host_id.bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err(
+                    "local journal: physical binding does not match this execution attempt".into(),
+                );
+            }
+        }
+        let tx = self.write_transaction(TransactionBehavior::Immediate)?;
+        Self::assert_attempt(&tx, token)?;
+        let lease = Self::operation_lease(&tx, OperationKind::Task, &token.operation.operation_id)?
+            .ok_or("local journal: task resource lease is missing")?;
+        if lease.state != LeaseState::Held
+            || lease.project_id != token.operation.project_id
+            || lease.authority != token.authority
+            || lease.attempt_id.as_deref() != Some(&token.attempt_id)
+            || lease.physical.is_some()
+            || lease.cleanup_proof.is_some()
+        {
+            return Err(
+                "local journal: process may bind only once to its held execution lease".into(),
+            );
+        }
+        // Even on Unix, a second PID observation is rejected rather than silently
+        // rebinding an operation that has no Windows Job Object.
+        if Self::read_task_snapshot(&tx, &token.operation.operation_id)?
+            .record
+            .process_id
+            .is_some()
+        {
+            return Err("local journal: process is already bound".into());
+        }
+        Self::transition_task_on(
+            &tx,
+            &token.operation.operation_id,
+            None,
+            winbridge_core::task::TaskEvent::ProcessStarted { process_id },
+        )?;
+        if let Some(identity) = identity {
+            let revision = lease
+                .revision
+                .checked_add(1)
+                .ok_or("local journal: lease revision exhausted")?;
+            let changed = tx.execute("UPDATE resource_leases SET physical=?2,revision=?3 WHERE id=?1 AND revision=?4",params![lease.lease_id,serde_json::to_string(identity).map_err(|e|e.to_string())?,revision,lease.revision]).map_err(sql)?;
+            if changed != 1 {
+                return Err(
+                    "local journal: physical binding ignored or stale; process must not resume"
+                        .into(),
+                );
+            }
+        }
+        tx.commit().map_err(sql)
+    }
+
+    /// Startup holds the exclusive worker instance lock. Observation never
+    /// terminates processes and an unresolved lease never authorizes dispatch.
+    pub(crate) fn reconcile_process_resources(&mut self) -> Result<()> {
+        self.guard_callback(None, None)?;
+        for lease in self.resource_leases(true)? {
+            if lease.state != LeaseState::Uncertain || lease.authority == self.authority {
+                continue;
+            }
+            let Some(identity) = &lease.physical else {
+                continue;
+            };
+            let expected = lease
+                .attempt_id
+                .as_deref()
+                .map(|attempt| job_name(&lease.authority.incarnation, attempt))
+                .transpose()?;
+            if expected.as_deref() != Some(&identity.job_name) {
+                return Err(
+                    "local journal: physical Job Object does not match recorded execution".into(),
+                );
+            }
+            let observation = winbridge_platform::process_identity::observe_process(identity);
+            let (state, proof, reason) = match observation {
+                ProcessObservation::Empty(reason) => (
+                    LeaseState::Released,
+                    Some(CleanupProof::ProcessTreeEmpty),
+                    reason,
+                ),
+                ProcessObservation::Occupied(reason) | ProcessObservation::Unknown(reason) => {
+                    (LeaseState::Uncertain, None, reason)
+                }
+            };
+            if state == lease.state
+                && proof == lease.cleanup_proof
+                && lease.reason.as_deref() == Some(&reason)
+            {
+                continue;
+            }
+            let tx = self.write_transaction(TransactionBehavior::Immediate)?;
+            Self::change_lease(&tx, &lease, state, proof, &reason)?;
+            tx.commit().map_err(sql)?;
+        }
+        Ok(())
+    }
     pub fn resource_leases(&self, active_only: bool) -> Result<Vec<ResourceLease>> {
         let query = format!(
             "SELECT {LEASE_COLUMNS} FROM resource_leases {} ORDER BY rowid",
@@ -308,6 +485,17 @@ impl Store {
         {
             return Err("local journal: stale resource owner/attempt; cleanup rejected".into());
         }
+        if proof == CleanupProof::NoProcessCreated
+            && (lease.physical.is_some()
+                || Self::read_task_snapshot(connection, &token.operation.operation_id)?
+                    .record
+                    .process_id
+                    .is_some())
+        {
+            return Err(
+                "local journal: a bound OS process cannot have a no-process receipt".into(),
+            );
+        }
         if lease.cleanup_proof == Some(proof) {
             return Ok(());
         }
@@ -414,7 +602,7 @@ impl Store {
         Self::cleanup_on(&tx, token, CleanupProof::ImportThreadStopped)?;
         let mut observed = Self::read_domain::<ImportRecord>(&tx, &token.operation.operation_id)?;
         observed.status = status;
-        observed.phase = "finished".into();
+        observed.finished_at_ms = Some(now_ms());
         observed.reason = Some(reason.into());
         Self::import_event(&mut observed, reason);
         Self::write_domain(&tx, &observed)?;
