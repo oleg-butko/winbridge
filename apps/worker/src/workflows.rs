@@ -117,7 +117,8 @@ impl Store {
     }
     pub fn save_workflow(&mut self, record: &mut JournalSnapshot<WorkflowRecord>) -> Result<()> {
         self.guard_callback(None, None)?;
-        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Deferred)?;
+        // Reservation checks and the root transition need one serialized writer.
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         Self::write_domain(&transaction, record)?;
         crate::attention::workflow_outcome(&transaction, record)?;
         transaction.commit().map_err(sql)?;
@@ -571,12 +572,24 @@ impl Worker {
                 if earlier_task || earlier_import {
                     continue;
                 }
+                let before = flow.clone();
                 flow.status = TaskStatus::Running;
+                flow.reason = None;
                 Store::workflow_event(
                     &mut flow,
                     "Project reserved for import/build/start/readiness; unrelated mutations wait",
                 );
                 if let Err(error) = store.save_workflow(&mut flow) {
+                    if error.starts_with("resource busy:") {
+                        flow = before;
+                        let reason = error.trim_start_matches("resource busy:").trim();
+                        if flow.reason.as_deref() != Some(reason) {
+                            flow.reason = Some(reason.into());
+                            Store::workflow_event(&mut flow, reason);
+                            store.save_workflow(&mut flow)?;
+                        }
+                        continue;
+                    }
                     self.record_journal_fault(
                         &flow.workflow_id,
                         &error,
@@ -1029,6 +1042,7 @@ impl Worker {
         if flow.steps[3].status == WorkflowStepStatus::Succeeded
             && active.get(&app.project_id) == Some(&app.task_id)
         {
+            store.handoff_application_resource(&app.application_id)?;
             active.remove(&app.project_id); // The process remains owned; only the startup mutation lease ends.
         }
         Ok(())

@@ -324,6 +324,55 @@ fn actual_pipeline_dedup_readiness_log_and_owner_leases() {
 }
 
 #[test]
+fn ignored_readiness_resource_handoff_keeps_mutation_reserved_and_reports_recovery_required() {
+    let (_temp, config, request) = setup();
+    let path = config.state_directory.join("journal.sqlite");
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let accepted = accept(&worker, request);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("CREATE TRIGGER ignore_handoff BEFORE UPDATE OF scope ON resource_leases BEGIN SELECT RAISE(IGNORE); END;").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        match worker.schedule() {
+            Ok(()) => {}
+            Err(error) => {
+                assert!(error.contains("application resource handoff"), "{error}");
+                break;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "handoff failure was not surfaced"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert!(matches!(
+        worker.handle(LocalRequest::GetWorkflow {
+            workflow_id: accepted.workflow_id.clone()
+        }),
+        LocalResponse::Error { .. }
+    ));
+    let store = winbridge_worker::store::Store::open(&path).unwrap();
+    let record = store.workflow(&accepted.workflow_id).unwrap();
+    assert_ne!(record.status, TaskStatus::Succeeded);
+    let app = store
+        .application(record.application_id.as_ref().unwrap())
+        .unwrap();
+    let leases = store.resource_leases(true).unwrap();
+    assert_eq!(leases.len(), 1);
+    assert_eq!(leases[0].operation_id, app.task_id);
+    assert_eq!(
+        leases[0].scope,
+        winbridge_worker::store::LeaseScope::ProjectMutation
+    );
+    assert_eq!(leases[0].cleanup_proof, None);
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!()
+    };
+    assert!(info.journal_recovery_required.is_some());
+}
+
+#[test]
 fn build_failure_never_launches_a_stale_existing_executable() {
     let (_temp, config, request) = setup();
     let worker = WorkerOwner(Worker::open(config).unwrap());
@@ -482,7 +531,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();

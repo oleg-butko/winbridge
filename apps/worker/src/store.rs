@@ -10,7 +10,9 @@ use winbridge_protocol::{
     TaskSubmission,
 };
 
+mod leases;
 mod ownership;
+pub use leases::{CleanupProof, LeaseScope, LeaseState, ResourceLease};
 pub use ownership::{
     ExecutionAttempt, ExecutionToken, JournalAuthority, OperationKind, OperationRef,
 };
@@ -18,7 +20,7 @@ mod domain_records;
 pub use domain_records::JournalSnapshot;
 mod task_records;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 9;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 10;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -223,6 +225,30 @@ impl Store {
             }
             migration
                 .pragma_update(None, "user_version", 9)
+                .map_err(sql)?;
+            migration.commit().map_err(sql)?;
+        }
+        if version < 10 {
+            if version == 9 {
+                let backup = path.with_file_name(format!(
+                    "journal-v9-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            migration.execute_batch("CREATE TABLE resource_leases(id TEXT PRIMARY KEY,project TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('task','import')),operation TEXT NOT NULL,attempt TEXT UNIQUE,incarnation TEXT NOT NULL,epoch INTEGER NOT NULL CHECK(typeof(epoch)='integer' AND epoch>=0),authority TEXT NOT NULL,acquired INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN ('held','uncertain','released')),scope TEXT NOT NULL DEFAULT 'project_mutation' CHECK(scope IN ('project_mutation','application_lifetime')),proof TEXT CHECK(proof IN ('no_process_created','process_tree_empty','import_thread_stopped')),members TEXT NOT NULL CHECK(json_valid(members)),reason TEXT,revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(revision)='integer' AND revision>=0),CHECK((kind='task' AND (proof IS NULL OR proof IN ('no_process_created','process_tree_empty'))) OR (kind='import' AND (proof IS NULL OR proof='import_thread_stopped'))),CHECK(state!='released' OR proof IS NOT NULL));
+                CREATE UNIQUE INDEX resource_project_owner ON resource_leases(project) WHERE state!='released' AND scope='project_mutation';
+                CREATE TRIGGER resource_revision_guard BEFORE UPDATE ON resource_leases WHEN NEW.revision!=OLD.revision+1 OR OLD.state='released' OR NEW.id!=OLD.id OR NEW.project!=OLD.project OR NEW.kind!=OLD.kind OR NEW.operation!=OLD.operation OR NEW.attempt IS NOT OLD.attempt OR NEW.incarnation!=OLD.incarnation OR NEW.epoch!=OLD.epoch OR NEW.authority!=OLD.authority OR NEW.acquired!=OLD.acquired OR NEW.members!=OLD.members OR (NEW.scope!=OLD.scope AND NOT(OLD.scope='project_mutation' AND NEW.scope='application_lifetime' AND OLD.state='held' AND NEW.state='held' AND OLD.kind='task' AND OLD.proof IS NULL AND NEW.proof IS NULL AND EXISTS(SELECT 1 FROM applications a JOIN workflows w ON w.id=a.workflow WHERE a.task=OLD.operation AND a.status='ready' AND json_extract(w.record,'$.steps[3].status')='succeeded'))) OR (OLD.proof IS NOT NULL AND NEW.proof IS NOT OLD.proof) OR (OLD.state='uncertain' AND NEW.state='held') BEGIN SELECT RAISE(ABORT,'Resource identity/receipt is immutable and revision must advance'); END;
+                CREATE TRIGGER resource_no_delete BEFORE DELETE ON resource_leases BEGIN SELECT RAISE(ABORT,'Resource ownership history must be retained'); END;").map_err(sql)?;
+            migration
+                .pragma_update(None, "user_version", 10)
                 .map_err(sql)?;
             migration.commit().map_err(sql)?;
         }

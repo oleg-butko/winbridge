@@ -39,12 +39,15 @@ fn accept(store: &mut Store, root: &Path, key: &str) -> TaskRecord {
     store.accept(request, command, None).unwrap()
 }
 fn imported(store: &mut Store) -> ImportRecord {
+    imported_in(store, "fixture")
+}
+fn imported_in(store: &mut Store, project: &str) -> ImportRecord {
     store
         .accept_import(
             ImportSubmission {
                 protocol_version: 1,
                 request_id: "import".into(),
-                project_id: "fixture".into(),
+                project_id: project.into(),
                 snapshot_id: "snapshot".into(),
                 manifest_sha256: "a".repeat(64),
                 idempotency_key: "import".into(),
@@ -461,7 +464,7 @@ fn old_attempt_cannot_write_pid_output_finish_or_import_progress_after_authority
     old.begin_authority().unwrap();
     let task = accept(&mut old, root.path(), "old");
     let (_, task_token) = old.claim_task(&task.task_id).unwrap();
-    let import = imported(&mut old);
+    let import = imported_in(&mut old, "other");
     let (_, import_token) = old.claim_import(&import.import_id).unwrap();
     let mut next = Store::open(&path).unwrap();
     next.begin_authority().unwrap();
@@ -519,7 +522,12 @@ fn callback_cannot_retarget_or_nest_another_operation_or_change_administrative_s
     let mut store = Store::open(&path).unwrap();
     store.begin_authority().unwrap();
     let first = accept(&mut store, root.path(), "first");
-    let second = accept(&mut store, root.path(), "second");
+    // Separate projects provide independent owners; this test never dispatches.
+    let mut other = request("second", "success");
+    other.project_id = "other".into();
+    let second = store
+        .accept(other, first.resolved_command.clone(), None)
+        .unwrap();
     let (_, one) = store.claim_task(&first.task_id).unwrap();
     let (_, two) = store.claim_task(&second.task_id).unwrap();
     assert!(store
@@ -804,7 +812,7 @@ fn schema_eight_migration_keeps_legacy_bytes_backup_and_keys_without_fabricating
     drop(store);
     let db = Connection::open(&path).unwrap();
     db.execute_batch(
-        "DROP TABLE execution_attempts; DROP TABLE journal_authority; PRAGMA user_version=8;",
+        "DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; PRAGMA user_version=8;",
     )
     .unwrap();
     let raw: (String, String) = db
@@ -891,7 +899,7 @@ fn failed_metadata_migration_rolls_back_tables_and_schema() {
     let path = root.path().join("journal.sqlite");
     drop(Store::open(&path).unwrap());
     let db = Connection::open(&path).unwrap();
-    db.execute_batch("DROP TABLE execution_attempts; DROP TABLE journal_authority; CREATE TABLE execution_attempts(dummy); PRAGMA user_version=8;").unwrap();
+    db.execute_batch("DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; CREATE TABLE execution_attempts(dummy); PRAGMA user_version=8;").unwrap();
     assert!(Store::open(&path).is_err());
     assert_eq!(
         db.query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))

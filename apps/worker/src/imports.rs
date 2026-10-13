@@ -412,8 +412,8 @@ impl Worker {
                 record.commit = Some(commit);
                 store.with_execution(&token, |store| store.save_import(&mut record))?;
                 store.with_execution(&token, |store| {
-                    store.finish_import(
-                        &id,
+                    store.finish_import_execution(
+                        &token,
                         TaskStatus::Succeeded,
                         "Local source generation verified; ready for explicit build",
                     )
@@ -423,8 +423,8 @@ impl Worker {
                 let cancelled =
                     store.get_import(&id)?.cancel_requested || self.stop.load(Ordering::Acquire);
                 store.with_execution(&token, |store| {
-                    store.finish_import(
-                        &id,
+                    store.finish_import_execution(
+                        &token,
                         if cancelled {
                             TaskStatus::Cancelled
                         } else {

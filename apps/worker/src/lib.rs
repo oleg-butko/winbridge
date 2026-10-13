@@ -30,6 +30,62 @@ use winbridge_protocol::{
 };
 
 pub type Result<T> = std::result::Result<T, String>;
+/// The receipt survives early errors. Only this OS owner can prove tree cleanup.
+struct ProcessOwner {
+    child: ManagedChild,
+    receipt: Arc<Mutex<Option<store::CleanupProof>>>,
+    readers: Vec<thread::JoinHandle<()>>,
+    cleaned: bool,
+}
+impl std::ops::Deref for ProcessOwner {
+    type Target = ManagedChild;
+    fn deref(&self) -> &Self::Target {
+        &self.child
+    }
+}
+impl std::ops::DerefMut for ProcessOwner {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.child
+    }
+}
+impl ProcessOwner {
+    fn cleanup(&mut self) -> Result<()> {
+        if self.cleaned {
+            return Ok(());
+        }
+        self.child
+            .terminate_tree()
+            .map_err(|e| format!("process tree termination failed: {e}"))?;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while self.child.try_wait().map_err(|e| e.to_string())?.is_none()
+            || !self.child.tree_is_empty().map_err(|e| e.to_string())?
+        {
+            if Instant::now() >= deadline {
+                return Err("process tree cleanup was not confirmed within 5 seconds; project remains reserved".into());
+            }
+            thread::sleep(Duration::from_millis(20));
+        }
+        self.cleaned = true;
+        Ok(())
+    }
+    fn drain_readers(&mut self) -> bool {
+        let mut failed = false;
+        for reader in self.readers.drain(..) {
+            failed |= reader.join().is_err();
+        }
+        failed
+    }
+}
+impl Drop for ProcessOwner {
+    fn drop(&mut self) {
+        if self.cleanup().is_ok() {
+            self.drain_readers();
+            if let Ok(mut receipt) = self.receipt.lock() {
+                *receipt = Some(store::CleanupProof::ProcessTreeEmpty);
+            }
+        }
+    }
+}
 pub struct Worker {
     config_path: Mutex<Option<std::path::PathBuf>>,
     maintenance: Mutex<(u64, Option<String>)>,
@@ -110,6 +166,8 @@ impl Worker {
         }
         let mut store = Store::open(&db_path)?;
         store.begin_authority()?;
+        store.recover_resource_leases()?;
+        store.capture_legacy_resources()?;
         store.recover()?;
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
@@ -139,6 +197,7 @@ impl Worker {
             _instance_lock: lock,
         });
         worker.recover_imports()?;
+        worker.store()?.release_stopped_import_resources()?;
         Ok(worker)
     }
     fn store(&self) -> Result<std::sync::MutexGuard<'_, Store>> {
@@ -566,7 +625,18 @@ impl Worker {
             {
                 continue;
             }
-            let (import, token) = store.claim_import(&import.import_id)?;
+            let (import, token) = match store.claim_import(&import.import_id) {
+                Ok(claim) => claim,
+                Err(reason) if reason.starts_with("resource busy:") => {
+                    store.note_resource_wait(
+                        store::OperationKind::Import,
+                        &import.import_id,
+                        &reason,
+                    )?;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             active.insert(project.clone(), import.import_id.clone());
             self.active_jobs.fetch_add(1, Ordering::AcqRel);
             let worker = Arc::clone(self);
@@ -575,8 +645,8 @@ impl Worker {
                     match worker.store() {
                         Ok(mut store) => {
                             if let Err(recovery) = store.with_execution(&token, |store| {
-                                store.finish_import(
-                                    &import.import_id,
+                                store.finish_import_execution(
+                                    &token,
                                     TaskStatus::Indeterminate,
                                     &error,
                                 )
@@ -624,7 +694,14 @@ impl Worker {
                     continue;
                 }
             }
-            let (decision, token) = store.claim_task(&task.task_id)?;
+            let (decision, token) = match store.claim_task(&task.task_id) {
+                Ok(claim) => claim,
+                Err(reason) if reason.starts_with("resource busy:") => {
+                    store.note_resource_wait(store::OperationKind::Task, &task.task_id, &reason)?;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            };
             if decision.effect != TaskEffect::ExecuteAcceptedCommand {
                 return Err("Task launch did not produce a committed execution decision".into());
             }
@@ -635,13 +712,24 @@ impl Worker {
             thread::spawn(move || {
                 let id = task.task_id.clone();
                 let project = task.submission.project_id.clone();
-                if let Err(error) = worker.execute(task, token.clone()) {
+                let cleanup = Arc::new(Mutex::new(Some(store::CleanupProof::NoProcessCreated)));
+                if let Err(error) = worker.execute(task, token.clone(), cleanup.clone()) {
                     eprintln!("task {id}: {error}; outcome requires reconciliation");
                     // Publish the fault before releasing the journal lock. Admission
                     // rechecks while holding it, so it cannot race the failed commit.
                     match worker.store() {
                         Ok(mut store) => {
                             if let Err(recovery_error) = store.with_execution(&token, |store| {
+                                if let Some(proof) = cleanup
+                                    .lock()
+                                    .map_err(|_| "process cleanup receipt poisoned")?
+                                    .as_ref()
+                                    .copied()
+                                {
+                                    // Persist the receipt independently if the outcome writer failed.
+                                    // The lease stays held until a terminal result is committed.
+                                    store.record_execution_cleanup(&token, proof)?;
+                                }
                                 store.finish(&id, TaskStatus::Indeterminate, None, &error)
                             }) {
                                 worker.record_journal_fault(&id, &error, &recovery_error);
@@ -720,7 +808,12 @@ impl Worker {
     ) -> Result<T> {
         self.store()?.with_execution(token, callback)
     }
-    fn execute(self: &Arc<Self>, task: TaskRecord, token: store::ExecutionToken) -> Result<()> {
+    fn execute(
+        self: &Arc<Self>,
+        task: TaskRecord,
+        token: store::ExecutionToken,
+        cleanup: Arc<Mutex<Option<store::CleanupProof>>>,
+    ) -> Result<()> {
         let id = task.task_id.clone();
         if self.stop.load(Ordering::Acquire)
             || self
@@ -728,11 +821,12 @@ impl Worker {
                 .cancel_requested
         {
             self.execution_store(&token, |store| {
-                store.finish(
-                    &id,
+                store.finish_task_execution(
+                    &token,
                     TaskStatus::Cancelled,
                     None,
                     "Cancelled before process creation",
+                    store::CleanupProof::NoProcessCreated,
                 )
             })?;
             return Ok(());
@@ -744,11 +838,12 @@ impl Worker {
                 .is_none_or(|r| r.snapshot_id != *snapshot)
             {
                 self.execution_store(&token, |store| {
-                    store.finish(
-                        &id,
+                    store.finish_task_execution(
+                        &token,
                         TaskStatus::Failed,
                         None,
                         "Task lacks a bound accepted snapshot manifest; submit a new explicit task",
+                        store::CleanupProof::NoProcessCreated,
                     )
                 })?;
                 return Ok(());
@@ -781,8 +876,8 @@ impl Worker {
                         .execution_store(&token, |store| store.get(&id))?
                         .cancel_requested;
                 self.execution_store(&token, |store| {
-                    store.finish(
-                        &id,
+                    store.finish_task_execution(
+                        &token,
                         if cancelled {
                             TaskStatus::Cancelled
                         } else {
@@ -790,28 +885,48 @@ impl Worker {
                         },
                         None,
                         &reason,
+                        store::CleanupProof::NoProcessCreated,
                     )
                 })?;
                 return Ok(());
             }
         }
         self.execution_store(&token, |_| Ok(()))?;
-        let (mut child, stdout, stderr) = match ManagedChild::spawn(&task.resolved_command) {
+        *cleanup
+            .lock()
+            .map_err(|_| "process cleanup receipt poisoned")? = None;
+        let (child, stdout, stderr) = match ManagedChild::spawn(&task.resolved_command) {
             Ok(child) => child,
             Err(error) => {
+                if !error.no_process_created {
+                    // A partially initialized OS process has no cleanup receipt.
+                    // Fallback records indeterminate and retains the project lease.
+                    return Err(format!("Process initialization failed after OS creation; cleanup requires reconciliation: {error}"));
+                }
+                *cleanup
+                    .lock()
+                    .map_err(|_| "process cleanup receipt poisoned")? =
+                    Some(store::CleanupProof::NoProcessCreated);
                 self.execution_store(&token, |store| {
-                    store.finish(
-                        &id,
+                    store.finish_task_execution(
+                        &token,
                         TaskStatus::Failed,
                         None,
                         &format!(
                             "Could not launch executable {:?}: {error}",
                             task.resolved_command.executable
                         ),
+                        store::CleanupProof::NoProcessCreated,
                     )
                 })?;
                 return Ok(());
             }
+        };
+        let mut child = ProcessOwner {
+            child,
+            receipt: cleanup,
+            readers: vec![],
+            cleaned: false,
         };
         {
             let mut store = self.store()?;
@@ -825,7 +940,7 @@ impl Worker {
             })?;
         }
         let fault = Arc::new(AtomicBool::new(false));
-        let readers: Vec<_> = [
+        child.readers = [
             (stdout, OutputStream::Stdout),
             (stderr, OutputStream::Stderr),
         ]
@@ -921,22 +1036,9 @@ impl Worker {
             thread::sleep(Duration::from_millis(20));
         };
         // Also reap descendants which outlive a one-shot parent; they must not hold pipes open.
-        child
-            .terminate_tree()
-            .map_err(|e| format!("process tree termination failed: {e}"))?;
-        let cleanup_deadline = Instant::now() + Duration::from_secs(5);
-        while child.try_wait().map_err(|e| e.to_string())?.is_none()
-            || !child.tree_is_empty().map_err(|e| e.to_string())?
-        {
-            if Instant::now() >= cleanup_deadline {
-                return Err("process tree did not terminate within 5 seconds; task remains indeterminate on recovery".into());
-            }
-            thread::sleep(Duration::from_millis(20));
-        }
-        for reader in readers {
-            if reader.join().is_err() {
-                fault.store(true, Ordering::Release);
-            }
+        child.cleanup()?;
+        if child.drain_readers() {
+            fault.store(true, Ordering::Release);
         }
         let (status, reason) = if fault.load(Ordering::Acquire) {
             (
@@ -947,7 +1049,13 @@ impl Worker {
             (status, reason)
         };
         self.execution_store(&token, |store| {
-            store.finish(&id, status, exit_code, &reason)
+            store.finish_task_execution(
+                &token,
+                status,
+                exit_code,
+                &reason,
+                store::CleanupProof::ProcessTreeEmpty,
+            )
         })?;
         Ok(())
     }

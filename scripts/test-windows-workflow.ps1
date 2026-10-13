@@ -51,7 +51,7 @@ cancel/timeout/process tree, recovery и совместимость сущест
 Рабочие exe/state не меняются; desktop и тестовые UI-окна не открываются.
 .PARAMETER TaskCasOnly
 Проверяет revisions/CAS tasks/imports/workflows/applications/attention,
-миграции schema 6/7/8 → 9, owner/attempt tokens, atomic child links, output/retention rollback,
+миграции schema 6/7/8/9 → 10, owner/attempt tokens, atomic child links, output/retention rollback,
 legacy contracts и process/workflow regressions без desktop/UI-окон.
 Требует TaskCasReferenceWorker; старый exe запускается с НОВЫМ тестовым state,
 чтобы подтвердить отказ открыть новую схему. Установленный журнал не открывается.
@@ -169,7 +169,7 @@ try {
         $groups = @(
             @{ name='task-cas-pure-fsm'; arguments=@('test','-p','winbridge-core','--test','task_fsm','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-frozen-contracts'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
-            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','ownership','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','ownership','--test','leases','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-older-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--locked','--offline','--','--ignored','--exact','legacy_schema_six_worker_refuses_new_journal_without_mutating_it','--test-threads=1','--nocapture') }
         )
     }

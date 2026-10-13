@@ -17,7 +17,7 @@ pub enum OperationKind {
     Import,
 }
 impl OperationKind {
-    fn as_str(self) -> &'static str {
+    pub(super) fn as_str(self) -> &'static str {
         match self {
             Self::Task => "task",
             Self::Import => "import",
@@ -282,6 +282,7 @@ impl Store {
             id,
             &observed.record.submission.project_id,
         )?;
+        Self::acquire_execution_lease(&transaction, &token)?;
         transaction.commit().map_err(sql)?;
         Ok((decision, token))
     }
@@ -295,6 +296,7 @@ impl Store {
         }
         observed.status = TaskStatus::Running;
         observed.phase = "validate".into();
+        observed.reason = None;
         Self::import_event(
             &mut observed,
             "Import lease acquired; validating immutable delivery",
@@ -307,6 +309,7 @@ impl Store {
             id,
             &observed.submission.project_id,
         )?;
+        Self::acquire_execution_lease(&transaction, &token)?;
         transaction.commit().map_err(sql)?;
         Ok((observed.record, token))
     }
@@ -332,6 +335,7 @@ impl Store {
                 );
             }
         }
+        Self::complete_execution_lease(connection, kind, id)?;
         Ok(())
     }
 }

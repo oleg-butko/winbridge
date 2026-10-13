@@ -242,6 +242,7 @@ pub fn reduce(
                 return Err(invalid);
             }
             record.status = TaskStatus::Running;
+            record.reason = None;
             append_event(
                 &mut record,
                 now_ms,

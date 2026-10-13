@@ -18,6 +18,32 @@ pub struct ManagedChild {
 
 pub type OutputReader = Box<dyn Read + Send>;
 
+/// A spawn error may happen after OS process creation. Only failures before
+/// creation authorize the caller to release resources without tree reconciliation.
+#[derive(Debug)]
+pub struct SpawnFailure {
+    pub no_process_created: bool,
+    error: io::Error,
+}
+impl From<io::Error> for SpawnFailure {
+    fn from(error: io::Error) -> Self {
+        Self {
+            no_process_created: true,
+            error,
+        }
+    }
+}
+impl std::fmt::Display for SpawnFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.error.fmt(f)
+    }
+}
+impl std::error::Error for SpawnFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.error)
+    }
+}
+
 /// Reject linked/reparse/special paths before accessing managed state or project files.
 pub fn require_safe_path(path: &std::path::Path) -> io::Result<()> {
     if !path.is_absolute() {
@@ -123,7 +149,9 @@ pub fn require_local_disk(path: &std::path::Path) -> io::Result<()> {
 }
 
 impl ManagedChild {
-    pub fn spawn(command: &ResolvedCommand) -> io::Result<(Self, OutputReader, OutputReader)> {
+    pub fn spawn(
+        command: &ResolvedCommand,
+    ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
         let mut builder = Command::new(&command.executable);
         builder
             .args(&command.arguments)
@@ -144,34 +172,33 @@ impl ManagedChild {
             builder.creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
             windows::Job::new()?
         };
-        let mut child = builder.spawn()?;
+        let child = builder.spawn()?;
         #[cfg(windows)]
         if let Err(error) = job.assign_and_resume(&child) {
+            let mut child = child;
             let _ = child.kill();
             let _ = child.wait();
-            return Err(error);
+            return Err(SpawnFailure {
+                no_process_created: false,
+                error,
+            });
         }
-        let stdout = Box::new(
-            child
-                .stdout
-                .take()
-                .ok_or_else(|| io::Error::other("stdout pipe missing"))?,
-        );
-        let stderr = Box::new(
-            child
-                .stderr
-                .take()
-                .ok_or_else(|| io::Error::other("stderr pipe missing"))?,
-        );
-        Ok((
-            Self {
-                child,
-                #[cfg(windows)]
-                job,
-            },
-            stdout,
-            stderr,
-        ))
+        // Own the tree before any further fallible pipe setup. An early return
+        // must never drop a bare Child (which does not terminate its process).
+        let mut owner = Self {
+            child,
+            #[cfg(windows)]
+            job,
+        };
+        let stdout = Box::new(owner.child.stdout.take().ok_or_else(|| SpawnFailure {
+            no_process_created: false,
+            error: io::Error::other("stdout pipe missing"),
+        })?);
+        let stderr = Box::new(owner.child.stderr.take().ok_or_else(|| SpawnFailure {
+            no_process_created: false,
+            error: io::Error::other("stderr pipe missing"),
+        })?);
+        Ok((owner, stdout, stderr))
     }
 
     pub fn id(&self) -> u32 {

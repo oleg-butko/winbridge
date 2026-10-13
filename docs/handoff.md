@@ -2,6 +2,21 @@
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
 
+## A2.3.2 durable project/resource leases — native gate ожидается, 2026-10-13
+
+База `dd04276`; [контракт, ревью и проверки](plans/architecture-transition/project-resource-leases.md).
+Schema 10: project mutation/application lifetime scopes; claim + attempt + lease
+атомарны. Terminal outcome освобождает ресурс только с physical cleanup receipt;
+без receipt проект ждёт, другие проекты продолжают работу. Readiness передаёт
+mutation scope приложению без ложного cleanup, поздний callback не освобождает
+новую lease. Root/child reservations проверяются в той же SQLite transaction.
+15 новых lease tests и fault test handoff; PID fault/crash profile regressions
+расширены. Legacy unknown ownership сохраняется без вымышленных attempts/proofs.
+Local gate: 245 workspace tests и финальные 44 leases/task_fsm/workflows tests passed;
+Windows-target workspace/tests, Clippy/fmt, AST/Python guards/scaffold passed.
+Installed worker b5d39f9 connected/idle и не обновляется; тест candidate изолирован.
+Полный A2 открыт; следующий пакет A2.4 — physical reconciliation/restore recovery.
+
 ## A2.3.1 authority/attempt tokens — завершён, 2026-10-13
 
 База `6b1959e`; [контракт и оставшаяся работа](plans/architecture-transition/ownership-context.md).

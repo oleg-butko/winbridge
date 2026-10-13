@@ -259,11 +259,33 @@ async fn profile_projects_preserve_command_origin_dedup_cancel_and_crash_recover
             Some("Общие команды ✓")
         );
     }
-    let next = submit(
+    let uncertain = submit(
         &server,
         request("second", "explicit-new-profile", "inspect"),
     )
     .await;
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let uncertain = get(&server, &uncertain.task_id).await;
+    assert_eq!(uncertain.status, TaskStatus::Queued);
+    assert!(uncertain
+        .reason
+        .as_deref()
+        .unwrap()
+        .contains(&crashed.task_id));
+    assert!(uncertain.process_id.is_none());
+    let cancelled_wait = task(
+        rpc(
+            &server,
+            LocalRequest::Cancel {
+                task_id: uncertain.task_id,
+            },
+        )
+        .await,
+    );
+    assert_eq!(cancelled_wait.status, TaskStatus::Cancelled);
+    // The crash blocks only its project. A healthy independent project can
+    // execute the changed profile without treating a new epoch as cleanup proof.
+    let next = submit(&server, request("first", "explicit-new-profile", "inspect")).await;
     let next = wait(&server, &next.task_id, true).await;
     assert_eq!(next.status, TaskStatus::Succeeded);
     assert_eq!(

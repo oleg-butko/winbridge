@@ -113,8 +113,10 @@ operation/attempt token. Record revisions не подменяют authority. Sna
 record/revision/authority одним SELECT. Native gate passed: 141 tests, включая
 реальное завершение managed tree при owner-change fault и byte-identical schema-9
 refusal прежнего binary.
-Durable project leases, physical reconciliation и explicit restore recovery mode
-остаются A2.3.2/A2.4; глобальный параллелизм и actor migration не включены.
+[A2.3.2 durable leases](plans/architecture-transition/project-resource-leases.md)
+добавляют schema 10: mutation/application scopes, atomic claim, readiness handoff
+и освобождение только с physical receipt. Native gate ожидается.
+Physical reconciliation и explicit restore recovery mode остаются A2.4; глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 

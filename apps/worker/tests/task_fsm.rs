@@ -131,6 +131,20 @@ fn failed_pid_observation_is_indeterminate_and_never_replays_the_spawn() {
         std::fs::read(root.path().join("runs.log")).ok(),
         runs_before
     );
+    let store = Store::open(&root.path().join("state/journal.sqlite")).unwrap();
+    let lease = &store.resource_leases(false).unwrap()[0];
+    assert_eq!(lease.state, winbridge_worker::store::LeaseState::Released);
+    assert_eq!(
+        lease.cleanup_proof,
+        Some(winbridge_worker::store::CleanupProof::ProcessTreeEmpty)
+    );
+    drop(store);
+    db.execute_batch("DROP TRIGGER reject_pid;").unwrap();
+    let mut next = submission("success");
+    next.idempotency_key = "healthy-after-failed-pid".into();
+    let next = task(worker.handle(LocalRequest::Submit { request: next }));
+    worker.schedule().unwrap();
+    assert_eq!(wait(&worker, &next.task_id).status, TaskStatus::Succeeded);
 }
 
 #[test]

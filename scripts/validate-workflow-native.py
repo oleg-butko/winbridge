@@ -85,8 +85,8 @@ def main():
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
-    parser.add_argument('--task-cas-only', action='store_true', help='Check domain revisions, owner/attempt tokens, schema-6/7/8 migration, atomic child links, stale writes, output/retention and old-worker refusal; no desktop windows')
-    parser.add_argument('--task-cas-reference-worker', help='Read-only Windows path to a schema-6 worker exe, used only with NEW isolated state to prove schema-9 refusal')
+    parser.add_argument('--task-cas-only', action='store_true', help='Check durable project/application leases, domain revisions, owner/attempt tokens, schema-6/7/8/9 migration, atomic child links, stale writes, output/retention and old-worker refusal; no desktop windows')
+    parser.add_argument('--task-cas-reference-worker', help='Read-only Windows path to a schema-6 worker exe, used only with NEW isolated state to prove schema-10 refusal')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
     parser.add_argument('--output-reference-worker', help='Read-only path to the installed worker exe, used with a NEW isolated config/state for matched output samples')
@@ -246,7 +246,7 @@ exit $LASTEXITCODE
         raise RuntimeError({'task': task_id, 'result': result})
     if args.task_cas_only:
         proof = json.loads((report / 'task-cas-reference-proof.json').read_text(encoding='utf-8-sig'))
-        if not proof['passed'] or proof['platform'] != 'windows' or proof['journalSchema'] != 9 or not proof['journalUnchanged'] or proof['exitCode'] != 1:
+        if not proof['passed'] or proof['platform'] != 'windows' or proof['journalSchema'] != 10 or not proof['journalUnchanged'] or proof['exitCode'] != 1:
             raise RuntimeError('Incomplete older-worker schema refusal proof')
         if proof['build']['sourceCommit'] != result['sourceCommit'] or proof['build']['sourceDirty'] or proof['referenceBuild'] != info['build']:
             raise RuntimeError('Candidate/reference worker source identity mismatch')

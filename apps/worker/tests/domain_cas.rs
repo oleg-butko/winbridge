@@ -523,8 +523,10 @@ fn schema_seven_migration_preserves_all_records_and_creates_exact_backup() {
         ))
         .unwrap();
     }
-    db.execute_batch("DROP TABLE execution_attempts; DROP TABLE journal_authority;")
-        .unwrap();
+    db.execute_batch(
+        "DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
+    )
+    .unwrap();
     db.pragma_update(None, "user_version", 7).unwrap();
     db.execute(
         "UPDATE sqlite_sequence SET seq=5000 WHERE name='attention'",
@@ -673,8 +675,10 @@ fn domain_migration_failure_rolls_back_every_added_column_and_schema() {
         ))
         .unwrap();
     }
-    db.execute_batch("DROP TABLE execution_attempts; DROP TABLE journal_authority;")
-        .unwrap();
+    db.execute_batch(
+        "DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
+    )
+    .unwrap();
     db.pragma_update(None, "user_version", 7).unwrap();
     db.execute_batch(
         "CREATE TRIGGER imports_revision_guard BEFORE UPDATE ON imports BEGIN SELECT 1; END;",

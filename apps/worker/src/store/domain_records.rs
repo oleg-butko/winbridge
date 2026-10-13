@@ -18,6 +18,9 @@ pub trait JournalRecord: sealed::Sealed + Serialize + DeserializeOwned + Clone {
     fn identity(&self) -> Result<String>;
     fn terminal(&self) -> bool;
     fn status(&self) -> Result<String>;
+    fn check_resources(&self, _connection: &Connection, _previous: &str) -> Result<()> {
+        Ok(())
+    }
 }
 
 impl JournalRecord for ImportRecord {
@@ -45,6 +48,15 @@ impl JournalRecord for ImportRecord {
 }
 impl JournalRecord for WorkflowRecord {
     const TABLE: &'static str = "workflows";
+    fn check_resources(&self, connection: &Connection, previous: &str) -> Result<()> {
+        let before: WorkflowRecord = serde_json::from_str(previous).map_err(|e| e.to_string())?;
+        if before.status == winbridge_protocol::TaskStatus::Queued
+            && self.status == winbridge_protocol::TaskStatus::Running
+        {
+            Store::check_workflow_reservation(connection, self)?;
+        }
+        Ok(())
+    }
     fn id(&self) -> &str {
         &self.workflow_id
     }
@@ -170,6 +182,7 @@ impl Store {
         if observed.terminal && raw != observed.raw {
             return Err("local journal: terminal record is immutable".into());
         }
+        observed.record.check_resources(connection, &observed.raw)?;
         let next = observed
             .revision
             .checked_add(1)
