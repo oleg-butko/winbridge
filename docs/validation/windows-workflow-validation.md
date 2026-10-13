@@ -27,6 +27,14 @@ worker и UI не запускаются. В report `diagnosticOnly: true`: ус
 Свободное место local volume измеряется до/после; при менее 4 GiB тестовая сборка
 не начинается. Существующие каталоги и рабочий runtime не очищаются.
 
+Полный CAS gate может использовать `--task-cas-reuse-diagnostic <run-id>` вместе
+с тем же `--archive` и `--task-cas-reference-worker`. Driver принимает только
+успешный checksum-verified diagnostic этого точного archive; Windows повторно
+проверяет manifest/entrypoint/source files и запрещает linked source/cache.
+Повторно используется source/build cache; тесты исполняются заново с новыми states
+и новым shared report. Trace включён и для full gate. Прошлый report сохраняется.
+Это экономит место без удаления старых runs и не разрешает reuse другой версии.
+
 ```bash
 python3 scripts/validate-workflow-native.py \
   --controller-config .winbridge/controller-snapshot.local.json \

@@ -25,7 +25,9 @@
 [A2.3.2 durable leases](project-resource-leases.md) завершены: 245 workspace и
 [157 native tests](windows-resource-leases-gate-2026-10-13.md) passed;
 [A2.4.1 physical process reconciliation](physical-reconciliation.md) завершён,
-[164 native tests passed](windows-reconciliation-gate-2026-10-13.md); [A2.4.2a journal inspection](journal-inspection.md) проходит local/native gates;
+[164 native tests passed](windows-reconciliation-gate-2026-10-13.md); [A2.4.2a journal inspection](journal-inspection.md)
+прошёл local/browser и [26-test native diagnostic](windows-inspection-diagnostic-2026-10-13.md),
+но полный native gate ещё не пройден после двух runtime deadlines;
 controlled restore/new incarnation/admission A2.4.2b ещё впереди.
 
 ## Результат для пользователя и проектов

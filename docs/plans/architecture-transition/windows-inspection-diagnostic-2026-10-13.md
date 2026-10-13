@@ -49,9 +49,37 @@ Windows test повышает suspend count до 2 и проверяет отк�
 
 Нужен только прежний установленный worker; desktop закрыт, UI-окон не будет.
 Сценарий использует новый isolated source/build/state и измеряет свободное место.
-Диагностический прогон ещё не выполнен. По результатам решается следующий шаг;
-автоматический повтор полного gate до анализа причины не назначен.
+Диагностический прогон завершён; результаты ниже. Причина прежних двух deadlines
+не доказана, и увеличение timeouts не применялось.
 
 До native diagnostic: 23 local runtime/reconciliation/recovery tests passed;
 Windows-target tests compile, Linux/Windows Clippy с `-D warnings`, fmt и
 PowerShell AST passed. UI не изменён относительно clean browser gate.
+
+## Узкий native diagnostic — passed
+
+Source `b90a708d6a6178a65af77a89a40f275b0b636d2f`, clean archive
+`winbridge-20261013T204006Z-b90a708-f8bdc612.zip`, SHA-256
+`a5f9096ae650add7f9c240bb5b98f35fe843bc5e6761ccbf149a5fcd7d2a4251`.
+Run `20261013-164022-975ce2c4`, task `c5d5373f-e832-45e3-ab8a-c6cf51a0c9bf`
+succeeded/exit 0. `diagnosticOnly: true`; две groups exit 0,
+**26 Windows tests** (1 resume guard + 7 reconciliation + 11 recovery + 7 runtime).
+Три artifacts, включая report и оба logs, проверены по size/SHA-256.
+
+Прежние delays не воспроизвелись. По восьми task traces максимумы:
+prepare→bind 19 ms, bind commit 7 ms, resume 70 ms, cleanup→outcome commit 46 ms;
+cleanup timeout нет. Installed worker build/generation/session прежние,
+connected/idle, maintenance/journal errors нет. Desktop можно оставить закрытым,
+worker оставить работать.
+
+Диск K: available bytes до/после: `31820439552` → `29670723584`
+(~2 GiB на isolated build; осталось ~27.6 GiB). Для full regression используется
+этот же чистый source/build cache, а новые test states и shared report создаются
+отдельно. Admission проверяет успешный diagnostic receipt и SHA каждого artifact,
+точный archive SHA/source identity; Windows заново сверяет manifest и entrypoint
+с archive, затем все source files. Reparse ancestors source/cache запрещены.
+Полный gate сохраняет trace; diagnostic success не принимается вместо него.
+
+Четыре Python fault tests проверяют wrong archive, changed artifact, failed/dirty/
+неполную партию, traversal и linked artifact. Ни один прежний run не удаляется.
+Полный gate пока не выполнен.

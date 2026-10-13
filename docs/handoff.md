@@ -18,7 +18,9 @@ gate passed. Native run `20261013-161810-d7049c65` прошёл все 11 recove
 terminal outcome после output, flood task остался до PID binding. Полный gate
 не пройден; [диагностика и receipts](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md).
 Пользователь не видел prompts защиты или нагрузки. Причина ещё не установлена;
-следующий прогон ограничен process/recovery с trace, без UI и замены рабочего worker.
+узкий run `20261013-164022-975ce2c4` passed: 26 Windows tests, 3 artifacts verified,
+delays не воспроизвелись. Осталось ~27.6 GiB на K:. Full gate с trace использует
+проверенный diagnostic source/build cache, свежие test states/report; пока не выполнен.
 Installed schema-6 worker остаётся прежним, desktop закрыт. Полный A2.4.2/A2 открыт:
 A2.4.2b — controlled new incarnation/admission после restore; rollback detection
 и безопасный выход из latched inspection ещё не реализованы.

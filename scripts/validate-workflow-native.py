@@ -6,11 +6,13 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path, PureWindowsPath
+import re
 import socket
 import struct
 import subprocess
 import time
 import uuid
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,6 +77,34 @@ def ps_string(value):
     return "'" + value.replace("'", "''") + "'"
 
 
+def verify_reusable_diagnostic(base, run_id, archive_sha):
+    """Reuse only a successful, checksum-verified diagnostic of this exact archive."""
+    if not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', run_id):
+        raise ValueError('Invalid diagnostic run ID')
+    report = base / run_id
+    if report.is_symlink() or report.resolve().parent != base.resolve():
+        raise ValueError('Diagnostic report must stay inside its validation namespace')
+    ready = json.loads((report / 'report.ready.json').read_text(encoding='utf-8-sig'))
+    names = set()
+    for item in ready['files']:
+        name = item['path']
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or name in names or (report / name).is_symlink():
+            raise ValueError('Unsafe diagnostic artifact')
+        data = (report / name).read_bytes()
+        if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
+            raise ValueError('Diagnostic artifact checksum mismatch: ' + name)
+        names.add(name)
+    expected = {'report.json', 'process-resume-guard.log', 'process-runtime-recovery-diagnostic.log'}
+    if not expected.issubset(names) or not ready['passed'] or ready['platform'] != 'windows':
+        raise ValueError('Incomplete successful diagnostic receipt')
+    result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
+    if not result['passed'] or not result['diagnosticOnly'] or result['sourceDirty'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != archive_sha:
+        raise ValueError('Diagnostic must have passed with this exact clean archive')
+    if [g['name'] for g in result['commands']] != ['process-resume-guard', 'process-runtime-recovery-diagnostic'] or any(g['exitCode'] != 0 for g in result['commands']):
+        raise ValueError('Incomplete diagnostic test groups')
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--controller-config', type=Path, required=True)
@@ -87,6 +117,7 @@ def main():
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--task-cas-only', action='store_true', help='Check durable project/application leases, domain revisions, owner/attempt tokens, schema-6/7/8/9/10 migration, physical Job Object reconciliation, atomic child links, stale writes, output/retention and old-worker refusal; no desktop windows')
     parser.add_argument('--task-cas-runtime-diagnostic', action='store_true', help='With --task-cas-only: narrow process/recovery diagnostic with trace and disk usage, without UI or full CAS/reference gate')
+    parser.add_argument('--task-cas-reuse-diagnostic', help='Full CAS only: reuse the source/build cache of a successful diagnostic run ID for this exact archive; new tests/state/report, process trace enabled')
     parser.add_argument('--task-cas-reference-worker', help='Read-only Windows path to a schema-6 worker exe, used only with NEW isolated state to prove schema-11 refusal')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
@@ -104,6 +135,8 @@ def main():
         parser.error('--output-only requires --output-reference-worker')
     if args.task_cas_runtime_diagnostic and not args.task_cas_only:
         parser.error('--task-cas-runtime-diagnostic requires --task-cas-only')
+    if args.task_cas_reuse_diagnostic and (not args.task_cas_only or args.task_cas_runtime_diagnostic):
+        parser.error('--task-cas-reuse-diagnostic requires a full --task-cas-only gate')
     if args.task_cas_only and not args.task_cas_runtime_diagnostic and not args.task_cas_reference_worker:
         parser.error('--task-cas-only requires --task-cas-reference-worker')
     if args.task_cas_reference_worker and not args.task_cas_only:
@@ -124,6 +157,18 @@ def main():
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
+    reused = None
+    manifest_sha = script_sha = ''
+    if args.task_cas_reuse_diagnostic:
+        reused = verify_reusable_diagnostic(report.parent, args.task_cas_reuse_diagnostic, digest)
+        local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + args.task_cas_reuse_diagnostic
+        with zipfile.ZipFile(args.archive) as archive:
+            manifest_bytes = archive.read('winbridge/winbridge-source-manifest.json')
+            manifest_sha = hashlib.sha256(manifest_bytes).hexdigest()
+            manifest = json.loads(manifest_bytes)
+            if manifest['sourceCommit'] != reused['sourceCommit'] or manifest['dirty']:
+                raise ValueError('Reusable diagnostic/archive source identity mismatch')
+            script_sha = hashlib.sha256(archive.read('winbridge/scripts/test-windows-workflow.ps1')).hexdigest()
     extra = ''
     profile_argument = ''
     resume_publication = None
@@ -189,7 +234,8 @@ $ProgressPreference = 'SilentlyContinue'
 $archive = {ps_string(windows_archive)}
 if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne {ps_string(digest)}) {{ throw 'Archive SHA-256 mismatch' }}
 $local = {ps_string(local)}
-if (Test-Path -LiteralPath $local) {{ throw 'Refusing to overwrite an existing test run' }}
+$reuse = {'$true' if reused else '$false'}
+if (-not $reuse -and (Test-Path -LiteralPath $local)) {{ throw 'Refusing to overwrite an existing test run' }}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($archive)
 try {{
@@ -197,13 +243,34 @@ try {{
         if ($entry.FullName -notmatch '^winbridge/' -or $entry.FullName -match '(^|/)\\.\\.?(/|$)|[\\\\:]') {{ throw 'Unsafe source archive entry' }}
     }}
 }} finally {{ $zip.Dispose() }}
-New-Item -ItemType Directory -Path $local | Out-Null
-Expand-Archive -LiteralPath $archive -DestinationPath $local
+if (-not $reuse) {{
+    New-Item -ItemType Directory -Path $local | Out-Null
+    Expand-Archive -LiteralPath $archive -DestinationPath $local
+}}
 $source = Join-Path $local 'winbridge'
+if ($reuse) {{
+    # Revalidate trusted entrypoints before executing an existing script. The
+    # script then validates every source file against the archive-pinned manifest.
+    foreach ($path in @($local, $source, (Join-Path $local 'test-build-cache'), (Join-Path $local 'test-temp'))) {{
+        $node = Get-Item -LiteralPath $path -ErrorAction Stop
+        while ($null -ne $node) {{
+            if ($node.Attributes -band [IO.FileAttributes]::ReparsePoint) {{ throw 'Refusing linked diagnostic source/cache' }}
+            $node = $node.Parent
+        }}
+    }}
+    if ((Get-FileHash -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant() -ne {ps_string(manifest_sha)}) {{ throw 'Reused manifest differs from archive' }}
+    if ((Get-FileHash -LiteralPath (Join-Path $source 'scripts/test-windows-workflow.ps1') -Algorithm SHA256).Hash.ToLowerInvariant() -ne {ps_string(script_sha)}) {{ throw 'Reused entrypoint differs from archive' }}
+    $env:WINBRIDGE_PROCESS_TRACE = '1'
+    $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($source))
+    Write-Output ('Reusable diagnostic volume free bytes: ' + $drive.AvailableFreeSpace)
+    if ($drive.AvailableFreeSpace -lt 4GB) {{ throw 'Less than 4 GiB free; existing validation runs are retained' }}
+}}
 {extra}
 $pwsh = (Get-Command pwsh.exe -ErrorAction Stop).Source
 & $pwsh -NoProfile -File (Join-Path $source 'scripts/test-windows-workflow.ps1') -SourceDirectory $source -ReportDirectory {ps_string(windows_report)} -SourceArchiveSha256 {ps_string(digest)}{profile_argument}
-exit $LASTEXITCODE
+$nativeExit = $LASTEXITCODE
+if ($reuse) {{ Write-Output ('Reusable diagnostic volume free bytes after: ' + $drive.AvailableFreeSpace) }}
+exit $nativeExit
 """
     request = {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': args.project,
                'idempotencyKey': 'native-workflow-' + run_id, 'timeoutMs': 1800000,
@@ -215,7 +282,7 @@ exit $LASTEXITCODE
     # Preserve the request for reconciliation; stop on an unexpected worker error.
     accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
     task_id = accepted['taskId']
-    print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest}), flush=True)
+    print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest, 'reusedDiagnostic': args.task_cas_reuse_diagnostic}), flush=True)
     chunks = []
     sequence = 0
     deadline = time.monotonic() + 1850
