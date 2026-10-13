@@ -135,7 +135,7 @@ caller при создании операции. Повтор не меняет 
 worker проверяет scope до handler. Старые DTO и bytes остаются прежними.
 Новый журнал может необратимо требовать этот контракт до первого owner activation;
 это не является physical proof или разрешением recovery cutover.
-271 local tests и real Unix browser gate прошли, Windows execution gate ожидается.
+271 local tests, real Unix browser gate и [186 native tests/desktop compile](plans/architecture-transition/windows-fenced-request-gate-2026-10-13.md) прошли.
 Exe paths остаются стабильными. Archive preparation/activation ещё впереди.
 Глобальный параллелизм и actor migration не включены.
 

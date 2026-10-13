@@ -80,7 +80,9 @@ Browser использует real Unix worker/controller;
 fault injection сохраняет v2 frame и прежний ACK-loss сценарий. Windows group
 добавляет protocol/worker request_context и native desktop compile без UI-окон.
 Installed schema-6 worker/config/journal не изменяются.
-Windows execution gate ещё впереди; cross-check не заменяет выполнение.
+[Windows execution gate](windows-fenced-request-gate-2026-10-13.md) прошёл:
+186 tests, native desktop compile, 9 artifacts проверены. Пакет b.1 завершён;
+archive preparation и physical cutover не входят в этот результат.
 
 ## Следующий пакет
 

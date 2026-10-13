@@ -27,8 +27,8 @@ A2.4.2a завершён: local/browser и
 следующий пакет A2.4.2b — controlled restore/new incarnation/admission. До native gates process/runtime
 изменения не считаются готовыми. Пользователь выбрал
 [новую пару/журнал с архивом](plans/architecture-transition/restore-admission-options.md).
-[A2.4.2b.1 request fence](plans/architecture-transition/fenced-requests.md) реализован:
-271 local tests и browser gate прошли, native gate ожидается.
+[A2.4.2b.1 request fence](plans/architecture-transition/fenced-requests.md) завершён:
+271 local tests, browser gate и [186 native tests/desktop compile](plans/architecture-transition/windows-fenced-request-gate-2026-10-13.md) прошли.
 Archive preparation и physical cutover ещё не реализованы; full A2 открыт.
 
 ## Этап 0 — подготовка репозитория
