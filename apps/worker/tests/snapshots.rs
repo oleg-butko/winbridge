@@ -167,6 +167,24 @@ fn wait(worker: &Arc<Worker>, id: &str) -> ImportRecord {
         thread::sleep(Duration::from_millis(5));
     }
 }
+fn reopen_after_drop(config: WorkerConfig) -> Arc<Worker> {
+    // Parallel Unix process creation can briefly retain a fork-inherited flock
+    // descriptor until exec closes it. Require real ownership release; do not
+    // make production instance locking weaker or retry arbitrary startup faults.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        match Worker::open(config.clone()) {
+            Ok(worker) => return worker,
+            Err(error)
+                if error.contains("stateDirectory is already owned by another worker")
+                    && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(5))
+            }
+            Err(error) => panic!("Previous worker did not release stateDirectory: {error}"),
+        }
+    }
+}
 #[test]
 fn discovery_requires_registration_and_missing_import_explains_admission_failure() {
     let (_temp, config, request) = setup();
@@ -241,13 +259,13 @@ fn recovery_reconciles_verified_generation_and_refuses_incomplete_staging() {
     import.status = TaskStatus::Running;
     store.save_import(&import).unwrap();
     drop(store);
-    let worker = Worker::open(config.clone()).unwrap();
+    let worker = reopen_after_drop(config.clone());
     assert_eq!(
         get(&worker, &accepted.import_id).status,
         TaskStatus::Interrupted
     );
     drop(worker);
-    let worker = Worker::open(config.clone()).unwrap();
+    let worker = reopen_after_drop(config.clone());
     let mut retry = request.clone();
     retry.idempotency_key = "published-before-crash".into();
     let accepted = accept(&worker, retry.clone());
@@ -265,7 +283,7 @@ fn recovery_reconciles_verified_generation_and_refuses_incomplete_staging() {
     import.status = TaskStatus::Running;
     store.save_import(&import).unwrap();
     drop(store);
-    let worker = Worker::open(config).unwrap();
+    let worker = reopen_after_drop(config);
     assert_eq!(
         get(&worker, &accepted.import_id).status,
         TaskStatus::Succeeded
@@ -490,7 +508,7 @@ fn schema_migration_takes_consistent_backup_and_preserves_accepted_commands() {
     let path = config.state_directory.join("journal.sqlite");
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute_batch("DROP TABLE output_cleanup; DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
+        .execute_batch("DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
         .unwrap();
     drop(connection);
     let worker = Worker::open(config.clone()).unwrap();

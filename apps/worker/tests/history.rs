@@ -46,7 +46,9 @@ fn cursor_ties_filters_literal_wildcards_and_restart_cover_the_entire_history() 
         } else {
             "tool".into()
         };
-        store.save(&task).unwrap();
+        let mut observed = store.task_snapshot(&task.task_id).unwrap();
+        observed.record = task.clone();
+        store.save(&observed).unwrap();
         ids.push(task.task_id);
     }
     let first = store.history(&query()).unwrap();

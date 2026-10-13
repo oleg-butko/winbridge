@@ -175,9 +175,19 @@ fn insert_outcome(connection: &Connection, outcome: Outcome<'_>) -> Result<()> {
         key,
         created,
     } = outcome;
-    connection.execute("INSERT INTO attention(id,project,task,target,severity,message,origin,key,payload,created) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'',?9) ON CONFLICT(origin,key) DO NOTHING",
-        params![uuid::Uuid::new_v4().to_string(),project,task,serde_json::to_string(target).map_err(|e|e.to_string())?,
+    let target = serde_json::to_string(target).map_err(|e| e.to_string())?;
+    let changed = connection.execute("INSERT INTO attention(id,project,task,target,severity,message,origin,key,payload,created) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,'',?9) ON CONFLICT(origin,key) DO NOTHING",
+        params![uuid::Uuid::new_v4().to_string(),project,task,target,
             serde_json::to_string(&severity).map_err(|e|e.to_string())?,message,origin,key,timestamp(created)?]).map_err(sql)?;
+    if changed != 1 {
+        let existing: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM attention WHERE origin=?1 AND key=?2 AND project=?3 AND target=?4)",
+            params![origin,key,project,target], |row| row.get(0),
+        ).map_err(sql)?;
+        if !existing {
+            return Err("Outcome attention was not stored; terminal transaction rejected".into());
+        }
+    }
     Ok(())
 }
 const COLUMNS: &str = "id,sequence,project,task,severity,message,origin,created,acknowledged";

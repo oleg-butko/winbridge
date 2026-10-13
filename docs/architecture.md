@@ -90,6 +90,12 @@ Starting остаётся v1 running без PID. Protocol/schema/fingerprints п
 revision/attempt/epoch и защита остальных writers относятся к следующему A2.
 Native Windows gate A1 пройден: 66 tests; подробности в linked A1 report.
 
+[A2.1](plans/architecture-transition/durable-transitions.md) вводит schema 7 с
+внутренним task revision и общим CAS для lifecycle/output/retention writers.
+Wire record не меняется. Schema migration сохраняет legacy JSON/keys и делает
+consistent backup; старый schema-6 binary отказывает новой БД. Native gate pending.
+Этот пакет ещё не вводит durable owner epochs/attempts и guards других доменов.
+
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 
 [Desktop diagnostic log](guides/desktop-diagnostics.md) находится рядом с exe в `logs/`,

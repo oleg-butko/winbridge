@@ -85,6 +85,8 @@ def main():
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
+    parser.add_argument('--task-cas-only', action='store_true', help='Check task revisions, schema-6 migration, stale writes and atomic output/retention with an older reference worker; no desktop windows')
+    parser.add_argument('--task-cas-reference-worker', help='Read-only Windows path to a schema-6 worker exe, used only with NEW isolated state to prove schema-7 refusal')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
     parser.add_argument('--output-reference-worker', help='Read-only path to the installed worker exe, used with a NEW isolated config/state for matched output samples')
@@ -95,10 +97,14 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only)) > 1:
         parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
+    if args.task_cas_only and not args.task_cas_reference_worker:
+        parser.error('--task-cas-only requires --task-cas-reference-worker')
+    if args.task_cas_reference_worker and not args.task_cas_only:
+        parser.error('--task-cas-reference-worker requires --task-cas-only')
     config = json.loads(args.controller_config.read_text())
     endpoint = Path(config['stateDirectory']) / ('controller-' + config['instanceId'] + '.sock')
     info = call(endpoint, {'method': 'info'})['info']
@@ -135,6 +141,8 @@ def main():
         profile_argument = ' -IdentityOnly'
     if args.task_fsm_only:
         profile_argument = ' -TaskFsmOnly'
+    if args.task_cas_only:
+        profile_argument = ' -TaskCasOnly -TaskCasReferenceWorker ' + ps_string(args.task_cas_reference_worker)
     if args.resume_only:
         resume_publication, resume_blob_sha, resume_delivery, resume_measurement = prepare_resume_package(config, shared, run_id)
         profile_argument = ' -ResumeOnly -ResumeDeliveryRoot ' + ps_string(resume_delivery) + ' -ResumePublicationFile ' + ps_string(resume_measurement)
@@ -236,6 +244,12 @@ exit $LASTEXITCODE
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
+    if args.task_cas_only:
+        proof = json.loads((report / 'task-cas-reference-proof.json').read_text(encoding='utf-8-sig'))
+        if not proof['passed'] or proof['platform'] != 'windows' or proof['journalSchema'] != 7 or not proof['journalUnchanged'] or proof['exitCode'] != 1:
+            raise RuntimeError('Incomplete older-worker schema refusal proof')
+        if proof['build']['sourceCommit'] != result['sourceCommit'] or proof['build']['sourceDirty'] or proof['referenceBuild'] != info['build']:
+            raise RuntimeError('Candidate/reference worker source identity mismatch')
     if args.profiles_only:
         proof = json.loads((report / 'profiles-proof.json').read_text())
         tasks = proof['completed']

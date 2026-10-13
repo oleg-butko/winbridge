@@ -20,7 +20,7 @@ fn preview(
     }
     // Pending attention protects its target and linked workflow children. Active
     // applications also protect their entire startup workflow, including builds.
-    let mut statement = connection.prepare("SELECT t.id,t.project,t.record,sum(length(o.bytes)) AS bytes
+    let mut statement = connection.prepare("SELECT t.id,t.project,t.record,sum(length(o.bytes)) AS bytes,t.revision
         FROM tasks t JOIN output o ON o.task=t.id
         WHERE (?1 IS NULL OR t.project=?1)
           AND json_extract(t.record,'$.status') IN ('succeeded','failed','cancelled','interrupted')
@@ -57,7 +57,8 @@ fn preview(
                 .finished_at_ms
                 .ok_or("Terminal task lacks finish time")?,
         });
-        raw_records.push(raw);
+        let revision: i64 = row.get(4).map_err(sql)?;
+        raw_records.push((raw, revision));
     }
     let has_more = entries.len() > 50;
     entries.truncate(50);
@@ -141,31 +142,30 @@ impl Store {
             occurred_at_ms: now_ms(),
         };
         for entry in &current.entries {
-            let raw: String = transaction
-                .query_row(
-                    "SELECT record FROM tasks WHERE id=?1",
-                    [&entry.task_id],
-                    |r| r.get(0),
-                )
-                .map_err(sql)?;
-            let mut task: TaskRecord = serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+            let observed = Store::read_task_snapshot(&transaction, &entry.task_id)?;
+            let mut task = observed.record.clone();
             task.output_removed_at_ms = Some(result.occurred_at_ms);
             task.removed_output_bytes += entry.bytes;
             Store::event(&mut task, format!("Output retention removed {} saved stdout/stderr bytes; command, result and idempotency key retained", entry.bytes));
             transaction
                 .execute("DELETE FROM output WHERE task=?1", [&entry.task_id])
                 .map_err(sql)?;
-            transaction
-                .execute(
-                    "UPDATE tasks SET record=?2 WHERE id=?1",
-                    params![
-                        entry.task_id,
-                        serde_json::to_string(&task).map_err(|e| e.to_string())?
-                    ],
+            let remains: bool = transaction
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM output WHERE task=?1)",
+                    [&entry.task_id],
+                    |row| row.get(0),
                 )
                 .map_err(sql)?;
+            if remains {
+                return Err(
+                    "Output cleanup did not remove every approved chunk; transaction rejected"
+                        .into(),
+                );
+            }
+            Store::write_task_snapshot(&transaction, &observed, &task)?;
         }
-        transaction
+        let changed = transaction
             .execute(
                 "INSERT INTO output_cleanup(key,payload,record) VALUES (?1,?2,?3)",
                 params![
@@ -175,6 +175,9 @@ impl Store {
                 ],
             )
             .map_err(sql)?;
+        if changed != 1 {
+            return Err("Output cleanup receipt was not stored; transaction rejected".into());
+        }
         transaction.commit().map_err(sql)?;
         Ok(result)
     }

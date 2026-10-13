@@ -51,7 +51,9 @@ fn old_task(store: &mut Store, config: &WorkerConfig, key: &str) -> TaskRecord {
         .unwrap();
     let mut task = store.get(&task.task_id).unwrap();
     task.finished_at_ms = Some(now_ms() - 40 * 86_400_000);
-    store.save(&task).unwrap();
+    let mut observed = store.task_snapshot(&task.task_id).unwrap();
+    observed.record = task.clone();
+    store.save(&observed).unwrap();
     task
 }
 fn preview(store: &Store) -> OutputCleanupPreview {
@@ -288,11 +290,15 @@ fn retention_excludes_running_indeterminate_workflows_and_applications() {
         TaskStatus::Indeterminate,
     ] {
         task.status = status;
-        store.save(&task).unwrap();
+        let mut observed = store.task_snapshot(&task.task_id).unwrap();
+        observed.record = task.clone();
+        store.save(&observed).unwrap();
         assert!(preview(&store).entries.is_empty());
     }
     task.status = TaskStatus::Succeeded;
-    store.save(&task).unwrap();
+    let mut observed = store.task_snapshot(&task.task_id).unwrap();
+    observed.record = task.clone();
+    store.save(&observed).unwrap();
     // SQL fixtures exercise the exact relationship predicates, independent of orchestration.
     let connection = rusqlite::Connection::open(&path).unwrap();
     let record = json!({"steps":[{"operationId":task.task_id}]}).to_string();
@@ -366,7 +372,7 @@ fn schema_five_upgrade_has_a_consistent_backup_and_preserves_output() {
     drop(store);
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute_batch("DROP TABLE output_cleanup; PRAGMA user_version=5;")
+        .execute_batch("DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; PRAGMA user_version=5;")
         .unwrap();
     drop(connection);
     let store = Store::open(&path).unwrap();
@@ -416,7 +422,9 @@ fn cleanup_batches_and_invalid_queries_keep_recent_output() {
     }
     let mut recent = old_task(&mut store, &config, "recent");
     recent.finished_at_ms = Some(now_ms());
-    store.save(&recent).unwrap();
+    let mut observed = store.task_snapshot(&recent.task_id).unwrap();
+    observed.record = recent.clone();
+    store.save(&observed).unwrap();
     for query in [
         OutputCleanupQuery {
             older_than_days: 0,

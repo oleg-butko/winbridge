@@ -1,5 +1,22 @@
 # Автоматические Windows проверки workflow
 
+Архитектурный A2.1: `--task-cas-only` / `-TaskCasOnly` проверяет
+[task revisions/CAS](../plans/architecture-transition/durable-transitions.md),
+schema migration, stale writes, atomic output/cleanup и process/workflow regressions.
+Debian driver требует `--task-cas-reference-worker` с read-only Windows путём
+schema-6 worker.exe: этот exe запускается только с НОВЫМ тестовым config/state,
+чтобы подтвердить отказ открыть schema 7. Установленный journal не открывается,
+working runtime не заменяется. Нужен только запущенный worker; desktop необязателен,
+тестовых UI-окон нет. Это automatic gate, не команда установки/обновления.
+
+```bash
+python3 scripts/validate-workflow-native.py \
+  --controller-config .winbridge/controller-snapshot.local.json \
+  --archive /mnt/hgfs/shared/WinBridge/sources/<source-archive>.zip \
+  --task-cas-only \
+  --task-cas-reference-worker 'K:\_proj-26\winbridge\runtime\winbridge-worker.exe'
+```
+
 Архитектурный A1: `--task-fsm-only` / `-TaskFsmOnly` проверяет
 [типизированную FSM задач](../plans/architecture-transition/task-fsm.md) и frozen
 A0 baseline. В одной партии выполняются launch/PID commit fault tests, cancel/

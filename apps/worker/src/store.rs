@@ -10,6 +10,10 @@ use winbridge_protocol::{
     TaskSubmission,
 };
 
+mod task_records;
+pub use task_records::TaskSnapshot;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 7;
+
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
     SystemTime::now()
@@ -33,8 +37,8 @@ impl Store {
         let version: u32 = connection
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
-        if version > 6 {
-            return Err(format!("journal schema {version} is unsupported; expected 6; keep the database and use a compatible worker"));
+        if version > JOURNAL_SCHEMA_VERSION {
+            return Err(format!("journal schema {version} is unsupported; expected {JOURNAL_SCHEMA_VERSION}; keep the database and use a compatible worker"));
         }
         if version == 0 {
             let tables: u32 = connection.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0)).map_err(sql)?;
@@ -143,6 +147,25 @@ impl Store {
                 CREATE TABLE output_cleanup (key TEXT PRIMARY KEY, payload TEXT NOT NULL, record TEXT NOT NULL);
                 PRAGMA user_version=6; COMMIT;").map_err(sql)?;
         }
+        if version <= 6 {
+            if version == 6 {
+                let backup = path.with_file_name(format!(
+                    "journal-v6-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            connection.execute_batch("BEGIN IMMEDIATE;
+                ALTER TABLE tasks ADD COLUMN revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(revision)='integer' AND revision>=0);
+                CREATE TRIGGER tasks_revision_guard BEFORE UPDATE ON tasks
+                WHEN NEW.revision != OLD.revision+1 OR NEW.id != OLD.id OR NEW.project != OLD.project OR NEW.key != OLD.key OR NEW.payload != OLD.payload
+                BEGIN SELECT RAISE(ABORT,'Task updates require the next journal revision and immutable identity/payload'); END;
+                PRAGMA user_version=7; COMMIT;").map_err(sql)?;
+        }
         Ok(Self { connection })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {
@@ -151,8 +174,13 @@ impl Store {
         serde_json::to_string(&payload).map_err(|e| e.to_string())
     }
     pub fn existing(&self, request: &TaskSubmission) -> Result<Option<TaskRecord>> {
-        let row: Option<(String, String)> = self
-            .connection
+        Self::existing_task(&self.connection, request)
+    }
+    fn existing_task(
+        connection: &Connection,
+        request: &TaskSubmission,
+    ) -> Result<Option<TaskRecord>> {
+        let row: Option<(String, String)> = connection
             .query_row(
                 "SELECT payload,record FROM tasks WHERE project=?1 AND key=?2",
                 params![request.project_id, request.idempotency_key],
@@ -187,7 +215,11 @@ impl Store {
         snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
         recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
     ) -> Result<TaskRecord> {
-        if let Some(task) = self.existing(&request)? {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        if let Some(task) = Self::existing_task(&transaction, &request)? {
             return Ok(task);
         }
         let now = now_ms();
@@ -199,8 +231,7 @@ impl Store {
             recipe_origin,
             now,
         );
-        let transaction = self.connection.transaction().map_err(sql)?;
-        transaction
+        let changed = transaction
             .execute(
                 "INSERT INTO tasks(id,project,key,payload,record) VALUES (?1,?2,?3,?4,?5)",
                 params![
@@ -212,17 +243,14 @@ impl Store {
                 ],
             )
             .map_err(sql)?;
+        if changed != 1 {
+            return Err("Task acceptance was not stored; acknowledgement rejected".into());
+        }
         transaction.commit().map_err(sql)?; // Acceptance response is sent only after this commit.
         Ok(task)
     }
     pub fn get(&self, id: &str) -> Result<TaskRecord> {
-        let record: Option<String> = self
-            .connection
-            .query_row("SELECT record FROM tasks WHERE id=?1", [id], |r| r.get(0))
-            .optional()
-            .map_err(sql)?;
-        serde_json::from_str(&record.ok_or_else(|| format!("taskId {id:?} was not found"))?)
-            .map_err(|e| e.to_string())
+        self.task_snapshot(id).map(|snapshot| snapshot.record)
     }
     pub fn all(&self) -> Result<Vec<TaskRecord>> {
         let mut statement = self
@@ -253,18 +281,6 @@ impl Store {
         rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
             .collect()
     }
-    pub fn save(&mut self, task: &TaskRecord) -> Result<()> {
-        self.connection
-            .execute(
-                "UPDATE tasks SET record=?2 WHERE id=?1",
-                params![
-                    task.task_id,
-                    serde_json::to_string(task).map_err(|e| e.to_string())?
-                ],
-            )
-            .map_err(sql)?;
-        Ok(())
-    }
     pub fn event(task: &mut TaskRecord, summary: impl Into<String>) {
         task.events.push(JournalEvent {
             sequence: task.events.len() as u64 + 1,
@@ -294,31 +310,45 @@ impl Store {
 
     /// Only a successfully committed decision may be dispatched by the execution owner.
     pub fn transition(&mut self, id: &str, event: TaskEvent) -> Result<TaskTransition> {
-        let current = self.get(id)?;
-        if current.task_id != id {
-            return Err("Task journal identity mismatch; execution decision rejected".into());
+        self.transition_inner(id, None, event)
+    }
+
+    /// An asynchronous caller must reject a decision based on a stale observation.
+    /// Execution completion uses a fresh record; launch revision is not an owner token.
+    pub fn transition_at(
+        &mut self,
+        id: &str,
+        revision: u64,
+        event: TaskEvent,
+    ) -> Result<TaskTransition> {
+        let revision =
+            i64::try_from(revision).map_err(|_| "Expected task revision exceeds journal range")?;
+        self.transition_inner(id, Some(revision), event)
+    }
+
+    fn transition_inner(
+        &mut self,
+        id: &str,
+        expected: Option<i64>,
+        event: TaskEvent,
+    ) -> Result<TaskTransition> {
+        let transaction = self.connection.transaction().map_err(sql)?;
+        let observed = Self::read_task_snapshot(&transaction, id)?;
+        if let Some(revision) = expected {
+            if revision != observed.revision() as i64 {
+                return Err(format!(
+                    "Task transition rejected: stale revision {revision}; current revision {}",
+                    observed.revision()
+                ));
+            }
         }
         let decision =
-            task::reduce(&current, event, now_ms()).map_err(|error| error.to_string())?;
-        if decision.effect == TaskEffect::None {
-            return Ok(decision);
-        }
-        let task = &decision.record;
-        let transaction = self.connection.transaction().map_err(sql)?;
-        let changed = transaction
-            .execute(
-                "UPDATE tasks SET record=?2 WHERE id=?1",
-                params![
-                    task.task_id,
-                    serde_json::to_string(task).map_err(|e| e.to_string())?
-                ],
-            )
-            .map_err(sql)?;
-        if changed != 1 {
-            return Err("Task transition was not stored; execution decision rejected".into());
-        }
-        if decision.effect == TaskEffect::RecordTerminalOutcome {
-            crate::attention::task_outcome(&transaction, task)?;
+            task::reduce(&observed.record, event, now_ms()).map_err(|error| error.to_string())?;
+        if decision.effect != TaskEffect::None {
+            Self::write_task_snapshot(&transaction, &observed, &decision.record)?;
+            if decision.effect == TaskEffect::RecordTerminalOutcome {
+                crate::attention::task_outcome(&transaction, &decision.record)?;
+            }
         }
         transaction.commit().map_err(sql)?;
         Ok(decision)
@@ -343,7 +373,8 @@ impl Store {
         bytes: &[u8],
         limit: u64,
     ) -> Result<()> {
-        let mut task = self.get(id)?;
+        let observed = self.task_snapshot(id)?;
+        let mut task = observed.record.clone();
         let was_truncated = task.output_truncated;
         let remaining = limit.saturating_sub(task.output_bytes) as usize;
         let accepted = bytes.len().min(remaining);
@@ -363,7 +394,7 @@ impl Store {
                     |r| r.get(0),
                 )
                 .map_err(sql)?;
-            transaction
+            let changed = transaction
                 .execute(
                     "INSERT INTO output(task,sequence,stream,offset,bytes) VALUES (?1,?2,?3,?4,?5)",
                     params![
@@ -378,14 +409,12 @@ impl Store {
                     ],
                 )
                 .map_err(sql)?;
+            if changed != 1 {
+                return Err("Output chunk was not stored; task output is not confirmed".into());
+            }
             task.output_bytes += accepted as u64;
         }
-        transaction
-            .execute(
-                "UPDATE tasks SET record=?2 WHERE id=?1",
-                params![id, serde_json::to_string(&task).map_err(|e| e.to_string())?],
-            )
-            .map_err(sql)?;
+        Self::write_task_snapshot(&transaction, &observed, &task)?;
         transaction.commit().map_err(sql)
     }
     pub fn output(&self, id: &str, after_sequence: u64) -> Result<Vec<OutputChunk>> {

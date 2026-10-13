@@ -245,7 +245,9 @@ fn launch_intent_recovery_is_indeterminate_and_queued_survives() {
     let mut accepted = store.accept(request.clone(), command, None).unwrap();
     accepted.status = TaskStatus::Running;
     Store::event(&mut accepted, "Launch intent");
-    store.save(&accepted).unwrap();
+    let mut observed = store.task_snapshot(&accepted.task_id).unwrap();
+    observed.record = accepted.clone();
+    store.save(&observed).unwrap();
     let queued = store
         .accept(
             submission("queued", "success", 5000),

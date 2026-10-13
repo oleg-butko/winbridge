@@ -16,7 +16,8 @@
 14 новых tests и полный workspace (171 tests) passed.
 [A1 Task FSM](task-fsm.md) завершена: 182 workspace и
 [66 native Windows tests](windows-task-fsm-gate-2026-10-13.md) passed.
-A2–A9 не реализованы.
+[A2.1 task revisions/CAS](durable-transitions.md) реализуется; общий A2 и A3–A9
+ещё не завершены.
 
 ## Результат для пользователя и проектов
 

@@ -1,6 +1,24 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
+## A2.1 task revisions/CAS — реализация, 2026-10-13
+
+База A1 `60c841f`. [Writer inventory и оставшийся A2](plans/architecture-transition/durable-transitions.md).
+Schema 7: task revision, SQLite update guard, все task writers через общий CAS;
+TaskSnapshot вместо blind Store::save. FSM/current completion сохраняют cancel/
+output; stale observed transition отвергается. Output/attention/cleanup faults
+откатываются атомарно; revision входит в cleanup preview hash. Additive migration
+с consistent backup, legacy JSON/keys неизменны. Общее ownership/epochs/recovery
+и остальные домены пока не реализованы; A2 не закрыт.
+15 SQLite/CAS regression checks + один explicit ignored reference test добавлены;
+native `--task-cas-only` обязан запустить старый exe в отдельном новом state и
+подтвердить отказ schema 7. 197 workspace tests passed, reference check ignored;
+Windows-target workspace/tests, Clippy/fmt/AST/Python syntax/arg guards/scaffold passed.
+Synthetic snapshot restart fixture теперь bounded waits actual instance lock release,
+production lock неизменна. Native gate pending.
+Controller/installed worker из A1 подключены и idle; рабочие Windows exe/config/DB
+ещё не обновлялись. Desktop для этого gate не нужен, UI-окон нет.
+
 ## A1 Task FSM — завершён, 2026-10-13
 
 Продолжение после A0 `f8c22d5`: [pure Task FSM](plans/architecture-transition/task-fsm.md)

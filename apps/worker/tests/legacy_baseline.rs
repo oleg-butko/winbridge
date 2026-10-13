@@ -66,7 +66,7 @@ fn historical_schema_migration_keeps_exact_payload_and_record_and_consistent_bac
     let version: u32 = connection
         .query_row("PRAGMA user_version", [], |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 6);
+    assert_eq!(version, winbridge_worker::store::JOURNAL_SCHEMA_VERSION);
     drop(connection);
     drop(store);
     let backups: Vec<_> = std::fs::read_dir(root.path())
@@ -189,7 +189,9 @@ fn recovery_keeps_queued_and_terminal_records_and_does_not_repeat_unknown_intent
     with_pid.status = TaskStatus::Running;
     with_pid.process_id = Some(4242); // Synthetic ID; never used to signal a process.
     Store::event(&mut with_pid, "Synthetic process observation");
-    store.save(&with_pid).unwrap();
+    let mut observed = store.task_snapshot(&with_pid.task_id).unwrap();
+    observed.record = with_pid.clone();
+    store.save(&observed).unwrap();
     let queued = accept(&mut store, "still-queued");
     let terminal = accept(&mut store, "already-finished");
     let terminal = store
@@ -352,7 +354,7 @@ fn output_sequence_is_per_task_across_streams_and_cursor_survives_reopen() {
 
 #[test]
 fn incompatible_or_unversioned_journal_is_refused_without_changing_legacy_rows() {
-    for version in [0, 7] {
+    for version in [0, winbridge_worker::store::JOURNAL_SCHEMA_VERSION + 1] {
         let root = TempDir::new().unwrap();
         let path = root.path().join("journal.sqlite");
         historical_journal(&path);

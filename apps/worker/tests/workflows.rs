@@ -482,7 +482,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();
@@ -1112,12 +1112,14 @@ fn attention_recovered_launch_intent_is_warning_without_another_external_start()
     drop(worker);
     let log = config.projects[0].workspace_root.join("logs/app.log");
     let before = fs::read(&log).unwrap();
+    let mut store =
+        winbridge_worker::store::Store::open(&config.state_directory.join("journal.sqlite"))
+            .unwrap();
+    let mut observed = store.task_snapshot(&running.task_id).unwrap();
+    observed.record = *running;
+    store.save(&observed).unwrap();
+    drop(store);
     let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
-    db.execute(
-        "UPDATE tasks SET record=?2 WHERE id=?1",
-        rusqlite::params![running.task_id, serde_json::to_string(&running).unwrap()],
-    )
-    .unwrap();
     db.execute(
         "UPDATE applications SET status='ready',record=?2 WHERE id=?1",
         rusqlite::params![id, serde_json::to_string(&ready_app).unwrap()],

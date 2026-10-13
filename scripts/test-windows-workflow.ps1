@@ -49,6 +49,13 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 Проверяет A0 baseline и A1 Task FSM: сохранение launch intent до spawn, ошибку записи PID,
 cancel/timeout/process tree, recovery и совместимость существующих workflows.
 Рабочие exe/state не меняются; desktop и тестовые UI-окна не открываются.
+.PARAMETER TaskCasOnly
+Проверяет task revisions/CAS, миграцию schema 6 → 7, output/retention rollback,
+legacy contracts и process/workflow regressions без desktop/UI-окон.
+Требует TaskCasReferenceWorker; старый exe запускается с НОВЫМ тестовым state,
+чтобы подтвердить отказ открыть новую схему. Установленный журнал не открывается.
+.PARAMETER TaskCasReferenceWorker
+Read-only путь schema-6 worker.exe для TaskCasOnly; рабочий процесс не заменяется.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -77,6 +84,8 @@ param(
     [switch]$ProjectsOnly,
     [switch]$IdentityOnly,
     [switch]$TaskFsmOnly,
+    [switch]$TaskCasOnly,
+    [string]$TaskCasReferenceWorker = '',
     [string]$ProjectsPreparation = '',
     [string]$ProjectsPreparationSha256 = '',
     [string]$ResumeDeliveryRoot = '',
@@ -123,6 +132,8 @@ $oldTmp = $env:TMP
 $oldDeltaShared = $env:WINBRIDGE_DELTA_GATE_SHARED
 $oldOutputReport = $env:WINBRIDGE_OUTPUT_GATE_REPORT
 $oldOutputReference = $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER
+$oldTaskCasReference = $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER
+$oldTaskCasReport = $env:WINBRIDGE_TASK_CAS_REPORT
 $oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
 $oldResumeDelivery = $env:WINBRIDGE_RESUME_GATE_DELIVERY
@@ -148,7 +159,19 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($TaskCasOnly) {
+        if ($NetwatchProfile -or -not $TaskCasReferenceWorker) { throw 'TaskCasOnly requires an isolated scenario and explicit schema-6 reference worker' }
+        if (-not (Test-Path -LiteralPath $TaskCasReferenceWorker -PathType Leaf)) { throw 'TaskCasReferenceWorker exe not found' }
+        $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER = (Resolve-Path -LiteralPath $TaskCasReferenceWorker).Path
+        $env:WINBRIDGE_TASK_CAS_REPORT = $ReportDirectory
+        $groups = @(
+            @{ name='task-cas-pure-fsm'; arguments=@('test','-p','winbridge-core','--test','task_fsm','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-frozen-contracts'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-older-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--locked','--offline','--','--ignored','--exact','legacy_schema_six_worker_refuses_new_journal_without_mutating_it','--test-threads=1','--nocapture') }
+        )
+    }
     if ($TaskFsmOnly) {
         if ($NetwatchProfile) { throw 'TaskFsmOnly requires an isolated scenario' }
         $groups = @(
@@ -302,6 +325,8 @@ try {
     $env:WINBRIDGE_DELTA_GATE_SHARED = $oldDeltaShared
     $env:WINBRIDGE_OUTPUT_GATE_REPORT = $oldOutputReport
     $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER = $oldOutputReference
+    $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER = $oldTaskCasReference
+    $env:WINBRIDGE_TASK_CAS_REPORT = $oldTaskCasReport
     $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
     $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
