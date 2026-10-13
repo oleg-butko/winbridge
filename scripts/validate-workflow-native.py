@@ -84,6 +84,7 @@ def main():
     parser.add_argument('--profiles-only', action='store_true', help='Check two registered projects with a reusable recipe profile, real IPC, cancel and crash/restart; no desktop windows')
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
+    parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
     parser.add_argument('--output-reference-worker', help='Read-only path to the installed worker exe, used with a NEW isolated config/state for matched output samples')
@@ -94,8 +95,8 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only)) > 1:
-        parser.error('Choose one isolated scenario: task attention, workflow attention, companion, history diagnostics or Netwatch')
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only)) > 1:
+        parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
     config = json.loads(args.controller_config.read_text())
@@ -132,6 +133,8 @@ def main():
         profile_argument = ' -ProfilesOnly'
     if args.identity_only:
         profile_argument = ' -IdentityOnly'
+    if args.task_fsm_only:
+        profile_argument = ' -TaskFsmOnly'
     if args.resume_only:
         resume_publication, resume_blob_sha, resume_delivery, resume_measurement = prepare_resume_package(config, shared, run_id)
         profile_argument = ' -ResumeOnly -ResumeDeliveryRoot ' + ps_string(resume_delivery) + ' -ResumePublicationFile ' + ps_string(resume_measurement)

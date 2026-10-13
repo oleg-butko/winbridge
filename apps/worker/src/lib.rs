@@ -21,8 +21,9 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use store::{now_ms, Store};
+use store::Store;
 use winbridge_core::config::WorkerConfig;
+use winbridge_core::task::{TaskEffect, TaskEvent};
 use winbridge_platform::ManagedChild;
 use winbridge_protocol::{
     LocalRequest, LocalResponse, OutputStream, TaskRecord, TaskStatus, WorkerInfo, PROTOCOL_VERSION,
@@ -599,7 +600,7 @@ impl Worker {
                 worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
             });
         }
-        for mut task in tasks {
+        for task in tasks {
             let project = task.submission.project_id.clone();
             if task.status != TaskStatus::Queued
                 || active.contains_key(&project)
@@ -622,12 +623,11 @@ impl Worker {
                     continue;
                 }
             }
-            task.status = TaskStatus::Running;
-            Store::event(
-                &mut task,
-                "Launch intent committed; awaiting process creation",
-            );
-            store.save(&task)?;
+            let decision = store.transition(&task.task_id, TaskEvent::LaunchIntent)?;
+            if decision.effect != TaskEffect::ExecuteAcceptedCommand {
+                return Err("Task launch did not produce a committed execution decision".into());
+            }
+            let task = decision.record;
             active.insert(project.clone(), task.task_id.clone());
             self.active_jobs.fetch_add(1, Ordering::AcqRel);
             let worker = Arc::clone(self);
@@ -789,17 +789,12 @@ impl Worker {
         };
         {
             let mut store = self.store()?;
-            let mut current = store.get(&id)?;
-            current.process_id = Some(child.id());
-            current.started_at_ms = Some(now_ms());
-            Store::event(
-                &mut current,
-                format!(
-                    "Process {} started; stdout/stderr are drained independently",
-                    child.id()
-                ),
-            );
-            store.save(&current)?;
+            store.transition(
+                &id,
+                TaskEvent::ProcessStarted {
+                    process_id: child.id(),
+                },
+            )?;
         }
         let fault = Arc::new(AtomicBool::new(false));
         let readers: Vec<_> = [

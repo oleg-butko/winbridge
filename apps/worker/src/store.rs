@@ -4,6 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use uuid::Uuid;
+use winbridge_core::task::{self, TaskEffect, TaskEvent, TaskOutcome, TaskTransition};
 use winbridge_protocol::{
     JournalEvent, OutputChunk, OutputStream, ResolvedCommand, TaskRecord, TaskStatus,
     TaskSubmission,
@@ -190,31 +191,14 @@ impl Store {
             return Ok(task);
         }
         let now = now_ms();
-        let task = TaskRecord {
-            task_id: Uuid::new_v4().to_string(),
-            submission: request,
-            resolved_command: command,
-            recipe_origin,
+        let task = task::accepted_record(
+            Uuid::new_v4().to_string(),
+            request,
+            command,
             snapshot,
-            status: TaskStatus::Queued,
-            accepted_at_ms: now,
-            started_at_ms: None,
-            finished_at_ms: None,
-            process_id: None,
-            exit_code: None,
-            reason: None,
-            cancel_requested: false,
-            output_bytes: 0,
-            output_truncated: false,
-            output_removed_at_ms: None,
-            removed_output_bytes: 0,
-            events: vec![JournalEvent {
-                sequence: 1,
-                occurred_at_ms: now,
-                status: TaskStatus::Queued,
-                summary: "Task accepted and committed to the local journal".into(),
-            }],
-        };
+            recipe_origin,
+            now,
+        );
         let transaction = self.connection.transaction().map_err(sql)?;
         transaction
             .execute(
@@ -296,54 +280,57 @@ impl Store {
         exit_code: Option<i32>,
         reason: &str,
     ) -> Result<TaskRecord> {
-        let mut task = self.get(id)?;
-        if task.status.is_terminal() {
-            return Ok(task);
+        let outcome = TaskOutcome::try_from(status).map_err(|error| error.to_string())?;
+        self.transition(
+            id,
+            TaskEvent::Completed {
+                outcome,
+                exit_code,
+                reason: reason.into(),
+            },
+        )
+        .map(|decision| decision.record)
+    }
+
+    /// Only a successfully committed decision may be dispatched by the execution owner.
+    pub fn transition(&mut self, id: &str, event: TaskEvent) -> Result<TaskTransition> {
+        let current = self.get(id)?;
+        if current.task_id != id {
+            return Err("Task journal identity mismatch; execution decision rejected".into());
         }
-        task.status = status;
-        task.exit_code = exit_code;
-        task.finished_at_ms = Some(now_ms());
-        task.reason = Some(reason.into());
-        Self::event(&mut task, reason);
+        let decision =
+            task::reduce(&current, event, now_ms()).map_err(|error| error.to_string())?;
+        if decision.effect == TaskEffect::None {
+            return Ok(decision);
+        }
+        let task = &decision.record;
         let transaction = self.connection.transaction().map_err(sql)?;
-        transaction
+        let changed = transaction
             .execute(
                 "UPDATE tasks SET record=?2 WHERE id=?1",
                 params![
                     task.task_id,
-                    serde_json::to_string(&task).map_err(|e| e.to_string())?
+                    serde_json::to_string(task).map_err(|e| e.to_string())?
                 ],
             )
             .map_err(sql)?;
-        crate::attention::task_outcome(&transaction, &task)?;
+        if changed != 1 {
+            return Err("Task transition was not stored; execution decision rejected".into());
+        }
+        if decision.effect == TaskEffect::RecordTerminalOutcome {
+            crate::attention::task_outcome(&transaction, task)?;
+        }
         transaction.commit().map_err(sql)?;
-        Ok(task)
+        Ok(decision)
     }
     pub fn cancel(&mut self, id: &str) -> Result<TaskRecord> {
-        let mut task = self.get(id)?;
-        if task.status.is_terminal() || task.cancel_requested {
-            return Ok(task);
-        }
-        if task.status == TaskStatus::Queued {
-            return self.finish(
-                id,
-                TaskStatus::Cancelled,
-                None,
-                "Cancelled before process launch",
-            );
-        }
-        task.cancel_requested = true;
-        Self::event(
-            &mut task,
-            "Cancellation requested; waiting for managed process tree termination",
-        );
-        self.save(&task)?;
-        Ok(task)
+        self.transition(id, TaskEvent::CancellationRequested)
+            .map(|decision| decision.record)
     }
     pub fn recover(&mut self) -> Result<()> {
         for task in self.all()? {
             if task.status == TaskStatus::Running {
-                self.finish(&task.task_id, TaskStatus::Indeterminate, None, "Worker restarted after launch intent; external command outcome is unknown. Automatic retry is disabled")?;
+                self.transition(&task.task_id, TaskEvent::Recovered)?;
             }
         }
         Ok(())

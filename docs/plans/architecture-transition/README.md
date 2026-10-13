@@ -13,7 +13,8 @@
 
 Ход первого пакета и evidence: [A0 — legacy baseline](baseline.md).
 Обновление 2026-10-13 после planning commit `d524e68`: A0 завершён,
-14 новых tests и полный workspace (171 tests) passed; A1–A9 ещё не реализованы.
+14 новых tests и полный workspace (171 tests) passed.
+[A1 Task FSM](task-fsm.md) реализована; native gate ещё pending, A2–A9 не реализованы.
 
 ## Результат для пользователя и проектов
 

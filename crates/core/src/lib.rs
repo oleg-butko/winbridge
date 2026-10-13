@@ -9,6 +9,7 @@ pub mod diagnostics;
 pub mod notifications;
 pub mod profiles;
 pub mod snapshot;
+pub mod task;
 pub mod workflow;
 
 use std::io::{self, Write};

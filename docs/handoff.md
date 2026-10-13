@@ -1,6 +1,23 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
+## A1 Task FSM — реализация, 2026-10-13
+
+Продолжение после A0 `f8c22d5`: [pure Task FSM](plans/architecture-transition/task-fsm.md)
+в core, worker Store::transition для launch/PID/cancel/finish/recovery.
+DB/wire/fingerprints/IDs/dependencies прежние; Starting → v1 running без PID.
+Найден/исправлен успех UPDATE без изменённых rows: dispatch теперь только после
+сохранённого decision; identity сверяется. Core 7 и worker 4 tests добавлены.
+Automatic `--task-fsm-only` / `-TaskFsmOnly` включает baseline и lifecycle/workflow
+regressions без desktop/UI windows. 182 workspace tests и Windows-target workspace/
+protocol/core/worker tests check пройдены; A1 native gate pending,
+этап пока не закрыт. Controller поднят с .winbridge/controller-snapshot.local.json,
+192.168.44.203:1143, exec 25088, generation 6ec4284a-6d9f-47b8-866a-f9cda6f7c702;
+Worker подключён и idle: generation 02939593-8adf-4878-a346-473092697a4a, session
+631c2e63-edc8-44f8-8cce-89abec7caf8b, installed build b5d39f9, dirty false.
+Эти сведения получены из текущего info, старые receipts ниже не подтверждают
+нынешнюю связь. Рабочие Windows runtime/config/state не менялись.
+
 ## Начало архитектурного перехода, 2026-10-13
 
 Пользователь поручил объединить три аналитических отчёта, сделать повторное ревью,

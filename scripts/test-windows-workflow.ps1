@@ -45,6 +45,10 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 .PARAMETER IdentityOnly
 Проверяет build identity на настоящей Windows/Git: parent checkout, Unicode paths
 и скрытые index flags. Запускает только protocol tests, без desktop/test worker.
+.PARAMETER TaskFsmOnly
+Проверяет A0 baseline и A1 Task FSM: сохранение launch intent до spawn, ошибку записи PID,
+cancel/timeout/process tree, recovery и совместимость существующих workflows.
+Рабочие exe/state не меняются; desktop и тестовые UI-окна не открываются.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -72,6 +76,7 @@ param(
     [switch]$ProfilesOnly,
     [switch]$ProjectsOnly,
     [switch]$IdentityOnly,
+    [switch]$TaskFsmOnly,
     [string]$ProjectsPreparation = '',
     [string]$ProjectsPreparationSha256 = '',
     [string]$ResumeDeliveryRoot = '',
@@ -143,7 +148,15 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($TaskFsmOnly) {
+        if ($NetwatchProfile) { throw 'TaskFsmOnly requires an isolated scenario' }
+        $groups = @(
+            @{ name='task-fsm-pure-transitions'; arguments=@('test','-p','winbridge-core','--test','task_fsm','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-fsm-frozen-wire-and-journal'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-fsm-native-faults-and-lifecycle'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_fsm','--test','runtime','--test','attention','--test','workflows','--locked','--offline','--','--test-threads=1','--nocapture') }
+        )
+    }
     if ($IdentityOnly) {
         if ($NetwatchProfile) { throw 'IdentityOnly requires an isolated scenario' }
         $groups = @(

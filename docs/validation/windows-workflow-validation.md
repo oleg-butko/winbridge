@@ -1,5 +1,14 @@
 # Автоматические Windows проверки workflow
 
+Архитектурный A1: `--task-fsm-only` / `-TaskFsmOnly` проверяет
+[типизированную FSM задач](../plans/architecture-transition/task-fsm.md) и frozen
+A0 baseline. В одной партии выполняются launch/PID commit fault tests, cancel/
+timeout/process tree, recovery/attention и существующие workflow regressions.
+Нужен working Windows worker; desktop необязателен, тестовых UI-окон не будет.
+Рабочие binaries/config/state не заменяются. Source archive собирается отдельно,
+tests/state/workspaces локальные, verified report/ready — в shared. Это режим
+агента для gate, а не команда обновления рабочего runtime.
+
 Этап 7: `--projects-only` / `-ProjectsOnly` выполняет [два реальных проекта](../guides/project-integration.md)
 Netwatch/WinBridge через общий build profile и прежний task service. Driver сам
 готовит отдельные Git clones, validation commits/diffs и pinned Debian packages,

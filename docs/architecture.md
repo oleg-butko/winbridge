@@ -82,6 +82,14 @@ Task states: queued, running, succeeded, failed, cancelled, interrupted, indeter
 
 Windows journal — источник истины по исполнению. SQLite metadata и сегменты output находятся на локальном диске Windows. Debian может иметь локальный dispatch journal, но не открывает Windows live SQLite файл через HGFS. WAL работает на одном хосте, а не как shared network database. [SQLite WAL](https://www.sqlite.org/wal.html).
 
+[Task FSM A1](plans/architecture-transition/task-fsm.md) выделяет решения о launch,
+PID, cancel, finish и recovery в pure reducer `crates/core`. Store сохраняет
+state/event и terminal attention до возврата execution decision; scheduler
+запускает процесс только после commit с одной изменённой task row. Внутренний
+Starting остаётся v1 running без PID. Protocol/schema/fingerprints прежние;
+revision/attempt/epoch и защита остальных writers относятся к следующему A2.
+Native Windows gate A1 пока pending.
+
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 
 [Desktop diagnostic log](guides/desktop-diagnostics.md) находится рядом с exe в `logs/`,
