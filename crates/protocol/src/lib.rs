@@ -1,6 +1,8 @@
 //! Shared wire contracts and the local worker read model.
 
 use serde::{Deserialize, Serialize};
+mod request_context;
+pub use request_context::*;
 
 mod attention;
 pub use attention::*;
@@ -345,6 +347,9 @@ pub struct JournalInspection {
 #[serde(rename_all = "camelCase")]
 pub struct WorkerInfo {
     pub protocol_version: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub fenced_requests: Option<FencedRequestInfo>,
     pub instance_id: String,
     pub node_id: String,
     pub generation: String,

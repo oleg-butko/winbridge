@@ -435,7 +435,7 @@ fn v3_migration_has_consistent_backup_and_preserves_old_task() {
     drop(store);
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute_batch("DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; PRAGMA user_version=3;")
+        .execute_batch("DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; PRAGMA user_version=3;")
         .unwrap();
     drop(connection);
     let store = Store::open(&path).unwrap();
@@ -500,7 +500,7 @@ fn v4_migration_preserves_target_ids_acknowledgement_and_sequence_high_water() {
       CREATE TABLE attention (sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL UNIQUE,project TEXT NOT NULL,task TEXT NOT NULL REFERENCES tasks(id),severity TEXT NOT NULL,message TEXT NOT NULL,origin TEXT NOT NULL,key TEXT NOT NULL,payload TEXT NOT NULL,created INTEGER NOT NULL,acknowledged INTEGER,UNIQUE(origin,key));
       INSERT INTO attention SELECT sequence,id,project,task,severity,message,origin,key,payload,created,acknowledged FROM richer_attention;
       DROP TABLE richer_attention; CREATE INDEX attention_pending ON attention(acknowledged,sequence);
-      DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; UPDATE sqlite_sequence SET seq=5000 WHERE name='attention'; PRAGMA user_version=4; COMMIT;").unwrap();
+      DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; UPDATE sqlite_sequence SET seq=5000 WHERE name='attention'; PRAGMA user_version=4; COMMIT;").unwrap();
     drop(db);
     let mut store = Store::open(&path).unwrap();
     assert_eq!(store.attention(&event.attention_id).unwrap(), ack);

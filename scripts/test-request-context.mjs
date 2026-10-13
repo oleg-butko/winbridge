@@ -1,0 +1,27 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import ts from "typescript";
+
+const source = await readFile(new URL("../ui/src/runtime/requestContext.ts", import.meta.url), "utf8");
+const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+const { bindWorkerRequest, requestEnvelope, scopedResult } = await import(`data:text/javascript;base64,${Buffer.from(code).toString("base64")}`);
+const context = { instanceId: "pair", journalIncarnation: "original" };
+const payload = { method: "submit", request: { idempotencyKey: "same-key", command: { kind: "direct", arguments: ["original"] } } };
+const pending = bindWorkerRequest(payload, context);
+context.journalIncarnation = "after-config-reload";
+payload.request.command.arguments[0] = "form-edited";
+const retry = requestEnvelope(pending);
+assert.equal(retry.context.journalIncarnation, "original");
+assert.equal(retry.request.request.idempotencyKey, "same-key");
+assert.deepEqual(retry.request.request.command.arguments, ["original"]);
+const legacy = bindWorkerRequest(payload);
+assert.equal("requestContractVersion" in requestEnvelope(legacy), false, "pending v1 must never silently upgrade after new Info");
+const next = requestEnvelope(bindWorkerRequest(payload, context));
+assert.equal(next.context.journalIncarnation, "after-config-reload", "new explicit actions can bind the new scope");
+const replied = { requestContractVersion: 2, outcome: "responded", context: pending.context, response: { kind: "tasks", tasks: [] } };
+assert.equal(scopedResult(replied, pending.context).kind, "tasks");
+assert.throws(() => scopedResult({ ...replied, context }, pending.context), /другому журналу/);
+assert.throws(() => scopedResult({ ...replied, outcome: "unconfirmed" }, pending.context), /другому журналу/);
+assert.throws(() => scopedResult({ ...replied, outcome: "unconfirmed", response: { kind: "error", message: "acceptance unknown" } }, pending.context), /acceptance unknown/);
+assert.throws(() => scopedResult({ ...replied, outcome: "rejected_before_dispatch", context, response: { kind: "error", message: "stale scope" } }, pending.context), /stale scope/);
+console.log("Request context survives retry/config reload; reply scope and uncertainty validated");

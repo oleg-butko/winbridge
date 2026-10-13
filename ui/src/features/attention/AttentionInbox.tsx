@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Alert, Badge, Button, Card, Checkbox, Group, ScrollArea, Stack, Text, Title } from "@mantine/core";
 import type { AttentionEventPage, AttentionTarget, WorkerInfo } from "../../runtime/contracts";
-import { expectResult, workerCall } from "../../runtime/adapter";
+import { expectResult, workerCall, workerMutation } from "../../runtime/adapter";
 
 const severity = {
   info: { label: "Сообщение", color: "blue" },
@@ -43,8 +43,8 @@ export function AttentionInbox({ info, connected, onTarget }: {
   async function acknowledge(id: string) {
     setAcknowledging(id); setAckError(null);
     try {
-      if (info.attentionTargetsAvailable) expectResult(await workerCall({ method: "acknowledge_attention_event", attentionId: id }), "attention_event");
-      else expectResult(await workerCall({ method: "acknowledge_attention", attentionId: id }), "attention");
+      if (info.attentionTargetsAvailable) expectResult(await workerMutation({ method: "acknowledge_attention_event", attentionId: id }, info.fencedRequests?.context), "attention_event");
+      else expectResult(await workerMutation({ method: "acknowledge_attention", attentionId: id }, info.fencedRequests?.context), "attention");
       setRevision((value) => value + 1);
     } catch (error) { setAckError({ id, message: `Ответ на подтверждение не получен: ${String(error)}. Повтор использует то же событие и сохраняет время первого подтверждения.` }); }
     finally { setAcknowledging(null); }

@@ -135,7 +135,9 @@ impl Store {
         Ok(())
     }
     pub fn check_authority(&self) -> Result<()> {
-        Self::assert_authority(&self.connection, &self.authority)
+        Self::assert_authority(&self.connection, &self.authority)?;
+        self.requires_fenced_requests()?;
+        Ok(())
     }
 
     /// Runtime calls this only after acquiring the existing exclusive instance lock.
@@ -177,6 +179,7 @@ impl Store {
             .transaction_with_behavior(behavior)
             .map_err(sql)?;
         Self::assert_authority(&transaction, &expected)?;
+        Self::read_admission_boundary(&transaction, &expected.incarnation)?;
         if let Some(token) = callback {
             Self::assert_attempt(&transaction, &token)?;
         }
@@ -229,7 +232,7 @@ impl Store {
         }
         Ok(())
     }
-    fn require_writable(&self) -> Result<()> {
+    pub(super) fn require_writable(&self) -> Result<()> {
         if self.read_only {
             return Err("local journal: read-only recovery inspection; no mutation or new effect is authorized".into());
         }

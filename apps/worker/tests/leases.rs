@@ -468,7 +468,10 @@ fn schema_nine_upgrade_retains_raw_bytes_keys_and_consistent_backup_without_inve
     let accepted = task(&mut store, "first", "task");
     let path = root.path().join("journal.sqlite");
     drop(store);
-    sql(&root, "DROP TABLE resource_leases; PRAGMA user_version=9;");
+    sql(
+        &root,
+        "DROP TABLE journal_admission; DROP TABLE resource_leases; PRAGMA user_version=9;",
+    );
     let raw = |path: &Path| {
         Connection::open(path)
             .unwrap()
@@ -522,7 +525,7 @@ fn schema_nine_upgrade_retains_raw_bytes_keys_and_consistent_backup_without_inve
 fn failed_schema_ten_upgrade_is_atomic() {
     let (root, store) = setup();
     drop(store);
-    sql(&root, "DROP TABLE resource_leases; PRAGMA user_version=9; CREATE TABLE resource_leases(canary TEXT); INSERT INTO resource_leases VALUES('unchanged');");
+    sql(&root, "DROP TABLE journal_admission; DROP TABLE resource_leases; PRAGMA user_version=9; CREATE TABLE resource_leases(canary TEXT); INSERT INTO resource_leases VALUES('unchanged');");
     assert!(Store::open(&root.path().join("journal.sqlite")).is_err());
     let db = Connection::open(root.path().join("journal.sqlite")).unwrap();
     assert_eq!(

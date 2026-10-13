@@ -28,7 +28,9 @@ use winbridge_core::config::WorkerConfig;
 use winbridge_core::task::TaskEffect;
 use winbridge_platform::{trace_process, ManagedChild};
 use winbridge_protocol::{
-    LocalRequest, LocalResponse, OutputStream, TaskRecord, TaskStatus, WorkerInfo, PROTOCOL_VERSION,
+    FencedRequest, FencedRequestInfo, FencedResponse, LocalRequest, LocalResponse, OutputStream,
+    RequestContext, TaskRecord, TaskStatus, WireRequest, WireResponse, WorkerInfo,
+    FENCED_REQUEST_CONTRACT, PROTOCOL_VERSION,
 };
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -253,12 +255,56 @@ impl Worker {
         Ok(store)
     }
     pub fn handle(&self, request: LocalRequest) -> LocalResponse {
-        match self.dispatch(request) {
+        match self.dispatch(request, false) {
             Ok(response) => response,
             Err(message) => LocalResponse::Error { message },
         }
     }
-    fn dispatch(&self, request: LocalRequest) -> Result<LocalResponse> {
+    pub fn request_context(&self) -> Result<RequestContext> {
+        Ok(RequestContext {
+            instance_id: self.config.instance_id.clone(),
+            journal_incarnation: self.store()?.journal_authority().incarnation.clone(),
+        })
+    }
+    pub fn handle_fenced(&self, request: FencedRequest) -> FencedResponse {
+        let context = self.request_context();
+        let mut dispatched = false;
+        let result = (|| {
+            if request.request_contract_version != FENCED_REQUEST_CONTRACT {
+                return Err("Unsupported request contract; no automatic v1 fallback".into());
+            }
+            if context.as_ref().map_err(Clone::clone)? != &request.context {
+                return Err("Request belongs to another instance/journal incarnation; create a new explicit request after reconnecting. The original logical request was not replayed".into());
+            }
+            dispatched = true;
+            self.dispatch(request.request, true)
+        })();
+        FencedResponse {
+            request_contract_version: FENCED_REQUEST_CONTRACT,
+            outcome: if result.is_ok() {
+                winbridge_protocol::FencedReplyOutcome::Responded
+            } else if dispatched {
+                winbridge_protocol::FencedReplyOutcome::Unconfirmed
+            } else {
+                winbridge_protocol::FencedReplyOutcome::RejectedBeforeDispatch
+            },
+            context: context.ok(),
+            response: result.unwrap_or_else(|message| LocalResponse::Error { message }),
+        }
+    }
+    pub fn handle_wire(&self, request: WireRequest) -> WireResponse {
+        match request {
+            WireRequest::Legacy(request) => WireResponse::Legacy(Box::new(self.handle(request))),
+            WireRequest::Fenced(request) => {
+                WireResponse::Fenced(Box::new(self.handle_fenced(*request)))
+            }
+        }
+    }
+    fn dispatch(&self, request: LocalRequest, fenced: bool) -> Result<LocalResponse> {
+        let requires_fenced = self.store()?.requires_fenced_requests()?;
+        if !fenced && !request.is_observation() && requires_fenced {
+            return Err("This recovered instance requires request contract 2 with a caller-pinned journal incarnation. Legacy mutation was rejected; do not automatically retry in a new scope".into());
+        }
         // An allowlist keeps future protocol additions disabled until their
         // read-only behavior is deliberately reviewed. SQLite is read-only too.
         if self.inspection
@@ -498,6 +544,15 @@ impl Worker {
                 };
                 Ok(LocalResponse::Info {
                     info: Box::new(WorkerInfo {
+                        fenced_requests: Some(FencedRequestInfo {
+                            request_contract_version: FENCED_REQUEST_CONTRACT,
+                            context: RequestContext {
+                                instance_id: self.config.instance_id.clone(),
+                                journal_incarnation: store.journal_authority().incarnation.clone(),
+                            },
+                            legacy_mutations_allowed: !self.inspection
+                                && !store.requires_fenced_requests()?,
+                        }),
                         resource_recovery: if self.inspection {
                             store.inspection_resource_summary()?
                         } else {
@@ -1250,6 +1305,12 @@ fn ensure_local_state(path: &Path) -> Result<()> {
 }
 
 pub async fn serve(worker: Arc<Worker>) -> Result<()> {
+    struct NetworkTask(tokio::task::JoinHandle<()>);
+    impl Drop for NetworkTask {
+        fn drop(&mut self) {
+            self.0.abort();
+        }
+    }
     let address =
         winbridge_transport::endpoint(&worker.config.state_directory, &worker.config.instance_id)
             .map_err(|e| e.to_string())?;
@@ -1298,7 +1359,7 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
         .worker
         .controller_url
         .as_ref()
-        .map(|_| tokio::spawn(network::connect(Arc::clone(&worker))));
+        .map(|_| NetworkTask(tokio::spawn(network::connect(Arc::clone(&worker)))));
     let mut interval = tokio::time::interval(Duration::from_millis(25));
     let shutdown = tokio::signal::ctrl_c();
     tokio::pin!(shutdown);
@@ -1306,6 +1367,7 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
         tokio::select! {
             _ = &mut shutdown => break,
             _ = interval.tick() => {
+                if worker.stop.load(Ordering::Acquire) { break; }
                 if let Err(error) = worker.schedule() {
                     worker.record_journal_fault("scheduler", &error, "scheduling failed; new launches suspended");
                     eprintln!("WinBridge scheduling paused; IPC and accepted process owners remain active: {error}");
@@ -1318,7 +1380,11 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
         }
     }
     if let Some(network) = network {
-        network.abort();
+        network.0.abort();
+        // Aborting is asynchronous. Join before declaring this service stopped
+        // so the network owner cannot keep the instance lock across a restart.
+        let mut network = network;
+        let _ = (&mut network.0).await;
     }
     worker.stop();
     while !worker.is_idle() {
@@ -1357,19 +1423,28 @@ where
         let _permit = permit;
         let operation = async {
             let bytes = winbridge_transport::read_frame(&mut stream).await?;
-            let request = serde_json::from_slice::<LocalRequest>(&bytes);
+            let request = serde_json::from_slice::<WireRequest>(&bytes);
             let response = match request {
-                Ok(request) => tokio::task::spawn_blocking(move || worker.handle(request))
+                Ok(request) => tokio::task::spawn_blocking(move || worker.handle_wire(request))
                     .await
                     .map_err(std::io::Error::other)?,
-                Err(error) => LocalResponse::Error {
+                Err(error) => WireResponse::Legacy(Box::new(LocalResponse::Error {
                     message: format!("invalid IPC request: {error}"),
-                },
+                })),
             };
             let mut bytes = serde_json::to_vec(&response)?;
             if bytes.len() > winbridge_transport::MAX_FRAME_BYTES {
-                bytes = serde_json::to_vec(&LocalResponse::Error {
-                    message: "Response exceeds 1 MiB; query an individual task".into(),
+                bytes = serde_json::to_vec(&match &response {
+                    WireResponse::Legacy(_) => {
+                        WireResponse::Legacy(Box::new(LocalResponse::Error {
+                            message: "Response exceeds 1 MiB; query an individual task".into(),
+                        }))
+                    }
+                    WireResponse::Fenced(_) => {
+                        WireResponse::Fenced(Box::new(FencedResponse::rejected(
+                            "Response exceeds 1 MiB; query an individual task".into(),
+                        )))
+                    }
                 })?;
             }
             winbridge_transport::write_frame(&mut stream, &bytes).await

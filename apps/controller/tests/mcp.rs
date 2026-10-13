@@ -115,7 +115,7 @@ fn catalog_is_generated_from_tagged_protocol_and_has_only_reachable_definitions(
         serde_json::to_value(schemars::schema_for!(winbridge_protocol::LocalRequest)).unwrap();
     assert_eq!(
         tools.len(),
-        request["oneOf"].as_array().unwrap().len() + 3 - 4
+        request["oneOf"].as_array().unwrap().len() + 4 - 4
     );
     assert!(!tools
         .iter()
@@ -161,6 +161,33 @@ fn catalog_is_generated_from_tagged_protocol_and_has_only_reachable_definitions(
         .is_none());
     assert_eq!(submit["annotations"]["openWorldHint"], true);
     assert!(serde_json::to_vec(&tools).unwrap().len() < 100_000);
+    let fenced = tools
+        .iter()
+        .find(|tool| tool["name"] == "winbridge_invoke_fenced")
+        .unwrap();
+    assert_eq!(
+        fenced["inputSchema"]["properties"]["requestContractVersion"]["enum"],
+        json!([2])
+    );
+    assert!(fenced["inputSchema"]["required"]
+        .as_array()
+        .unwrap()
+        .contains(&json!("context")));
+    for branch in fenced["inputSchema"]["definitions"]["LocalRequest"]["oneOf"]
+        .as_array()
+        .unwrap()
+    {
+        assert!(!matches!(
+            branch["properties"]["method"]["enum"][0].as_str(),
+            Some(
+                "get_runtime_settings"
+                    | "save_runtime_settings"
+                    | "preview_output_cleanup"
+                    | "apply_output_cleanup"
+                    | "controller_status"
+            )
+        ));
+    }
 }
 
 #[tokio::test]

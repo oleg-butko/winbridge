@@ -6,9 +6,11 @@ use tokio::{
     task::JoinSet,
     time::Instant,
 };
+#[cfg(test)]
+use winbridge_protocol::LocalResponse;
 use winbridge_protocol::{
-    Capability, Component, ConnectionState, LocalResponse, PeerIdentity, SessionMessage,
-    PROTOCOL_VERSION,
+    Capability, Component, ConnectionState, FencedSessionMessage, PeerIdentity, SessionFrame,
+    SessionMessage, WireRequest, WireResponse, PROTOCOL_VERSION,
 };
 use winbridge_transport::websocket::{self as ws, Result};
 
@@ -106,7 +108,7 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
     mut socket: ws::WebSocketStream<S>,
     worker: Arc<Worker>,
 ) -> Result<()> {
-    let mut handlers: JoinSet<(String, LocalResponse)> = JoinSet::new();
+    let mut handlers: JoinSet<(String, WireResponse)> = JoinSet::new();
     let mut active_ids = HashSet::new();
     let mut last_ping = Instant::now();
     let mut last_nonce = 0;
@@ -121,43 +123,53 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
             result = handlers.join_next(), if !handlers.is_empty() => {
                 let (id, response) = result.ok_or("Request handler disappeared")?.map_err(|e| e.to_string())?;
                 active_ids.remove(&id);
-                let mut message = SessionMessage::Response { id: id.clone(), response };
+                let mut message = SessionFrame::response(id.clone(), response);
                 if serde_json::to_vec(&message).map_err(|e| e.to_string())?.len() > winbridge_transport::MAX_FRAME_BYTES {
-                    message = SessionMessage::Response { id, response: LocalResponse::Error { message: "Response exceeds 1 MiB; request an individual task/output page".into() } };
+                    let response = match message {
+                        SessionFrame::Legacy(SessionMessage::Response { response, .. }) => WireResponse::Legacy(Box::new(response)),
+                        SessionFrame::Fenced(FencedSessionMessage::Response { response, .. }) => WireResponse::Fenced(Box::new(response)),
+                        _ => unreachable!(),
+                    };
+                    message = SessionFrame::response(id, response.with_error("Response exceeds 1 MiB; request an individual task/output page".into()));
                 }
-                ws::send(&mut socket, &message).await?;
+                ws::send_frame(&mut socket, &message).await?;
             }
-            message = ws::receive(&mut socket) => match message? {
+            message = ws::receive_frame(&mut socket) => match message? {
                 None => {},
-                Some(SessionMessage::Ping { nonce }) if nonce > last_nonce => {
+                Some(SessionFrame::Legacy(SessionMessage::Ping { nonce })) if nonce > last_nonce => {
                     ws::send(&mut socket, &SessionMessage::Pong { nonce }).await?;
                     last_nonce = nonce; last_ping = Instant::now();
                     update(&worker, |s| { s.last_confirmed_at_ms = Some(now_ms()); });
                 }
-                Some(SessionMessage::Request { id, request }) => {
+                Some(message) => {
+                    let (id, request) = match message {
+                        SessionFrame::Legacy(SessionMessage::Request { id, request }) => (id, WireRequest::Legacy(request)),
+                        SessionFrame::Fenced(FencedSessionMessage::Request { id, request }) => (id, WireRequest::Fenced(Box::new(request))),
+                        _ => return Err("Unexpected message in worker session".into()),
+                    };
                     if id.is_empty() || id.len() > 160 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') || active_ids.contains(&id) {
                         return Err("Invalid/duplicate WebSocket correlation ID".into());
                     }
                     if handlers.len() >= ws::MAX_IN_FLIGHT {
-                        ws::send(&mut socket, &SessionMessage::Response { id, response: LocalResponse::Error { message: "Worker has 16 active requests; request rejected before acceptance".into() } }).await?;
+                        ws::send_frame(&mut socket, &SessionFrame::response(id, WireResponse::rejected_for(&request, "Worker has 16 active requests; request rejected before acceptance".into()))).await?;
                         continue;
                     }
                     active_ids.insert(id.clone());
                     let worker = Arc::clone(&worker);
                     handlers.spawn(async move {
+                        let fallback = WireResponse::rejected_for(&request, String::new());
                         let result = tokio::time::timeout(ws::RPC_TIMEOUT, tokio::task::spawn_blocking(move || {
-                            if request.local_maintenance_only() { LocalResponse::Error { message: "Runtime settings and output cleanup are available through local desktop IPC only".into() } }
-                            else { worker.handle(request) }
+                            if request.request().local_maintenance_only() { WireResponse::rejected_for(&request, "Runtime settings and output cleanup are available through local desktop IPC only".into()) }
+                            else { worker.handle_wire(request) }
                         })).await;
                         let response = match result {
                             Ok(Ok(response)) => response,
-                            Ok(Err(error)) => LocalResponse::Error { message: format!("Worker handler failed: {error}; reconcile the same task/key") },
-                            Err(_) => LocalResponse::Error { message: "Worker handler timeout; acceptance is unknown, reconcile the same task/key without automatic retry".into() },
+                            Ok(Err(error)) => fallback.with_error(format!("Worker handler failed: {error}; reconcile the same task/key and pinned request scope")),
+                            Err(_) => fallback.with_error("Worker handler timeout; acceptance is unknown, reconcile the same task/key and pinned request scope without automatic retry".into()),
                         };
                         (id, response)
                     });
                 }
-                _ => return Err("Unexpected message in worker session".into()),
             }
         }
     }

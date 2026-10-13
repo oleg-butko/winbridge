@@ -176,6 +176,17 @@ async fn worker_rpc(
     winbridge_transport::call(address, &request).await.map_err(|e| format!("Windows worker is unavailable: {e}. Start worker with the same config; accepted tasks continue independently of this window"))
 }
 
+#[tauri::command]
+async fn worker_rpc_fenced(
+    window: tauri::WebviewWindow,
+    endpoint: tauri::State<'_, WorkerEndpoint>,
+    request: winbridge_protocol::FencedRequest,
+) -> Result<winbridge_protocol::FencedResponse, String> {
+    main_only(&window)?;
+    let address = endpoint.0.as_ref().map_err(Clone::clone)?;
+    winbridge_transport::call_fenced(address, &request).await.map_err(|e|format!("Ответ worker не подтверждён: {e}. Сохраните исходную incarnation и key; автоматического повтора нет"))
+}
+
 fn configured_endpoint() -> Result<String, String> {
     let executable =
         std::env::current_exe().map_err(|e| format!("desktop executable path: {e}"))?;
@@ -348,6 +359,7 @@ fn main() {
             diagnostic_directory,
             save_diagnostic,
             worker_rpc,
+            worker_rpc_fenced,
             load_command_drafts,
             save_command_draft,
             save_delivery_draft,

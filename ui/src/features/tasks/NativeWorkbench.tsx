@@ -1,3 +1,5 @@
+import { bindWorkerRequest } from "../../runtime/requestContext";
+import type { BoundWorkerRequest } from "../../runtime/requestContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SettingsPanel } from "../settings/SettingsPanel";
 import { AttentionInbox } from "../attention/AttentionInbox";
@@ -5,7 +7,7 @@ import { CompanionPanel } from "../attention/CompanionPanel";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { Alert, Button, Card, Code, Group, NumberInput, Select, Stack, Text, Textarea, TextInput, Title } from "@mantine/core";
-import { expectResult, workerCall } from "../../runtime/adapter";
+import { expectResult, workerCall, workerMutation, workerBoundCall } from "../../runtime/adapter";
 import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, saveDeliveryDraft, saveWorkflowProfile } from "../../runtime/commandDrafts";
 import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, DeliveryDraft, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
@@ -19,7 +21,7 @@ import { closeDeadline, CloseTimeout, desktopEvent } from "../../runtime/desktop
 import type { ClosePhase, CloseSource, DesktopLogStatus } from "../../runtime/desktopEvents";
 import { TaskDetail, statuses } from "./TaskDetail";
 
-function TaskSession({ id, readOnly }: { id: string; readOnly: boolean }) {
+function TaskSession({ id, readOnly, requestContext }: { id: string; readOnly: boolean; requestContext?: import("../../runtime/contracts").RequestContext }) {
   const [task, setTask] = useState<TaskRecord | null>(null);
   const [output, setOutput] = useState(() => new OutputBuffer().snapshot());
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ function TaskSession({ id, readOnly }: { id: string; readOnly: boolean }) {
   }, [id]);
   async function cancel() {
     setCancelling(true);
-    try { setTask(expectResult(await workerCall({ method: "cancel", taskId: id }), "task").task); }
+    try { setTask(expectResult(await workerMutation({ method: "cancel", taskId: id }, requestContext), "task").task); }
     catch (error) { setError(String(error)); }
     finally { setCancelling(false); }
   }
@@ -123,7 +125,7 @@ export function NativeWorkbench() {
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [pending, setPending] = useState<TaskSubmission | null>(null);
+  const [pending, setPending] = useState<BoundWorkerRequest<{ method: "submit"; request: TaskSubmission }> | null>(null);
   const selectedRef = useRef(selectedId); selectedRef.current = selectedId;
   useEffect(() => {
     let disposed = false;
@@ -280,10 +282,11 @@ export function NativeWorkbench() {
     scopedSaves.current.set(`workflow:${JSON.stringify([profile.workerInstanceId, profile.projectId, profile.workspaceRoot, profile.name])}`, pendingSave);
     return pendingSave;
   }
-  async function send(request: TaskSubmission) {
-    setSubmitting(true); setPending(request); setError(null);
+  async function send(request: TaskSubmission, bound?: BoundWorkerRequest<{ method: "submit"; request: TaskSubmission }>) {
+    const pinned = bound ?? bindWorkerRequest({ method: "submit", request }, info?.fencedRequests?.context);
+    setSubmitting(true); setPending(pinned); setError(null);
     try {
-      const response = await workerCall({ method: "submit", request });
+      const response = await workerBoundCall(pinned);
       if (response.kind === "error") { setPending(null); throw new Error(response.message); }
       const task = expectResult(response, "task").task;
       setSelectedId(task.taskId); setPending(null);
@@ -367,11 +370,11 @@ export function NativeWorkbench() {
       {error && connected && <Alert color="red" title="Запрос не завершён">{error}</Alert>}
       {pending && !submitting && <Alert color="yellow" title="Приём задачи не подтверждён">
         Worker мог сохранить задачу до потери ответа. Повтор отправит прежние параметры и тот же ключ, чтобы получить ту же задачу.
-        <Button mt="sm" disabled={!executionReady} onClick={() => void send(pending)}>Проверить приём — повторить тот же запрос</Button>
+        <Button mt="sm" disabled={!executionReady} onClick={() => void send(pending.request.request, pending)}>Проверить приём — повторить тот же запрос</Button>
       </Alert>}
       <Button onClick={() => void submit()} loading={submitting} disabled={!executionReady || pending !== null || !project || !formReady || closing || (!recipeId && !project.allowDirectCommands)}>Передать задачу worker</Button>
     </Stack></Card>
     <Select label="Последние 10 задач" value={selectedId} onChange={setSelectedId} searchable data={tasks.map((t) => ({ value: t.taskId, label: `${t.projectId} · ${statuses[t.status].label} · ${t.taskId}` }))} />
-    {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} readOnly={!!info?.journalInspection} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
+    {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} readOnly={!!info?.journalInspection} requestContext={info?.fencedRequests?.context} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
   </Stack>;
 }

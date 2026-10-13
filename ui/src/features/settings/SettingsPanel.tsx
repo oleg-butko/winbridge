@@ -1,7 +1,9 @@
+import { bindWorkerRequest } from "../../runtime/requestContext";
+import type { BoundWorkerRequest } from "../../runtime/requestContext";
 import { useEffect, useState } from "react";
 import { Accordion, Alert, Button, Card, Checkbox, Code, Group, NumberInput, Select, Stack, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
 import type { ApplyOutputCleanup, OutputCleanupPreview, OutputCleanupResult, RuntimeSettings, SaveRuntimeSettings, WorkerInfo } from "../../runtime/contracts";
-import { expectResult, workerCall } from "../../runtime/adapter";
+import { expectResult, workerCall, workerBoundCall } from "../../runtime/adapter";
 
 type Project = {id:string;workspaceRoot:string;allowDirectCommands:boolean;maxConcurrentMutations:number;recipes:unknown[];recipeProfile?:string|null};
 type Config = {instanceId:string;nodeId:string;stateDirectory:string;worker:{controllerUrl?:string|null;keepRunningOnUiExit:boolean};delivery?:unknown;projects:Project[];recipeProfiles?:{id:string;label:string;description:string}[];maxOutputBytesPerTask?:number;outputRetention?:{automatic:boolean;olderThanDays:number}};
@@ -29,9 +31,9 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
   const [settings,setSettings]=useState<RuntimeSettings|null>(null); const [json,setJson]=useState("");
   const [projectIndex,setProjectIndex]=useState("0"); const [error,setError]=useState<string|null>(null);
   const [saved,setSaved]=useState<string|null>(null); const [backup,setBackup]=useState<string|null>(null);
-  const [busy,setBusy]=useState(false); const [saveRequest,setSaveRequest]=useState<SaveRuntimeSettings|null>(null);
+  const [busy,setBusy]=useState(false); const [saveRequest,setSaveRequest]=useState<BoundWorkerRequest<{method:"save_runtime_settings";request:SaveRuntimeSettings}>|null>(null);
   const [days,setDays]=useState(30); const [cleanupProject,setCleanupProject]=useState<string|null>(null);
-  const [preview,setPreview]=useState<OutputCleanupPreview|null>(null); const [cleanupRequest,setCleanupRequest]=useState<ApplyOutputCleanup|null>(null);
+  const [preview,setPreview]=useState<OutputCleanupPreview|null>(null); const [cleanupRequest,setCleanupRequest]=useState<BoundWorkerRequest<{method:"apply_output_cleanup";request:ApplyOutputCleanup}>|null>(null);
   const [result,setResult]=useState<OutputCleanupResult|null>(null);
   const dirty=!!settings && json!==settings.savedJson;
   useEffect(()=>{onBlocked(dirty||busy);return()=>onBlocked(false);},[dirty,busy,onBlocked]);
@@ -52,18 +54,18 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
   const project=config?.projects?.[Number(projectIndex)];
   async function save(){
     if(!settings)return;setBusy(true);setError(null);setSaved(null);
-    const request=saveRequest??{generation:settings.generation,requestId:crypto.randomUUID(),expectedSha256:settings.savedSha256,json};setSaveRequest(request);
-    try{const value=expectResult(await workerCall({method:"save_runtime_settings",request}),"settings_saved").saved;setSettings(value.settings);setJson(value.settings.savedJson);setSaveRequest(null);setBackup(value.backupPath);setSaved(value.settings.restartRequired?"Сохранено и перечитано. Действующая конфигурация изменится после ручного перезапуска worker.":"Сохранено и перечитано. Действующая конфигурация совпадает с файлом.");}
+    const request=saveRequest??bindWorkerRequest({method:"save_runtime_settings",request:{generation:settings.generation,requestId:crypto.randomUUID(),expectedSha256:settings.savedSha256,json}},info.fencedRequests?.context);setSaveRequest(request);
+    try{const value=expectResult(await workerBoundCall(request),"settings_saved").saved;setSettings(value.settings);setJson(value.settings.savedJson);setSaveRequest(null);setBackup(value.backupPath);setSaved(value.settings.restartRequired?"Сохранено и перечитано. Действующая конфигурация изменится после ручного перезапуска worker.":"Сохранено и перечитано. Действующая конфигурация совпадает с файлом.");}
     catch(e){setError(`Сохранение не подтверждено: ${String(e)}. Повтор использует тот же ID и показанный JSON.`);}finally{setBusy(false);}
   }
   async function prepareCleanup(){
     setBusy(true);setError(null);setPreview(null);setResult(null);setCleanupRequest(null);
-    try{const value=expectResult(await workerCall({method:"preview_output_cleanup",query:{olderThanDays:days,projectId:cleanupProject}}),"output_cleanup_preview").preview;setPreview(value);setCleanupRequest({idempotencyKey:crypto.randomUUID(),plan:value.plan});}
+    try{const value=expectResult(await workerCall({method:"preview_output_cleanup",query:{olderThanDays:days,projectId:cleanupProject}}),"output_cleanup_preview").preview;setPreview(value);setCleanupRequest(bindWorkerRequest({method:"apply_output_cleanup",request:{idempotencyKey:crypto.randomUUID(),plan:value.plan}},info.fencedRequests?.context));}
     catch(e){setError(String(e));}finally{setBusy(false);}
   }
   async function cleanup(){
     if(!cleanupRequest)return;setBusy(true);setError(null);
-    try{const value=expectResult(await workerCall({method:"apply_output_cleanup",request:cleanupRequest}),"output_cleanup_result").result;setResult(value);}
+    try{const value=expectResult(await workerBoundCall(cleanupRequest),"output_cleanup_result").result;setResult(value);}
     catch(e){setError(`Очистка не подтверждена: ${String(e)}. Повтор сверяет тот же план и ключ; новый предпросмотр получает новый ключ.`);}finally{setBusy(false);}
   }
   const disabled=!connected||!!info.journalInspection||busy||closing;

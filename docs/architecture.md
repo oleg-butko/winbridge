@@ -128,8 +128,15 @@ restart до migration/owner activation. History остаётся историе
 scheduler fault приостанавливает запуск, сохраняя service. Controlled new incarnation
 и restore admission — A2.4.2b; автоматического rollback detector пока нет.
 A2.4.2a прошёл [176-test native gate](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md).
-Для A2.4.2b требуется выбрать [restore/admission policy](plans/architecture-transition/restore-admission-options.md);
-exe paths сохраняются стабильными при любом варианте.
+Для A2.4.2b выбрана [новая пара с архивом](plans/architecture-transition/restore-admission-options.md).
+[Request fence b.1](plans/architecture-transition/fenced-requests.md) добавляет schema 12
+и отдельный request contract 2: instance ID и journal incarnation закрепляются
+caller при создании операции. Повтор не меняет scope после reconnect/config reload;
+worker проверяет scope до handler. Старые DTO и bytes остаются прежними.
+Новый журнал может необратимо требовать этот контракт до первого owner activation;
+это не является physical proof или разрешением recovery cutover.
+271 local tests и real Unix browser gate прошли, Windows execution gate ожидается.
+Exe paths остаются стабильными. Archive preparation/activation ещё впереди.
 Глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.

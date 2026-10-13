@@ -15,7 +15,7 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH info | list\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH info | list\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -44,6 +44,32 @@ async fn run() -> Result<(), String> {
     let config = WorkerConfig::load(Path::new(&args[1]))?;
     let operation = &args[2..];
     match operation {
+        [name, path] if name == "invoke-v2" => {
+            let request: winbridge_protocol::FencedRequest =
+                serde_json::from_slice(&winbridge_workspace_sync::read_bounded(
+                    Path::new(path),
+                    winbridge_transport::MAX_FRAME_BYTES as u64,
+                )?)
+                .map_err(|_| "Invalid contract-2 request JSON")?;
+            let endpoint =
+                winbridge_transport::endpoint(&config.state_directory, &config.instance_id)
+                    .map_err(|e| e.to_string())?;
+            let response = winbridge_transport::call_fenced(&endpoint, &request)
+                .await
+                .map_err(|e| {
+                    format!(
+                        "Contract-2 request unconfirmed: {e}; retain the same request context/key"
+                    )
+                })?;
+            println!(
+                "{}",
+                serde_json::to_string(&response).map_err(|e| e.to_string())?
+            );
+            if let LocalResponse::Error { message } = response.response {
+                return Err(message);
+            }
+            Ok(())
+        }
         [name] if name == "validate" => {
             println!("Valid config: instance {}, {} project(s); controller connection {}, snapshot import available when delivery is configured", config.instance_id, config.projects.len(), config.worker.controller_url.as_deref().unwrap_or("disabled"));
             Ok(())

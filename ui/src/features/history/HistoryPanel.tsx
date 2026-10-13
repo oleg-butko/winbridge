@@ -3,7 +3,7 @@ import { useHotkeys } from "@mantine/hooks";
 import { invoke } from "@tauri-apps/api/core";
 import { Alert, Badge, Button, Card, Checkbox, Group, Modal, Select, Stack, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
 import type { DiagnosticPreview, HistoryCursor, HistoryEntry, HistoryKind, HistoryPage, SavedDiagnostic, StorageUsage, WorkerInfo } from "../../runtime/contracts";
-import { expectResult, workerCall } from "../../runtime/adapter";
+import { expectResult, workerCall, workerMutation } from "../../runtime/adapter";
 
 const kinds = [{value:"task",label:"Задачи"},{value:"import",label:"Импорты"},{value:"workflow",label:"Workflow"},{value:"application",label:"Приложения"}];
 const states: Record<string,string> = {queued:"В очереди",running:"Выполняется",succeeded:"Успешно",failed:"Ошибка",cancelled:"Отменено",interrupted:"Прервано",indeterminate:"Результат неизвестен",starting:"Запускается",ready:"Готово",stopping:"Останавливается",stopped:"Остановлено",exited:"Завершилось"};
@@ -43,7 +43,7 @@ export function HistoryPanel({info,connected,closing,onOpen}: {info:WorkerInfo;c
   async function prepare(){
     setBusy(true);setDiagnosticError(null);setSaved(null);setPreview(null);setText("");setSaveId(null);
     try {
-      const result=expectResult(await workerCall({method:"prepare_task_diagnostic",request:{taskId,includeCommand,includeOutput,redactValues:redactions.split("\n").filter((s)=>s.length>0)}}),"diagnostic").preview;
+      const result=expectResult(await workerMutation({method:"prepare_task_diagnostic",request:{taskId,includeCommand,includeOutput,redactValues:redactions.split("\n").filter((s)=>s.length>0)}}, info.fencedRequests?.context),"diagnostic").preview;
       setPreview(result);setText(result.json);setSaveId(crypto.randomUUID());
     }catch(e){setDiagnosticError(String(e));}finally{setBusy(false);}
   }

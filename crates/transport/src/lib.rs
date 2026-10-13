@@ -1,7 +1,9 @@
 //! Bounded, one-request local IPC. UI lifetime never controls accepted tasks.
 use std::{io, path::Path, time::Duration};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use winbridge_protocol::{LocalRequest, LocalResponse};
+use winbridge_protocol::{
+    FencedRequest, FencedResponse, LocalRequest, LocalResponse, WireRequest, WireResponse,
+};
 
 mod readiness;
 pub mod websocket;
@@ -58,12 +60,29 @@ pub async fn write_frame<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) ->
 }
 async fn exchange<S: AsyncRead + AsyncWrite + Unpin>(
     mut stream: S,
-    request: &LocalRequest,
-) -> io::Result<LocalResponse> {
+    request: &WireRequest,
+) -> io::Result<WireResponse> {
     write_frame(&mut stream, &serde_json::to_vec(request)?).await?;
     serde_json::from_slice(&read_frame(&mut stream).await?).map_err(io::Error::other)
 }
 pub async fn call(address: &str, request: &LocalRequest) -> io::Result<LocalResponse> {
+    match call_wire(address, &WireRequest::Legacy(request.clone())).await? {
+        WireResponse::Legacy(response) => Ok(*response),
+        WireResponse::Fenced(_) => Err(io::Error::other(
+            "Unexpected v2 response to a v1 request; no fallback or automatic retry",
+        )),
+    }
+}
+pub async fn call_fenced(address: &str, request: &FencedRequest) -> io::Result<FencedResponse> {
+    match call_wire(address, &WireRequest::Fenced(Box::new(request.clone()))).await? {
+        WireResponse::Fenced(response) => {
+            response.validate_for(&request.context).map_err(io::Error::other)?;
+            Ok(*response)
+        },
+        WireResponse::Legacy(_) => Err(io::Error::other("Peer did not return request contract 2; acceptance is unconfirmed, no fallback or automatic retry")),
+    }
+}
+pub async fn call_wire(address: &str, request: &WireRequest) -> io::Result<WireResponse> {
     tokio::time::timeout(IPC_TIMEOUT, async {
         #[cfg(unix)]
         {

@@ -140,8 +140,10 @@ try {
   const outputReadCalls = [];
   const settingsCalls=[];const cleanupCalls=[];
   async function attachNative(nativePage) {
-    await nativePage.exposeFunction("workerBridge", async (request) => {
-      const response = await call(request, ["import_delta_snapshot", "submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
+    await nativePage.exposeFunction("workerBridge", async (wire) => {
+      const request = wire.requestContractVersion === 2 ? wire.request : wire;
+      const raw = await call(wire, ["import_delta_snapshot", "submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
+      const response = wire.requestContractVersion === 2 ? raw.response : raw;
       if (request.method === "read_output") {
         outputReadCalls.push(request);
         if (loseOutputReadAck && response.kind === "output" && response.chunks.length) { loseOutputReadAck = false; throw new Error("Test: output page response lost"); }
@@ -154,7 +156,7 @@ try {
       if (request.method === "submit_workflow" && loseFirstWorkflowAck && response.kind === "workflow") { loseFirstWorkflowAck = false; acceptedWorkflowId = response.workflow.workflowId; throw new Error("Test: workflow ACK lost"); }
       if (request.method === "request_attention" && loseFirstAttentionAck && response.kind === "attention") { loseFirstAttentionAck = false; throw new Error("Test: attention acceptance ACK lost"); }
       if (["acknowledge_attention","acknowledge_attention_event"].includes(request.method) && loseFirstAttentionConfirmation && ["attention","attention_event"].includes(response.kind)) { loseFirstAttentionConfirmation = false; throw new Error("Test: attention confirmation ACK lost"); }
-      return response;
+      return raw;
     });
     // Native filesystem persistence is covered by core tests. Here the IPC shim
     // uses a real file across fresh WebViews to test the form and close lifecycle.
@@ -206,7 +208,7 @@ try {
         transformCallback: (callback) => { const id = ++nextCallback; callbacks.set(id, callback); return id; },
         invoke: (command, args) => {
           if (["diagnostic_directory","save_diagnostic"].includes(command)) return window.diagnosticBridge(command,args);
-          if (command === "worker_rpc") return window.workerBridge(args.request);
+          if (command === "worker_rpc" || command === "worker_rpc_fenced") return window.workerBridge(args.request);
           if (command === "desktop_build") return Promise.resolve({ version: "0.1.0", sourceCommit: "browser-test", sourceDirty: false, sourceManifestSha256: null, buildId: "test-shell" });
           if (command === "desktop_log_status") return Promise.resolve({path:"test-runtime/logs/desktop.jsonl",error:null,droppedRecords:0});
           if (command === "desktop_ui_event") { (window.__desktopEvents ??= []).push(args); return Promise.resolve(); }

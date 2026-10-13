@@ -51,7 +51,7 @@ cancel/timeout/process tree, recovery и совместимость сущест
 Рабочие exe/state не меняются; desktop и тестовые UI-окна не открываются.
 .PARAMETER TaskCasOnly
 Проверяет revisions/CAS tasks/imports/workflows/applications/attention,
-миграции schema 6/7/8/9/10 → 11, owner/attempt tokens, atomic child links, output/retention rollback,
+миграции schema 6/7/8/9/10/11 → 12, owner/attempt tokens, atomic child links, output/retention rollback,
 read-only recovery/latch, legacy contracts и process/workflow regressions без desktop/UI-окон.
 Требует TaskCasReferenceWorker; старый exe запускается с НОВЫМ тестовым state,
 чтобы подтвердить отказ открыть новую схему. Установленный журнал не открывается.
@@ -170,11 +170,11 @@ try {
     if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
     if ($TaskCasOnly) {
         if ($NetwatchProfile) { throw 'TaskCasOnly requires an isolated scenario' }
+        $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($source))
+        $report.storage = [ordered]@{ volume = $drive.Name; availableBytesBefore = $drive.AvailableFreeSpace }
+        if ($drive.AvailableFreeSpace -lt 4GB) { throw 'Less than 4 GiB free for an isolated build; no existing run is deleted' }
         if ($TaskCasRuntimeDiagnostic) {
             $env:WINBRIDGE_PROCESS_TRACE = '1'
-            $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($source))
-            $report.storage = [ordered]@{ volume = $drive.Name; availableBytesBefore = $drive.AvailableFreeSpace }
-            if ($drive.AvailableFreeSpace -lt 4GB) { throw 'Less than 4 GiB free for an isolated diagnostic build; no existing run is deleted' }
             $groups = @(
                 @{ name='process-resume-guard'; arguments=@('test','-p','winbridge-platform','--lib','windows::tests::','--locked','--offline','--','--test-threads=1','--nocapture') },
                 @{ name='process-runtime-recovery-diagnostic'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','runtime','--test','reconciliation','--test','recovery_mode','--locked','--offline','--','--test-threads=1','--nocapture') }
@@ -187,9 +187,11 @@ try {
             $groups = @(
             @{ name='task-cas-pure-fsm'; arguments=@('test','-p','winbridge-core','--test','task_fsm','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-process-resume-guard'; arguments=@('test','-p','winbridge-platform','--lib','windows::tests::','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-fenced-contract'; arguments=@('test','-p','winbridge-protocol','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-frozen-contracts'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
-            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','ownership','--test','leases','--test','reconciliation','--test','recovery_mode','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','ownership','--test','leases','--test','reconciliation','--test','recovery_mode','--test','request_context','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-older-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--locked','--offline','--','--ignored','--exact','legacy_schema_six_worker_refuses_new_journal_without_mutating_it','--test-threads=1','--nocapture') }
+            @{ name='task-cas-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
             )
         }
     }
@@ -353,7 +355,7 @@ try {
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
     $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
     $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $oldResumePublication
-    if ($TaskCasRuntimeDiagnostic -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
+    if ($TaskCasOnly -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {

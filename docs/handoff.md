@@ -1,6 +1,25 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
+## A2.4.2b.1 request fence — local gates passed, 2026-10-13
+
+[Контракт и ревью](plans/architecture-transition/fenced-requests.md),
+[CLI/MCP инструкция](guides/fenced-requests.md). Contract 2 закрепляет instance ID
+и journal incarnation у caller до отправки; transport/controller/worker не
+перепривязывают повтор к новой области. Legacy DTO/frame bytes сохраняются.
+Schema 12 хранит immutable admission: требование v2 разрешено только до owner
+activation в пустом журнале. Desktop хранит request вместе со scope; uncertainty
+не освобождает pending action для неявного нового key. MCP добавляет отдельный
+`winbridge_invoke_fenced`; local maintenance не становится remote.
+Ревью исправило stop/join embedded worker и различение unconfirmed/error в RPC logs.
+Local: **271 workspace tests**, Linux и Windows-target Clippy, UI
+typecheck/build/contracts, bound-request test и real Unix browser gate прошли.
+Windows gate готовится: protocol/worker scope tests и native desktop compile,
+без UI-окон; установленный schema-6 worker остаётся прежним.
+Это только b.1: archive preparation, evidence всей execution domain и activation
+не реализованы. История не переносится как active; marker не снимается.
+Следующий пакет — b.2, затем b.3 и общий gate; full A2 остаётся открытым.
+
 
 ## A2.4.2a journal inspection — завершён, 2026-10-13
 

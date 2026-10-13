@@ -926,6 +926,7 @@ dependencies = [
  "winbridge-core",
  "winbridge-protocol",
  "winbridge-transport",
+ "winbridge-worker",
  "winbridge-workspace-sync",
 ]
 
@@ -991,6 +992,7 @@ name = "winbridge-transport"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

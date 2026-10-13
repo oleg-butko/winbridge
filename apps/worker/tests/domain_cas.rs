@@ -524,7 +524,7 @@ fn schema_seven_migration_preserves_all_records_and_creates_exact_backup() {
         .unwrap();
     }
     db.execute_batch(
-        "DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
+        "DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
     )
     .unwrap();
     db.pragma_update(None, "user_version", 7).unwrap();
@@ -676,7 +676,7 @@ fn domain_migration_failure_rolls_back_every_added_column_and_schema() {
         .unwrap();
     }
     db.execute_batch(
-        "DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
+        "DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
     )
     .unwrap();
     db.pragma_update(None, "user_version", 7).unwrap();

@@ -508,7 +508,7 @@ fn schema_migration_takes_consistent_backup_and_preserves_accepted_commands() {
     let path = config.state_directory.join("journal.sqlite");
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute_batch("DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
+        .execute_batch("DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
         .unwrap();
     drop(connection);
     let worker = Worker::open(config.clone()).unwrap();

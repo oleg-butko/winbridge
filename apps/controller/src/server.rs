@@ -63,12 +63,12 @@ pub async fn serve(controller: Arc<Controller>) -> Result<()> {
                     let operation = async {
                         let request = winbridge_transport::read_frame(&mut stream).await?;
                         let response = match serde_json::from_slice(&request) {
-                            Ok(request) => controller.call(request).await,
-                            Err(e) => LocalResponse::Error { message: format!("Invalid controller IPC request: {e}") },
+                            Ok(request) => controller.call_wire(request).await,
+                            Err(e) => winbridge_protocol::WireResponse::Legacy(Box::new(LocalResponse::Error { message: format!("Invalid controller IPC request: {e}") })),
                         };
                         let mut bytes = serde_json::to_vec(&response)?;
                         if bytes.len() > winbridge_transport::MAX_FRAME_BYTES {
-                            bytes = serde_json::to_vec(&LocalResponse::Error { message: "Controller response exceeds 1 MiB; query an individual task".into() })?;
+                            bytes = serde_json::to_vec(&response.with_error("Controller response exceeds 1 MiB; query an individual task".into()))?;
                         }
                         winbridge_transport::write_frame(&mut stream, &bytes).await
                     };

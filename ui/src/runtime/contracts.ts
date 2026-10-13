@@ -77,7 +77,12 @@ export type ControllerStatus = { instanceId: string, nodeId: string, generation:
 export type ResourceRecoveryEntry = { projectId: string, operationId: string, operationKind: string, physicalBinding: boolean, reason: string, };
 export type ResourceRecovery = { unresolvedCount: number, truncated: boolean, resources: Array<ResourceRecoveryEntry>, };
 export type JournalInspection = { schemaVersion: number, reason: string, };
-export type WorkerInfo = { protocolVersion: number, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, commandHandlers?: Array<CommandHandlerInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
+export type RequestContext = { instanceId: string, journalIncarnation: string, };
+export type FencedRequest = { requestContractVersion: number, context: RequestContext, request: LocalRequest, };
+export type FencedResponse = { requestContractVersion: number, outcome: FencedReplyOutcome, context: RequestContext | null, response: LocalResponse, };
+export type FencedReplyOutcome = "responded" | "rejected_before_dispatch" | "unconfirmed";
+export type FencedRequestInfo = { requestContractVersion: number, context: RequestContext, legacyMutationsAllowed: boolean, };
+export type WorkerInfo = { protocolVersion: number, fencedRequests?: FencedRequestInfo, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, commandHandlers?: Array<CommandHandlerInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
 /**
  * Physical ownership still unresolved; scoped to projects, not a global
  * journal write failure. Absent in older workers and when no lease is uncertain.

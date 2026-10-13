@@ -126,7 +126,7 @@ fn process_binding_rejects_foreign_identity_rebinding_stale_owners_and_false_no_
 }
 
 fn downgrade_to_ten(cfg: &WorkerConfig) {
-    sql(cfg, "DROP TRIGGER resource_physical_guard; ALTER TABLE resource_leases DROP COLUMN physical; PRAGMA user_version=10;");
+    sql(cfg, "DROP TABLE journal_admission; DROP TRIGGER resource_physical_guard; ALTER TABLE resource_leases DROP COLUMN physical; PRAGMA user_version=10;");
 }
 #[test]
 fn schema_ten_upgrade_preserves_raw_records_owners_keys_and_consistent_backup() {

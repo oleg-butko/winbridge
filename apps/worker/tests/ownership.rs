@@ -782,14 +782,30 @@ fn incarnation_change_rejects_equal_revision_observations_and_tokens() {
     let observed = store.task_snapshot(&task.task_id).unwrap();
     let db = Connection::open(&path).unwrap();
     // Controlled fixture only: production restore policy is the remaining A2 package.
+    let replacement = uuid::Uuid::new_v4().to_string();
+    let guard: String = db
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE name='admission_update_guard'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    db.execute_batch("BEGIN IMMEDIATE; DROP TRIGGER admission_update_guard;")
+        .unwrap();
     db.execute(
         "UPDATE journal_authority SET incarnation=?1,epoch=epoch+1,authority=?2",
-        rusqlite::params![
-            uuid::Uuid::new_v4().to_string(),
-            uuid::Uuid::new_v4().to_string()
-        ],
+        rusqlite::params![replacement, uuid::Uuid::new_v4().to_string()],
     )
     .unwrap();
+    // Simulate a coherent foreign header, not a corrupt admission row. The test
+    // must still exercise stale observation/attempt guards with equal revisions.
+    db.execute(
+        "UPDATE journal_admission SET incarnation=?1",
+        [&replacement],
+    )
+    .unwrap();
+    db.execute_batch(&guard).unwrap();
+    db.execute_batch("COMMIT;").unwrap();
     let mut next = Store::open(&path).unwrap();
     assert_eq!(
         next.task_snapshot(&task.task_id).unwrap().revision(),
@@ -812,7 +828,7 @@ fn schema_eight_migration_keeps_legacy_bytes_backup_and_keys_without_fabricating
     drop(store);
     let db = Connection::open(&path).unwrap();
     db.execute_batch(
-        "DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; PRAGMA user_version=8;",
+        "DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; PRAGMA user_version=8;",
     )
     .unwrap();
     let raw: (String, String) = db
@@ -899,7 +915,7 @@ fn failed_metadata_migration_rolls_back_tables_and_schema() {
     let path = root.path().join("journal.sqlite");
     drop(Store::open(&path).unwrap());
     let db = Connection::open(&path).unwrap();
-    db.execute_batch("DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; CREATE TABLE execution_attempts(dummy); PRAGMA user_version=8;").unwrap();
+    db.execute_batch("DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; CREATE TABLE execution_attempts(dummy); PRAGMA user_version=8;").unwrap();
     assert!(Store::open(&path).is_err());
     assert_eq!(
         db.query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))

@@ -28,8 +28,10 @@
 [164 native tests passed](windows-reconciliation-gate-2026-10-13.md); [A2.4.2a journal inspection](journal-inspection.md)
 завершён: local/browser, 26-test diagnostic и
 [176-test full native gate](windows-inspection-diagnostic-2026-10-13.md) passed.
-Controlled restore/new incarnation/admission A2.4.2b ещё впереди;
-[выбор recovery policy](restore-admission-options.md) подготовлен, решение ожидается.
+Для A2.4.2b пользователь выбрал [новую пару/журнал с архивом](restore-admission-options.md).
+[b.1 request fence](fenced-requests.md) реализован: 271 workspace tests и real
+Unix browser gate прошли; Windows execution gate ожидается. Archive preparation
+и physical cutover ещё впереди; полный A2 открыт.
 
 ## Результат для пользователя и проектов
 

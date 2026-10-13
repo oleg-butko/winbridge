@@ -307,7 +307,7 @@ fn database_only_restore_with_lost_keys_remains_blocked_across_restarts() {
 
 #[test]
 fn incompatible_inspection_does_not_migrate_but_keeps_normal_start_latched() {
-    for version in [6, 10, 12] {
+    for version in [6, 10, 11, 13] {
         let (_root, cfg, store) = setup();
         drop(store);
         db(&cfg)

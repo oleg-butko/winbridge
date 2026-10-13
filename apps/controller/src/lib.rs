@@ -6,8 +6,9 @@ use std::{
 use tokio::net::TcpStream;
 use winbridge_core::controller_config::ControllerConfig;
 use winbridge_protocol::{
-    Capability, Component, ControllerStatus, LocalRequest, LocalResponse, PeerIdentity,
-    SessionMessage, PROTOCOL_VERSION,
+    Capability, Component, ControllerStatus, FencedRequest, FencedResponse, LocalRequest,
+    LocalResponse, PeerIdentity, RequestContext, SessionMessage, WireRequest, WireResponse,
+    FENCED_REQUEST_CONTRACT, PROTOCOL_VERSION,
 };
 use winbridge_transport::websocket::{self as ws, Result, RpcSender};
 mod activity;
@@ -139,12 +140,53 @@ impl Controller {
         })
     }
     pub async fn call(&self, request: LocalRequest) -> LocalResponse {
+        match self.call_scoped(request, None).await {
+            Ok(WireResponse::Legacy(response)) => *response,
+            Ok(WireResponse::Fenced(_)) => LocalResponse::Error {
+                message: "Wrong response contract; no automatic retry".into(),
+            },
+            Err(message) => LocalResponse::Error { message },
+        }
+    }
+    pub async fn call_fenced(&self, request: FencedRequest) -> FencedResponse {
+        if request.request_contract_version != FENCED_REQUEST_CONTRACT {
+            return FencedResponse::rejected(
+                "Unsupported request contract; no automatic fallback".into(),
+            );
+        }
+        match self
+            .call_scoped(request.request, Some(request.context))
+            .await
+        {
+            Ok(WireResponse::Fenced(response)) => *response,
+            Ok(WireResponse::Legacy(_)) => FencedResponse::unconfirmed(
+                "Wrong response contract; acceptance is unknown, no automatic retry".into(),
+            ),
+            Err(message) => FencedResponse::unconfirmed(message),
+        }
+    }
+    pub async fn call_wire(&self, request: WireRequest) -> WireResponse {
+        match request {
+            WireRequest::Legacy(request) => {
+                WireResponse::Legacy(Box::new(self.call(request).await))
+            }
+            WireRequest::Fenced(request) => {
+                WireResponse::Fenced(Box::new(self.call_fenced(*request).await))
+            }
+        }
+    }
+    async fn call_scoped(
+        &self,
+        request: LocalRequest,
+        context: Option<RequestContext>,
+    ) -> Result<WireResponse> {
         if request.local_maintenance_only() {
-            return LocalResponse::Error { message: "Settings/output cleanup require Windows desktop local IPC; request was not transmitted".into() };
+            return Err("Settings/output cleanup require Windows desktop local IPC; request was not transmitted".into());
         }
         let result = async {
             if matches!(request, LocalRequest::ControllerStatus) {
-                return Ok(LocalResponse::ControllerStatus { status: self.status()? });
+                if context.is_some() { return Err("Controller status is a local observation, not a worker-scoped contract-2 request".into()); }
+                return Ok(WireResponse::Legacy(Box::new(LocalResponse::ControllerStatus { status: self.status()? })));
             }
             let (sender, session_id, worker_address) = {
                 let state = self.state.lock().map_err(|_| "controller session state poisoned")?;
@@ -170,6 +212,12 @@ impl Controller {
                 }
                 (session.sender.clone(), session.id.clone(), state.last_peer.as_ref().map(|(_, address)| address.to_string()))
             };
+            if let Some(context) = &context {
+                if context.instance_id != self.config.instance_id { return Err("Request instance does not match this controller; original request was not transmitted".into()); }
+                let LocalResponse::Info { info } = sender.call(LocalRequest::Info).await? else { return Err("Cannot discover request contract before transmission".into()); };
+                let supported = info.fenced_requests.as_ref().filter(|info| info.request_contract_version == FENCED_REQUEST_CONTRACT).ok_or("Worker does not support request contract 2; request was not transmitted and no v1 fallback occurred")?;
+                if &supported.context != context { return Err("Caller-pinned journal incarnation no longer matches worker; original request was not transmitted. Do not rebind this logical retry to the new scope".into()); }
+            }
             if let LocalRequest::SubmitWorkflow { request: workflow } = &request {
                 let mut required = Vec::new();
                 if !workflow.artifacts.is_empty() { required.push("artifacts"); }
@@ -183,9 +231,14 @@ impl Controller {
             }
             let method = request_method(&request);
             self.activity.record(serde_json::json!({"event":"rpc_requested","origin":"local_ipc","workerAddress":worker_address,"sessionId":session_id,"method":method}));
-            let result = sender.call(request).await;
+            let result = match context {
+                Some(context) => sender.call_fenced(FencedRequest { request_contract_version: FENCED_REQUEST_CONTRACT, context, request }).await.map(|response| WireResponse::Fenced(Box::new(response))),
+                None => sender.call(request).await.map(|response|WireResponse::Legacy(Box::new(response))),
+            };
             let outcome = match &result {
-                Ok(LocalResponse::Error { .. }) => "rejected",
+                Ok(WireResponse::Fenced(response)) if response.outcome == winbridge_protocol::FencedReplyOutcome::Unconfirmed => "unconfirmed",
+                Ok(WireResponse::Fenced(response)) if response.outcome == winbridge_protocol::FencedReplyOutcome::RejectedBeforeDispatch => "rejected_before_dispatch",
+                Ok(response) if matches!(response.response(), LocalResponse::Error { .. }) => "responded_error",
                 Ok(_) => "responded",
                 Err(error) if error.ends_with("request rejected before transmission") => "rejected_before_transmission",
                 Err(_) => "unconfirmed",
@@ -193,7 +246,7 @@ impl Controller {
             self.activity.record(serde_json::json!({"event":"rpc_completed","origin":"local_ipc","workerAddress":worker_address,"sessionId":session_id,"method":method,"outcome":outcome}));
             result
         }.await;
-        result.unwrap_or_else(|message| LocalResponse::Error { message })
+        result
     }
     pub async fn accept(self: Arc<Self>, stream: TcpStream, address: SocketAddr) -> Result<()> {
         self.network_activity("tcp_accepted", address);

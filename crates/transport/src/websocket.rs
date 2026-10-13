@@ -7,7 +7,10 @@ use tokio::{
     time::Instant,
 };
 use tokio_tungstenite::tungstenite::{protocol::WebSocketConfig, Message};
-use winbridge_protocol::{LocalRequest, LocalResponse, SessionMessage};
+use winbridge_protocol::{
+    FencedRequest, FencedResponse, FencedSessionMessage, LocalRequest, LocalResponse, SessionFrame,
+    SessionMessage, WireRequest, WireResponse,
+};
 
 pub use tokio_tungstenite::{
     accept_async_with_config, client_async_with_config, connect_async_with_config, MaybeTlsStream,
@@ -36,7 +39,13 @@ pub async fn send<S: AsyncRead + AsyncWrite + Unpin>(
 ) -> Result<()> {
     send_encoded(socket, encode(message)?).await
 }
-fn encode(message: &SessionMessage) -> Result<String> {
+pub async fn send_frame<S: AsyncRead + AsyncWrite + Unpin>(
+    socket: &mut WebSocketStream<S>,
+    message: &SessionFrame,
+) -> Result<()> {
+    send_encoded(socket, encode(message)?).await
+}
+fn encode<T: serde::Serialize>(message: &T) -> Result<String> {
     let bytes = serde_json::to_string(message).map_err(|e| e.to_string())?;
     if bytes.len() > crate::MAX_FRAME_BYTES {
         return Err("WebSocket message exceeds 1 MiB".into());
@@ -56,6 +65,17 @@ async fn send_encoded<S: AsyncRead + AsyncWrite + Unpin>(
 pub async fn receive<S: AsyncRead + AsyncWrite + Unpin>(
     socket: &mut WebSocketStream<S>,
 ) -> Result<Option<SessionMessage>> {
+    match receive_frame(socket).await? {
+        None => Ok(None),
+        Some(SessionFrame::Legacy(message)) => Ok(Some(message)),
+        Some(SessionFrame::Fenced(_)) => {
+            Err("Unexpected contract-2 frame before negotiation".into())
+        }
+    }
+}
+pub async fn receive_frame<S: AsyncRead + AsyncWrite + Unpin>(
+    socket: &mut WebSocketStream<S>,
+) -> Result<Option<SessionFrame>> {
     match socket.next().await {
         Some(Ok(Message::Text(text))) => serde_json::from_str(&text)
             .map(Some)
@@ -93,17 +113,49 @@ pub async fn first<S: AsyncRead + AsyncWrite + Unpin>(
 }
 
 pub struct RpcCall {
-    pub request: LocalRequest,
-    pub reply: oneshot::Sender<Result<LocalResponse>>,
+    pub request: WireRequest,
+    pub reply: oneshot::Sender<Result<WireResponse>>,
 }
 #[derive(Clone)]
 pub struct RpcSender(mpsc::Sender<RpcCall>);
+enum ReplyContract {
+    Legacy,
+    Fenced,
+}
+struct PendingReply {
+    sent: Instant,
+    contract: ReplyContract,
+    reply: oneshot::Sender<Result<WireResponse>>,
+}
 pub fn rpc_channel() -> (RpcSender, mpsc::Receiver<RpcCall>) {
     let (sender, receiver) = mpsc::channel(32);
     (RpcSender(sender), receiver)
 }
 impl RpcSender {
     pub async fn call(&self, request: LocalRequest) -> Result<LocalResponse> {
+        match self.call_wire(WireRequest::Legacy(request)).await? {
+            WireResponse::Legacy(response) => Ok(*response),
+            WireResponse::Fenced(_) => {
+                Err("Wrong response contract; acceptance is unknown, no fallback".into())
+            }
+        }
+    }
+    pub async fn call_fenced(&self, request: FencedRequest) -> Result<FencedResponse> {
+        let context = request.context.clone();
+        match self
+            .call_wire(WireRequest::Fenced(Box::new(request)))
+            .await?
+        {
+            WireResponse::Fenced(response) => {
+                response.validate_for(&context)?;
+                Ok(*response)
+            }
+            WireResponse::Legacy(_) => {
+                Err("Wrong response contract; acceptance is unknown, no fallback".into())
+            }
+        }
+    }
+    async fn call_wire(&self, request: WireRequest) -> Result<WireResponse> {
         let (reply, response) = oneshot::channel();
         self.0
             .try_send(RpcCall { request, reply })
@@ -119,8 +171,7 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
     mut calls: mpsc::Receiver<RpcCall>,
     generation: &str,
 ) -> Result<()> {
-    let mut pending: HashMap<String, (Instant, oneshot::Sender<Result<LocalResponse>>)> =
-        HashMap::new();
+    let mut pending: HashMap<String, PendingReply> = HashMap::new();
     let mut counter = 0_u64;
     let mut nonce = 0_u64;
     let mut ping: Option<(u64, Instant)> = None;
@@ -133,7 +184,7 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                 if ping.is_some_and(|(_, sent)| now.duration_since(sent) >= HEARTBEAT_TIMEOUT) {
                     return Err("Worker heartbeat timeout; last task state is retained".into());
                 }
-                if pending.values().any(|(sent, _)| now.duration_since(*sent) >= RPC_TIMEOUT) {
+                if pending.values().any(|reply| now.duration_since(reply.sent) >= RPC_TIMEOUT) {
                     return Err("Worker response timeout; reconcile the same task/key without automatic retry".into());
                 }
                 if ping.is_none() && now >= next_ping {
@@ -151,7 +202,11 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                 }
                 counter += 1;
                 let id = format!("{generation}-{counter}");
-                let message = SessionMessage::Request { id: id.clone(), request: call.request };
+                let contract = if matches!(call.request, WireRequest::Fenced(_)) { ReplyContract::Fenced } else { ReplyContract::Legacy };
+                let message = match call.request {
+                    WireRequest::Legacy(request) => SessionFrame::Legacy(SessionMessage::Request { id: id.clone(), request }),
+                    WireRequest::Fenced(request) => SessionFrame::Fenced(FencedSessionMessage::Request { id: id.clone(), request: *request }),
+                };
                 let bytes = match encode(&message) {
                     Ok(bytes) => bytes,
                     Err(error) => {
@@ -160,19 +215,25 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                     }
                 };
                 // Insert before writing: losing this write/ACK leaves acceptance unknown.
-                pending.insert(id.clone(), (Instant::now(), call.reply));
+                pending.insert(id.clone(), PendingReply { sent: Instant::now(), contract, reply: call.reply });
                 send_encoded(&mut socket, bytes).await?;
             }
-            message = receive(&mut socket) => {
+            message = receive_frame(&mut socket) => {
                 match message? {
                     None => {},
-                    Some(SessionMessage::Pong { nonce }) if ping.is_some_and(|(expected, _)| nonce == expected) => {
+                    Some(SessionFrame::Legacy(SessionMessage::Pong { nonce })) if ping.is_some_and(|(expected, _)| nonce == expected) => {
                         ping = None;
                         next_ping = Instant::now() + HEARTBEAT_INTERVAL;
                     }
-                    Some(SessionMessage::Response { id, response }) => {
-                        let Some((_, reply)) = pending.remove(&id) else { return Err("Unknown WebSocket response correlation ID".into()); };
-                        let _ = reply.send(Ok(response));
+                    Some(SessionFrame::Legacy(SessionMessage::Response { id, response })) => {
+                        let Some(reply) = pending.remove(&id) else { return Err("Unknown WebSocket response correlation ID".into()); };
+                        if !matches!(reply.contract, ReplyContract::Legacy) { return Err("Legacy response to a fenced request; acceptance is unknown".into()); }
+                        let _ = reply.reply.send(Ok(WireResponse::Legacy(Box::new(response))));
+                    }
+                    Some(SessionFrame::Fenced(FencedSessionMessage::Response { id, response })) => {
+                        let Some(reply) = pending.remove(&id) else { return Err("Unknown WebSocket response correlation ID".into()); };
+                        if !matches!(reply.contract, ReplyContract::Fenced) { return Err("Fenced response to a legacy request; acceptance is unknown".into()); }
+                        let _ = reply.reply.send(Ok(WireResponse::Fenced(Box::new(response))));
                     }
                     _ => return Err("Unexpected message in controller session".into()),
                 }

@@ -129,6 +129,50 @@ pub fn tools() -> Result<Vec<Value>, String> {
     tools.push(json!({"name":"winbridge_publish_resumable","description":"Publish schema 3 with manifest-pinned 1 MiB payload blocks for explicit resumed imports. Optional baseSnapshotId selects delta. Requires a resume-capable worker for import; legacy publish remains the full fallback. Does not import/build or remove caches.",
         "inputSchema":{"type":"object","properties":{"projectId":{"type":"string"},"revision":{"type":"string"},"baseSnapshotId":{"type":"string"}},"required":["projectId","revision"],"additionalProperties":false},
         "annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
+    let mut fenced_schema =
+        serde_json::to_value(schemars::schema_for!(winbridge_protocol::FencedRequest))
+            .map_err(|e| e.to_string())?;
+    fenced_schema["properties"]["requestContractVersion"]["enum"] =
+        json!([winbridge_protocol::FENCED_REQUEST_CONTRACT]);
+    let branches = fenced_schema["definitions"]["LocalRequest"]["oneOf"]
+        .as_array_mut()
+        .ok_or("Fenced request schema has no tagged methods")?;
+    branches.retain(|branch| {
+        !matches!(
+            branch["properties"]["method"]["enum"][0].as_str(),
+            Some(
+                "get_runtime_settings"
+                    | "save_runtime_settings"
+                    | "preview_output_cleanup"
+                    | "apply_output_cleanup"
+                    | "controller_status"
+            )
+        )
+    });
+    let definitions = fenced_schema
+        .as_object_mut()
+        .unwrap()
+        .remove("definitions")
+        .ok_or("Fenced schema definitions missing")?;
+    let mut names = BTreeSet::new();
+    refs(&fenced_schema, &mut names);
+    let mut reachable = Map::new();
+    while let Some(name) = names.pop_first() {
+        if reachable.contains_key(&name) {
+            continue;
+        }
+        let definition = definitions
+            .get(&name)
+            .ok_or("Missing fenced schema definition")?
+            .clone();
+        refs(&definition, &mut names);
+        reachable.insert(name, definition);
+    }
+    fenced_schema["definitions"] = Value::Object(reachable);
+    tools.push(json!({"name":"winbridge_invoke_fenced",
+        "description":"Call request contract 2 with caller-pinned instanceId and journalIncarnation from info.fencedRequests.context. Pin this context when creating the logical request and retain it with the idempotency key on every retry. Never replace it after reconnect/config reload. The worker rejects a stale scope; no v1 fallback occurs. Required for mutations in a recovered pair. Settings/output cleanup remain Windows local IPC only; controller_status uses its own legacy observation tool.",
+        "inputSchema":fenced_schema,
+        "annotations":{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":true}}));
     tools.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     Ok(tools)
 }
@@ -310,6 +354,24 @@ async fn handle(
                         json!({"kind":"error","message":"Snapshot publication did not complete; inspect the same commit/package before retrying"})
                     }
                 }
+            } else if name == "winbridge_invoke_fenced" {
+                let request: winbridge_protocol::FencedRequest = match serde_json::from_value(args)
+                {
+                    Ok(request) => request,
+                    Err(_) => {
+                        return Some(error(
+                            id,
+                            -32602,
+                            "Arguments do not match request contract 2; inspect tools/list",
+                        ))
+                    }
+                };
+                match winbridge_transport::call_fenced(&super::endpoint(config), &request).await {
+                    Ok(response) => serde_json::to_value(response).unwrap(),
+                    Err(_) => {
+                        json!({"requestContractVersion":2,"outcome":"unconfirmed","context":null,"response":{"kind":"error","message":"Controller response unavailable or wrong request scope; acceptance is unconfirmed. Retain the original pinned context and idempotency key; no v1 fallback or automatic retry occurred."}})
+                    }
+                }
             } else {
                 let mut args = args;
                 if args.get("method").is_some() {
@@ -337,7 +399,7 @@ async fn handle(
                     }
                 }
             };
-            let failed = value["kind"] == "error";
+            let failed = value["kind"] == "error" || value["response"]["kind"] == "error";
             Some(response(id, tool_result(value, failed, state.structured)))
         }
         _ => Some(error(id, -32601, "Unsupported MCP method")),

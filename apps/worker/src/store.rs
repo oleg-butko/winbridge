@@ -10,6 +10,7 @@ use winbridge_protocol::{
     TaskSubmission,
 };
 
+mod admission;
 mod inspection;
 mod leases;
 mod ownership;
@@ -21,7 +22,7 @@ mod domain_records;
 pub use domain_records::JournalSnapshot;
 mod task_records;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 11;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 12;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -272,6 +273,30 @@ impl Store {
             migration.execute_batch("ALTER TABLE resource_leases ADD COLUMN physical TEXT CHECK(physical IS NULL OR (json_valid(physical) AND kind='task' AND attempt IS NOT NULL AND (proof IS NULL OR proof='process_tree_empty')));
                 CREATE TRIGGER resource_physical_guard BEFORE UPDATE ON resource_leases WHEN (OLD.physical IS NOT NULL AND NEW.physical IS NOT OLD.physical) OR (OLD.physical IS NULL AND NEW.physical IS NOT NULL AND (OLD.kind!='task' OR OLD.attempt IS NULL OR OLD.state!='held' OR NEW.state!='held' OR OLD.proof IS NOT NULL OR NEW.proof IS NOT NULL)) BEGIN SELECT RAISE(ABORT,'Physical execution identity is immutable and may bind only to an active task'); END;
                 PRAGMA user_version=11;").map_err(sql)?;
+            migration.commit().map_err(sql)?;
+        }
+        if version <= 11 {
+            Self::read_authority(&connection)?;
+            if version == 11 {
+                let backup = path.with_file_name(format!(
+                    "journal-v11-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            migration.execute_batch("CREATE TABLE journal_admission(singleton INTEGER PRIMARY KEY CHECK(singleton=1),incarnation TEXT NOT NULL,require_fenced INTEGER NOT NULL DEFAULT 0 CHECK(require_fenced IN (0,1)));
+                INSERT INTO journal_admission SELECT 1,incarnation,0 FROM journal_authority WHERE singleton=1;
+                CREATE TRIGGER admission_insert_guard BEFORE INSERT ON journal_admission WHEN EXISTS(SELECT 1 FROM journal_admission) BEGIN SELECT RAISE(ABORT,'Admission boundary is already initialized'); END;
+                CREATE TRIGGER admission_update_guard BEFORE UPDATE ON journal_admission WHEN NEW.singleton!=OLD.singleton OR NEW.incarnation!=OLD.incarnation OR OLD.require_fenced=1 OR NEW.require_fenced!=1 BEGIN SELECT RAISE(ABORT,'Fenced admission cannot be downgraded or rebound'); END;
+                CREATE TRIGGER admission_delete_guard BEFORE DELETE ON journal_admission BEGIN SELECT RAISE(ABORT,'Admission boundary cannot be deleted'); END;
+                PRAGMA user_version=12;").map_err(sql)?;
             migration.commit().map_err(sql)?;
         }
         let authority = Self::read_authority(&connection)?;

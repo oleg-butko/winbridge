@@ -1,6 +1,8 @@
+import { bindWorkerRequest } from "../../runtime/requestContext";
+import type { BoundWorkerRequest } from "../../runtime/requestContext";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Badge, Button, Card, Code, Group, Progress, Select, Stack, Table, Text, Title } from "@mantine/core";
-import { expectResult, workerCall } from "../../runtime/adapter";
+import { expectResult, workerCall, workerMutation, workerBoundCall } from "../../runtime/adapter";
 import type { DeliveryDraft, ImportRecord, ImportSubmission, PublishedSnapshotPage, SnapshotPreview, WorkerInfo } from "../../runtime/contracts";
 import { JournalTimeline } from "../tasks/JournalTimeline";
 import { statuses } from "../tasks/TaskDetail";
@@ -31,7 +33,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
   useEffect(()=>{if(navigation){setSelected(navigation.importId);setRecord(null);}},[navigation]);
   const [record, setRecord] = useState<ImportRecord | null>(null);
   const [pendingDelta, setPendingDelta] = useState(false);
-  const [pending, setPending] = useState<ImportSubmission | null>(null);
+  const [pending, setPending] = useState<BoundWorkerRequest<{ method: "import_snapshot" | "import_delta_snapshot"; request: ImportSubmission }> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,10 +103,11 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
     } catch (error) { setError(String(error)); }
     finally { setBusy(false); }
   }
-  async function send(request: ImportSubmission, delta = false) {
-    setPending(request); setPendingDelta(delta); setBusy(true); setError(null);
+  async function send(request: ImportSubmission, delta = false, bound?: BoundWorkerRequest<{ method: "import_snapshot" | "import_delta_snapshot"; request: ImportSubmission }>) {
+    const pinned = bound ?? bindWorkerRequest({ method: delta ? "import_delta_snapshot" : "import_snapshot", request }, info.fencedRequests?.context);
+    setPending(pinned); setPendingDelta(delta); setBusy(true); setError(null);
     try {
-      const response = await workerCall({ method: delta ? "import_delta_snapshot" : "import_snapshot", request });
+      const response = await workerBoundCall(pinned);
       if (response.kind === "error") { setPending(null); throw new Error(response.message); }
       const importRecord = expectResult(response, "import").import;
       setSelected(importRecord.importId); setRecord(importRecord); setPending(null);
@@ -114,7 +117,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
   async function cancel() {
     if (!record) return;
     setBusy(true);
-    try { setRecord(expectResult(await workerCall({ method: "cancel_import", importId: record.importId }), "import").import); }
+    try { setRecord(expectResult(await workerMutation({ method: "cancel_import", importId: record.importId }, info.fencedRequests?.context), "import").import); }
     catch (error) { setError(String(error)); }
     finally { setBusy(false); }
   }
@@ -167,7 +170,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
       <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 }, !!preview.delta)} disabled={!!preview.resumable && !info.snapshotResumeAvailable || !!preview.delta && !info.snapshotDeltaAvailable || !connected || !!info.journalRecoveryRequired || busy || pending !== null || closing}>Импортировать пакет</Button>
     </>}
     {pending && <Alert color="yellow" title="Приём импорта не подтверждён">Повтор отправит прежние параметры и ключ.
-      <Button onClick={() => void send(pending, pendingDelta)} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || closing}>Проверить приём импорта</Button>
+      <Button onClick={() => void send(pending.request.request, pendingDelta, pending)} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || closing}>Проверить приём импорта</Button>
     </Alert>}
     {pollError && <Alert color="yellow" title="Нет свежего подтверждения worker">{pollError}</Alert>}
     {error && <Alert color="yellow" title="Нет свежего результата операции">{error}</Alert>}

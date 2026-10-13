@@ -1,6 +1,8 @@
+import { bindWorkerRequest } from "../../runtime/requestContext";
+import type { BoundWorkerRequest } from "../../runtime/requestContext";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Badge, Button, Card, Code, Group, Select, Stack, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
-import { expectResult, workerCall } from "../../runtime/adapter";
+import { expectResult, workerCall, workerMutation, workerBoundCall } from "../../runtime/adapter";
 import type { ApplicationRecord, ApplicationStatus, LogCursor, WorkerInfo, WorkflowProfile, WorkflowRecord, WorkflowStepStatus, WorkflowSubmission } from "../../runtime/contracts";
 import { OutputView } from "../tasks/OutputView";
 import { JournalTimeline } from "../tasks/JournalTimeline";
@@ -100,7 +102,7 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
   const [application, setApplication] = useState<ApplicationRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
-  const [pending, setPending] = useState<WorkflowSubmission | null>(null);
+  const [pending, setPending] = useState<BoundWorkerRequest<{ method: "submit_workflow"; request: WorkflowSubmission }> | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!navigation) return;
@@ -138,10 +140,11 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
     }
     void poll(); return () => { disposed = true; clearTimeout(timer); };
   }, []);
-  async function send(request: WorkflowSubmission) {
-    setBusy(true); setPending(request); setError(null);
+  async function send(request: WorkflowSubmission, bound?: BoundWorkerRequest<{ method: "submit_workflow"; request: WorkflowSubmission }>) {
+    const pinned = bound ?? bindWorkerRequest({ method: "submit_workflow", request }, info.fencedRequests?.context);
+    setBusy(true); setPending(pinned); setError(null);
     try {
-      const response = await workerCall({ method: "submit_workflow", request });
+      const response = await workerBoundCall(pinned);
       if (response.kind === "error") { setPending(null); throw new Error(response.message); }
       const accepted = expectResult(response, "workflow").workflow;
       setSelected(accepted.workflowId); setAppId(null); setRecord(accepted); setPending(null);
@@ -163,12 +166,12 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
   }
   async function cancel() {
     if (!record) return; setBusy(true);
-    try { setRecord(expectResult(await workerCall({ method: "cancel_workflow", workflowId: record.workflowId }), "workflow").workflow); }
+    try { setRecord(expectResult(await workerMutation({ method: "cancel_workflow", workflowId: record.workflowId }, info.fencedRequests?.context), "workflow").workflow); }
     catch (error) { setError(String(error)); } finally { setBusy(false); }
   }
   async function stop() {
     if (!application) return; setBusy(true);
-    try { setApplication(expectResult(await workerCall({ method: "stop_application", applicationId: application.applicationId }), "application").application); }
+    try { setApplication(expectResult(await workerMutation({ method: "stop_application", applicationId: application.applicationId }, info.fencedRequests?.context), "application").application); }
     catch (error) { setError(String(error)); } finally { setBusy(false); }
   }
   function restoreProfile() {
@@ -187,7 +190,7 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
     <Textarea label="Параметры workflow — JSON" description="Проверьте команды, snapshot, общий timeout, проверку готовности и путь UTF-8 лога внутри проекта. Незаконченный черновик сохраняется. Приложение работает до явной остановки или своего завершения." value={profile} onChange={(e) => changeProfile(e.currentTarget.value)} autosize minRows={5} maxRows={15} disabled={profiles === null || busy || pending !== null || closing} />
     <Button onClick={() => void submit()} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || !profile || pending !== null || closing}>Запустить workflow</Button>
     {pending && <Alert color="yellow" title="Приём workflow не подтверждён">Повтор использует те же параметры и ключ; новую цепочку не создаёт.
-      <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || closing}>Проверить приём workflow</Button></Alert>}
+      <Button onClick={() => void send(pending.request.request, pending)} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || closing}>Проверить приём workflow</Button></Alert>}
     {error && <Alert color="yellow" title="Операция workflow не подтверждена">{error}</Alert>}
     {(pollError || !connected) && <Alert color="yellow" title="Нет свежего состояния workflow">{pollError ?? "Worker недоступен; показаны последние известные записи."}</Alert>}
     <Select label="Последние 10 workflow" value={selected ?? record?.workflowId ?? null} onChange={(id) => { setSelected(id); setAppId(null); }} data={(record && !flows.some((f)=>f.workflowId===record.workflowId) ? [record,...flows] : flows).map((f) => ({ value: f.workflowId, label: `${f.submission.name} · ${statuses[f.status].label} · ${f.workflowId}` }))} searchable />

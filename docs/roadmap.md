@@ -25,8 +25,11 @@ A0, A1, A2.1, A2.2, A2.3.1, A2.3.2 и A2.4.1 завершены;
 A2.4.2a завершён: local/browser и
 [176 native Windows tests](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md) passed;
 следующий пакет A2.4.2b — controlled restore/new incarnation/admission. До native gates process/runtime
-изменения не считаются готовыми. Для A2.4.2b требуется выбор
-[restore/admission policy](plans/architecture-transition/restore-admission-options.md).
+изменения не считаются готовыми. Пользователь выбрал
+[новую пару/журнал с архивом](plans/architecture-transition/restore-admission-options.md).
+[A2.4.2b.1 request fence](plans/architecture-transition/fenced-requests.md) реализован:
+271 local tests и browser gate прошли, native gate ожидается.
+Archive preparation и physical cutover ещё не реализованы; full A2 открыт.
 
 ## Этап 0 — подготовка репозитория
 
