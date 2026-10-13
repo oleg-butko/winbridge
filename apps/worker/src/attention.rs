@@ -226,8 +226,12 @@ impl Store {
         let mut frozen = request.clone();
         frozen.request_id.clear();
         let payload = serde_json::to_string(&frozen).map_err(|e| e.to_string())?;
-        let existing: Option<(String, String)> = self
+        let task = self.get(&request.task_id)?;
+        let transaction = self
             .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        let existing: Option<(String, String)> = transaction
             .query_row(
                 "SELECT id,payload FROM attention WHERE origin='agent_request' AND key=?1",
                 [&request.idempotency_key],
@@ -239,28 +243,37 @@ impl Store {
             if previous != payload {
                 return Err("Attention idempotencyKey belongs to a different payload; use the original request or a new key".into());
             }
-            return self.attention(&id);
+            return Self::read_attention(&transaction, &id);
         }
-        let task = self.get(&request.task_id)?;
         // Automatic outcomes are never dropped to satisfy this explicit-request limit.
-        let pending: u64 = self.connection.query_row("SELECT count(*) FROM attention WHERE origin='agent_request' AND acknowledged IS NULL", [], |r|counter(r,0)).map_err(sql)?;
+        let pending: u64 = transaction.query_row("SELECT count(*) FROM attention WHERE origin='agent_request' AND acknowledged IS NULL", [], |r|counter(r,0)).map_err(sql)?;
         if pending >= 1000 {
             return Err(
                 "Attention queue limit reached: acknowledge pending agent requests (1000)".into(),
             );
         }
         let id = uuid::Uuid::new_v4().to_string();
-        self.connection.execute(
+        let changed = transaction.execute(
             "INSERT INTO attention(id,project,task,target,severity,message,origin,key,payload,created) VALUES (?1,?2,?3,?9,?4,?5,'agent_request',?6,?7,?8)",
             params![id, task.submission.project_id, request.task_id,
                 serde_json::to_string(&request.severity).map_err(|e|e.to_string())?, request.message,
                 request.idempotency_key, payload, timestamp(now_ms())?, serde_json::to_string(&AttentionTarget::Task {task_id:request.task_id.clone()}).map_err(|e|e.to_string())?],
-        ).map_err(sql)?; // FULL synchronous WAL commit precedes the response.
-        self.attention(&id)
+        ).map_err(sql)?;
+        if changed != 1 {
+            return Err(
+                "local journal: attention acceptance not stored; acknowledgement rejected".into(),
+            );
+        }
+        let record = Self::read_attention(&transaction, &id)?;
+        transaction.commit().map_err(sql)?;
+        Ok(record)
     }
 
     pub fn attention(&self, id: &str) -> Result<AttentionRecord> {
-        self.connection
+        Self::read_attention(&self.connection, id)
+    }
+    fn read_attention(connection: &Connection, id: &str) -> Result<AttentionRecord> {
+        connection
             .query_row(
                 &format!("SELECT {COLUMNS} FROM attention WHERE id=?1 AND json_extract(target,'$.kind')='task'"),
                 [id],
@@ -272,16 +285,45 @@ impl Store {
     }
 
     pub fn acknowledge_attention(&mut self, id: &str) -> Result<AttentionRecord> {
-        self.attention(id)?; // Reject non-task targets before a legacy ACK can mutate them.
-        self.connection
-            .execute(
-                "UPDATE attention SET acknowledged=COALESCE(acknowledged,?2) WHERE id=?1",
-                params![id, timestamp(now_ms())?],
-            )
-            .map_err(sql)?;
+        self.acknowledge_attention_inner(id, None, true)?;
         self.attention(id)
     }
-
+    fn acknowledge_attention_inner(
+        &mut self,
+        id: &str,
+        expected: Option<u64>,
+        legacy: bool,
+    ) -> Result<AttentionEvent> {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        if legacy {
+            Self::read_attention(&transaction, id)?;
+        }
+        let record = Self::read_attention_event(&transaction, id)?;
+        let revision: i64 = transaction
+            .query_row("SELECT revision FROM attention WHERE id=?1", [id], |r| {
+                r.get(0)
+            })
+            .map_err(sql)?;
+        if expected.is_some_and(|value| value != revision as u64) {
+            return Err("local journal: stale attention revision".into());
+        }
+        if record.acknowledged_at_ms.is_some() {
+            return Ok(record);
+        }
+        let next = revision
+            .checked_add(1)
+            .ok_or("local journal: attention revision exhausted")?;
+        let changed = transaction.execute("UPDATE attention SET acknowledged=?2,revision=?4 WHERE id=?1 AND revision=?3 AND acknowledged IS NULL",params![id,timestamp(now_ms())?,revision,next]).map_err(sql)?;
+        if changed != 1 {
+            return Err("local journal: attention acknowledgement not stored".into());
+        }
+        let updated = Self::read_attention_event(&transaction, id)?;
+        transaction.commit().map_err(sql)?;
+        Ok(updated)
+    }
     pub fn list_attention(&self, after_sequence: u64, pending_only: bool) -> Result<AttentionPage> {
         let after = i64::try_from(after_sequence)
             .map_err(|_| "Attention cursor exceeds journal integer range")?;
@@ -310,7 +352,10 @@ impl Store {
         })
     }
     pub fn attention_event(&self, id: &str) -> Result<AttentionEvent> {
-        self.connection
+        Self::read_attention_event(&self.connection, id)
+    }
+    fn read_attention_event(connection: &Connection, id: &str) -> Result<AttentionEvent> {
+        connection
             .query_row(
                 &format!("SELECT {COLUMNS},target FROM attention WHERE id=?1"),
                 [id],
@@ -321,13 +366,14 @@ impl Store {
             .ok_or_else(|| format!("attentionId {id:?} was not found"))
     }
     pub fn acknowledge_attention_event(&mut self, id: &str) -> Result<AttentionEvent> {
-        self.connection
-            .execute(
-                "UPDATE attention SET acknowledged=COALESCE(acknowledged,?2) WHERE id=?1",
-                params![id, timestamp(now_ms())?],
-            )
-            .map_err(sql)?;
-        self.attention_event(id)
+        self.acknowledge_attention_inner(id, None, false)
+    }
+    pub fn acknowledge_attention_event_at(
+        &mut self,
+        id: &str,
+        revision: u64,
+    ) -> Result<AttentionEvent> {
+        self.acknowledge_attention_inner(id, Some(revision), false)
     }
     pub fn list_attention_events(
         &self,

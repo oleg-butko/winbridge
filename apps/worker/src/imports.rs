@@ -1,5 +1,5 @@
 use crate::{
-    store::{now_ms, sql, Store},
+    store::{now_ms, sql, JournalSnapshot, Store},
     Result, Worker,
 };
 use rusqlite::{params, OptionalExtension};
@@ -12,8 +12,13 @@ use winbridge_protocol::*;
 use winbridge_workspace_sync as sync;
 impl Store {
     pub fn existing_import(&self, request: &ImportSubmission) -> Result<Option<ImportRecord>> {
-        let row: Option<(String, String)> = self
-            .connection
+        Self::existing_import_on(&self.connection, request)
+    }
+    fn existing_import_on(
+        connection: &rusqlite::Connection,
+        request: &ImportSubmission,
+    ) -> Result<Option<ImportRecord>> {
+        let row: Option<(String, String)> = connection
             .query_row(
                 "SELECT payload,record FROM imports WHERE project=?1 AND key=?2",
                 params![request.project_id, request.idempotency_key],
@@ -41,6 +46,23 @@ impl Store {
         shared_path: String,
         workspace_path: String,
     ) -> Result<ImportRecord> {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        let import = Self::accept_import_on(&transaction, request, shared_path, workspace_path)?;
+        transaction.commit().map_err(sql)?;
+        Ok(import)
+    }
+    pub(crate) fn accept_import_on(
+        connection: &rusqlite::Connection,
+        request: ImportSubmission,
+        shared_path: String,
+        workspace_path: String,
+    ) -> Result<ImportRecord> {
+        if let Some(import) = Self::existing_import_on(connection, &request)? {
+            return Ok(import);
+        }
         let mut import = ImportRecord {
             import_id: uuid::Uuid::new_v4().to_string(),
             submission: request.clone(),
@@ -67,7 +89,7 @@ impl Store {
         );
         let mut payload = request;
         payload.request_id.clear();
-        self.connection
+        let changed = connection
             .execute(
                 "INSERT INTO imports(id,project,key,payload,record) VALUES(?1,?2,?3,?4,?5)",
                 params![
@@ -79,6 +101,11 @@ impl Store {
                 ],
             )
             .map_err(sql)?;
+        if changed != 1 {
+            return Err(
+                "local journal: import acceptance not stored; acknowledgement rejected".into(),
+            );
+        }
         Ok(import)
     }
     pub fn get_import(&self, id: &str) -> Result<ImportRecord> {
@@ -102,17 +129,11 @@ impl Store {
         rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
             .collect()
     }
-    pub fn save_import(&mut self, import: &ImportRecord) -> Result<()> {
-        self.connection
-            .execute(
-                "UPDATE imports SET record=?2 WHERE id=?1",
-                params![
-                    import.import_id,
-                    serde_json::to_string(import).map_err(|e| e.to_string())?
-                ],
-            )
-            .map_err(sql)?;
-        Ok(())
+    pub fn save_import(&mut self, import: &mut JournalSnapshot<ImportRecord>) -> Result<()> {
+        let transaction = self.connection.transaction().map_err(sql)?;
+        Self::write_domain(&transaction, import)?;
+        transaction.commit().map_err(sql)?;
+        import.committed()
     }
     pub fn import_event(import: &mut ImportRecord, summary: impl Into<String>) {
         import.events.push(JournalEvent {
@@ -128,21 +149,21 @@ impl Store {
         status: TaskStatus,
         reason: &str,
     ) -> Result<ImportRecord> {
-        let mut import = self.get_import(id)?;
+        let mut import = self.import_snapshot(id)?;
         if import.status.is_terminal() {
-            return Ok(import);
+            return Ok(import.record);
         }
         import.status = status;
         import.finished_at_ms = Some(now_ms());
         import.reason = Some(reason.into());
         Self::import_event(&mut import, reason);
-        self.save_import(&import)?;
-        Ok(import)
+        self.save_import(&mut import)?;
+        Ok(import.record)
     }
     pub fn cancel_import(&mut self, id: &str) -> Result<ImportRecord> {
-        let mut import = self.get_import(id)?;
+        let mut import = self.import_snapshot(id)?;
         if import.status.is_terminal() || import.cancel_requested {
-            return Ok(import);
+            return Ok(import.record);
         }
         if import.status == TaskStatus::Queued {
             return self.finish_import(
@@ -156,8 +177,8 @@ impl Store {
             &mut import,
             "Cancellation requested; awaiting staging checkpoint",
         );
-        self.save_import(&import)?;
-        Ok(import)
+        self.save_import(&mut import)?;
+        Ok(import.record)
     }
 }
 impl Worker {
@@ -305,13 +326,13 @@ impl Worker {
             Some(&import.submission.manifest_sha256),
         ) {
             let mut store = self.store()?;
-            let mut record = store.get_import(&id)?;
+            let mut record = store.import_snapshot(&id)?;
             record.delta = sync::delta_summary(&manifest);
             record.total_files = Some(manifest.files.len() as u64);
             record.total_bytes = Some(manifest.total_bytes);
             let SnapshotSource::GitCommit { commit } = manifest.source;
             record.commit = Some(commit);
-            store.save_import(&record)?;
+            store.save_import(&mut record)?;
         }
         let started = Instant::now();
         let mut persisted = Instant::now() - Duration::from_secs(1);
@@ -322,7 +343,7 @@ impl Worker {
                 return Err("Worker stopping; import staging remains unbuildable".into());
             }
             let mut store = self.store()?;
-            let mut record = store.get_import(&id)?;
+            let mut record = store.import_snapshot(&id)?;
             if record.cancel_requested {
                 return Err("Import cancelled at staging checkpoint".into());
             }
@@ -339,7 +360,7 @@ impl Worker {
                 record.phase = phase.into();
                 record.completed_files = files;
                 record.completed_bytes = bytes;
-                store.save_import(&record)?;
+                store.save_import(&mut record)?;
                 persisted = Instant::now();
             }
             Ok(())
@@ -352,15 +373,15 @@ impl Worker {
             &mut checkpoint,
             |transfer| {
                 let mut store = self.store()?;
-                let mut record = store.get_import(&id)?;
+                let mut record = store.import_snapshot(&id)?;
                 record.transfer = Some(transfer.clone());
-                store.save_import(&record)
+                store.save_import(&mut record)
             },
         );
         let mut store = self.store()?;
         match result {
             Ok(manifest) => {
-                let mut record = store.get_import(&id)?;
+                let mut record = store.import_snapshot(&id)?;
                 record.delta = sync::delta_summary(&manifest);
                 record.phase = "verified".into();
                 record.completed_files = manifest.files.len() as u64;
@@ -369,7 +390,7 @@ impl Worker {
                 record.total_bytes = Some(manifest.total_bytes);
                 let SnapshotSource::GitCommit { commit } = manifest.source;
                 record.commit = Some(commit);
-                store.save_import(&record)?;
+                store.save_import(&mut record)?;
                 store.finish_import(
                     &id,
                     TaskStatus::Succeeded,
@@ -415,7 +436,7 @@ impl Worker {
                 });
             let mut store = self.store()?;
             if let Some(manifest) = verified {
-                let mut recovered = store.get_import(&import.import_id)?;
+                let mut recovered = store.import_snapshot(&import.import_id)?;
                 recovered.phase = "verified".into();
                 recovered.delta = sync::delta_summary(&manifest);
                 recovered.completed_files = manifest.files.len() as u64;
@@ -424,7 +445,7 @@ impl Worker {
                 recovered.total_bytes = Some(recovered.completed_bytes);
                 let SnapshotSource::GitCommit { commit } = manifest.source;
                 recovered.commit = Some(commit);
-                store.save_import(&recovered)?;
+                store.save_import(&mut recovered)?;
                 store.finish_import(&import.import_id,TaskStatus::Succeeded,"Recovered a fully verified local generation after worker restart; no build was repeated")?;
             } else {
                 store.finish_import(&import.import_id,TaskStatus::Interrupted,"Worker restarted during import; staging is not buildable. Retry requires a new explicit key")?;

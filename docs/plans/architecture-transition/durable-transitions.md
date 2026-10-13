@@ -3,7 +3,8 @@
 Дата: 2026-10-13. База: завершённый A1, `60c841f`.
 Статус: **A2.1 task revisions/CAS завершён**, implementation `8f631dd`;
 [107 native Windows tests passed](windows-task-cas-gate-2026-10-13.md).
-Весь A2 пока не завершён: ownership/epochs и остальные домены ещё впереди.
+A2.2: [domain revisions и atomic links](domain-transitions.md) реализованы, native gate pending.
+Весь A2 пока не завершён: ownership/epochs/incarnation/reconciliation ещё впереди.
 
 ## Зачем нужна первая поставка
 
@@ -15,20 +16,20 @@ owners на акторов. SQLite остаётся единственным aut
 
 ## Инвентаризация writers
 
-| Область | Текущие точки записи | A2.1 | Осталось в A2 |
+| Область | Текущие точки записи | Реализовано A2.1 / A2.2 (native pending) | Осталось в A2 |
 | --- | --- | --- | --- |
 | Task admission | Store::accept_with_origin, UNIQUE(project,key), frozen payload | Dedup/read/insert в одной immediate transaction; INSERT обязан сохранить одну row. | Journal incarnation, durable operation/attempt context. |
 | Task lifecycle | transition, PID, cancel, finish, recover | Pure FSM + revision CAS + terminal attention в одной transaction. | Owner/attempt/epoch guards и recovery admission. |
 | Task output | append_output, sequence, byte counter/quota event | Output INSERT и task CAS атомарны; игнорирование записи откатывает всё. | Process-owner fencing и согласованный общий read snapshot. |
 | Output retention | preview/apply_output_cleanup, cleanup receipt | Revision входит в preview hash; delete/task CAS/receipt одной transaction. | Общие guards связанных workflow/app/attention и ownership maintenance. |
-| Snapshot imports | imports.rs: accept_import/save_import/finish_import/cancel_import, progress/recovery | Прежний Store Mutex и project lease; regression tests сохраняются. | Versioned import writes, transfer attempt, durable workspace ownership/reconciliation. |
-| Workflow | workflows.rs: accept/save/finish/cancel, scheduler steps | Прежний Store Mutex, status/record и attention transaction. | Versioned flow/step writes, atomic child association/resource decision. |
-| Application | workflows.rs: save_application, stop/readiness/exit/recovery | Прежний registry и process owner; status/record/attention transaction. | Versioned registry, lifetime owner/epoch, unresolved physical owner. |
-| Attention | attention.rs: explicit request, outcome insertion, ACK | Generated outcome проверяет существование durable event при dedup/no-op. | Guards explicit request/ACK; общий consistent read model. ACK остаётся монотонным. |
+| Snapshot imports | imports.rs: accept_import/save_import/finish_import/cancel_import, progress/recovery | Versioned import CAS, atomic dedup/admission, progress/cancel/recovery guards. | Transfer attempt, durable workspace ownership/reconciliation. |
+| Workflow | workflows.rs: accept/save/finish/cancel, scheduler steps | Versioned flow/step CAS, atomic child association и outcome/attention; reservation после commit. | Durable lease/epoch и восстановление physical resources. |
+| Application | workflows.rs: save_application, stop/readiness/exit/recovery | Versioned registry, atomic task stop и readiness/step; legacy orphan association без reset/replay. | Lifetime owner/epoch, unresolved physical owner. |
+| Attention | attention.rs: explicit request, outcome insertion, ACK | Generated outcome и explicit accept проверяют durable row; ACK revision CAS/монотонность. | Общий consistent read model и связанный owner context. |
 | Runtime settings | settings.rs и core file storage, manual restart | SQLite не используется; прежний checked file/atomic save. | Связь config generation с admission/resource policy; без hot reload. |
 | Controller/desktop state | Dispatch/connection freshness и локальные формы | Исполнительного authority не получают. | OperationRef/discovery A3; connection UUID не становится epoch. |
 
-Общий guard не объявляется реализованным для import/workflow/application/attention.
+Все domain UPDATE guards реализованы в A2.2; их native gate пока не подтверждён.
 Исходные application/process callbacks и файловые эффекты пока у прежних owners.
 
 ## Контракт A2.1
@@ -119,7 +120,7 @@ Candidate и reference используют изолированные config/st
 
 ## Последовательность оставшегося A2
 
-1. A2.2: versioned import, workflow/step/application и explicit attention writers;
+1. A2.2 (реализация готова, native pending): versioned import, workflow/step/application и explicit attention writers;
    DB transaction объединяет child association, event и resource decision.
    До изменения каждого домена расширить исторические fixtures и fault matrix.
 2. A2.3: journal incarnation, durable OperationRef/attempt IDs и owner epochs;

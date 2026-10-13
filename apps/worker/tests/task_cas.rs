@@ -384,7 +384,7 @@ fn ignored_acceptance_cannot_ack_a_nonexistent_task() {
 
 fn schema_six(path: &Path) {
     let db = Connection::open(path).unwrap();
-    db.execute_batch("DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; PRAGMA user_version=6;").unwrap();
+    db.execute_batch("DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; PRAGMA user_version=6;").unwrap();
 }
 
 #[test]
@@ -657,7 +657,10 @@ fn legacy_schema_six_worker_refuses_new_journal_without_mutating_it() {
     let error = String::from_utf8(stderr).unwrap();
     assert_eq!(status.code(), Some(1));
     assert!(
-        error.contains("journal schema 7 is unsupported; expected 6"),
+        error.contains(&format!(
+            "journal schema {} is unsupported; expected 6",
+            winbridge_worker::store::JOURNAL_SCHEMA_VERSION
+        )),
         "{error}"
     );
     assert!(stdout.is_empty());

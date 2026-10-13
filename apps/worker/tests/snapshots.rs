@@ -255,9 +255,9 @@ fn recovery_reconciles_verified_generation_and_refuses_incomplete_staging() {
     let accepted = accept(&worker, request.clone());
     drop(worker);
     let mut store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
-    let mut import = store.get_import(&accepted.import_id).unwrap();
+    let mut import = store.import_snapshot(&accepted.import_id).unwrap();
     import.status = TaskStatus::Running;
-    store.save_import(&import).unwrap();
+    store.save_import(&mut import).unwrap();
     drop(store);
     let worker = reopen_after_drop(config.clone());
     assert_eq!(
@@ -279,9 +279,9 @@ fn recovery_reconciles_verified_generation_and_refuses_incomplete_staging() {
     )
     .unwrap();
     let mut store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
-    let mut import = store.get_import(&accepted.import_id).unwrap();
+    let mut import = store.import_snapshot(&accepted.import_id).unwrap();
     import.status = TaskStatus::Running;
-    store.save_import(&import).unwrap();
+    store.save_import(&mut import).unwrap();
     drop(store);
     let worker = reopen_after_drop(config);
     assert_eq!(
@@ -508,7 +508,7 @@ fn schema_migration_takes_consistent_backup_and_preserves_accepted_commands() {
     let path = config.state_directory.join("journal.sqlite");
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute_batch("DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
+        .execute_batch("DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DROP TABLE applications; DROP TABLE workflows; DROP TABLE imports; PRAGMA user_version=1;")
         .unwrap();
     drop(connection);
     let worker = Worker::open(config.clone()).unwrap();
@@ -710,13 +710,23 @@ fn delta_worker_dedup_recovery_build_and_source_pin() {
     }
     drop(worker);
     fs::copy(repo.join("src/main.rs"), generation.join("src/main.rs")).unwrap();
-    let mut store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
+    let store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
     let mut interrupted = store.get_import(&accepted.import_id).unwrap();
     interrupted.status = TaskStatus::Running;
     interrupted.phase = "publish_local".into();
     interrupted.delta = None;
     interrupted.finished_at_ms = None;
-    store.save_import(&interrupted).unwrap();
+    let connection =
+        rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
+    connection
+        .execute(
+            "UPDATE imports SET record=?2,revision=revision+1 WHERE id=?1",
+            rusqlite::params![
+                interrupted.import_id,
+                serde_json::to_string(&interrupted).unwrap()
+            ],
+        )
+        .unwrap();
     drop(store);
     let recovered = Worker::open(config.clone()).unwrap();
     let recovered_import = get(&recovered, &accepted.import_id);

@@ -482,7 +482,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();
@@ -1121,7 +1121,7 @@ fn attention_recovered_launch_intent_is_warning_without_another_external_start()
     drop(store);
     let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
     db.execute(
-        "UPDATE applications SET status='ready',record=?2 WHERE id=?1",
+        "UPDATE applications SET status='ready',record=?2,revision=revision+1 WHERE id=?1",
         rusqlite::params![id, serde_json::to_string(&ready_app).unwrap()],
     )
     .unwrap();
@@ -1339,7 +1339,7 @@ fn recovered_running_workflow_reconciles_import_but_does_not_expand_changed_buil
         let connection = rusqlite::Connection::open(&database).unwrap();
         connection
             .execute(
-                "UPDATE workflows SET record=?2 WHERE id=?1",
+                "UPDATE workflows SET record=?2,revision=revision+1 WHERE id=?1",
                 rusqlite::params![
                     accepted.workflow_id,
                     serde_json::to_string(&accepted).unwrap()

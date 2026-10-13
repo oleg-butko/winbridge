@@ -1,6 +1,23 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
+## A2.2 domain revisions/atomic links — native pending, 2026-10-13
+
+База `5f3c007`; [контракт и ревью](plans/architecture-transition/domain-transitions.md).
+Schema 8: revisions imports/workflows/applications/attention, все writers CAS;
+immutable identity/terminal records. Atomic child import/task+step, start registry,
+readiness+step, application stop+task intent; outcome attention вместе с result.
+Explicit accept/dedup и ACK проверяют rows, ACK монотонен. Legacy orphan registry
+relinked без сброса outcome/replay. Migration из schema 7 делает consistent backup,
+raw records/payloads/keys/cursors/attention sequence сохраняются. Wire неизменен.
+Local gate: 213 workspace tests passed, reference test ignored; Windows-target
+workspace/worker tests, Clippy/fmt/AST/Python syntax/argument guard/scaffold passed.
+16 new SQLite regressions; `--task-cas-only` расширен до domain CAS/resume/profiles
+и actual schema-8 отказа reference worker с отдельной DB. Native ещё не выполнен.
+Установленный worker b5d39f9 connected/idle на старой schema 6, прежние generation/
+session; desktop закрыт/не нужен. Working runtime/config/DB не обновлялись.
+Полный A2 открыт; A2.3 owner epoch/incarnation, A2.4 physical reconciliation впереди.
+
 ## A2.1 task revisions/CAS — завершён, 2026-10-13
 
 База A1 `60c841f`. [Writer inventory и оставшийся A2](plans/architecture-transition/durable-transitions.md).

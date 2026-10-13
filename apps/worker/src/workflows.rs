@@ -1,5 +1,5 @@
 use crate::{
-    store::{now_ms, sql, Store},
+    store::{now_ms, sql, JournalSnapshot, Store},
     Result, Worker,
 };
 use rusqlite::{params, OptionalExtension};
@@ -12,8 +12,13 @@ impl Store {
         &self,
         request: &WorkflowSubmission,
     ) -> Result<Option<WorkflowRecord>> {
-        let row: Option<(String, String)> = self
-            .connection
+        Self::existing_workflow_on(&self.connection, request)
+    }
+    fn existing_workflow_on(
+        connection: &rusqlite::Connection,
+        request: &WorkflowSubmission,
+    ) -> Result<Option<WorkflowRecord>> {
+        let row: Option<(String, String)> = connection
             .query_row(
                 "SELECT payload,record FROM workflows WHERE project=?1 AND key=?2",
                 params![request.project_id, request.idempotency_key],
@@ -43,7 +48,11 @@ impl Store {
         request: WorkflowSubmission,
         recipe_pins: Option<Vec<WorkflowRecipePin>>,
     ) -> Result<WorkflowRecord> {
-        if let Some(existing) = self.existing_workflow(&request)? {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        if let Some(existing) = Self::existing_workflow_on(&transaction, &request)? {
             return Ok(existing);
         }
         let mut payload = request.clone();
@@ -77,7 +86,13 @@ impl Store {
             &mut workflow,
             "Workflow accepted; parameters and step IDs committed before ACK",
         );
-        self.connection.execute("INSERT INTO workflows(id,project,key,payload,status,record) VALUES (?1,?2,?3,?4,'queued',?5)",params![workflow.workflow_id,workflow.submission.project_id,workflow.submission.idempotency_key,serde_json::to_string(&payload).map_err(|e|e.to_string())?,serde_json::to_string(&workflow).map_err(|e|e.to_string())?]).map_err(sql)?;
+        let changed = transaction.execute("INSERT INTO workflows(id,project,key,payload,status,record) VALUES (?1,?2,?3,?4,'queued',?5)",params![workflow.workflow_id,workflow.submission.project_id,workflow.submission.idempotency_key,serde_json::to_string(&payload).map_err(|e|e.to_string())?,serde_json::to_string(&workflow).map_err(|e|e.to_string())?]).map_err(sql)?;
+        if changed != 1 {
+            return Err(
+                "local journal: workflow acceptance not stored; acknowledgement rejected".into(),
+            );
+        }
+        transaction.commit().map_err(sql)?;
         Ok(workflow)
     }
     pub fn workflow(&self, id: &str) -> Result<WorkflowRecord> {
@@ -102,22 +117,12 @@ impl Store {
         rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
             .collect()
     }
-    fn save_workflow(&mut self, record: &WorkflowRecord) -> Result<()> {
+    pub fn save_workflow(&mut self, record: &mut JournalSnapshot<WorkflowRecord>) -> Result<()> {
         let transaction = self.connection.transaction().map_err(sql)?;
-        transaction
-            .execute(
-                "UPDATE workflows SET status=?2,record=?3 WHERE id=?1",
-                params![
-                    record.workflow_id,
-                    serde_json::to_value(record.status)
-                        .map_err(|e| e.to_string())?
-                        .as_str(),
-                    serde_json::to_string(record).map_err(|e| e.to_string())?
-                ],
-            )
-            .map_err(sql)?;
+        Self::write_domain(&transaction, record)?;
         crate::attention::workflow_outcome(&transaction, record)?;
-        transaction.commit().map_err(sql)
+        transaction.commit().map_err(sql)?;
+        record.committed()
     }
     fn workflow_event(record: &mut WorkflowRecord, summary: impl Into<String>) {
         record.events.push(JournalEvent {
@@ -129,7 +134,7 @@ impl Store {
     }
     fn finish_workflow(
         &mut self,
-        record: &mut WorkflowRecord,
+        record: &mut JournalSnapshot<WorkflowRecord>,
         status: TaskStatus,
         reason: &str,
     ) -> Result<()> {
@@ -158,17 +163,17 @@ impl Store {
         self.save_workflow(record)
     }
     pub fn cancel_workflow(&mut self, id: &str) -> Result<WorkflowRecord> {
-        let mut record = self.workflow(id)?;
+        let mut record = self.workflow_snapshot(id)?;
         if record.status.is_terminal() || record.cancel_requested {
-            return Ok(record);
+            return Ok(record.record);
         }
         record.cancel_requested = true;
         Self::workflow_event(
             &mut record,
             "Cancellation requested; waiting for owned child operations to terminate",
         );
-        self.save_workflow(&record)?;
-        Ok(record)
+        self.save_workflow(&mut record)?;
+        Ok(record.record)
     }
     pub fn application(&self, id: &str) -> Result<ApplicationRecord> {
         let record: String = self
@@ -204,21 +209,217 @@ impl Store {
         rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
             .collect()
     }
-    fn save_application(&mut self, app: &ApplicationRecord) -> Result<()> {
+    pub fn save_application(&mut self, app: &mut JournalSnapshot<ApplicationRecord>) -> Result<()> {
         let transaction = self.connection.transaction().map_err(sql)?;
-        transaction.execute("INSERT INTO applications(id,workflow,task,status,record) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET status=excluded.status,record=excluded.record",params![app.application_id,app.workflow_id,app.task_id,serde_json::to_value(app.status).map_err(|e|e.to_string())?.as_str(),serde_json::to_string(app).map_err(|e|e.to_string())?]).map_err(sql)?;
+        Self::write_domain(&transaction, app)?;
         crate::attention::application_outcome(&transaction, app)?;
-        transaction.commit().map_err(sql)
+        transaction.commit().map_err(sql)?;
+        app.committed()
+    }
+    fn insert_application(
+        connection: &rusqlite::Connection,
+        app: &ApplicationRecord,
+    ) -> Result<()> {
+        let existing: Option<String> = connection
+            .query_row(
+                "SELECT record FROM applications WHERE id=?1",
+                [&app.application_id],
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(sql)?;
+        if let Some(raw) = existing {
+            let existing: ApplicationRecord =
+                serde_json::from_str(&raw).map_err(|e| format!("local journal: {e}"))?;
+            if existing.application_id != app.application_id
+                || existing.workflow_id != app.workflow_id
+                || existing.task_id != app.task_id
+                || existing.project_id != app.project_id
+                || existing.log_path != app.log_path
+            {
+                return Err("local journal: existing application has different ownership".into());
+            }
+            // Reconcile a legacy crash after registry commit but before parent link.
+            // Preserve its actual outcome, PID and timestamps; never reset to Starting.
+            return Ok(());
+        }
+        let changed = connection
+            .execute(
+                "INSERT INTO applications(id,workflow,task,status,record) VALUES (?1,?2,?3,?4,?5)",
+                params![
+                    app.application_id,
+                    app.workflow_id,
+                    app.task_id,
+                    serde_json::to_value(app.status)
+                        .map_err(|e| e.to_string())?
+                        .as_str(),
+                    serde_json::to_string(app).map_err(|e| e.to_string())?
+                ],
+            )
+            .map_err(sql)?;
+        if changed != 1 {
+            return Err("local journal: application acceptance not stored".into());
+        }
+        Ok(())
+    }
+    pub fn accept_workflow_import(
+        &mut self,
+        flow: &mut JournalSnapshot<WorkflowRecord>,
+        request: ImportSubmission,
+        shared: String,
+        workspace: String,
+    ) -> Result<()> {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        if flow.status.is_terminal()
+            || flow.cancel_requested
+            || flow.steps[0].operation_id.is_some()
+            || request.project_id != flow.submission.project_id
+            || request.snapshot_id != flow.submission.snapshot_id
+            || request.manifest_sha256 != flow.submission.manifest_sha256
+        {
+            return Err("local journal: import child admission contradicts workflow".into());
+        }
+        let mut updated = flow.clone();
+        let import = Self::accept_import_on(&transaction, request, shared, workspace)?;
+        updated.steps[0].operation_id = Some(import.import_id);
+        update_step(
+            &mut updated,
+            0,
+            WorkflowStepStatus::Running,
+            "Import accepted; verified generation required before build",
+        );
+        Self::write_domain(&transaction, &updated)?;
+        transaction.commit().map_err(sql)?;
+        updated.committed()?;
+        *flow = updated;
+        Ok(())
+    }
+    pub fn accept_workflow_task(
+        &mut self,
+        flow: &mut JournalSnapshot<WorkflowRecord>,
+        index: usize,
+        request: TaskSubmission,
+        command: ResolvedCommand,
+        snapshot: Option<VerifiedSnapshotRef>,
+        origin: Option<RecipeOrigin>,
+    ) -> Result<()> {
+        if !matches!(index, 1 | 2) {
+            return Err("local journal: invalid child step".into());
+        }
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        if flow.status.is_terminal()
+            || flow.cancel_requested
+            || flow.steps[index].operation_id.is_some()
+            || request.project_id != flow.submission.project_id
+            || request.snapshot_id.as_ref() != Some(&flow.submission.snapshot_id)
+        {
+            return Err("local journal: task child admission contradicts workflow".into());
+        }
+        let mut updated = flow.clone();
+        let task = Self::accept_task_on(&transaction, request, command, snapshot, origin)?;
+        if task
+            .snapshot
+            .as_ref()
+            .is_none_or(|s| s.manifest_sha256 != updated.submission.manifest_sha256)
+        {
+            return Err(
+                "Imported manifest differs from accepted workflow; child not admitted".into(),
+            );
+        }
+        updated.steps[index].operation_id = Some(task.task_id.clone());
+        update_step(
+            &mut updated,
+            index,
+            WorkflowStepStatus::Running,
+            if index == 1 {
+                "Build task accepted; start waits for exit 0"
+            } else {
+                "Start task accepted; PID does not confirm readiness"
+            },
+        );
+        if index == 2 {
+            let app = ApplicationRecord {
+                application_id: updated.steps[2].step_id.clone(),
+                workflow_id: updated.workflow_id.clone(),
+                project_id: updated.submission.project_id.clone(),
+                task_id: task.task_id,
+                status: ApplicationStatus::Starting,
+                process_id: None,
+                created_at_ms: now_ms(),
+                ready_at_ms: None,
+                finished_at_ms: None,
+                log_path: updated.submission.log_path.clone(),
+                reason: Some("Awaiting process and explicit stdout readiness probe".into()),
+                failure_reason: None,
+            };
+            Self::insert_application(&transaction, &app)?;
+            updated.application_id = Some(app.application_id);
+        }
+        Self::write_domain(&transaction, &updated)?;
+        transaction.commit().map_err(sql)?;
+        updated.committed()?;
+        *flow = updated;
+        Ok(())
+    }
+    pub fn save_workflow_application(
+        &mut self,
+        flow: &mut JournalSnapshot<WorkflowRecord>,
+        app: &mut JournalSnapshot<ApplicationRecord>,
+        cancel_task: bool,
+    ) -> Result<()> {
+        if app.workflow_id != flow.workflow_id
+            || flow.application_id.as_ref() != Some(&app.application_id)
+            || flow.steps[2].operation_id.as_ref() != Some(&app.task_id)
+        {
+            return Err("local journal: workflow/application association mismatch".into());
+        }
+        let transaction = self
+            .connection
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+            .map_err(sql)?;
+        if cancel_task {
+            Self::transition_task_on(
+                &transaction,
+                &app.task_id,
+                None,
+                winbridge_core::task::TaskEvent::CancellationRequested,
+            )?;
+        }
+        Self::write_domain(&transaction, app)?;
+        Self::write_domain(&transaction, flow)?;
+        crate::attention::application_outcome(&transaction, app)?;
+        crate::attention::workflow_outcome(&transaction, flow)?;
+        transaction.commit().map_err(sql)?;
+        app.committed()?;
+        flow.committed()
     }
     pub fn stop_application(&mut self, id: &str) -> Result<ApplicationRecord> {
-        let mut app = self.application(id)?;
+        let mut app = self.application_snapshot(id)?;
         if !app.status.is_terminal() {
-            self.cancel(&app.task_id)?;
             app.status = ApplicationStatus::Stopping;
             app.reason = Some("Stop requested; awaiting managed process tree termination".into());
-            self.save_application(&app)?;
+            let transaction = self
+                .connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            Self::transition_task_on(
+                &transaction,
+                &app.task_id,
+                None,
+                winbridge_core::task::TaskEvent::CancellationRequested,
+            )?;
+            Self::write_domain(&transaction, &app)?;
+            crate::attention::application_outcome(&transaction, &app)?;
+            transaction.commit().map_err(sql)?;
+            app.committed()?;
         }
-        Ok(app)
+        Ok(app.record)
     }
 }
 
@@ -276,7 +477,8 @@ impl Worker {
         active: &mut HashMap<String, String>,
     ) -> Result<()> {
         // Process state is reconciled independently of completed startup workflows.
-        for mut app in store.applications(false)? {
+        for app in store.applications(false)? {
+            let mut app = store.application_snapshot(&app.application_id)?;
             let task = store.get(&app.task_id)?;
             let changed = app.process_id != task.process_id || task.status.is_terminal();
             app.process_id = task.process_id;
@@ -296,7 +498,7 @@ impl Worker {
                 app.reason = app.failure_reason.clone().or(task.reason.clone());
             }
             if changed {
-                if let Err(error) = store.save_application(&app) {
+                if let Err(error) = store.save_application(&mut app) {
                     self.record_journal_fault(
                         &app.application_id,
                         &error,
@@ -312,7 +514,8 @@ impl Worker {
             .filter(|f| f.status == TaskStatus::Running)
             .map(|f| (f.submission.project_id.clone(), f.workflow_id.clone()))
             .collect();
-        for mut flow in flows {
+        for flow in flows {
+            let mut flow = store.workflow_snapshot(&flow.workflow_id)?;
             let project = flow.submission.project_id.clone();
             if flow.status == TaskStatus::Queued {
                 if flow.cancel_requested
@@ -376,12 +579,11 @@ impl Worker {
                     continue;
                 }
                 flow.status = TaskStatus::Running;
-                reserved.insert(project.clone(), flow.workflow_id.clone());
                 Store::workflow_event(
                     &mut flow,
                     "Project reserved for import/build/start/readiness; unrelated mutations wait",
                 );
-                if let Err(error) = store.save_workflow(&flow) {
+                if let Err(error) = store.save_workflow(&mut flow) {
                     self.record_journal_fault(
                         &flow.workflow_id,
                         &error,
@@ -389,6 +591,7 @@ impl Worker {
                     );
                     return Err(error);
                 }
+                reserved.insert(project.clone(), flow.workflow_id.clone());
             }
             if let Err(reason) = self.advance_workflow(store, active, &mut flow) {
                 if reason.starts_with("local journal:") {
@@ -442,18 +645,18 @@ impl Worker {
         self: &Arc<Self>,
         store: &mut Store,
         active: &mut HashMap<String, String>,
-        flow: &mut WorkflowRecord,
+        flow: &mut JournalSnapshot<WorkflowRecord>,
     ) -> Result<()> {
         let timeout = now_ms().saturating_sub(flow.accepted_at_ms) >= flow.submission.timeout_ms;
         if flow.cancel_requested || timeout {
             if timeout && !flow.cancel_requested {
                 if let Some(id) = &flow.application_id {
-                    let mut app = store.application(id)?;
+                    let mut app = store.application_snapshot(id)?;
                     if !app.status.is_terminal() && app.failure_reason.is_none() {
                         app.failure_reason =
                             Some("Workflow startup timeout; owned application stopped".into());
                         app.reason = app.failure_reason.clone();
-                        store.save_application(&app)?;
+                        store.save_application(&mut app)?;
                     }
                 }
             }
@@ -519,28 +722,17 @@ impl Worker {
                 };
                 let (shared, local) =
                     self.import_paths(&request.project_id, &request.snapshot_id)?;
-                let import = if let Some(existing) = store.existing_import(&request)? {
-                    existing
-                } else {
-                    if let Err(reason) =
-                        winbridge_core::workflow::validate_recipe_pins(&self.config, flow)
-                    {
-                        return store.finish_workflow(flow, TaskStatus::Failed, &reason);
-                    }
-                    store.accept_import(
-                        request,
-                        shared.to_string_lossy().into(),
-                        local.to_string_lossy().into(),
-                    )?
-                };
-                flow.steps[0].operation_id = Some(import.import_id);
-                update_step(
+                if let Err(reason) =
+                    winbridge_core::workflow::validate_recipe_pins(&self.config, flow)
+                {
+                    return store.finish_workflow(flow, TaskStatus::Failed, &reason);
+                }
+                store.accept_workflow_import(
                     flow,
-                    0,
-                    WorkflowStepStatus::Running,
-                    "Import accepted; verified generation required before build",
-                );
-                store.save_workflow(flow)?;
+                    request,
+                    shared.to_string_lossy().into(),
+                    local.to_string_lossy().into(),
+                )?;
             }
             let import = store.get_import(flow.steps[0].operation_id.as_ref().unwrap())?;
             return self.child_result(store, flow, 0, import.status, import.reason.as_deref());
@@ -602,8 +794,8 @@ impl Worker {
                         flow.submission.start.clone()
                     },
                 };
-                let task = if let Some(task) = store.existing(&request)? {
-                    task
+                let (command, snapshot, origin) = if let Some(task) = store.existing(&request)? {
+                    (task.resolved_command, task.snapshot, task.recipe_origin)
                 } else {
                     if let Err(reason) =
                         winbridge_core::workflow::validate_recipe_pins(&self.config, flow)
@@ -627,7 +819,7 @@ impl Worker {
                                 Some(origin) => Some(origin),
                                 None => winbridge_runner::recipe_origin(&self.config, &request)?,
                             };
-                            store.accept_with_origin(request, command, snapshot, origin)?
+                            (command, snapshot, origin)
                         }
                         Err(reason) => {
                             update_step(flow, index, WorkflowStepStatus::Failed, &reason);
@@ -635,12 +827,13 @@ impl Worker {
                         }
                     }
                 };
-                if task
-                    .snapshot
+                if snapshot
                     .as_ref()
                     .is_none_or(|s| s.manifest_sha256 != flow.submission.manifest_sha256)
                 {
-                    store.cancel(&task.task_id)?;
+                    if let Some(existing) = store.existing(&request)? {
+                        store.cancel(&existing.task_id)?;
+                    }
                     update_step(
                         flow,
                         index,
@@ -653,36 +846,7 @@ impl Worker {
                         "Imported manifest differs from accepted workflow",
                     );
                 }
-                flow.steps[index].operation_id = Some(task.task_id.clone());
-                update_step(
-                    flow,
-                    index,
-                    WorkflowStepStatus::Running,
-                    if index == 1 {
-                        "Build task accepted; start waits for exit 0"
-                    } else {
-                        "Start task accepted; PID does not confirm readiness"
-                    },
-                );
-                if index == 2 {
-                    let app = ApplicationRecord {
-                        application_id: flow.steps[2].step_id.clone(),
-                        workflow_id: flow.workflow_id.clone(),
-                        project_id: flow.submission.project_id.clone(),
-                        task_id: task.task_id,
-                        status: ApplicationStatus::Starting,
-                        process_id: None,
-                        created_at_ms: now_ms(),
-                        ready_at_ms: None,
-                        finished_at_ms: None,
-                        log_path: flow.submission.log_path.clone(),
-                        reason: Some("Awaiting process and explicit stdout readiness probe".into()),
-                        failure_reason: None,
-                    };
-                    store.save_application(&app)?;
-                    flow.application_id = Some(app.application_id);
-                }
-                store.save_workflow(flow)?;
+                store.accept_workflow_task(flow, index, request, command, snapshot, origin)?;
             }
             let task = store.get(flow.steps[index].operation_id.as_ref().unwrap())?;
             if index == 2 && task.status == TaskStatus::Running && task.process_id.is_some() {
@@ -710,7 +874,7 @@ impl Worker {
             .as_ref()
             .ok_or("Workflow application record missing")?
             .clone();
-        let mut app = store.application(&id)?;
+        let mut app = store.application_snapshot(&id)?;
         let task = store.get(&app.task_id)?;
         if task.status.is_terminal() {
             let status = if task.status == TaskStatus::Indeterminate
@@ -735,7 +899,6 @@ impl Worker {
         let startup_elapsed =
             now_ms().saturating_sub(task.started_at_ms.unwrap_or(app.created_at_ms));
         if startup_elapsed >= flow.submission.readiness.timeout_ms {
-            store.cancel(&app.task_id)?;
             if app.failure_reason.is_none() {
                 let detail = flow.steps[index]
                     .reason
@@ -746,12 +909,11 @@ impl Worker {
                     "Readiness/log deadline exceeded; owned application stopped. {detail}"
                 ));
                 app.reason = app.failure_reason.clone();
-                store.save_application(&app)?;
                 // Mark the failed step only after process termination is confirmed on a later tick.
                 if let Some(step) = flow.steps.get_mut(index) {
                     step.reason = app.reason.clone();
                 }
-                store.save_workflow(flow)?;
+                store.save_workflow_application(flow, &mut app, true)?;
             }
             return Ok(());
         }
@@ -799,15 +961,17 @@ impl Worker {
                             app.status = ApplicationStatus::Ready;
                             app.ready_at_ms = Some(now_ms());
                             app.reason = Some(reason.clone());
-                            store.save_application(&app)?;
                             update_step(flow, 3, WorkflowStepStatus::Succeeded, reason);
+                            store.save_workflow_application(flow, &mut app, false)?;
                         }
                         Err(reason) => {
                             flow.steps[3].reason = Some(reason);
                         }
                         _ => return Err("Invalid health check result".into()),
                     }
-                    store.save_workflow(flow)?;
+                    if flow.steps[3].status != WorkflowStepStatus::Succeeded {
+                        store.save_workflow(flow)?;
+                    }
                 }
             } else {
                 // Ready output is bounded by the task's output quota. No PID or stale log confirms readiness.
@@ -835,14 +999,13 @@ impl Worker {
                         app.reason = Some(
                             "Configured stdout readiness token confirmed from this process".into(),
                         );
-                        store.save_application(&app)?;
                         update_step(
                             flow,
                             3,
                             WorkflowStepStatus::Succeeded,
                             "Readiness confirmed from this application's stdout",
                         );
-                        store.save_workflow(flow)?;
+                        store.save_workflow_application(flow, &mut app, false)?;
                         break;
                     }
                     let keep = needle.len().saturating_sub(1);
@@ -907,7 +1070,7 @@ impl Worker {
     fn child_result(
         &self,
         store: &mut Store,
-        flow: &mut WorkflowRecord,
+        flow: &mut JournalSnapshot<WorkflowRecord>,
         index: usize,
         status: TaskStatus,
         reason: Option<&str>,

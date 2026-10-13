@@ -97,6 +97,14 @@ consistent backup; старый schema-6 binary отказывает новой 
 107 tests, включая actual старый executable и побайтную сохранность test journal.
 Этот пакет ещё не вводит durable owner epochs/attempts и guards других доменов.
 
+[A2.2](plans/architecture-transition/domain-transitions.md) добавляет schema 8 и
+внутренние import/workflow/application/attention revisions. Общий CAS защищает
+эти writers; child admission/link/registry, readiness/step и application stop/task
+cancel сохраняются атомарно. ACK внимания монотонен и проверяет durable row.
+Миграция сохраняет raw records/payloads/keys и делает consistent backup исходной
+schema 7. Native gate пока pending; owner epoch/incarnation/reconciliation остаются
+следующими частями A2. Wire/UI/MCP JSON не меняются.
+
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 
 [Desktop diagnostic log](guides/desktop-diagnostics.md) находится рядом с exe в `logs/`,

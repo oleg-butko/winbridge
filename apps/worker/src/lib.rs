@@ -544,11 +544,12 @@ impl Worker {
         let workflows = store.workflows(false)?;
         let tasks = store.all()?;
         let imports = store.imports(false)?;
-        for mut import in imports
+        for import in imports
             .iter()
             .filter(|r| r.status == TaskStatus::Queued)
             .cloned()
         {
+            let mut import = store.import_snapshot(&import.import_id)?;
             let project = import.submission.project_id.clone();
             if active.contains_key(&project)
                 || workflows::reserved_for_other(&workflows, &project, &import.import_id)
@@ -567,12 +568,12 @@ impl Worker {
                 &mut import,
                 "Import lease acquired; validating immutable delivery",
             );
-            store.save_import(&import)?;
+            store.save_import(&mut import)?;
             active.insert(project.clone(), import.import_id.clone());
             self.active_jobs.fetch_add(1, Ordering::AcqRel);
             let worker = Arc::clone(self);
             thread::spawn(move || {
-                if let Err(error) = worker.execute_import(import.clone()) {
+                if let Err(error) = worker.execute_import(import.record.clone()) {
                     match worker.store() {
                         Ok(mut store) => {
                             if let Err(recovery) = store.finish_import(

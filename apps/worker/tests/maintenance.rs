@@ -305,13 +305,19 @@ fn retention_excludes_running_indeterminate_workflows_and_applications() {
     connection.execute("INSERT INTO workflows(id,project,key,payload,status,record) VALUES ('wf','fixture','wf','{}','running',?1)",[&record]).unwrap();
     assert!(preview(&store).entries.is_empty());
     connection
-        .execute("UPDATE workflows SET status='succeeded'", [])
+        .execute(
+            "UPDATE workflows SET status='succeeded',revision=revision+1",
+            [],
+        )
         .unwrap();
     assert_eq!(preview(&store).entries.len(), 1);
     connection.execute("INSERT INTO applications(id,workflow,task,status,record) VALUES ('app','wf',?1,'ready','{}')",[&task.task_id]).unwrap();
     assert!(preview(&store).entries.is_empty());
     connection
-        .execute("UPDATE applications SET status='stopped'", [])
+        .execute(
+            "UPDATE applications SET status='stopped',revision=revision+1",
+            [],
+        )
         .unwrap();
     assert_eq!(preview(&store).entries.len(), 1);
     let attention = store
@@ -322,6 +328,9 @@ fn retention_excludes_running_indeterminate_workflows_and_applications() {
             severity: AttentionSeverity::Warning,
             message: "Review".into(),
         })
+        .unwrap();
+    connection
+        .execute_batch("DROP TRIGGER attention_revision_guard;")
         .unwrap();
     connection
         .execute(
@@ -372,7 +381,7 @@ fn schema_five_upgrade_has_a_consistent_backup_and_preserves_output() {
     drop(store);
     let connection = rusqlite::Connection::open(&path).unwrap();
     connection
-        .execute_batch("DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; PRAGMA user_version=5;")
+        .execute_batch("DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; PRAGMA user_version=5;")
         .unwrap();
     drop(connection);
     let store = Store::open(&path).unwrap();

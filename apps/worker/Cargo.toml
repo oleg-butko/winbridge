@@ -16,6 +16,7 @@ winbridge-core.workspace = true
 winbridge-protocol.workspace = true
 winbridge-platform.workspace = true
 winbridge-transport.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 rusqlite = "0.40"

@@ -50,7 +50,8 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 cancel/timeout/process tree, recovery и совместимость существующих workflows.
 Рабочие exe/state не меняются; desktop и тестовые UI-окна не открываются.
 .PARAMETER TaskCasOnly
-Проверяет task revisions/CAS, миграцию schema 6 → 7, output/retention rollback,
+Проверяет revisions/CAS tasks/imports/workflows/applications/attention,
+миграции schema 6/7 → 8, atomic child links, output/retention rollback,
 legacy contracts и process/workflow regressions без desktop/UI-окон.
 Требует TaskCasReferenceWorker; старый exe запускается с НОВЫМ тестовым state,
 чтобы подтвердить отказ открыть новую схему. Установленный журнал не открывается.
@@ -168,7 +169,7 @@ try {
         $groups = @(
             @{ name='task-cas-pure-fsm'; arguments=@('test','-p','winbridge-core','--test','task_fsm','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-frozen-contracts'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
-            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-older-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--locked','--offline','--','--ignored','--exact','legacy_schema_six_worker_refuses_new_journal_without_mutating_it','--test-threads=1','--nocapture') }
         )
     }
@@ -201,7 +202,7 @@ try {
         $groups = @(
             @{ name='profile-config-policy'; arguments=@('test','-p','winbridge-core','-p','winbridge-runner','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='profile-native-ipc-projects-dedup-cancel-recovery'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
-            @{ name='profile-runner-snapshot-workflow-regression'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','runtime','--test','snapshots','--test','workflows','--locked','--offline','--','--test-threads=1','--nocapture') }
+            @{ name='profile-runner-snapshot-workflow-regression'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','runtime','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') }
         )
     }
     if ($ResumeOnly) {

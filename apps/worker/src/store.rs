@@ -10,9 +10,11 @@ use winbridge_protocol::{
     TaskSubmission,
 };
 
+mod domain_records;
+pub use domain_records::JournalSnapshot;
 mod task_records;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 7;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 8;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -166,6 +168,29 @@ impl Store {
                 BEGIN SELECT RAISE(ABORT,'Task updates require the next journal revision and immutable identity/payload'); END;
                 PRAGMA user_version=7; COMMIT;").map_err(sql)?;
         }
+        if version <= 7 {
+            if version == 7 {
+                let backup = path.with_file_name(format!(
+                    "journal-v7-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            connection.execute_batch("BEGIN IMMEDIATE;
+                ALTER TABLE imports ADD COLUMN revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(revision)='integer' AND revision>=0);
+                ALTER TABLE workflows ADD COLUMN revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(revision)='integer' AND revision>=0);
+                ALTER TABLE applications ADD COLUMN revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(revision)='integer' AND revision>=0);
+                ALTER TABLE attention ADD COLUMN revision INTEGER NOT NULL DEFAULT 0 CHECK(typeof(revision)='integer' AND revision>=0);
+                CREATE TRIGGER imports_revision_guard BEFORE UPDATE ON imports WHEN NEW.revision != OLD.revision+1 OR NEW.id != OLD.id OR NEW.project != OLD.project OR NEW.key != OLD.key OR NEW.payload != OLD.payload BEGIN SELECT RAISE(ABORT,'Import revision/identity guard'); END;
+                CREATE TRIGGER workflows_revision_guard BEFORE UPDATE ON workflows WHEN NEW.revision != OLD.revision+1 OR NEW.id != OLD.id OR NEW.project != OLD.project OR NEW.key != OLD.key OR NEW.payload != OLD.payload BEGIN SELECT RAISE(ABORT,'Workflow revision/identity guard'); END;
+                CREATE TRIGGER applications_revision_guard BEFORE UPDATE ON applications WHEN NEW.revision != OLD.revision+1 OR NEW.id != OLD.id OR NEW.workflow != OLD.workflow OR NEW.task != OLD.task BEGIN SELECT RAISE(ABORT,'Application revision/identity guard'); END;
+                CREATE TRIGGER attention_revision_guard BEFORE UPDATE ON attention WHEN NEW.revision != OLD.revision+1 OR NEW.id != OLD.id OR NEW.sequence != OLD.sequence OR NEW.project != OLD.project OR NEW.task IS NOT OLD.task OR NEW.target != OLD.target OR NEW.severity != OLD.severity OR NEW.message != OLD.message OR NEW.origin != OLD.origin OR NEW.key != OLD.key OR NEW.payload != OLD.payload OR NEW.created != OLD.created OR OLD.acknowledged IS NOT NULL OR NEW.acknowledged IS NULL BEGIN SELECT RAISE(ABORT,'Attention revision/identity/ack guard'); END;
+                PRAGMA user_version=8; COMMIT;").map_err(sql)?;
+        }
         Ok(Self { connection })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {
@@ -219,7 +244,18 @@ impl Store {
             .connection
             .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
             .map_err(sql)?;
-        if let Some(task) = Self::existing_task(&transaction, &request)? {
+        let task = Self::accept_task_on(&transaction, request, command, snapshot, recipe_origin)?;
+        transaction.commit().map_err(sql)?;
+        Ok(task)
+    }
+    pub(crate) fn accept_task_on(
+        connection: &Connection,
+        request: TaskSubmission,
+        command: ResolvedCommand,
+        snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
+        recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
+    ) -> Result<TaskRecord> {
+        if let Some(task) = Self::existing_task(connection, &request)? {
             return Ok(task);
         }
         let now = now_ms();
@@ -231,7 +267,7 @@ impl Store {
             recipe_origin,
             now,
         );
-        let changed = transaction
+        let changed = connection
             .execute(
                 "INSERT INTO tasks(id,project,key,payload,record) VALUES (?1,?2,?3,?4,?5)",
                 params![
@@ -244,9 +280,10 @@ impl Store {
             )
             .map_err(sql)?;
         if changed != 1 {
-            return Err("Task acceptance was not stored; acknowledgement rejected".into());
+            return Err(
+                "local journal: Task acceptance was not stored; acknowledgement rejected".into(),
+            );
         }
-        transaction.commit().map_err(sql)?; // Acceptance response is sent only after this commit.
         Ok(task)
     }
     pub fn get(&self, id: &str) -> Result<TaskRecord> {
@@ -333,7 +370,17 @@ impl Store {
         event: TaskEvent,
     ) -> Result<TaskTransition> {
         let transaction = self.connection.transaction().map_err(sql)?;
-        let observed = Self::read_task_snapshot(&transaction, id)?;
+        let decision = Self::transition_task_on(&transaction, id, expected, event)?;
+        transaction.commit().map_err(sql)?;
+        Ok(decision)
+    }
+    pub(crate) fn transition_task_on(
+        connection: &Connection,
+        id: &str,
+        expected: Option<i64>,
+        event: TaskEvent,
+    ) -> Result<TaskTransition> {
+        let observed = Self::read_task_snapshot(connection, id)?;
         if let Some(revision) = expected {
             if revision != observed.revision() as i64 {
                 return Err(format!(
@@ -345,12 +392,11 @@ impl Store {
         let decision =
             task::reduce(&observed.record, event, now_ms()).map_err(|error| error.to_string())?;
         if decision.effect != TaskEffect::None {
-            Self::write_task_snapshot(&transaction, &observed, &decision.record)?;
+            Self::write_task_snapshot(connection, &observed, &decision.record)?;
             if decision.effect == TaskEffect::RecordTerminalOutcome {
-                crate::attention::task_outcome(&transaction, &decision.record)?;
+                crate::attention::task_outcome(connection, &decision.record)?;
             }
         }
-        transaction.commit().map_err(sql)?;
         Ok(decision)
     }
     pub fn cancel(&mut self, id: &str) -> Result<TaskRecord> {
