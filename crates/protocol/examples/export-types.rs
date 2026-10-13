@@ -65,6 +65,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ControllerStatus::decl(&config),
         ResourceRecoveryEntry::decl(&config),
         ResourceRecovery::decl(&config),
+        JournalInspection::decl(&config),
         WorkerInfo::decl(&config),
         BuildIdentity::decl(&config),
         LocalRequest::decl(&config),

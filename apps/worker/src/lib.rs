@@ -4,6 +4,8 @@ mod attention;
 mod history;
 mod imports;
 mod network;
+mod recovery;
+pub use recovery::RECOVERY_MARKER;
 mod retention;
 mod settings;
 pub mod store;
@@ -101,15 +103,20 @@ pub struct Worker {
     stop: AtomicBool,
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
     unreconciled_tasks: Mutex<HashMap<String, String>>,
+    inspection: bool,
     _instance_lock: File,
 }
 impl Worker {
     pub fn open(config: WorkerConfig) -> Result<Arc<Self>> {
-        Self::open_inner(config, None)
+        Self::open_inner(config, None, false)
+    }
+    pub fn open_recovery(config: WorkerConfig) -> Result<Arc<Self>> {
+        Self::open_inner(config, None, true)
     }
     fn open_inner(
         config: WorkerConfig,
         config_path: Option<std::path::PathBuf>,
+        inspection: bool,
     ) -> Result<Arc<Self>> {
         config.validate()?;
         ensure_local_state(&config.state_directory)?;
@@ -165,12 +172,24 @@ impl Worker {
                     .join(format!("journal.sqlite{suffix}")),
             )?;
         }
-        let mut store = Store::open(&db_path)?;
-        store.begin_authority()?;
-        store.recover_resource_leases()?;
-        store.capture_legacy_resources()?;
-        store.reconcile_process_resources()?;
-        store.recover()?;
+        let store = if inspection {
+            if !db_path.is_file() {
+                return Err("Read-only recovery requires an existing journal.sqlite; no journal was created".into());
+            }
+            recovery::latch(&config.state_directory)?;
+            Store::open_read_only(&db_path)?
+        } else {
+            recovery::reject_normal_start(&config.state_directory)?;
+            let mut store = Store::open(&db_path)?;
+            store.begin_authority()?;
+            store.recover_resource_leases()?;
+            store.capture_legacy_resources().map_err(|e| {
+                format!("{e}; use --config PATH serve-recovery to inspect without dispatch")
+            })?;
+            store.reconcile_process_resources()?;
+            store.recover()?;
+            store
+        };
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
                 url: url.clone(),
@@ -197,10 +216,24 @@ impl Worker {
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
             unreconciled_tasks: Mutex::new(HashMap::new()),
+            inspection,
             _instance_lock: lock,
         });
-        worker.recover_imports()?;
-        worker.store()?.release_stopped_import_resources()?;
+        if !inspection {
+            worker.recover_imports()?;
+            worker.store()?.release_stopped_import_resources()?;
+            // Observe application/task consistency before the first IPC response,
+            // without advancing workflows or creating any new process.
+            let result = {
+                let mut store = worker.store()?;
+                worker.reconcile_applications(&mut store)
+            };
+            if let Err(error) = result {
+                if worker.journal_recovery_required()?.is_none() {
+                    return Err(error);
+                }
+            }
+        }
         Ok(worker)
     }
     fn store(&self) -> Result<std::sync::MutexGuard<'_, Store>> {
@@ -218,6 +251,34 @@ impl Worker {
         }
     }
     fn dispatch(&self, request: LocalRequest) -> Result<LocalResponse> {
+        // An allowlist keeps future protocol additions disabled until their
+        // read-only behavior is deliberately reviewed. SQLite is read-only too.
+        if self.inspection
+            && !matches!(
+                &request,
+                LocalRequest::Info
+                    | LocalRequest::GetRuntimeSettings
+                    | LocalRequest::ListTasks
+                    | LocalRequest::GetTask { .. }
+                    | LocalRequest::ReadOutput { .. }
+                    | LocalRequest::History { .. }
+                    | LocalRequest::StorageUsage
+                    | LocalRequest::PreviewOutputCleanup { .. }
+                    | LocalRequest::ListImports
+                    | LocalRequest::GetImport { .. }
+                    | LocalRequest::ListWorkflows
+                    | LocalRequest::GetWorkflow { .. }
+                    | LocalRequest::ListApplications
+                    | LocalRequest::GetApplication { .. }
+                    | LocalRequest::ReadApplicationLog { .. }
+                    | LocalRequest::ListAttention { .. }
+                    | LocalRequest::ListAttentionEvents { .. }
+                    | LocalRequest::ListSnapshots { .. }
+                    | LocalRequest::PreviewSnapshot { .. }
+            )
+        {
+            return Err(recovery::INSPECTION_REASON.into());
+        }
         if matches!(
             request,
             LocalRequest::Submit { .. }
@@ -238,9 +299,7 @@ impl Worker {
             }),
             LocalRequest::PreviewOutputCleanup { query } => {
                 let store = self.store()?;
-                if let Some(reason) = self.journal_recovery_required()? {
-                    return Err(reason);
-                }
+                self.require_live_or_inspection()?;
                 Ok(LocalResponse::OutputCleanupPreview {
                     preview: store.preview_output_cleanup(&query)?,
                 })
@@ -256,9 +315,7 @@ impl Worker {
             }
             LocalRequest::History { query } => {
                 let store = self.store()?;
-                if let Some(reason) = self.journal_recovery_required()? {
-                    return Err(reason);
-                }
+                self.require_live_or_inspection()?;
                 Ok(LocalResponse::History {
                     page: store.history(&query)?,
                 })
@@ -272,9 +329,7 @@ impl Worker {
             }
             LocalRequest::StorageUsage => {
                 let store = self.store()?;
-                if let Some(reason) = self.journal_recovery_required()? {
-                    return Err(reason);
-                }
+                self.require_live_or_inspection()?;
                 let mut usage = store.storage_usage()?;
                 for (name, destination) in [
                     ("journal.sqlite", &mut usage.journal_bytes),
@@ -352,9 +407,7 @@ impl Worker {
             }
             LocalRequest::ListWorkflows => {
                 let store = self.store()?;
-                if let Some(reason) = self.journal_recovery_required()? {
-                    return Err(reason);
-                }
+                self.require_live_or_inspection()?;
                 Ok(LocalResponse::Workflows {
                     workflows: store.workflows(true)?,
                 })
@@ -376,9 +429,7 @@ impl Worker {
             }
             LocalRequest::ListApplications => {
                 let store = self.store()?;
-                if let Some(reason) = self.journal_recovery_required()? {
-                    return Err(reason);
-                }
+                self.require_live_or_inspection()?;
                 Ok(LocalResponse::Applications {
                     applications: store.applications(true)?,
                 })
@@ -439,13 +490,23 @@ impl Worker {
                 };
                 Ok(LocalResponse::Info {
                     info: Box::new(WorkerInfo {
-                        resource_recovery: store.resource_recovery_summary()?,
+                        resource_recovery: if self.inspection {
+                            store.inspection_resource_summary()?
+                        } else {
+                            store.resource_recovery_summary()?
+                        },
+                        journal_inspection: self.inspection.then(|| {
+                            winbridge_protocol::JournalInspection {
+                                schema_version: store::JOURNAL_SCHEMA_VERSION,
+                                reason: recovery::INSPECTION_REASON.into(),
+                            }
+                        }),
                         build: Some(winbridge_protocol::build_identity()),
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
                         attention_targets_available: true,
                         history_available: true,
-                        maintenance_available: true,
+                        maintenance_available: !self.inspection,
                         maintenance_error: self
                             .maintenance
                             .lock()
@@ -467,10 +528,13 @@ impl Worker {
                         .into(),
                         projects: self.config.public_projects()?,
                         command_handlers: Some(winbridge_runner::metadata()),
-                        snapshot_import_available: self.config.delivery.is_some(),
-                        snapshot_delta_available: self.config.delivery.is_some(),
-                        snapshot_resume_available: self.config.delivery.is_some(),
-                        workflow_available: self.config.delivery.is_some(),
+                        snapshot_import_available: !self.inspection
+                            && self.config.delivery.is_some(),
+                        snapshot_delta_available: !self.inspection
+                            && self.config.delivery.is_some(),
+                        snapshot_resume_available: !self.inspection
+                            && self.config.delivery.is_some(),
+                        workflow_available: !self.inspection && self.config.delivery.is_some(),
                         controller_connection: self
                             .controller_connection
                             .lock()
@@ -506,9 +570,7 @@ impl Worker {
             }
             LocalRequest::ListImports => {
                 let store = self.store()?;
-                if let Some(reason) = self.journal_recovery_required()? {
-                    return Err(reason);
-                }
+                self.require_live_or_inspection()?;
                 Ok(LocalResponse::Imports {
                     imports: store.imports(true)?,
                 })
@@ -777,11 +839,22 @@ impl Worker {
         Ok(())
     }
     fn journal_recovery_required(&self) -> Result<Option<String>> {
+        if self.inspection {
+            return Ok(Some(recovery::INSPECTION_REASON.into()));
+        }
         let faults = self
             .unreconciled_tasks
             .lock()
             .map_err(|_| "journal fault state lock poisoned")?;
-        Ok(faults.keys().next().map(|id|format!("Operation {id} has an uncommitted outcome. New launches are suspended; repair journal storage and restart worker for indeterminate recovery. No command is automatically resubmitted")))
+        Ok(faults.iter().next().map(|(id,reason)|format!("Journal consistency could not be confirmed ({id}): {reason}. New launches are suspended; repair journal storage and restart worker to reconcile. No command is automatically resubmitted")))
+    }
+    fn require_live_or_inspection(&self) -> Result<()> {
+        if !self.inspection {
+            if let Some(reason) = self.journal_recovery_required()? {
+                return Err(reason);
+            }
+        }
+        Ok(())
     }
     fn require_committed_result(&self, id: &str) -> Result<()> {
         if let Some(reason) = self
@@ -815,10 +888,8 @@ impl Worker {
         self.require_committed_result(&app.task_id)
     }
     fn record_journal_fault(&self, id: &str, error: &str, recovery_error: &str) {
-        let reason = format!(
-            "Execution error: {error}; recording unknown outcome also failed: {recovery_error}"
-        );
-        eprintln!("task {id}: {reason}; new launches suspended until journal recovery");
+        let reason = format!("Journal consistency failure: {error}; reconciliation was not committed: {recovery_error}");
+        eprintln!("operation {id}: {reason}; new launches suspended until journal recovery");
         if let Ok(mut faults) = self.unreconciled_tasks.lock() {
             faults.insert(id.into(), reason);
         }
@@ -1207,7 +1278,12 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
     loop {
         tokio::select! {
             _ = &mut shutdown => break,
-            _ = interval.tick() => { worker.schedule()?; },
+            _ = interval.tick() => {
+                if let Err(error) = worker.schedule() {
+                    worker.record_journal_fault("scheduler", &error, "scheduling failed; new launches suspended");
+                    eprintln!("WinBridge scheduling paused; IPC and accepted process owners remain active: {error}");
+                }
+            },
             result = accept_local(&mut listener, &address) => {
                 let stream = result.map_err(|e| e.to_string())?;
                 accept_connection(stream, Arc::clone(&worker), Arc::clone(&permits));

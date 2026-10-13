@@ -2,6 +2,21 @@
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
 
+## A2.4.2a journal inspection — local gate, 2026-10-13
+
+База `d1f3090`; [контракт, ревью и ограничения](plans/architecture-transition/journal-inspection.md),
+[инструкция](guides/journal-recovery.md). Исправлены fatal scheduler error и stale Ready
+application до первого tick. `serve-recovery` открывает существующий schema-11 journal
+READ_ONLY, без epoch/migration/recovery/probe/retention/dispatch; отдельный persistent
+marker запрещает normal restart до Store::open. History/output/attention и inventory
+legacy overlap доступны; новые RPC/мутации запрещены по умолчанию. UI объясняет
+historical statuses и отключает actions. Schema не меняется, optional DTO сохраняет
+legacy JSON. Local: 260 workspace tests, 10 новых recovery tests; Windows-target tests,
+Linux Clippy, UI typecheck/build/contracts passed. Browser/native gate ещё выполняются.
+Installed schema-6 worker остаётся прежним, desktop закрыт. Полный A2.4.2/A2 открыт:
+A2.4.2b — controlled new incarnation/admission после restore; rollback detection
+и безопасный выход из latched inspection ещё не реализованы.
+
 ## A2.4.1 physical process reconciliation — завершён, 2026-10-13
 
 База `899a7ab`; [контракт, ревью и ограничения](plans/architecture-transition/physical-reconciliation.md).

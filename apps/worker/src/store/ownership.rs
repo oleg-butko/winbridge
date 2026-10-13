@@ -169,6 +169,7 @@ impl Store {
         &mut self,
         behavior: TransactionBehavior,
     ) -> Result<Transaction<'_>> {
+        self.require_writable()?;
         let expected = self.authority.clone();
         let callback = self.callback_attempt.clone();
         let transaction = self
@@ -217,6 +218,7 @@ impl Store {
         kind: Option<OperationKind>,
         id: Option<&str>,
     ) -> Result<()> {
+        self.require_writable()?;
         self.check_authority()?;
         if let Some(token) = &self.callback_attempt {
             if kind != Some(token.operation.kind)
@@ -224,6 +226,12 @@ impl Store {
             {
                 return Err("local journal: execution callback cannot mutate another operation or administrative state".into());
             }
+        }
+        Ok(())
+    }
+    fn require_writable(&self) -> Result<()> {
+        if self.read_only {
+            return Err("local journal: read-only recovery inspection; no mutation or new effect is authorized".into());
         }
         Ok(())
     }

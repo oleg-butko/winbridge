@@ -19,7 +19,7 @@ import { closeDeadline, CloseTimeout, desktopEvent } from "../../runtime/desktop
 import type { ClosePhase, CloseSource, DesktopLogStatus } from "../../runtime/desktopEvents";
 import { TaskDetail, statuses } from "./TaskDetail";
 
-function TaskSession({ id }: { id: string }) {
+function TaskSession({ id, readOnly }: { id: string; readOnly: boolean }) {
   const [task, setTask] = useState<TaskRecord | null>(null);
   const [output, setOutput] = useState(() => new OutputBuffer().snapshot());
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +56,7 @@ function TaskSession({ id }: { id: string }) {
     {error && <Alert color="yellow" title="Нет свежего подтверждения worker">{error}<Text mt="xs">Последнее подтверждение: {confirmedAt === null ? "ещё не получено" : new Date(confirmedAt).toLocaleString()}. Последний известный статус сохранён; повторный запуск не выполняется.</Text></Alert>}
     {task ? <>
       <Group justify="space-between"><Text size="xs" c="dimmed">Последнее подтверждение: {confirmedAt && new Date(confirmedAt).toLocaleTimeString()}</Text>
-        <Button color="orange" variant="light" disabled={!["queued", "running"].includes(task.status) || task.cancelRequested} loading={cancelling} onClick={() => void cancel()}>Отменить задачу</Button>
+        <Button color="orange" variant="light" disabled={readOnly || !["queued", "running"].includes(task.status) || task.cancelRequested} loading={cancelling} onClick={() => void cancel()}>Отменить задачу</Button>
       </Group>
       <TaskDetail task={task} outputState={output} />
     </> : <Text>Читается сохранённая задача…</Text>}
@@ -317,7 +317,7 @@ export function NativeWorkbench() {
         <Text size="xs">Последнее подтверждение: {controller.lastConfirmedAtMs === null ? "ещё не получено" : new Date(controller.lastConfirmedAtMs).toLocaleString()} · session: {controller.sessionId ?? "ещё не создана"}</Text>
         {!connected && <Text size="sm">Worker недоступен; сохранены последние известные данные соединения.</Text>}
         {controller.error && <Text size="sm">{controller.error}</Text>}
-        {!controllerFresh && <Text size="sm">Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет.</Text>}
+        {!controllerFresh && <Text size="sm">{info?.journalInspection ? "Доступна диагностика журнала; состояние прежних процессов не подтверждено." : "Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет."}</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}
@@ -327,7 +327,12 @@ export function NativeWorkbench() {
       <Button mt="sm" variant="light" disabled={closing} onClick={() => void requestClose(closeQuit.current, "recovery", true)}>Закрыть без сохранения</Button>
     </Alert>}
     <CompanionPanel status={companion} preferences={preferences} closing={closing} error={preferencesError} companionError={companionError} preferencesStatus={preferencesStatus} persist={persistPreferences} close={(quit) => void requestClose(quit)} desktopLog={desktopLog} />
-    {info?.journalRecoveryRequired && <Alert color="red" title="Результат операции не записан · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
+    {info?.journalRecoveryRequired && !info.journalInspection && <Alert color="red" title="Ошибка журнала · новые запуски приостановлены">{info.journalRecoveryRequired}<Text mt="xs">Старый статус задачи в журнале не подтверждает, что процесс ещё работает. Восстановите доступ к локальному журналу и перезапустите worker; неизвестная команда не запускается повторно.</Text></Alert>}
+    {info?.journalInspection && <Alert id="journal-inspection" color="orange" title="Диагностика восстановления · только чтение">
+      <Text>{info.journalInspection.reason}</Text>
+      <Text mt="xs">История, output и события внимания доступны. «Выполняется» и «Готово» здесь — сохранённые записи, а не подтверждение работающего процесса. Схема журнала: {info.journalInspection.schemaVersion}.</Text>
+      <Text mt="xs">Worker сохраняет блокировку вне базы данных. Обычный перезапуск не разрешает исполнение; не удаляйте journal-recovery.required для продолжения работы.</Text>
+    </Alert>}
     {info?.resourceRecovery && <Alert id="resource-recovery" color="yellow" title={`Восстановление: ${info.resourceRecovery.unresolvedCount} ресурсов требуют проверки`}>
       <Text size="sm">Остановка прежнего исполнителя не подтверждена. Новые операции в этих проектах ждут освобождения ресурса; прежние команды повторно не запускаются.</Text>
       <Stack mt="xs" gap="xs">{info.resourceRecovery.resources.map((resource) => <div key={`${resource.operationKind}:${resource.operationId}`}>
@@ -337,8 +342,8 @@ export function NativeWorkbench() {
       </div>)}</Stack>
       {info.resourceRecovery.truncated && <Text size="sm" mt="xs">Показаны первые 50 ресурсов.</Text>}
     </Alert>}
-    {info?.snapshotImportAvailable && <SnapshotWorkbench navigation={importNavigation} info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
-    {info?.workflowAvailable && <WorkflowWorkbench navigation={workflowNavigation} info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
+    {info && (info.snapshotImportAvailable || info.journalInspection) && <SnapshotWorkbench navigation={importNavigation} info={info} connected={connected} closing={closing} drafts={deliveryDrafts} persist={persistDelivery} onWorkflowSnapshot={info.workflowAvailable ? setWorkflowSnapshot : undefined} />}
+    {info && (info.workflowAvailable || info.journalInspection) && <WorkflowWorkbench navigation={workflowNavigation} info={info} connected={connected} closing={closing} profiles={workflowProfiles} persist={persistWorkflow} snapshot={workflowSnapshot} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} />}
     <Card id="native-command" tabIndex={-1} withBorder><Stack>
       <Title order={3}>Запустить команду</Title>
       <Select label="Зарегистрированный проект" value={projectId} onChange={setProjectId} data={info?.projects.map((p) => ({ value: p.id, label: p.id })) ?? []} disabled={submitting || pending !== null || closing || drafts === null} />
@@ -362,11 +367,11 @@ export function NativeWorkbench() {
       {error && connected && <Alert color="red" title="Запрос не завершён">{error}</Alert>}
       {pending && !submitting && <Alert color="yellow" title="Приём задачи не подтверждён">
         Worker мог сохранить задачу до потери ответа. Повтор отправит прежние параметры и тот же ключ, чтобы получить ту же задачу.
-        <Button mt="sm" onClick={() => void send(pending)}>Проверить приём — повторить тот же запрос</Button>
+        <Button mt="sm" disabled={!executionReady} onClick={() => void send(pending)}>Проверить приём — повторить тот же запрос</Button>
       </Alert>}
       <Button onClick={() => void submit()} loading={submitting} disabled={!executionReady || pending !== null || !project || !formReady || closing || (!recipeId && !project.allowDirectCommands)}>Передать задачу worker</Button>
     </Stack></Card>
     <Select label="Последние 10 задач" value={selectedId} onChange={setSelectedId} searchable data={tasks.map((t) => ({ value: t.taskId, label: `${t.projectId} · ${statuses[t.status].label} · ${t.taskId}` }))} />
-    {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
+    {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} readOnly={!!info?.journalInspection} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
   </Stack>;
 }

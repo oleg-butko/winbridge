@@ -39,6 +39,7 @@ consistency guards, очередь нескольких проектов, actors
 | [Диагностика desktop](guides/desktop-diagnostics.md) | Кнопки закрытия, тайм-ауты и передача журналов из Windows. |
 | [История и диагностика](guides/history-diagnostics.md) | Поиск операций и подготовка отчёта. |
 | [Настройки и хранение вывода](guides/settings-retention.md) | Конфигурация, ручной restart и очистка stdout/stderr. |
+| [Диагностика журнала](guides/journal-recovery.md) | Candidate: чтение восстановленного журнала с сохраняющимся запретом исполнения. |
 
 ## Форматы и среда — `reference/`
 

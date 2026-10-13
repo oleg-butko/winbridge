@@ -167,7 +167,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
       <Button onClick={() => void send({ protocolVersion: info.protocolVersion, requestId: crypto.randomUUID(), projectId: preview.projectId, snapshotId: preview.snapshotId, manifestSha256: preview.manifestSha256, idempotencyKey: crypto.randomUUID(), timeoutMs: 1800000 }, !!preview.delta)} disabled={!!preview.resumable && !info.snapshotResumeAvailable || !!preview.delta && !info.snapshotDeltaAvailable || !connected || !!info.journalRecoveryRequired || busy || pending !== null || closing}>Импортировать пакет</Button>
     </>}
     {pending && <Alert color="yellow" title="Приём импорта не подтверждён">Повтор отправит прежние параметры и ключ.
-      <Button onClick={() => void send(pending, pendingDelta)} loading={busy} disabled={!connected || closing}>Проверить приём импорта</Button>
+      <Button onClick={() => void send(pending, pendingDelta)} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || closing}>Проверить приём импорта</Button>
     </Alert>}
     {pollError && <Alert color="yellow" title="Нет свежего подтверждения worker">{pollError}</Alert>}
     {error && <Alert color="yellow" title="Нет свежего результата операции">{error}</Alert>}
@@ -184,7 +184,7 @@ export function SnapshotWorkbench({ navigation, info, connected, closing, drafts
       {progressKnown && <Progress value={record.totalBytes === 0 ? 100 : Math.min(100, record.completedBytes / record.totalBytes! * 100)} />}
       {record.reason && <Alert color={statuses[record.status].color}>{record.reason}</Alert>}
       {record.cancelRequested && !record.finishedAtMs && <Text>Отмена запрошена; ожидается ближайшая проверка worker.</Text>}
-      <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || busy || closing || record.cancelRequested || !["queued", "running"].includes(record.status)}>Отменить импорт</Button>
+      <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || !!info.journalInspection || busy || closing || record.cancelRequested || !["queued", "running"].includes(record.status)}>Отменить импорт</Button>
       <JournalTimeline events={record.events} />
     </Stack>}
   </Stack></Card>;

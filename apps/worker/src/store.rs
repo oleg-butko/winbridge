@@ -10,6 +10,7 @@ use winbridge_protocol::{
     TaskSubmission,
 };
 
+mod inspection;
 mod leases;
 mod ownership;
 pub use leases::{CleanupProof, LeaseScope, LeaseState, ResourceLease};
@@ -36,6 +37,7 @@ pub struct Store {
     pub(crate) connection: Connection,
     authority: JournalAuthority,
     callback_attempt: Option<ExecutionToken>,
+    read_only: bool,
 }
 
 impl Store {
@@ -277,6 +279,7 @@ impl Store {
             connection,
             authority,
             callback_attempt: None,
+            read_only: false,
         })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {

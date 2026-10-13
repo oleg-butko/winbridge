@@ -41,7 +41,7 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
     try{const value=expectResult(await workerCall({method:"get_runtime_settings"}),"runtime_settings").settings;setSettings(value);setJson(value.savedJson);setSaveRequest(null);setSaved(null);setBackup(null);setProjectIndex("0");}
     catch(e){setError(String(e));}finally{setBusy(false);}
   }
-  useEffect(()=>{if(info.maintenanceAvailable && connected && (!settings||(!dirty&&settings.generation!==info.generation)))void load();},[info.maintenanceAvailable,connected,info.generation]);
+  useEffect(()=>{if((info.maintenanceAvailable || info.journalInspection) && connected && (!settings||(!dirty&&settings.generation!==info.generation)))void load();},[info.maintenanceAvailable,!!info.journalInspection,connected,info.generation]);
   function change(value:string){setJson(value);setSaveRequest(null);setSaved(null);setBackup(null);}
   function update(edit:(value:Config)=>void){if(config){const copy=structuredClone(config);edit(copy);
     // Friendly controls can undo an edit. Restore the original bytes too, rather
@@ -66,10 +66,10 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
     try{const value=expectResult(await workerCall({method:"apply_output_cleanup",request:cleanupRequest}),"output_cleanup_result").result;setResult(value);}
     catch(e){setError(`Очистка не подтверждена: ${String(e)}. Повтор сверяет тот же план и ключ; новый предпросмотр получает новый ключ.`);}finally{setBusy(false);}
   }
-  const disabled=!connected||busy||closing;
+  const disabled=!connected||!!info.journalInspection||busy||closing;
   return <Card id="native-settings" data-settings-generation={settings?.generation} data-settings-busy={busy} tabIndex={-1} withBorder><Stack>
     <Title order={3}>Проекты, соединение и хранение</Title>
-    {!info.maintenanceAvailable?<Alert color="yellow">Настройки требуют общего обновления worker и desktop.</Alert>:<>
+    {!info.maintenanceAvailable&&!info.journalInspection?<Alert color="yellow">Настройки требуют общего обновления worker и desktop.</Alert>:<>
       <Text size="sm">Worker продолжает работать с действующими настройками до ручного перезапуска. Эта форма не запускает и не останавливает процессы.</Text>
       {info.maintenanceError && <Alert color="yellow" title="Автоматическая очистка не подтверждена">{info.maintenanceError}</Alert>}
       <Group><Button variant="light" data-testid="settings-reload" disabled={disabled||dirty} onClick={()=>void load()}>Перечитать файл</Button><Button variant="subtle" disabled={busy||!dirty} onClick={()=>{change(settings?.savedJson??"");}}>Отменить несохранённые изменения</Button><Text role="status" size="sm">{dirty?"Есть несохранённые изменения":settings?"Форма совпадает с сохранённым файлом":"Настройки ещё не прочитаны"}</Text></Group>
@@ -98,7 +98,7 @@ export function SettingsPanel({info,connected,closing,onBlocked}:{info:WorkerInf
         <Accordion><Accordion.Item value="active"><Accordion.Control>Действующий конфиг worker · сравнить с предпросмотром</Accordion.Control><Accordion.Panel><Code block>{settings.activeJson}</Code></Accordion.Panel></Accordion.Item></Accordion>
         <Button data-testid="settings-save" loading={busy} disabled={disabled||(!dirty&&!saveRequest)} onClick={()=>void save()}>Проверить и сохранить конфиг</Button>
         {saved && <Alert color="green" data-testid="settings-saved">{saved}{backup && <Text size="xs">Прежняя версия: {backup}</Text>}</Alert>}
-        <Text size="sm">Перезапуск: завершите worker через Ctrl+C, затем запустите прежний worker.exe с <Code>--config {JSON.stringify(settings.path)} serve</Code>. Desktop можно оставить открытым; он покажет новое подтверждение и generation после запуска.</Text>
+        {!info.journalInspection && <Text size="sm">Перезапуск: завершите worker через Ctrl+C, затем запустите прежний worker.exe с <Code>--config {JSON.stringify(settings.path)} serve</Code>. Desktop можно оставить открытым; он покажет новое подтверждение и generation после запуска.</Text>}
       </>}
       <Title order={4}>Явная очистка старого stdout/stderr</Title>
       <Text size="sm">Только output завершённых задач старше срока, до 50 за раз. Активные/неизвестные задачи и связанные данные активных workflow/приложений или непрочитанного внимания защищены. Команды, результаты, история, ключи запросов, snapshots и отчёты сохраняются. SQLite переиспользует освобождённое место; размер файла может не уменьшиться сразу.</Text>

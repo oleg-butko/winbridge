@@ -79,8 +79,8 @@ let page;
 let workerLog = "";
 let server;
 let crashedPid;
-async function startWorker() {
-  worker = spawn(workerExe, ["--config", config, "serve"], { stdio: ["ignore", "ignore", "pipe"] });
+async function startWorker(mode = "serve") {
+  worker = spawn(workerExe, ["--config", config, mode], { stdio: ["ignore", "ignore", "pipe"] });
   worker.stderr.on("data", (bytes) => { workerLog = (workerLog + bytes.toString()).slice(-8192); });
   await until(async () => (await call({ method: "info" })).kind === "info", "worker unavailable");
 }
@@ -752,7 +752,7 @@ try {
   // A real journal failure must block new launches without presenting stale running as fresh.
   await exec("python3", ["-c", "import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute(\"CREATE TRIGGER reject_outcome BEFORE INSERT ON attention WHEN NEW.origin='task_outcome' BEGIN SELECT RAISE(ABORT,'expected UI journal fault'); END\"); c.commit()", join(run,"state/journal.sqlite")]);
   const uncommitted=(await call({method:"submit",request:{protocolVersion:1,requestId:"journal-fault-ui",projectId:"other-fixture",idempotencyKey:"journal-fault-ui",timeoutMs:5000,command:{kind:"direct",executable:"/deliberately-missing/fixture",arguments:[],workingDirectory:"."}}})).task;
-  await workflowPage.getByText("Результат операции не записан · новые запуски приостановлены",{exact:true}).waitFor();
+  await workflowPage.getByText("Ошибка журнала · новые запуски приостановлены",{exact:true}).waitFor();
   assert.equal(await workflowPage.getByRole("button",{name:"Передать задачу worker",exact:true}).isDisabled(),true);
   assert.equal((await call({method:"get_task",taskId:uncommitted.taskId})).kind,"error");
   await exec("python3",["-c","import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute('DROP TRIGGER reject_outcome'); c.commit()",join(run,"state/journal.sqlite")]);
@@ -780,6 +780,24 @@ try {
   assert.equal(await workflowPage.evaluate(() => window.__aborted),true);
   await workflowPage.evaluate(() => { window.__validation.enabled=false; });
   await until(async()=>!await validationBanner.isVisible(),"Validation banner did not clear");
+  // Inspect a real existing journal. No fixture Info overrides: the mode and
+  // persistent admission block come from the actual worker/SQLite connection.
+  await stopWorker();
+  await startWorker("serve-recovery");
+  await workflowPage.locator("#journal-inspection").waitFor();
+  assert.ok((await workflowPage.locator("#journal-inspection").innerText()).includes("обычный перезапуск"));
+  assert.equal(await workflowPage.getByRole("button",{name:"Передать задачу worker",exact:true}).isDisabled(),true);
+  await until(async()=>await workflowPage.getByTestId("settings-save").isDisabled(),"Inspection left config save enabled");
+  await until(async()=>await workflowPage.locator("#native-history [data-history-id]").count()>0,"Inspection history unavailable");
+  assert.equal(await workflowPage.getByTestId("diagnostic-prepare").isDisabled(),true);
+  const inspectedTask=(await call({method:"get_task",taskId:historical.taskId})).task;
+  assert.equal(inspectedTask.taskId,historical.taskId);
+  assert.equal((await call({method:"cancel",taskId:historical.taskId})).kind,"error");
+  await stopWorker();
+  const refused=await exec(workerExe,["--config",config,"serve"]).then(()=>null,(e)=>e);
+  assert.ok(refused && refused.stderr.includes("Recovery marker"),"Normal restart bypassed recovery latch");
+  await startWorker("serve-recovery");
+  await workflowPage.locator("#journal-inspection").waitFor();
   assert.deepEqual(errors, []);
   console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup, pinned-base delta preview/import and same-method lost ACK; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences and exact popup targets. History: paging/keyboard/redacted editable diagnostics. Settings/retention: keyboard navigation, unsaved close guard, exact reviewed config, save ACK loss with same ID, preview/actual output cleanup and same-key reconciliation; task history/keys retained. Native windows and diagnostic publication are validated separately on Windows.");
 } catch (error) {

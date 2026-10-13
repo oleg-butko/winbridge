@@ -56,7 +56,7 @@ export function AttentionInbox({ info, connected, onTarget }: {
     <Text size="sm">События хранятся у worker при закрытом окне. Открытие страницы не подтверждает просмотр; нажмите «Прочитано» отдельно.</Text>
     {!info.attentionAvailable ? <Alert color="yellow">Журнал внимания требует следующего общего обновления worker и desktop.</Alert> : <>
       {(!connected || error) && <Alert color="yellow" title="Нет свежего подтверждения журнала внимания">{error ?? "Worker недоступен; показаны последние известные события."}</Alert>}
-      {ackError && <Alert color="yellow">{ackError.message}<Button mt="sm" variant="light" loading={acknowledging === ackError.id} disabled={!connected || acknowledging !== null} onClick={() => void acknowledge(ackError.id)}>Проверить подтверждение</Button></Alert>}
+      {ackError && <Alert color="yellow">{ackError.message}<Button mt="sm" variant="light" loading={acknowledging === ackError.id} disabled={!connected || !!info.journalInspection || acknowledging !== null} onClick={() => void acknowledge(ackError.id)}>Проверить подтверждение</Button></Alert>}
       <Checkbox label="Показать также подтверждённые события" checked={history} onChange={(event) => { setHistory(event.currentTarget.checked); setAfter(0); setPage(null); }} />
       <ScrollArea.Autosize mah={360}><Stack gap="sm">
         {page?.records.map((record) => <Card key={record.attentionId} withBorder data-attention-id={record.attentionId}>
@@ -64,7 +64,7 @@ export function AttentionInbox({ info, connected, onTarget }: {
           <Text mt="xs">{record.message}</Text>
           <Text size="xs" c="dimmed">{new Date(record.createdAtMs).toLocaleString()} · {({task_outcome:"Результат задачи",workflow_outcome:"Результат workflow",application_outcome:"Состояние приложения",agent_request:"Запрос агента"} as Record<string,string>)[record.origin] ?? record.origin} · {record.target.kind === "task" ? `Task ID: ${record.target.taskId}` : record.target.kind === "workflow" ? `Workflow ID: ${record.target.workflowId}` : `Application ID: ${record.target.applicationId}`}</Text>
           <Group mt="sm"><Button size="xs" variant="light" onClick={() => onTarget(record.target)}>{record.target.kind === "task" ? "Открыть задачу" : record.target.kind === "workflow" ? "Открыть workflow" : "Открыть приложение"}</Button>
-            {record.acknowledgedAtMs === null ? <Button size="xs" data-testid={`ack-attention-${record.attentionId}`} loading={acknowledging === record.attentionId} disabled={!connected || acknowledging !== null} onClick={() => void acknowledge(record.attentionId)}>Прочитано</Button>
+            {record.acknowledgedAtMs === null ? <Button size="xs" data-testid={`ack-attention-${record.attentionId}`} loading={acknowledging === record.attentionId} disabled={!connected || !!info.journalInspection || acknowledging !== null} onClick={() => void acknowledge(record.attentionId)}>Прочитано</Button>
               : <Text size="xs">Прочитано: {new Date(record.acknowledgedAtMs).toLocaleString()}</Text>}
           </Group>
         </Card>)}

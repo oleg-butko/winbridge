@@ -187,7 +187,7 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
     <Textarea label="Параметры workflow — JSON" description="Проверьте команды, snapshot, общий timeout, проверку готовности и путь UTF-8 лога внутри проекта. Незаконченный черновик сохраняется. Приложение работает до явной остановки или своего завершения." value={profile} onChange={(e) => changeProfile(e.currentTarget.value)} autosize minRows={5} maxRows={15} disabled={profiles === null || busy || pending !== null || closing} />
     <Button onClick={() => void submit()} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || !profile || pending !== null || closing}>Запустить workflow</Button>
     {pending && <Alert color="yellow" title="Приём workflow не подтверждён">Повтор использует те же параметры и ключ; новую цепочку не создаёт.
-      <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || closing}>Проверить приём workflow</Button></Alert>}
+      <Button onClick={() => void send(pending)} loading={busy} disabled={!connected || !!info.journalRecoveryRequired || closing}>Проверить приём workflow</Button></Alert>}
     {error && <Alert color="yellow" title="Операция workflow не подтверждена">{error}</Alert>}
     {(pollError || !connected) && <Alert color="yellow" title="Нет свежего состояния workflow">{pollError ?? "Worker недоступен; показаны последние известные записи."}</Alert>}
     <Select label="Последние 10 workflow" value={selected ?? record?.workflowId ?? null} onChange={(id) => { setSelected(id); setAppId(null); }} data={(record && !flows.some((f)=>f.workflowId===record.workflowId) ? [record,...flows] : flows).map((f) => ({ value: f.workflowId, label: `${f.submission.name} · ${statuses[f.status].label} · ${f.workflowId}` }))} searchable />
@@ -202,7 +202,7 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
       </Stack>}
       {record.reason && <Alert color={statuses[record.status].color}>{record.reason}</Alert>}
       <Group><Button variant="light" onClick={restoreProfile} disabled={busy || pending !== null || closing}>Заполнить профиль из workflow</Button>
-        <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || busy || record.cancelRequested || !["queued", "running"].includes(record.status) || closing}>Отменить workflow</Button></Group>
+        <Button color="orange" variant="light" onClick={() => void cancel()} disabled={!connected || !!info.journalInspection || busy || record.cancelRequested || !["queued", "running"].includes(record.status) || closing}>Отменить workflow</Button></Group>
       {record.cancelRequested && !record.finishedAtMs && <Text>Запрошена отмена; ожидается остановка дочерних операций.</Text>}
       <Table.ScrollContainer minWidth={500}><Table><Table.Thead><Table.Tr><Table.Th>Шаг</Table.Th><Table.Th>Состояние</Table.Th><Table.Th>Результат</Table.Th></Table.Tr></Table.Thead><Table.Tbody>
         {record.steps.map((step) => <Table.Tr key={step.stepId}><Table.Td>{steps[step.name] ?? step.name}<Text size="xs">{step.stepId}</Text></Table.Td><Table.Td>{stepStates[step.status]}</Table.Td><Table.Td>{step.reason}
@@ -219,7 +219,7 @@ export function WorkflowWorkbench({ navigation, info, connected, closing, snapsh
       <Text size="xs">Application ID: {application.applicationId} · workflow {application.workflowId} · task {application.taskId}</Text>
       <Text size="sm">Готовность: {application.readyAtMs === null ? "не подтверждена" : new Date(application.readyAtMs).toLocaleString()}</Text>
       {application.reason && <Alert color={appStates[application.status].color}>{application.reason}</Alert>}
-      <Button color="orange" variant="light" onClick={() => void stop()} disabled={!connected || busy || terminalApp(application) || application.status === "stopping" || closing}>Остановить приложение</Button>
+      <Button color="orange" variant="light" onClick={() => void stop()} disabled={!connected || !!info.journalInspection || busy || terminalApp(application) || application.status === "stopping" || closing}>Остановить приложение</Button>
       <ApplicationLog key={application.applicationId} applicationId={application.applicationId} connected={connected} />
     </Stack>}
   </Stack></Card>;

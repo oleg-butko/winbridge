@@ -121,8 +121,13 @@ passed: 157 tests, actual schema-10 refusal не меняет test journal.
 приостановленный Windows process, immutable named Job binding/PID commit до resume,
 read-only physical reconciliation и bounded unresolved inventory в Info/UI.
 [Native gate](plans/architecture-transition/windows-reconciliation-gate-2026-10-13.md) passed: 164 tests, actual schema-11 refusal без изменения test journal.
-Installed worker остаётся schema 6. Explicit restore
-recovery mode — A2.4.2; глобальный параллелизм и actor migration не включены.
+Installed worker остаётся schema 6. [A2.4.2a](plans/architecture-transition/journal-inspection.md)
+добавляет explicit read-only inspection и marker вне SQLite, запрещающий normal
+restart до migration/owner activation. History остаётся историей; inspection не
+выдаёт physical proof и не разрешает replay. Startup сверяет applications до IPC;
+scheduler fault приостанавливает запуск, сохраняя service. Controlled new incarnation
+и restore admission — A2.4.2b; автоматического rollback detector пока нет.
+Глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 

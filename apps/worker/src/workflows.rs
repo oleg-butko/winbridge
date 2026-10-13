@@ -465,11 +465,7 @@ impl Worker {
             .ok_or("Application project is not registered")?;
         winbridge_log_reader::read(&project.workspace_root, &app.log_path, id, cursor, max)
     }
-    pub(crate) fn advance_workflows(
-        self: &Arc<Self>,
-        store: &mut Store,
-        active: &mut HashMap<String, String>,
-    ) -> Result<()> {
+    pub(crate) fn reconcile_applications(&self, store: &mut Store) -> Result<()> {
         // Process state is reconciled independently of completed startup workflows.
         for app in store.applications(false)? {
             let mut app = store.application_snapshot(&app.application_id)?;
@@ -502,6 +498,14 @@ impl Worker {
                 }
             }
         }
+        Ok(())
+    }
+    pub(crate) fn advance_workflows(
+        self: &Arc<Self>,
+        store: &mut Store,
+        active: &mut HashMap<String, String>,
+    ) -> Result<()> {
+        self.reconcile_applications(store)?;
         let flows = store.workflows(false)?;
         let mut reserved: HashMap<String, String> = flows
             .iter()

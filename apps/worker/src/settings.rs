@@ -48,7 +48,13 @@ impl Worker {
         let path = std::path::absolute(path).map_err(|e| e.to_string())?;
         winbridge_platform::require_safe_path(&path).map_err(|e| e.to_string())?;
         let config = WorkerConfig::load(&path)?;
-        Self::open_inner(config, Some(path))
+        Self::open_inner(config, Some(path), false)
+    }
+    pub fn open_recovery_file(path: &Path) -> Result<std::sync::Arc<Self>> {
+        let path = std::path::absolute(path).map_err(|e| e.to_string())?;
+        winbridge_platform::require_safe_path(&path).map_err(|e| e.to_string())?;
+        let config = WorkerConfig::load(&path)?;
+        Self::open_inner(config, Some(path), true)
     }
     fn settings_at(&self, path: &Path) -> Result<RuntimeSettings> {
         let bytes = read(path)?;

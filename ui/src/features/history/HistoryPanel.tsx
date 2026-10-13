@@ -81,13 +81,13 @@ export function HistoryPanel({info,connected,closing,onOpen}: {info:WorkerInfo;c
       <TextInput label="Task ID для отчёта" data-testid="diagnostic-task-id" value={taskId} onChange={(e)=>setTaskId(e.currentTarget.value)} />
       <Group><Checkbox data-testid="diagnostic-include-command" label="Включить параметры команды" checked={includeCommand} onChange={(e)=>setIncludeCommand(e.currentTarget.checked)} /><Checkbox data-testid="diagnostic-include-output" label="Включить stdout/stderr" checked={includeOutput} onChange={(e)=>setIncludeOutput(e.currentTarget.checked)} /></Group>
       <Textarea data-testid="diagnostic-redactions" label="Значения для замены — одно на строку" value={redactions} onChange={(e)=>setRedactions(e.currentTarget.value)} minRows={2} />
-      <Button data-testid="diagnostic-prepare" onClick={()=>void prepare()} loading={busy} disabled={!connected||!taskId||closing}>Подготовить предпросмотр</Button>
+      <Button data-testid="diagnostic-prepare" onClick={()=>void prepare()} loading={busy} disabled={!connected||!!info.journalInspection||!taskId||closing}>Подготовить предпросмотр</Button>
       {preview && <>
         <Text size="sm">Task ID: {preview.taskId} · данные на {new Date(preview.observedAtMs).toLocaleString()} · параметры: {preview.commandIncluded?"включены с маскированием":"исключены"} · output: {preview.outputIncluded?"включён":"исключён"}</Text>
         {preview.outputTruncated && <Alert color="yellow">Output неполон: квота worker, очистка по политике хранения или предел отчёта 64 KiB / 128 chunks. Предпросмотр не меняет журнал и процесс.</Alert>}
         <Textarea label="Редактируемый предпросмотр отчёта" data-testid="diagnostic-preview" value={text} readOnly={busy} onChange={(e)=>{setText(e.currentTarget.value);setSaveId(null);setSaved(null);}} autosize minRows={8} maxRows={20} spellCheck={false} />
         <Text size="xs">Каталог из локального desktop config: {directory??"недоступен"}</Text>
-        <Button data-testid="diagnostic-save" onClick={()=>void save()} loading={busy} disabled={!directory||!text||closing}>Сохранить показанный JSON</Button>
+        <Button data-testid="diagnostic-save" onClick={()=>void save()} loading={busy} disabled={!!info.journalInspection||!directory||!text||closing}>Сохранить показанный JSON</Button>
       </>}
       {diagnosticError && <Alert color="yellow">{diagnosticError}</Alert>}
       {saved && <Alert color="green" title="Отчёт сохранён и проверен" data-testid="diagnostic-saved" data-diagnostic-path={saved.path} data-diagnostic-sha256={saved.sha256}><Text>{saved.path}</Text><Text size="xs">{saved.bytes} байт · SHA-256: {saved.sha256}</Text></Alert>}
