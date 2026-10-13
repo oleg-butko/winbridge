@@ -21,32 +21,27 @@ fn setup() -> (TempDir, WorkerConfig, Store) {
     (root, cfg, store)
 }
 fn task(store: &mut Store, root: &Path, project: &str, key: &str, mode: &str) -> TaskRecord {
-    let executable = env!("CARGO_BIN_EXE_winbridge-fixture").to_string();
-    store
-        .accept(
-            TaskSubmission {
-                protocol_version: 1,
-                request_id: key.into(),
-                project_id: project.into(),
-                idempotency_key: key.into(),
-                timeout_ms: 5000,
-                snapshot_id: None,
-                command: CommandSource::Direct {
-                    executable: executable.clone(),
-                    arguments: vec![mode.into()],
-                    working_directory: ".".into(),
-                },
-            },
-            ResolvedCommand {
-                executable,
-                arguments: vec![mode.into()],
-                working_directory: root.to_string_lossy().into_owned(),
-                timeout_ms: 5000,
-            },
-            None,
-        )
-        .unwrap()
+    let request = TaskSubmission {
+        protocol_version: 1,
+        request_id: key.into(),
+        project_id: project.into(),
+        idempotency_key: key.into(),
+        timeout_ms: 5000,
+        snapshot_id: None,
+        command: CommandSource::Direct {
+            executable: env!("CARGO_BIN_EXE_winbridge-fixture").into(),
+            arguments: vec![mode.into()],
+            working_directory: ".".into(),
+        },
+    };
+    // Use exactly the runtime policy's resolved Windows paths. Handwritten
+    // TempDir paths omit its canonical prefix and look like changed commands.
+    let mut cfg = config(root);
+    cfg.projects[0].id = project.into();
+    let command = winbridge_runner::resolve(&cfg, &request).unwrap();
+    store.accept(request, command, None).unwrap()
 }
+
 fn identity(token: &ExecutionToken) -> ProcessIdentity {
     ProcessIdentity {
         job_name: Store::execution_job_name(token).unwrap(),
@@ -457,10 +452,8 @@ fn windows_live_tree_blocks_recovery_then_verified_empty_job_frees_only_new_requ
         assert!(Instant::now() < deadline);
         thread::sleep(Duration::from_millis(20));
     }
-    assert_eq!(
-        store.get(&next.task_id).unwrap().status,
-        TaskStatus::Succeeded
-    );
+    let outcome = store.get(&next.task_id).unwrap();
+    assert_eq!(outcome.status, TaskStatus::Succeeded, "{outcome:?}");
     assert_eq!(
         store.get(&accepted.task_id).unwrap().status,
         TaskStatus::Indeterminate
