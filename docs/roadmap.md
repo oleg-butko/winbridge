@@ -12,7 +12,7 @@
 
 - [x] A0: [frozen legacy contracts/journal tests и ADR инвариантов](plans/architecture-transition/baseline.md); 14 новых/171 workspace tests passed, Windows cross-check tests passed. Runtime не меняется.
 - [x] A1: [Task FSM через прежний wire API](plans/architecture-transition/task-fsm.md); 182 workspace tests и [66 native Windows tests](plans/architecture-transition/windows-task-fsm-gate-2026-10-13.md) passed, runtime/wire/schema совместимы.
-- [ ] A2: [durable transitions](plans/architecture-transition/durable-transitions.md); task revisions/CAS A2.1 завершён (197 workspace/[107 native tests](plans/architecture-transition/windows-task-cas-gate-2026-10-13.md)); [A2.2 domain CAS/atomic links](plans/architecture-transition/domain-transitions.md) завершён (213 workspace/[125 native tests](plans/architecture-transition/windows-domain-cas-gate-2026-10-13.md)); [A2.3.1 authority/attempt tokens](plans/architecture-transition/ownership-context.md) завершены (229 workspace/[141 native tests](plans/architecture-transition/windows-ownership-gate-2026-10-13.md)); [A2.3.2 durable leases](plans/architecture-transition/project-resource-leases.md) завершены (245 workspace/[157 native tests](plans/architecture-transition/windows-resource-leases-gate-2026-10-13.md)); [A2.4.1 physical process reconciliation](plans/architecture-transition/physical-reconciliation.md) завершён ([164 native tests](plans/architecture-transition/windows-reconciliation-gate-2026-10-13.md)); [A2.4.2a journal inspection](plans/architecture-transition/journal-inspection.md) на local gate; controlled restore admission впереди.
+- [ ] A2: [durable transitions](plans/architecture-transition/durable-transitions.md); task revisions/CAS A2.1 завершён (197 workspace/[107 native tests](plans/architecture-transition/windows-task-cas-gate-2026-10-13.md)); [A2.2 domain CAS/atomic links](plans/architecture-transition/domain-transitions.md) завершён (213 workspace/[125 native tests](plans/architecture-transition/windows-domain-cas-gate-2026-10-13.md)); [A2.3.1 authority/attempt tokens](plans/architecture-transition/ownership-context.md) завершены (229 workspace/[141 native tests](plans/architecture-transition/windows-ownership-gate-2026-10-13.md)); [A2.3.2 durable leases](plans/architecture-transition/project-resource-leases.md) завершены (245 workspace/[157 native tests](plans/architecture-transition/windows-resource-leases-gate-2026-10-13.md)); [A2.4.1 physical process reconciliation](plans/architecture-transition/physical-reconciliation.md) завершён ([164 native tests](plans/architecture-transition/windows-reconciliation-gate-2026-10-13.md)); [A2.4.2a journal inspection](plans/architecture-transition/journal-inspection.md) завершён ([176 native tests](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md)); controlled restore admission впереди.
 - [ ] A3: совместимый discovery и общий read model UI/CLI/MCP.
 - [ ] A4: global resources, очередь и fairness для нескольких проектов.
 - [ ] A5: local actor pilot и постепенная миграция owners.
@@ -22,11 +22,11 @@
 - [ ] A9: расширение FSM/контрактов; дальнейшие изменения по доказанной потребности.
 
 A0, A1, A2.1, A2.2, A2.3.1, A2.3.2 и A2.4.1 завершены;
-A2.4.2a — read-only inspection и persistent execution block: local/browser passed,
-native gate остановлен на двух runtime deadlines; следующий шаг —
-[узкая диагностика процессов](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md);
+A2.4.2a завершён: local/browser и
+[176 native Windows tests](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md) passed;
 следующий пакет A2.4.2b — controlled restore/new incarnation/admission. До native gates process/runtime
-изменения не считаются готовыми.
+изменения не считаются готовыми. Для A2.4.2b требуется выбор
+[restore/admission policy](plans/architecture-transition/restore-admission-options.md).
 
 ## Этап 0 — подготовка репозитория
 

@@ -26,9 +26,10 @@
 [157 native tests](windows-resource-leases-gate-2026-10-13.md) passed;
 [A2.4.1 physical process reconciliation](physical-reconciliation.md) завершён,
 [164 native tests passed](windows-reconciliation-gate-2026-10-13.md); [A2.4.2a journal inspection](journal-inspection.md)
-прошёл local/browser и [26-test native diagnostic](windows-inspection-diagnostic-2026-10-13.md),
-но полный native gate ещё не пройден после двух runtime deadlines;
-controlled restore/new incarnation/admission A2.4.2b ещё впереди.
+завершён: local/browser, 26-test diagnostic и
+[176-test full native gate](windows-inspection-diagnostic-2026-10-13.md) passed.
+Controlled restore/new incarnation/admission A2.4.2b ещё впереди;
+[выбор recovery policy](restore-admission-options.md) подготовлен, решение ожидается.
 
 ## Результат для пользователя и проектов
 

@@ -127,6 +127,9 @@ restart до migration/owner activation. History остаётся историе
 выдаёт physical proof и не разрешает replay. Startup сверяет applications до IPC;
 scheduler fault приостанавливает запуск, сохраняя service. Controlled new incarnation
 и restore admission — A2.4.2b; автоматического rollback detector пока нет.
+A2.4.2a прошёл [176-test native gate](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md).
+Для A2.4.2b требуется выбрать [restore/admission policy](plans/architecture-transition/restore-admission-options.md);
+exe paths сохраняются стабильными при любом варианте.
 Глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.

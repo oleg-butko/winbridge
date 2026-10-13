@@ -1,7 +1,7 @@
-# A2.4.2a: незавершённый Windows gate и диагностика процессов
+# A2.4.2a: Windows gate и диагностика процессов
 
-Дата: 2026-10-13. Полный gate не пройден; read-only inspection не объявлен
-завершённым, installed schema-6 worker не обновляется.
+Дата: 2026-10-13. **A2.4.2a завершён**: local/browser, diagnostic и полный native
+gate passed. A2.4.2b/A2 остаются открытыми; installed schema-6 worker не обновляется.
 
 ## Проверенные наблюдения
 
@@ -82,4 +82,32 @@ worker оставить работать.
 
 Четыре Python fault tests проверяют wrong archive, changed artifact, failed/dirty/
 неполную партию, traversal и linked artifact. Ни один прежний run не удаляется.
-Полный gate пока не выполнен.
+## Полный native gate — passed
+
+Run `20261013-164733-080393fb`, task `c1977ce7-939d-44fd-acb6-f276d00644d9`,
+PID 13452, succeeded/exit 0. Windows candidate остаётся clean `b90a708` из archive
+выше; Debian driver `e60f396` проверил и использовал diagnostic source/cache.
+Test states и report новые. `diagnosticOnly: false`; все пять groups exit 0:
+7 pure FSM + 1 resume guard + 14 frozen contracts + 153 native writers +
+1 actual older-worker refusal = **176 Windows tests**.
+
+Все семь artifacts проверены по size/SHA-256. Report SHA-256:
+`cdd39b77f84238a078b2f25ba2a739fb32f71652c06909d46eb5760e97ce89ea`.
+Actual schema-6 reference `b5d39f9` отказал schema 11 (exit 1), test journal
+byte-identical. Candidate identity в proof совпадает с archive/report:
+manifest SHA `c609459ccc804f250c1e1346b365b58a7e0314c46a3508801c249e4d94e9269d`.
+Resume crash/restart, runtime, snapshot/workflow и новый inspection прошли.
+Cleanup timeouts в полной партии нет; исходная причина двух прежних deadlines
+по этим результатам не установлена, не следует приписывать её resume guard.
+
+Installed worker build/generation/session прежние, connected/idle, errors нет.
+Desktop можно оставить закрытым, worker оставить работать. Bootstrap измерил K:
+`29732225024` → `27842531328` bytes (~25.9 GiB осталось). Дополнительные targets
+расширили существующий build cache; второй полный cache не создавался, прежние
+run directories не удалялись.
+
+Повторное ревью: resume неоднозначность даёт отказ и cleanup своего OS owner;
+cleanup proof требует и root exit, и пустое дерево. Trace не содержит arguments
+или output. Cache reuse не принимает failed/dirty/different archive и сохраняет
+новый report; прежний diagnostic не засчитывается как full gate. Следующий пакет
+требует выбора restore/admission policy; marker deletion или blind restart не предлагаются.

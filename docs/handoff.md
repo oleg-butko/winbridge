@@ -2,7 +2,7 @@
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
 
-## A2.4.2a journal inspection — local gate, 2026-10-13
+## A2.4.2a journal inspection — завершён, 2026-10-13
 
 База `d1f3090`; [контракт, ревью и ограничения](plans/architecture-transition/journal-inspection.md),
 [инструкция](guides/journal-recovery.md). Исправлены fatal scheduler error и stale Ready
@@ -12,18 +12,20 @@ marker запрещает normal restart до Store::open. History/output/attent
 legacy overlap доступны; новые RPC/мутации запрещены по умолчанию. UI объясняет
 historical statuses и отключает actions. Schema не меняется, optional DTO сохраняет
 legacy JSON. Local: 260 workspace tests, 10 новых recovery tests; Windows-target tests,
-Linux Clippy, UI typecheck/build/contracts passed. Clean real Unix worker browser
-gate passed. Native run `20261013-161810-d7049c65` прошёл все 11 recovery tests,
-но два прежних runtime tests задержались до deadline: failure task не получил
-terminal outcome после output, flood task остался до PID binding. Полный gate
-не пройден; [диагностика и receipts](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md).
-Пользователь не видел prompts защиты или нагрузки. Причина ещё не установлена;
-узкий run `20261013-164022-975ce2c4` passed: 26 Windows tests, 3 artifacts verified,
-delays не воспроизвелись. Осталось ~27.6 GiB на K:. Full gate с trace использует
-проверенный diagnostic source/build cache, свежие test states/report; пока не выполнен.
+Linux/Windows Clippy, UI typecheck/build/contracts passed. Clean real Unix worker
+browser gate passed. [Native receipts и история диагностики](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md):
+узкий run `20261013-164022-975ce2c4` — 26 tests; полный
+`20261013-164733-080393fb` — **176 Windows tests**, 5 groups exit 0, 7 artifacts
+verified, task `c1977ce7-939d-44fd-acb6-f276d00644d9` succeeded/exit 0/PID 13452.
+Actual old-worker schema-11 refusal сохранил test journal. Windows code clean
+`b90a708`, driver/cache reuse `e60f396`; отдельный resume guard и process traces.
+Два прежних runtime deadlines не повторились; их исходная причина не доказана,
+timeouts не увеличены. Reused cache сохранил новые test states/report и прежние
+run directories; осталось ~25.9 GiB на K:.
 Installed schema-6 worker остаётся прежним, desktop закрыт. Полный A2.4.2/A2 открыт:
 A2.4.2b — controlled new incarnation/admission после restore; rollback detection
-и безопасный выход из latched inspection ещё не реализованы.
+и безопасный выход из latched inspection ещё не реализованы. Требуется выбор
+[restore/admission policy](plans/architecture-transition/restore-admission-options.md).
 
 ## A2.4.1 physical process reconciliation — завершён, 2026-10-13
 
