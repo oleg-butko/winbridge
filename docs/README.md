@@ -5,9 +5,14 @@
 
 [Практический сценарий WinBridge v1](user-friendly-guide-v1/winbridge-v1/README.md): один Windows `src`, постоянный `runtime`, MCP, звук/UI и ручная проверка обновления.
 
-[Анализ Netwatch через WinBridge](analysis/netwatch-agent-pipeline/README.md): сценарий
-внешнего агента, тестирование фич на Windows, ограничения архитектуры и предложения
-по развитию pipeline. Готовые возможности отделены от будущих расширений.
+[Аналитические отчёты](analysis/README.md):
+[консистентность, очередь и расширяемость](analysis/consistency-extensibility/README.md)
+и [Netwatch через WinBridge](analysis/netwatch-agent-pipeline/README.md).
+Готовые возможности отделены от предложений по развитию.
+
+[Долгосрочный переход A0–A9](plans/architecture-transition/README.md): FSM,
+consistency guards, очередь нескольких проектов, actors и versioned executors.
+[Ревью плана](plans/architecture-transition/review.md) объясняет порядок и риски.
 
 ## Основные документы
 
@@ -16,7 +21,7 @@
 | [Архитектура](architecture.md) | Компоненты, владение задачами и текущие решения. |
 | [UI/UX](ux.md) | Прозрачность действий, состояния и поведение интерфейса. |
 | [Структура кода](structure.md) | Границы packages/modules и правила расширения. |
-| [Roadmap](roadmap.md) | Результаты этапов 0–7 и возможности, отложенные до новой задачи. |
+| [Roadmap](roadmap.md) | Результаты этапов 0–7 и новый цикл архитектурного перехода A0–A9. |
 | [Handoff](handoff.md) | Готовность проекта, последние проверки и сведения для следующей сессии. |
 
 ## Руководства — `guides/`

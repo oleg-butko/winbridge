@@ -2,6 +2,27 @@
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 
+## Архитектурный переход A0–A9 — новая задача 2026-10-13
+
+Этапы 0–7 ниже завершены и сохраняются как история. Пользователь поручил
+объединить Actor Model + FSM, consistency/extensibility и consistency techniques,
+повторно проверить план, зафиксировать его и начать выполнение.
+[План и зависимости](plans/architecture-transition/README.md),
+[повторное ревью](plans/architecture-transition/review.md).
+
+- [ ] A0: frozen legacy contracts/journal tests и ADR инвариантов.
+- [ ] A1: Task FSM через прежний wire API.
+- [ ] A2: transactional transitions, revision/ownership и recovery для всех writers.
+- [ ] A3: совместимый discovery и общий read model UI/CLI/MCP.
+- [ ] A4: global resources, очередь и fairness для нескольких проектов.
+- [ ] A5: local actor pilot и постепенная миграция owners.
+- [ ] A6: Run/Step и contract-tested one-shot executor/report.
+- [ ] A7: outbox + inbox для нужного durable receiver (условный этап).
+- [ ] A8: два независимых потребителя и automatic paired native gates.
+- [ ] A9: расширение FSM/контрактов; дальнейшие изменения по доказанной потребности.
+
+Первый пакет — A0; до native gates process/runtime изменения не считаются готовыми.
+
 ## Этап 0 — подготовка репозитория
 
 - [x] Отдельный Git repository, Rust workspace и границы будущих модулей.
@@ -154,7 +175,8 @@ tests и оба application cycles, 15 verified artifacts. 153 workspace tests;
 
 ## После основного roadmap
 
-Этапы 0–7 завершены. Следующий проект подключается по [готовой инструкции](guides/project-integration.md)
+Этапы 0–7 завершены. Новый цикл A0–A9 описан в начале этого документа.
+Следующий проект подключается по [готовой инструкции](guides/project-integration.md)
 через registry/recipe profile и прежний workflow/journal/cancel/recovery. Native
 evidence и актуальный source archive находятся в handoff. Новые возможности
 выбираются по следующей пользовательской задаче: dirty snapshots, source-cache
