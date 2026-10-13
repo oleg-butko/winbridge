@@ -1,7 +1,9 @@
 # A2.3.2 — durable ownership ресурсов проекта
 
 Дата: 2026-10-13. База: `dd04276`, завершённый A2.3.1.
-Статус: реализация готова к native gate; весь A2 остаётся открытым.
+Статус: **A2.3.2 завершён**, implementation `9d1fa9d`;
+[157 native Windows tests passed](windows-resource-leases-gate-2026-10-13.md).
+Весь A2 остаётся открытым.
 
 ## Что показало ревью
 
@@ -83,7 +85,9 @@ Frozen wire v1 не изменён. Старый worker должен отказ�
 Queued task/import/workflow получает persisted reason с project и owner ID, если
 durable ресурс мешает запуску. Повтор scheduler не плодит одинаковые events;
 после получения ресурса причина ожидания очищается. Queued cancel остаётся доступен.
-Неопределённость одного проекта не блокирует независимые проекты.
+Неопределённость физического состояния одного проекта не блокирует независимые
+проекты, если outcome сохранён. Ошибка самого journal writer по-прежнему
+приостанавливает новые запуски глобально и показывает recovery required.
 
 Автоматически снимать unknown process lease по timeout, epoch или terminal result
 нельзя. Проверка физического состояния, recovery mode и явное разрешение неизвестных
@@ -111,4 +115,6 @@ Local gate: 245 workspace tests passed (reference refusal test intentionally ign
 финальные leases/task_fsm/workflows targets: 44 tests passed. Windows-target
 workspace и worker tests, Clippy all-targets, fmt/diff checks, PowerShell AST,
 Python syntax/pre-IPC argument guards и scaffold passed.
-Готовность будет отмечена после автоматического native gate.
+[Native gate](windows-resource-leases-gate-2026-10-13.md) passed: 157 tests,
+четыре cargo groups exit 0, шесть verified artifacts. Installed worker остался
+connected/idle с прежними build/generation/session.

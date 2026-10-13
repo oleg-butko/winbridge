@@ -115,7 +115,8 @@ record/revision/authority одним SELECT. Native gate passed: 141 tests, вк
 refusal прежнего binary.
 [A2.3.2 durable leases](plans/architecture-transition/project-resource-leases.md)
 добавляют schema 10: mutation/application scopes, atomic claim, readiness handoff
-и освобождение только с physical receipt. Native gate ожидается.
+и освобождение только с physical receipt. [Native gate](plans/architecture-transition/windows-resource-leases-gate-2026-10-13.md)
+passed: 157 tests, actual schema-10 refusal не меняет test journal.
 Physical reconciliation и explicit restore recovery mode остаются A2.4; глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.

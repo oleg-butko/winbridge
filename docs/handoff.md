@@ -2,7 +2,7 @@
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
 
-## A2.3.2 durable project/resource leases — native gate ожидается, 2026-10-13
+## A2.3.2 durable project/resource leases — завершён, 2026-10-13
 
 База `dd04276`; [контракт, ревью и проверки](plans/architecture-transition/project-resource-leases.md).
 Schema 10: project mutation/application lifetime scopes; claim + attempt + lease
@@ -14,7 +14,14 @@ mutation scope приложению без ложного cleanup, поздни�
 расширены. Legacy unknown ownership сохраняется без вымышленных attempts/proofs.
 Local gate: 245 workspace tests и финальные 44 leases/task_fsm/workflows tests passed;
 Windows-target workspace/tests, Clippy/fmt, AST/Python guards/scaffold passed.
-Installed worker b5d39f9 connected/idle и не обновляется; тест candidate изолирован.
+Implementation `9d1fa9d`; [native gate](plans/architecture-transition/windows-resource-leases-gate-2026-10-13.md)
+passed: 157 tests (7+14+135+1), четыре cargo groups exit 0; task
+789e716b-dc64-419b-8d1d-8656b032d855 succeeded/exit 0/PID 16504,
+run 20261013-130210-1b9361d0; шесть artifacts verified. Actual schema-6 reference
+отказал schema 10; отдельный test journal byte-identical. Installed worker b5d39f9
+остался connected/idle без maintenance/recovery ошибок, build/generation/session
+прежние. Executables/configs/schema рабочего journal не обновлялись;
+добавлена одна задача gate. Desktop можно закрыть, worker оставить.
 Полный A2 открыт; следующий пакет A2.4 — physical reconciliation/restore recovery.
 
 ## A2.3.1 authority/attempt tokens — завершён, 2026-10-13

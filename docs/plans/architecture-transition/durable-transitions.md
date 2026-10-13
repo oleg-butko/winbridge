@@ -6,7 +6,8 @@
 A2.2: [domain revisions и atomic links](domain-transitions.md) завершены,
 [125 native tests passed](windows-domain-cas-gate-2026-10-13.md).
 Весь A2 пока не завершён. [A2.3.1 authority/attempt context](ownership-context.md)
-завершён, [141 native tests passed](windows-ownership-gate-2026-10-13.md); [A2.3.2 durable leases](project-resource-leases.md) реализованы и ожидают native gate;
+завершён, [141 native tests passed](windows-ownership-gate-2026-10-13.md); [A2.3.2 durable leases](project-resource-leases.md) завершены,
+[157 native tests passed](windows-resource-leases-gate-2026-10-13.md);
 A2.4 reconciliation ещё впереди.
 
 ## Зачем нужна первая поставка
