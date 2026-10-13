@@ -2,7 +2,7 @@
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
 
-## A2.3.1 authority/attempt tokens — native gate ожидается, 2026-10-13
+## A2.3.1 authority/attempt tokens — завершён, 2026-10-13
 
 База `6b1959e`; [контракт и оставшаяся работа](plans/architecture-transition/ownership-context.md).
 Schema 9 добавляет journal incarnation, owner epoch/UUID и retained execution attempts.
@@ -18,6 +18,14 @@ Native `--task-cas-only` расширен новым target ownership и реа�
 reference binary на отдельной DB. Рабочий installed worker b5d39f9 connected/idle,
 generation 02939593-8adf-4878-a346-473092697a4a, session 631c2e63-edc8-44f8-8cce-89abec7caf8b.
 На Windows требуется только этот worker, desktop/test UI windows не нужны.
+Implementation `ad9b1f9`; [native gate](plans/architecture-transition/windows-ownership-gate-2026-10-13.md)
+passed: 141 tests, четыре cargo groups exit 0; task 087435ea-188d-4636-ae56-04b362acab6b
+succeeded/exit 0/PID 9524, run 20261013-115405-a1c5c6ef; шесть verified artifacts.
+Все 16 ownership tests прошли, включая реальное завершение managed tree при fault.
+Actual schema-6 reference отказал schema 9, test journal byte-identical. Post-gate
+working worker connected/idle, activeTaskCount=0, maintenanceError/recoveryRequired
+нет, build/generation/session прежние. Runtime/config/DB не обновлялись; рабочий
+journal получил одну task gate. Desktop можно закрыть, worker оставить работать.
 Durable project/resource leases (A2.3.2), physical reconciliation/restore mode
 (A2.4) ещё не реализованы; A2 остаётся открытым.
 

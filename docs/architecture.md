@@ -110,7 +110,9 @@ journal incarnation, owner epoch/UUID и retained execution attempts. Актив
 под прежней instance lock; все writers проверяют owner в write transaction.
 Task/import claim и attempt атомарны; PID/output/progress/outcome/fallback получают
 operation/attempt token. Record revisions не подменяют authority. Snapshot читает
-record/revision/authority одним SELECT. Local guards реализованы, native gate ожидается.
+record/revision/authority одним SELECT. Native gate passed: 141 tests, включая
+реальное завершение managed tree при owner-change fault и byte-identical schema-9
+refusal прежнего binary.
 Durable project leases, physical reconciliation и explicit restore recovery mode
 остаются A2.3.2/A2.4; глобальный параллелизм и actor migration не включены.
 

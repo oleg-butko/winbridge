@@ -1,7 +1,8 @@
 # A2.3.1 — journal authority и попытки исполнения
 
 Дата: 2026-10-13. База: завершённый A2.2, `6b1959e`.
-Статус: реализация готова к автоматическому native gate; Windows результат пока не подтверждён.
+Статус: **завершён**, implementation `ad9b1f9`;
+[141 native Windows tests passed](windows-ownership-gate-2026-10-13.md).
 Это первая часть A2.3. Постоянные project/resource leases остаются в A2.3.2,
 physical reconciliation и восстановление backup — в A2.4. Весь A2 открыт.
 

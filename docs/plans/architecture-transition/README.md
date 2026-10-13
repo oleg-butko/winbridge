@@ -20,7 +20,8 @@
 [107 native tests](windows-task-cas-gate-2026-10-13.md) passed; общий A2 и A3–A9
 ещё не завершены.
 [A2.2 domain transitions](domain-transitions.md) завершены: 213 workspace и
-[125 native Windows tests](windows-domain-cas-gate-2026-10-13.md) passed. [A2.3.1 authority/attempt context](ownership-context.md) реализован, native gate ожидается;
+[125 native Windows tests](windows-domain-cas-gate-2026-10-13.md) passed. [A2.3.1 authority/attempt context](ownership-context.md) завершён: 229 workspace и
+[141 native Windows tests](windows-ownership-gate-2026-10-13.md) passed;
 A2.3.2 durable leases и A2.4 reconciliation ещё впереди.
 
 ## Результат для пользователя и проектов
