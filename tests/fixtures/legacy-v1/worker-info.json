@@ -1,0 +1,12 @@
+{
+  "kind": "info",
+  "info": {
+    "protocolVersion": 1,
+    "instanceId": "legacy-fixture",
+    "nodeId": "fixture-windows",
+    "generation": "00000000-0000-4000-8000-000000000001",
+    "platform": "windows",
+    "runtimeValidation": "windows-native",
+    "projects": []
+  }
+}

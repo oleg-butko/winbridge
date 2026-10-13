@@ -8,10 +8,20 @@ commit плана и приступить к реализации. [Единый
 и [ревью](plans/architecture-transition/review.md) разрешают расхождение порядка:
 durable FSM/ownership сначала, queue нескольких проектов перед полной actor миграцией;
 outbox/inbox только при durable receiver. Текущая база кода `a42cd7e`; этапы 0–7
-сохраняют завершённый статус. Первый пакет A0 ещё предстоит выполнить: frozen
-legacy DTO/journal fixtures и ADR. Новый runtime/DB schema пока не вводятся.
+сохраняют завершённый статус. План и supporting reports зафиксированы `d524e68`
+**до** начала реализации. [A0 завершён](plans/architecture-transition/baseline.md):
+ADR 0005, frozen v1/session/task/schema-1 SQL fixtures, 6 protocol + 8 Store tests.
+Независимое acceptance чтение, lost ACK/reopen/frozen fingerprint, conflict,
+project scope, intent recovery/cancel, terminal guards и output sequence/cursors
+passed. 171 workspace tests, Windows protocol/worker `legacy_baseline` cross-check,
+fmt/scaffold (114 docs)/diff checks passed. Нет process/network/UI запуска новых
+fixtures: fake paths/PID не используются для OS effects. Все execution regressions
+в общем прогоне — Unix adapter. Runtime/DB schema/dependencies не менялись.
+Следующий пакет A1: чистая typed Task FSM с прежней v1 проекцией; Windows lifecycle
+интеграция требует automatic native gate. В scenario с явными `--test` добавить
+оба baseline targets, они пока автоматически входят только в workspace test.
 Windows worker/controller в этой сессии не проверялись; прошлые generation/session
-ниже не считать подтверждением нынешней связи. Для A0 Windows запуск не требуется.
+ниже не считать подтверждением нынешней связи. A0 не требует Windows обновления.
 
 ## Исправления закрытия desktop, 2026-10-10
 

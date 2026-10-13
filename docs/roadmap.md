@@ -10,7 +10,7 @@
 [План и зависимости](plans/architecture-transition/README.md),
 [повторное ревью](plans/architecture-transition/review.md).
 
-- [ ] A0: frozen legacy contracts/journal tests и ADR инвариантов.
+- [x] A0: [frozen legacy contracts/journal tests и ADR инвариантов](plans/architecture-transition/baseline.md); 14 новых/171 workspace tests passed, Windows cross-check tests passed. Runtime не меняется.
 - [ ] A1: Task FSM через прежний wire API.
 - [ ] A2: transactional transitions, revision/ownership и recovery для всех writers.
 - [ ] A3: совместимый discovery и общий read model UI/CLI/MCP.
@@ -21,7 +21,8 @@
 - [ ] A8: два независимых потребителя и automatic paired native gates.
 - [ ] A9: расширение FSM/контрактов; дальнейшие изменения по доказанной потребности.
 
-Первый пакет — A0; до native gates process/runtime изменения не считаются готовыми.
+Первый пакет A0 завершён. Следующий — A1; до native gates process/runtime изменения
+не считаются готовыми.
 
 ## Этап 0 — подготовка репозитория
 

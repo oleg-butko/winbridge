@@ -1,0 +1,12 @@
+{
+  "type": "hello",
+  "peer": {
+    "protocolVersion": 1,
+    "applicationVersion": "0.1.0",
+    "component": "worker",
+    "instanceId": "legacy-fixture",
+    "nodeId": "fixture-windows",
+    "generation": "00000000-0000-4000-8000-000000000001",
+    "capabilities": ["task_submit", "task_cancel"]
+  }
+}

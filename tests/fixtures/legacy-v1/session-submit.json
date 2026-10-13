@@ -1,0 +1,20 @@
+{
+  "type": "request",
+  "id": "transport-correlation-1",
+  "request": {
+    "method": "submit",
+    "request": {
+      "protocolVersion": 1,
+      "requestId": "submission-correlation-1",
+      "projectId": "legacy-project",
+      "idempotencyKey": "legacy-task-1",
+      "timeoutMs": 60000,
+      "command": {
+        "kind": "direct",
+        "executable": "K:\\fixtures\\tool.exe",
+        "arguments": ["success", "Привет ✓", "a & b", "$value"],
+        "workingDirectory": "src"
+      }
+    }
+  }
+}
