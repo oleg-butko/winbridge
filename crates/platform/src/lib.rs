@@ -23,6 +23,18 @@ pub struct ManagedChild {
 
 pub type OutputReader = Box<dyn Read + Send>;
 
+/// Opt-in native gate diagnostics. Never include executable arguments or output.
+pub fn trace_process(event: &str, process_id: Option<u32>) {
+    if std::env::var_os("WINBRIDGE_PROCESS_TRACE").as_deref() != Some(std::ffi::OsStr::new("1")) {
+        return;
+    }
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    eprintln!("process-trace at_ms={at} pid={process_id:?} {event}");
+}
+
 /// A spawn error may happen after OS process creation. Only failures before
 /// creation authorize the caller to release resources without tree reconciliation.
 #[derive(Debug)]
@@ -170,6 +182,7 @@ impl ManagedChild {
         command: &ResolvedCommand,
         job_name: Option<&str>,
     ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
+        trace_process("prepare.begin", None);
         #[cfg(not(windows))]
         let _ = job_name;
         let mut builder = Command::new(&command.executable);
@@ -191,13 +204,19 @@ impl ManagedChild {
             // No user code runs before the process belongs to the worker's Job Object.
             builder.creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
             let host = if job_name.is_some() {
+                trace_process("host-binding.begin", None);
                 Some(windows::host_binding()?)
             } else {
                 None
             };
-            (windows::Job::new(job_name)?, host)
+            trace_process("job-create.begin", None);
+            let job = windows::Job::new(job_name)?;
+            trace_process("job-create.complete", None);
+            (job, host)
         };
+        trace_process("os-spawn.begin", None);
         let child = builder.spawn()?;
+        trace_process("os-spawn.complete", Some(child.id()));
         #[cfg(windows)]
         if let Err(error) = job.assign(&child) {
             let mut child = child;
@@ -219,6 +238,7 @@ impl ManagedChild {
             #[cfg(windows)]
             resumed: false,
         };
+        trace_process("process-owned", Some(owner.id()));
         #[cfg(windows)]
         if let (Some(name), Some((host_id, session_id))) = (job_name, host) {
             owner.identity = Some(process_identity::ProcessIdentity {
@@ -234,6 +254,7 @@ impl ManagedChild {
                 })?,
             });
         }
+        trace_process("identity.complete", Some(owner.id()));
         let stdout = Box::new(owner.child.stdout.take().ok_or_else(|| SpawnFailure {
             no_process_created: false,
             error: io::Error::other("stdout pipe missing"),
@@ -242,6 +263,7 @@ impl ManagedChild {
             no_process_created: false,
             error: io::Error::other("stderr pipe missing"),
         })?);
+        trace_process("prepare.complete", Some(owner.id()));
         Ok((owner, stdout, stderr))
     }
 

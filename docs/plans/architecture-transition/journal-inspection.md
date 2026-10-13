@@ -1,6 +1,6 @@
 # A2.4.2a — диагностика восстановленного журнала
 
-Дата: 2026-10-13. База: `d1f3090`. Реализация и local/native gates проверяются;
+Дата: 2026-10-13. База: `d1f3090`. Local/browser passed, полный native gate не пройден;
 полный A2.4.2/A2 остаётся открытым.
 
 ## Ревью и выбранная граница
@@ -76,6 +76,11 @@ history, banner и disabled actions, настоящий отказ normal restar
 диагностику. Это не native desktop execution. Native gate запускает новый
 `recovery_mode` вместе с прежними CAS/ownership/lease/workflow targets из чистого
 candidate archive; installed schema-6 binary/config/journal не обновляются.
+
+Run `20261013-161810-d7049c65` подтвердил все 11 Windows recovery tests, но
+остановился на двух runtime deadlines вне нового read-only режима.
+[Отчёт диагностики](windows-inspection-diagnostic-2026-10-13.md) сохраняет
+точные наблюдения; до проверки причины полный gate и A2.4.2a остаются открытыми.
 
 ## Следующий пакет — A2.4.2b
 

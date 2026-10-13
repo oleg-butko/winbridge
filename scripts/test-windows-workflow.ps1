@@ -57,6 +57,10 @@ read-only recovery/latch, legacy contracts и process/workflow regressions бе�
 чтобы подтвердить отказ открыть новую схему. Установленный журнал не открывается.
 .PARAMETER TaskCasReferenceWorker
 Read-only путь schema-6 worker.exe для TaskCasOnly; рабочий процесс не заменяется.
+.PARAMETER TaskCasRuntimeDiagnostic
+Только с TaskCasOnly: узкий process/recovery прогон с отметками запуска, resume,
+PID binding и cleanup. Без UI, reference worker и полного CAS gate. Успех этого
+режима не означает завершение этапа. Диагностика не записывает команды или output.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -86,6 +90,7 @@ param(
     [switch]$IdentityOnly,
     [switch]$TaskFsmOnly,
     [switch]$TaskCasOnly,
+    [switch]$TaskCasRuntimeDiagnostic,
     [string]$TaskCasReferenceWorker = '',
     [string]$ProjectsPreparation = '',
     [string]$ProjectsPreparationSha256 = '',
@@ -124,7 +129,7 @@ if ($env:OS -ne 'Windows_NT') { throw 'This scenario requires actual Windows' }
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
 $manifest = Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 $report = [ordered]@{ schemaVersion = 1; platform = 'windows'; passed = $false; sourceArchiveSha256 = $SourceArchiveSha256;
-    sourceCommit = $manifest.sourceCommit; sourceDirty = $manifest.dirty; startedAt = [DateTime]::UtcNow.ToString('o'); commands = @(); error = $null }
+    sourceCommit = $manifest.sourceCommit; sourceDirty = $manifest.dirty; diagnosticOnly = [bool]$TaskCasRuntimeDiagnostic; startedAt = [DateTime]::UtcNow.ToString('o'); commands = @(); error = $null }
 New-Item -ItemType Directory -Path $ReportDirectory -ErrorAction Stop | Out-Null
 $reportPath = Join-Path $ReportDirectory 'report.json'
 $oldTarget = $env:CARGO_TARGET_DIR
@@ -135,6 +140,7 @@ $oldOutputReport = $env:WINBRIDGE_OUTPUT_GATE_REPORT
 $oldOutputReference = $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER
 $oldTaskCasReference = $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER
 $oldTaskCasReport = $env:WINBRIDGE_TASK_CAS_REPORT
+$oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
 $oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
 $oldResumeDelivery = $env:WINBRIDGE_RESUME_GATE_DELIVERY
@@ -154,6 +160,7 @@ try {
     New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
     Set-Location -LiteralPath $source
     $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
+    if ($TaskCasRuntimeDiagnostic -and -not $TaskCasOnly) { throw 'TaskCasRuntimeDiagnostic requires TaskCasOnly' }
     $groups = @(
         @{ name = 'core-and-log-reader'; arguments = @('test', '-p', 'winbridge-core', '-p', 'winbridge-log-reader', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'readiness-ipc'; arguments = @('test', '-p', 'winbridge-transport', '--lib', 'readiness', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
@@ -162,16 +169,29 @@ try {
     )
     if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
     if ($TaskCasOnly) {
-        if ($NetwatchProfile -or -not $TaskCasReferenceWorker) { throw 'TaskCasOnly requires an isolated scenario and explicit schema-6 reference worker' }
-        if (-not (Test-Path -LiteralPath $TaskCasReferenceWorker -PathType Leaf)) { throw 'TaskCasReferenceWorker exe not found' }
-        $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER = (Resolve-Path -LiteralPath $TaskCasReferenceWorker).Path
-        $env:WINBRIDGE_TASK_CAS_REPORT = $ReportDirectory
-        $groups = @(
+        if ($NetwatchProfile) { throw 'TaskCasOnly requires an isolated scenario' }
+        if ($TaskCasRuntimeDiagnostic) {
+            $env:WINBRIDGE_PROCESS_TRACE = '1'
+            $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($source))
+            $report.storage = [ordered]@{ volume = $drive.Name; availableBytesBefore = $drive.AvailableFreeSpace }
+            if ($drive.AvailableFreeSpace -lt 4GB) { throw 'Less than 4 GiB free for an isolated diagnostic build; no existing run is deleted' }
+            $groups = @(
+                @{ name='process-resume-guard'; arguments=@('test','-p','winbridge-platform','--lib','windows::tests::','--locked','--offline','--','--test-threads=1','--nocapture') },
+                @{ name='process-runtime-recovery-diagnostic'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','runtime','--test','reconciliation','--test','recovery_mode','--locked','--offline','--','--test-threads=1','--nocapture') }
+            )
+        } else {
+            if (-not $TaskCasReferenceWorker) { throw 'TaskCasOnly requires an explicit schema-6 reference worker' }
+            if (-not (Test-Path -LiteralPath $TaskCasReferenceWorker -PathType Leaf)) { throw 'TaskCasReferenceWorker exe not found' }
+            $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER = (Resolve-Path -LiteralPath $TaskCasReferenceWorker).Path
+            $env:WINBRIDGE_TASK_CAS_REPORT = $ReportDirectory
+            $groups = @(
             @{ name='task-cas-pure-fsm'; arguments=@('test','-p','winbridge-core','--test','task_fsm','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-process-resume-guard'; arguments=@('test','-p','winbridge-platform','--lib','windows::tests::','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-frozen-contracts'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','ownership','--test','leases','--test','reconciliation','--test','recovery_mode','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-older-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--locked','--offline','--','--ignored','--exact','legacy_schema_six_worker_refuses_new_journal_without_mutating_it','--test-threads=1','--nocapture') }
-        )
+            )
+        }
     }
     if ($TaskFsmOnly) {
         if ($NetwatchProfile) { throw 'TaskFsmOnly requires an isolated scenario' }
@@ -328,10 +348,12 @@ try {
     $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER = $oldOutputReference
     $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER = $oldTaskCasReference
     $env:WINBRIDGE_TASK_CAS_REPORT = $oldTaskCasReport
+    $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace
     $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
     $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
     $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $oldResumePublication
+    if ($TaskCasRuntimeDiagnostic -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {

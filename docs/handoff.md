@@ -12,7 +12,13 @@ marker запрещает normal restart до Store::open. History/output/attent
 legacy overlap доступны; новые RPC/мутации запрещены по умолчанию. UI объясняет
 historical statuses и отключает actions. Schema не меняется, optional DTO сохраняет
 legacy JSON. Local: 260 workspace tests, 10 новых recovery tests; Windows-target tests,
-Linux Clippy, UI typecheck/build/contracts passed. Browser/native gate ещё выполняются.
+Linux Clippy, UI typecheck/build/contracts passed. Clean real Unix worker browser
+gate passed. Native run `20261013-161810-d7049c65` прошёл все 11 recovery tests,
+но два прежних runtime tests задержались до deadline: failure task не получил
+terminal outcome после output, flood task остался до PID binding. Полный gate
+не пройден; [диагностика и receipts](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md).
+Пользователь не видел prompts защиты или нагрузки. Причина ещё не установлена;
+следующий прогон ограничен process/recovery с trace, без UI и замены рабочего worker.
 Installed schema-6 worker остаётся прежним, desktop закрыт. Полный A2.4.2/A2 открыт:
 A2.4.2b — controlled new incarnation/admission после restore; rollback detection
 и безопасный выход из latched inspection ещё не реализованы.

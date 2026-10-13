@@ -22,7 +22,9 @@
 - [ ] A9: расширение FSM/контрактов; дальнейшие изменения по доказанной потребности.
 
 A0, A1, A2.1, A2.2, A2.3.1, A2.3.2 и A2.4.1 завершены;
-A2.4.2a — read-only inspection и persistent execution block на native gate;
+A2.4.2a — read-only inspection и persistent execution block: local/browser passed,
+native gate остановлен на двух runtime deadlines; следующий шаг —
+[узкая диагностика процессов](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md);
 следующий пакет A2.4.2b — controlled restore/new incarnation/admission. До native gates process/runtime
 изменения не считаются готовыми.
 

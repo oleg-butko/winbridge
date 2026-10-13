@@ -26,7 +26,7 @@ use std::{
 use store::Store;
 use winbridge_core::config::WorkerConfig;
 use winbridge_core::task::TaskEffect;
-use winbridge_platform::ManagedChild;
+use winbridge_platform::{trace_process, ManagedChild};
 use winbridge_protocol::{
     LocalRequest, LocalResponse, OutputStream, TaskRecord, TaskStatus, WorkerInfo, PROTOCOL_VERSION,
 };
@@ -55,26 +55,34 @@ impl ProcessOwner {
         if self.cleaned {
             return Ok(());
         }
+        trace_process("cleanup.terminate.begin", Some(self.child.id()));
         self.child
             .terminate_tree()
             .map_err(|e| format!("process tree termination failed: {e}"))?;
         let deadline = Instant::now() + Duration::from_secs(5);
-        while self.child.try_wait().map_err(|e| e.to_string())?.is_none()
-            || !self.child.tree_is_empty().map_err(|e| e.to_string())?
-        {
+        trace_process("cleanup.terminate.complete", Some(self.child.id()));
+        loop {
+            let parent_reaped = self.child.try_wait().map_err(|e| e.to_string())?.is_some();
+            let tree_empty = self.child.tree_is_empty().map_err(|e| e.to_string())?;
+            if parent_reaped && tree_empty {
+                break;
+            }
             if Instant::now() >= deadline {
-                return Err("process tree cleanup was not confirmed within 5 seconds; project remains reserved".into());
+                return Err(format!("process tree cleanup was not confirmed within 5 seconds (PID {}, parent_reaped={parent_reaped}, tree_empty={tree_empty}); project remains reserved", self.child.id()));
             }
             thread::sleep(Duration::from_millis(20));
         }
+        trace_process("cleanup.confirmed", Some(self.child.id()));
         self.cleaned = true;
         Ok(())
     }
     fn drain_readers(&mut self) -> bool {
+        trace_process("readers-drain.begin", Some(self.child.id()));
         let mut failed = false;
         for reader in self.readers.drain(..) {
             failed |= reader.join().is_err();
         }
+        trace_process("readers-drain.complete", Some(self.child.id()));
         failed
     }
 }
@@ -908,6 +916,7 @@ impl Worker {
         cleanup: Arc<Mutex<Option<store::CleanupProof>>>,
     ) -> Result<()> {
         let id = task.task_id.clone();
+        trace_process(&format!("task={id} execution.begin"), None);
         if self.stop.load(Ordering::Acquire)
             || self
                 .execution_store(&token, |store| store.get(&id))?
@@ -989,6 +998,7 @@ impl Worker {
             .lock()
             .map_err(|_| "process cleanup receipt poisoned")? = None;
         let job_name = Store::execution_job_name(&token)?;
+        trace_process(&format!("task={id} prepare.begin"), None);
         let (child, stdout, stderr) = match ManagedChild::prepare(
             &task.resolved_command,
             Some(&job_name),
@@ -1025,12 +1035,14 @@ impl Worker {
             readers: vec![],
             cleaned: false,
         };
+        trace_process(&format!("task={id} bind.begin"), Some(child.id()));
         {
             let mut store = self.store()?;
             store.with_execution(&token, |store| {
                 store.bind_task_process(&token, child.id(), child.identity())
             })?;
         }
+        trace_process(&format!("task={id} bind.complete"), Some(child.id()));
         let fault = Arc::new(AtomicBool::new(false));
         child.readers = [
             (stdout, OutputStream::Stdout),
@@ -1094,9 +1106,11 @@ impl Worker {
             })?;
             return Ok(());
         }
+        trace_process(&format!("task={id} resume.begin"), Some(child.id()));
         child
             .resume()
             .map_err(|error| format!("Could not resume journal-bound process: {error}"))?;
+        trace_process(&format!("task={id} resume.complete"), Some(child.id()));
         let deadline = if self.store()?.application_for_task(&id)?.is_some() {
             None
         } else {
@@ -1104,6 +1118,10 @@ impl Worker {
         };
         let (status, exit_code, reason) = loop {
             if let Some(exit) = child.try_wait().map_err(|e| e.to_string())? {
+                trace_process(
+                    &format!("task={id} parent-exit code={:?}", exit.code()),
+                    Some(child.id()),
+                );
                 break (
                     if exit.success() {
                         TaskStatus::Succeeded
@@ -1147,6 +1165,10 @@ impl Worker {
             }
             thread::sleep(Duration::from_millis(20));
         };
+        trace_process(
+            &format!("task={id} cleanup.begin status={status:?}"),
+            Some(child.id()),
+        );
         // Also reap descendants which outlive a one-shot parent; they must not hold pipes open.
         child.cleanup()?;
         if child.drain_readers() {
@@ -1160,6 +1182,7 @@ impl Worker {
         } else {
             (status, reason)
         };
+        trace_process(&format!("task={id} outcome-commit.begin"), Some(child.id()));
         self.execution_store(&token, |store| {
             store.finish_task_execution(
                 &token,
@@ -1169,6 +1192,10 @@ impl Worker {
                 store::CleanupProof::ProcessTreeEmpty,
             )
         })?;
+        trace_process(
+            &format!("task={id} outcome-commit.complete"),
+            Some(child.id()),
+        );
         Ok(())
     }
     pub fn stop(&self) {

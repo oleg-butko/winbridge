@@ -86,6 +86,7 @@ def main():
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--task-cas-only', action='store_true', help='Check durable project/application leases, domain revisions, owner/attempt tokens, schema-6/7/8/9/10 migration, physical Job Object reconciliation, atomic child links, stale writes, output/retention and old-worker refusal; no desktop windows')
+    parser.add_argument('--task-cas-runtime-diagnostic', action='store_true', help='With --task-cas-only: narrow process/recovery diagnostic with trace and disk usage, without UI or full CAS/reference gate')
     parser.add_argument('--task-cas-reference-worker', help='Read-only Windows path to a schema-6 worker exe, used only with NEW isolated state to prove schema-11 refusal')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
@@ -101,7 +102,9 @@ def main():
         parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
-    if args.task_cas_only and not args.task_cas_reference_worker:
+    if args.task_cas_runtime_diagnostic and not args.task_cas_only:
+        parser.error('--task-cas-runtime-diagnostic requires --task-cas-only')
+    if args.task_cas_only and not args.task_cas_runtime_diagnostic and not args.task_cas_reference_worker:
         parser.error('--task-cas-only requires --task-cas-reference-worker')
     if args.task_cas_reference_worker and not args.task_cas_only:
         parser.error('--task-cas-reference-worker requires --task-cas-only')
@@ -142,7 +145,11 @@ def main():
     if args.task_fsm_only:
         profile_argument = ' -TaskFsmOnly'
     if args.task_cas_only:
-        profile_argument = ' -TaskCasOnly -TaskCasReferenceWorker ' + ps_string(args.task_cas_reference_worker)
+        profile_argument = ' -TaskCasOnly'
+        if args.task_cas_runtime_diagnostic:
+            profile_argument += ' -TaskCasRuntimeDiagnostic'
+        else:
+            profile_argument += ' -TaskCasReferenceWorker ' + ps_string(args.task_cas_reference_worker)
     if args.resume_only:
         resume_publication, resume_blob_sha, resume_delivery, resume_measurement = prepare_resume_package(config, shared, run_id)
         profile_argument = ' -ResumeOnly -ResumeDeliveryRoot ' + ps_string(resume_delivery) + ' -ResumePublicationFile ' + ps_string(resume_measurement)
@@ -244,7 +251,12 @@ exit $LASTEXITCODE
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
-    if args.task_cas_only:
+    if bool(result.get('diagnosticOnly', False)) != args.task_cas_runtime_diagnostic:
+        raise RuntimeError('Native report diagnostic/full gate scope mismatch')
+    if args.task_cas_runtime_diagnostic:
+        if [group['name'] for group in result['commands']] != ['process-resume-guard', 'process-runtime-recovery-diagnostic'] or any(group['exitCode'] != 0 for group in result['commands']):
+            raise RuntimeError('Incomplete process diagnostic groups')
+    if args.task_cas_only and not args.task_cas_runtime_diagnostic:
         proof = json.loads((report / 'task-cas-reference-proof.json').read_text(encoding='utf-8-sig'))
         if not proof['passed'] or proof['platform'] != 'windows' or proof['journalSchema'] != 11 or not proof['journalUnchanged'] or proof['exitCode'] != 1:
             raise RuntimeError('Incomplete older-worker schema refusal proof')

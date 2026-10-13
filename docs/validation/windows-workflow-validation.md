@@ -5,7 +5,7 @@
 schema migration, stale writes, atomic output/cleanup и process/workflow regressions.
 Debian driver требует `--task-cas-reference-worker` с read-only Windows путём
 schema-6 worker.exe: этот exe запускается только с НОВЫМ тестовым config/state,
-чтобы подтвердить отказ открыть schema 7. Установленный journal не открывается,
+чтобы подтвердить отказ открыть актуальную schema 11. Установленный journal не открывается,
 working runtime не заменяется. Нужен только запущенный worker; desktop необязателен,
 тестовых UI-окон нет. Это automatic gate, не команда установки/обновления.
 
@@ -15,6 +15,23 @@ python3 scripts/validate-workflow-native.py \
   --archive /mnt/hgfs/shared/WinBridge/sources/<source-archive>.zip \
   --task-cas-only \
   --task-cas-reference-worker 'K:\_proj-26\winbridge\runtime\winbridge-worker.exe'
+```
+
+Для расследования process deadlines есть узкий режим
+`--task-cas-only --task-cas-runtime-diagnostic` / `-TaskCasOnly -TaskCasRuntimeDiagnostic`.
+Он запускает resume guard, runtime, reconciliation и read-only recovery; reference
+worker и UI не запускаются. В report `diagnosticOnly: true`: успех не заменяет
+полный CAS gate. `WINBRIDGE_PROCESS_TRACE=1` действует только в дочернем тестовом
+сценарии и восстанавливается в finally; в лог попадают timestamps, task/PID/thread
+и этапы prepare/bind/resume/exit/cleanup, без arguments или содержимого output.
+Свободное место local volume измеряется до/после; при менее 4 GiB тестовая сборка
+не начинается. Существующие каталоги и рабочий runtime не очищаются.
+
+```bash
+python3 scripts/validate-workflow-native.py \
+  --controller-config .winbridge/controller-snapshot.local.json \
+  --archive /mnt/hgfs/shared/WinBridge/sources/<source-archive>.zip \
+  --task-cas-only --task-cas-runtime-diagnostic
 ```
 
 Архитектурный A1: `--task-fsm-only` / `-TaskFsmOnly` проверяет

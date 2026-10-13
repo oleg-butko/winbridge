@@ -6,8 +6,8 @@ use std::{
 };
 use windows_sys::Win32::{
     Foundation::{
-        GetLastError, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, FILETIME, HANDLE,
-        INVALID_HANDLE_VALUE,
+        GetLastError, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_NO_MORE_FILES, FILETIME,
+        HANDLE, INVALID_HANDLE_VALUE,
     },
     System::{
         Diagnostics::ToolHelp::{
@@ -23,7 +23,8 @@ use windows_sys::Win32::{
         RemoteDesktop::ProcessIdToSessionId,
         SystemServices::JOB_OBJECT_QUERY,
         Threading::{
-            GetCurrentProcessId, GetProcessTimes, OpenThread, ResumeThread, THREAD_SUSPEND_RESUME,
+            GetCurrentProcessId, GetProcessIdOfThread, GetProcessTimes, OpenThread, ResumeThread,
+            THREAD_QUERY_LIMITED_INFORMATION, THREAD_SUSPEND_RESUME,
         },
     },
 };
@@ -75,26 +76,60 @@ impl Job {
         Ok(())
     }
     pub fn resume(&self, child: &Child) -> io::Result<()> {
-        // std::process does not expose the primary thread handle. The process is
-        // still suspended and has one thread; obtain it through documented APIs.
+        // Stable std::process does not expose the primary thread handle. Refuse
+        // ambiguous snapshots rather than selecting an arbitrary helper thread.
+        super::trace_process("thread-snapshot.begin", Some(child.id()));
         let snapshot = owned(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) })?;
         let mut entry: THREADENTRY32 = unsafe { zeroed() };
         entry.dwSize = size_of::<THREADENTRY32>() as u32;
         let mut available = unsafe { Thread32First(snapshot.as_raw_handle(), &mut entry) };
+        let mut threads = Vec::new();
         while available != 0 {
             if entry.th32OwnerProcessID == child.id() {
-                let thread =
-                    owned(unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) })?;
-                if unsafe { ResumeThread(thread.as_raw_handle()) } == u32::MAX {
-                    return Err(io::Error::last_os_error());
-                }
-                return Ok(());
+                threads.push(entry.th32ThreadID);
             }
             available = unsafe { Thread32Next(snapshot.as_raw_handle(), &mut entry) };
         }
-        Err(io::Error::other(
-            "suspended primary thread was not found; process was not started",
-        ))
+        let error = io::Error::last_os_error();
+        if error.raw_os_error() != Some(ERROR_NO_MORE_FILES as i32) {
+            return Err(error);
+        }
+        let [thread_id] = threads.as_slice() else {
+            return Err(io::Error::other(format!(
+                "Expected one suspended primary thread; found {}; process was not resumed",
+                threads.len()
+            )));
+        };
+        let thread = owned(unsafe {
+            OpenThread(
+                THREAD_SUSPEND_RESUME | THREAD_QUERY_LIMITED_INFORMATION,
+                0,
+                *thread_id,
+            )
+        })?;
+        let owner = unsafe { GetProcessIdOfThread(thread.as_raw_handle()) };
+        if owner == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if owner != child.id() {
+            return Err(io::Error::other(
+                "Thread ownership changed; process was not resumed",
+            ));
+        }
+        let count = unsafe { ResumeThread(thread.as_raw_handle()) };
+        if count == u32::MAX {
+            return Err(io::Error::last_os_error());
+        }
+        super::trace_process(
+            &format!("thread-resume tid={thread_id} previous_suspend_count={count}"),
+            Some(child.id()),
+        );
+        if count != 1 {
+            return Err(io::Error::other(format!(
+                "ResumeThread did not confirm resuming the primary thread (previous suspend count {count})"
+            )));
+        }
+        Ok(())
     }
     pub fn terminate(&self) -> io::Result<()> {
         if unsafe { TerminateJobObject(self.0.as_raw_handle(), 1) } == 0 {
@@ -215,5 +250,58 @@ pub fn observe(
         Ok(true) => Empty("В сохранённом Windows Job Object нет процессов".into()),
         Ok(false) => Occupied("В сохранённом Windows Job Object ещё есть процессы".into()),
         Err(error) => Unknown(format!("Не удалось прочитать Windows Job Object: {error}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ManagedChild;
+
+    #[test]
+    fn extra_suspend_count_refuses_resume_without_running_and_cleans_owned_tree() {
+        use std::{
+            io::Read,
+            thread,
+            time::{Duration, Instant},
+        };
+        use windows_sys::Win32::System::Threading::SuspendThread;
+
+        let root = tempfile::tempdir().unwrap();
+        let command = winbridge_protocol::ResolvedCommand {
+            executable: "cmd.exe".into(),
+            arguments: vec!["/D".into(), "/C".into(), "echo unexpectedly-resumed".into()],
+            working_directory: root.path().to_str().unwrap().into(),
+            timeout_ms: 5000,
+        };
+        let (mut child, mut output, _error) = ManagedChild::prepare(&command, None).unwrap();
+        let snapshot = owned(unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) }).unwrap();
+        let mut entry: THREADENTRY32 = unsafe { zeroed() };
+        entry.dwSize = size_of::<THREADENTRY32>() as u32;
+        let mut available = unsafe { Thread32First(snapshot.as_raw_handle(), &mut entry) };
+        let mut threads = Vec::new();
+        while available != 0 {
+            if entry.th32OwnerProcessID == child.id() {
+                threads.push(entry.th32ThreadID);
+            }
+            available = unsafe { Thread32Next(snapshot.as_raw_handle(), &mut entry) };
+        }
+        assert_eq!(threads.len(), 1);
+        let handle = owned(unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, threads[0]) }).unwrap();
+        assert_eq!(unsafe { SuspendThread(handle.as_raw_handle()) }, 1);
+        let error = child.resume().unwrap_err().to_string();
+        assert!(error.contains("previous suspend count 2"), "{error}");
+        thread::sleep(Duration::from_millis(100));
+        assert!(child.try_wait().unwrap().is_none());
+        child.terminate_tree().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while child.try_wait().unwrap().is_none() || !child.tree_is_empty().unwrap() {
+            assert!(Instant::now() < deadline, "test process cleanup timeout");
+            thread::sleep(Duration::from_millis(10));
+        }
+        drop(child);
+        let mut bytes = Vec::new();
+        output.read_to_end(&mut bytes).unwrap();
+        assert!(bytes.is_empty(), "unexpected user code output: {bytes:?}");
     }
 }
