@@ -1,7 +1,7 @@
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
-## A1 Task FSM — реализация, 2026-10-13
+## A1 Task FSM — завершён, 2026-10-13
 
 Продолжение после A0 `f8c22d5`: [pure Task FSM](plans/architecture-transition/task-fsm.md)
 в core, worker Store::transition для launch/PID/cancel/finish/recovery.
@@ -9,14 +9,21 @@ DB/wire/fingerprints/IDs/dependencies прежние; Starting → v1 running б
 Найден/исправлен успех UPDATE без изменённых rows: dispatch теперь только после
 сохранённого decision; identity сверяется. Core 7 и worker 4 tests добавлены.
 Automatic `--task-fsm-only` / `-TaskFsmOnly` включает baseline и lifecycle/workflow
-regressions без desktop/UI windows. 182 workspace tests и Windows-target workspace/
-protocol/core/worker tests check пройдены; A1 native gate pending,
-этап пока не закрыт. Controller поднят с .winbridge/controller-snapshot.local.json,
+regressions без desktop/UI windows. 182 workspace tests, Windows-target workspace/
+protocol/core/worker tests check, Clippy/fmt/scaffold/AST/syntax пройдены.
+Implementation commit `34f21f5`; [native gate](plans/architecture-transition/windows-task-fsm-gate-2026-10-13.md)
+passed: 66 Windows tests, task e0f271c9-6a21-445f-9eba-a4e85382a762 succeeded/exit 0,
+shared run 20261013-092340-93391277, четыре verified artifacts. A1 закрыт.
+Controller поднят с .winbridge/controller-snapshot.local.json,
 192.168.44.203:1143, exec 25088, generation 6ec4284a-6d9f-47b8-866a-f9cda6f7c702;
 Worker подключён и idle: generation 02939593-8adf-4878-a346-473092697a4a, session
 631c2e63-edc8-44f8-8cce-89abec7caf8b, installed build b5d39f9, dirty false.
-Эти сведения получены из текущего info, старые receipts ниже не подтверждают
-нынешнюю связь. Рабочие Windows runtime/config/state не менялись.
+Post-gate info подтверждает прежние generation/session/build и activeTaskCount=0,
+maintenanceError/journalRecoveryRequired отсутствуют. Установленные Windows exe/
+configs не заменялись; рабочий journal получил одну задачу gate, test state отдельный.
+Desktop можно закрыть, worker оставить. Следующий пакет A2: инвентаризация всех
+writers, additive revisions/ownership/recovery guards до миграции actor owners.
+Нельзя считать A1 phase guards уже реализованной защитой CAS/epoch для всех доменов.
 
 ## Начало архитектурного перехода, 2026-10-13
 

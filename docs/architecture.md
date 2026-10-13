@@ -88,7 +88,7 @@ state/event и terminal attention до возврата execution decision; sche
 запускает процесс только после commit с одной изменённой task row. Внутренний
 Starting остаётся v1 running без PID. Protocol/schema/fingerprints прежние;
 revision/attempt/epoch и защита остальных writers относятся к следующему A2.
-Native Windows gate A1 пока pending.
+Native Windows gate A1 пройден: 66 tests; подробности в linked A1 report.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.
 

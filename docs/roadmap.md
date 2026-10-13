@@ -11,7 +11,7 @@
 [повторное ревью](plans/architecture-transition/review.md).
 
 - [x] A0: [frozen legacy contracts/journal tests и ADR инвариантов](plans/architecture-transition/baseline.md); 14 новых/171 workspace tests passed, Windows cross-check tests passed. Runtime не меняется.
-- [ ] A1: [Task FSM через прежний wire API](plans/architecture-transition/task-fsm.md) реализована, local checks passed; native gate pending.
+- [x] A1: [Task FSM через прежний wire API](plans/architecture-transition/task-fsm.md); 182 workspace tests и [66 native Windows tests](plans/architecture-transition/windows-task-fsm-gate-2026-10-13.md) passed, runtime/wire/schema совместимы.
 - [ ] A2: transactional transitions, revision/ownership и recovery для всех writers.
 - [ ] A3: совместимый discovery и общий read model UI/CLI/MCP.
 - [ ] A4: global resources, очередь и fairness для нескольких проектов.
@@ -21,7 +21,7 @@
 - [ ] A8: два независимых потребителя и automatic paired native gates.
 - [ ] A9: расширение FSM/контрактов; дальнейшие изменения по доказанной потребности.
 
-Первый пакет A0 завершён. Следующий — A1; до native gates process/runtime изменения
+A0 и A1 завершены. Следующий — A2; до native gates process/runtime изменения
 не считаются готовыми.
 
 ## Этап 0 — подготовка репозитория

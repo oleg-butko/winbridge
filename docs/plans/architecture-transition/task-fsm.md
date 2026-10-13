@@ -1,8 +1,8 @@
 # A1 — типизированная Task FSM
 
 Дата: 2026-10-13. База: A0, `f8c22d5`.
-Статус: runtime implementation добавлена; local checks пройдены,
-automatic native Windows gate ещё не пройден. A1 пока не закрыт.
+Статус: **A1 завершён**. Реализация `34f21f5`, local checks и
+[automatic native Windows gate](windows-task-fsm-gate-2026-10-13.md) пройдены.
 
 ## Что изменилось
 
@@ -85,5 +85,6 @@ Desktop и UI test windows не открываются. Working worker нуже�
 запуска; он и его state/configs не заменяются, test instances используют отдельные
 local state/workspaces. Отчёты/ready и logs находятся в новом shared run namespace.
 
-До native gate A1 остаётся implemented / native gate pending; следующий A2 не
-включать как замену обязательной проверки process lifecycle.
+Native gate: 66 tests passed, три cargo commands exit 0, четыре проверенных
+report/log artifacts; task succeeded/exit 0. Установленный worker не заменён.
+Следующий пакет — A2: общие durable guards для всех writers, не только task FSM.
