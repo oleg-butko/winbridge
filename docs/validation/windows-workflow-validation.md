@@ -7,7 +7,9 @@ Debian driver требует `--task-cas-reference-worker` с read-only Windows 
 schema-6 worker.exe: этот exe запускается только с НОВЫМ тестовым config/state,
 чтобы подтвердить отказ открыть актуальную schema 12. Установленный journal не открывается,
 working runtime не заменяется. Нужен только запущенный worker; desktop необязателен,
-тестовых UI-окон нет. Это automatic gate, не команда установки/обновления.
+тестовых UI-окон нет. Это automatic gate, не команда установки/обновления. A3.1 добавляет catalog
+reader checks, actual candidate IPC и isolated старый worker Info; отдельный
+`discovery-reference-proof.json` подтверждает missing catalog и cleanup reference.
 
 ```bash
 python3 scripts/validate-workflow-native.py \

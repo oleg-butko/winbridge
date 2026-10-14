@@ -187,6 +187,8 @@ def main():
     relative = args.archive.resolve().relative_to(shared.resolve())
     windows_archive = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(relative).replace('/', '\\')
     digest = hashlib.sha256(args.archive.read_bytes()).hexdigest()
+    with zipfile.ZipFile(args.archive) as archive:
+        archive_has_discovery = 'winbridge/apps/worker/tests/discovery.rs' in archive.namelist()
     run_id = time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
@@ -377,6 +379,10 @@ exit $nativeExit
             raise RuntimeError('Incomplete older-worker schema refusal proof')
         if proof['build']['sourceCommit'] != result['sourceCommit'] or proof['build']['sourceDirty'] or proof['referenceBuild'] != info['build']:
             raise RuntimeError('Candidate/reference worker source identity mismatch')
+        if archive_has_discovery:
+            catalog_proof = json.loads((report / 'discovery-reference-proof.json').read_text(encoding='utf-8-sig'))
+            if not catalog_proof['passed'] or catalog_proof['platform'] != 'windows' or not catalog_proof['catalogAbsent'] or not catalog_proof['isolatedReferenceStopped'] or catalog_proof['candidateBuild'] != proof['build'] or catalog_proof['referenceBuild'] != info['build']:
+                raise RuntimeError('Incomplete native legacy discovery/reference proof')
     if args.profiles_only:
         proof = json.loads((report / 'profiles-proof.json').read_text())
         tasks = proof['completed']

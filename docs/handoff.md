@@ -12,7 +12,9 @@ checks прошли. [Windows gate](plans/architecture-transition/windows-recove
 prefix bug и misleading retired-source activation исправлены. Shared run
 `20261014-044152-738951fb`, succeeded/exit 0. Следующий этап — A3 discovery/read model.
 [Первый пакет и ревью плана](plans/architecture-transition/discovery.md): optional
-support catalog; malformed/unknown read metadata не включает новые действия.
+support catalog реализован локально: 285 workspace tests и 22 общих Rust/TS
+fixtures. Real Unix worker/WS/controller IPC/MCP route и future metadata passed.
+Native gate A3.1 готовится; paired enable/read model ещё не реализованы.
 Installed schema-6 worker/generation/session прежние, connected/idle.
 Debian: [cleanup](guides/build-storage.md) освободил ~19.4 GiB incremental caches;
 новые проверки с CARGO_INCREMENTAL=0. Runtime/config/history/reports сохранены.

@@ -43,6 +43,14 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
     let context = worker.request_context().unwrap();
     let worker_server = tokio::spawn(winbridge_worker::serve(Arc::clone(&worker)));
     until_ready(&controller).await;
+    let LocalResponse::Info { info } = controller.call(LocalRequest::Info).await else {
+        panic!("route info")
+    };
+    let advertised = info.contract_catalog.clone();
+    let CatalogObservation::Known(catalog) = interpret_catalog(&info) else {
+        panic!("route lost catalog")
+    };
+    assert!(catalog.supports(WORKER_RPC_CONTRACT, 2));
     let legacy:LocalRequest=serde_json::from_value(serde_json::json!({"method":"submit","request":{"protocolVersion":1,"requestId":"r","projectId":"fixture","idempotencyKey":"logical-key","timeoutMs":5000,"command":{"kind":"direct","executable":"sh","arguments":["-c","printf 'ran\\n' >> runs.log; printf 'paired ✓\\n'"],"workingDirectory":"."}}})).unwrap();
     let envelope = FencedRequest {
         request_contract_version: 2,
@@ -78,10 +86,11 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     let input = format!(
-        "{}\n{}\n{}\n",
+        "{}\n{}\n{}\n{}\n",
         serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"scope-test","version":"1"}}}),
         serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"winbridge_invoke_fenced","arguments":envelope}})
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"winbridge_invoke_fenced","arguments":envelope}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"winbridge_info","arguments":{}}})
     );
     let mut output = Vec::new();
     winbridge_controller::mcp::run(cfg.clone(), input.as_bytes(), &mut output)
@@ -93,6 +102,11 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
     assert_eq!(messages[1]["result"]["isError"], false);
+    assert_eq!(messages[2]["result"]["isError"], false);
+    assert_eq!(
+        messages[2]["result"]["structuredContent"]["info"]["contractCatalog"],
+        advertised.unwrap()
+    );
     assert_eq!(
         messages[1]["result"]["structuredContent"]["context"]["journalIncarnation"],
         context.journal_incarnation

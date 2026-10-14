@@ -16,6 +16,7 @@
     "test:command-presentation": "node scripts/test-command-presentation.mjs",
     "test:output-buffer": "node scripts/test-output-buffer.mjs",
     "test:request-context": "node scripts/test-request-context.mjs",
+    "test:discovery": "node scripts/test-discovery.mjs",
     "generate:contracts": "cargo run --locked -p winbridge-protocol --example export-types --features typescript",
     "check:contracts": "cargo run --locked -p winbridge-protocol --example export-types --features typescript -- --check",
     "check:scaffold": "node scripts/check-scaffold.mjs",

@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 mod request_context;
 pub use request_context::*;
+mod discovery;
+pub use discovery::*;
 
 mod attention;
 pub use attention::*;
@@ -347,6 +349,15 @@ pub struct JournalInspection {
 #[serde(rename_all = "camelCase")]
 pub struct WorkerInfo {
     pub protocol_version: u16,
+    /// Open read-only metadata. Interpret known versions separately; a future
+    /// catalog must not make the entire legacy Info reply unreadable.
+    #[serde(
+        default,
+        deserialize_with = "discovery::deserialize_catalog",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
+    pub contract_catalog: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "typescript", ts(optional))]
     pub fenced_requests: Option<FencedRequestInfo>,

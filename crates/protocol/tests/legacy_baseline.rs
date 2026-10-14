@@ -7,6 +7,9 @@ const SUBMIT: &str = include_str!("../../../tests/fixtures/legacy-v1/session-sub
 const RECORD: &str = include_str!("../../../tests/fixtures/legacy-v1/task-record.json");
 const FINGERPRINT: &str = include_str!("../../../tests/fixtures/legacy-v1/task-fingerprint.txt");
 const STATUSES: &str = include_str!("../../../tests/fixtures/legacy-v1/task-statuses.json");
+#[path = "../../../tests/fixtures/legacy-v1/worker-info-codec.rs"]
+mod frozen_info;
+
 const INFO: &str = include_str!("../../../tests/fixtures/legacy-v1/worker-info.json");
 
 #[test]
@@ -105,14 +108,12 @@ fn unnegotiated_hello_and_execution_extensions_fail_closed() {
 fn optional_info_metadata_is_readable_but_not_forwarded_by_the_legacy_codec() {
     let mut wire: Value = serde_json::from_str(INFO).unwrap();
     wire["info"]["contractCatalog"] = json!({"supported": ["executor.run@1"]});
-    let response: LocalResponse = serde_json::from_value(wire).unwrap();
-    let LocalResponse::Info { info } = &response else {
-        panic!("expected worker info");
-    };
+    let info: frozen_info::FrozenV1WorkerInfo =
+        serde_json::from_value(wire["info"].clone()).unwrap();
     assert_eq!(info.instance_id, "legacy-fixture");
     assert!(!info.workflow_available);
     assert!(info.active_task_count.is_none());
-    let forwarded = serde_json::to_value(response).unwrap();
+    let forwarded = json!({"kind":"info","info":serde_json::to_value(info).unwrap()});
     assert!(forwarded["info"].get("contractCatalog").is_none());
     let LocalResponse::Info { info } = serde_json::from_value(forwarded).unwrap() else {
         panic!("expected forwarded worker info");

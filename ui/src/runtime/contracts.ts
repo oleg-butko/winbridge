@@ -83,7 +83,14 @@ export type FencedResponse = { requestContractVersion: number, outcome: FencedRe
 export type FencedReplyOutcome = "responded" | "rejected_before_dispatch" | "unconfirmed";
 export type FencedRequestInfo = { requestContractVersion: number, context: RequestContext, legacyMutationsAllowed: boolean, };
 export type RecoveryCoverageInfo = { complete: boolean, reason: string, };
-export type WorkerInfo = { protocolVersion: number, fencedRequests?: FencedRequestInfo, recoveryCoverage?: RecoveryCoverageInfo, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, commandHandlers?: Array<CommandHandlerInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
+export type ContractRef = { id: string, version: number, };
+export type ContractCatalog = { schemaVersion: number, provider: BuildIdentity, supported: Array<ContractRef>, };
+export type WorkerInfo = { protocolVersion: number,
+/**
+ * Open read-only metadata. Interpret known versions separately; a future
+ * catalog must not make the entire legacy Info reply unreadable.
+ */
+contractCatalog?: unknown, fencedRequests?: FencedRequestInfo, recoveryCoverage?: RecoveryCoverageInfo, instanceId: string, nodeId: string, generation: string, platform: string, runtimeValidation: string, projects: Array<ProjectInfo>, commandHandlers?: Array<CommandHandlerInfo>, controllerConnection: ControllerConnection | null, snapshotImportAvailable: boolean, snapshotDeltaAvailable: boolean, snapshotResumeAvailable: boolean, workflowAvailable: boolean, workflowFeatures: Array<string>, attentionAvailable: boolean, attentionTargetsAvailable: boolean, historyAvailable: boolean, maintenanceAvailable: boolean, maintenanceError: string | null, journalRecoveryRequired: string | null,
 /**
  * Physical ownership still unresolved; scoped to projects, not a global
  * journal write failure. Absent in older workers and when no lease is uncertain.

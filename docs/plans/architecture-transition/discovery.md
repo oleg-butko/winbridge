@@ -1,7 +1,8 @@
 # A3 — discovery и согласованное наблюдение
 
 Дата: 2026-10-14. База: A2 завершён, `85cf724`.
-Общий [план](README.md). A3 ещё не реализован.
+Общий [план](README.md). A3.1 реализован локально, native gate впереди;
+полный A3 ещё не завершён.
 
 ## Последовательность
 
@@ -51,3 +52,18 @@ test launcher до этого шага. Gate A3.1 не завершает пол
 Cost/rollback: additive metadata без migration БД и новых executable actions.
 Удаление catalog возвращает legacy discovery. Будущая negotiation/read model
 имеют отдельные версии; metadata не расширяет старый strict command envelope.
+
+## Реализация первого пакета и ревью
+
+285 workspace tests passed; дополнительно known-reader/TS parity проверена на
+22 общих fixtures. Real Unix route сохраняет catalog через worker/WebSocket/
+controller IPC/MCP. Fake future metadata и explicit null прошли actual WebSocket.
+Frozen v1 Info reader скопирован из `a42cd7e` отдельно от current codec: будущие
+поля он отбрасывает. Native regular/ignored checks добавлены к full CAS gate;
+reference запускается с новым config/state и завершается подтверждённой cleanup.
+
+Ревью исправило explicit-null loss у Option<Value>, разницу JSON integer 1/1.0
+между Rust/JS и trailing-newline ID. Normalization относится только к metadata;
+command DTOs не менялись. UI показывает compatibility summary внутри details,
+offline сведения помечает как последние сохранённые. Typecheck/build и schema/TS
+checks прошли; paired enable и consistent read model по-прежнему впереди.

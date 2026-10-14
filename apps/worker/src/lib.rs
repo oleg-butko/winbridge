@@ -584,6 +584,12 @@ impl Worker {
                 };
                 Ok(LocalResponse::Info {
                     info: Box::new(WorkerInfo {
+                        contract_catalog: Some(
+                            serde_json::to_value(winbridge_protocol::ContractCatalog::implemented(
+                                winbridge_protocol::build_identity(),
+                            ))
+                            .map_err(|e| e.to_string())?,
+                        ),
                         recovery_coverage: self
                             .coverage
                             .lock()

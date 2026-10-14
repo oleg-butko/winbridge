@@ -72,6 +72,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         FencedReplyOutcome::decl(&config),
         FencedRequestInfo::decl(&config),
         RecoveryCoverageInfo::decl(&config),
+        ContractRef::decl(&config),
+        ContractCatalog::decl(&config),
         WorkerInfo::decl(&config),
         BuildIdentity::decl(&config),
         LocalRequest::decl(&config),

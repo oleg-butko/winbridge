@@ -75,6 +75,20 @@ fn fenced_request_and_key_survive_worker_restart_without_rebinding_or_duplicate_
     let cfg = config(root.path(), "pair", "state");
     prepare(&cfg);
     let worker = Worker::open(cfg.clone()).unwrap();
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!("worker info")
+    };
+    let CatalogObservation::Known(catalog) = interpret_catalog(&info) else {
+        panic!("worker catalog")
+    };
+    assert!(catalog.supports(WORKER_RPC_CONTRACT, 2));
+    assert!(
+        !info
+            .fenced_requests
+            .as_ref()
+            .unwrap()
+            .legacy_mutations_allowed
+    );
     let context = worker.request_context().unwrap();
     let first = call(&worker, context.clone(), submit("same-key"));
     assert_eq!(first.outcome, FencedReplyOutcome::Responded);

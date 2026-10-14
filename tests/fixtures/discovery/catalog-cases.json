@@ -1,0 +1,828 @@
+{
+  "cases": [
+    {
+      "name": "missing",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "expected": "missing"
+    },
+    {
+      "name": "known",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "known"
+    },
+    {
+      "name": "null",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": null,
+      "expected": "unsupported"
+    },
+    {
+      "name": "future-string",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": "future",
+      "expected": "unsupported"
+    },
+    {
+      "name": "future-version",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 2,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "partial",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "duplicate",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "too-many",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "feature-0",
+            "version": 1
+          },
+          {
+            "id": "feature-1",
+            "version": 1
+          },
+          {
+            "id": "feature-2",
+            "version": 1
+          },
+          {
+            "id": "feature-3",
+            "version": 1
+          },
+          {
+            "id": "feature-4",
+            "version": 1
+          },
+          {
+            "id": "feature-5",
+            "version": 1
+          },
+          {
+            "id": "feature-6",
+            "version": 1
+          },
+          {
+            "id": "feature-7",
+            "version": 1
+          },
+          {
+            "id": "feature-8",
+            "version": 1
+          },
+          {
+            "id": "feature-9",
+            "version": 1
+          },
+          {
+            "id": "feature-10",
+            "version": 1
+          },
+          {
+            "id": "feature-11",
+            "version": 1
+          },
+          {
+            "id": "feature-12",
+            "version": 1
+          },
+          {
+            "id": "feature-13",
+            "version": 1
+          },
+          {
+            "id": "feature-14",
+            "version": 1
+          },
+          {
+            "id": "feature-15",
+            "version": 1
+          },
+          {
+            "id": "feature-16",
+            "version": 1
+          },
+          {
+            "id": "feature-17",
+            "version": 1
+          },
+          {
+            "id": "feature-18",
+            "version": 1
+          },
+          {
+            "id": "feature-19",
+            "version": 1
+          },
+          {
+            "id": "feature-20",
+            "version": 1
+          },
+          {
+            "id": "feature-21",
+            "version": 1
+          },
+          {
+            "id": "feature-22",
+            "version": 1
+          },
+          {
+            "id": "feature-23",
+            "version": 1
+          },
+          {
+            "id": "feature-24",
+            "version": 1
+          },
+          {
+            "id": "feature-25",
+            "version": 1
+          },
+          {
+            "id": "feature-26",
+            "version": 1
+          },
+          {
+            "id": "feature-27",
+            "version": 1
+          },
+          {
+            "id": "feature-28",
+            "version": 1
+          },
+          {
+            "id": "feature-29",
+            "version": 1
+          },
+          {
+            "id": "feature-30",
+            "version": 1
+          },
+          {
+            "id": "feature-31",
+            "version": 1
+          },
+          {
+            "id": "feature-32",
+            "version": 1
+          },
+          {
+            "id": "feature-33",
+            "version": 1
+          },
+          {
+            "id": "feature-34",
+            "version": 1
+          },
+          {
+            "id": "feature-35",
+            "version": 1
+          },
+          {
+            "id": "feature-36",
+            "version": 1
+          },
+          {
+            "id": "feature-37",
+            "version": 1
+          },
+          {
+            "id": "feature-38",
+            "version": 1
+          },
+          {
+            "id": "feature-39",
+            "version": 1
+          },
+          {
+            "id": "feature-40",
+            "version": 1
+          },
+          {
+            "id": "feature-41",
+            "version": 1
+          },
+          {
+            "id": "feature-42",
+            "version": 1
+          },
+          {
+            "id": "feature-43",
+            "version": 1
+          },
+          {
+            "id": "feature-44",
+            "version": 1
+          },
+          {
+            "id": "feature-45",
+            "version": 1
+          },
+          {
+            "id": "feature-46",
+            "version": 1
+          },
+          {
+            "id": "feature-47",
+            "version": 1
+          },
+          {
+            "id": "feature-48",
+            "version": 1
+          },
+          {
+            "id": "feature-49",
+            "version": 1
+          },
+          {
+            "id": "feature-50",
+            "version": 1
+          },
+          {
+            "id": "feature-51",
+            "version": 1
+          },
+          {
+            "id": "feature-52",
+            "version": 1
+          },
+          {
+            "id": "feature-53",
+            "version": 1
+          },
+          {
+            "id": "feature-54",
+            "version": 1
+          },
+          {
+            "id": "feature-55",
+            "version": 1
+          },
+          {
+            "id": "feature-56",
+            "version": 1
+          },
+          {
+            "id": "feature-57",
+            "version": 1
+          },
+          {
+            "id": "feature-58",
+            "version": 1
+          },
+          {
+            "id": "feature-59",
+            "version": 1
+          },
+          {
+            "id": "feature-60",
+            "version": 1
+          },
+          {
+            "id": "feature-61",
+            "version": 1
+          },
+          {
+            "id": "feature-62",
+            "version": 1
+          },
+          {
+            "id": "feature-63",
+            "version": 1
+          },
+          {
+            "id": "feature-64",
+            "version": 1
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "zero-version",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "feature",
+            "version": 0
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "wide-version",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "feature",
+            "version": 65536
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "fractional-version",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "feature",
+            "version": 1.5
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "bad-id",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "\u0444\u0438\u0447\u0430",
+            "version": 1
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "long-id",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "version": 1
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "extra-permission",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ],
+        "enabled": true
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "foreign-build",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "other"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "empty-build",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": ""
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "unknown-ref-field",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "feature",
+            "version": 1,
+            "enabled": true
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "provider-extra-read-metadata",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture",
+          "note": "ignored by BuildIdentity codec"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "known"
+    },
+    {
+      "name": "unknown-contract-ref-is-data",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "future.run",
+            "version": 99
+          }
+        ]
+      },
+      "expected": "known"
+    },
+    {
+      "name": "legacy-worker-no-build",
+      "workerBuild": null,
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "unsupported"
+    },
+    {
+      "name": "integral-json-numbers",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1.0,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1.0
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2.0
+          }
+        ]
+      },
+      "expected": "known"
+    },
+    {
+      "name": "trailing-newline-id",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "future.run\n",
+            "version": 1
+          }
+        ]
+      },
+      "expected": "unsupported"
+    }
+  ]
+}

@@ -106,6 +106,50 @@ async fn next_request(client: &mut Client) -> SessionMessage {
 }
 
 #[tokio::test]
+async fn future_read_metadata_survives_real_websocket_without_changing_legacy_support() {
+    tokio::time::timeout(std::time::Duration::from_secs(3), async {
+        let (_root, controller, listener) = pair().await;
+        let (actor, mut client) = connect(&controller, &listener).await;
+        for metadata in [
+            serde_json::json!({"schemaVersion":99,"future":{"states":["waiting"]}}),
+            serde_json::Value::Null,
+        ] {
+            let caller = Arc::clone(&controller);
+            let pending = tokio::spawn(async move { caller.call(LocalRequest::Info).await });
+            let SessionMessage::Request {
+                id,
+                request: LocalRequest::Info,
+            } = next_request(&mut client).await
+            else {
+                panic!("expected Info")
+            };
+            let mut wire: serde_json::Value = serde_json::from_str(include_str!(
+                "../../../tests/fixtures/legacy-v1/worker-info.json"
+            ))
+            .unwrap();
+            wire["info"]["contractCatalog"] = metadata.clone();
+            let response: LocalResponse = serde_json::from_value(wire).unwrap();
+            ws::send(&mut client, &SessionMessage::Response { id, response })
+                .await
+                .unwrap();
+            let LocalResponse::Info { info } = pending.await.unwrap() else {
+                panic!("metadata blocked Info")
+            };
+            assert_eq!(info.contract_catalog, Some(metadata));
+            assert!(matches!(
+                winbridge_protocol::interpret_catalog(&info),
+                winbridge_protocol::CatalogObservation::Unsupported(_)
+            ));
+            assert!(controller.status().unwrap().connected);
+        }
+        actor.abort();
+        let _ = actor.await;
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
 async fn delta_requires_capability_before_transmission_to_full_only_worker() {
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         let (_root, controller, listener) = pair().await;
