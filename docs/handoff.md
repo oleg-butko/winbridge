@@ -1,3 +1,20 @@
+## A3.1 discovery catalog — завершён, 2026-10-14
+
+[Контракт](plans/architecture-transition/discovery.md), [native evidence](plans/architecture-transition/windows-discovery-gate-2026-10-14.md):
+286 workspace tests, Linux/Windows Clippy, 24 Rust/TS cases и **203 native tests**
+с desktop compile passed. Ревью исправило nullable build metadata, confirmed-error
+scope и cache-chain/removed-cache handling. Run `20261014-063318-85934278`,
+succeeded/exit 0, 10 verified artifacts. Cache reused; Windows free ~30.5 GiB,
+Debian ~23 GiB. Installed schema-6 worker connected/idle, без active apps.
+
+Следующий пакет [A3.2](plans/architecture-transition/paired-readiness.md) требует
+обновить installed Windows worker, чтобы проверить полный new/new WS/IPC/MCP route
+и exact pair identities на постоянном firewall path. [Инструкция](validation/architecture-worker-update.md).
+Source/code `ec75bcb` прошёл native gate; пакет с финальными docs готовится.
+Controller обновляется агентом, config/state сохраняются. Full A3 не завершён.
+Пользователь разрешил рекомендованные architecture/scenario fixes и automatic
+retries выбирать самостоятельно; правило сохранено в AGENTS.md.
+
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 

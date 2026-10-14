@@ -1,7 +1,9 @@
-# A3.1 — native discovery gate: остановка сценария
+# A3.1 — native discovery gate и финальное ревью
 
 Дата: 2026-10-14. [Контракт и local evidence](discovery.md).
-Native gate **не пройден**; полный A3 открыт. A2 остаётся завершённым.
+**A3.1 завершён**: финальный gate прошёл 203 native tests.
+Полный A3 открыт; дальше [A3.2 paired readiness](paired-readiness.md).
+Ниже сохранены остановки/исправления и evidence каждого прогона.
 
 ## Прогон
 
@@ -92,3 +94,33 @@ Rust transport: теперь все Responded требуют исходный sc
 unconfirmed остаются error-only. Есть реальный RpcSender regression без retry.
 286 workspace tests, UI checks и Windows-target Clippy прошли. Этот protocol fix
 проверяется новым native повтором с уже созданным cache; до него A3.1 не закрыт.
+
+## Финальный scope-guard gate — passed
+
+Clean source `ec75bcb675f1a33019362e36d8f448bc7f5971d4`, archive
+`winbridge-20261014T103212Z-ec75bcb-6d8f1556.zip`, SHA-256
+`1ec4c6f8ecd01c29b271a862c6f43276e41241f1fdb2ae84b28274bd91f28226`.
+Run `20261014-063318-85934278`, task
+`f3712202-462e-4c13-9a4f-5dbfb26495f5`, PID 23624, succeeded/exit 0.
+UTC 10:33:24–10:38:42. **203 native tests**, 7 групп и desktop check passed;
+10 artifacts size/SHA verified, report SHA-256
+`1afda5f25e7adc8820e4306c96be5d7200bbdb8339cce5a5e9aead11ebe51baa`.
+Candidate build ID `1791974033135349800`, manifest SHA-256
+`c1d8af838926c5740e1a4cf720b34572e7b431973a1004b3d09816fe8e5976c4`.
+
+Новое regression проверило foreign/null scope error через actual RpcSender:
+confirmation отвергнуто, transport не повторил и не перепривязал request.
+Все остальные runtime/restore/refusal/dedup cases также passed. Reference Info
+missing catalog корректно прочитан; reference runtime подтверждённо остановлен.
+Installed worker generation/session unchanged и activeTaskCount 0; app history
+показывает stopped, активных приложений нет. Desktop закрыт, окон не было.
+
+Cache из `20261014-054619-d5d99c71` переиспользован, source/state/report новые.
+Windows free before 33,483,112,448, after 32,785,203,200 bytes (~30.5 GiB),
+добавлено ~0.65 GiB вместо второго полного cache. Runtime/state/reports сохранены.
+
+Local final review: 286 workspace tests, Linux/Windows-target Clippy, 24 shared
+Rust/TS metadata cases, bound request tests, typecheck/build/contracts и script
+checks passed. A3.1 закрыт. Это доказательство isolated candidate и mixed reader
+compatibility, не pair-tested installed route. Для A3.2 нужен новый installed
+worker по постоянному exe path; [инструкция](../../validation/architecture-worker-update.md).

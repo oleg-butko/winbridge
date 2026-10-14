@@ -1,9 +1,9 @@
 # A3 — discovery и согласованное наблюдение
 
 Дата: 2026-10-14. База: A2 завершён, `85cf724`.
-Общий [план](README.md). A3.1 реализован, [first native gate](windows-discovery-gate-2026-10-14.md)
-прошёл (202 tests), финальный scope-guard review fix проверяется повторно;
-полный A3 ещё не завершён.
+Общий [план](README.md). **A3.1 завершён**: [203 native tests](windows-discovery-gate-2026-10-14.md),
+desktop compile, final review и 286 workspace tests passed. Далее
+[A3.2 paired readiness](paired-readiness.md); полный A3 ещё не завершён.
 
 ## Последовательность
 
@@ -72,4 +72,4 @@ checks прошли; paired enable и consistent read model по-прежнем�
 Последующее ревью: omitted nullable build fields нормализуются в UI как Rust None;
 24 shared cases. Подтверждённый error reply также обязан иметь исходный journal
 scope; чужой/null scope даёт unconfirmed, не разрешает автоматический rebind/retry.
-286 workspace tests прошли; final native review gate ожидается.
+286 workspace tests и 203-test native review gate прошли.

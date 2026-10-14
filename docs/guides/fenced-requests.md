@@ -1,7 +1,8 @@
 # Запросы с закреплённым журналом
 
-Это candidate A2.4.2b.1. Установленный worker пока обновлять не нужно;
-процедура восстановления новой пары ещё готовится.
+Contract 2 реализован, [A2.4.2b native gate завершён](../plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md).
+[Recovery/new pair](recovery-pair.md) — отдельная local процедура. Для actual
+installed new/new route A3.2 нужен [обновлённый Windows worker](../validation/architecture-worker-update.md).
 
 1. Прочитайте `info`. Если есть `fencedRequests`, сохраните его `context`
    вместе с создаваемым запросом и idempotency key.

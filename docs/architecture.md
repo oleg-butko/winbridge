@@ -223,3 +223,11 @@ cache/staging/source находятся на local disk. Новый явный i
 и читает только недостающие blocks из shared. Все прежние whole ZIP/file/base pins,
 leases, terminal records/dedup и immutable publication сохраняются. Restart/close
 не возобновляют мутации. Cache cleanup не входит в output retention policy.
+
+
+A3.1 discovery завершён: optional open Info metadata с typed known interpreter,
+provider build binding, unknown-data fallback и отдельные advertisements RPC 1/2.
+[203 native tests/desktop compile](plans/architecture-transition/windows-discovery-gate-2026-10-14.md)
+и final scope-error review passed. Catalog не является permission или pair evidence;
+[A3.2](plans/architecture-transition/paired-readiness.md) вводит эти основания отдельно.
+Installed schema-6 runtime нужно обновить до actual paired new/new проверки.

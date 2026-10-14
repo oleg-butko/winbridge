@@ -37,6 +37,9 @@ Unix browser gate и [186 native tests/desktop compile](windows-fenced-request-g
 Полный A2 завершён 2026-10-14; далее A3 discovery/read model.
 [Пакеты и ревью A3](discovery.md): сначала optional support catalog, затем paired
 readiness и общий consistent read model. Advertised support не даёт permission.
+A3.1 завершён: 286 workspace tests, 24 Rust/TS cases и
+[203 native tests/desktop compile](windows-discovery-gate-2026-10-14.md) passed.
+Следующий [A3.2](paired-readiness.md) требует обновления installed worker.
 
 ## Результат для пользователя и проектов
 
