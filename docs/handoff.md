@@ -21,6 +21,19 @@ worker с policy metadata; не подменять её чтением disk conf
 Debian cleanup освободил 13.7 GiB obsolete test binaries; free ~31 GiB.
 Desktop можно оставить закрытым; worker оставить работающим.
 
+Operational boundary после gate: controller обновлён до clean `f834f64`,
+build ID `1791986520723239267`, generation `f91ebe2f-9cf4-4937-81a7-968987db3275`,
+IPC/WS прежние, serve session `51744`. Worker автоматически подключился с session
+`67ebc158-35f8-492e-a6a4-739c8535592d`; build/generation/incarnation прежние,
+idle/без live applications и ошибок. Новый decoder подтвердил отсутствие
+`projectPolicies`/`contractSchemas` у actual installed `f128c9a`, исключив
+потерю metadata старым controller как причину. Proof
+`.winbridge/architecture-transition/a32-update-boundary.json`.
+Это условие пользователя «пока не потребуется новый worker». Source update
+`winbridge-20261014T135448Z-b2aeb9f-7bf64364.zip` уже прошёл 39 native tests;
+[точная команда обновления](validation/architecture-worker-update.md).
+До actual new provider не утверждать readiness/pair enable. Full A3 открыт.
+
 ## A3.1 discovery catalog — завершён, 2026-10-14
 
 [Контракт](plans/architecture-transition/discovery.md), [native evidence](plans/architecture-transition/windows-discovery-gate-2026-10-14.md):
