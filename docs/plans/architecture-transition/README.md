@@ -32,7 +32,8 @@
 [b.1 request fence](fenced-requests.md) завершён: 271 workspace tests, real
 Unix browser gate и [186 native tests/desktop compile](windows-fenced-request-gate-2026-10-13.md) прошли.
 [Archive preparation/physical cutover b.2/b.3](recovery-pair.md) реализованы:
-280 local tests, cross-checks и browser gate passed; Windows gate ожидается.
+280 local tests, cross-checks и browser gate passed;
+[native path fix/retry](windows-recovery-pair-gate-2026-10-14.md) после canonical-drive/UNC bug.
 Полный A2 открыт.
 
 ## Результат для пользователя и проектов

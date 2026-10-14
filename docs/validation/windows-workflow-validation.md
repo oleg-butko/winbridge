@@ -5,7 +5,7 @@
 schema migration, stale writes, atomic output/cleanup и process/workflow regressions.
 Debian driver требует `--task-cas-reference-worker` с read-only Windows путём
 schema-6 worker.exe: этот exe запускается только с НОВЫМ тестовым config/state,
-чтобы подтвердить отказ открыть актуальную schema 11. Установленный journal не открывается,
+чтобы подтвердить отказ открыть актуальную schema 12. Установленный journal не открывается,
 working runtime не заменяется. Нужен только запущенный worker; desktop необязателен,
 тестовых UI-окон нет. Это automatic gate, не команда установки/обновления.
 
@@ -24,7 +24,7 @@ worker и UI не запускаются. В report `diagnosticOnly: true`: ус
 полный CAS gate. `WINBRIDGE_PROCESS_TRACE=1` действует только в дочернем тестовом
 сценарии и восстанавливается в finally; в лог попадают timestamps, task/PID/thread
 и этапы prepare/bind/resume/exit/cleanup, без arguments или содержимого output.
-Свободное место local volume измеряется до/после; при менее 4 GiB тестовая сборка
+Свободное место local volume измеряется до/после; при менее 8 GiB тестовая сборка
 не начинается. Существующие каталоги и рабочий runtime не очищаются.
 
 Полный CAS gate может использовать `--task-cas-reuse-diagnostic <run-id>` вместе
@@ -34,6 +34,15 @@ worker и UI не запускаются. В report `diagnosticOnly: true`: ус
 Повторно используется source/build cache; тесты исполняются заново с новыми states
 и новым shared report. Trace включён и для full gate. Прошлый report сохраняется.
 Это экономит место без удаления старых runs и не разрешает reuse другой версии.
+
+Для новой версии исходников используйте `--task-cas-reuse-build-cache <run-id>`.
+Это отдельный режим: распаковываются новые исходники и создаётся новый отчёт,
+переиспользуется только `test-build-cache` прежнего full CAS run. Driver проверяет
+SHA-256 всех ready artifacts и terminal task в том же проекте. Прежние тесты могут
+быть failed, если компиляция завершилась и тесты исполнялись. Их результат не
+переносится: все группы выполняются заново. Windows проверяет pinned receipt,
+source identity, local path/reparse и держит exclusive cache lease; Cargo сам
+пересобирает изменённые компоненты. Старые состояния и reports сохраняются.
 
 ```bash
 python3 scripts/validate-workflow-native.py \

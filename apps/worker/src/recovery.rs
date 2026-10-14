@@ -67,13 +67,18 @@ fn latch_named(state: &Path, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn reject_normal_start(config: &winbridge_core::config::WorkerConfig) -> Result<()> {
-    let state = &config.state_directory;
+pub(crate) fn reject_retired_source(state: &Path) -> Result<()> {
     let retired = state.join(SOURCE_RETIRED_MARKER);
     crate::reject_symlink(&retired)?;
     if retired.try_exists().map_err(|e| e.to_string())? {
         return Err("Recovery marker permanently retires this source; an older activation receipt cannot resume it. Keep its history/markers and use read-only inspection".into());
     }
+    Ok(())
+}
+
+pub(crate) fn reject_normal_start(config: &winbridge_core::config::WorkerConfig) -> Result<()> {
+    let state = &config.state_directory;
+    reject_retired_source(state)?;
     let path = state.join(RECOVERY_MARKER);
     crate::reject_symlink(&path)?;
     let paired = state

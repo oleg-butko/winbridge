@@ -20,3 +20,8 @@ Rust workspace и native desktop. Освобождено 20,810,207,232 bytes (~
 Последний Windows gate b.1: после сборки оставалось 32,443,744,256 bytes
 (~30.2 GiB); [native report](../plans/architecture-transition/windows-fenced-request-gate-2026-10-13.md).
 Это измерение конкретного прогона, а не обещание текущего свободного места.
+
+Для full CAS повтора после исправления используйте
+`--task-cas-reuse-build-cache <run-id>`: [проверка receipt и lease](../validation/windows-workflow-validation.md).
+Новые исходники, test-temp/state и report отдельные; Cargo target один.
+Failed тест не становится passed из-за reuse cache. Windows каталоги не удаляются.

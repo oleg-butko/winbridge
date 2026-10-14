@@ -1,0 +1,87 @@
+"""Verify cache admission with failed tests, tampered receipts and incomplete builds."""
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+
+spec = importlib.util.spec_from_file_location('native', Path(__file__).with_name('validate-workflow-native.py'))
+native = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(native)
+
+
+class CacheReceiptTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.run = '20261014-042057-8075f8f1'
+        self.report = self.base / self.run
+        self.report.mkdir()
+        self.result = dict(platform='windows', passed=False, sourceDirty=False, diagnosticOnly=False,
+                           sourceCommit='a' * 40, sourceArchiveSha256='b' * 64,
+                           commands=[dict(name=n, exitCode=101 if n.endswith('writers') else 0)
+                                     for n in ['task-cas-pure-fsm', 'task-cas-process-resume-guard',
+                                               'task-cas-fenced-contract', 'task-cas-frozen-contracts',
+                                               'task-cas-native-writers']])
+        self.log = 'Finished `test` profile [unoptimized + debuginfo]\ntest result: FAILED. 7 passed; 3 failed\n'
+        self.publish()
+
+    def publish(self):
+        (self.report / 'report.json').write_text(json.dumps(self.result))
+        (self.report / 'task-cas-native-writers.log').write_text(self.log)
+        files = []
+        for name in ['report.json', 'task-cas-native-writers.log']:
+            data = (self.report / name).read_bytes()
+            files.append(dict(path=name, bytes=len(data), sha256=hashlib.sha256(data).hexdigest()))
+        (self.report / 'report.ready.json').write_text(json.dumps(dict(platform='windows', passed=self.result['passed'], files=files)))
+
+    def check(self):
+        return native.verify_reusable_build_cache(self.base, self.run)
+
+    def test_test_failure_can_supply_only_compiler_cache(self):
+        receipt = self.check()
+        self.assertEqual(receipt['sourceCommit'], 'a' * 40)
+        self.assertNotIn('passed', receipt)
+        self.assertEqual(receipt['reportSha256'], hashlib.sha256((self.report / 'report.json').read_bytes()).hexdigest())
+
+    def test_tampered_log_is_refused(self):
+        (self.report / 'task-cas-native-writers.log').write_text('tampered')
+        with self.assertRaisesRegex(ValueError, 'checksum'):
+            self.check()
+
+    def test_compiler_failure_without_execution_is_refused(self):
+        self.log = 'error: could not compile winbridge-worker\n'
+        self.publish()
+        with self.assertRaisesRegex(ValueError, 'compilation'):
+            self.check()
+
+    def test_missing_group_and_dirty_source_are_refused(self):
+        for key, value in [('commands', self.result['commands'][:4]), ('sourceDirty', True)]:
+            original = self.result[key]
+            self.result[key] = value
+            self.publish()
+            with self.assertRaises(ValueError):
+                self.check()
+            self.result[key] = original
+
+    def test_traversal_and_duplicate_artifact_are_refused(self):
+        with self.assertRaisesRegex(ValueError, 'run ID'):
+            native.verify_reusable_build_cache(self.base, '../' + self.run)
+        ready_path = self.report / 'report.ready.json'
+        ready = json.loads(ready_path.read_text())
+        ready['files'].append(ready['files'][0])
+        ready_path.write_text(json.dumps(ready))
+        with self.assertRaisesRegex(ValueError, 'Unsafe'):
+            self.check()
+
+    def test_linked_cache_receipt_is_refused(self):
+        linked_run = '20261014-042057-00000000'
+        (self.base / linked_run).symlink_to(self.report, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'namespace'):
+            native.verify_reusable_build_cache(self.base, linked_run)
+
+
+if __name__ == '__main__':
+    unittest.main()

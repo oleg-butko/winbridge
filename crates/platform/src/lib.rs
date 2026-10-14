@@ -122,7 +122,27 @@ pub fn file_identity(file: &std::fs::File) -> io::Result<String> {
     }
 }
 
+/// Check syntax without touching a network path. Canonical Windows drive paths
+/// use VerbatimDisk (`\\?\K:\...`), which is distinct from VerbatimUNC.
+pub fn require_local_path_prefix(path: &std::path::Path) -> io::Result<()> {
+    #[cfg(windows)]
+    let local = matches!(
+        path.components().next(),
+        Some(std::path::Component::Prefix(prefix))
+            if matches!(prefix.kind(), std::path::Prefix::Disk(_) | std::path::Prefix::VerbatimDisk(_))
+    );
+    #[cfg(not(windows))]
+    let local = !path.to_string_lossy().replace('\\', "/").starts_with("//");
+    if !local {
+        return Err(io::Error::other(
+            "state/workspace directory must use a local disk path, not UNC/network or device storage",
+        ));
+    }
+    Ok(())
+}
+
 pub fn require_local_disk(path: &std::path::Path) -> io::Result<()> {
+    require_local_path_prefix(path)?;
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;

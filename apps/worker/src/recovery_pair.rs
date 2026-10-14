@@ -283,6 +283,7 @@ fn validate_preparation(state: &Path) -> Result<RecoveryPreparation> {
 pub fn activate_recovery(target: &WorkerConfig) -> Result<RecoveryActivation> {
     target.validate()?;
     let _target_lock = lock_state(&target.state_directory)?;
+    recovery::reject_retired_source(&target.state_directory)?;
     require_marker(&target.state_directory)?;
     let preparation = validate_preparation(&target.state_directory)?;
     if target.instance_id != preparation.target_context.instance_id {

@@ -1327,10 +1327,8 @@ unsafe fn libc_uid() -> u32 {
     unsafe { getuid() }
 }
 fn ensure_local_state(path: &Path) -> Result<()> {
+    winbridge_platform::require_local_path_prefix(path).map_err(|e| e.to_string())?;
     winbridge_workspace_sync::safe_path(path)?;
-    if path.to_string_lossy().replace('\\', "/").starts_with("//") {
-        return Err("stateDirectory must be on a local disk, not UNC/network storage".into());
-    }
     #[cfg(unix)]
     {
         let mut parent = path;

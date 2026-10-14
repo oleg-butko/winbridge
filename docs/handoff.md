@@ -7,7 +7,9 @@
 реализованы, [инструкция](guides/recovery-pair.md). Whole-domain witness вне SQLite,
 outer global Job каждого owner, create-only preparation/activation и постоянный
 source retirement. 280 workspace tests, Linux/Windows-target Clippy, UI checks
-и browser gate passed; Windows execution gate ожидается. Full A2 открыт.
+и browser gate passed. [Первый Windows gate](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md)
+остановлен из-за canonical drive prefix bug; исправление и автоматический повтор
+с compiler cache разрешены пользователем. Full A2 открыт.
 Installed schema-6 worker/generation/session прежние, connected/idle.
 Debian: [cleanup](guides/build-storage.md) освободил ~19.4 GiB incremental caches;
 новые проверки с CARGO_INCREMENTAL=0. Runtime/config/history/reports сохранены.

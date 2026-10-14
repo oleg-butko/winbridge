@@ -326,6 +326,7 @@ fn old_activation_receipt_cannot_remove_a_retired_source_latch() {
     drop(Worker::open(cfg.clone()).unwrap());
     retire(&cfg);
     fs::write(cfg.state_directory.join("recovery-activated.json"), b"{}").unwrap();
+    assert!(activate_recovery(&cfg).unwrap_err().contains("retires"));
     assert!(Worker::open(cfg).is_err());
 }
 
@@ -342,6 +343,32 @@ fn linked_recovery_destination_is_refused_without_writing_outside() {
     std::os::unix::fs::symlink(&outside, &link).unwrap();
     assert!(prepare_recovery(&cfg, &link.join("replacement")).is_err());
     assert_eq!(fs::read_dir(outside).unwrap().count(), 0);
+}
+
+#[cfg(windows)]
+#[test]
+fn canonical_drive_path_keeps_the_journal_and_network_prefixes_are_refused() {
+    let temp = TempDir::new().unwrap();
+    let mut cfg = config(temp.path());
+    let worker = Worker::open(cfg.clone()).unwrap();
+    let context = worker.request_context().unwrap();
+    drop(worker);
+    cfg.state_directory = fs::canonicalize(&cfg.state_directory).unwrap();
+    assert!(matches!(
+        cfg.state_directory.components().next(),
+        Some(std::path::Component::Prefix(prefix))
+            if matches!(prefix.kind(), std::path::Prefix::VerbatimDisk(_))
+    ));
+    let worker = Worker::open(cfg).unwrap();
+    assert_eq!(worker.request_context().unwrap(), context);
+    for path in [
+        r"\\server\share\state",
+        r"\\?\UNC\server\share\state",
+        r"\\.\pipe\state",
+    ] {
+        // Pure syntax check: never probe a remote server or named device.
+        assert!(winbridge_platform::require_local_path_prefix(Path::new(path)).is_err());
+    }
 }
 
 #[cfg(windows)]
@@ -416,6 +443,9 @@ fn a_second_recovery_retires_the_old_activation_receipt() {
     activate_recovery(&first_config).unwrap();
     drop(Worker::open(first_config.clone()).unwrap());
     retire(&first_config);
+    assert!(activate_recovery(&first_config)
+        .unwrap_err()
+        .contains("retires"));
     assert!(first_config
         .state_directory
         .join("recovery-activated.json")

@@ -61,6 +61,12 @@ Read-only путь schema-6 worker.exe для TaskCasOnly; рабочий про
 Только с TaskCasOnly: узкий process/recovery прогон с отметками запуска, resume,
 PID binding и cleanup. Без UI, reference worker и полного CAS gate. Успех этого
 режима не означает завершение этапа. Диагностика не записывает команды или output.
+.PARAMETER BuildCacheRunId
+Full CAS: переиспользовать только Cargo target прежнего подтверждённого прогона.
+Исходники, test-temp, состояния и отчёт остаются новыми; lease исключает одновременную сборку.
+.PARAMETER BuildCacheReportSha256
+SHA-256 прежнего report.json, который Debian проверил вместе с ready artifacts.
+Провалившиеся тесты допустимы как compiler cache, но их результат не наследуется.
 .PARAMETER OutputReferenceWorker
 Путь рабочего worker.exe только для запуска отдельного reference runtime с новым
 state directory. Рабочий процесс, конфиг и журнал не изменяются.
@@ -92,6 +98,8 @@ param(
     [switch]$TaskCasOnly,
     [switch]$TaskCasRuntimeDiagnostic,
     [string]$TaskCasReferenceWorker = '',
+    [string]$BuildCacheRunId = '',
+    [string]$BuildCacheReportSha256 = '',
     [string]$ProjectsPreparation = '',
     [string]$ProjectsPreparationSha256 = '',
     [string]$ResumeDeliveryRoot = '',
@@ -147,6 +155,7 @@ $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
 $oldResumeDelivery = $env:WINBRIDGE_RESUME_GATE_DELIVERY
 $oldResumePublication = $env:WINBRIDGE_RESUME_GATE_PUBLICATION
 $oldLocation = Get-Location
+$cacheLease = $null
 try {
     foreach ($file in $manifest.files) {
         $filePath = Join-Path $source $file.path
@@ -156,6 +165,37 @@ try {
         }
     }
     $env:CARGO_TARGET_DIR = Join-Path (Split-Path $source -Parent) 'test-build-cache'
+    if ($BuildCacheRunId -or $BuildCacheReportSha256) {
+        if (-not $TaskCasOnly -or $TaskCasRuntimeDiagnostic -or $BuildCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $BuildCacheReportSha256 -notmatch '^[0-9a-f]{64}$') {
+            throw 'Build-cache reuse requires full CAS and a pinned prior run receipt'
+        }
+        $priorRun = Join-Path (Split-Path (Split-Path $source -Parent) -Parent) $BuildCacheRunId
+        $priorReport = Join-Path (Join-Path (Split-Path $ReportDirectory -Parent) $BuildCacheRunId) 'report.json'
+        if ((Get-FileHash -LiteralPath $priorReport -Algorithm SHA256).Hash.ToLowerInvariant() -ne $BuildCacheReportSha256) { throw 'Build-cache receipt changed' }
+        $previous = Get-Content -LiteralPath $priorReport -Raw | ConvertFrom-Json
+        $priorManifest = Get-Content -LiteralPath (Join-Path $priorRun 'winbridge/winbridge-source-manifest.json') -Raw | ConvertFrom-Json
+        if ($previous.sourceDirty -or $previous.platform -ne 'windows' -or $previous.diagnosticOnly -or $previous.sourceCommit -ne $priorManifest.sourceCommit -or $priorManifest.dirty) { throw 'Prior build-cache source identity mismatch' }
+        $env:CARGO_TARGET_DIR = Join-Path $priorRun 'test-build-cache'
+        if (-not (Test-Path -LiteralPath $env:CARGO_TARGET_DIR -PathType Container)) { throw 'Prior build cache no longer exists' }
+        $report.buildCacheReusedFrom = [ordered]@{ runId = $BuildCacheRunId; sourceCommit = $previous.sourceCommit; reportSha256 = $BuildCacheReportSha256 }
+    }
+    # All validations take the same lease, including first-time builds. Reusing
+    # compiler artifacts never reuses source, temporary test state, or proof.
+    $cachePath = [IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)
+    $ancestor = $cachePath
+    while ($ancestor) {
+        if (Test-Path -LiteralPath $ancestor) {
+            if ((Get-Item -LiteralPath $ancestor).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Refusing linked build cache' }
+        }
+        $ancestor = Split-Path $ancestor -Parent
+    }
+    $cacheDrive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($cachePath))
+    if ($cacheDrive.DriveType -ne [IO.DriveType]::Fixed) { throw 'Build cache must use a local fixed disk' }
+    New-Item -ItemType Directory -Path $cachePath -Force | Out-Null
+    $leasePath = Join-Path $cachePath '.winbridge-build-cache.lock'
+    if ((Test-Path -LiteralPath $leasePath) -and ((Get-Item -LiteralPath $leasePath).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Refusing linked build-cache lease' }
+    $cacheLease = [IO.File]::Open($leasePath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    $report.buildCacheDirectory = $cachePath
     $env:CARGO_INCREMENTAL = '0'
     $env:TEMP = Join-Path (Split-Path $source -Parent) 'test-temp'
     $env:TMP = $env:TEMP
@@ -343,6 +383,7 @@ try {
     $report.error = $_.Exception.Message
     Write-Output $report.error
 } finally {
+    if ($cacheLease) { $cacheLease.Dispose() }
     Set-Location -LiteralPath $oldLocation.Path
     $env:CARGO_TARGET_DIR = $oldTarget
     $env:CARGO_INCREMENTAL = $oldIncremental

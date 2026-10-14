@@ -105,6 +105,37 @@ def verify_reusable_diagnostic(base, run_id, archive_sha):
     return result
 
 
+def verify_reusable_build_cache(base, run_id):
+    """A failed test is usable compiler cache, never inherited test evidence."""
+    if not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', run_id):
+        raise ValueError('Invalid build-cache run ID')
+    report = base / run_id
+    if report.is_symlink() or report.resolve().parent != base.resolve():
+        raise ValueError('Build-cache receipt must stay inside its validation namespace')
+    ready = json.loads((report / 'report.ready.json').read_text(encoding='utf-8-sig'))
+    names = set()
+    for item in ready['files']:
+        name = item['path']
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or name in names or (report / name).is_symlink():
+            raise ValueError('Unsafe build-cache artifact')
+        data = (report / name).read_bytes()
+        if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
+            raise ValueError('Build-cache artifact checksum mismatch: ' + name)
+        names.add(name)
+    if ready['platform'] != 'windows' or not {'report.json', 'task-cas-native-writers.log'}.issubset(names):
+        raise ValueError('Incomplete build-cache receipt')
+    result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
+    if result['sourceDirty'] or result['platform'] != 'windows' or result.get('diagnosticOnly') or not re.fullmatch(r'[0-9a-f]{40}', result['sourceCommit']) or not re.fullmatch(r'[0-9a-f]{64}', result['sourceArchiveSha256']) or result['passed'] != ready['passed']:
+        raise ValueError('Build cache requires a clean full-CAS source receipt')
+    expected = ['task-cas-pure-fsm', 'task-cas-process-resume-guard', 'task-cas-fenced-contract', 'task-cas-frozen-contracts', 'task-cas-native-writers']
+    if [g['name'] for g in result['commands'][:5]] != expected or any(g['exitCode'] != 0 for g in result['commands'][:4]) or result['commands'][4]['exitCode'] not in {0, 101}:
+        raise ValueError('Prior run did not reach native test execution')
+    log = (report / 'task-cas-native-writers.log').read_text(encoding='utf-8-sig')
+    if not re.search(r'Finished `test` profile', log) or not re.search(r'test result: (ok|FAILED)\.', log):
+        raise ValueError('No completed compilation/test execution in prior cache')
+    return {'runId': run_id, 'sourceCommit': result['sourceCommit'], 'reportSha256': hashlib.sha256((report / 'report.json').read_bytes()).hexdigest()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--controller-config', type=Path, required=True)
@@ -118,6 +149,7 @@ def main():
     parser.add_argument('--task-cas-only', action='store_true', help='Check durable leases/CAS, schema-6/7/8/9/10/11 migration, physical reconciliation, fenced requests, desktop compile and old-worker refusal; no desktop windows')
     parser.add_argument('--task-cas-runtime-diagnostic', action='store_true', help='With --task-cas-only: narrow process/recovery diagnostic with trace and disk usage, without UI or full CAS/reference gate')
     parser.add_argument('--task-cas-reuse-diagnostic', help='Full CAS only: reuse the source/build cache of a successful diagnostic run ID for this exact archive; new tests/state/report, process trace enabled')
+    parser.add_argument('--task-cas-reuse-build-cache', help='Full CAS only: reuse only Cargo artifacts from a checksum-verified terminal CAS run; always extract new source and create new test state/report')
     parser.add_argument('--task-cas-reference-worker', help='Read-only Windows path to a schema-6 worker exe, used only with NEW isolated state to prove schema-12 refusal')
     parser.add_argument('--resume-only', action='store_true', help='Check manifest-pinned chunks, actual owned crash/restart and explicit resume on HGFS, without desktop windows')
     parser.add_argument('--output-only', action='store_true', help='Check bounded output and native IPC/cursor/control against an isolated reference worker, without desktop windows')
@@ -137,6 +169,8 @@ def main():
         parser.error('--task-cas-runtime-diagnostic requires --task-cas-only')
     if args.task_cas_reuse_diagnostic and (not args.task_cas_only or args.task_cas_runtime_diagnostic):
         parser.error('--task-cas-reuse-diagnostic requires a full --task-cas-only gate')
+    if args.task_cas_reuse_build_cache and (not args.task_cas_only or args.task_cas_runtime_diagnostic or args.task_cas_reuse_diagnostic):
+        parser.error('--task-cas-reuse-build-cache requires full CAS and cannot reuse diagnostic source')
     if args.task_cas_only and not args.task_cas_runtime_diagnostic and not args.task_cas_reference_worker:
         parser.error('--task-cas-only requires --task-cas-reference-worker')
     if args.task_cas_reference_worker and not args.task_cas_only:
@@ -159,6 +193,13 @@ def main():
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
     reused = None
     manifest_sha = script_sha = ''
+    cache_receipt = None
+    if args.task_cas_reuse_build_cache:
+        cache_receipt = verify_reusable_build_cache(report.parent, args.task_cas_reuse_build_cache)
+        previous = json.loads((ROOT / '.winbridge/workflow-validation' / args.task_cas_reuse_build_cache / 'task-report.json').read_text())['task']
+        terminal = call(endpoint, {'method': 'get_task', 'taskId': previous['taskId']})['task']
+        if terminal['status'] not in {'succeeded', 'failed'} or terminal.get('exitCode') not in {0, 1} or terminal['submission']['projectId'] != args.project or terminal['submission']['idempotencyKey'] != 'native-workflow-' + args.task_cas_reuse_build_cache:
+            raise ValueError('Build cache must belong to a confirmed terminal native task in this project')
     if args.task_cas_reuse_diagnostic:
         reused = verify_reusable_diagnostic(report.parent, args.task_cas_reuse_diagnostic, digest)
         local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + args.task_cas_reuse_diagnostic
@@ -195,6 +236,8 @@ def main():
             profile_argument += ' -TaskCasRuntimeDiagnostic'
         else:
             profile_argument += ' -TaskCasReferenceWorker ' + ps_string(args.task_cas_reference_worker)
+        if cache_receipt:
+            profile_argument += ' -BuildCacheRunId ' + ps_string(cache_receipt['runId']) + ' -BuildCacheReportSha256 ' + ps_string(cache_receipt['reportSha256'])
     if args.resume_only:
         resume_publication, resume_blob_sha, resume_delivery, resume_measurement = prepare_resume_package(config, shared, run_id)
         profile_argument = ' -ResumeOnly -ResumeDeliveryRoot ' + ps_string(resume_delivery) + ' -ResumePublicationFile ' + ps_string(resume_measurement)
@@ -282,7 +325,7 @@ exit $nativeExit
     # Preserve the request for reconciliation; stop on an unexpected worker error.
     accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
     task_id = accepted['taskId']
-    print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest, 'reusedDiagnostic': args.task_cas_reuse_diagnostic}), flush=True)
+    print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest, 'reusedDiagnostic': args.task_cas_reuse_diagnostic, 'reusedBuildCache': cache_receipt}), flush=True)
     chunks = []
     sequence = 0
     deadline = time.monotonic() + 1850
@@ -316,6 +359,8 @@ exit $nativeExit
         if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
             raise RuntimeError('Report artifact checksum mismatch: ' + name)
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
+    if cache_receipt and result.get('buildCacheReusedFrom') != cache_receipt:
+        raise RuntimeError('Native build-cache receipt does not match the pinned prior run')
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
     if bool(result.get('diagnosticOnly', False)) != args.task_cas_runtime_diagnostic:

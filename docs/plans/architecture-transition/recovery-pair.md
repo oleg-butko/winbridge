@@ -3,7 +3,8 @@
 Дата: 2026-10-14. После [request fence b.1](fenced-requests.md).
 Решение пользователя: прежняя история как архив, новые instance/incarnation,
 явное переподключение, contract 2. Local/browser gates прошли; Windows gate
-ещё впереди, full A2 открыт.
+[остановлен из-за canonical drive prefix](windows-recovery-pair-gate-2026-10-14.md);
+исправление и повтор разрешены пользователем, full A2 открыт.
 
 ## Архив, подготовка и activation
 
