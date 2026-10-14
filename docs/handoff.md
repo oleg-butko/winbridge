@@ -11,6 +11,8 @@ checks прошли. [Windows gate](plans/architecture-transition/windows-recove
 197 native tests, desktop compile и 9 verified artifacts passed; canonical drive
 prefix bug и misleading retired-source activation исправлены. Shared run
 `20261014-044152-738951fb`, succeeded/exit 0. Следующий этап — A3 discovery/read model.
+[Первый пакет и ревью плана](plans/architecture-transition/discovery.md): optional
+support catalog; malformed/unknown read metadata не включает новые действия.
 Installed schema-6 worker/generation/session прежние, connected/idle.
 Debian: [cleanup](guides/build-storage.md) освободил ~19.4 GiB incremental caches;
 новые проверки с CARGO_INCREMENTAL=0. Runtime/config/history/reports сохранены.

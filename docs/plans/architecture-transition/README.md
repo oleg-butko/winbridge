@@ -35,6 +35,8 @@ Unix browser gate и [186 native tests/desktop compile](windows-fenced-request-g
 280 local tests, cross-checks/browser и
 [197 native tests/desktop compile](windows-recovery-pair-gate-2026-10-14.md) passed.
 Полный A2 завершён 2026-10-14; далее A3 discovery/read model.
+[Пакеты и ревью A3](discovery.md): сначала optional support catalog, затем paired
+readiness и общий consistent read model. Advertised support не даёт permission.
 
 ## Результат для пользователя и проектов
 
