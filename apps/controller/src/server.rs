@@ -62,6 +62,20 @@ pub async fn serve(controller: Arc<Controller>) -> Result<()> {
                     let _permit = permit;
                     let operation = async {
                         let request = winbridge_transport::read_frame(&mut stream).await?;
+                        let controller_request = serde_json::from_slice::<serde_json::Value>(&request).ok().is_some_and(|v|v.get("controllerContractVersion").is_some());
+                        if controller_request {
+                            let response = match serde_json::from_slice(&request) {
+                                Ok(request) => controller.call_controller_api(request).await,
+                                Err(_) => winbridge_protocol::ControllerApiResponse { controller_contract_version:winbridge_protocol::CONTROLLER_API_CONTRACT,
+                                    result:winbridge_protocol::ControllerApiResult::Error {message:"Invalid controller-local request; no worker request transmitted".into()} },
+                            };
+                            let mut bytes=serde_json::to_vec(&response)?;
+                            if bytes.len()>winbridge_transport::MAX_FRAME_BYTES {
+                                bytes=serde_json::to_vec(&winbridge_protocol::ControllerApiResponse { controller_contract_version:winbridge_protocol::CONTROLLER_API_CONTRACT,
+                                    result:winbridge_protocol::ControllerApiResult::Error {message:"Controller readiness response exceeds 1 MiB".into()} })?;
+                            }
+                            return winbridge_transport::write_frame(&mut stream,&bytes).await;
+                        }
                         let response = match serde_json::from_slice(&request) {
                             Ok(request) => controller.call_wire(request).await,
                             Err(e) => winbridge_protocol::WireResponse::Legacy(Box::new(LocalResponse::Error { message: format!("Invalid controller IPC request: {e}") })),

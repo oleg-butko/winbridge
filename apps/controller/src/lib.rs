@@ -14,7 +14,11 @@ use winbridge_transport::websocket::{self as ws, Result, RpcSender};
 mod activity;
 pub mod mcp;
 #[cfg(unix)]
+pub mod readiness;
+#[cfg(unix)]
 pub mod readiness_store;
+#[cfg(unix)]
+mod verification;
 
 pub fn publish(
     config: &ControllerConfig,
@@ -110,6 +114,8 @@ pub struct Controller {
     pub generation: String,
     state: Mutex<State>,
     activity: activity::ActivityLog,
+    #[cfg(unix)]
+    verification_runs: Mutex<std::collections::HashSet<String>>,
 }
 impl Controller {
     pub fn new(config: ControllerConfig) -> Result<Arc<Self>> {
@@ -120,6 +126,8 @@ impl Controller {
             generation: uuid::Uuid::new_v4().to_string(),
             state: Mutex::new(State::default()),
             activity,
+            #[cfg(unix)]
+            verification_runs: Mutex::new(std::collections::HashSet::new()),
         }))
     }
     pub fn status(&self) -> Result<ControllerStatus> {

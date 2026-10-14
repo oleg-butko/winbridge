@@ -41,7 +41,7 @@ async fn run() -> Result<(), String> {
         return Ok(());
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --contract-schemas (actual local DTO fingerprints; read-only)\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH measure-publish PROJECT REVISION (monotonic stage timings)\n  --config PATH publish-delta PROJECT REVISION BASE_SNAPSHOT (pinned base, measured)\n  --config PATH publish-resumable PROJECT REVISION [BASE_SNAPSHOT] (manifest-pinned 1 MiB blocks)\n  --config PATH import-delta REQUEST.json\n  --config PATH validate | serve | mcp | status | info | list\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
+        println!("WinBridge controller — Debian dispatch to the configured worker\n  --describe\n  --contract-schemas (actual local DTO fingerprints; read-only)\n  --check-snapshot-manifest PATH (metadata only; does not import or verify payload bytes)\n  --config PATH publish PROJECT REVISION\n  --config PATH measure-publish PROJECT REVISION (monotonic stage timings)\n  --config PATH publish-delta PROJECT REVISION BASE_SNAPSHOT (pinned base, measured)\n  --config PATH publish-resumable PROJECT REVISION [BASE_SNAPSHOT] (manifest-pinned 1 MiB blocks)\n  --config PATH import-delta REQUEST.json\n  --config PATH validate | serve | mcp | status | info | list\n  --config PATH readiness QUERY.json | verify-pair REQUEST.json | verification KEY\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID | cancel TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH watch TASK_ID [AFTER_EVENT_SEQUENCE] [AFTER_OUTPUT_SEQUENCE]\nWatch prints JSON updates, resumes the same task after reconnect, and never submits commands.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -73,6 +73,28 @@ async fn run() -> Result<(), String> {
     let operation = &args[2..];
     let address = winbridge_controller::endpoint(&config);
     match operation {
+        #[cfg(unix)]
+        [name,path] if name == "verify-pair" => {
+            let request:winbridge_protocol::VerifyPairRequest=serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),winbridge_transport::MAX_FRAME_BYTES as u64)?).map_err(|e|e.to_string())?;
+            let response=winbridge_controller::readiness::call(&address,&winbridge_protocol::ControllerApiRequest {controller_contract_version:1,adapter:winbridge_protocol::build_identity(),adapter_kind:winbridge_protocol::ControllerAdapter::Cli,request:winbridge_protocol::ControllerOperation::VerifyPair{request:Box::new(request)}}).await?;
+            println!("{}",serde_json::to_string_pretty(&response).map_err(|e|e.to_string())?);
+            if let winbridge_protocol::ControllerApiResult::Error{message}=response.result{return Err(message);}
+        }
+        #[cfg(unix)]
+        [name,key] if name == "verification" => {
+            let response=winbridge_controller::readiness::call(&address,&winbridge_protocol::ControllerApiRequest {controller_contract_version:1,adapter:winbridge_protocol::build_identity(),adapter_kind:winbridge_protocol::ControllerAdapter::Cli,request:winbridge_protocol::ControllerOperation::GetVerification{verification_key:key.clone()}}).await?;
+            println!("{}",serde_json::to_string_pretty(&response).map_err(|e|e.to_string())?);
+            if let winbridge_protocol::ControllerApiResult::Error{message}=response.result{return Err(message);}
+        }
+
+        #[cfg(unix)]
+        [name,path] if name == "readiness" => {
+            let query:winbridge_protocol::ContractReadinessQuery=serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path),winbridge_transport::MAX_FRAME_BYTES as u64)?).map_err(|e|e.to_string())?;
+            let response=winbridge_controller::readiness::call(&address,&winbridge_protocol::ControllerApiRequest {controller_contract_version:winbridge_protocol::CONTROLLER_API_CONTRACT,
+                adapter:winbridge_protocol::build_identity(),adapter_kind:winbridge_protocol::ControllerAdapter::Cli,request:winbridge_protocol::ControllerOperation::ContractReadiness{query}}).await?;
+            println!("{}",serde_json::to_string_pretty(&response).map_err(|e|e.to_string())?);
+            if let winbridge_protocol::ControllerApiResult::Error {message}=response.result {return Err(message);}
+        }
         [name, path] if name == "invoke-v2" => {
             let request: winbridge_protocol::FencedRequest = serde_json::from_slice(&winbridge_workspace_sync::read_bounded(Path::new(path), winbridge_transport::MAX_FRAME_BYTES as u64)?).map_err(|_| "Invalid contract-2 request JSON")?;
             let response = winbridge_transport::call_fenced(&address, &request).await.map_err(|e|format!("Contract-2 request unconfirmed: {e}; retain the same request context/key"))?;

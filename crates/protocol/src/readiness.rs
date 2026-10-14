@@ -127,6 +127,7 @@ pub enum RouteRole {
 #[serde(rename_all = "snake_case")]
 pub enum RouteTransport {
     McpIpcWebsocket,
+    CliIpcWebsocket,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

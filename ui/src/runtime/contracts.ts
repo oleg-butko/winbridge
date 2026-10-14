@@ -90,7 +90,7 @@ export type ContractSchemaCatalog = { schemaVersion: number, provider: BuildIden
 export type ProjectPolicyFingerprint = { projectId: string, sha256: string, };
 export type ProjectPolicyCatalog = { schemaVersion: number, provider: BuildIdentity, projects: Array<ProjectPolicyFingerprint>, };
 export type RouteRole = "adapter" | "controller" | "worker";
-export type RouteTransport = "mcp_ipc_websocket";
+export type RouteTransport = "mcp_ipc_websocket" | "cli_ipc_websocket";
 export type RouteHop = {
 /**
  * The ordered route is adapter -> controller -> worker.
@@ -105,6 +105,21 @@ export type BuildVerification = { build: BuildIdentity, platform: string, testSu
 export type PairVerification = { schemaVersion: number, identity: PairIdentity, consumerVerification: BuildVerification, providerVerification: BuildVerification, testProfile: string, reportSha256: string, checks: Array<string>, };
 export type ReadinessReason = "unsupported_contract" | "missing_identity" | "invalid_identity" | "missing_evidence" | "invalid_evidence" | "identity_changed" | "schema_changed" | "build_unverified" | "pair_untested" | "route_not_fresh" | "policy_denied";
 export type ContractReadiness = { supported: boolean, buildVerified: boolean, pairTested: boolean, enabled: boolean, reasons: Array<ReadinessReason>, };
+export type ControllerAdapter = "mcp" | "cli";
+export type ControllerApiRequest = { controllerContractVersion: number, adapter: BuildIdentity, adapterKind: ControllerAdapter, request: ControllerOperation, };
+export type ControllerOperation = { "method": "contract_readiness", query: ContractReadinessQuery, } | { "method": "verify_pair", request: VerifyPairRequest, } | { "method": "get_verification", verificationKey: string, };
+export type ContractReadinessQuery = { projectId: string, contract: ContractRef, receiptId: string | null, };
+export type ContractReadinessView = { projectId: string, contract: ContractRef, identity: PairIdentity | null, readiness: ContractReadiness, receiptId: string | null, testProfile: string, controllerGeneration: string, sessionId: string | null, detail: string, };
+export type ControllerApiResult = { "kind": "contract_readiness", view: ContractReadinessView, } | { "kind": "verification", view: VerificationView, } | { "kind": "error", message: string, };
+export type ControllerApiResponse = { controllerContractVersion: number, result: ControllerApiResult, };
+export type VerifyPairRequest = { verificationKey: string,
+/**
+ * Copy identity from the readiness observation when creating the operation;
+ * never replace it on retry or after reconnect/recovery.
+ */
+identity: PairIdentity, };
+export type VerificationStatus = "accepted" | "running" | "succeeded" | "failed" | "indeterminate";
+export type VerificationView = { verificationKey: string, identity: PairIdentity, status: VerificationStatus, stage: string, taskIds: Array<string>, receiptId: string | null, detail: string, };
 export type WorkerInfo = { protocolVersion: number, contractSchemas?: unknown,
 /**
  * Read-only policy fingerprints. Unknown schemas stay opaque on older hops.

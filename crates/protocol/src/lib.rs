@@ -7,6 +7,8 @@ mod discovery;
 pub use discovery::*;
 mod readiness;
 pub use readiness::*;
+mod controller_api;
+pub use controller_api::*;
 
 mod attention;
 pub use attention::*;

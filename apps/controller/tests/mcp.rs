@@ -115,7 +115,7 @@ fn catalog_is_generated_from_tagged_protocol_and_has_only_reachable_definitions(
         serde_json::to_value(schemars::schema_for!(winbridge_protocol::LocalRequest)).unwrap();
     assert_eq!(
         tools.len(),
-        request["oneOf"].as_array().unwrap().len() + 4 - 4
+        request["oneOf"].as_array().unwrap().len() + 7 - 4
     );
     assert!(!tools
         .iter()

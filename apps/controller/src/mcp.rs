@@ -173,6 +173,11 @@ pub fn tools() -> Result<Vec<Value>, String> {
         "description":"Call request contract 2 with caller-pinned instanceId and journalIncarnation from info.fencedRequests.context. Pin this context when creating the logical request and retain it with the idempotency key on every retry. Never replace it after reconnect/config reload. The worker rejects a stale scope; no v1 fallback occurs. Required for mutations in a recovered pair. Settings/output cleanup remain Windows local IPC only; controller_status uses its own legacy observation tool.",
         "inputSchema":fenced_schema,
         "annotations":{"readOnlyHint":false,"destructiveHint":true,"idempotentHint":false,"openWorldHint":true}}));
+    tools.push(json!({"name":"winbridge_contract_readiness", "description":"Observe support, build evidence, tested pair and current readiness for a project/contract on this exact live route. Unknown metadata, stale scope, changed policy/build or a missing receipt never enables a contract. This is read-only; existing A2 admission remains unchanged. receiptId selects historical evidence for comparison, not an execution permission.",
+        "inputSchema":schemars::schema_for!(winbridge_protocol::ContractReadinessQuery),
+        "annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
+    tools.push(json!({"name":"winbridge_verify_pair","description":"Explicitly verify the caller-pinned tuple against the installed Windows worker in isolated state, then the actual paired route. Copy identity from contract_readiness when creating the logical operation and retain it with verificationKey on every retry; never rebind it. Returns an operation, not success. First known profile is fixture/RPC-2; no desktop windows or outbound test-worker connection. Exact tested consumer build evidence must already be installed.","inputSchema":schemars::schema_for!(winbridge_protocol::VerifyPairRequest),"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}}));
+    tools.push(json!({"name":"winbridge_get_verification","description":"Read the original verification operation, stage, linked Windows task IDs and receipt. Does not start, retry, rebind or cancel any task.","inputSchema":{"type":"object","properties":{"verificationKey":{"type":"string"}},"required":["verificationKey"],"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
     tools.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     Ok(tools)
 }
@@ -354,6 +359,80 @@ async fn handle(
                         json!({"kind":"error","message":"Snapshot publication did not complete; inspect the same commit/package before retrying"})
                     }
                 }
+            } else if name == "winbridge_verify_pair" || name == "winbridge_get_verification" {
+                let operation = if name == "winbridge_verify_pair" {
+                    match serde_json::from_value::<winbridge_protocol::VerifyPairRequest>(args) {Ok(request)=>winbridge_protocol::ControllerOperation::VerifyPair{request:Box::new(request)},Err(_)=>return Some(error(id,-32602,"Supply a stable verificationKey and the original identity from contract_readiness"))}
+                } else {
+                    if args.as_object().is_none_or(|a| a.len() != 1)
+                        || !args["verificationKey"].is_string()
+                    {
+                        return Some(error(id, -32602, "Only verificationKey is accepted"));
+                    }
+                    winbridge_protocol::ControllerOperation::GetVerification {
+                        verification_key: args["verificationKey"].as_str().unwrap().into(),
+                    }
+                };
+                #[cfg(unix)]
+                {
+                    match super::readiness::call(
+                        &super::endpoint(config),
+                        &winbridge_protocol::ControllerApiRequest {
+                            controller_contract_version: 1,
+                            adapter: winbridge_protocol::build_identity(),
+                            adapter_kind: winbridge_protocol::ControllerAdapter::Mcp,
+                            request: operation,
+                        },
+                    )
+                    .await
+                    {
+                        Ok(response) => serde_json::to_value(response).unwrap(),
+                        Err(message) => {
+                            json!({"kind":"error","message":format!("Verification response unconfirmed: {message}; retain original key/identity, no automatic retry")})
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = operation;
+                    json!({"kind":"error","message":"Verification requires Debian controller IPC"})
+                }
+            } else if name == "winbridge_contract_readiness" {
+                let query: winbridge_protocol::ContractReadinessQuery =
+                    match serde_json::from_value(args) {
+                        Ok(q) => q,
+                        Err(_) => {
+                            return Some(error(
+                                id,
+                                -32602,
+                                "Arguments do not match the controller readiness query",
+                            ))
+                        }
+                    };
+                #[cfg(unix)]
+                {
+                    match super::readiness::call(
+                        &super::endpoint(config),
+                        &winbridge_protocol::ControllerApiRequest {
+                            controller_contract_version:
+                                winbridge_protocol::CONTROLLER_API_CONTRACT,
+                            adapter: winbridge_protocol::build_identity(),
+                            adapter_kind: winbridge_protocol::ControllerAdapter::Mcp,
+                            request: winbridge_protocol::ControllerOperation::ContractReadiness {
+                                query,
+                            },
+                        },
+                    )
+                    .await
+                    {
+                        Ok(response) => serde_json::to_value(response).unwrap(),
+                        Err(message) => json!({"kind":"error","message":message}),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = query;
+                    json!({"kind":"error","message":"Controller readiness requires Debian IPC"})
+                }
             } else if name == "winbridge_invoke_fenced" {
                 let request: winbridge_protocol::FencedRequest = match serde_json::from_value(args)
                 {
@@ -399,7 +478,9 @@ async fn handle(
                     }
                 }
             };
-            let failed = value["kind"] == "error" || value["response"]["kind"] == "error";
+            let failed = value["kind"] == "error"
+                || value["response"]["kind"] == "error"
+                || value["result"]["kind"] == "error";
             Some(response(id, tool_result(value, failed, state.structured)))
         }
         _ => Some(error(id, -32601, "Unsupported MCP method")),
