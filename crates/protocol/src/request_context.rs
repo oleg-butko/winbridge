@@ -83,6 +83,15 @@ pub struct FencedRequestInfo {
     pub legacy_mutations_allowed: bool,
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecoveryCoverageInfo {
+    pub complete: bool,
+    pub reason: String,
+}
+
 // Keep the closed v1 DTOs unchanged. A v2 frame cannot parse as a v1 mutation.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]

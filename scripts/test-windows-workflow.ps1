@@ -133,6 +133,7 @@ $report = [ordered]@{ schemaVersion = 1; platform = 'windows'; passed = $false; 
 New-Item -ItemType Directory -Path $ReportDirectory -ErrorAction Stop | Out-Null
 $reportPath = Join-Path $ReportDirectory 'report.json'
 $oldTarget = $env:CARGO_TARGET_DIR
+$oldIncremental = $env:CARGO_INCREMENTAL
 $oldTemp = $env:TEMP
 $oldTmp = $env:TMP
 $oldDeltaShared = $env:WINBRIDGE_DELTA_GATE_SHARED
@@ -155,6 +156,7 @@ try {
         }
     }
     $env:CARGO_TARGET_DIR = Join-Path (Split-Path $source -Parent) 'test-build-cache'
+    $env:CARGO_INCREMENTAL = '0'
     $env:TEMP = Join-Path (Split-Path $source -Parent) 'test-temp'
     $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
@@ -172,7 +174,7 @@ try {
         if ($NetwatchProfile) { throw 'TaskCasOnly requires an isolated scenario' }
         $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($source))
         $report.storage = [ordered]@{ volume = $drive.Name; availableBytesBefore = $drive.AvailableFreeSpace }
-        if ($drive.AvailableFreeSpace -lt 4GB) { throw 'Less than 4 GiB free for an isolated build; no existing run is deleted' }
+        if ($drive.AvailableFreeSpace -lt 8GB) { throw 'Less than 8 GiB free for an isolated build; no existing run is deleted' }
         if ($TaskCasRuntimeDiagnostic) {
             $env:WINBRIDGE_PROCESS_TRACE = '1'
             $groups = @(
@@ -189,7 +191,7 @@ try {
             @{ name='task-cas-process-resume-guard'; arguments=@('test','-p','winbridge-platform','--lib','windows::tests::','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-fenced-contract'; arguments=@('test','-p','winbridge-protocol','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-frozen-contracts'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
-            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','ownership','--test','leases','--test','reconciliation','--test','recovery_mode','--test','request_context','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='task-cas-native-writers'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--test','domain_cas','--test','ownership','--test','leases','--test','reconciliation','--test','recovery_mode','--test','request_context','--test','recovery_pair','--test','task_fsm','--test','runtime','--test','attention','--test','maintenance','--test','output','--test','history','--test','snapshots','--test','workflows','--test','resume','--test','profiles','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-cas-older-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_cas','--locked','--offline','--','--ignored','--exact','legacy_schema_six_worker_refuses_new_journal_without_mutating_it','--test-threads=1','--nocapture') }
             @{ name='task-cas-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
             )
@@ -343,6 +345,7 @@ try {
 } finally {
     Set-Location -LiteralPath $oldLocation.Path
     $env:CARGO_TARGET_DIR = $oldTarget
+    $env:CARGO_INCREMENTAL = $oldIncremental
     $env:TEMP = $oldTemp
     $env:TMP = $oldTmp
     $env:WINBRIDGE_DELTA_GATE_SHARED = $oldDeltaShared

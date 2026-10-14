@@ -5,7 +5,42 @@ use std::path::Path;
 use winbridge_protocol::{ResourceRecovery, ResourceRecoveryEntry};
 
 impl Store {
+    /// Minimal frozen schema-12 metadata for cutover guards. This does not
+    /// interpret old execution rows or migrate an archived/target journal.
+    /// Keeping this separate from the current-schema runtime reader allows
+    /// future migrations to preserve earlier recovery receipts.
+    pub fn read_admission_header(path: &Path) -> Result<(super::JournalAuthority, bool)> {
+        winbridge_platform::require_safe_path(path).map_err(|e| e.to_string())?;
+        for suffix in ["-wal", "-shm"] {
+            let mut name = path.as_os_str().to_os_string();
+            name.push(suffix);
+            winbridge_platform::require_safe_path(Path::new(&name)).map_err(|e| e.to_string())?;
+        }
+        let connection = Connection::open_with_flags(
+            path,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .map_err(sql)?;
+        connection
+            .busy_timeout(std::time::Duration::from_secs(2))
+            .map_err(sql)?;
+        let version: u32 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .map_err(sql)?;
+        if !(12..=JOURNAL_SCHEMA_VERSION).contains(&version) {
+            return Err(format!("Unsupported recovery admission metadata schema {version}; no migration/effects allowed"));
+        }
+        let authority = Self::read_authority(&connection)?;
+        let required = Self::read_admission_boundary(&connection, &authority.incarnation)?;
+        Ok((authority, required))
+    }
     pub fn open_read_only(path: &Path) -> Result<Self> {
+        winbridge_platform::require_safe_path(path).map_err(|e| e.to_string())?;
+        for suffix in ["-wal", "-shm"] {
+            let mut name = path.as_os_str().to_os_string();
+            name.push(suffix);
+            winbridge_platform::require_safe_path(Path::new(&name)).map_err(|e| e.to_string())?;
+        }
         let connection = Connection::open_with_flags(
             path,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,

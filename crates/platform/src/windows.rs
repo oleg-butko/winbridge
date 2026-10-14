@@ -38,6 +38,48 @@ fn owned(handle: HANDLE) -> io::Result<OwnedHandle> {
     Ok(unsafe { OwnedHandle::from_raw_handle(handle) })
 }
 impl Job {
+    /// Reuse the properly configured domain. Surviving processes stay covered;
+    /// per-project reconciliation still governs dispatch. Opening this owner
+    /// never claims physical emptiness or authorizes recovery cutover.
+    pub fn open_domain(name: &str) -> io::Result<Self> {
+        let handle = unsafe { CreateJobObjectW(std::ptr::null(), wide(name).as_ptr()) };
+        let existed = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;
+        let job = Self(owned(handle)?);
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { zeroed() };
+        if existed {
+            if unsafe {
+                QueryInformationJobObject(
+                    job.0.as_raw_handle(),
+                    JobObjectExtendedLimitInformation,
+                    &mut limits as *mut _ as *mut _,
+                    size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                    std::ptr::null_mut(),
+                )
+            } == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            if limits.BasicLimitInformation.LimitFlags != JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE {
+                return Err(io::Error::other(
+                    "Existing execution domain has unexpected limits",
+                ));
+            }
+        } else {
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if unsafe {
+                SetInformationJobObject(
+                    job.0.as_raw_handle(),
+                    JobObjectExtendedLimitInformation,
+                    &limits as *const _ as *const _,
+                    size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                )
+            } == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        Ok(job)
+    }
     pub fn new(name: Option<&str>) -> io::Result<Self> {
         if name.is_some_and(|name| name.contains('\0') || name.encode_utf16().count() >= 260) {
             return Err(io::Error::other("Invalid Windows Job Object name"));
@@ -157,6 +199,33 @@ impl Job {
 
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
+}
+
+/// Global namespace deliberately observes the same domain across logon sessions.
+/// Query access only; neither a missing task row nor an idle IPC peer is proof.
+pub fn observe_domain(
+    identity: &super::execution_domain::DomainIdentity,
+) -> super::process_identity::ProcessObservation {
+    use super::process_identity::ProcessObservation::{Empty, Occupied, Unknown};
+    match host_binding() {
+        Ok((host, _)) if host == identity.host_id => {}
+        Ok(_) => return Unknown("Execution domain belongs to another Windows host".into()),
+        Err(error) => return Unknown(error.to_string()),
+    }
+    let handle = unsafe { OpenJobObjectW(JOB_OBJECT_QUERY, 0, wide(&identity.job_name).as_ptr()) };
+    if handle.is_null() {
+        let error = io::Error::last_os_error();
+        return if error.raw_os_error() == Some(ERROR_FILE_NOT_FOUND as i32) {
+            Empty("Covered global execution Job no longer exists".into())
+        } else {
+            Unknown(error.to_string())
+        };
+    }
+    match owned(handle).and_then(|handle| Job(handle).is_empty()) {
+        Ok(true) => Empty("Covered global execution Job is empty".into()),
+        Ok(false) => Occupied("Covered global execution Job still contains processes".into()),
+        Err(error) => Unknown(error.to_string()),
+    }
 }
 
 pub fn host_binding() -> io::Result<(String, u32)> {

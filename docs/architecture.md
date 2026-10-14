@@ -136,7 +136,12 @@ worker проверяет scope до handler. Старые DTO и bytes оста
 Новый журнал может необратимо требовать этот контракт до первого owner activation;
 это не является physical proof или разрешением recovery cutover.
 271 local tests, real Unix browser gate и [186 native tests/desktop compile](plans/architecture-transition/windows-fenced-request-gate-2026-10-13.md) прошли.
-Exe paths остаются стабильными. Archive preparation/activation ещё впереди.
+Exe paths остаются стабильными. [b.2/b.3](plans/architecture-transition/recovery-pair.md)
+реализуют immutable preparation/activation, постоянный source retirement и
+whole-domain witness вне SQLite. Outer global Jobs разделены по durable owner/
+logon session; suspended child входит в них до per-task Job. Cutover требует всех
+Empty observations, не inventory после restore. 280 local tests/cross-checks и
+browser gate passed; Windows gate ожидается, full A2 открыт.
 Глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.

@@ -1,11 +1,16 @@
 //! Windows execution authority. The Unix runner is a development/test adapter.
 mod artifacts;
 mod attention;
+mod domain;
 mod history;
 mod imports;
 mod network;
 mod recovery;
+mod recovery_pair;
 pub use recovery::RECOVERY_MARKER;
+pub use recovery_pair::{
+    activate_recovery, prepare_recovery, PreparationStage, RecoveryActivation, RecoveryPreparation,
+};
 mod retention;
 mod settings;
 pub mod store;
@@ -114,6 +119,8 @@ pub struct Worker {
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
     unreconciled_tasks: Mutex<HashMap<String, String>>,
     inspection: bool,
+    execution_domain: Mutex<Option<winbridge_platform::execution_domain::ExecutionDomain>>,
+    coverage: Mutex<Option<winbridge_protocol::RecoveryCoverageInfo>>,
     _instance_lock: File,
 }
 impl Worker {
@@ -175,6 +182,7 @@ impl Worker {
         lock.try_lock_exclusive()
             .map_err(|e| format!("stateDirectory is already owned by another worker: {e}"))?;
         let db_path = config.state_directory.join("journal.sqlite");
+        let fresh_journal = !db_path.try_exists().map_err(|e| e.to_string())?;
         for suffix in ["", "-wal", "-shm"] {
             reject_symlink(
                 &config
@@ -186,11 +194,19 @@ impl Worker {
             if !db_path.is_file() {
                 return Err("Read-only recovery requires an existing journal.sqlite; no journal was created".into());
             }
-            recovery::latch(&config.state_directory)?;
+            recovery::latch_source(&config.state_directory)?;
             Store::open_read_only(&db_path)?
         } else {
-            recovery::reject_normal_start(&config.state_directory)?;
+            recovery::reject_normal_start(&config)?;
             let mut store = Store::open(&db_path)?;
+            if config
+                .state_directory
+                .join(domain::WITNESS)
+                .try_exists()
+                .map_err(|e| e.to_string())?
+            {
+                domain::load(&config.state_directory, &domain::context(&config, &store))?;
+            }
             store.begin_authority()?;
             store.recover_resource_leases()?;
             store.capture_legacy_resources().map_err(|e| {
@@ -227,6 +243,8 @@ impl Worker {
             controller_connection: Mutex::new(controller_connection),
             unreconciled_tasks: Mutex::new(HashMap::new()),
             inspection,
+            execution_domain: Mutex::new(None),
+            coverage: Mutex::new(None),
             _instance_lock: lock,
         });
         if !inspection {
@@ -243,6 +261,28 @@ impl Worker {
                     return Err(error);
                 }
             }
+            let (owner, info) =
+                domain::initialize(&worker.config, &*worker.store()?, fresh_journal)?;
+            *worker
+                .execution_domain
+                .lock()
+                .map_err(|_| "execution domain lock poisoned")? = owner;
+            *worker
+                .coverage
+                .lock()
+                .map_err(|_| "execution coverage lock poisoned")? = Some(info);
+        } else {
+            let context = domain::context(&worker.config, &*worker.store()?);
+            let info = domain::load(&worker.config.state_directory, &context)
+                .map(|witness| witness.info())
+                .unwrap_or_else(|reason| winbridge_protocol::RecoveryCoverageInfo {
+                    complete: false,
+                    reason,
+                });
+            *worker
+                .coverage
+                .lock()
+                .map_err(|_| "execution coverage lock poisoned")? = Some(info);
         }
         Ok(worker)
     }
@@ -544,6 +584,11 @@ impl Worker {
                 };
                 Ok(LocalResponse::Info {
                     info: Box::new(WorkerInfo {
+                        recovery_coverage: self
+                            .coverage
+                            .lock()
+                            .map_err(|_| "execution coverage lock poisoned")?
+                            .clone(),
                         fenced_requests: Some(FencedRequestInfo {
                             request_contract_version: FENCED_REQUEST_CONTRACT,
                             context: RequestContext {
@@ -1054,9 +1099,13 @@ impl Worker {
             .map_err(|_| "process cleanup receipt poisoned")? = None;
         let job_name = Store::execution_job_name(&token)?;
         trace_process(&format!("task={id} prepare.begin"), None);
-        let (child, stdout, stderr) = match ManagedChild::prepare(
+        let (child, stdout, stderr) = match ManagedChild::prepare_in_domain(
             &task.resolved_command,
             Some(&job_name),
+            self.execution_domain
+                .lock()
+                .map_err(|_| "execution domain lock poisoned")?
+                .as_ref(),
         ) {
             Ok(child) => child,
             Err(error) => {

@@ -335,6 +335,8 @@ export function NativeWorkbench() {
       <Text>{info.journalInspection.reason}</Text>
       <Text mt="xs">История, output и события внимания доступны. «Выполняется» и «Готово» здесь — сохранённые записи, а не подтверждение работающего процесса. Схема журнала: {info.journalInspection.schemaVersion}.</Text>
       <Text mt="xs">Worker сохраняет блокировку вне базы данных. Обычный перезапуск не разрешает исполнение; не удаляйте journal-recovery.required для продолжения работы.</Text>
+      <Text mt="xs">Прежняя история остаётся архивом. Новая пара готовится отдельно; запуск разрешается после проверки прежней области исполнения. Агенты переподключаются явно с новым контрактом запросов.</Text>
+      {info.recoveryCoverage && <Text mt="xs">Учёт области исполнения: {info.recoveryCoverage.reason}</Text>}
     </Alert>}
     {info?.resourceRecovery && <Alert id="resource-recovery" color="yellow" title={`Восстановление: ${info.resourceRecovery.unresolvedCount} ресурсов требуют проверки`}>
       <Text size="sm">Остановка прежнего исполнителя не подтверждена. Новые операции в этих проектах ждут освобождения ресурса; прежние команды повторно не запускаются.</Text>

@@ -6,6 +6,7 @@ use std::{
 use winbridge_protocol::ResolvedCommand;
 
 pub mod event_log;
+pub mod execution_domain;
 pub mod process_identity;
 pub mod reports;
 #[cfg(windows)]
@@ -182,9 +183,16 @@ impl ManagedChild {
         command: &ResolvedCommand,
         job_name: Option<&str>,
     ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
+        Self::prepare_in_domain(command, job_name, None)
+    }
+    pub fn prepare_in_domain(
+        command: &ResolvedCommand,
+        job_name: Option<&str>,
+        domain: Option<&execution_domain::ExecutionDomain>,
+    ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
         trace_process("prepare.begin", None);
         #[cfg(not(windows))]
-        let _ = job_name;
+        let _ = (job_name, domain);
         let mut builder = Command::new(&command.executable);
         builder
             .args(&command.arguments)
@@ -218,7 +226,10 @@ impl ManagedChild {
         let child = builder.spawn()?;
         trace_process("os-spawn.complete", Some(child.id()));
         #[cfg(windows)]
-        if let Err(error) = job.assign(&child) {
+        if let Err(error) = domain
+            .map_or(Ok(()), |domain| domain.job.assign(&child))
+            .and_then(|_| job.assign(&child))
+        {
             let mut child = child;
             let _ = child.kill();
             let _ = child.wait();

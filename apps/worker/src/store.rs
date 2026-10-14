@@ -11,6 +11,7 @@ use winbridge_protocol::{
 };
 
 mod admission;
+mod archive;
 mod inspection;
 mod leases;
 mod ownership;

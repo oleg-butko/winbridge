@@ -3,6 +3,15 @@
 
 ## A2.4.2b.1 request fence — завершён, 2026-10-13
 
+Обновление 2026-10-14: [archive/new pair b.2/b.3](plans/architecture-transition/recovery-pair.md)
+реализованы, [инструкция](guides/recovery-pair.md). Whole-domain witness вне SQLite,
+outer global Job каждого owner, create-only preparation/activation и постоянный
+source retirement. 280 workspace tests, Linux/Windows-target Clippy, UI checks
+и browser gate passed; Windows execution gate ожидается. Full A2 открыт.
+Installed schema-6 worker/generation/session прежние, connected/idle.
+Debian: [cleanup](guides/build-storage.md) освободил ~19.4 GiB incremental caches;
+новые проверки с CARGO_INCREMENTAL=0. Runtime/config/history/reports сохранены.
+
 [Контракт и ревью](plans/architecture-transition/fenced-requests.md),
 [CLI/MCP инструкция](guides/fenced-requests.md). Contract 2 закрепляет instance ID
 и journal incarnation у caller до отправки; transport/controller/worker не

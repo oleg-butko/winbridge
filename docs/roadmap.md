@@ -29,7 +29,9 @@ A2.4.2a завершён: local/browser и
 [новую пару/журнал с архивом](plans/architecture-transition/restore-admission-options.md).
 [A2.4.2b.1 request fence](plans/architecture-transition/fenced-requests.md) завершён:
 271 local tests, browser gate и [186 native tests/desktop compile](plans/architecture-transition/windows-fenced-request-gate-2026-10-13.md) прошли.
-Archive preparation и physical cutover ещё не реализованы; full A2 открыт.
+Archive preparation и physical cutover [b.2/b.3](plans/architecture-transition/recovery-pair.md)
+реализованы: 280 local tests, cross-checks и browser gate passed; Windows gate
+ожидается. Full A2 открыт до этого gate и финального ревью.
 
 ## Этап 0 — подготовка репозитория
 

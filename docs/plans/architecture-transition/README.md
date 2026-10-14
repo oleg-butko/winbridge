@@ -30,8 +30,10 @@
 [176-test full native gate](windows-inspection-diagnostic-2026-10-13.md) passed.
 Для A2.4.2b пользователь выбрал [новую пару/журнал с архивом](restore-admission-options.md).
 [b.1 request fence](fenced-requests.md) завершён: 271 workspace tests, real
-Unix browser gate и [186 native tests/desktop compile](windows-fenced-request-gate-2026-10-13.md) прошли. Archive preparation
-и physical cutover ещё впереди; полный A2 открыт.
+Unix browser gate и [186 native tests/desktop compile](windows-fenced-request-gate-2026-10-13.md) прошли.
+[Archive preparation/physical cutover b.2/b.3](recovery-pair.md) реализованы:
+280 local tests, cross-checks и browser gate passed; Windows gate ожидается.
+Полный A2 открыт.
 
 ## Результат для пользователя и проектов
 

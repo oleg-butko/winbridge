@@ -350,6 +350,9 @@ pub struct WorkerInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(feature = "typescript", ts(optional))]
     pub fenced_requests: Option<FencedRequestInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "typescript", ts(optional))]
+    pub recovery_coverage: Option<RecoveryCoverageInfo>,
     pub instance_id: String,
     pub node_id: String,
     pub generation: String,

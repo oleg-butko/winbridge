@@ -263,7 +263,7 @@ if ($reuse) {{
     $env:WINBRIDGE_PROCESS_TRACE = '1'
     $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($source))
     Write-Output ('Reusable diagnostic volume free bytes: ' + $drive.AvailableFreeSpace)
-    if ($drive.AvailableFreeSpace -lt 4GB) {{ throw 'Less than 4 GiB free; existing validation runs are retained' }}
+    if ($drive.AvailableFreeSpace -lt 8GB) {{ throw 'Less than 8 GiB free; existing validation runs are retained' }}
 }}
 {extra}
 $pwsh = (Get-Command pwsh.exe -ErrorAction Stop).Source
