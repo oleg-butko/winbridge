@@ -170,6 +170,11 @@ fn schema_metadata_binds_the_actual_dto_digest_to_provider_and_supported_contrac
     i.contract_schemas = Some(serde_json::to_value(&schemas).unwrap());
     assert_eq!(interpret_contract_schemas(&i), Some(schemas.clone()));
     assert!(is_sha256(&schemas.schemas[0].sha256));
+    assert_eq!(
+        schemas.schemas[0].sha256,
+        include_str!("../../../tests/fixtures/readiness/fenced-rpc-2.sha256").trim(),
+        "Schema change requires an explicit contract review"
+    );
     for raw in [
         json!(null),
         json!({"schemaVersion":99,"future":"schema"}),
@@ -197,4 +202,19 @@ fn schema_metadata_binds_the_actual_dto_digest_to_provider_and_supported_contrac
     changed.schemas[0].sha256 = "bad".into();
     i.contract_schemas = Some(serde_json::to_value(changed).unwrap());
     assert!(interpret_contract_schemas(&i).is_none());
+}
+
+#[test]
+fn evidence_json_has_stable_nested_key_order_and_preserves_array_order() {
+    let value: Value = serde_json::from_str(r#"{"z":1,"a":{"y":true,"b":["x",null]}}"#).unwrap();
+    assert_eq!(
+        canonical_evidence_json(&value).unwrap(),
+        br#"{"a":{"b":["x",null],"y":true},"z":1}"#
+    );
+    let reordered: Value =
+        serde_json::from_str(r#"{"a":{"b":["x",null],"y":true},"z":1}"#).unwrap();
+    assert_eq!(
+        canonical_evidence_json(&value).unwrap(),
+        canonical_evidence_json(&reordered).unwrap()
+    );
 }

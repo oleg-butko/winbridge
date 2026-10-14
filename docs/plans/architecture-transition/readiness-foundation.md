@@ -80,6 +80,9 @@ Old receipts остаются историей; disconnect не удаляет �
 - Отдельная типизированная decision не позволяет использовать присланный
   `enabled: true` как внутреннее разрешение; есть compile-fail regression.
 - Route включает transport и endpoints, а не только названия узлов.
+- Post-gate review исправил зависимость schema/policy hashes от serde_json
+  `preserve_order`: рекурсивная сортировка keys и golden digest проверяются
+  с обоими набором features. Final native повтор выполняет тот же focused profile.
 - Concurrent create-only dedup и reopen; corrupt/partial/future receipt,
   symlink target/store и FIFO отвергаются без подмены существующих файлов.
 - Policy/context/build/hop/schema/profile/check changes и отсутствие route/policy

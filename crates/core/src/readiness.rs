@@ -12,7 +12,7 @@ pub fn project_policy_catalog(
         .map(|project| {
             // Effective recipes include expanded profiles. These are the loaded settings,
             // not a pending edit on disk. Unrelated project edits do not alter this scope.
-            let bytes = serde_json::to_vec(&serde_json::json!({
+            let bytes = canonical_evidence_json(&serde_json::json!({
                 "schemaVersion": 1, "instanceId": config.instance_id, "nodeId": config.node_id,
                 "stateDirectory": config.state_directory, "project": project,
                 "workerSettings": config.worker,

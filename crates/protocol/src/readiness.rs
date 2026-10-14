@@ -7,6 +7,29 @@ pub fn evidence_sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+/// Sorted object keys at every level, independent of serde_json's optional
+/// preserve_order feature. Array order and typed numeric values stay intact.
+pub fn canonical_evidence_json(value: &serde_json::Value) -> Result<Vec<u8>, serde_json::Error> {
+    fn sorted(value: &serde_json::Value) -> serde_json::Value {
+        match value {
+            serde_json::Value::Object(fields) => {
+                let mut keys: Vec<_> = fields.keys().collect();
+                keys.sort();
+                let mut map = serde_json::Map::new();
+                for key in keys {
+                    map.insert(key.clone(), sorted(&fields[key]));
+                }
+                serde_json::Value::Object(map)
+            }
+            serde_json::Value::Array(items) => {
+                serde_json::Value::Array(items.iter().map(sorted).collect())
+            }
+            scalar => scalar.clone(),
+        }
+    }
+    serde_json::to_vec(&sorted(value))
+}
+
 pub fn is_sha256(value: &str) -> bool {
     value.len() == 64
         && value
@@ -174,7 +197,7 @@ pub fn fenced_rpc_schema_sha256() -> String {
     static DIGEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     DIGEST
         .get_or_init(|| {
-            let bytes = serde_json::to_vec(&serde_json::json!({
+            let bytes = canonical_evidence_json(&serde_json::json!({
                 "requestContractVersion": crate::FENCED_REQUEST_CONTRACT,
                 "request": schemars::schema_for!(crate::FencedRequest),
                 "response": schemars::schema_for!(crate::FencedResponse)
