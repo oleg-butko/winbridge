@@ -3,13 +3,16 @@
 [Контракт и ревью](plans/architecture-transition/readiness-projection.md).
 Negotiated readonly frame/cache/UI implemented; 307 workspace tests,
 Linux/Windows Clippy, 29 shared Rust/TS cases, typecheck/UI build и actual
-WS→local IPC→browser/disconnect passed. Native candidate gate готовится;
+WS→local IPC→browser/disconnect passed.
+[Native candidate gate](plans/architecture-transition/windows-projection-gate-2026-10-14.md):
+41 tests/desktop compile, seven verified artifacts passed;
 full A3.2/A3 остаётся открытым. Installed worker `b2aeb9f` здоров/idle, но
 projection contract 1 ещё не объявляет. Перед actual new/new UI gate потребуется
 обновление постоянного runtime. Controller сейчас actual tested `69fb4b1`
 (build `1792019331881246150`, serve session `82480`); новые checks его не заменяли.
-Desktop оставить закрытым; working worker нужен для isolated candidate gate.
-Debian free ~31 GiB, incremental disabled, existing compiler cache будет переиспользован.
+Desktop можно оставить закрытым; worker здоров/idle. Новое обновление требуется
+для negotiated projection 1; это граница текущего цикла пользователя.
+Debian free ~31 GiB, incremental disabled; Windows cache переиспользован, ~21.8 GiB free.
 
 ## A3.2b runtime producer — проверен, 2026-10-14
 

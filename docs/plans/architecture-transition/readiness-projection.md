@@ -35,5 +35,10 @@ corrupt published record не интерпретируется как evidence.
 307 workspace tests, Linux/Windows-target Clippy, TypeScript/UI build прошли.
 29 shared Rust/TS cases и actual Unix WS→IPC→browser rendering/disconnect прошли.
 Frozen worker RPC-2 schema SHA-256 прежний `dd86d35b8b9ed59aca0bb438491e906b9c25c69970f0121226fdee99b98e9a12`.
-Native candidate gate готовится. Installed `b2aeb9f` не объявляет projection 1;
+[Native candidate gate](windows-projection-gate-2026-10-14.md) прошёл: 41 tests,
+desktop compile, seven verified artifacts. Installed `b2aeb9f` не объявляет projection 1;
 actual new/new Windows presentation требует следующего обновления.
+
+Sequence упорядочивает delivery этой readonly сводки внутри session; он не
+обещает единую SQLite revision для всех строк. Полный consistent/paged read model
+реализуется отдельно в A3.3. Новые сведения не добавляют execution permission.

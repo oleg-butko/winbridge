@@ -1,4 +1,35 @@
-## Обновление для A3.2b — 2026-10-14
+# Обновление для A3.2c — 2026-10-14
+
+Новая сводка «Совместимость компонентов» требует поддержки readonly projection 1
+в worker/desktop. Установленный `b2aeb9f` исправен, но этого контракта ещё нет.
+[41 native tests и desktop compile](../plans/architecture-transition/windows-projection-gate-2026-10-14.md)
+прошли; actual new/new presentation проверяется после обновления. Ручной UI checklist
+не нужен. Debian controller и consumer evidence обновляет агент.
+
+Точное имя итогового ZIP и SHA-256 сообщает агент; они также сохранены в
+`K:\VMs\shared\WinBridge\sources\architecture-update.latest.json`.
+Пакет содержит runtime code, прошедший gate; последующие изменения — report/docs
+и Debian verifier. Не выбирать старый ZIP из исторических разделов ниже.
+
+1. Закройте desktop, остановите worker через Ctrl+C.
+2. Обновите обычный `K:\_proj-26\winbridge\src` содержимым каталога `winbridge`
+   из ZIP. Existing configs, `target`, `.winbridge` и runtime journal сохраняются.
+3. Выполните без `-SkipBuild`:
+
+   ```powershell
+   Set-Location K:\_proj-26\winbridge\src
+   .\scripts\prepare-windows-snapshot.ps1
+   ```
+
+4. Запущенный desktop можно закрыть; worker оставьте работать и сообщите об обновлении.
+   Агент проверит фактический build/metadata и новый route автоматически.
+
+Постоянный runtime `K:\_proj-26\winbridge\runtime`, firewall path, RPC 1/2
+и schema 12 сохраняются. Новые окна для автоматической проверки не нужны.
+Candidate report не включает новую пару заранее: actual binaries получают новую
+квитанцию только после их проверки.
+
+## Предыдущее обновление для A3.2b — 2026-10-14
 
 A3.2a прошёл [39 native tests и desktop check](../plans/architecture-transition/windows-readiness-gate-2026-10-14.md).
 Для следующего пакета нужны actual `projectPolicies`/`contractSchemas` от installed

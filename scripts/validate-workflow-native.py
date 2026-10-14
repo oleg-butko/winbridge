@@ -175,6 +175,7 @@ def main():
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--readiness-only', action='store_true', help='Check typed pair/readiness policy, native Info and fenced scope, legacy wire and desktop compile; no reference worker or UI windows')
+    parser.add_argument('--verify-readiness-run', help='Read-only recheck of an existing terminal readiness run/report; never submit or rebuild')
     parser.add_argument('--task-cas-only', action='store_true', help='Check durable leases/CAS, schema-6/7/8/9/10/11 migration, physical reconciliation, fenced requests, desktop compile and old-worker refusal; no desktop windows')
     parser.add_argument('--task-cas-runtime-diagnostic', action='store_true', help='With --task-cas-only: narrow process/recovery diagnostic with trace and disk usage, without UI or full CAS/reference gate')
     parser.add_argument('--task-cas-reuse-diagnostic', help='Full CAS only: reuse the source/build cache of a successful diagnostic run ID for this exact archive; new tests/state/report, process trace enabled')
@@ -190,6 +191,8 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
+    if args.verify_readiness_run and (not args.readiness_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.verify_readiness_run)):
+        parser.error('--verify-readiness-run requires --readiness-only and a valid saved run ID')
     if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only, args.readiness_only)) > 1:
         parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
@@ -218,7 +221,8 @@ def main():
     digest = hashlib.sha256(args.archive.read_bytes()).hexdigest()
     with zipfile.ZipFile(args.archive) as archive:
         archive_has_discovery = 'winbridge/apps/worker/tests/discovery.rs' in archive.namelist()
-    run_id = time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
+        archive_has_projection = 'winbridge/crates/protocol/tests/projection.rs' in archive.namelist()
+    run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
@@ -353,33 +357,45 @@ exit $nativeExit
                'command': {'kind': 'direct', 'executable': 'pwsh.exe',
                            'arguments': ['-NoProfile', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()], 'workingDirectory': '.'}}
     local_report = ROOT / '.winbridge' / 'workflow-validation' / run_id
-    local_report.mkdir(parents=True)
-    (local_report / 'request.json').write_text(json.dumps(request, indent=2))
-    # Preserve the request for reconciliation; stop on an unexpected worker error.
-    accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
-    task_id = accepted['taskId']
-    print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest, 'reusedDiagnostic': args.task_cas_reuse_diagnostic, 'reusedBuildCache': cache_receipt}), flush=True)
-    chunks = []
-    sequence = 0
-    deadline = time.monotonic() + 1850
-    last_status = None
-    while time.monotonic() < deadline:
+    if args.verify_readiness_run:
+        if local_report.is_symlink() or report.is_symlink():
+            raise RuntimeError('Linked saved readiness run refused')
+        request = json.loads((local_report / 'request.json').read_text())
+        saved = json.loads((local_report / 'task-report.json').read_text())
+        task_id = saved['task']['taskId']
         task = call(endpoint, {'method': 'get_task', 'taskId': task_id})['task']
-        if task['status'] != last_status:
-            print('native task: ' + task['status'], flush=True)
-            last_status = task['status']
-        while True:
-            page = call(endpoint, {'method': 'read_output', 'taskId': task_id, 'afterSequence': sequence})['chunks']
-            if not page:
-                break
-            chunks.extend(page)
-            sequence = page[-1]['sequence']
-        if task['status'] not in {'queued', 'running'}:
-            break
-        time.sleep(1)
+        if task['submission'] != request or task['status'] != 'succeeded' or task['exitCode'] != 0:
+            raise RuntimeError('Saved run does not match the terminal accepted task; no submit performed')
+        chunks = saved['output']
+        print(json.dumps({'readOnlyRecheck': True, 'taskId': task_id, 'reportDirectory': str(report)}), flush=True)
     else:
-        raise TimeoutError(f'Native task {task_id} deadline; inspect the retained request and worker task')
-    (local_report / 'task-report.json').write_text(json.dumps({'schemaVersion': 1, 'platform': 'windows', 'task': task, 'output': chunks}, indent=2))
+        local_report.mkdir(parents=True)
+        (local_report / 'request.json').write_text(json.dumps(request, indent=2))
+        # Preserve the request for reconciliation; stop on an unexpected worker error.
+        accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
+        task_id = accepted['taskId']
+        print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest, 'reusedDiagnostic': args.task_cas_reuse_diagnostic, 'reusedBuildCache': cache_receipt}), flush=True)
+        chunks = []
+        sequence = 0
+        deadline = time.monotonic() + 1850
+        last_status = None
+        while time.monotonic() < deadline:
+            task = call(endpoint, {'method': 'get_task', 'taskId': task_id})['task']
+            if task['status'] != last_status:
+                print('native task: ' + task['status'], flush=True)
+                last_status = task['status']
+            while True:
+                page = call(endpoint, {'method': 'read_output', 'taskId': task_id, 'afterSequence': sequence})['chunks']
+                if not page:
+                    break
+                chunks.extend(page)
+                sequence = page[-1]['sequence']
+            if task['status'] not in {'queued', 'running'}:
+                break
+            time.sleep(1)
+        else:
+            raise TimeoutError(f'Native task {task_id} deadline; inspect the retained request and worker task')
+        (local_report / 'task-report.json').write_text(json.dumps({'schemaVersion': 1, 'platform': 'windows', 'task': task, 'output': chunks}, indent=2))
     if not (report / 'report.ready.json').exists():
         diagnostic = ''.join(bytes(chunk['bytes']).decode('utf-8', errors='replace') for chunk in chunks)[-8000:]
         raise RuntimeError(f'Native bootstrap failed; task {task_id}; retained report {local_report}: {diagnostic}')
@@ -414,7 +430,10 @@ exit $nativeExit
             if not catalog_proof['passed'] or catalog_proof['platform'] != 'windows' or not catalog_proof['catalogAbsent'] or not catalog_proof['isolatedReferenceStopped'] or catalog_proof['candidateBuild'] != proof['build'] or catalog_proof['referenceBuild'] != info['build']:
                 raise RuntimeError('Incomplete native legacy discovery/reference proof')
     if args.readiness_only:
-        expected_groups = ['readiness-pure-policy', 'readiness-wire-compatibility', 'readiness-native-info-and-scope', 'readiness-desktop-contract-check']
+        expected_groups = ['readiness-pure-policy', 'readiness-wire-compatibility']
+        if archive_has_projection:
+            expected_groups.append('readiness-cache-freshness')
+        expected_groups += ['readiness-native-info-and-scope', 'readiness-desktop-contract-check']
         if not result.get('readinessOnly') or [g['name'] for g in result['commands']] != expected_groups or any(g['exitCode'] != 0 for g in result['commands']):
             raise RuntimeError('Incomplete readiness foundation gate')
         proof = json.loads((report / 'policy-proof.json').read_text(encoding='utf-8-sig'))
@@ -478,7 +497,8 @@ exit $nativeExit
     final_info = call(endpoint, {'method':'info'})['info']
     if final_info['generation'] != info['generation'] or final_info.get('journalRecoveryRequired') or final_info.get('maintenanceError') or final_info.get('activeTaskCount') != 0:
         raise RuntimeError('Installed worker health/generation changed unexpectedly; inspect retained task/report')
-    (local_report / 'worker-proof.json').write_text(json.dumps({'initial':{k:v for k,v in info.items() if k!='projects'},'final':{k:v for k,v in final_info.items() if k!='projects'}},indent=2))
+    proof_name = 'worker-observation-' + uuid.uuid4().hex + '.json' if args.verify_readiness_run else 'worker-proof.json'
+    (local_report / proof_name).write_text(json.dumps({'readOnlyRecheck':bool(args.verify_readiness_run),'initial':{k:v for k,v in info.items() if k!='projects'},'final':{k:v for k,v in final_info.items() if k!='projects'}},indent=2))
     print(json.dumps({'passed': True, 'platform': 'windows', 'taskId': task_id, 'reportDirectory': str(report), 'reportSha256': hashlib.sha256((report / 'report.json').read_bytes()).hexdigest(), 'commands': result['commands']}), flush=True)
 
 
