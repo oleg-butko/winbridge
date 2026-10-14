@@ -1,8 +1,9 @@
 # A3.2a — идентичность пары, evidence и отпечаток policy
 
 Дата: 2026-10-14. Часть [A3.2](paired-readiness.md), после закрытого A3.1.
-Реализован фундамент: 300 workspace tests, Linux/Windows-target Clippy,
-TypeScript/UI и 36 общих Rust/TS metadata cases passed. Windows gate готовится. **Полный A3.2/A3 открыт**:
+A3.2a завершён: 300 workspace tests + focused canonical review, Linux/Windows
+Clippy, TypeScript/UI и 36 Rust/TS cases passed. [Финальный Windows gate](windows-readiness-gate-2026-10-14.md):
+39 tests, desktop check и шесть verified artifacts passed. **Полный A3.2/A3 открыт**:
 producer квитанций, runtime readiness API и применение к новым execution contracts
 пока не подключены. Сохранённая квитанция сама ничего не запускает.
 

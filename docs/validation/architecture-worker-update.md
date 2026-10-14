@@ -1,3 +1,27 @@
+## Обновление для A3.2b — 2026-10-14
+
+A3.2a прошёл [39 native tests и desktop check](../plans/architecture-transition/windows-readiness-gate-2026-10-14.md).
+Для следующего пакета нужны actual `projectPolicies`/`contractSchemas` от installed
+worker; `f128c9a` этих полей ещё не передаёт. Controller обновляет агент.
+
+Проверенный code ZIP:
+`K:\VMs\shared\WinBridge\sources\winbridge-20261014T135448Z-b2aeb9f-7bf64364.zip`.
+SHA-256 `09f5c70b8e47620133ba85f90b34db808f827450d0fc3f1e90d261c905600d7f`.
+
+Закройте desktop, остановите worker через Ctrl+C, распакуйте в обычный `src`,
+затем выполните:
+
+```powershell
+Set-Location K:\_proj-26\winbridge\src
+.\scripts\prepare-windows-snapshot.ps1
+```
+
+Без `-SkipBuild`. Configs и journal сохраняются; schema 12 прежняя.
+Worker запускается по прежнему `K:\_proj-26\winbridge\runtime\winbridge-worker.exe`,
+правило firewall остаётся прежним. Desktop после подготовки можно закрыть;
+worker оставьте запущенным и сообщите об обновлении. Ручной UI checklist не нужен.
+Полный A3.2 ещё открыт: после обновления агент продолжит producer/readiness API.
+
 # Обновление Windows worker для A3.2
 
 Нужно обновить runtime для actual paired Windows проверок. Native candidate gate

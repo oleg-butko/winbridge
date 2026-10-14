@@ -39,8 +39,8 @@ Unix browser gate и [186 native tests/desktop compile](windows-fenced-request-g
 readiness и общий consistent read model. Advertised support не даёт permission.
 A3.1 завершён: 286 workspace tests, 24 Rust/TS cases и
 [203 native tests/desktop compile](windows-discovery-gate-2026-10-14.md) passed.
-[A3.2a foundation](readiness-foundation.md) реализован локально: identities,
-create-only evidence и loaded policy fingerprint. Native gate готовится;
+[A3.2a foundation](readiness-foundation.md) завершён: identities, create-only
+evidence, loaded policy и schema hashes; [39 native tests/desktop check](windows-readiness-gate-2026-10-14.md) passed;
 [полный A3.2](paired-readiness.md) и A3.3 ещё открыты.
 
 ## Результат для пользователя и проектов

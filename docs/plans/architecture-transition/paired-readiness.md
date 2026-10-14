@@ -1,7 +1,7 @@
 # A3.2 — evidence конкретной пары и разрешение контрактов
 
 Дата: 2026-10-14. После [A3.1 catalog](discovery.md).
-A3.2 начат; [A3.2a foundation](readiness-foundation.md) реализован локально.
+A3.2 начат; [A3.2a foundation](readiness-foundation.md) завершён с native gate.
 Runtime producer/readiness API/enable ещё не подключены; полный A3.2/A3 открыт.
 
 ## Последовательность исполнения

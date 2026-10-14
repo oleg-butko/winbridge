@@ -1,4 +1,4 @@
-## A3.2a readiness foundation — реализован локально, 2026-10-14
+## A3.2a readiness foundation — завершён, 2026-10-14
 
 [Контракт и ревью](plans/architecture-transition/readiness-foundation.md).
 Installed worker обновлён пользователем до clean `f128c9a`, generation
@@ -12,9 +12,13 @@ same key/same Task ID и stale scope refusal прошли. Worker idle/без re
 local receipt store, optional loaded project-policy hashes и actual DTO schema
 digests в Info; UI объясняет наличие/отсутствие policy metadata.
 300 workspace tests, Linux/Windows Clippy, 36 Rust/TS cases, UI build passed.
-Native `ReadinessOnly` gate готовится; full A3.2/A3 открыт. Producer и runtime
+[Native gate](plans/architecture-transition/windows-readiness-gate-2026-10-14.md):
+39 tests + desktop compile, шесть verified artifacts passed; code `b2aeb9f`,
+run `20261014-095509-b06820e8`. Post-gate review canonical hashing fixed and
+checked with both JSON map features. Full A3.2/A3 открыт. Producer и runtime
 UI/CLI/MCP readiness API пока не подключены. Следующий A3.2b требует installed
 worker с policy metadata; не подменять её чтением disk config или candidate proof.
+Debian cleanup освободил 13.7 GiB obsolete test binaries; free ~31 GiB.
 Desktop можно оставить закрытым; worker оставить работающим.
 
 ## A3.1 discovery catalog — завершён, 2026-10-14
