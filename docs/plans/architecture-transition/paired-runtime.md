@@ -52,6 +52,14 @@ same-key вызова; worker journal сверяет ту же задачу, sco
 Known failure/unknown outcome не создают success receipt и не запускают команду
 автоматически. CLI/MCP acceptance означает операцию, а не готовность контракта.
 
+Post-implementation review: unknown outcome сохраняется отдельным immutable
+interruption record, а не terminal failure. Явный same-key retry продолжает
+сверку прежних task keys; без supervisor сохранённый plan показывается как
+`indeterminate`, поскольку ACK мог потеряться до сохранения Task ID. Known terminal
+failure не повторяется. Drop guard освобождает in-memory key, panic executor
+попадает в supervisor как unknown outcome. Report/ready schema проверяется явно;
+consumer proof создаётся с 0700/0600 и fsync parent directory.
+
 Следом — actual paired producer gate, reconnect/reopen и UI projection через
 negotiated readonly metadata. Windows worker `b2aeb9f` уже даёт required policy/schema
 inputs. Новое представление для desktop ещё не реализовано; полноту A3.2 не объявлять.

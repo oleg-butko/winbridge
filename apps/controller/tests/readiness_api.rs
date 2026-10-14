@@ -163,20 +163,27 @@ async fn actual_readiness_ipc_mcp_observe_new_metadata_without_enabling_missing_
         .reasons
         .contains(&ReadinessReason::RouteNotFresh));
     if let Some(directory) = std::env::var_os("WINBRIDGE_CONSUMER_PROOF_DIRECTORY") {
+        use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
         let directory = std::path::Path::new(&directory);
         let artifact = fs::read(executable).unwrap();
         let proof = serde_json::json!({"schemaVersion":1,"profile":"controller-consumer-rpc2-v1","passed":true,"platform":"linux","build":build_identity(),"binarySha256":evidence_sha256(&artifact),"checks":["actual-cli-identity","actual-mcp-stdio","actual-ws-ipc-route","schema-policy-scope-preserved","unknown-contract-no-dispatch","disconnect-no-enable"]});
         let bytes = serde_json::to_vec_pretty(&proof).unwrap();
         let id = evidence_sha256(&serde_json::to_vec(&build_identity()).unwrap());
-        fs::create_dir_all(directory).unwrap();
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(directory)
+            .unwrap();
         let path = directory.join(format!("consumer-{id}.json"));
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create_new(true)
+            .mode(0o600)
             .open(path)
             .unwrap();
         file.write_all(&bytes).unwrap();
         file.sync_all().unwrap();
+        fs::File::open(directory).unwrap().sync_all().unwrap();
     }
     server.abort();
     let _ = server.await;

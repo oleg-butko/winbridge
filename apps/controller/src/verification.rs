@@ -24,6 +24,34 @@ struct Plan {
     pair_request: FencedRequest,
     report_directory: PathBuf,
 }
+enum VerificationFailure {
+    Failed(String),
+    Indeterminate(String),
+}
+impl From<String> for VerificationFailure {
+    fn from(detail: String) -> Self {
+        Self::Indeterminate(detail)
+    }
+}
+impl From<&str> for VerificationFailure {
+    fn from(detail: &str) -> Self {
+        Self::Indeterminate(detail.into())
+    }
+}
+// Dropping the supervisor (including unwinding) must release its in-memory key.
+struct VerificationRun {
+    owner: Arc<Controller>,
+    key: String,
+}
+impl Drop for VerificationRun {
+    fn drop(&mut self) {
+        self.owner
+            .verification_runs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.key);
+    }
+}
 fn durable_new<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let payload = serde_json::to_value(value).map_err(|e| e.to_string())?;
     let checksum = evidence_sha256(&canonical_evidence_json(&payload).map_err(|e| e.to_string())?);
@@ -106,6 +134,13 @@ impl Controller {
         }
         winbridge_platform::require_local_disk(&self.config.state_directory)
             .map_err(|e| e.to_string())?;
+        for ancestor in self.config.state_directory.ancestors() {
+            let metadata = fs::symlink_metadata(ancestor).map_err(|e| e.to_string())?;
+            if metadata.is_symlink() || !metadata.is_dir() {
+                return Err("Linked/non-directory verification ancestor refused".into());
+            }
+        }
+        crate::activity::private_directory(&self.config.state_directory)?;
         let root = self
             .config
             .state_directory
@@ -144,13 +179,16 @@ impl Controller {
             .lock()
             .map_err(|_| "verification supervisor poisoned")?
             .contains(key);
+        if !running && directory.join("interruption.json").exists() {
+            return durable_read(&directory.join("interruption.json"));
+        }
         Ok(VerificationView {
             verification_key: key.into(),
             identity: plan.request.identity,
             status: if running {
                 VerificationStatus::Running
             } else {
-                VerificationStatus::Accepted
+                VerificationStatus::Indeterminate
             },
             stage: if task_ids.is_empty() {
                 "accepted"
@@ -323,24 +361,42 @@ impl Controller {
         if spawn {
             let owner = Arc::clone(self);
             tokio::spawn(async move {
-                let result = owner.run_verification(&key).await;
+                let _run = VerificationRun {
+                    owner: Arc::clone(&owner),
+                    key: key.clone(),
+                };
+                let executor = Arc::clone(&owner);
+                let execution_key = key.clone();
+                // JoinError becomes an explicit unknown outcome; it cannot strand the key.
+                let result =
+                    tokio::spawn(async move { executor.run_verification(&execution_key).await })
+                        .await
+                        .unwrap_or_else(|error| {
+                            Err(VerificationFailure::Indeterminate(format!(
+                                "Verification executor interrupted: {error}"
+                            )))
+                        });
                 if let Err(error) = result {
                     if let Ok(mut view) = owner.get_verification(&key) {
-                        view.status =
-                            if error.contains(" ended ") || error.contains("report mismatch") {
-                                VerificationStatus::Failed
-                            } else {
-                                VerificationStatus::Indeterminate
-                            };
-                        view.detail = error;
-                        let _ = durable_new(&directory.join("terminal.json"), &view);
+                        let (name, status, detail) = match error {
+                            VerificationFailure::Failed(detail) => {
+                                ("terminal.json", VerificationStatus::Failed, detail)
+                            }
+                            VerificationFailure::Indeterminate(detail) => (
+                                "interruption.json",
+                                VerificationStatus::Indeterminate,
+                                detail,
+                            ),
+                        };
+                        view.status = status;
+                        view.detail = detail;
+                        // The first interruption stays historical. Explicit same-key retry
+                        // may reconcile the original task keys, but never replace the plan.
+                        if let Err(error) = durable_new(&directory.join(name), &view) {
+                            eprintln!("Verification {key}: cannot persist outcome: {error}");
+                        }
                     }
                 }
-                owner
-                    .verification_runs
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .remove(&key);
             });
         }
         self.get_verification(&request.verification_key)
@@ -433,7 +489,7 @@ impl Controller {
         sender: &RpcSender,
         context: &RequestContext,
         id: &str,
-    ) -> Result<TaskRecord, String> {
+    ) -> Result<TaskRecord, VerificationFailure> {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(200);
         loop {
             let response = sender
@@ -450,10 +506,10 @@ impl Controller {
                 if task.status == TaskStatus::Succeeded && task.exit_code == Some(0) {
                     return Ok(*task);
                 }
-                return Err(format!(
+                return Err(VerificationFailure::Failed(format!(
                     "Verification task {id} ended {:?}; no receipt",
                     task.status
-                ));
+                )));
             }
             if tokio::time::Instant::now() >= deadline {
                 return Err("Verification observation deadline; no automatic command retry".into());
@@ -477,7 +533,7 @@ impl Controller {
         durable_new(path, &task.task_id)?;
         Ok((sender, task.task_id))
     }
-    async fn run_verification(&self, key: &str) -> Result<(), String> {
+    async fn run_verification(&self, key: &str) -> Result<(), VerificationFailure> {
         let directory = self.verification_directory(key, false)?;
         let plan: Plan = durable_read(&directory.join("plan.json"))?;
         let consumer = self.consumer_verification(&plan.adapter)?;
@@ -508,7 +564,9 @@ impl Controller {
             "managed-tree-cancel",
             "isolated-provider-stopped"
         ]);
-        if ready["passed"] != true
+        if ready["schemaVersion"] != 1
+            || proof["schemaVersion"] != 1
+            || ready["passed"] != true
             || ready["sha256"] != evidence_sha256(&report_bytes)
             || ready["bytes"] != report_bytes.len()
             || proof["passed"] != true
@@ -520,9 +578,9 @@ impl Controller {
                     .map_err(|e| e.to_string())?
             || !proof["binarySha256"].as_str().is_some_and(is_sha256)
         {
-            return Err(
+            return Err(VerificationFailure::Failed(
                 "Actual installed-provider report mismatch/incomplete; no pair receipt".into(),
-            );
+            ));
         }
         let provider = BuildVerification {
             build: plan.request.identity.provider.clone(),
@@ -599,6 +657,74 @@ impl Controller {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn interruption_is_reconcilable_and_a_dropped_supervisor_cannot_strand_the_key() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = serde_json::from_value(json!({"schemaVersion":1,"instanceId":"verification-test","nodeId":"controller","stateDirectory":temp.path().join("state"),"controller":{"listenAddress":"127.0.0.1:1143","workerNodeId":"worker"},"projects":[]})).unwrap();
+        let owner = Controller::new(config).unwrap();
+        let receipt: PairVerification =
+            serde_json::from_str(include_str!("../../../tests/fixtures/readiness/pair.json"))
+                .unwrap();
+        let key = "original-verification";
+        let directory = owner.verification_directory(key, true).unwrap();
+        let request = FencedRequest {
+            request_contract_version: 2,
+            context: receipt.identity.context.clone(),
+            request: LocalRequest::Info,
+        };
+        let plan = Plan {
+            request: VerifyPairRequest {
+                verification_key: key.into(),
+                identity: receipt.identity,
+            },
+            adapter: build_identity(),
+            adapter_kind: ControllerAdapter::Mcp,
+            provider_request: request.clone(),
+            pair_request: request,
+            report_directory: temp.path().join("report"),
+        };
+        durable_new(&directory.join("plan.json"), &plan).unwrap();
+        let mut interrupted = owner.get_verification(key).unwrap();
+        assert!(matches!(
+            interrupted.status,
+            VerificationStatus::Indeterminate
+        ));
+        interrupted.detail = "Reply lost; retain original task keys".into();
+        durable_new(&directory.join("interruption.json"), &interrupted).unwrap();
+        assert_eq!(
+            owner.get_verification(key).unwrap().detail,
+            interrupted.detail
+        );
+        owner.verification_runs.lock().unwrap().insert(key.into());
+        let run = VerificationRun {
+            owner: Arc::clone(&owner),
+            key: key.into(),
+        };
+        assert!(matches!(
+            owner.get_verification(key).unwrap().status,
+            VerificationStatus::Running
+        ));
+        drop(run);
+        assert!(matches!(
+            owner.get_verification(key).unwrap().status,
+            VerificationStatus::Indeterminate
+        ));
+        let mut terminal = interrupted;
+        terminal.status = VerificationStatus::Succeeded;
+        terminal.receipt_id = Some("a".repeat(64));
+        durable_new(&directory.join("terminal.json"), &terminal).unwrap();
+        assert!(matches!(
+            owner.get_verification(key).unwrap().status,
+            VerificationStatus::Succeeded
+        ));
+        assert_eq!(
+            durable_read::<Plan>(&directory.join("plan.json"))
+                .unwrap()
+                .request,
+            plan.request
+        );
+        assert!(directory.join("interruption.json").exists());
+    }
     #[test]
     fn immutable_records_dedup_and_detect_partial_replaced_and_future_data() {
         use std::os::unix::fs::PermissionsExt;
