@@ -8,11 +8,20 @@ WS→local IPC→browser/disconnect passed.
 41 tests/desktop compile, seven verified artifacts passed;
 full A3.2/A3 остаётся открытым. Installed worker `b2aeb9f` здоров/idle, но
 projection contract 1 ещё не объявляет. Перед actual new/new UI gate потребуется
-обновление постоянного runtime. Controller сейчас actual tested `69fb4b1`
-(build `1792019331881246150`, serve session `82480`); новые checks его не заменяли.
+обновление постоянного runtime. Candidate gate выполнялся через actual tested
+controller `69fb4b1` (build `1792019331881246150`).
 Desktop можно оставить закрытым; worker здоров/idle. Новое обновление требуется
 для negotiated projection 1; это граница текущего цикла пользователя.
 Debian free ~31 GiB, incremental disabled; Windows cache переиспользован, ~21.8 GiB free.
+
+Operational deployment: controller clean `d817fe0`, build `1792021098069838891`,
+прошёл actual CLI/MCP/WS/IPC consumer test и artifact SHA verification. Запущен
+на прежних WS/IPC endpoints, generation `28499055-2403-48e8-87f0-8a31355de60c`,
+serve session `32599`. Installed worker автоматически переподключился, session
+`c730b7ca-f260-4e53-b981-2a8c7568a2e9`, build/generation/scope прежние, idle.
+Old receipt/verification сохранены, но changed controller tuple не получает
+enabled. Старому worker не отправлялись новые projection frames.
+Evidence `.winbridge/architecture-transition/a32c-deployment.json`.
 
 ## A3.2b runtime producer — проверен, 2026-10-14
 
