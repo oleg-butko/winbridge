@@ -42,7 +42,9 @@ worker и UI не запускаются. В report `diagnosticOnly: true`: ус
 переиспользуется только `test-build-cache` прежнего full CAS run. Driver проверяет
 SHA-256 всех ready artifacts и terminal task в том же проекте. Прежние тесты могут
 быть failed, если компиляция завершилась и тесты исполнялись. Их результат не
-переносится: все группы выполняются заново. Windows проверяет pinned receipt,
+переносится: все группы выполняются заново. Если выбранный run сам заимствовал
+cache, driver проверяет цепочку parent receipts (не более 32, без циклов) и
+передаёт исходного owner, а не папку последнего отчёта. Windows проверяет pinned receipt,
 source identity, local path/reparse и держит exclusive cache lease; Cargo сам
 пересобирает изменённые компоненты. Старые состояния и reports сохраняются.
 

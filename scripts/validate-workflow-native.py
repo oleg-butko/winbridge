@@ -105,8 +105,12 @@ def verify_reusable_diagnostic(base, run_id, archive_sha):
     return result
 
 
-def verify_reusable_build_cache(base, run_id):
+def verify_reusable_build_cache(base, run_id, visited=None):
     """A failed test is usable compiler cache, never inherited test evidence."""
+    visited = set() if visited is None else set(visited)
+    if run_id in visited or len(visited) >= 32:
+        raise ValueError('Cyclic or oversized build-cache provenance chain')
+    visited.add(run_id)
     if not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', run_id):
         raise ValueError('Invalid build-cache run ID')
     report = base / run_id
@@ -133,7 +137,23 @@ def verify_reusable_build_cache(base, run_id):
     log = (report / 'task-cas-native-writers.log').read_text(encoding='utf-8-sig')
     if not re.search(r'Finished `test` profile', log) or not re.search(r'test result: (ok|FAILED)\.', log):
         raise ValueError('No completed compilation/test execution in prior cache')
-    return {'runId': run_id, 'sourceCommit': result['sourceCommit'], 'reportSha256': hashlib.sha256((report / 'report.json').read_bytes()).hexdigest()}
+    receipt = {'runId': run_id, 'sourceCommit': result['sourceCommit'], 'reportSha256': hashlib.sha256((report / 'report.json').read_bytes()).hexdigest()}
+    parent = result.get('buildCacheReusedFrom')
+    if parent:
+        # The report is fresh, but its Cargo directory may belong to an earlier
+        # run. Resolve only verified receipts; never accept a free-form path.
+        owner = verify_reusable_build_cache(base, parent['runId'], visited)
+        prior = base / parent['runId'] / 'report.json'
+        prior_bytes = prior.read_bytes()
+        prior_result = json.loads(prior_bytes.decode('utf-8-sig'))
+        if parent != {'runId': parent['runId'], 'sourceCommit': prior_result['sourceCommit'], 'reportSha256': hashlib.sha256(prior_bytes).hexdigest()}:
+            raise ValueError('Build-cache parent receipt identity mismatch')
+    else:
+        owner = receipt
+    recorded_path = result.get('buildCacheDirectory')
+    if recorded_path and PureWindowsPath(recorded_path).parts[-3:] != ('workflow-validation', owner['runId'], 'test-build-cache'):
+        raise ValueError('Build-cache directory differs from its verified owner run')
+    return owner
 
 
 def main():
@@ -361,10 +381,10 @@ exit $nativeExit
         if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
             raise RuntimeError('Report artifact checksum mismatch: ' + name)
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
-    if cache_receipt and result.get('buildCacheReusedFrom') != cache_receipt:
-        raise RuntimeError('Native build-cache receipt does not match the pinned prior run')
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
+    if cache_receipt and result.get('buildCacheReusedFrom') != cache_receipt:
+        raise RuntimeError('Native build-cache receipt does not match the pinned prior run')
     if bool(result.get('diagnosticOnly', False)) != args.task_cas_runtime_diagnostic:
         raise RuntimeError('Native report diagnostic/full gate scope mismatch')
     if args.task_cas_runtime_diagnostic:

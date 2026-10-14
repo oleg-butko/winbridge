@@ -82,6 +82,37 @@ class CacheReceiptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'namespace'):
             native.verify_reusable_build_cache(self.base, linked_run)
 
+    def borrowed_run(self, parent_receipt):
+        self.run = '20261014-044152-738951fb'
+        self.report = self.base / self.run
+        self.report.mkdir()
+        self.result['buildCacheReusedFrom'] = parent_receipt
+        self.result['buildCacheDirectory'] = 'K:\\project\\workflow-validation\\' + parent_receipt['runId'] + '\\test-build-cache'
+        self.publish()
+
+    def test_borrowed_cache_resolves_to_verified_original_owner(self):
+        owner = self.check()
+        self.borrowed_run(owner)
+        self.assertEqual(self.check(), owner)
+
+    def test_tampered_parent_and_wrong_directory_are_refused(self):
+        owner = self.check()
+        self.borrowed_run(dict(owner, reportSha256='0' * 64))
+        with self.assertRaisesRegex(ValueError, 'identity mismatch'):
+            self.check()
+        self.result['buildCacheReusedFrom'] = owner
+        self.result['buildCacheDirectory'] = 'K:\\project\\workflow-validation\\' + self.run + '\\test-build-cache'
+        self.publish()
+        with self.assertRaisesRegex(ValueError, 'directory differs'):
+            self.check()
+
+    def test_cycle_in_cache_provenance_is_refused(self):
+        owner = self.check()
+        self.result['buildCacheReusedFrom'] = owner
+        self.publish()
+        with self.assertRaisesRegex(ValueError, 'Cyclic'):
+            self.check()
+
 
 if __name__ == '__main__':
     unittest.main()
