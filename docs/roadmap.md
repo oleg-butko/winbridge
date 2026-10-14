@@ -12,7 +12,7 @@
 
 - [x] A0: [frozen legacy contracts/journal tests и ADR инвариантов](plans/architecture-transition/baseline.md); 14 новых/171 workspace tests passed, Windows cross-check tests passed. Runtime не меняется.
 - [x] A1: [Task FSM через прежний wire API](plans/architecture-transition/task-fsm.md); 182 workspace tests и [66 native Windows tests](plans/architecture-transition/windows-task-fsm-gate-2026-10-13.md) passed, runtime/wire/schema совместимы.
-- [ ] A2: [durable transitions](plans/architecture-transition/durable-transitions.md); task revisions/CAS A2.1 завершён (197 workspace/[107 native tests](plans/architecture-transition/windows-task-cas-gate-2026-10-13.md)); [A2.2 domain CAS/atomic links](plans/architecture-transition/domain-transitions.md) завершён (213 workspace/[125 native tests](plans/architecture-transition/windows-domain-cas-gate-2026-10-13.md)); [A2.3.1 authority/attempt tokens](plans/architecture-transition/ownership-context.md) завершены (229 workspace/[141 native tests](plans/architecture-transition/windows-ownership-gate-2026-10-13.md)); [A2.3.2 durable leases](plans/architecture-transition/project-resource-leases.md) завершены (245 workspace/[157 native tests](plans/architecture-transition/windows-resource-leases-gate-2026-10-13.md)); [A2.4.1 physical process reconciliation](plans/architecture-transition/physical-reconciliation.md) завершён ([164 native tests](plans/architecture-transition/windows-reconciliation-gate-2026-10-13.md)); [A2.4.2a journal inspection](plans/architecture-transition/journal-inspection.md) завершён ([176 native tests](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md)); controlled restore admission впереди.
+- [x] A2: [durable transitions](plans/architecture-transition/durable-transitions.md); task revisions/CAS A2.1 завершён (197 workspace/[107 native tests](plans/architecture-transition/windows-task-cas-gate-2026-10-13.md)); [A2.2 domain CAS/atomic links](plans/architecture-transition/domain-transitions.md) завершён (213 workspace/[125 native tests](plans/architecture-transition/windows-domain-cas-gate-2026-10-13.md)); [A2.3.1 authority/attempt tokens](plans/architecture-transition/ownership-context.md) завершены (229 workspace/[141 native tests](plans/architecture-transition/windows-ownership-gate-2026-10-13.md)); [A2.3.2 durable leases](plans/architecture-transition/project-resource-leases.md) завершены (245 workspace/[157 native tests](plans/architecture-transition/windows-resource-leases-gate-2026-10-13.md)); [A2.4.1 physical process reconciliation](plans/architecture-transition/physical-reconciliation.md) завершён ([164 native tests](plans/architecture-transition/windows-reconciliation-gate-2026-10-13.md)); [A2.4.2a journal inspection](plans/architecture-transition/journal-inspection.md) завершён ([176 native tests](plans/architecture-transition/windows-inspection-diagnostic-2026-10-13.md)); controlled archive/new-pair admission завершён ([197 native tests](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md)).
 - [ ] A3: совместимый discovery и общий read model UI/CLI/MCP.
 - [ ] A4: global resources, очередь и fairness для нескольких проектов.
 - [ ] A5: local actor pilot и постепенная миграция owners.
@@ -30,9 +30,9 @@ A2.4.2a завершён: local/browser и
 [A2.4.2b.1 request fence](plans/architecture-transition/fenced-requests.md) завершён:
 271 local tests, browser gate и [186 native tests/desktop compile](plans/architecture-transition/windows-fenced-request-gate-2026-10-13.md) прошли.
 Archive preparation и physical cutover [b.2/b.3](plans/architecture-transition/recovery-pair.md)
-реализованы: 280 local tests, cross-checks и browser gate passed;
-[native path fix/retry](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md)
-после canonical-drive/UNC bug. Full A2 открыт до этого gate и финального ревью.
+завершены: 280 local tests, cross-checks/browser и
+[197 native tests/desktop compile](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md) passed.
+Полный A2 закрыт после финального ревью; далее A3 discovery/read model.
 
 ## Этап 0 — подготовка репозитория
 

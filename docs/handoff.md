@@ -3,13 +3,14 @@
 
 ## A2.4.2b.1 request fence — завершён, 2026-10-13
 
-Обновление 2026-10-14: [archive/new pair b.2/b.3](plans/architecture-transition/recovery-pair.md)
-реализованы, [инструкция](guides/recovery-pair.md). Whole-domain witness вне SQLite,
-outer global Job каждого owner, create-only preparation/activation и постоянный
-source retirement. 280 workspace tests, Linux/Windows-target Clippy, UI checks
-и browser gate passed. [Первый Windows gate](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md)
-остановлен из-за canonical drive prefix bug; исправление и автоматический повтор
-с compiler cache разрешены пользователем. Full A2 открыт.
+Обновление 2026-10-14: **полный A2 завершён**. [Archive/new pair b.2/b.3](plans/architecture-transition/recovery-pair.md)
+и [инструкция](guides/recovery-pair.md): whole-domain witness вне SQLite,
+outer global Job каждого owner, create-only preparation/activation, постоянный
+source retirement. 280 workspace tests, Linux/Windows-target Clippy, UI/browser
+checks прошли. [Windows gate](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md):
+197 native tests, desktop compile и 9 verified artifacts passed; canonical drive
+prefix bug и misleading retired-source activation исправлены. Shared run
+`20261014-044152-738951fb`, succeeded/exit 0. Следующий этап — A3 discovery/read model.
 Installed schema-6 worker/generation/session прежние, connected/idle.
 Debian: [cleanup](guides/build-storage.md) освободил ~19.4 GiB incremental caches;
 новые проверки с CARGO_INCREMENTAL=0. Runtime/config/history/reports сохранены.

@@ -12,6 +12,16 @@ A2.2: [domain revisions и atomic links](domain-transitions.md) завершен
 [164 native tests passed](windows-reconciliation-gate-2026-10-13.md);
 explicit restore/recovery mode A2.4.2 ещё впереди.
 
+## Итог всего A2, 2026-10-14
+
+**A2 завершён**: [request fence](fenced-requests.md), [archive/new pair](recovery-pair.md)
+и [197-test native gate](windows-recovery-pair-gate-2026-10-14.md). Таблица ниже
+сохраняет состояние A2.1/A2.2 как историю. Owner guards всех Store writers,
+durable resource leases, physical reconciliation и explicit restore admission
+реализованы последующими пакетами; поддерживаемая recovery policy — новая пара
+с архивом, без replay lost keys. 280 workspace tests и native desktop compile passed.
+Общие consistent read snapshots/discovery — A3, global slots — A4, actor owners — A5.
+
 ## Зачем нужна первая поставка
 
 FSM выбирает допустимый переход, но не защищает запись от другого writer.

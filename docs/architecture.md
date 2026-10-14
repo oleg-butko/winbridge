@@ -141,8 +141,8 @@ Exe paths остаются стабильными. [b.2/b.3](plans/architecture-
 whole-domain witness вне SQLite. Outer global Jobs разделены по durable owner/
 logon session; suspended child входит в них до per-task Job. Cutover требует всех
 Empty observations, не inventory после restore. 280 local tests/cross-checks и
-browser gate passed; [native path fix/retry](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md)
-после ошибочного UNC detection, full A2 открыт.
+browser gate и [197 native tests/desktop compile](plans/architecture-transition/windows-recovery-pair-gate-2026-10-14.md)
+passed; full A2 завершён в выбранной archive/new-pair политике.
 Глобальный параллелизм и actor migration не включены.
 
 Output events могут ссылаться на уже сохранённые byte ranges. При переполнении live очереди UI дочитывает файл с offset. При достижении retention/quota продолжать drain stdout и отмечать пропуски; нельзя подвесить процесс заполненным pipe. Короткие диагностические logs runtime отделены от пользовательского task journal.

@@ -2,9 +2,9 @@
 
 Дата: 2026-10-14. После [request fence b.1](fenced-requests.md).
 Решение пользователя: прежняя история как архив, новые instance/incarnation,
-явное переподключение, contract 2. Local/browser gates прошли; Windows gate
-[остановлен из-за canonical drive prefix](windows-recovery-pair-gate-2026-10-14.md);
-исправление и повтор разрешены пользователем, full A2 открыт.
+явное переподключение, contract 2. Local/browser gates и
+[197 native tests/desktop compile](windows-recovery-pair-gate-2026-10-14.md) прошли.
+Canonical drive prefix bug исправлен. b.2/b.3 и полный A2 завершены.
 
 ## Архив, подготовка и activation
 
@@ -88,9 +88,9 @@ archive sync через write-capable handle. Synthetic v1 fixture убирае�
 которого v1 не имел; реальный malformed witness по-прежнему блокирует startup.
 
 **280 workspace tests**, Linux/Windows-target Clippy, UI typecheck/build/contracts,
-bound-request tests и real Unix browser gate passed. Native tests проверят
+bound-request tests и real Unix browser gate passed. 197 native tests подтвердили
 реальную activation, stale/v1 refusal, dedup после restart, живой unlisted
-process и цепочку A→B→C. Installed schema-6 worker пока не меняется.
+process, canonical local path и цепочку A→B→C. Installed schema-6 worker пока не меняется.
 
 Архив сохраняет SQLite history и записанный stdout/stderr. Внешние application log,
 artifact files и workspaces целиком не копируются: сохранённый путь не является
