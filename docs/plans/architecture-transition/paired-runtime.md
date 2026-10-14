@@ -1,7 +1,8 @@
 # A3.2b — runtime producer и CLI/MCP readiness
 
 Дата: 2026-10-14. После [A3.2a](readiness-foundation.md).
-Пакет реализован локально; полный paired gate ещё впереди. **A3.2/A3 открыт.**
+Пакет producer/CLI/MCP проверен на реальной паре. **A3.2/A3 открыт:**
+следующий пакет — readonly native UI projection.
 
 ## Контракт
 
@@ -63,3 +64,21 @@ consumer proof создаётся с 0700/0600 и fsync parent directory.
 Следом — actual paired producer gate, reconnect/reopen и UI projection через
 negotiated readonly metadata. Windows worker `b2aeb9f` уже даёт required policy/schema
 inputs. Новое представление для desktop ещё не реализовано; полноту A3.2 не объявлять.
+
+## Actual paired gate
+
+Consumer clean `69fb4b1`, build ID `1792019331881246150`; tested CLI executable
+SHA-256 совпадает с `/proc/self/exe` controller. Provider — actual installed
+`b2aeb9f`, build `1792012729498364300`. Run `20261014-190934-94c2dc4f`:
+provider task `4d54da30-b2b5-4d61-9834-cf018fed8b52`, pair task
+`acdee7ab-66a7-4b9c-a615-134aca386952`, обе succeeded/0.
+Receipt `c386138b57f506ae80637e9b7873d78f5829a7d2fd8af20558289d1d8a477dfd`.
+Actual stdio MCP producer, duplicate без новых задач, conflict frozen identity
+и unknown-contract no-enable passed. Четыре readiness facts true для этого
+точного профиля/маршрута. Это не включает новую execution permission.
+
+После restart того же controller сохранённая квитанция и прежние Task IDs
+прочитаны без submit. Новый session `b282eba1-1cec-4542-874a-805f77c7ccdb`,
+live tuple тот же; readiness заново проверен и true. Evidence в
+`.winbridge/architecture-transition/paired-20261014-190934-94c2dc4f`.
+Рабочий Windows worker idle, build/generation/scope не менялись.

@@ -1,4 +1,4 @@
-## A3.2b runtime producer — начат, 2026-10-14
+## A3.2b runtime producer — проверен, 2026-10-14
 
 [Контракт и ход](plans/architecture-transition/paired-runtime.md).
 User updated worker до clean `b2aeb9f`, build ID `1792012729498364300`, generation
@@ -10,8 +10,13 @@ run `20261014-180817-61117dcf`, task `8621c915-0dfe-4bfd-b69a-49ce96af958c`.
 
 Local controller API/CLI/MCP + immutable producer plan implemented; 304 workspace,
 Linux/Windows-target Clippy, TypeScript and actual CLI/MCP test passed.
-Deployment consumer proof и actual paired producer gate ещё не проведены;
-UI projection ещё не реализована. Full A3.2/A3 открыт. Worker оставить работать,
+Deployment consumer proof и actual paired producer/restart gate passed:
+consumer `69fb4b1`, run `20261014-190934-94c2dc4f`, receipt
+`c386138b57f506ae80637e9b7873d78f5829a7d2fd8af20558289d1d8a477dfd`.
+Controller serve session `82480`; Windows worker прежний/idle. Review исправил
+interruption reconciliation, supervisor key release и durable private proof.
+[UI projection A3.2c](plans/architecture-transition/readiness-projection.md) — следующий пакет.
+Full A3.2/A3 открыт. Worker оставить работать,
 desktop не нужен, тестовых UI-окон не будет. CARGO_INCREMENTAL=0; Debian free ~31 GiB.
 
 ## A3.2a readiness foundation — завершён, 2026-10-14

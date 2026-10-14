@@ -116,7 +116,10 @@ def main():
                           'changed-key-identity-rejected', 'unknown-contract-no-enable']}
     if args.observe_only:
         outcome['checks'] = ['saved-receipt', 'same-tuple-fresh-route', 'no-submission']
-    save_new(directory / ('observation-' + uuid.uuid4().hex + '.json' if args.observe_only else 'completed.json'), outcome)
+    name = 'completed.json'
+    if args.observe_only or (directory / name).exists():
+        name = 'observation-' + uuid.uuid4().hex + '.json'
+    save_new(directory / name, outcome)
     print(json.dumps({'passed': True, 'receiptId': view['receiptId'], 'taskIds': view['taskIds'],
                       'sessionId': readiness['sessionId'], 'readiness': readiness['readiness']}), flush=True)
 
