@@ -174,6 +174,7 @@ def main():
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
+    parser.add_argument('--readiness-only', action='store_true', help='Check typed pair/readiness policy, native Info and fenced scope, legacy wire and desktop compile; no reference worker or UI windows')
     parser.add_argument('--task-cas-only', action='store_true', help='Check durable leases/CAS, schema-6/7/8/9/10/11 migration, physical reconciliation, fenced requests, desktop compile and old-worker refusal; no desktop windows')
     parser.add_argument('--task-cas-runtime-diagnostic', action='store_true', help='With --task-cas-only: narrow process/recovery diagnostic with trace and disk usage, without UI or full CAS/reference gate')
     parser.add_argument('--task-cas-reuse-diagnostic', help='Full CAS only: reuse the source/build cache of a successful diagnostic run ID for this exact archive; new tests/state/report, process trace enabled')
@@ -189,7 +190,7 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only, args.readiness_only)) > 1:
         parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
@@ -197,8 +198,8 @@ def main():
         parser.error('--task-cas-runtime-diagnostic requires --task-cas-only')
     if args.task_cas_reuse_diagnostic and (not args.task_cas_only or args.task_cas_runtime_diagnostic):
         parser.error('--task-cas-reuse-diagnostic requires a full --task-cas-only gate')
-    if args.task_cas_reuse_build_cache and (not args.task_cas_only or args.task_cas_runtime_diagnostic or args.task_cas_reuse_diagnostic):
-        parser.error('--task-cas-reuse-build-cache requires full CAS and cannot reuse diagnostic source')
+    if args.task_cas_reuse_build_cache and (not (args.task_cas_only or args.readiness_only) or args.task_cas_runtime_diagnostic or args.task_cas_reuse_diagnostic):
+        parser.error('--task-cas-reuse-build-cache requires full CAS/readiness and cannot reuse diagnostic source')
     if args.task_cas_only and not args.task_cas_runtime_diagnostic and not args.task_cas_reference_worker:
         parser.error('--task-cas-only requires --task-cas-reference-worker')
     if args.task_cas_reference_worker and not args.task_cas_only:
@@ -258,6 +259,8 @@ def main():
         profile_argument = ' -ProfilesOnly'
     if args.identity_only:
         profile_argument = ' -IdentityOnly'
+    if args.readiness_only:
+        profile_argument = ' -ReadinessOnly'
     if args.task_fsm_only:
         profile_argument = ' -TaskFsmOnly'
     if args.task_cas_only:
@@ -266,8 +269,6 @@ def main():
             profile_argument += ' -TaskCasRuntimeDiagnostic'
         else:
             profile_argument += ' -TaskCasReferenceWorker ' + ps_string(args.task_cas_reference_worker)
-        if cache_receipt:
-            profile_argument += ' -BuildCacheRunId ' + ps_string(cache_receipt['runId']) + ' -BuildCacheReportSha256 ' + ps_string(cache_receipt['reportSha256'])
     if args.resume_only:
         resume_publication, resume_blob_sha, resume_delivery, resume_measurement = prepare_resume_package(config, shared, run_id)
         profile_argument = ' -ResumeOnly -ResumeDeliveryRoot ' + ps_string(resume_delivery) + ' -ResumePublicationFile ' + ps_string(resume_measurement)
@@ -302,6 +303,8 @@ def main():
         encoded = base64.b64encode(json.dumps(profile).encode()).decode()
         extra = f"$profilePath = Join-Path $local 'netwatch.request.json'\n[IO.File]::WriteAllBytes($profilePath, [Convert]::FromBase64String('{encoded}'))\n"
         profile_argument = ' -NetwatchProfile $profilePath'
+    if cache_receipt:
+        profile_argument += ' -BuildCacheRunId ' + ps_string(cache_receipt['runId']) + ' -BuildCacheReportSha256 ' + ps_string(cache_receipt['reportSha256'])
     script = f"""$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $archive = {ps_string(windows_archive)}
@@ -410,6 +413,14 @@ exit $nativeExit
             catalog_proof = json.loads((report / 'discovery-reference-proof.json').read_text(encoding='utf-8-sig'))
             if not catalog_proof['passed'] or catalog_proof['platform'] != 'windows' or not catalog_proof['catalogAbsent'] or not catalog_proof['isolatedReferenceStopped'] or catalog_proof['candidateBuild'] != proof['build'] or catalog_proof['referenceBuild'] != info['build']:
                 raise RuntimeError('Incomplete native legacy discovery/reference proof')
+    if args.readiness_only:
+        expected_groups = ['readiness-pure-policy', 'readiness-wire-compatibility', 'readiness-native-info-and-scope', 'readiness-desktop-contract-check']
+        if not result.get('readinessOnly') or [g['name'] for g in result['commands']] != expected_groups or any(g['exitCode'] != 0 for g in result['commands']):
+            raise RuntimeError('Incomplete readiness foundation gate')
+        proof = json.loads((report / 'policy-proof.json').read_text(encoding='utf-8-sig'))
+        local_schemas = json.loads(subprocess.run([str(ROOT / 'target/debug/winbridge-controller'), '--contract-schemas'], check=True, capture_output=True, text=True, timeout=20).stdout)
+        if not proof['passed'] or proof['platform'] != 'windows' or proof['candidateBuild']['sourceCommit'] != result['sourceCommit'] or proof['candidateBuild']['sourceDirty'] or proof['policies']['provider'] != proof['candidateBuild'] or proof['schemas']['provider'] != proof['candidateBuild'] or proof['schemas']['schemas'] != local_schemas['schemas'] or not proof['context']['journalIncarnation']:
+            raise RuntimeError('Incomplete native policy/Info proof')
     if args.profiles_only:
         proof = json.loads((report / 'profiles-proof.json').read_text())
         tasks = proof['completed']

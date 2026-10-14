@@ -85,7 +85,31 @@ export type FencedRequestInfo = { requestContractVersion: number, context: Reque
 export type RecoveryCoverageInfo = { complete: boolean, reason: string, };
 export type ContractRef = { id: string, version: number, };
 export type ContractCatalog = { schemaVersion: number, provider: BuildIdentity, supported: Array<ContractRef>, };
-export type WorkerInfo = { protocolVersion: number,
+export type ContractSchemaFingerprint = { contract: ContractRef, sha256: string, };
+export type ContractSchemaCatalog = { schemaVersion: number, provider: BuildIdentity, schemas: Array<ContractSchemaFingerprint>, };
+export type ProjectPolicyFingerprint = { projectId: string, sha256: string, };
+export type ProjectPolicyCatalog = { schemaVersion: number, provider: BuildIdentity, projects: Array<ProjectPolicyFingerprint>, };
+export type RouteRole = "adapter" | "controller" | "worker";
+export type RouteTransport = "mcp_ipc_websocket";
+export type RouteHop = {
+/**
+ * The ordered route is adapter -> controller -> worker.
+ */
+role: RouteRole, nodeId: string, endpoint: string, build: BuildIdentity, };
+export type PairIdentity = { schemaVersion: number, contract: ContractRef, contractSchemaSha256: string, consumer: BuildIdentity, provider: BuildIdentity, context: RequestContext, routeTransport: RouteTransport,
+/**
+ * Session UUID is freshness, and deliberately absent from durable identity.
+ */
+route: Array<RouteHop>, projectPolicy: ProjectPolicyFingerprint, };
+export type BuildVerification = { build: BuildIdentity, platform: string, testSuite: string, reportSha256: string, };
+export type PairVerification = { schemaVersion: number, identity: PairIdentity, consumerVerification: BuildVerification, providerVerification: BuildVerification, testProfile: string, reportSha256: string, checks: Array<string>, };
+export type ReadinessReason = "unsupported_contract" | "missing_identity" | "invalid_identity" | "missing_evidence" | "invalid_evidence" | "identity_changed" | "schema_changed" | "build_unverified" | "pair_untested" | "route_not_fresh" | "policy_denied";
+export type ContractReadiness = { supported: boolean, buildVerified: boolean, pairTested: boolean, enabled: boolean, reasons: Array<ReadinessReason>, };
+export type WorkerInfo = { protocolVersion: number, contractSchemas?: unknown,
+/**
+ * Read-only policy fingerprints. Unknown schemas stay opaque on older hops.
+ */
+projectPolicies?: unknown,
 /**
  * Open read-only metadata. Interpret known versions separately; a future
  * catalog must not make the entire legacy Info reply unreadable.

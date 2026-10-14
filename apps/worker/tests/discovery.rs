@@ -47,6 +47,20 @@ async fn actual_worker_ipc_advertises_build_bound_support_without_enabling_an_ac
     };
     assert!(catalog.supports(WORKER_RPC_CONTRACT, 1));
     assert!(catalog.supports(WORKER_RPC_CONTRACT, 2));
+    let schemas = interpret_contract_schemas(&info).expect("native schema metadata");
+    assert_eq!(
+        schemas,
+        implemented_contract_schemas(info.build.clone().unwrap())
+    );
+    let policies = interpret_project_policies(&info).expect("native IPC policy metadata");
+    assert_eq!(
+        policies,
+        winbridge_core::readiness::project_policy_catalog(&cfg, info.build.clone().unwrap())
+            .unwrap()
+    );
+    if let Some(report) = std::env::var_os("WINBRIDGE_TASK_CAS_REPORT") {
+        fs::write(Path::new(&report).join("policy-proof.json"), serde_json::to_vec_pretty(&serde_json::json!({"passed":true,"platform":std::env::consts::OS,"candidateBuild":info.build,"context":info.fenced_requests.as_ref().unwrap().context,"policies":policies,"schemas":schemas})).unwrap()).unwrap();
+    }
     assert_eq!(info.active_task_count, Some(0));
     assert!(
         matches!(worker.handle(LocalRequest::ListTasks), LocalResponse::Tasks { tasks } if tasks.is_empty())
@@ -92,6 +106,8 @@ async fn older_worker_info_is_readable_and_has_no_catalog_or_new_permission() {
         CatalogObservation::Missing
     ));
     assert_eq!(info.instance_id, cfg.instance_id);
+    assert!(info.project_policies.is_none());
+    assert!(info.contract_schemas.is_none());
     assert_eq!(info.active_task_count, Some(0));
     assert!(info.fenced_requests.is_none());
     child.terminate_tree().unwrap();

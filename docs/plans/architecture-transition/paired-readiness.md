@@ -1,7 +1,8 @@
 # A3.2 — evidence конкретной пары и разрешение контрактов
 
 Дата: 2026-10-14. После [A3.1 catalog](discovery.md).
-Это следующий пакет; runtime readiness store ещё не реализован.
+A3.2 начат; [A3.2a foundation](readiness-foundation.md) реализован локально.
+Runtime producer/readiness API/enable ещё не подключены; полный A3.2/A3 открыт.
 
 ## Последовательность исполнения
 
@@ -37,8 +38,9 @@ route/policy. Старые принятые запросы не переприв
 Session UUID — freshness, не durable journal incarnation и не proof тестирования.
 
 Native A3.1 проверяет candidate IPC и reference compatibility, не объявляет
-pair-tested installed route. Нынешний installed worker schema 6 не передаёт
-fenced scope/catalog. Для следующего шага нужен schema-12 worker. Использовать
+pair-tested installed route. Исторический installed worker schema 6 не передавал
+fenced scope/catalog. Пользователь обновил его до `f128c9a`; actual Windows
+WS/IPC/MCP smoke прошёл. Для A3.2b нужен следующий worker с policy fingerprints. Использовать
 новый временный exe для outbound WS означало бы снова менять firewall path;
 по решению пользователя обновляется `K:\_proj-26\winbridge\runtime\winbridge-worker.exe`.
 Автоматического self-updater вне managed process tree сейчас нет; обновление

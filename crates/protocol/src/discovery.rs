@@ -16,7 +16,9 @@ pub(crate) fn deserialize_catalog<'de, D: serde::Deserializer<'de>>(
 
 // JSON/TypeScript treat 1 and 1.0 as the same integer. Keep the catalog's known
 // reader consistent across languages; this does not relax command DTO parsing.
-fn deserialize_version<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<u16, D::Error> {
+pub(crate) fn deserialize_version<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<u16, D::Error> {
     let number = serde_json::Number::deserialize(deserializer)?;
     let value = number
         .as_f64()

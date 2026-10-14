@@ -49,6 +49,9 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 Проверяет A0 baseline и A1 Task FSM: сохранение launch intent до spawn, ошибку записи PID,
 cancel/timeout/process tree, recovery и совместимость существующих workflows.
 Рабочие exe/state не меняются; desktop и тестовые UI-окна не открываются.
+.PARAMETER ReadinessOnly
+Проверяет typed readiness/policy, frozen wire, native Info/request context и desktop compile.
+Без schema-6 reference, тестовых UI-окон или изменения рабочего runtime.
 .PARAMETER TaskCasOnly
 Проверяет revisions/CAS tasks/imports/workflows/applications/attention,
 миграции schema 6/7/8/9/10/11 → 12, owner/attempt tokens, atomic child links, output/retention rollback,
@@ -62,7 +65,7 @@ Read-only путь schema-6 worker.exe для TaskCasOnly; рабочий про
 PID binding и cleanup. Без UI, reference worker и полного CAS gate. Успех этого
 режима не означает завершение этапа. Диагностика не записывает команды или output.
 .PARAMETER BuildCacheRunId
-Full CAS: переиспользовать только Cargo target прежнего подтверждённого прогона.
+Full CAS/readiness: переиспользовать только Cargo target прежнего подтверждённого CAS прогона.
 Исходники, test-temp, состояния и отчёт остаются новыми; lease исключает одновременную сборку.
 .PARAMETER BuildCacheReportSha256
 SHA-256 прежнего report.json, который Debian проверил вместе с ready artifacts.
@@ -96,6 +99,7 @@ param(
     [switch]$IdentityOnly,
     [switch]$TaskFsmOnly,
     [switch]$TaskCasOnly,
+    [switch]$ReadinessOnly,
     [switch]$TaskCasRuntimeDiagnostic,
     [string]$TaskCasReferenceWorker = '',
     [string]$BuildCacheRunId = '',
@@ -137,7 +141,7 @@ if ($env:OS -ne 'Windows_NT') { throw 'This scenario requires actual Windows' }
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
 $manifest = Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 $report = [ordered]@{ schemaVersion = 1; platform = 'windows'; passed = $false; sourceArchiveSha256 = $SourceArchiveSha256;
-    sourceCommit = $manifest.sourceCommit; sourceDirty = $manifest.dirty; diagnosticOnly = [bool]$TaskCasRuntimeDiagnostic; startedAt = [DateTime]::UtcNow.ToString('o'); commands = @(); error = $null }
+    sourceCommit = $manifest.sourceCommit; sourceDirty = $manifest.dirty; diagnosticOnly = [bool]$TaskCasRuntimeDiagnostic; readinessOnly = [bool]$ReadinessOnly; startedAt = [DateTime]::UtcNow.ToString('o'); commands = @(); error = $null }
 New-Item -ItemType Directory -Path $ReportDirectory -ErrorAction Stop | Out-Null
 $reportPath = Join-Path $ReportDirectory 'report.json'
 $oldTarget = $env:CARGO_TARGET_DIR
@@ -168,8 +172,8 @@ try {
     $env:CARGO_TARGET_DIR = Join-Path (Split-Path $source -Parent) 'test-build-cache'
     $previousCache = ''
     if ($BuildCacheRunId -or $BuildCacheReportSha256) {
-        if (-not $TaskCasOnly -or $TaskCasRuntimeDiagnostic -or $BuildCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $BuildCacheReportSha256 -notmatch '^[0-9a-f]{64}$') {
-            throw 'Build-cache reuse requires full CAS and a pinned prior run receipt'
+        if ((-not $TaskCasOnly -and -not $ReadinessOnly) -or $TaskCasRuntimeDiagnostic -or $BuildCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $BuildCacheReportSha256 -notmatch '^[0-9a-f]{64}$') {
+            throw 'Build-cache reuse requires full CAS/readiness and a pinned prior full-CAS receipt'
         }
         $priorRun = Join-Path (Split-Path (Split-Path $source -Parent) -Parent) $BuildCacheRunId
         $priorReport = Join-Path (Join-Path (Split-Path $ReportDirectory -Parent) $BuildCacheRunId) 'report.json'
@@ -210,12 +214,14 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
-    if ($TaskCasOnly) {
-        if ($NetwatchProfile) { throw 'TaskCasOnly requires an isolated scenario' }
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly,$ReadinessOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($TaskCasOnly -or $ReadinessOnly) {
         $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($source))
         $report.storage = [ordered]@{ volume = $drive.Name; availableBytesBefore = $drive.AvailableFreeSpace }
         if ($drive.AvailableFreeSpace -lt 8GB) { throw 'Less than 8 GiB free for an isolated build; no existing run is deleted' }
+    }
+    if ($TaskCasOnly) {
+        if ($NetwatchProfile) { throw 'TaskCasOnly requires an isolated scenario' }
         if ($TaskCasRuntimeDiagnostic) {
             $env:WINBRIDGE_PROCESS_TRACE = '1'
             $groups = @(
@@ -237,6 +243,16 @@ try {
             @{ name='task-cas-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
             )
         }
+    }
+    if ($ReadinessOnly) {
+        if ($NetwatchProfile) { throw 'ReadinessOnly requires an isolated scenario' }
+        $env:WINBRIDGE_TASK_CAS_REPORT = $ReportDirectory
+        $groups = @(
+            @{ name='readiness-pure-policy'; arguments=@('test','-p','winbridge-core','--test','readiness','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='readiness-wire-compatibility'; arguments=@('test','-p','winbridge-protocol','--features','jsonschema','--test','discovery','--test','legacy_baseline','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='readiness-native-info-and-scope'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','discovery','--test','request_context','--test','maintenance','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='readiness-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
+        )
     }
     if ($TaskFsmOnly) {
         if ($NetwatchProfile) { throw 'TaskFsmOnly requires an isolated scenario' }
@@ -400,7 +416,7 @@ try {
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
     $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
     $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $oldResumePublication
-    if ($TaskCasOnly -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
+    if (($TaskCasOnly -or $ReadinessOnly) -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {

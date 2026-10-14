@@ -1,3 +1,22 @@
+## A3.2a readiness foundation — реализован локально, 2026-10-14
+
+[Контракт и ревью](plans/architecture-transition/readiness-foundation.md).
+Installed worker обновлён пользователем до clean `f128c9a`, generation
+`a1412884-4287-4bb2-a24c-3c2018d39e25`, incarnation
+`5a8eb173-4193-4332-b00f-67e3850b2c97`. Controller из `f128c9a` работает
+на ws://192.168.44.203:1143, generation `514b13b5-6c6a-4b84-92d3-ffed91de811e`.
+Actual MCP fixture task `44f71380-dede-45eb-835a-c80aaf018648` succeeded/exit 0;
+same key/same Task ID и stale scope refusal прошли. Worker idle/без recovery errors.
+
+Добавлены typed pair/evidence/readiness, sealed dispatch decision, create-only
+local receipt store, optional loaded project-policy hashes и actual DTO schema
+digests в Info; UI объясняет наличие/отсутствие policy metadata.
+300 workspace tests, Linux/Windows Clippy, 36 Rust/TS cases, UI build passed.
+Native `ReadinessOnly` gate готовится; full A3.2/A3 открыт. Producer и runtime
+UI/CLI/MCP readiness API пока не подключены. Следующий A3.2b требует installed
+worker с policy metadata; не подменять её чтением disk config или candidate proof.
+Desktop можно оставить закрытым; worker оставить работающим.
+
 ## A3.1 discovery catalog — завершён, 2026-10-14
 
 [Контракт](plans/architecture-transition/discovery.md), [native evidence](plans/architecture-transition/windows-discovery-gate-2026-10-14.md):

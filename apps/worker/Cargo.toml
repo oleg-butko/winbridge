@@ -13,7 +13,7 @@ winbridge-runner.workspace = true
 winbridge-workspace-sync.workspace = true
 winbridge-log-reader.workspace = true
 winbridge-core.workspace = true
-winbridge-protocol.workspace = true
+winbridge-protocol = { workspace = true, features = ["jsonschema"] }
 winbridge-platform.workspace = true
 winbridge-transport.workspace = true
 serde.workspace = true

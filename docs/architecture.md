@@ -231,3 +231,12 @@ provider build binding, unknown-data fallback и отдельные advertisemen
 и final scope-error review passed. Catalog не является permission или pair evidence;
 [A3.2](plans/architecture-transition/paired-readiness.md) вводит эти основания отдельно.
 Installed schema-6 runtime нужно обновить до actual paired new/new проверки.
+
+
+A3.2a [readiness foundation](plans/architecture-transition/readiness-foundation.md)
+добавляет typed exact pair identity и local create-only evidence store у controller.
+Worker Info передаёт provider-bound hashes действующей project policy; pending save
+не меняет их до restart. Pure core evaluator отделяет исторические build/pair
+проверки от свежего policy decision. Сериализованный `enabled` — readonly projection;
+internal dispatch decision не десериализуется. Runtime producer/API и применение
+к новым execution contracts ещё не подключены; existing A2 admission сохранён.

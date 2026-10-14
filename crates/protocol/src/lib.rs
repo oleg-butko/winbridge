@@ -5,6 +5,8 @@ mod request_context;
 pub use request_context::*;
 mod discovery;
 pub use discovery::*;
+mod readiness;
+pub use readiness::*;
 
 mod attention;
 pub use attention::*;
@@ -349,6 +351,21 @@ pub struct JournalInspection {
 #[serde(rename_all = "camelCase")]
 pub struct WorkerInfo {
     pub protocol_version: u16,
+    #[serde(
+        default,
+        deserialize_with = "discovery::deserialize_catalog",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
+    pub contract_schemas: Option<serde_json::Value>,
+    /// Read-only policy fingerprints. Unknown schemas stay opaque on older hops.
+    #[serde(
+        default,
+        deserialize_with = "discovery::deserialize_catalog",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
+    pub project_policies: Option<serde_json::Value>,
     /// Open read-only metadata. Interpret known versions separately; a future
     /// catalog must not make the entire legacy Info reply unreadable.
     #[serde(

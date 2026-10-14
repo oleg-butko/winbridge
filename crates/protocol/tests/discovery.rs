@@ -90,3 +90,111 @@ fn discovery_cases_have_the_same_rust_and_typescript_interpretation() {
         );
     }
 }
+
+#[test]
+fn policy_metadata_is_bound_to_build_and_complete_project_scope() {
+    let mut i = info();
+    i.projects = vec![serde_json::from_value(json!({"id":"fixture","workspaceRoot":"K:\\fixture","allowDirectCommands":true,"recipes":[]})).unwrap()];
+    let catalog = ProjectPolicyCatalog {
+        schema_version: 1,
+        provider: i.build.clone().unwrap(),
+        projects: i
+            .projects
+            .iter()
+            .map(|p| ProjectPolicyFingerprint {
+                project_id: p.id.clone(),
+                sha256: "a".repeat(64),
+            })
+            .collect(),
+    };
+    i.project_policies = Some(serde_json::to_value(&catalog).unwrap());
+    assert!(interpret_project_policies(&i).is_some());
+    for raw in [
+        serde_json::json!(null),
+        serde_json::json!({"schemaVersion":2}),
+        serde_json::json!("future policy format"),
+    ] {
+        i.project_policies = Some(raw.clone());
+        let decoded: WorkerInfo =
+            serde_json::from_value(serde_json::to_value(&i).unwrap()).unwrap();
+        assert_eq!(decoded.project_policies, Some(raw));
+        assert!(interpret_project_policies(&decoded).is_none());
+    }
+    let mut wrong = catalog.clone();
+    wrong.provider.build_id.push_str("-other");
+    i.project_policies = Some(serde_json::to_value(wrong).unwrap());
+    assert!(interpret_project_policies(&i).is_none());
+    let mut wrong = catalog.clone();
+    wrong.projects.clear();
+    i.project_policies = Some(serde_json::to_value(wrong).unwrap());
+    assert!(interpret_project_policies(&i).is_none());
+    if !catalog.projects.is_empty() {
+        let mut wrong = catalog.clone();
+        wrong.projects[0].sha256 = "bad".into();
+        i.project_policies = Some(serde_json::to_value(wrong).unwrap());
+        assert!(interpret_project_policies(&i).is_none());
+        let mut wrong = catalog.clone();
+        wrong.projects.push(wrong.projects[0].clone());
+        i.project_policies = Some(serde_json::to_value(wrong).unwrap());
+        assert!(interpret_project_policies(&i).is_none());
+    }
+}
+
+#[test]
+fn rust_typescript_share_policy_metadata_acceptance() {
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/readiness/policy-cases.json"
+    ))
+    .unwrap();
+    for case in fixtures["cases"].as_array().unwrap() {
+        let mut i = info();
+        i.build = Some(serde_json::from_value(case["workerBuild"].clone()).unwrap());
+        i.projects = serde_json::from_value(case["projects"].clone()).unwrap();
+        i.project_policies = Some(case["policies"].clone());
+        assert_eq!(
+            interpret_project_policies(&i).is_some(),
+            case["known"].as_bool().unwrap(),
+            "{}",
+            case["name"]
+        );
+    }
+}
+
+#[cfg(feature = "jsonschema")]
+#[test]
+fn schema_metadata_binds_the_actual_dto_digest_to_provider_and_supported_contract() {
+    let mut i = info();
+    i.contract_catalog =
+        Some(serde_json::to_value(ContractCatalog::implemented(i.build.clone().unwrap())).unwrap());
+    let schemas = implemented_contract_schemas(i.build.clone().unwrap());
+    i.contract_schemas = Some(serde_json::to_value(&schemas).unwrap());
+    assert_eq!(interpret_contract_schemas(&i), Some(schemas.clone()));
+    assert!(is_sha256(&schemas.schemas[0].sha256));
+    for raw in [
+        json!(null),
+        json!({"schemaVersion":99,"future":"schema"}),
+        json!({"schemaVersion":1,"enabled":true}),
+    ] {
+        i.contract_schemas = Some(raw.clone());
+        let decoded: WorkerInfo =
+            serde_json::from_value(serde_json::to_value(&i).unwrap()).unwrap();
+        assert_eq!(decoded.contract_schemas, Some(raw));
+        assert!(interpret_contract_schemas(&decoded).is_none());
+    }
+    let mut changed = schemas.clone();
+    changed.provider.build_id.push_str("-other");
+    i.contract_schemas = Some(serde_json::to_value(changed).unwrap());
+    assert!(interpret_contract_schemas(&i).is_none());
+    let mut changed = schemas.clone();
+    changed.schemas[0].contract.version = 99;
+    i.contract_schemas = Some(serde_json::to_value(changed).unwrap());
+    assert!(interpret_contract_schemas(&i).is_none());
+    let mut changed = schemas.clone();
+    changed.schemas.push(changed.schemas[0].clone());
+    i.contract_schemas = Some(serde_json::to_value(changed).unwrap());
+    assert!(interpret_contract_schemas(&i).is_none());
+    let mut changed = schemas;
+    changed.schemas[0].sha256 = "bad".into();
+    i.contract_schemas = Some(serde_json::to_value(changed).unwrap());
+    assert!(interpret_contract_schemas(&i).is_none());
+}

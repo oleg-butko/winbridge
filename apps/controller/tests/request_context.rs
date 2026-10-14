@@ -47,6 +47,10 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         panic!("route info")
     };
     let advertised = info.contract_catalog.clone();
+    let policies = info.project_policies.clone();
+    let schemas = info.contract_schemas.clone();
+    assert!(interpret_contract_schemas(&info).is_some());
+    assert!(interpret_project_policies(&info).is_some());
     let CatalogObservation::Known(catalog) = interpret_catalog(&info) else {
         panic!("route lost catalog")
     };
@@ -106,6 +110,14 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
     assert_eq!(
         messages[2]["result"]["structuredContent"]["info"]["contractCatalog"],
         advertised.unwrap()
+    );
+    assert_eq!(
+        messages[2]["result"]["structuredContent"]["info"]["projectPolicies"],
+        policies.unwrap()
+    );
+    assert_eq!(
+        messages[2]["result"]["structuredContent"]["info"]["contractSchemas"],
+        schemas.unwrap()
     );
     assert_eq!(
         messages[1]["result"]["structuredContent"]["context"]["journalIncarnation"],

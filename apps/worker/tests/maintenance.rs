@@ -110,6 +110,10 @@ fn settings_save_is_local_pinned_and_does_not_change_a_running_process() {
         thread::sleep(Duration::from_millis(10));
     };
     let before = fs::read(&path).unwrap();
+    let loaded_policy = match worker.handle(LocalRequest::Info) {
+        LocalResponse::Info { info } => info.project_policies,
+        other => panic!("{other:?}"),
+    };
     let mut next = serde_json::to_value(&config).unwrap();
     next["maxOutputBytesPerTask"] = json!(4096);
     next["worker"]["controllerUrl"] = json!("ws://127.0.0.1:1143");
@@ -125,6 +129,13 @@ fn settings_save_is_local_pinned_and_does_not_change_a_running_process() {
         config.max_output_bytes_per_task
     );
     assert!(worker.config.worker.controller_url.is_none());
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!("info")
+    };
+    assert_eq!(
+        info.project_policies, loaded_policy,
+        "Pending saved settings cannot change loaded policy"
+    );
     let LocalResponse::Task { task: current } = worker.handle(LocalRequest::GetTask {
         task_id: task.task_id.clone(),
     }) else {
@@ -145,6 +156,13 @@ fn settings_save_is_local_pinned_and_does_not_change_a_running_process() {
     });
     drop(owner);
     let worker = Worker::open_file(&path).unwrap();
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!("info")
+    };
+    assert_ne!(
+        info.project_policies, loaded_policy,
+        "Restart must advertise newly loaded policy"
+    );
     assert_eq!(worker.config.max_output_bytes_per_task, 4096);
     assert!(!worker.runtime_settings().unwrap().restart_required);
 }

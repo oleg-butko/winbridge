@@ -918,12 +918,15 @@ name = "winbridge-controller"
 version = "0.1.0"
 dependencies = [
  "fs2",
+ "libc",
  "schemars",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "uuid",
  "winbridge-core",
+ "winbridge-platform",
  "winbridge-protocol",
  "winbridge-transport",
  "winbridge-worker",

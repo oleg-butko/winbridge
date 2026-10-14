@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "identity": {
+    "schemaVersion": 1,
+    "contract": {
+      "id": "winbridge.worker-rpc",
+      "version": 2
+    },
+    "contractSchemaSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "consumer": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": null,
+      "buildId": "consumer-build"
+    },
+    "provider": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "buildId": "provider-build"
+    },
+    "context": {
+      "instanceId": "test",
+      "journalIncarnation": "incarnation-1"
+    },
+    "route": [
+      {
+        "role": "adapter",
+        "nodeId": "agent",
+        "build": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "consumer-build"
+        },
+        "endpoint": "stdio"
+      },
+      {
+        "role": "controller",
+        "nodeId": "debian",
+        "build": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "controller-build"
+        },
+        "endpoint": "/local/controller.sock"
+      },
+      {
+        "role": "worker",
+        "nodeId": "windows",
+        "build": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "buildId": "provider-build"
+        },
+        "endpoint": "ws://192.168.44.203:1143"
+      }
+    ],
+    "projectPolicy": {
+      "projectId": "fixture",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "routeTransport": "mcp_ipc_websocket"
+  },
+  "consumerVerification": {
+    "build": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": null,
+      "buildId": "consumer-build"
+    },
+    "platform": "linux",
+    "testSuite": "consumer-suite",
+    "reportSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  },
+  "providerVerification": {
+    "build": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "buildId": "provider-build"
+    },
+    "platform": "windows",
+    "testSuite": "provider-suite",
+    "reportSha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "testProfile": "fenced-task-v1",
+  "reportSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "checks": [
+    "fenced-reply",
+    "dedup",
+    "stale-scope"
+  ]
+}

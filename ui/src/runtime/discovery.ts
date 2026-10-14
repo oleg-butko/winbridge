@@ -1,4 +1,4 @@
-import type { BuildIdentity, ContractCatalog, ContractRef, WorkerInfo } from "./contracts";
+import type { BuildIdentity, ContractCatalog, ContractRef, ProjectPolicyCatalog, WorkerInfo } from "./contracts";
 
 export type CatalogObservation =
   | { kind: "missing" }
@@ -55,4 +55,30 @@ export function catalogSummary(info: Pick<WorkerInfo, "contractCatalog" | "build
   if (observation.kind === "unsupported") return observation.reason;
   const versions = observation.catalog.supported.filter((entry) => entry.id === "winbridge.worker-rpc").map((entry) => entry.version);
   return `Worker сообщает поддержку RPC: ${versions.length ? versions.join(", ") : "известные версии не указаны"}. Это не подтверждение проверки пары и не новое разрешение на запуск.`;
+}
+
+
+export function interpretProjectPolicies(info: Pick<WorkerInfo, "projectPolicies" | "build" | "projects">): ProjectPolicyCatalog | null {
+  const raw = info.projectPolicies;
+  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "projects"]) || raw.schemaVersion !== 1 || !Array.isArray(raw.projects)
+    || raw.projects.length !== info.projects.length) return null;
+  const provider = readBuild(raw.provider);
+  const expected = readBuild(info.build);
+  if (!provider || !expected || !provider.buildId || (["version", "sourceCommit", "sourceDirty", "sourceManifestSha256", "buildId"] as const)
+    .some((key) => expected[key] !== provider[key])) return null;
+  const seen = new Set<string>();
+  if (raw.projects.some((entry) => {
+    if (!object(entry) || !keys(entry, ["projectId", "sha256"]) || typeof entry.projectId !== "string"
+      || typeof entry.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(entry.sha256) || entry.sha256.length !== 64
+      || seen.has(entry.projectId) || !info.projects.some((p) => p.id === entry.projectId)) return true;
+    seen.add(entry.projectId);
+    return false;
+  })) return null;
+  return { schemaVersion: 1, provider, projects: raw.projects as ProjectPolicyCatalog["projects"] };
+}
+
+export function projectPolicySummary(info: Pick<WorkerInfo, "projectPolicies" | "build" | "projects">): string {
+  const policies = interpretProjectPolicies(info);
+  return policies ? `Получены отпечатки действующих настроек для ${policies.projects.length} проектов. Изменение настроек потребует новой проверки пары.`
+    : "Проверенные сведения о действующих настройках проектов ещё не получены. Готовность новых контрактов не подтверждена.";
 }

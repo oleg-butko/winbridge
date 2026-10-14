@@ -13,6 +13,8 @@ use winbridge_protocol::{
 use winbridge_transport::websocket::{self as ws, Result, RpcSender};
 mod activity;
 pub mod mcp;
+#[cfg(unix)]
+pub mod readiness_store;
 
 pub fn publish(
     config: &ControllerConfig,

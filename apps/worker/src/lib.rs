@@ -584,6 +584,21 @@ impl Worker {
                 };
                 Ok(LocalResponse::Info {
                     info: Box::new(WorkerInfo {
+                        contract_schemas: Some(
+                            serde_json::to_value(winbridge_protocol::implemented_contract_schemas(
+                                winbridge_protocol::build_identity(),
+                            ))
+                            .map_err(|e| e.to_string())?,
+                        ),
+                        project_policies: Some(
+                            serde_json::to_value(
+                                winbridge_core::readiness::project_policy_catalog(
+                                    &self.config,
+                                    winbridge_protocol::build_identity(),
+                                )?,
+                            )
+                            .map_err(|e| e.to_string())?,
+                        ),
                         contract_catalog: Some(
                             serde_json::to_value(winbridge_protocol::ContractCatalog::implemented(
                                 winbridge_protocol::build_identity(),

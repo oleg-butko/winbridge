@@ -1,0 +1,395 @@
+{
+  "cases": [
+    {
+      "name": "valid-loaded-policy",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "known": true
+    },
+    {
+      "name": "null",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": null,
+      "known": false
+    },
+    {
+      "name": "future",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 99
+      },
+      "known": false
+    },
+    {
+      "name": "json-integer-float",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1.0,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "known": true
+    },
+    {
+      "name": "unrecognized-enable-field",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "enabled": true
+      },
+      "known": false
+    },
+    {
+      "name": "foreign-provider",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "other"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "known": false
+    },
+    {
+      "name": "missing-project",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": []
+      },
+      "known": false
+    },
+    {
+      "name": "bad-digest",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bad"
+          }
+        ]
+      },
+      "known": false
+    },
+    {
+      "name": "foreign-project",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "foreign",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "known": false
+    },
+    {
+      "name": "duplicate-project",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "known": false
+    },
+    {
+      "name": "newline-digest",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceManifestSha256": null,
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+          }
+        ]
+      },
+      "known": false
+    },
+    {
+      "name": "omitted-null-build-field",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceManifestSha256": null,
+        "sourceDirty": false,
+        "buildId": "provider"
+      },
+      "projects": [
+        {
+          "id": "fixture",
+          "workspaceRoot": "K:\\fixture",
+          "allowDirectCommands": true,
+          "recipes": []
+        }
+      ],
+      "policies": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "buildId": "provider"
+        },
+        "projects": [
+          {
+            "projectId": "fixture",
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ]
+      },
+      "known": true
+    }
+  ]
+}

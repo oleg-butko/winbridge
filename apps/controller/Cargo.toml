@@ -9,7 +9,10 @@ winbridge-workspace-sync.workspace = true
 winbridge-core.workspace = true
 winbridge-protocol = { workspace = true, features = ["jsonschema"] }
 winbridge-transport.workspace = true
+winbridge-platform.workspace = true
 serde_json.workspace = true
+serde.workspace = true
+libc = "0.2"
 tokio = { workspace = true, features = ["io-std"] }
 schemars = "0.8.22"
 uuid = { version = "1", features = ["v4"] }
