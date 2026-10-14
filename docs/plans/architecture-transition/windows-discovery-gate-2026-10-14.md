@@ -59,3 +59,36 @@ volume, exclusive lease и 8 GiB free-space threshold сохраняются; с
 каталоги не очищаются. PowerShell тестирует missing/existing-without-source/file/
 linked ancestor; 10 Python tests проверяют provenance и explicit scoped fallback.
 Автоматический fresh повтор готовится, installed worker остаётся healthy/idle.
+
+## Успешный fresh gate и последующее ревью
+
+Source `f8c5676f583147549f16d147e5786e11fa266afa`, archive
+`winbridge-20261014T094331Z-f8c5676-d84c66a2.zip`, SHA-256
+`21e418eed764f5a916935a00e52c1a1810b59227f3d435430e5a4263da43ee75`.
+Run `20261014-054619-d5d99c71`, task
+`1ada176b-7b02-47fa-aed1-1d94e1a7381a`, PID 2784, succeeded/exit 0.
+UTC 09:46:26–09:52:40. **202 native tests**, все 7 групп и desktop compile passed;
+10 artifacts size/SHA verified, report SHA-256
+`458c5d075140c1445925a317078bbf4bb71b570e7c33b0afaef14587f5075698`.
+Candidate build ID `1791971228556180000`, manifest SHA-256
+`0226cc4e1c94e9eb789b0a790bf74edc1a6503c8866d702fece46fba7577effb`.
+
+Candidate named pipe Info содержит build-bound catalog. Настоящий reference exe
+schema 6 с новым config/state вернул читаемый Info без catalog/fenced scope,
+подтверждённо остановлен; actual older-schema refusal также passed. Installed
+worker generation/session unchanged, idle, без maintenance/journal errors.
+Окон не было, desktop можно оставить закрытым, рабочий worker оставить.
+
+Cache missing подтверждён report: requested owner `20261014-042057-8075f8f1`,
+`buildCacheReuseSkipped: cache_missing`; фактический новый cache находится в
+`20261014-054619-d5d99c71/test-build-cache`. Windows free before 37,373,976,576,
+after 33,064,738,816 bytes (~30.8 GiB); fresh build добавил ~4.01 GiB вместе с
+native desktop dependencies. Debian ~23 GiB free, incremental выключен.
+
+Финальное ревью нашло несовпадение Rust/TS для omitted nullable build fields:
+UI теперь нормализует missing → null так же, как Rust Option; 24 common cases
+passed. Также Responded/Error с foreign/null scope мог считаться подтверждённым
+Rust transport: теперь все Responded требуют исходный scope, explicit rejection/
+unconfirmed остаются error-only. Есть реальный RpcSender regression без retry.
+286 workspace tests, UI checks и Windows-target Clippy прошли. Этот protocol fix
+проверяется новым native повтором с уже созданным cache; до него A3.1 не закрыт.

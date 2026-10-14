@@ -63,9 +63,10 @@ impl FencedResponse {
                 "Unsupported fenced response contract; no automatic fallback or retry".into(),
             );
         }
-        if !matches!(self.response, LocalResponse::Error { .. })
-            && (self.context.as_ref() != Some(expected)
-                || self.outcome != FencedReplyOutcome::Responded)
+        if (self.outcome == FencedReplyOutcome::Responded
+            && self.context.as_ref() != Some(expected))
+            || (!matches!(self.response, LocalResponse::Error { .. })
+                && self.outcome != FencedReplyOutcome::Responded)
         {
             return Err("Worker response belongs to another journal incarnation; reconcile the original request scope without retrying in the new scope".into());
         }

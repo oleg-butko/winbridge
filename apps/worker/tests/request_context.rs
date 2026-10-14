@@ -25,6 +25,54 @@ fn prepare(config: &WorkerConfig) {
     let mut store = Store::open(&config.state_directory.join("journal.sqlite")).unwrap();
     store.require_fenced_requests().unwrap();
 }
+
+#[tokio::test]
+async fn a_foreign_or_missing_scope_error_cannot_confirm_a_fenced_transport_call() {
+    use winbridge_transport::websocket;
+    let context = RequestContext {
+        instance_id: "pair".into(),
+        journal_incarnation: "current".into(),
+    };
+    for reply_context in [
+        None,
+        Some(RequestContext {
+            journal_incarnation: "foreign".into(),
+            ..context.clone()
+        }),
+    ] {
+        let (sender, mut incoming) = websocket::rpc_channel();
+        let client = sender.clone();
+        let request = FencedRequest {
+            request_contract_version: 2,
+            context: context.clone(),
+            request: LocalRequest::ListTasks,
+        };
+        let pending = tokio::spawn(async move { client.call_fenced(request).await });
+        let call = incoming.recv().await.unwrap();
+        call.reply
+            .send(Ok(WireResponse::Fenced(Box::new(FencedResponse {
+                request_contract_version: 2,
+                context: reply_context,
+                outcome: FencedReplyOutcome::Responded,
+                response: LocalResponse::Error {
+                    message: "foreign failure".into(),
+                },
+            }))))
+            .unwrap();
+        assert!(pending
+            .await
+            .unwrap()
+            .unwrap_err()
+            .contains("another journal incarnation"));
+        assert!(
+            matches!(
+                incoming.try_recv(),
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty)
+            ),
+            "transport must not retry or rebind the request"
+        );
+    }
+}
 fn submit(key: &str) -> LocalRequest {
     LocalRequest::Submit {
         request: TaskSubmission {

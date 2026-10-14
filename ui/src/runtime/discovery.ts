@@ -9,11 +9,17 @@ const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, allowed: string[]) =>
   Object.keys(value).every((key) => allowed.includes(key));
-function build(value: unknown): value is BuildIdentity {
-  return object(value) && typeof value.version === "string" && typeof value.buildId === "string"
-    && typeof value.sourceDirty === "boolean"
-    && (value.sourceCommit === null || typeof value.sourceCommit === "string")
-    && (value.sourceManifestSha256 === null || typeof value.sourceManifestSha256 === "string");
+function optionalString(value: unknown): value is string | null | undefined {
+  return value === null || value === undefined || typeof value === "string";
+}
+function readBuild(value: unknown): BuildIdentity | null {
+  if (!object(value) || typeof value.version !== "string" || typeof value.buildId !== "string"
+    || typeof value.sourceDirty !== "boolean" || !optionalString(value.sourceCommit)
+    || !optionalString(value.sourceManifestSha256)) return null;
+  // Rust Option<String> reads an omitted field as None. Normalize both sides
+  // identically before comparing build identities or returning typed metadata.
+  return { version: value.version, buildId: value.buildId, sourceDirty: value.sourceDirty,
+    sourceCommit: value.sourceCommit ?? null, sourceManifestSha256: value.sourceManifestSha256 ?? null };
 }
 function contract(value: unknown): value is ContractRef {
   return object(value) && keys(value, ["id", "version"]) && typeof value.id === "string"
@@ -27,10 +33,11 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
   if (raw === undefined) return { kind: "missing" };
   const invalid = (reason: string): CatalogObservation => ({ kind: "unsupported", reason });
   if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported"]) || raw.schemaVersion !== 1
-    || !build(raw.provider) || !Array.isArray(raw.supported)) return invalid("Формат каталога неизвестен. Новые функции не включены.");
-  const provider = raw.provider;
-  if (!info.build || !provider.buildId || (["version", "sourceCommit", "sourceDirty", "sourceManifestSha256", "buildId"] as const)
-    .some((key) => info.build![key] !== provider[key])) return invalid("Каталог относится к другой сборке worker.");
+    || !Array.isArray(raw.supported)) return invalid("Формат каталога неизвестен. Новые функции не включены.");
+  const provider = readBuild(raw.provider);
+  const expected = readBuild(info.build);
+  if (!provider || !expected || !provider.buildId || (["version", "sourceCommit", "sourceDirty", "sourceManifestSha256", "buildId"] as const)
+    .some((key) => expected[key] !== provider[key])) return invalid("Каталог относится к другой сборке worker.");
   const seen = new Set<string>();
   if (raw.supported.length > 64 || raw.supported.some((entry) => {
     if (!contract(entry)) return true;

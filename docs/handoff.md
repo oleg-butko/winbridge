@@ -15,11 +15,12 @@ prefix bug и misleading retired-source activation исправлены. Shared 
 support catalog реализован локально: 285 workspace tests и 22 общих Rust/TS
 fixtures. Real Unix worker/WS/controller IPC/MCP route и future metadata passed.
 [Native gate A3.1](plans/architecture-transition/windows-discovery-gate-2026-10-14.md)
-пока не пройден: первый chained-cache fix прошёл 9 tests, затем обнаружен
-отсутствующий owner directory. Fresh fallback проверен PowerShell и 10 Python
-tests. Пользователь подтвердил автоматическое продолжение и самостоятельный
-выбор рекомендованных исправлений; повтор готовится. Worker здоров/idle;
-paired enable/read model ещё не реализованы.
+первый fresh gate прошёл (202 tests/desktop compile, 10 verified artifacts).
+Ревью исправило nullable build metadata в UI и foreign/error reply scope;
+286 workspace tests и 24 Rust/TS fixtures passed. Финальный native повтор
+protocol guard готовится с cache `20261014-054619-d5d99c71`. Пользователь
+разрешил recommended fixes/retries автоматически; worker здоров/idle.
+Paired enable/read model ещё не реализованы.
 Installed schema-6 worker/generation/session прежние, connected/idle.
 Debian: [cleanup](guides/build-storage.md) освободил ~19.4 GiB incremental caches;
 новые проверки с CARGO_INCREMENTAL=0. Runtime/config/history/reports сохранены.

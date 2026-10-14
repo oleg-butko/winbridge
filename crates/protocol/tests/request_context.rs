@@ -66,10 +66,22 @@ fn reply_cannot_claim_success_in_a_foreign_or_unconfirmed_scope() {
     response.validate_for(&context()).unwrap();
     response.context.as_mut().unwrap().journal_incarnation = "foreign".into();
     assert!(response.validate_for(&context()).is_err());
+    response.response = LocalResponse::Error {
+        message: "foreign error is not confirmation".into(),
+    };
+    assert!(response.validate_for(&context()).is_err());
+    response.context = None;
+    assert!(response.validate_for(&context()).is_err());
+    response.context = Some(context());
+    response.validate_for(&context()).unwrap();
+    response.response = LocalResponse::Tasks { tasks: vec![] };
     response.context = Some(context());
     response.outcome = FencedReplyOutcome::Unconfirmed;
     assert!(response.validate_for(&context()).is_err());
     FencedResponse::unconfirmed("unknown effect".into())
+        .validate_for(&context())
+        .unwrap();
+    FencedResponse::rejected("rejected before dispatch".into())
         .validate_for(&context())
         .unwrap();
 }

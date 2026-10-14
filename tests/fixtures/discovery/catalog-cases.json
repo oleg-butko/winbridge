@@ -823,6 +823,62 @@
         ]
       },
       "expected": "unsupported"
+    },
+    {
+      "name": "omitted-nullable-provider-fields",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceCommit": null,
+        "sourceDirty": false,
+        "sourceManifestSha256": null,
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceDirty": false,
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "known"
+    },
+    {
+      "name": "omitted-nullable-fields-on-both-sides",
+      "workerBuild": {
+        "version": "0.1.0",
+        "sourceDirty": false,
+        "buildId": "catalog-fixture"
+      },
+      "catalog": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceDirty": false,
+          "buildId": "catalog-fixture"
+        },
+        "supported": [
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 1
+          },
+          {
+            "id": "winbridge.worker-rpc",
+            "version": 2
+          }
+        ]
+      },
+      "expected": "known"
     }
   ]
 }

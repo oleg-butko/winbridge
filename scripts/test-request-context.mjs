@@ -21,6 +21,7 @@ assert.equal(next.context.journalIncarnation, "after-config-reload", "new explic
 const replied = { requestContractVersion: 2, outcome: "responded", context: pending.context, response: { kind: "tasks", tasks: [] } };
 assert.equal(scopedResult(replied, pending.context).kind, "tasks");
 assert.throws(() => scopedResult({ ...replied, context }, pending.context), /другому журналу/);
+assert.throws(() => scopedResult({ ...replied, context, response: { kind: "error", message: "foreign failure" } }, pending.context), /foreign failure/);
 assert.throws(() => scopedResult({ ...replied, outcome: "unconfirmed" }, pending.context), /другому журналу/);
 assert.throws(() => scopedResult({ ...replied, outcome: "unconfirmed", response: { kind: "error", message: "acceptance unknown" } }, pending.context), /acceptance unknown/);
 assert.throws(() => scopedResult({ ...replied, outcome: "rejected_before_dispatch", context, response: { kind: "error", message: "stale scope" } }, pending.context), /stale scope/);
