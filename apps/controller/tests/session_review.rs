@@ -70,6 +70,27 @@ async fn connect_with_capabilities(
         ws::first(&mut client).await.unwrap(),
         SessionMessage::Welcome { .. }
     ));
+    // This legacy fixture has no discovery metadata. Consume the harmless
+    // negotiation Info; the controller must keep the original RPC session alive
+    // and send no projection frames to it.
+    let SessionMessage::Request {
+        id,
+        request: LocalRequest::Info,
+    } = next_request(&mut client).await
+    else {
+        panic!("expected readonly discovery");
+    };
+    ws::send(
+        &mut client,
+        &SessionMessage::Response {
+            id,
+            response: LocalResponse::Error {
+                message: "Legacy fixture has no catalog".into(),
+            },
+        },
+    )
+    .await
+    .unwrap();
     (actor, client)
 }
 

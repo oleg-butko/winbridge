@@ -80,6 +80,14 @@ Tray показывает активные задачи и attention count. За
 
 ## Качество и расширяемость
 
+В «Совместимость компонентов» readonly readiness сводка показывает отдельно
+support, проверенные сборки, проверенную пару и готовность именованного профиля.
+Build/scope/route/policy change объясняет несовпадение сохранённой квитанции;
+успех прежней проверки остаётся историей. Task links открывают реальные сохранённые
+задачи; связи из другой journal incarnation не перепривязываются. Disconnect
+или истёкший cache не показывает текущий enabled. [A3.2c](plans/architecture-transition/readiness-projection.md)
+проверен locally/browser; actual new/new Windows gate ещё впереди.
+
 Статус передаётся текстом и значком, а не только цветом. Поддержать keyboard navigation, focus states, responsive layout, readable contrast и длинные пути/аргументы. После reconnect не сбрасывать раскрытые steps, фильтры, выбранный task и scroll position.
 
 Новая capability обязана определить label, parameters view, events, progress, output/result, доступные actions и failure recovery. Общие status badges/timeline/renderers переиспользуются; предметный renderer добавляется в `ui/src/features`.

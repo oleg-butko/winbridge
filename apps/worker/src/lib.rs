@@ -5,6 +5,7 @@ mod domain;
 mod history;
 mod imports;
 mod network;
+mod projection;
 mod recovery;
 mod recovery_pair;
 pub use recovery::RECOVERY_MARKER;
@@ -117,6 +118,7 @@ pub struct Worker {
     checks: Mutex<HashMap<String, Option<Result<workflows::CheckResult>>>>,
     stop: AtomicBool,
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
+    controller_projection: Mutex<Option<projection::CachedProjection>>,
     unreconciled_tasks: Mutex<HashMap<String, String>>,
     inspection: bool,
     execution_domain: Mutex<Option<winbridge_platform::execution_domain::ExecutionDomain>>,
@@ -241,6 +243,7 @@ impl Worker {
             checks: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
+            controller_projection: Mutex::new(None),
             unreconciled_tasks: Mutex::new(HashMap::new()),
             inspection,
             execution_domain: Mutex::new(None),
@@ -600,9 +603,10 @@ impl Worker {
                             .map_err(|e| e.to_string())?,
                         ),
                         contract_catalog: Some(
-                            serde_json::to_value(winbridge_protocol::ContractCatalog::implemented(
-                                winbridge_protocol::build_identity(),
-                            ))
+                            serde_json::to_value(self.projection_catalog(&RequestContext {
+                                instance_id: self.config.instance_id.clone(),
+                                journal_incarnation: store.journal_authority().incarnation.clone(),
+                            })?)
                             .map_err(|e| e.to_string())?,
                         ),
                         recovery_coverage: self

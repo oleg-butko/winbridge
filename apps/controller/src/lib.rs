@@ -14,6 +14,8 @@ use winbridge_transport::websocket::{self as ws, Result, RpcSender};
 mod activity;
 pub mod mcp;
 #[cfg(unix)]
+mod projection;
+#[cfg(unix)]
 pub mod readiness;
 #[cfg(unix)]
 pub mod readiness_store;
@@ -322,7 +324,7 @@ impl Controller {
                 state.last_peer = Some((peer.clone(), address));
                 state.last_error = None;
                 state.active = Some(Session {
-                    sender,
+                    sender: sender.clone(),
                     id: id.clone(),
                     ready: false,
                 });
@@ -370,7 +372,22 @@ impl Controller {
         }
         self.activity.record(serde_json::json!({"event":"worker_connected","sourceIp":address.ip().to_string(),"sourceAddress":address.to_string(),"sessionId":id,"nodeId":peer.node_id,"generation":peer.generation}));
         eprintln!("WinBridge worker connected: {address}; session {id}");
-        ws::controller_session(socket, calls, &id).await
+        #[cfg(unix)]
+        let mut publishers = tokio::task::JoinSet::new();
+        #[cfg(unix)]
+        {
+            let owner = Arc::clone(&guard.controller);
+            let projection_session = id.clone();
+            publishers.spawn(async move {
+                if let Err(error) = projection::publish(owner, sender, projection_session).await {
+                    eprintln!("Readonly readiness projection stopped: {error}; task execution and RPC session continue");
+                }
+            });
+        }
+        let result = ws::controller_session(socket, calls, &id).await;
+        #[cfg(unix)]
+        publishers.shutdown().await;
+        result
     }
     fn validate_peer(&self, peer: &PeerIdentity) -> Result<()> {
         if peer.protocol_version != PROTOCOL_VERSION {

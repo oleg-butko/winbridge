@@ -1,0 +1,430 @@
+{
+  "provenance": "Synthetic DTOs; no user configs, journals or runtime output. Shared known-reader cases, not execution evidence.",
+  "baseInfo": {
+    "protocolVersion": 1,
+    "instanceId": "legacy-fixture",
+    "nodeId": "fixture-windows",
+    "generation": "provider-generation",
+    "platform": "windows",
+    "runtimeValidation": "windows-native",
+    "projects": [],
+    "build": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "buildId": "provider-build"
+    },
+    "fencedRequests": {
+      "requestContractVersion": 2,
+      "context": {
+        "instanceId": "test",
+        "journalIncarnation": "incarnation-1"
+      },
+      "legacyMutationsAllowed": false
+    },
+    "controllerConnection": {
+      "url": "ws://127.0.0.1:1143",
+      "state": "connected",
+      "sessionId": "session",
+      "controllerNodeId": "controller",
+      "controllerGeneration": "controller-generation",
+      "lastConfirmedAtMs": 1,
+      "error": null
+    },
+    "contractCatalog": {
+      "schemaVersion": 1,
+      "provider": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "buildId": "provider-build"
+      },
+      "supported": [
+        {
+          "id": "winbridge.worker-rpc",
+          "version": 2
+        },
+        {
+          "id": "winbridge.controller-readiness",
+          "version": 1
+        }
+      ],
+      "controllerProjection": {
+        "schemaVersion": 1,
+        "controllerBuild": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "controller-build"
+        },
+        "controllerGeneration": "controller-generation",
+        "sessionId": "session",
+        "providerBuild": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "buildId": "provider-build"
+        },
+        "providerGeneration": "provider-generation",
+        "context": {
+          "instanceId": "test",
+          "journalIncarnation": "incarnation-1"
+        },
+        "sequence": 1,
+        "views": [
+          {
+            "projectId": "fixture",
+            "contract": {
+              "id": "winbridge.worker-rpc",
+              "version": 2
+            },
+            "identity": {
+              "schemaVersion": 1,
+              "contract": {
+                "id": "winbridge.worker-rpc",
+                "version": 2
+              },
+              "contractSchemaSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "consumer": {
+                "version": "0.1.0",
+                "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "sourceDirty": false,
+                "sourceManifestSha256": null,
+                "buildId": "consumer-build"
+              },
+              "provider": {
+                "version": "0.1.0",
+                "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "sourceDirty": false,
+                "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "buildId": "provider-build"
+              },
+              "context": {
+                "instanceId": "test",
+                "journalIncarnation": "incarnation-1"
+              },
+              "route": [
+                {
+                  "role": "adapter",
+                  "nodeId": "agent",
+                  "build": {
+                    "version": "0.1.0",
+                    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sourceDirty": false,
+                    "sourceManifestSha256": null,
+                    "buildId": "consumer-build"
+                  },
+                  "endpoint": "stdio"
+                },
+                {
+                  "role": "controller",
+                  "nodeId": "debian",
+                  "build": {
+                    "version": "0.1.0",
+                    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sourceDirty": false,
+                    "sourceManifestSha256": null,
+                    "buildId": "controller-build"
+                  },
+                  "endpoint": "/local/controller.sock"
+                },
+                {
+                  "role": "worker",
+                  "nodeId": "windows",
+                  "build": {
+                    "version": "0.1.0",
+                    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sourceDirty": false,
+                    "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                    "buildId": "provider-build"
+                  },
+                  "endpoint": "ws://192.168.44.203:1143"
+                }
+              ],
+              "projectPolicy": {
+                "projectId": "fixture",
+                "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              },
+              "routeTransport": "mcp_ipc_websocket"
+            },
+            "readiness": {
+              "supported": true,
+              "buildVerified": true,
+              "pairTested": true,
+              "enabled": true,
+              "reasons": []
+            },
+            "receiptId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "testProfile": "fenced-task-v1",
+            "controllerGeneration": "controller-generation",
+            "sessionId": "session",
+            "detail": "Synthetic readonly observation"
+          }
+        ],
+        "verifications": [
+          {
+            "verificationKey": "synthetic",
+            "identity": {
+              "schemaVersion": 1,
+              "contract": {
+                "id": "winbridge.worker-rpc",
+                "version": 2
+              },
+              "contractSchemaSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "consumer": {
+                "version": "0.1.0",
+                "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "sourceDirty": false,
+                "sourceManifestSha256": null,
+                "buildId": "consumer-build"
+              },
+              "provider": {
+                "version": "0.1.0",
+                "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "sourceDirty": false,
+                "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                "buildId": "provider-build"
+              },
+              "context": {
+                "instanceId": "test",
+                "journalIncarnation": "incarnation-1"
+              },
+              "route": [
+                {
+                  "role": "adapter",
+                  "nodeId": "agent",
+                  "build": {
+                    "version": "0.1.0",
+                    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sourceDirty": false,
+                    "sourceManifestSha256": null,
+                    "buildId": "consumer-build"
+                  },
+                  "endpoint": "stdio"
+                },
+                {
+                  "role": "controller",
+                  "nodeId": "debian",
+                  "build": {
+                    "version": "0.1.0",
+                    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sourceDirty": false,
+                    "sourceManifestSha256": null,
+                    "buildId": "controller-build"
+                  },
+                  "endpoint": "/local/controller.sock"
+                },
+                {
+                  "role": "worker",
+                  "nodeId": "windows",
+                  "build": {
+                    "version": "0.1.0",
+                    "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "sourceDirty": false,
+                    "sourceManifestSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+                    "buildId": "provider-build"
+                  },
+                  "endpoint": "ws://192.168.44.203:1143"
+                }
+              ],
+              "projectPolicy": {
+                "projectId": "fixture",
+                "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+              },
+              "routeTransport": "mcp_ipc_websocket"
+            },
+            "status": "succeeded",
+            "stage": "complete",
+            "taskIds": [
+              "one",
+              "two"
+            ],
+            "receiptId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "detail": "Synthetic, no process was started"
+          }
+        ],
+        "truncated": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "valid-current-frame",
+      "expected": "known"
+    },
+    {
+      "name": "future-schema",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/schemaVersion",
+      "value": 2
+    },
+    {
+      "name": "zero-sequence",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/sequence",
+      "value": 0
+    },
+    {
+      "name": "unsafe-json-sequence",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/sequence",
+      "value": 9007199254740992
+    },
+    {
+      "name": "foreign-session",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/sessionId",
+      "value": "old"
+    },
+    {
+      "name": "foreign-controller",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/controllerGeneration",
+      "value": "old"
+    },
+    {
+      "name": "foreign-provider-generation",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/providerGeneration",
+      "value": "old"
+    },
+    {
+      "name": "foreign-provider-build",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/providerBuild/buildId",
+      "value": "other"
+    },
+    {
+      "name": "foreign-scope",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/context/journalIncarnation",
+      "value": "other"
+    },
+    {
+      "name": "future-field",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/future",
+      "value": true
+    },
+    {
+      "name": "null-payload",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection",
+      "value": null
+    },
+    {
+      "name": "future-view-field",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/future",
+      "value": true
+    },
+    {
+      "name": "future-reason",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/readiness/reasons",
+      "value": [
+        "future"
+      ]
+    },
+    {
+      "name": "contradictory-enable",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/readiness/pairTested",
+      "value": false
+    },
+    {
+      "name": "foreign-view-controller",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/controllerGeneration",
+      "value": "other"
+    },
+    {
+      "name": "foreign-view-scope",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/identity/context/journalIncarnation",
+      "value": "other"
+    },
+    {
+      "name": "foreign-view-policy",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/identity/projectPolicy/projectId",
+      "value": "other"
+    },
+    {
+      "name": "foreign-view-hop",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/identity/route/1/build/buildId",
+      "value": "other"
+    },
+    {
+      "name": "future-identity-schema",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views/0/identity/schemaVersion",
+      "value": 2
+    },
+    {
+      "name": "future-verification-status",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/verifications/0/status",
+      "value": "future"
+    },
+    {
+      "name": "future-verification-field",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/verifications/0/future",
+      "value": true
+    },
+    {
+      "name": "future-verification-identity",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/verifications/0/identity/schemaVersion",
+      "value": 2
+    },
+    {
+      "name": "too-many-views",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/views",
+      "repeat": 11
+    },
+    {
+      "name": "too-many-verifications",
+      "expected": "unsupported",
+      "pointer": "/contractCatalog/controllerProjection/verifications",
+      "repeat": 11
+    },
+    {
+      "name": "missing-payload",
+      "expected": "missing",
+      "pointer": "/contractCatalog/controllerProjection",
+      "remove": true
+    },
+    {
+      "name": "disconnected",
+      "expected": "unsupported",
+      "pointer": "/controllerConnection/state",
+      "value": "disconnected"
+    },
+    {
+      "name": "changed-journal",
+      "expected": "unsupported",
+      "pointer": "/fencedRequests/context/journalIncarnation",
+      "value": "other"
+    },
+    {
+      "name": "changed-binary",
+      "expected": "unsupported",
+      "pointer": "/build/buildId",
+      "value": "other"
+    },
+    {
+      "name": "disabled-no-identity",
+      "expected": "known",
+      "pointer": "/contractCatalog/controllerProjection/views/0/readiness/enabled",
+      "value": false
+    }
+  ]
+}

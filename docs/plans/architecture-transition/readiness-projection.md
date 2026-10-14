@@ -26,3 +26,14 @@ cases; isolated Windows tests/desktop compile через installed worker. Actua
 installed new/new route требует последующего обновления worker. Full A3.2 не
 закрывать до него. Ревью плана: no new mutation API, no mailboxes-as-journal,
 no historical receipt auto-enable, capped metadata independent of process output.
+
+Реализовано локально: negotiated latest-value frame, disposable worker cache
+(TTL 10 секунд), обновление каждые 3 секунды, four-fact UI и task links.
+Последние десять проверок — ограниченная сводка, не paged operation history.
+Incomplete unpublished plan directory не подавляет остальные данные;
+corrupt published record не интерпретируется как evidence.
+307 workspace tests, Linux/Windows-target Clippy, TypeScript/UI build прошли.
+29 shared Rust/TS cases и actual Unix WS→IPC→browser rendering/disconnect прошли.
+Frozen worker RPC-2 schema SHA-256 прежний `dd86d35b8b9ed59aca0bb438491e906b9c25c69970f0121226fdee99b98e9a12`.
+Native candidate gate готовится. Installed `b2aeb9f` не объявляет projection 1;
+actual new/new Windows presentation требует следующего обновления.

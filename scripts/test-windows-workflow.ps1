@@ -249,7 +249,8 @@ try {
         $env:WINBRIDGE_TASK_CAS_REPORT = $ReportDirectory
         $groups = @(
             @{ name='readiness-pure-policy'; arguments=@('test','-p','winbridge-core','--test','readiness','--locked','--offline','--','--test-threads=1','--nocapture') },
-            @{ name='readiness-wire-compatibility'; arguments=@('test','-p','winbridge-protocol','--features','jsonschema','--test','discovery','--test','legacy_baseline','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='readiness-wire-compatibility'; arguments=@('test','-p','winbridge-protocol','--features','jsonschema','--test','discovery','--test','projection','--test','legacy_baseline','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='readiness-cache-freshness'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','projection::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-native-info-and-scope'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','discovery','--test','request_context','--test','maintenance','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
         )

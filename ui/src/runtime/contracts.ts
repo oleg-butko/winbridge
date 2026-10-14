@@ -1,4 +1,5 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type ControllerReadinessProjection = { schemaVersion: number, controllerBuild: BuildIdentity, controllerGeneration: string, sessionId: string, providerBuild: BuildIdentity, providerGeneration: string, context: RequestContext, sequence: number, views: Array<ContractReadinessView>, verifications: Array<VerificationView>, truncated: boolean, };
 export type RuntimeSettings = { generation: string, path: string, activeJson: string, savedJson: string, savedSha256: string, restartRequired: boolean, };
 export type SaveRuntimeSettings = { generation: string, requestId: string, expectedSha256: string, json: string, };
 export type SettingsSaved = { settings: RuntimeSettings, backupPath: string | null, };
@@ -84,7 +85,7 @@ export type FencedReplyOutcome = "responded" | "rejected_before_dispatch" | "unc
 export type FencedRequestInfo = { requestContractVersion: number, context: RequestContext, legacyMutationsAllowed: boolean, };
 export type RecoveryCoverageInfo = { complete: boolean, reason: string, };
 export type ContractRef = { id: string, version: number, };
-export type ContractCatalog = { schemaVersion: number, provider: BuildIdentity, supported: Array<ContractRef>, };
+export type ContractCatalog = { schemaVersion: number, provider: BuildIdentity, supported: Array<ContractRef>, controllerProjection?: unknown, };
 export type ContractSchemaFingerprint = { contract: ContractRef, sha256: string, };
 export type ContractSchemaCatalog = { schemaVersion: number, provider: BuildIdentity, schemas: Array<ContractSchemaFingerprint>, };
 export type ProjectPolicyFingerprint = { projectId: string, sha256: string, };

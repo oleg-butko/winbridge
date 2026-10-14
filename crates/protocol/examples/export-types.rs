@@ -8,6 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        ControllerReadinessProjection::decl(&config),
         RuntimeSettings::decl(&config),
         SaveRuntimeSettings::decl(&config),
         SettingsSaved::decl(&config),

@@ -3,7 +3,7 @@ use futures_util::{SinkExt, StreamExt};
 use std::{collections::HashMap, time::Duration};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, watch},
     time::Instant,
 };
 use tokio_tungstenite::tungstenite::{protocol::WebSocketConfig, Message};
@@ -68,8 +68,8 @@ pub async fn receive<S: AsyncRead + AsyncWrite + Unpin>(
     match receive_frame(socket).await? {
         None => Ok(None),
         Some(SessionFrame::Legacy(message)) => Ok(Some(message)),
-        Some(SessionFrame::Fenced(_)) => {
-            Err("Unexpected contract-2 frame before negotiation".into())
+        Some(SessionFrame::Fenced(_) | SessionFrame::Projection(_)) => {
+            Err("Unexpected versioned frame before negotiation".into())
         }
     }
 }
@@ -117,7 +117,22 @@ pub struct RpcCall {
     pub reply: oneshot::Sender<Result<WireResponse>>,
 }
 #[derive(Clone)]
-pub struct RpcSender(mpsc::Sender<RpcCall>);
+pub struct RpcSender(
+    mpsc::Sender<RpcCall>,
+    watch::Sender<Option<winbridge_protocol::ControllerReadinessProjection>>,
+);
+pub struct RpcChannels {
+    calls: mpsc::Receiver<RpcCall>,
+    projections: watch::Receiver<Option<winbridge_protocol::ControllerReadinessProjection>>,
+}
+impl RpcChannels {
+    pub async fn recv(&mut self) -> Option<RpcCall> {
+        self.calls.recv().await
+    }
+    pub fn try_recv(&mut self) -> std::result::Result<RpcCall, mpsc::error::TryRecvError> {
+        self.calls.try_recv()
+    }
+}
 enum ReplyContract {
     Legacy,
     Fenced,
@@ -127,11 +142,28 @@ struct PendingReply {
     contract: ReplyContract,
     reply: oneshot::Sender<Result<WireResponse>>,
 }
-pub fn rpc_channel() -> (RpcSender, mpsc::Receiver<RpcCall>) {
+pub fn rpc_channel() -> (RpcSender, RpcChannels) {
     let (sender, receiver) = mpsc::channel(32);
-    (RpcSender(sender), receiver)
+    let (projection_sender, projections) = watch::channel(None);
+    (
+        RpcSender(sender, projection_sender),
+        RpcChannels {
+            calls: receiver,
+            projections,
+        },
+    )
 }
 impl RpcSender {
+    /// Caller must first negotiate support on this exact worker session.
+    /// Latest readonly projection replaces older pending metadata; no task ACKs are dropped.
+    pub fn publish_projection(
+        &self,
+        projection: winbridge_protocol::ControllerReadinessProjection,
+    ) -> Result<()> {
+        self.1
+            .send(Some(projection))
+            .map_err(|_| "Projection session closed".into())
+    }
     pub async fn call(&self, request: LocalRequest) -> Result<LocalResponse> {
         match self.call_wire(WireRequest::Legacy(request)).await? {
             WireResponse::Legacy(response) => Ok(*response),
@@ -168,7 +200,7 @@ impl RpcSender {
 
 pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
     mut socket: WebSocketStream<S>,
-    mut calls: mpsc::Receiver<RpcCall>,
+    mut channels: RpcChannels,
     generation: &str,
 ) -> Result<()> {
     let mut pending: HashMap<String, PendingReply> = HashMap::new();
@@ -177,6 +209,7 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
     let mut ping: Option<(u64, Instant)> = None;
     let mut next_ping = Instant::now();
     let mut timer = tokio::time::interval(Duration::from_millis(100));
+    let mut projection_open = true;
     loop {
         tokio::select! {
             _ = timer.tick() => {
@@ -193,7 +226,14 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                     ping = Some((nonce, now));
                 }
             }
-            call = calls.recv() => {
+            changed = channels.projections.changed(), if projection_open => {
+                if changed.is_err() { projection_open = false; continue; }
+                let projection = channels.projections.borrow_and_update().clone();
+                if let Some(projection) = projection {
+                    send_frame(&mut socket, &SessionFrame::Projection(winbridge_protocol::ProjectionSessionMessage::ControllerProjection { projection: Box::new(projection) })).await?;
+                }
+            }
+            call = channels.calls.recv() => {
                 let Some(call) = call else { return Ok(()); };
                 if call.reply.is_closed() { continue; }
                 if pending.len() >= MAX_IN_FLIGHT {

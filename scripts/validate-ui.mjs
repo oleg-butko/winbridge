@@ -229,6 +229,11 @@ try {
   await page.goto(url);
   await page.getByText("Worker подключён · linux · ui-test", { exact: true }).waitFor();
   await page.getByText("Controller Debian подключён", { exact: true }).waitFor();
+  await page.getByText("Совместимость компонентов", { exact: true }).click();
+  await page.getByTestId("contract-readiness").waitFor();
+  assert.match(await page.getByTestId("contract-readiness").innerText(), /Проверены сборки: нет/i);
+  assert.match(await page.getByTestId("contract-readiness").innerText(), /Проверена пара: нет/i);
+  assert.match(await page.getByTestId("contract-readiness").innerText(), /Готовность профиля: нет/i);
   const published = JSON.parse((await exec(controllerExe,["--config",controllerConfig,"publish","fixture","HEAD"])).stdout);
   const discovered = JSON.parse((await exec(controllerExe,["--config",controllerConfig,"snapshots","fixture"])).stdout);
   assert.equal(discovered.kind, "snapshots");
@@ -337,6 +342,7 @@ try {
   const long = await latestTask();
   await stopController();
   await page.getByText("Нет свежего соединения с controller Debian", { exact: true }).waitFor();
+  await until(async () => await page.getByTestId("contract-readiness").count() === 0, "controller disconnect retained a live readiness projection");
   assert.equal((await call({ method: "get_task", taskId: long.taskId })).task.status, "running", "controller exit cancelled a task");
   await startController();
   await page.getByText("Controller Debian подключён", { exact: true }).waitFor();

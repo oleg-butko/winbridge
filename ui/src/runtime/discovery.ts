@@ -1,4 +1,4 @@
-import type { BuildIdentity, ContractCatalog, ContractRef, ProjectPolicyCatalog, WorkerInfo } from "./contracts";
+import type { BuildIdentity, ContractCatalog, ContractRef, ControllerReadinessProjection, ProjectPolicyCatalog, WorkerInfo } from "./contracts";
 
 export type CatalogObservation =
   | { kind: "missing" }
@@ -32,7 +32,7 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
   const raw = info.contractCatalog;
   if (raw === undefined) return { kind: "missing" };
   const invalid = (reason: string): CatalogObservation => ({ kind: "unsupported", reason });
-  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported"]) || raw.schemaVersion !== 1
+  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported", "controllerProjection"]) || raw.schemaVersion !== 1
     || !Array.isArray(raw.supported)) return invalid("Формат каталога неизвестен. Новые функции не включены.");
   const provider = readBuild(raw.provider);
   const expected = readBuild(info.build);
@@ -46,7 +46,71 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
     seen.add(id);
     return false;
   })) return invalid("В каталоге некорректные или повторяющиеся контракты.");
-  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[] } };
+  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[], ...(Object.hasOwn(raw, "controllerProjection") ? { controllerProjection: raw.controllerProjection } : {}) } };
+}
+
+type ProjectionObservation = { kind: "missing" | "unsupported" } | { kind: "known"; projection: ControllerReadinessProjection };
+const sameBuild = (a: unknown, b: unknown) => {
+  const left = readBuild(a), right = readBuild(b);
+  return left !== null && right !== null && (["version", "sourceCommit", "sourceDirty", "sourceManifestSha256", "buildId"] as const).every((key) => left[key] === right[key]);
+};
+const scope = (value: unknown): value is Record<string, string> => object(value)
+  && keys(value, ["instanceId", "journalIncarnation"]) && typeof value.instanceId === "string" && typeof value.journalIncarnation === "string";
+const sameScope = (a: unknown, b: unknown) => scope(a) && scope(b) && a.instanceId === b.instanceId && a.journalIncarnation === b.journalIncarnation;
+function identity(value: unknown): value is Record<string, unknown> {
+  return object(value) && keys(value, ["schemaVersion", "contract", "contractSchemaSha256", "consumer", "provider", "context", "routeTransport", "route", "projectPolicy"])
+    && value.schemaVersion === 1 && contract(value.contract) && typeof value.contractSchemaSha256 === "string"
+    && readBuild(value.consumer) !== null && readBuild(value.provider) !== null && scope(value.context)
+    && typeof value.routeTransport === "string" && ["mcp_ipc_websocket", "cli_ipc_websocket"].includes(value.routeTransport)
+    && object(value.projectPolicy) && keys(value.projectPolicy, ["projectId", "sha256"])
+    && typeof value.projectPolicy.projectId === "string" && typeof value.projectPolicy.sha256 === "string"
+    && Array.isArray(value.route) && value.route.length === 3 && value.route.every((hop) => object(hop)
+      && keys(hop, ["role", "nodeId", "endpoint", "build"]) && typeof hop.role === "string" && ["adapter", "controller", "worker"].includes(hop.role)
+      && typeof hop.nodeId === "string" && typeof hop.endpoint === "string" && readBuild(hop.build) !== null);
+}
+const reasons = ["unsupported_contract", "missing_identity", "invalid_identity", "missing_evidence", "invalid_evidence", "identity_changed", "schema_changed", "build_unverified", "pair_untested", "route_not_fresh", "policy_denied"];
+function projectionView(view: unknown, raw: Record<string, unknown>): boolean {
+  if (!object(view) || !keys(view, ["projectId", "contract", "identity", "readiness", "receiptId", "testProfile", "controllerGeneration", "sessionId", "detail"])
+    || typeof view.projectId !== "string" || !contract(view.contract) || !optionalString(view.receiptId)
+    || typeof view.testProfile !== "string" || typeof view.detail !== "string"
+    || view.controllerGeneration !== raw.controllerGeneration || view.sessionId !== raw.sessionId || !object(view.readiness)) return false;
+  const ready = view.readiness;
+  if (!keys(ready, ["supported", "buildVerified", "pairTested", "enabled", "reasons"])
+    || ["supported", "buildVerified", "pairTested", "enabled"].some((key) => typeof ready[key] !== "boolean")
+    || !Array.isArray(ready.reasons) || ready.reasons.some((reason) => typeof reason !== "string" || !reasons.includes(reason))) return false;
+  if (view.identity !== null && view.identity !== undefined) {
+    const id = view.identity;
+    if (!identity(id) || !sameScope(id.context, raw.context) || !sameBuild(id.provider, raw.providerBuild)
+      || !object(id.projectPolicy) || id.projectPolicy.projectId !== view.projectId
+      || !contract(id.contract) || id.contract.id !== view.contract.id || id.contract.version !== view.contract.version
+      || !Array.isArray(id.route) || !object(id.route[1]) || id.route[1].role !== "controller" || !sameBuild(id.route[1].build, raw.controllerBuild)) return false;
+  }
+  return !ready.enabled || (view.identity != null && ready.supported === true && ready.buildVerified === true && ready.pairTested === true && ready.reasons.length === 0);
+}
+function verificationView(view: unknown): boolean {
+  return object(view) && keys(view, ["verificationKey", "identity", "status", "stage", "taskIds", "receiptId", "detail"])
+    && typeof view.verificationKey === "string" && identity(view.identity)
+    && typeof view.status === "string" && ["accepted", "running", "succeeded", "failed", "indeterminate"].includes(view.status)
+    && typeof view.stage === "string" && Array.isArray(view.taskIds) && view.taskIds.every((id) => typeof id === "string")
+    && optionalString(view.receiptId) && typeof view.detail === "string";
+}
+export function interpretControllerProjection(info: WorkerInfo): ProjectionObservation {
+  const catalog = interpretCatalog(info);
+  if (catalog.kind !== "known" || !catalog.catalog.supported.some((c) => c.id === "winbridge.controller-readiness" && c.version === 1)) return { kind: "unsupported" };
+  const raw = catalog.catalog.controllerProjection;
+  if (raw === undefined) return { kind: "missing" };
+  const connection = info.controllerConnection;
+  if (!object(raw) || !keys(raw, ["schemaVersion", "controllerBuild", "controllerGeneration", "sessionId", "providerBuild", "providerGeneration", "context", "sequence", "views", "verifications", "truncated"])
+    || raw.schemaVersion !== 1 || typeof raw.controllerGeneration !== "string" || typeof raw.sessionId !== "string"
+    || readBuild(raw.controllerBuild) === null || !sameBuild(raw.providerBuild, info.build)
+    || raw.providerGeneration !== info.generation || !connection || connection.state !== "connected"
+    || raw.sessionId !== connection.sessionId || raw.controllerGeneration !== connection.controllerGeneration
+    || !info.fencedRequests || info.fencedRequests.requestContractVersion !== 2 || !sameScope(raw.context, info.fencedRequests.context)
+    || typeof raw.sequence !== "number" || !Number.isSafeInteger(raw.sequence) || raw.sequence <= 0
+    || typeof raw.truncated !== "boolean" || !Array.isArray(raw.views) || raw.views.length > 10
+    || !Array.isArray(raw.verifications) || raw.verifications.length > 10
+    || !raw.views.every((view) => projectionView(view, raw)) || !raw.verifications.every(verificationView)) return { kind: "unsupported" };
+  return { kind: "known", projection: raw as unknown as ControllerReadinessProjection };
 }
 
 export function catalogSummary(info: Pick<WorkerInfo, "contractCatalog" | "build">): string {

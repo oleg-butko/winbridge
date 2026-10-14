@@ -24,6 +24,7 @@ struct Plan {
     pair_request: FencedRequest,
     report_directory: PathBuf,
 }
+type VerificationObservation = (BuildIdentity, ControllerAdapter, VerificationView);
 enum VerificationFailure {
     Failed(String),
     Indeterminate(String),
@@ -128,6 +129,53 @@ fn query(identity: &PairIdentity) -> ContractReadinessQuery {
     }
 }
 impl Controller {
+    pub(crate) fn recent_verifications(
+        &self,
+    ) -> Result<(Vec<VerificationObservation>, bool), String> {
+        let root = self
+            .config
+            .state_directory
+            .join("contract-verifications-v1");
+        if !root.exists() {
+            return Ok((vec![], false));
+        }
+        crate::activity::private_directory(&root)?;
+        let mut entries = Vec::new();
+        let mut truncated = false;
+        for (index, entry) in fs::read_dir(&root).map_err(|e| e.to_string())?.enumerate() {
+            if index >= 128 {
+                truncated = true;
+                break;
+            }
+            let entry = entry.map_err(|e| e.to_string())?;
+            if !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+                continue;
+            }
+            let metadata = entry.metadata().map_err(|e| e.to_string())?;
+            entries.push((
+                metadata.modified().map_err(|e| e.to_string())?,
+                entry.path(),
+            ));
+        }
+        entries.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        truncated |= entries.len() > PROJECTION_MAX_ITEMS;
+        let mut recent = Vec::new();
+        for (_, directory) in entries.into_iter().take(PROJECTION_MAX_ITEMS) {
+            if !directory.join("plan.json").exists() {
+                // A crash between directory creation and plan publication is not
+                // acceptance and must not suppress all other readonly observations.
+                truncated = true;
+                continue;
+            }
+            let plan: Plan = durable_read(&directory.join("plan.json"))?;
+            if self.verification_directory(&plan.request.verification_key, false)? != directory {
+                return Err("Verification directory/key mismatch".into());
+            }
+            let view = self.get_verification(&plan.request.verification_key)?;
+            recent.push((plan.adapter, plan.adapter_kind, view));
+        }
+        Ok((recent, truncated))
+    }
     fn verification_directory(&self, key: &str, create: bool) -> Result<PathBuf, String> {
         if !winbridge_core::config::valid_id(key) {
             return Err("verificationKey must be a stable safe ID, at most 80 characters".into());
@@ -221,7 +269,7 @@ impl Controller {
         {
             return Err("First registered test profile covers fixture/RPC-2 only; other contracts remain untested".into());
         }
-        let directory = self.verification_directory(&request.verification_key, true)?;
+        let directory = self.verification_directory(&request.verification_key, false)?;
         if directory.join("plan.json").exists() {
             let old: Plan = durable_read(&directory.join("plan.json"))?;
             if old.request != request || old.adapter != adapter {
@@ -350,6 +398,7 @@ impl Controller {
                 },
                 report_directory,
             };
+            let directory = self.verification_directory(&request.verification_key, true)?;
             durable_new(&directory.join("plan.json"), &plan)?;
         }
         let key = request.verification_key.clone();
@@ -666,6 +715,9 @@ mod tests {
             serde_json::from_str(include_str!("../../../tests/fixtures/readiness/pair.json"))
                 .unwrap();
         let key = "original-verification";
+        owner
+            .verification_directory("unpublished-plan", true)
+            .unwrap();
         let directory = owner.verification_directory(key, true).unwrap();
         let request = FencedRequest {
             request_contract_version: 2,
@@ -684,6 +736,9 @@ mod tests {
             report_directory: temp.path().join("report"),
         };
         durable_new(&directory.join("plan.json"), &plan).unwrap();
+        let (recent, truncated) = owner.recent_verifications().unwrap();
+        assert_eq!(recent.len(), 1);
+        assert!(truncated);
         let mut interrupted = owner.get_verification(key).unwrap();
         assert!(matches!(
             interrupted.status,

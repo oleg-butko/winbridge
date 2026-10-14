@@ -57,6 +57,34 @@ async fn actual_readiness_ipc_mcp_observe_new_metadata_without_enabling_missing_
     assert_eq!(identity.contract_schema_sha256, fenced_rpc_schema_sha256());
     assert_eq!(identity.route[1].build, build_identity());
     assert_eq!(identity.provider, build_identity());
+    // Actual WS publisher -> disposable worker cache -> normal local IPC Info.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let LocalResponse::Info { info } = winbridge_transport::call(
+            &winbridge_transport::endpoint(
+                &worker.config.state_directory,
+                &worker.config.instance_id,
+            )
+            .unwrap(),
+            &LocalRequest::Info,
+        )
+        .await
+        .unwrap() else {
+            panic!("worker info");
+        };
+        if let ProjectionObservation::Known(projection) = interpret_controller_projection(&info) {
+            assert_eq!(projection.context, identity.context);
+            assert!(projection.views.iter().any(|v| v.project_id == "fixture"));
+            assert!(projection.views.iter().all(|v| !v.readiness.enabled));
+            assert!(projection.verifications.is_empty());
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Actual projection did not reach local IPC"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     let input = format!(
         "{}\n{}\n{}\n",
         serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"readiness-test","version":"1"}}}),

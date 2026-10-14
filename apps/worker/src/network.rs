@@ -18,6 +18,9 @@ fn update(worker: &Worker, change: impl FnOnce(&mut winbridge_protocol::Controll
     if let Ok(mut state) = worker.controller_connection.lock() {
         if let Some(state) = state.as_mut() {
             change(state);
+            if !matches!(state.state, ConnectionState::Connected) {
+                worker.clear_projection();
+            }
         }
     }
 }
@@ -140,6 +143,9 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                     ws::send(&mut socket, &SessionMessage::Pong { nonce }).await?;
                     last_nonce = nonce; last_ping = Instant::now();
                     update(&worker, |s| { s.last_confirmed_at_ms = Some(now_ms()); });
+                }
+                Some(SessionFrame::Projection(winbridge_protocol::ProjectionSessionMessage::ControllerProjection { projection })) => {
+                    let _ = worker.accept_projection(*projection)?;
                 }
                 Some(message) => {
                     let (id, request) = match message {

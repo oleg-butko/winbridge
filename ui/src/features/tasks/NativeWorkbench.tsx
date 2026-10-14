@@ -12,6 +12,7 @@ import { emptyCommandForm, loadCommandDrafts, sameDraftScope, saveCommandDraft, 
 import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, DeliveryDraft, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
 import { catalogSummary, projectPolicySummary } from "../../runtime/discovery";
+import { ReadinessPanel } from "./ReadinessPanel";
 import { OutputBuffer } from "./outputBuffer";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
@@ -312,7 +313,7 @@ export function NativeWorkbench() {
     <Alert color={connected ? "teal" : "yellow"} title={connected ? `Worker подключён · ${info?.platform} · ${info?.instanceId}` : "Worker недоступен"}>
       {connected ? "Данные поступают из локального журнала worker. Закрытие окна не отменяет принятую задачу." : connectionError ?? "Ожидается соединение с локальным worker."}
       {info && <Text size="xs" mt="xs">{info.runtimeValidation}</Text>}
-      {info && <details><summary>Совместимость компонентов</summary><Text size="xs">{!connected && "Последние сохранённые сведения; worker сейчас недоступен. "}{catalogSummary(info)}</Text><Text size="xs">{projectPolicySummary(info)}</Text></details>}
+      {info && <details><summary>Совместимость компонентов</summary><Text size="xs">{!connected && "Последние сохранённые сведения; worker сейчас недоступен. "}{catalogSummary(info)}</Text><Text size="xs">{projectPolicySummary(info)}</Text><ReadinessPanel info={info} connected={connected} onTask={(id) => { setSelectedId(id); requestAnimationFrame(() => document.getElementById("native-task-detail")?.scrollIntoView({ behavior: "smooth" })); }} /></details>}
       {info && <Text size="xs">Версия worker: {info.build ? `${info.build.version} · commit ${info.build.sourceCommit || "не указан"}${!info.build.sourceCommit ? " · происхождение исходников не подтверждено" : info.build.sourceDirty ? " · изменённые исходники" : ""} · build ${info.build.buildId}` : "этот выпуск не передаёт сведения о сборке"} · generation {info.generation}</Text>}
       <Text size="xs">Версия desktop: {desktopBuild ? `${desktopBuild.version} · commit ${desktopBuild.sourceCommit || "не указан"}${!desktopBuild.sourceCommit ? " · происхождение исходников не подтверждено" : desktopBuild.sourceDirty ? " · изменённые исходники" : ""} · build ${desktopBuild.buildId}` : "сведения о сборке ещё не получены"}</Text>
     </Alert>

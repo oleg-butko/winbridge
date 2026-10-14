@@ -107,10 +107,20 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         .collect();
     assert_eq!(messages[1]["result"]["isError"], false);
     assert_eq!(messages[2]["result"]["isError"], false);
-    assert_eq!(
-        messages[2]["result"]["structuredContent"]["info"]["contractCatalog"],
-        advertised.unwrap()
-    );
+    // Support metadata is immutable; a readonly session projection may advance
+    // between two Info calls. Scope/policy/schema forwarding remains exact.
+    let mut forwarded_catalog =
+        messages[2]["result"]["structuredContent"]["info"]["contractCatalog"].clone();
+    let mut advertised = advertised.unwrap();
+    forwarded_catalog
+        .as_object_mut()
+        .unwrap()
+        .remove("controllerProjection");
+    advertised
+        .as_object_mut()
+        .unwrap()
+        .remove("controllerProjection");
+    assert_eq!(forwarded_catalog, advertised);
     assert_eq!(
         messages[2]["result"]["structuredContent"]["info"]["projectPolicies"],
         policies.unwrap()

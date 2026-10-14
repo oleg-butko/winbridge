@@ -46,12 +46,20 @@ pub struct ContractCatalog {
     pub schema_version: u16,
     pub provider: BuildIdentity,
     pub supported: Vec<ContractRef>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_catalog"
+    )]
+    #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
+    pub controller_projection: Option<serde_json::Value>,
 }
 impl ContractCatalog {
     pub fn implemented(provider: BuildIdentity) -> Self {
         Self {
             schema_version: CATALOG_SCHEMA,
             provider,
+            controller_projection: None,
             supported: vec![
                 ContractRef {
                     id: WORKER_RPC_CONTRACT.into(),
@@ -60,6 +68,10 @@ impl ContractCatalog {
                 ContractRef {
                     id: WORKER_RPC_CONTRACT.into(),
                     version: crate::FENCED_REQUEST_CONTRACT,
+                },
+                ContractRef {
+                    id: crate::CONTROLLER_PROJECTION_CONTRACT.into(),
+                    version: 1,
                 },
             ],
         }
