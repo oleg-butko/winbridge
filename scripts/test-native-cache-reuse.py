@@ -113,6 +113,16 @@ class CacheReceiptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Cyclic'):
             self.check()
 
+    def test_missing_cache_fallback_requires_a_new_scoped_directory_and_explicit_reason(self):
+        owner = self.check()
+        local = 'K:\\project\\workflow-validation\\20261014-060000-aaaaaaaa'
+        result = dict(buildCacheRequested=owner, buildCacheReuseSkipped='cache_missing', buildCacheDirectory=local+'\\test-build-cache')
+        native.verify_build_cache_usage(result, owner, local)
+        for field, value in [('buildCacheReuseSkipped', 'ignored'), ('buildCacheDirectory', 'K:\\other\\test-build-cache'), ('buildCacheRequested', None)]:
+            wrong = dict(result, **{field: value})
+            with self.assertRaises(RuntimeError):
+                native.verify_build_cache_usage(wrong, owner, local)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -156,6 +156,14 @@ def verify_reusable_build_cache(base, run_id, visited=None):
     return owner
 
 
+def verify_build_cache_usage(result, requested, local):
+    if not requested or result.get('buildCacheReusedFrom') == requested:
+        return
+    expected_cache = PureWindowsPath(local) / 'test-build-cache'
+    if result.get('buildCacheRequested') != requested or result.get('buildCacheReuseSkipped') != 'cache_missing' or PureWindowsPath(result.get('buildCacheDirectory', '')) != expected_cache:
+        raise RuntimeError('Native build-cache receipt does not match the pinned prior run/fresh fallback')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--controller-config', type=Path, required=True)
@@ -383,8 +391,7 @@ exit $nativeExit
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
-    if cache_receipt and result.get('buildCacheReusedFrom') != cache_receipt:
-        raise RuntimeError('Native build-cache receipt does not match the pinned prior run')
+    verify_build_cache_usage(result, cache_receipt, local)
     if bool(result.get('diagnosticOnly', False)) != args.task_cas_runtime_diagnostic:
         raise RuntimeError('Native report diagnostic/full gate scope mismatch')
     if args.task_cas_runtime_diagnostic:

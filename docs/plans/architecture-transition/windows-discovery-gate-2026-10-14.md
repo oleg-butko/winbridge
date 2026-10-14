@@ -36,3 +36,26 @@ Installed worker generation `02939593-8adf-4878-a346-473092697a4a` unchanged,
 idle, без journal/maintenance errors. Desktop закрыт, окон не было; рабочий
 worker оставить запущенным. Обновление installed worker для этого исправления
 не требуется; build cache/reports/configs не удалялись.
+
+## Авторизованный повтор и отсутствующий cache
+
+Пользователь подтвердил автоматическое исправление/повтор и уточнил: выбирать
+рекомендованный вариант в таких ситуациях самостоятельно. Это правило сохранено
+в AGENTS.md; реальная проблема установленного worker по-прежнему останавливает
+зависящие Windows действия.
+
+Run `20261014-053002-115eeed9`, source `509dabd`, task
+`d7a90728-2abf-4f8e-837d-67e638253f6e`, failed/exit 1, zero test groups:
+старый source manifest не найден. Read-only inspection task
+`96fc7226-90fb-49dd-bdc5-4f594f3abfe7` succeeded/exit 0: весь owner directory
+`20261014-042057-8075f8f1` уже отсутствует, включая compiler cache. Free Windows
+bytes 37,407,731,712 (~34.8 GiB). WinBridge не удалял этот каталог.
+
+Сценарий больше не требует старых source files для compiler cache. Если cache
+отсутствует, выбирается только новый `test-build-cache` текущего run, отчёт хранит
+requested receipt и `cache_missing`, driver проверяет свежий scoped directory.
+Не-directory/reparse/busy cache не превращается в fresh fallback. Fixed local
+volume, exclusive lease и 8 GiB free-space threshold сохраняются; старые
+каталоги не очищаются. PowerShell тестирует missing/existing-without-source/file/
+linked ancestor; 10 Python tests проверяют provenance и explicit scoped fallback.
+Автоматический fresh повтор готовится, installed worker остаётся healthy/idle.

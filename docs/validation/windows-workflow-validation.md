@@ -47,6 +47,10 @@ cache, driver проверяет цепочку parent receipts (не более
 передаёт исходного owner, а не папку последнего отчёта. Windows проверяет pinned receipt,
 source identity, local path/reparse и держит exclusive cache lease; Cargo сам
 пересобирает изменённые компоненты. Старые состояния и reports сохраняются.
+Старые source files для cache reuse не нужны. Если compiler cache уже удалён,
+выбирается новый cache текущего run после проверки free-space threshold; report
+хранит `buildCacheRequested` и `buildCacheReuseSkipped: cache_missing`. Driver
+проверяет этот новый путь. Links, non-directory и занятая lease не дают fallback.
 
 ```bash
 python3 scripts/validate-workflow-native.py \
