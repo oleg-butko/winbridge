@@ -15,6 +15,20 @@ Controller обновляется агентом, config/state сохраняю�
 Пользователь разрешил рекомендованные architecture/scenario fixes и automatic
 retries выбирать самостоятельно; правило сохранено в AGENTS.md.
 
+Operational handoff: controller пересобран и запущен из `f128c9a`, build ID
+`1791974645864017237`, generation `514b13b5-6c6a-4b84-92d3-ffed91de811e`,
+ws://192.168.44.203:1143. Старый Windows worker автоматически переподключился,
+session `ff1e57d4-b73c-40fc-9fcf-4bd95229be26`; idle, ошибок нет. После нового
+controller старый worker по-прежнему не передаёт catalog/fenced context:
+это actual old-provider limitation, а не потеря metadata старым hop.
+Готовый update ZIP `winbridge-20261014T104405Z-f128c9a-5070ec9f.zip`, SHA-256
+`f63b7fcf198b5aae82b87b61bf613f9d1266489596d029f56f519616d0a3ceff`, в
+`/mnt/hgfs/shared/WinBridge/sources`. ZIP/clean manifest проверены; runtime code
+идентичен native-tested `ec75bcb` (между commits только docs). Выполнение цикла
+дошло до условия пользователя «нужен новый worker»; дальше manual update по
+[инструкции](validation/architecture-worker-update.md), без ручного UI checklist.
+
+
 [Оглавление документации](README.md) · [Планы, ревью и отчёты завершённых этапов](done/stage0-7/README.md).
 Материалы прошлых сессий ниже сохраняют хронологию; инструкции запуска находятся в `validation/`, руководства функций — в `guides/`.
 
