@@ -1,3 +1,22 @@
+## A3 завершён; A4.1 начат, 2026-10-15
+
+[Actual installed operation gate](plans/architecture-transition/windows-operation-pages-installed-2026-10-15.md)
+passed: worker `a8cf019`, build `1792055908607920500`, generation
+`69b65ecc-fe9d-42f2-a4cc-210b75127a66`, прежняя journal scope.
+173 history rows / четыре вида; admission fence, duplicate key, actual local pipe,
+resources, UTF-8/output/exit, controller restart и retained cursor прошли.
+Production UI renderer проверен на actual MCP/Windows data, без Windows UI окон.
+Task `21b7e911-c197-4c7a-af3a-50eea99ad9bc`, PID 14640, succeeded/0;
+report SHA `d21dbc9d6bb8643a7b1f19f6d2569424def45cabbf214b0bfb73785e8ba3485e`.
+Actual RPC2 MCP pair также passed; исходный receipt сохранён после reconnect.
+
+Controller binary `545166d`, serve session `75826`, WS session
+`01823f6a-0e4c-480e-a45b-a38ec3f1da03`. Worker здоров/idle, desktop закрыт.
+Новое обновление пока не требуется; Windows/config/system settings не менялись.
+Следующий вертикальный пакет — [A4.1 work slots/fair selection](plans/architecture-transition/work-scheduling.md).
+Production limits по умолчанию прежние; новые значения испытываются только на
+изолированном test config. CARGO_INCREMENTAL=0; Debian free ~28 GiB.
+
 ## A3.3 — проверенный кандидат; требуется installed update, 2026-10-15
 
 [Windows gate/report](plans/architecture-transition/windows-operation-pages-gate-2026-10-15.md):

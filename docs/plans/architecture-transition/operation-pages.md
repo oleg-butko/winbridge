@@ -79,3 +79,7 @@ admission sequence либо явной инвалидизации cursors; эт�
 контракта, а не обещание неизменности rowid при внешнем редактировании БД.
 Хранится только наблюдение активных lease проекта. Это не вычисленный scheduler
 blocker/fairness; семантика очереди и глобальные ресурсы остаются A4.
+
+## Установленная пара
+
+[A3.3 actual gate](windows-operation-pages-installed-2026-10-15.md) прошёл: MCP/CLI/Windows IPC, все четыре вида, 173 записи, admission fence, live resources, reconnect/cursor и production UI renderer. **A3 и A3.3 завершены.**

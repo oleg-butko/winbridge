@@ -240,3 +240,6 @@ Worker Info передаёт provider-bound hashes действующей projec
 проверки от свежего policy decision. Сериализованный `enabled` — readonly projection;
 internal dispatch decision не десериализуется. Runtime producer/API и применение
 к новым execution contracts ещё не подключены; existing A2 admission сохранён.
+
+
+A3 завершён 2026-10-15: [discovery/readiness и согласованные страницы](plans/architecture-transition/windows-operation-pages-installed-2026-10-15.md) проверены на установленной Windows паре через MCP/CLI/IPC и UI renderer. Scoped readonly extension transport отделён от frozen RPC 1/2; каждая operation page читается одной SQLite transaction. [A4.1](plans/architecture-transition/work-scheduling.md) начинает opt-in global work budget и fair selection; production scheduling пока прежний.

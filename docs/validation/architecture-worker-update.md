@@ -1,3 +1,9 @@
+# Текущее состояние — обновление A3.3 проверено, 2026-10-15
+
+Установленный `a8cf019` прошёл [actual MCP/IPC/read-model gate](../plans/architecture-transition/windows-operation-pages-installed-2026-10-15.md).
+Полный A3 завершён. Worker оставить работающим, desktop можно закрыть.
+Новый пакет пока не требуется; инструкции ниже — история уже выполненных обновлений.
+
 # Текущее обновление: A3.3 — 2026-10-15
 
 Новый общий журнал требует `winbridge.operation-read-model` v1 в worker и нового

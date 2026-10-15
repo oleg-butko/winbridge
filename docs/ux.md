@@ -86,7 +86,7 @@ Build/scope/route/policy change объясняет несовпадение со
 успех прежней проверки остаётся историей. Task links открывают реальные сохранённые
 задачи; связи из другой journal incarnation не перепривязываются. Disconnect
 или истёкший cache не показывает текущий enabled. [A3.2c](plans/architecture-transition/readiness-projection.md)
-проверен locally/browser; actual new/new Windows gate ещё впереди.
+[проверен на actual installed Windows pair](plans/architecture-transition/windows-operation-pages-installed-2026-10-15.md).
 
 Статус передаётся текстом и значком, а не только цветом. Поддержать keyboard navigation, focus states, responsive layout, readable contrast и длинные пути/аргументы. После reconnect не сбрасывать раскрытые steps, фильтры, выбранный task и scroll position.
 
@@ -131,7 +131,7 @@ Preview обозначает resume-capable package и объясняет explic
 и точную ошибку блока. Resume не обозначается успехом до verified generation.
 
 
-## Общий журнал A3.3 — кандидат 2026-10-15
+## Общий журнал A3.3 — проверен 2026-10-15
 
 Task/import/workflow/application показываются вместе со scoped ID, typed status,
 причиной, revision/event и занятыми ресурсами проекта. Одна страница — один
@@ -140,4 +140,4 @@ Task/import/workflow/application показываются вместе со scop
 фильтры отмечены явно. Детали содержат команду/output; общий список их не дублирует.
 При потере связи последний срез сохраняется с предупреждением; просмотр не
 запускает работу. Старый worker получает сообщение об отсутствии поддержки,
-новый контракт ему не отправляется. Windows candidate прошёл 48 tests и desktop compile; actual installed update ещё ожидается.
+новый контракт ему не отправляется. Windows candidate прошёл 48 tests и desktop compile; actual installed MCP/IPC/reconnect и renderer также проверены автоматически.
