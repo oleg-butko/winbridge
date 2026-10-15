@@ -21,6 +21,7 @@ pub use ownership::{
 };
 mod domain_records;
 pub use domain_records::JournalSnapshot;
+mod operation_pages;
 mod task_records;
 pub use task_records::TaskSnapshot;
 pub const JOURNAL_SCHEMA_VERSION: u32 = 12;

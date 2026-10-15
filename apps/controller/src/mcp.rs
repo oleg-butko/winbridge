@@ -178,6 +178,7 @@ pub fn tools() -> Result<Vec<Value>, String> {
         "annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
     tools.push(json!({"name":"winbridge_verify_pair","description":"Explicitly verify the caller-pinned tuple against the installed Windows worker in isolated state, then the actual paired route. Copy identity from contract_readiness when creating the logical operation and retain it with verificationKey on every retry; never rebind it. Returns an operation, not success. First known profile is fixture/RPC-2; no desktop windows or outbound test-worker connection. Exact tested consumer build evidence must already be installed.","inputSchema":schemars::schema_for!(winbridge_protocol::VerifyPairRequest),"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}}));
     tools.push(json!({"name":"winbridge_get_verification","description":"Read the original verification operation, stage, linked Windows task IDs and receipt. Does not start, retry, rebind or cancel any task.","inputSchema":{"type":"object","properties":{"verificationKey":{"type":"string"}},"required":["verificationKey"],"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
+    tools.push(json!({"name":"winbridge_operations","description":"Read a scoped operation page from one SQLite snapshot: task/import/workflow/application state, revision, reason, resources and links. Pin context and cursor; a changed scope/filter requires a new view. Cursor fences admissions, while each page observes current states. Decimal counters retain full precision; no command is accepted and no legacy fallback occurs.","inputSchema":schemars::schema_for!(winbridge_protocol::OperationPageRequest),"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}}));
     tools.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     Ok(tools)
 }
@@ -358,6 +359,43 @@ async fn handle(
                     Err(_) => {
                         json!({"kind":"error","message":"Snapshot publication did not complete; inspect the same commit/package before retrying"})
                     }
+                }
+            } else if name == "winbridge_operations" {
+                let request = match serde_json::from_value::<winbridge_protocol::OperationPageRequest>(
+                    args,
+                ) {
+                    Ok(request) => request,
+                    Err(_) => {
+                        return Some(error(
+                            id,
+                            -32602,
+                            "Supply original context and typed operation query",
+                        ))
+                    }
+                };
+                #[cfg(unix)]
+                {
+                    match super::readiness::call(
+                        &super::endpoint(config),
+                        &winbridge_protocol::ControllerApiRequest {
+                            controller_contract_version: 1,
+                            adapter: winbridge_protocol::build_identity(),
+                            adapter_kind: winbridge_protocol::ControllerAdapter::Mcp,
+                            request: winbridge_protocol::ControllerOperation::OperationPage {
+                                request: Box::new(request),
+                            },
+                        },
+                    )
+                    .await
+                    {
+                        Ok(response) => serde_json::to_value(response).unwrap(),
+                        Err(message) => json!({"kind":"error","message":message}),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = request;
+                    json!({"kind":"error","message":"Operation coordination requires Debian IPC"})
                 }
             } else if name == "winbridge_verify_pair" || name == "winbridge_get_verification" {
                 let operation = if name == "winbridge_verify_pair" {

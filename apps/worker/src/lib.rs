@@ -2,6 +2,7 @@
 mod artifacts;
 mod attention;
 mod domain;
+mod extensions;
 mod history;
 mod imports;
 mod network;
@@ -1495,6 +1496,32 @@ where
         let _permit = permit;
         let operation = async {
             let bytes = winbridge_transport::read_frame(&mut stream).await?;
+            if serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .is_some_and(|v| v.get("extensionVersion").is_some())
+            {
+                let response = match serde_json::from_slice(&bytes) {
+                    Ok(request) => {
+                        tokio::task::spawn_blocking(move || worker.handle_extension(request))
+                            .await
+                            .map_err(std::io::Error::other)?
+                    }
+                    Err(_) => winbridge_protocol::ExtensionResponse::rejected(
+                        winbridge_protocol::operation_contract(),
+                        winbridge_protocol::ExtensionError::InvalidRequest,
+                        "Invalid extension envelope; no dispatch".into(),
+                    ),
+                };
+                let mut bytes = serde_json::to_vec(&response)?;
+                if bytes.len() > winbridge_transport::MAX_FRAME_BYTES {
+                    bytes = serde_json::to_vec(&winbridge_protocol::ExtensionResponse::rejected(
+                        response.contract,
+                        winbridge_protocol::ExtensionError::QueryFailed,
+                        "Operation page exceeds frame budget; reduce limit".into(),
+                    ))?;
+                }
+                return winbridge_transport::write_frame(&mut stream, &bytes).await;
+            }
             let request = serde_json::from_slice::<WireRequest>(&bytes);
             let response = match request {
                 Ok(request) => tokio::task::spawn_blocking(move || worker.handle_wire(request))

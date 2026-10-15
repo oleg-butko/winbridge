@@ -1,3 +1,20 @@
+## A3.3 — кандидат согласованного read model, 2026-10-15
+
+[Контракт и ограничения](plans/architecture-transition/operation-pages.md).
+Одна SQLite read transaction объединяет task/import/workflow/application,
+revision/event decimal strings, причины, связанные IDs и ресурсы. Scoped keyset
+cursor закрепляет фильтры и admission watermarks. Новый readonly extension
+transport согласуется по exact contract/schema; frozen RPC 1/2 и schema 12 прежние.
+Подключены worker IPC/WS, controller API/CLI/MCP `winbridge_operations`, desktop
+и общий журнал. Unknown/foreign replies и cursor rebind отвергаются.
+316 workspace tests, отдельная negotiation regression, Linux/Windows-target
+Clippy, typecheck/build и полный actual Unix worker UI scenario прошли.
+Windows native gate и actual installed route ещё не выполнены для A3.3;
+готовность не объявлена заранее. Installed worker `35b716a` здоров, остаётся
+launcher для isolated candidate. Controller daemon пока `d817fe0`.
+Desktop можно держать закрытым, worker оставить работать; UI-окон не будет.
+Перед тяжёлой сборкой Debian free 29.6 GiB, incremental disabled.
+
 ## A3.2 завершён; A3.3 начат, 2026-10-15
 
 [Actual installed pair/projection gate](plans/architecture-transition/windows-projection-pair-2026-10-15.md)

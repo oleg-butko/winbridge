@@ -1,4 +1,19 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type OperationRef = { context: RequestContext, kind: HistoryKind, operationId: string, };
+export type AdmissionWatermarks = { tasks: string, imports: string, workflows: string, applications: string, };
+export type OperationCursor = { context: RequestContext, querySha256: string, watermarks: AdmissionWatermarks, before: HistoryCursor, };
+export type OperationQuery = { projectId: string | null, kind: HistoryKind | null, search: string, limit: number, cursor: OperationCursor | null, };
+export type OperationPageRequest = { context: RequestContext, query: OperationQuery, };
+export type OperationResource = { leaseId: string, owner: OperationRef, state: ObservedLeaseState, scope: ObservedLeaseScope, revision: string, reason: string | null, };
+export type OperationObservation = { reference: OperationRef, projectId: string, state: OperationState, revision: string, label: string, reason: string | null, textTruncated: boolean, acceptedAtMs: number, finishedAtMs: number | null, lastEventSequence: string | null, related: Array<OperationRef>, resources: Array<OperationResource>, resourcesTruncated: boolean, };
+export type OperationPage = { schemaVersion: number, context: RequestContext, observationId: string, observedAtMs: number, records: Array<OperationObservation>, nextCursor: OperationCursor | null, hasMore: boolean, readOnly: boolean, };
+export type OperationState = { "family": "execution", status: TaskStatus, } | { "family": "application", status: ApplicationStatus, };
+export type ObservedLeaseState = "held" | "uncertain";
+export type ObservedLeaseScope = "project_mutation" | "application_lifetime";
+export type ExtensionRequest = { extensionVersion: number, contract: ContractRef, context: RequestContext, payload: unknown, };
+export type ExtensionResponse = { extensionVersion: number, contract: ContractRef, context: RequestContext | null, result: ExtensionResult, };
+export type ExtensionResult = { "kind": "data", payload: unknown, } | { "kind": "error", code: ExtensionError, message: string, };
+export type ExtensionError = "unsupported_contract" | "invalid_request" | "scope_mismatch" | "query_failed";
 export type ControllerReadinessProjection = { schemaVersion: number, controllerBuild: BuildIdentity, controllerGeneration: string, sessionId: string, providerBuild: BuildIdentity, providerGeneration: string, context: RequestContext, sequence: number, views: Array<ContractReadinessView>, verifications: Array<VerificationView>, truncated: boolean, };
 export type RuntimeSettings = { generation: string, path: string, activeJson: string, savedJson: string, savedSha256: string, restartRequired: boolean, };
 export type SaveRuntimeSettings = { generation: string, requestId: string, expectedSha256: string, json: string, };
@@ -108,10 +123,10 @@ export type ReadinessReason = "unsupported_contract" | "missing_identity" | "inv
 export type ContractReadiness = { supported: boolean, buildVerified: boolean, pairTested: boolean, enabled: boolean, reasons: Array<ReadinessReason>, };
 export type ControllerAdapter = "mcp" | "cli";
 export type ControllerApiRequest = { controllerContractVersion: number, adapter: BuildIdentity, adapterKind: ControllerAdapter, request: ControllerOperation, };
-export type ControllerOperation = { "method": "contract_readiness", query: ContractReadinessQuery, } | { "method": "verify_pair", request: VerifyPairRequest, } | { "method": "get_verification", verificationKey: string, };
+export type ControllerOperation = { "method": "operation_page", request: OperationPageRequest, } | { "method": "contract_readiness", query: ContractReadinessQuery, } | { "method": "verify_pair", request: VerifyPairRequest, } | { "method": "get_verification", verificationKey: string, };
 export type ContractReadinessQuery = { projectId: string, contract: ContractRef, receiptId: string | null, };
 export type ContractReadinessView = { projectId: string, contract: ContractRef, identity: PairIdentity | null, readiness: ContractReadiness, receiptId: string | null, testProfile: string, controllerGeneration: string, sessionId: string | null, detail: string, };
-export type ControllerApiResult = { "kind": "contract_readiness", view: ContractReadinessView, } | { "kind": "verification", view: VerificationView, } | { "kind": "error", message: string, };
+export type ControllerApiResult = { "kind": "operation_page", page: OperationPage, } | { "kind": "contract_readiness", view: ContractReadinessView, } | { "kind": "verification", view: VerificationView, } | { "kind": "error", message: string, };
 export type ControllerApiResponse = { controllerContractVersion: number, result: ControllerApiResult, };
 export type VerifyPairRequest = { verificationKey: string,
 /**

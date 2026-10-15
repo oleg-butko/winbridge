@@ -35,6 +35,12 @@ impl Controller {
             Err("Unsupported controller-local contract; no worker request transmitted".into())
         } else {
             match request.request {
+                ControllerOperation::OperationPage { request } => self
+                    .operation_page(*request)
+                    .await
+                    .map(|page| ControllerApiResult::OperationPage {
+                        page: Box::new(page),
+                    }),
                 ControllerOperation::ContractReadiness { query } => self
                     .observe_contract(&request.adapter, &request.adapter_kind, query)
                     .await

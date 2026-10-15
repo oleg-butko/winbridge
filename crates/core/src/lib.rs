@@ -58,3 +58,4 @@ fn print_help(component: Component) {
     println!("  --describe  Print application/protocol metadata and planned capabilities as JSON");
     println!("  --help      Show this message");
 }
+pub mod operation_query;

@@ -68,9 +68,9 @@ pub async fn receive<S: AsyncRead + AsyncWrite + Unpin>(
     match receive_frame(socket).await? {
         None => Ok(None),
         Some(SessionFrame::Legacy(message)) => Ok(Some(message)),
-        Some(SessionFrame::Fenced(_) | SessionFrame::Projection(_)) => {
-            Err("Unexpected versioned frame before negotiation".into())
-        }
+        Some(
+            SessionFrame::Fenced(_) | SessionFrame::Projection(_) | SessionFrame::Extension(_),
+        ) => Err("Unexpected versioned frame before negotiation".into()),
     }
 }
 pub async fn receive_frame<S: AsyncRead + AsyncWrite + Unpin>(
@@ -120,10 +120,20 @@ pub struct RpcCall {
 pub struct RpcSender(
     mpsc::Sender<RpcCall>,
     watch::Sender<Option<winbridge_protocol::ControllerReadinessProjection>>,
+    mpsc::Sender<ExtensionCall>,
 );
+struct ExtensionCall {
+    request: winbridge_protocol::ExtensionRequest,
+    reply: oneshot::Sender<Result<winbridge_protocol::ExtensionResponse>>,
+}
+struct PendingExtension {
+    sent: Instant,
+    reply: oneshot::Sender<Result<winbridge_protocol::ExtensionResponse>>,
+}
 pub struct RpcChannels {
     calls: mpsc::Receiver<RpcCall>,
     projections: watch::Receiver<Option<winbridge_protocol::ControllerReadinessProjection>>,
+    extensions: mpsc::Receiver<ExtensionCall>,
 }
 impl RpcChannels {
     pub async fn recv(&mut self) -> Option<RpcCall> {
@@ -145,15 +155,36 @@ struct PendingReply {
 pub fn rpc_channel() -> (RpcSender, RpcChannels) {
     let (sender, receiver) = mpsc::channel(32);
     let (projection_sender, projections) = watch::channel(None);
+    let (extension_sender, extensions) = mpsc::channel(32);
     (
-        RpcSender(sender, projection_sender),
+        RpcSender(sender, projection_sender, extension_sender),
         RpcChannels {
             calls: receiver,
             projections,
+            extensions,
         },
     )
 }
 impl RpcSender {
+    /// Caller must negotiate the exact extension/business contract on this session.
+    pub async fn call_extension(
+        &self,
+        request: winbridge_protocol::ExtensionRequest,
+    ) -> Result<winbridge_protocol::ExtensionResponse> {
+        let (reply, response) = oneshot::channel();
+        self.2
+            .try_send(ExtensionCall {
+                request: request.clone(),
+                reply,
+            })
+            .map_err(|_| "Readonly extension channel unavailable/busy")?;
+        let response = tokio::time::timeout(RPC_TIMEOUT, response)
+            .await
+            .map_err(|_| "Readonly extension query deadline; no fallback")?
+            .map_err(|_| "Readonly extension connection lost")??;
+        response.validate_for(&request)?;
+        Ok(response)
+    }
     /// Caller must first negotiate support on this exact worker session.
     /// Latest readonly projection replaces older pending metadata; no task ACKs are dropped.
     pub fn publish_projection(
@@ -204,6 +235,7 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
     generation: &str,
 ) -> Result<()> {
     let mut pending: HashMap<String, PendingReply> = HashMap::new();
+    let mut pending_extensions: HashMap<String, PendingExtension> = HashMap::new();
     let mut counter = 0_u64;
     let mut nonce = 0_u64;
     let mut ping: Option<(u64, Instant)> = None;
@@ -217,7 +249,7 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                 if ping.is_some_and(|(_, sent)| now.duration_since(sent) >= HEARTBEAT_TIMEOUT) {
                     return Err("Worker heartbeat timeout; last task state is retained".into());
                 }
-                if pending.values().any(|reply| now.duration_since(reply.sent) >= RPC_TIMEOUT) {
+                if pending.values().any(|reply| now.duration_since(reply.sent) >= RPC_TIMEOUT) || pending_extensions.values().any(|reply|now.duration_since(reply.sent)>=RPC_TIMEOUT) {
                     return Err("Worker response timeout; reconcile the same task/key without automatic retry".into());
                 }
                 if ping.is_none() && now >= next_ping {
@@ -225,6 +257,17 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                     send(&mut socket, &SessionMessage::Ping { nonce }).await?;
                     ping = Some((nonce, now));
                 }
+            }
+            call=channels.extensions.recv()=> {
+                let Some(call)=call else {return Ok(());};
+                if call.reply.is_closed() {continue;}
+                if pending.len()+pending_extensions.len()>=MAX_IN_FLIGHT {let _=call.reply.send(Err("Readonly extension query rejected: session busy".into()));continue;}
+                counter+=1;
+                let id=format!("{generation}-{counter}");
+                let message=SessionFrame::Extension(winbridge_protocol::ExtensionSessionMessage::ExtensionRequest {id:id.clone(),request:call.request});
+                let bytes=match encode(&message) {Ok(bytes)=>bytes,Err(error)=>{let _=call.reply.send(Err(error));continue;}};
+                pending_extensions.insert(id,PendingExtension {sent:Instant::now(),reply:call.reply});
+                send_encoded(&mut socket,bytes).await?;
             }
             changed = channels.projections.changed(), if projection_open => {
                 if changed.is_err() { projection_open = false; continue; }
@@ -236,7 +279,7 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
             call = channels.calls.recv() => {
                 let Some(call) = call else { return Ok(()); };
                 if call.reply.is_closed() { continue; }
-                if pending.len() >= MAX_IN_FLIGHT {
+                if pending.len()+pending_extensions.len() >= MAX_IN_FLIGHT {
                     let _ = call.reply.send(Err("Worker has 16 pending requests; retry after reconciliation".into()));
                     continue;
                 }
@@ -274,6 +317,10 @@ pub async fn controller_session<S: AsyncRead + AsyncWrite + Unpin>(
                         let Some(reply) = pending.remove(&id) else { return Err("Unknown WebSocket response correlation ID".into()); };
                         if !matches!(reply.contract, ReplyContract::Fenced) { return Err("Fenced response to a legacy request; acceptance is unknown".into()); }
                         let _ = reply.reply.send(Ok(WireResponse::Fenced(Box::new(response))));
+                    }
+                    Some(SessionFrame::Extension(winbridge_protocol::ExtensionSessionMessage::ExtensionResponse {id,response}))=> {
+                        let Some(pending)=pending_extensions.remove(&id) else {return Err("Unknown extension correlation ID".into());};
+                        let _=pending.reply.send(Ok(response));
                     }
                     _ => return Err("Unexpected message in controller session".into()),
                 }

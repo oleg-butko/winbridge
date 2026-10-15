@@ -222,6 +222,7 @@ def main():
     with zipfile.ZipFile(args.archive) as archive:
         archive_has_discovery = 'winbridge/apps/worker/tests/discovery.rs' in archive.namelist()
         archive_has_projection = 'winbridge/crates/protocol/tests/projection.rs' in archive.namelist()
+        archive_has_operations = 'winbridge/apps/worker/tests/operations.rs' in archive.namelist()
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
@@ -433,7 +434,10 @@ exit $nativeExit
         expected_groups = ['readiness-pure-policy', 'readiness-wire-compatibility']
         if archive_has_projection:
             expected_groups.append('readiness-cache-freshness')
-        expected_groups += ['readiness-native-info-and-scope', 'readiness-desktop-contract-check']
+        expected_groups += ['readiness-native-info-and-scope']
+        if archive_has_operations:
+            expected_groups += ['operations-query-contract', 'operations-transaction-snapshot', 'operations-native-ipc']
+        expected_groups += ['readiness-desktop-contract-check']
         if not result.get('readinessOnly') or [g['name'] for g in result['commands']] != expected_groups or any(g['exitCode'] != 0 for g in result['commands']):
             raise RuntimeError('Incomplete readiness foundation gate')
         proof = json.loads((report / 'policy-proof.json').read_text(encoding='utf-8-sig'))

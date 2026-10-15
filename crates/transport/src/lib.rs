@@ -58,10 +58,14 @@ pub async fn write_frame<S: AsyncWrite + Unpin>(stream: &mut S, bytes: &[u8]) ->
     stream.write_all(bytes).await?;
     stream.flush().await
 }
-async fn exchange<S: AsyncRead + AsyncWrite + Unpin>(
+async fn exchange<
+    S: AsyncRead + AsyncWrite + Unpin,
+    Q: serde::Serialize,
+    R: serde::de::DeserializeOwned,
+>(
     mut stream: S,
-    request: &WireRequest,
-) -> io::Result<WireResponse> {
+    request: &Q,
+) -> io::Result<R> {
     write_frame(&mut stream, &serde_json::to_vec(request)?).await?;
     serde_json::from_slice(&read_frame(&mut stream).await?).map_err(io::Error::other)
 }
@@ -83,6 +87,73 @@ pub async fn call_fenced(address: &str, request: &FencedRequest) -> io::Result<F
     }
 }
 pub async fn call_wire(address: &str, request: &WireRequest) -> io::Result<WireResponse> {
+    call_dto(
+        address,
+        request,
+        "worker IPC timeout; query the same idempotency key before submitting a new task",
+    )
+    .await
+}
+pub async fn call_extension(
+    address: &str,
+    request: &winbridge_protocol::ExtensionRequest,
+) -> io::Result<winbridge_protocol::ExtensionResponse> {
+    let response: winbridge_protocol::ExtensionResponse = call_dto(
+        address,
+        request,
+        "Readonly worker IPC timeout; saved page retained, no command submitted",
+    )
+    .await?;
+    response.validate_for(request).map_err(io::Error::other)?;
+    Ok(response)
+}
+pub async fn operation_page(
+    address: &str,
+    request: &winbridge_protocol::OperationPageRequest,
+) -> Result<winbridge_protocol::OperationPage, String> {
+    use winbridge_protocol::*;
+    let LocalResponse::Info { info } = call(address, &LocalRequest::Info)
+        .await
+        .map_err(|e| e.to_string())?
+    else {
+        return Err("Missing operation provider metadata".into());
+    };
+    if !matches!(interpret_catalog(&info),CatalogObservation::Known(c) if c.supports(EXTENSION_TRANSPORT,1)&&c.supports(OPERATION_READ_MODEL,1))
+        || !interpret_contract_schemas(&info).is_some_and(|c| {
+            c.schemas.iter().any(|s| {
+                s.contract == operation_contract() && s.sha256 == operation_schema_sha256()
+            })
+        })
+    {
+        return Err(
+            "Worker does not support this operation page contract/schema; no fallback".into(),
+        );
+    }
+    if !info
+        .fenced_requests
+        .as_ref()
+        .is_some_and(|f| f.context == request.context)
+    {
+        return Err("Operation query scope changed; cursor retained, no rebind".into());
+    }
+    let envelope = ExtensionRequest {
+        extension_version: 1,
+        contract: operation_contract(),
+        context: request.context.clone(),
+        payload: serde_json::to_value(&request.query).map_err(|e| e.to_string())?,
+    };
+    decode_operation_page(
+        call_extension(address, &envelope)
+            .await
+            .map_err(|e| e.to_string())?,
+        request,
+    )
+}
+async fn call_dto<Q: serde::Serialize, R: serde::de::DeserializeOwned>(
+    address: &str,
+    request: &Q,
+    timeout_message: &str,
+) -> io::Result<R> {
     tokio::time::timeout(IPC_TIMEOUT, async {
         #[cfg(unix)]
         {
@@ -105,12 +176,7 @@ pub async fn call_wire(address: &str, request: &WireRequest) -> io::Result<WireR
         }
     })
     .await
-    .map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::TimedOut,
-            "worker IPC timeout; query the same idempotency key before submitting a new task",
-        )
-    })?
+    .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, timeout_message))?
 }
 
 #[cfg(windows)]

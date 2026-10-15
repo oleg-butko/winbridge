@@ -150,6 +150,7 @@ pub enum FencedSessionMessage {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum SessionFrame {
+    Extension(crate::ExtensionSessionMessage),
     Projection(crate::ProjectionSessionMessage),
     Fenced(FencedSessionMessage),
     Legacy(SessionMessage),

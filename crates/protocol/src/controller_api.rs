@@ -26,6 +26,9 @@ pub enum ControllerAdapter {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "method", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ControllerOperation {
+    OperationPage {
+        request: Box<crate::OperationPageRequest>,
+    },
     ContractReadiness {
         query: ContractReadinessQuery,
     },
@@ -110,6 +113,7 @@ pub struct ControllerApiResponse {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ControllerApiResult {
+    OperationPage { page: Box<crate::OperationPage> },
     ContractReadiness { view: Box<ContractReadinessView> },
     Verification { view: Box<VerificationView> },
     Error { message: String },

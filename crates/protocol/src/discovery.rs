@@ -62,6 +62,11 @@ impl ContractCatalog {
             controller_projection: None,
             supported: vec![
                 ContractRef {
+                    id: crate::EXTENSION_TRANSPORT.into(),
+                    version: 1,
+                },
+                crate::operation_contract(),
+                ContractRef {
                     id: WORKER_RPC_CONTRACT.into(),
                     version: 1,
                 },

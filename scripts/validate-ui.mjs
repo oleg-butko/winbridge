@@ -140,6 +140,13 @@ try {
   const outputReadCalls = [];
   const settingsCalls=[];const cleanupCalls=[];
   async function attachNative(nativePage) {
+    await nativePage.exposeFunction("operationBridge", async (request) => {
+      const response = await call({ extensionVersion: 1, contract: { id: "winbridge.operation-read-model", version: 1 }, context: request.context, payload: request.query });
+      assert.equal(response.contract.id, "winbridge.operation-read-model");
+      assert.deepEqual(response.context, request.context);
+      if (response.result.kind !== "data") throw new Error(response.result.message);
+      return response.result.payload;
+    });
     await nativePage.exposeFunction("workerBridge", async (wire) => {
       const request = wire.requestContractVersion === 2 ? wire.request : wire;
       const raw = await call(wire, ["import_delta_snapshot", "submit_workflow", "request_attention", "list_attention", "acknowledge_attention", "list_attention_events", "acknowledge_attention_event", "history", "prepare_task_diagnostic", "storage_usage"].includes(request.method) ? join(run, "controller/controller-ui-test.sock") : socket);
@@ -207,6 +214,7 @@ try {
         metadata: { currentWindow: { label: "main" } },
         transformCallback: (callback) => { const id = ++nextCallback; callbacks.set(id, callback); return id; },
         invoke: (command, args) => {
+          if (command === "operation_page") return window.operationBridge(args.request);
           if (["diagnostic_directory","save_diagnostic"].includes(command)) return window.diagnosticBridge(command,args);
           if (command === "worker_rpc" || command === "worker_rpc_fenced") return window.workerBridge(args.request);
           if (command === "desktop_build") return Promise.resolve({ version: "0.1.0", sourceCommit: "browser-test", sourceDirty: false, sourceManifestSha256: null, buildId: "test-shell" });
@@ -290,6 +298,17 @@ try {
   const record = (await call({ method: "get_task", taskId: submittedId })).task;
   assert.equal(record.status, "succeeded");
   assert.equal((await readFile(join(project, "runs.log"), "utf8")).trim().split("\n").length, 1);
+  const operations = page.getByTestId("operation-pages");
+  await operations.getByRole("button", { name: "Обновить общий журнал", exact: true }).click();
+  await operations.getByRole("button", { name: `Открыть операцию ${submittedId}`, exact: true }).waitFor();
+  assert.match(await operations.innerText(), /revision \d+ · событие \d+/);
+  assert.match(await operations.innerText(), /Импорт/);
+  await operations.getByRole("textbox", { name: "Поиск по ID, проекту и названию", exact: true }).fill(submittedId);
+  await operations.getByText(/Фильтры изменены/).waitFor();
+  await operations.getByRole("button", { name: "Обновить общий журнал", exact: true }).click();
+  await operations.getByRole("button", { name: `Открыть операцию ${submittedId}`, exact: true }).click();
+  assert.equal(await operations.getByRole("button", { name: /^Открыть операцию / }).count(), 1);
+  assert.equal((await call({ method: "list_tasks" })).tasks.length, 1, "readonly operation browsing admitted a new task");
   await page.getByRole("tab", { name: "stdout / stderr", exact: true }).click();
   await page.getByText(/stdout: success Привет ✓/).waitFor();
   await page.getByText(/stderr: diagnostic/).waitFor();
@@ -807,7 +826,7 @@ try {
   await startWorker("serve-recovery");
   await workflowPage.locator("#journal-inspection").waitFor();
   assert.deepEqual(errors, []);
-  console.log("UI verified against real Unix worker: command/output/cancel/reconnect/recovery; snapshot discovery/dedup, pinned-base delta preview/import and same-method lost ACK; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences and exact popup targets. History: paging/keyboard/redacted editable diagnostics. Settings/retention: keyboard navigation, unsaved close guard, exact reviewed config, save ACK loss with same ID, preview/actual output cleanup and same-key reconciliation; task history/keys retained. Native windows and diagnostic publication are validated separately on Windows.");
+  console.log("UI verified against real Unix worker: scoped operation page/filter/detail navigation without task admission; command/output/cancel/reconnect/recovery; snapshot discovery/dedup, pinned-base delta preview/import and same-method lost ACK; drafts/close failures; workflow/profiles/artifacts/log/lifecycle. Stage 5: decoded PowerShell, durable attention ACK/restart; notification preferences and exact popup targets. History: paging/keyboard/redacted editable diagnostics. Settings/retention: keyboard navigation, unsaved close guard, exact reviewed config, save ACK loss with same ID, preview/actual output cleanup and same-key reconciliation; task history/keys retained. Native windows and diagnostic publication are validated separately on Windows.");
 } catch (error) {
   const diagnostics = await Promise.allSettled([
     call({ method: "info" }), call({ method: "list_imports" }), call({ method: "list_tasks" }),

@@ -17,6 +17,7 @@ import { OutputBuffer } from "./outputBuffer";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
 import { HistoryPanel } from "../history/HistoryPanel";
+import { OperationPagePanel } from "../history/OperationPagePanel";
 import type { HistoryEntry } from "../../runtime/contracts";
 import type { WorkflowSnapshot } from "../workflows/WorkflowWorkbench";
 import { closeDeadline, CloseTimeout, desktopEvent } from "../../runtime/desktopEvents";
@@ -328,6 +329,7 @@ export function NativeWorkbench() {
     </Alert>
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}
     {info && <HistoryPanel key={`history:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onOpen={(entry)=>void openHistory(entry)} />}
+    {info && <OperationPagePanel key={`operations:${info.instanceId}:${info.fencedRequests?.context.journalIncarnation ?? "legacy"}`} info={info} connected={connected} onOpen={(entry) => void openHistory(entry)} />}
     {info && <SettingsPanel key={`settings:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onBlocked={blockSettingsClose} />}
     {closeError && <Alert id="desktop-close-error" color="yellow" title="Окно осталось открытым: закрытие не подтверждено">{closeError}
       <Button mt="sm" variant="light" disabled={closing} onClick={() => void requestClose(closeQuit.current, "recovery", true)}>Закрыть без сохранения</Button>

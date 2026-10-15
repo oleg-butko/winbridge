@@ -175,6 +175,15 @@ async fn worker_rpc(
     let address = endpoint.0.as_ref().map_err(Clone::clone)?;
     winbridge_transport::call(address, &request).await.map_err(|e| format!("Windows worker is unavailable: {e}. Start worker with the same config; accepted tasks continue independently of this window"))
 }
+#[tauri::command]
+async fn operation_page(
+    window: tauri::WebviewWindow,
+    endpoint: tauri::State<'_, WorkerEndpoint>,
+    request: winbridge_protocol::OperationPageRequest,
+) -> Result<winbridge_protocol::OperationPage, String> {
+    main_only(&window)?;
+    winbridge_transport::operation_page(endpoint.0.as_ref().map_err(Clone::clone)?, &request).await
+}
 
 #[tauri::command]
 async fn worker_rpc_fenced(
@@ -359,6 +368,7 @@ fn main() {
             diagnostic_directory,
             save_diagnostic,
             worker_rpc,
+            operation_page,
             worker_rpc_fenced,
             load_command_drafts,
             save_command_draft,

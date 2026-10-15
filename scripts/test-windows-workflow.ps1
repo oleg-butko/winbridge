@@ -50,7 +50,8 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 cancel/timeout/process tree, recovery и совместимость существующих workflows.
 Рабочие exe/state не меняются; desktop и тестовые UI-окна не открываются.
 .PARAMETER ReadinessOnly
-Проверяет typed readiness/policy, frozen wire, native Info/request context и desktop compile.
+Проверяет typed readiness/policy, frozen wire, native Info/request context,
+согласованные страницы операций (SQLite snapshot, scoped contract, реальный IPC) и desktop compile.
 Без schema-6 reference, тестовых UI-окон или изменения рабочего runtime.
 .PARAMETER TaskCasOnly
 Проверяет revisions/CAS tasks/imports/workflows/applications/attention,
@@ -252,6 +253,9 @@ try {
             @{ name='readiness-wire-compatibility'; arguments=@('test','-p','winbridge-protocol','--features','jsonschema','--test','discovery','--test','projection','--test','legacy_baseline','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-cache-freshness'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','projection::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-native-info-and-scope'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','discovery','--test','request_context','--test','maintenance','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='operations-query-contract'; arguments=@('test','-p','winbridge-core','--test','operation_query','-p','winbridge-protocol','--test','operations','--features','jsonschema','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='operations-transaction-snapshot'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::operation_pages::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='operations-native-ipc'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','operations','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
         )
     }

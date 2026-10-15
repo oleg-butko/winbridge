@@ -11,6 +11,8 @@ mod controller_api;
 pub use controller_api::*;
 mod projection;
 pub use projection::*;
+mod operations;
+pub use operations::*;
 
 mod attention;
 pub use attention::*;

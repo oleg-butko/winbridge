@@ -214,12 +214,18 @@ pub fn implemented_contract_schemas(provider: BuildIdentity) -> ContractSchemaCa
     ContractSchemaCatalog {
         schema_version: 1,
         provider,
-        schemas: vec![ContractSchemaFingerprint {
-            contract: ContractRef {
-                id: crate::WORKER_RPC_CONTRACT.into(),
-                version: crate::FENCED_REQUEST_CONTRACT,
+        schemas: vec![
+            ContractSchemaFingerprint {
+                contract: ContractRef {
+                    id: crate::WORKER_RPC_CONTRACT.into(),
+                    version: crate::FENCED_REQUEST_CONTRACT,
+                },
+                sha256: fenced_rpc_schema_sha256(),
             },
-            sha256: fenced_rpc_schema_sha256(),
-        }],
+            ContractSchemaFingerprint {
+                contract: crate::operation_contract(),
+                sha256: crate::operation_schema_sha256(),
+            },
+        ],
     }
 }

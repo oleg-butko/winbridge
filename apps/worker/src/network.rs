@@ -113,6 +113,7 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
 ) -> Result<()> {
     let mut handlers: JoinSet<(String, WireResponse)> = JoinSet::new();
     let mut active_ids = HashSet::new();
+    let mut extensions: JoinSet<(String, winbridge_protocol::ExtensionResponse)> = JoinSet::new();
     let mut last_ping = Instant::now();
     let mut last_nonce = 0;
     let mut timer = tokio::time::interval(Duration::from_millis(100));
@@ -137,6 +138,12 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                 }
                 ws::send_frame(&mut socket, &message).await?;
             }
+            result=extensions.join_next(),if !extensions.is_empty()=> {
+                let (id,mut response)=result.ok_or("Extension handler disappeared")?.map_err(|e|e.to_string())?;
+                active_ids.remove(&id);
+                if serde_json::to_vec(&response).map_err(|e|e.to_string())?.len()>winbridge_transport::MAX_FRAME_BYTES-512 {response=winbridge_protocol::ExtensionResponse::rejected(response.contract,winbridge_protocol::ExtensionError::QueryFailed,"Operation page exceeds frame budget; reduce limit".into());}
+                ws::send_frame(&mut socket,&SessionFrame::Extension(winbridge_protocol::ExtensionSessionMessage::ExtensionResponse {id,response})).await?;
+            }
             message = ws::receive_frame(&mut socket) => match message? {
                 None => {},
                 Some(SessionFrame::Legacy(SessionMessage::Ping { nonce })) if nonce > last_nonce => {
@@ -147,6 +154,20 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                 Some(SessionFrame::Projection(winbridge_protocol::ProjectionSessionMessage::ControllerProjection { projection })) => {
                     let _ = worker.accept_projection(*projection)?;
                 }
+                Some(SessionFrame::Extension(winbridge_protocol::ExtensionSessionMessage::ExtensionRequest {id,request}))=> {
+                    if id.is_empty() || id.len()>160 || !id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-') || active_ids.contains(&id) {return Err("Invalid/duplicate extension correlation ID".into());}
+                    if handlers.len()+extensions.len()>=ws::MAX_IN_FLIGHT {
+                        ws::send_frame(&mut socket,&SessionFrame::Extension(winbridge_protocol::ExtensionSessionMessage::ExtensionResponse {id,response:winbridge_protocol::ExtensionResponse::rejected(request.contract,winbridge_protocol::ExtensionError::QueryFailed,"Readonly query rejected before dispatch: session busy".into())})).await?;continue;
+                    }
+                    active_ids.insert(id.clone());let worker=Arc::clone(&worker);
+                    extensions.spawn(async move {
+                        let contract=request.contract.clone();
+                        let response=match tokio::time::timeout(ws::RPC_TIMEOUT,tokio::task::spawn_blocking(move||worker.handle_extension(request))).await {
+                            Ok(Ok(response))=>response,
+                            _=>winbridge_protocol::ExtensionResponse::rejected(contract,winbridge_protocol::ExtensionError::QueryFailed,"Readonly query unavailable/deadline; no command acceptance".into()),
+                        };(id,response)
+                    });
+                }
                 Some(message) => {
                     let (id, request) = match message {
                         SessionFrame::Legacy(SessionMessage::Request { id, request }) => (id, WireRequest::Legacy(request)),
@@ -156,7 +177,7 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                     if id.is_empty() || id.len() > 160 || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') || active_ids.contains(&id) {
                         return Err("Invalid/duplicate WebSocket correlation ID".into());
                     }
-                    if handlers.len() >= ws::MAX_IN_FLIGHT {
+                    if handlers.len()+extensions.len() >= ws::MAX_IN_FLIGHT {
                         ws::send_frame(&mut socket, &SessionFrame::response(id, WireResponse::rejected_for(&request, "Worker has 16 active requests; request rejected before acceptance".into()))).await?;
                         continue;
                     }

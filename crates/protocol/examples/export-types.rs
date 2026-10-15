@@ -8,6 +8,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        OperationRef::decl(&config),
+        AdmissionWatermarks::decl(&config),
+        OperationCursor::decl(&config),
+        OperationQuery::decl(&config),
+        OperationPageRequest::decl(&config),
+        OperationResource::decl(&config),
+        OperationObservation::decl(&config),
+        OperationPage::decl(&config),
+        OperationState::decl(&config),
+        ObservedLeaseState::decl(&config),
+        ObservedLeaseScope::decl(&config),
+        ExtensionRequest::decl(&config),
+        ExtensionResponse::decl(&config),
+        ExtensionResult::decl(&config),
+        ExtensionError::decl(&config),
         ControllerReadinessProjection::decl(&config),
         RuntimeSettings::decl(&config),
         SaveRuntimeSettings::decl(&config),
