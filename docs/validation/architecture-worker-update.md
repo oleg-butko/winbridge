@@ -1,10 +1,48 @@
-# Текущее состояние — обновление A3.3 проверено, 2026-10-15
+# Текущее обновление: A4.1 — 2026-10-15
+
+[57 native tests, desktop compile и проверка очереди трёх проектов](../plans/architecture-transition/windows-work-scheduling-gate-2026-10-15.md)
+прошли. Controller Debian обновлён, его actual RPC2 пара с установленным `a8cf019`
+проверена. Этот worker здоров, но новый `winbridge.work-scheduling` v1 ещё не
+объявляет. Для actual installed проверки нужен новый worker/desktop.
+
+Точный ZIP и SHA-256 сообщает агент; актуальная запись находится в
+`K:\VMs\shared\WinBridge\sources\architecture-update.latest.json`.
+Берите ZIP из этой записи, а не из исторических разделов ниже.
+
+1. Закройте desktop и остановите worker через Ctrl+C.
+2. Обновите `K:\_proj-26\winbridge\src` содержимым каталога `winbridge` из ZIP.
+   Существующие local configs, `target`, `.winbridge` и runtime journal сохраняются.
+3. В PowerShell выполните без `-SkipBuild`:
+
+   ```powershell
+   Set-Location K:\_proj-26\winbridge\src
+   .\scripts\prepare-windows-snapshot.ps1
+   ```
+
+4. Запущенный desktop можно закрыть; worker оставьте работать и сообщите об обновлении.
+   Агент проверит actual build/metadata и установленный executable в изолированном
+   pool автоматически. Ручной Windows UI checklist не требуется.
+
+Общий лимит по умолчанию **не включён**. Рабочий config менять не нужно; ограничения
+1/2 и очередь трёх проектов испытываются отдельно. Настройку production budget
+выбирает пользователь; она применяется после ручного restart worker.
+[Семантика work slots](../guides/work-scheduling.md).
+
+Сборка остаётся в `src`, exe в постоянном `K:\_proj-26\winbridge\runtime`:
+новый firewall path не создаётся. Journal schema 12 и RPC 1/2 сохраняются,
+новая миграция БД не требуется. Source ZIP содержит проверенный runtime code;
+последующие изменения — документация. Native candidate не подменяет проверку
+фактически обновлённой пары. Полный A4 остаётся открыт.
+
+## История обновлений
+
+# A3.3 — обновление проверено, 2026-10-15
 
 Установленный `a8cf019` прошёл [actual MCP/IPC/read-model gate](../plans/architecture-transition/windows-operation-pages-installed-2026-10-15.md).
 Полный A3 завершён. Worker оставить работающим, desktop можно закрыть.
-Новый пакет пока не требуется; инструкции ниже — история уже выполненных обновлений.
+Инструкции этого раздела — история уже выполненного обновления A3.3.
 
-# Текущее обновление: A3.3 — 2026-10-15
+# Обновление A3.3 — 2026-10-15
 
 Новый общий журнал требует `winbridge.operation-read-model` v1 в worker и нового
 UI в desktop. Установленный `35b716a` исправен; новый контракт в нём отсутствует.
@@ -35,7 +73,6 @@ UI в desktop. Установленный `35b716a` исправен; новый
 изменения — документация. Квитанция новой установленной пары появится после её
 реальной проверки, а не заранее из отчёта кандидата.
 
-## История обновлений
 
 # Обновление для A3.2c — 2026-10-14
 

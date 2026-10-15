@@ -89,7 +89,8 @@ admissions для limit 1/2/legacy, native local IPC API и workflow readiness h
 прошли на Debian. UI проверен отдельно с настоящим Unix worker (limit 1, queued
 counts/cancel/freshness) и полным прежним browser scenario. Linux/Windows Clippy,
 typecheck/build и отдельный desktop locked metadata resolution прошли.
-Native Windows gate и actual installed новый pool пока не выполнены.
+Native Windows candidate gate завершён; actual installed новый pool ещё ожидается.
+[Отчёт и границы проверки](windows-work-scheduling-gate-2026-10-15.md).
 
 Первый native run `20261015-060547-6ba88f51`: policy/transaction/operation
 группы прошли, pool test получил timeout первого local IPC Info под backlog.
@@ -104,4 +105,7 @@ actual claim по-прежнему повторяет проверку внут�
 pool повторная запись неизменившейся wait reason пропускается. Timer пропускает
 missed ticks вместо очереди устаревших проходов. Regression снова стартует с 45
 durable queued admissions без прогрева IPC и требует Info быстрее 5 s; времена
-сохраняются в checksummed native proof. Исправленный Windows gate ещё ожидается.
+сохраняются в checksummed native proof. Исправленный run `20261015-103809-d68fa193`
+прошёл 57 tests / 12 groups, desktop check и 15 checksummed artifacts. Loaded Info
+12/4/8 ms для limit 1/2/legacy; cancel 46/52/66 ms. Все три сценария начинают с
+полной очередью до старта IPC, после cleanup work slots равны нулю.

@@ -1,3 +1,32 @@
+## A4.1 — native gate готов, нужен installed update, 2026-10-15
+
+[Отчёт](plans/architecture-transition/windows-work-scheduling-gate-2026-10-15.md),
+[обновление](validation/architecture-worker-update.md), [поведение](guides/work-scheduling.md).
+Code `bff20cd`: opt-in global work slots + fair projects + typed metadata/UI;
+326 workspace tests, focused final pool/workflow/store tests, Linux/Windows Clippy
+passed. Native run `20261015-103809-d68fa193`, task
+`63ba3507-02b9-48dc-b18f-7b2e9ea22d32` succeeded/0: **57 tests / 12 groups,
+desktop compile, 15 verified artifacts passed**. Report SHA
+`9fbfdc39cda96abf7a8149d7d9cdbf7009f228d27f908c39fb0ea6d398cb89d7`.
+Найден и исправлен expensive Windows path scan при полном pool: cold startup с
+45 queued tasks даёт Info 12/4/8 ms вместо 9.5 s, cancel 46/52/66 ms.
+Atomic claim, physical cleanup, прежние RPC/schema и production config сохранены.
+
+Controller clean `bff20cd`, build `1792075089522830086`, consumer proof SHA
+совпал с executable; serve `26577`, PID 44875. Actual MCP RPC2 pair с installed
+`a8cf019` прошла; receipt
+`64877717460d085593828f07a6f07c0a0e6fc20c5b694e04437d8b22e7709d9e`.
+Worker generation/scope прежние, healthy/idle. New work-scheduling metadata
+на старом provider отсутствует — actual установленный новый контракт не заявлен.
+
+Граница продолжения: одно обычное обновление worker/desktop, затем автоматический
+installed pool/metadata/UI gate. Рабочий budget не включать автоматически.
+Desktop можно закрыть, worker оставить до обновления; тестовых UI окон нет.
+Debian free 29,065,887,744 bytes (~27.1 GiB), Windows ~42.4 GiB,
+CARGO_INCREMENTAL=0; caches переиспользованы, Windows directories не удалялись.
+Full A4 открыт: A4.2 backlog/pause, A4.3 full resource sets, A4.4 multi-consumer.
+Ни системных изменений, ни правок рабочих configs не было.
+
 ## A4.1 — work scheduling candidate, 2026-10-15
 
 [План и ревью](plans/architecture-transition/work-scheduling.md),
