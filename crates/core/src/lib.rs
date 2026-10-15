@@ -11,6 +11,7 @@ pub mod profiles;
 pub mod readiness;
 pub mod snapshot;
 pub mod task;
+pub mod work_scheduling;
 pub mod workflow;
 
 use std::io::{self, Write};

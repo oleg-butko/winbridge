@@ -236,6 +236,7 @@ try {
   await attachNative(page);
   await page.goto(url);
   await page.getByText("Worker подключён · linux · ui-test", { exact: true }).waitFor();
+  await page.getByTestId("work-scheduling").getByText("Общий лимит не включён", { exact: true }).waitFor();
   await page.getByText("Controller Debian подключён", { exact: true }).waitFor();
   await page.getByText("Совместимость компонентов", { exact: true }).click();
   await page.getByTestId("contract-readiness").waitFor();

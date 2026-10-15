@@ -115,6 +115,8 @@ pub struct WorkerConfig {
     pub max_output_bytes_per_task: u64,
     #[serde(default)]
     pub output_retention: OutputRetention,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_scheduling: Option<winbridge_protocol::WorkSchedulingPolicy>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -226,6 +228,9 @@ impl WorkerConfig {
         if let Some(url) = &self.worker.controller_url {
             crate::controller_config::validate_controller_url(url)?;
         }
+        if let Some(policy) = &self.work_scheduling {
+            crate::work_scheduling::validate(policy)?;
+        }
         if !(4096..=256 * 1024 * 1024).contains(&self.max_output_bytes_per_task) {
             return Err("maxOutputBytesPerTask must be 4096–268435456 bytes".into());
         }
@@ -244,7 +249,7 @@ impl WorkerConfig {
             }
             if project.max_concurrent_mutations != 1 {
                 return Err(format!(
-                    "project {}: maxConcurrentMutations must be 1 in stage 1",
+                    "project {}: maxConcurrentMutations must be 1; use workScheduling.maxConcurrentWork for parallel projects",
                     project.id
                 ));
             }

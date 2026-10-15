@@ -193,7 +193,7 @@ impl Worker {
                     .join(format!("journal.sqlite{suffix}")),
             )?;
         }
-        let store = if inspection {
+        let mut store = if inspection {
             if !db_path.is_file() {
                 return Err("Read-only recovery requires an existing journal.sqlite; no journal was created".into());
             }
@@ -219,6 +219,7 @@ impl Worker {
             store.recover()?;
             store
         };
+        store.configure_work_scheduling(config.work_scheduling.clone())?;
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
                 url: url.clone(),
@@ -603,13 +604,18 @@ impl Worker {
                             )
                             .map_err(|e| e.to_string())?,
                         ),
-                        contract_catalog: Some(
-                            serde_json::to_value(self.projection_catalog(&RequestContext {
+                        contract_catalog: Some({
+                            let context = RequestContext {
                                 instance_id: self.config.instance_id.clone(),
                                 journal_incarnation: store.journal_authority().incarnation.clone(),
-                            })?)
-                            .map_err(|e| e.to_string())?,
-                        ),
+                            };
+                            let mut catalog = self.projection_catalog(&context)?;
+                            catalog.work_scheduling = Some(
+                                serde_json::to_value(store.work_scheduling_observation(context)?)
+                                    .map_err(|e| e.to_string())?,
+                            );
+                            serde_json::to_value(catalog).map_err(|e| e.to_string())?
+                        }),
                         recovery_coverage: self
                             .coverage
                             .lock()
@@ -825,150 +831,190 @@ impl Worker {
         let workflows = store.workflows(false)?;
         let tasks = store.all()?;
         let imports = store.imports(false)?;
-        for import in imports
-            .iter()
-            .filter(|r| r.status == TaskStatus::Queued)
-            .cloned()
-        {
-            let import = store.import_snapshot(&import.import_id)?;
-            let project = import.submission.project_id.clone();
-            if active.contains_key(&project)
-                || workflows::reserved_for_other(&workflows, &project, &import.import_id)
-                || tasks.iter().any(|t| {
-                    t.status == TaskStatus::Queued
-                        && !workflows::reserved_for_other(&workflows, &project, &t.task_id)
-                        && t.submission.project_id == project
-                        && t.accepted_at_ms <= import.accepted_at_ms
+        let projects = if self.config.work_scheduling.is_some() {
+            store
+                .fair_projects(
+                    &self
+                        .config
+                        .projects
+                        .iter()
+                        .map(|p| p.id.clone())
+                        .collect::<Vec<_>>(),
+                )?
+                .into_iter()
+                .map(Some)
+                .collect::<Vec<_>>()
+        } else {
+            vec![None]
+        };
+        for selected_project in projects {
+            for import in imports
+                .iter()
+                .filter(|r| r.status == TaskStatus::Queued)
+                .filter(|r| {
+                    selected_project
+                        .as_ref()
+                        .is_none_or(|p| p == &r.submission.project_id)
                 })
+                .cloned()
             {
-                continue;
-            }
-            let (import, token) = match store.claim_import(&import.import_id) {
-                Ok(claim) => claim,
-                Err(reason) if reason.starts_with("resource busy:") => {
-                    store.note_resource_wait(
-                        store::OperationKind::Import,
-                        &import.import_id,
-                        &reason,
-                    )?;
+                let import = store.import_snapshot(&import.import_id)?;
+                let project = import.submission.project_id.clone();
+                if active.contains_key(&project)
+                    || workflows::reserved_for_other(&workflows, &project, &import.import_id)
+                    || tasks.iter().any(|t| {
+                        t.status == TaskStatus::Queued
+                            && !workflows::reserved_for_other(&workflows, &project, &t.task_id)
+                            && t.submission.project_id == project
+                            && t.accepted_at_ms <= import.accepted_at_ms
+                    })
+                {
                     continue;
                 }
-                Err(error) => return Err(error),
-            };
-            active.insert(project.clone(), import.import_id.clone());
-            self.active_jobs.fetch_add(1, Ordering::AcqRel);
-            let worker = Arc::clone(self);
-            thread::spawn(move || {
-                if let Err(error) = worker.execute_import(import.clone(), token.clone()) {
-                    match worker.store() {
-                        Ok(mut store) => {
-                            if let Err(recovery) = store.with_execution(&token, |store| {
-                                store.finish_import_execution(
-                                    &token,
-                                    TaskStatus::Indeterminate,
-                                    &error,
-                                )
-                            }) {
-                                worker.record_journal_fault(&import.import_id, &error, &recovery);
-                            }
-                        }
-                        Err(recovery) => {
-                            worker.record_journal_fault(&import.import_id, &error, &recovery)
-                        }
+                let (import, token) = match store.claim_import(&import.import_id) {
+                    Ok(claim) => claim,
+                    Err(reason) if reason.starts_with("resource busy:") => {
+                        store.note_resource_wait(
+                            store::OperationKind::Import,
+                            &import.import_id,
+                            &reason,
+                        )?;
+                        continue;
                     }
-                }
-                let unreconciled = worker
-                    .unreconciled_tasks
-                    .lock()
-                    .map_or(true, |faults| faults.contains_key(&import.import_id));
-                if let Ok(mut projects) = worker.active_projects.lock() {
-                    if !unreconciled && projects.get(&project) == Some(&import.import_id) {
-                        projects.remove(&project);
-                    }
-                }
-                worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
-            });
-        }
-        for task in tasks {
-            let project = task.submission.project_id.clone();
-            if task.status != TaskStatus::Queued
-                || active.contains_key(&project)
-                || workflows::reserved_for_other(&workflows, &project, &task.task_id)
-                || imports.iter().any(|r| {
-                    r.status == TaskStatus::Queued
-                        && !workflows::reserved_for_other(&workflows, &project, &r.import_id)
-                        && r.submission.project_id == project
-                        && r.accepted_at_ms < task.accepted_at_ms
-                })
-            {
-                continue;
-            }
-            // Revalidate real paths at launch; never run against a silently changed root/cwd.
-            match self.resolve_task(&task.submission) {
-                Ok(command) if command == task.resolved_command => {}
-                result => {
-                    let reason = result.err().unwrap_or_else(|| "resolved command changed since acceptance; submit a new task after checking project paths".into());
-                    store.finish(&task.task_id, TaskStatus::Failed, None, &reason)?;
-                    continue;
-                }
-            }
-            let (decision, token) = match store.claim_task(&task.task_id) {
-                Ok(claim) => claim,
-                Err(reason) if reason.starts_with("resource busy:") => {
-                    store.note_resource_wait(store::OperationKind::Task, &task.task_id, &reason)?;
-                    continue;
-                }
-                Err(error) => return Err(error),
-            };
-            if decision.effect != TaskEffect::ExecuteAcceptedCommand {
-                return Err("Task launch did not produce a committed execution decision".into());
-            }
-            let task = decision.record;
-            active.insert(project.clone(), task.task_id.clone());
-            self.active_jobs.fetch_add(1, Ordering::AcqRel);
-            let worker = Arc::clone(self);
-            thread::spawn(move || {
-                let id = task.task_id.clone();
-                let project = task.submission.project_id.clone();
-                let cleanup = Arc::new(Mutex::new(Some(store::CleanupProof::NoProcessCreated)));
-                if let Err(error) = worker.execute(task, token.clone(), cleanup.clone()) {
-                    eprintln!("task {id}: {error}; outcome requires reconciliation");
-                    // Publish the fault before releasing the journal lock. Admission
-                    // rechecks while holding it, so it cannot race the failed commit.
-                    match worker.store() {
-                        Ok(mut store) => {
-                            if let Err(recovery_error) = store.with_execution(&token, |store| {
-                                if let Some(proof) = cleanup
-                                    .lock()
-                                    .map_err(|_| "process cleanup receipt poisoned")?
-                                    .as_ref()
-                                    .copied()
-                                {
-                                    // Persist the receipt independently if the outcome writer failed.
-                                    // The lease stays held until a terminal result is committed.
-                                    store.record_execution_cleanup(&token, proof)?;
+                    Err(error) => return Err(error),
+                };
+                active.insert(project.clone(), import.import_id.clone());
+                self.active_jobs.fetch_add(1, Ordering::AcqRel);
+                let worker = Arc::clone(self);
+                thread::spawn(move || {
+                    if let Err(error) = worker.execute_import(import.clone(), token.clone()) {
+                        match worker.store() {
+                            Ok(mut store) => {
+                                if let Err(recovery) = store.with_execution(&token, |store| {
+                                    store.finish_import_execution(
+                                        &token,
+                                        TaskStatus::Indeterminate,
+                                        &error,
+                                    )
+                                }) {
+                                    worker.record_journal_fault(
+                                        &import.import_id,
+                                        &error,
+                                        &recovery,
+                                    );
                                 }
-                                store.finish(&id, TaskStatus::Indeterminate, None, &error)
-                            }) {
-                                worker.record_journal_fault(&id, &error, &recovery_error);
+                            }
+                            Err(recovery) => {
+                                worker.record_journal_fault(&import.import_id, &error, &recovery)
                             }
                         }
-                        Err(recovery_error) => {
-                            worker.record_journal_fault(&id, &error, &recovery_error)
+                    }
+                    let unreconciled = worker
+                        .unreconciled_tasks
+                        .lock()
+                        .map_or(true, |faults| faults.contains_key(&import.import_id));
+                    if let Ok(mut projects) = worker.active_projects.lock() {
+                        if !unreconciled && projects.get(&project) == Some(&import.import_id) {
+                            projects.remove(&project);
                         }
                     }
+                    worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
+                });
+            }
+            for task in tasks
+                .iter()
+                .filter(|t| {
+                    t.status == TaskStatus::Queued
+                        && selected_project
+                            .as_ref()
+                            .is_none_or(|p| p == &t.submission.project_id)
+                })
+                .cloned()
+            {
+                let project = task.submission.project_id.clone();
+                if task.status != TaskStatus::Queued
+                    || active.contains_key(&project)
+                    || workflows::reserved_for_other(&workflows, &project, &task.task_id)
+                    || imports.iter().any(|r| {
+                        r.status == TaskStatus::Queued
+                            && !workflows::reserved_for_other(&workflows, &project, &r.import_id)
+                            && r.submission.project_id == project
+                            && r.accepted_at_ms < task.accepted_at_ms
+                    })
+                {
+                    continue;
                 }
-                let unreconciled = worker
-                    .unreconciled_tasks
-                    .lock()
-                    .map_or(true, |faults| faults.contains_key(&id));
-                if let Ok(mut projects) = worker.active_projects.lock() {
-                    if !unreconciled && projects.get(&project) == Some(&id) {
-                        projects.remove(&project);
+                // Revalidate real paths at launch; never run against a silently changed root/cwd.
+                match self.resolve_task(&task.submission) {
+                    Ok(command) if command == task.resolved_command => {}
+                    result => {
+                        let reason = result.err().unwrap_or_else(|| "resolved command changed since acceptance; submit a new task after checking project paths".into());
+                        store.finish(&task.task_id, TaskStatus::Failed, None, &reason)?;
+                        continue;
                     }
                 }
-                worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
-            });
+                let (decision, token) = match store.claim_task(&task.task_id) {
+                    Ok(claim) => claim,
+                    Err(reason) if reason.starts_with("resource busy:") => {
+                        store.note_resource_wait(
+                            store::OperationKind::Task,
+                            &task.task_id,
+                            &reason,
+                        )?;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                if decision.effect != TaskEffect::ExecuteAcceptedCommand {
+                    return Err("Task launch did not produce a committed execution decision".into());
+                }
+                let task = decision.record;
+                active.insert(project.clone(), task.task_id.clone());
+                self.active_jobs.fetch_add(1, Ordering::AcqRel);
+                let worker = Arc::clone(self);
+                thread::spawn(move || {
+                    let id = task.task_id.clone();
+                    let project = task.submission.project_id.clone();
+                    let cleanup = Arc::new(Mutex::new(Some(store::CleanupProof::NoProcessCreated)));
+                    if let Err(error) = worker.execute(task, token.clone(), cleanup.clone()) {
+                        eprintln!("task {id}: {error}; outcome requires reconciliation");
+                        // Publish the fault before releasing the journal lock. Admission
+                        // rechecks while holding it, so it cannot race the failed commit.
+                        match worker.store() {
+                            Ok(mut store) => {
+                                if let Err(recovery_error) = store.with_execution(&token, |store| {
+                                    if let Some(proof) = cleanup
+                                        .lock()
+                                        .map_err(|_| "process cleanup receipt poisoned")?
+                                        .as_ref()
+                                        .copied()
+                                    {
+                                        // Persist the receipt independently if the outcome writer failed.
+                                        // The lease stays held until a terminal result is committed.
+                                        store.record_execution_cleanup(&token, proof)?;
+                                    }
+                                    store.finish(&id, TaskStatus::Indeterminate, None, &error)
+                                }) {
+                                    worker.record_journal_fault(&id, &error, &recovery_error);
+                                }
+                            }
+                            Err(recovery_error) => {
+                                worker.record_journal_fault(&id, &error, &recovery_error)
+                            }
+                        }
+                    }
+                    let unreconciled = worker
+                        .unreconciled_tasks
+                        .lock()
+                        .map_or(true, |faults| faults.contains_key(&id));
+                    if let Ok(mut projects) = worker.active_projects.lock() {
+                        if !unreconciled && projects.get(&project) == Some(&id) {
+                            projects.remove(&project);
+                        }
+                    }
+                    worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
+                });
+            }
         }
         Ok(())
     }

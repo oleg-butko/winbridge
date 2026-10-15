@@ -224,6 +224,75 @@ fn complete(worker: &Arc<Worker>, id: &str) -> WorkflowRecord {
     until(worker, || flow(worker, id).status.is_terminal());
     flow(worker, id)
 }
+
+#[test]
+fn work_scheduling_workflow_uses_child_slot_and_ready_app_releases_work_capacity() {
+    let (_temp, mut config, request) = setup();
+    config.work_scheduling = Some(WorkSchedulingPolicy {
+        max_concurrent_work: 1,
+    });
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let queued = accept(&worker, request);
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!("info");
+    };
+    assert_eq!(
+        interpret_work_scheduling(&info).unwrap().queued_operations,
+        1,
+        "queued root counts once before it has a child"
+    );
+    let completed = complete(&worker, &queued.workflow_id);
+    assert_eq!(completed.status, TaskStatus::Succeeded);
+    let app_id = completed.application_id.as_ref().unwrap();
+    assert_eq!(app(&worker, app_id).status, ApplicationStatus::Ready);
+    let view = || {
+        let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+            panic!("info");
+        };
+        interpret_work_scheduling(&info).unwrap()
+    };
+    assert_eq!(
+        view().occupied_slots,
+        0,
+        "ready app is retained but no longer owns mutation capacity"
+    );
+    let response = worker.handle(LocalRequest::Submit {
+        request: TaskSubmission {
+            protocol_version: 1,
+            request_id: "after-ready".into(),
+            idempotency_key: "after-ready".into(),
+            project_id: "fixture".into(),
+            timeout_ms: 15000,
+            snapshot_id: None,
+            command: CommandSource::Direct {
+                executable: env!("CARGO_BIN_EXE_winbridge-fixture").into(),
+                arguments: vec!["long".into()],
+                working_directory: ".".into(),
+            },
+        },
+    });
+    let LocalResponse::Task { task } = response else {
+        panic!("task");
+    };
+    let id = task.task_id.clone();
+    until(&worker, || {
+        let LocalResponse::Task { task } = worker.handle(LocalRequest::GetTask {
+            task_id: id.clone(),
+        }) else {
+            return false;
+        };
+        task.process_id.is_some()
+    });
+    assert_eq!(view().occupied_slots, 1);
+    assert_eq!(app(&worker, app_id).status, ApplicationStatus::Ready);
+    worker.handle(LocalRequest::Cancel { task_id: id });
+    until(&worker, || view().occupied_slots == 0);
+    stop(&worker, app_id);
+    assert_eq!(
+        flow(&worker, &completed.workflow_id).status,
+        TaskStatus::Succeeded
+    );
+}
 fn stop(worker: &Arc<Worker>, id: &str) {
     worker.handle(LocalRequest::StopApplication {
         application_id: id.into(),

@@ -1,4 +1,4 @@
-import type { BuildIdentity, ContractCatalog, ContractRef, ControllerReadinessProjection, ProjectPolicyCatalog, WorkerInfo } from "./contracts";
+import type { BuildIdentity, ContractCatalog, ContractRef, ControllerReadinessProjection, ProjectPolicyCatalog, WorkerInfo, WorkSchedulingObservation } from "./contracts";
 
 export type CatalogObservation =
   | { kind: "missing" }
@@ -32,7 +32,7 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
   const raw = info.contractCatalog;
   if (raw === undefined) return { kind: "missing" };
   const invalid = (reason: string): CatalogObservation => ({ kind: "unsupported", reason });
-  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported", "controllerProjection"]) || raw.schemaVersion !== 1
+  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported", "controllerProjection", "workScheduling"]) || raw.schemaVersion !== 1
     || !Array.isArray(raw.supported)) return invalid("Формат каталога неизвестен. Новые функции не включены.");
   const provider = readBuild(raw.provider);
   const expected = readBuild(info.build);
@@ -46,7 +46,20 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
     seen.add(id);
     return false;
   })) return invalid("В каталоге некорректные или повторяющиеся контракты.");
-  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[], ...(Object.hasOwn(raw, "controllerProjection") ? { controllerProjection: raw.controllerProjection } : {}) } };
+  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[], ...(Object.hasOwn(raw, "controllerProjection") ? { controllerProjection: raw.controllerProjection } : {}), ...(Object.hasOwn(raw, "workScheduling") ? { workScheduling: raw.workScheduling } : {}) } };
+}
+
+export function interpretWorkScheduling(info: WorkerInfo): WorkSchedulingObservation | null {
+  const catalog = interpretCatalog(info);
+  if (catalog.kind !== "known" || !catalog.catalog.supported.some((ref) => ref.id === "winbridge.work-scheduling" && ref.version === 1)) return null;
+  const value = catalog.catalog.workScheduling;
+  if (!object(value) || !keys(value, ["schemaVersion", "provider", "context", "maxConcurrentWork", "occupiedSlots", "uncertainSlots", "queuedOperations", "observedAtMs", "readOnly"])
+    || value.schemaVersion !== 1 || !sameBuild(value.provider, info.build) || !sameScope(value.context, info.fencedRequests?.context)
+    || typeof value.readOnly !== "boolean" || ![value.occupiedSlots, value.uncertainSlots, value.queuedOperations].every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff)
+    || (value.uncertainSlots as number) > (value.occupiedSlots as number)
+    || typeof value.observedAtMs !== "number" || !Number.isSafeInteger(value.observedAtMs) || value.observedAtMs < 0
+    || (value.maxConcurrentWork != null && (typeof value.maxConcurrentWork !== "number" || !Number.isInteger(value.maxConcurrentWork) || value.maxConcurrentWork < 1 || value.maxConcurrentWork > 32))) return null;
+  return { ...value, provider: readBuild(value.provider)!, maxConcurrentWork: value.maxConcurrentWork ?? null } as unknown as WorkSchedulingObservation;
 }
 
 type ProjectionObservation = { kind: "missing" | "unsupported" } | { kind: "known"; projection: ControllerReadinessProjection };

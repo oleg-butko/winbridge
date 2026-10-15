@@ -66,3 +66,27 @@ slot, а процесс жить; unknown owner может пережить work
 и не обходит durable claim. Absent config сохраняет production semantics; новая
 миграция, Kafka, distributed actor transport и изменение execution контрактов
 для первого budget не нужны. Точные binary/IPC keys нельзя обещать до A4.3.
+
+
+## Реализация кандидата
+
+Policy загружается один раз в Worker/его Store. Task/import claim проверяет budget
+до launch intent в той же serialized transaction; failed lease insert откатывает
+attempt/status. Fair project selection использует max execution_attempts.rowid;
+кандидаты фильтруются до клонирования, завершённая история не копируется повторно.
+Slot summary — собственный read snapshot, не часть observation другой страницы.
+Queue count включает queued task/import и queued workflow roots без child; после
+перехода root в running ожидание считается по child. Это не новый backlog cap.
+
+Protocol добавляет provider/scope-bound opaque workScheduling metadata и contract
+`winbridge.work-scheduling` v1. Known readers нормализуют числовые metadata как JS,
+но строгие config/command DTO не ослабляются. 23 общих fixtures проходят на Rust/TS.
+RPC-2 schema остаётся прежней. Running config fingerprint включает активный budget,
+а absent policy сохраняет прежний hash.
+
+326 workspace tests, capacity race/rollback/restart, actual 3-project pool с 45
+admissions для limit 1/2/legacy, native local IPC API и workflow readiness handoff
+прошли на Debian. UI проверен отдельно с настоящим Unix worker (limit 1, queued
+counts/cancel/freshness) и полным прежним browser scenario. Linux/Windows Clippy,
+typecheck/build и отдельный desktop locked metadata resolution прошли.
+Native Windows gate и actual installed новый pool пока не выполнены.

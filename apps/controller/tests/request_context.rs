@@ -47,6 +47,7 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         panic!("route info")
     };
     let advertised = info.contract_catalog.clone();
+    let initial_scheduling = interpret_work_scheduling(&info).expect("scheduling metadata");
     let policies = info.project_policies.clone();
     let schemas = info.contract_schemas.clone();
     assert!(interpret_contract_schemas(&info).is_some());
@@ -107,8 +108,18 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         .collect();
     assert_eq!(messages[1]["result"]["isError"], false);
     assert_eq!(messages[2]["result"]["isError"], false);
-    // Support metadata is immutable; a readonly session projection may advance
-    // between two Info calls. Scope/policy/schema forwarding remains exact.
+    // Support is immutable; session/scheduling observations advance between Info calls.
+    // Validate the forwarded observation separately instead of equating its timestamp.
+    let forwarded_info: WorkerInfo =
+        serde_json::from_value(messages[2]["result"]["structuredContent"]["info"].clone()).unwrap();
+    let forwarded_scheduling = interpret_work_scheduling(&forwarded_info).unwrap();
+    assert_eq!(forwarded_scheduling.context, context);
+    assert_eq!(
+        forwarded_scheduling.max_concurrent_work,
+        initial_scheduling.max_concurrent_work
+    );
+    assert_eq!(forwarded_scheduling.occupied_slots, 0);
+    assert!(forwarded_scheduling.observed_at_ms >= initial_scheduling.observed_at_ms);
     let mut forwarded_catalog =
         messages[2]["result"]["structuredContent"]["info"]["contractCatalog"].clone();
     let mut advertised = advertised.unwrap();
@@ -120,6 +131,11 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         .as_object_mut()
         .unwrap()
         .remove("controllerProjection");
+    forwarded_catalog
+        .as_object_mut()
+        .unwrap()
+        .remove("workScheduling");
+    advertised.as_object_mut().unwrap().remove("workScheduling");
     assert_eq!(forwarded_catalog, advertised);
     assert_eq!(
         messages[2]["result"]["structuredContent"]["info"]["projectPolicies"],

@@ -280,7 +280,9 @@ impl Store {
     pub fn claim_task(&mut self, id: &str) -> Result<(TaskTransition, ExecutionToken)> {
         self.guard_callback(None, None)?;
         let authority = self.authority.clone();
+        let policy = self.work_scheduling.clone();
         let transaction = self.write_transaction(TransactionBehavior::Immediate)?;
+        Self::require_work_capacity(&transaction, policy.as_ref())?;
         let observed = Self::read_task_snapshot(&transaction, id)?;
         let decision = Self::transition_task_on(&transaction, id, None, TaskEvent::LaunchIntent)?;
         if decision.effect != TaskEffect::ExecuteAcceptedCommand {
@@ -300,7 +302,9 @@ impl Store {
     pub fn claim_import(&mut self, id: &str) -> Result<(ImportRecord, ExecutionToken)> {
         self.guard_callback(None, None)?;
         let authority = self.authority.clone();
+        let policy = self.work_scheduling.clone();
         let transaction = self.write_transaction(TransactionBehavior::Immediate)?;
+        Self::require_work_capacity(&transaction, policy.as_ref())?;
         let mut observed = Self::read_domain::<ImportRecord>(&transaction, id)?;
         if observed.status != TaskStatus::Queued || observed.cancel_requested {
             return Err("local journal: import claim requires queued work".into());

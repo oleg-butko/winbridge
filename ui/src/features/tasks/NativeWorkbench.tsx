@@ -13,6 +13,7 @@ import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, DeliveryDraft, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
 import { catalogSummary, projectPolicySummary } from "../../runtime/discovery";
 import { ReadinessPanel } from "./ReadinessPanel";
+import { WorkSchedulingSummary } from "./WorkSchedulingSummary";
 import { OutputBuffer } from "./outputBuffer";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
@@ -327,6 +328,7 @@ export function NativeWorkbench() {
         {!controllerFresh && <Text size="sm">{info?.journalInspection ? "Доступна диагностика журнала; состояние прежних процессов не подтверждено." : "Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет."}</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
+    {info && <WorkSchedulingSummary info={info} connected={connected} />}
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}
     {info && <HistoryPanel key={`history:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} closing={closing} onOpen={(entry)=>void openHistory(entry)} />}
     {info && <OperationPagePanel key={`operations:${info.instanceId}:${info.fencedRequests?.context.journalIncarnation ?? "legacy"}`} info={info} connected={connected} onOpen={(entry) => void openHistory(entry)} />}

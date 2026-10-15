@@ -16,6 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         OperationResource::decl(&config),
         OperationObservation::decl(&config),
         OperationPage::decl(&config),
+        WorkSchedulingPolicy::decl(&config),
+        WorkSchedulingObservation::decl(&config),
         OperationState::decl(&config),
         ObservedLeaseState::decl(&config),
         ObservedLeaseScope::decl(&config),

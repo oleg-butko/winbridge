@@ -1,0 +1,222 @@
+{
+  "baseInfo": {
+    "protocolVersion": 1,
+    "instanceId": "legacy-fixture",
+    "nodeId": "fixture-windows",
+    "generation": "00000000-0000-4000-8000-000000000001",
+    "platform": "windows",
+    "runtimeValidation": "windows-native",
+    "projects": [],
+    "build": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": null,
+      "buildId": "scheduling-fixture"
+    },
+    "fencedRequests": {
+      "requestContractVersion": 2,
+      "context": {
+        "instanceId": "legacy-fixture",
+        "journalIncarnation": "journal"
+      },
+      "legacyMutationsAllowed": false
+    },
+    "contractCatalog": {
+      "schemaVersion": 1,
+      "provider": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": null,
+        "buildId": "scheduling-fixture"
+      },
+      "supported": [
+        {
+          "id": "winbridge.work-scheduling",
+          "version": 1
+        }
+      ],
+      "workScheduling": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "maxConcurrentWork": 2,
+        "occupiedSlots": 2,
+        "uncertainSlots": 0,
+        "queuedOperations": 5,
+        "observedAtMs": 1792050000000,
+        "readOnly": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "known",
+      "expected": true
+    },
+    {
+      "name": "future",
+      "pointer": "/contractCatalog/workScheduling/schemaVersion",
+      "value": 2,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "zero-limit",
+      "pointer": "/contractCatalog/workScheduling/maxConcurrentWork",
+      "value": 0,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "big-limit",
+      "pointer": "/contractCatalog/workScheduling/maxConcurrentWork",
+      "value": 33,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "negative",
+      "pointer": "/contractCatalog/workScheduling/occupiedSlots",
+      "value": -1,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "fraction",
+      "pointer": "/contractCatalog/workScheduling/occupiedSlots",
+      "value": 1.5,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "string-count",
+      "pointer": "/contractCatalog/workScheduling/queuedOperations",
+      "value": "5",
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "overflow-count",
+      "pointer": "/contractCatalog/workScheduling/queuedOperations",
+      "value": 4294967296,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "unsafe-time",
+      "pointer": "/contractCatalog/workScheduling/observedAtMs",
+      "value": 9007199254740992,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "uncertain-exceeds-used",
+      "pointer": "/contractCatalog/workScheduling/uncertainSlots",
+      "value": 3,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "foreign-provider",
+      "pointer": "/contractCatalog/workScheduling/provider/buildId",
+      "value": "other",
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "foreign-scope",
+      "pointer": "/contractCatalog/workScheduling/context/journalIncarnation",
+      "value": "other",
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "unknown-field",
+      "pointer": "/contractCatalog/workScheduling/future",
+      "value": true,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "legacy-unlimited",
+      "pointer": "/contractCatalog/workScheduling/maxConcurrentWork",
+      "value": null,
+      "remove": false,
+      "expected": true
+    },
+    {
+      "name": "absent-limit",
+      "pointer": "/contractCatalog/workScheduling/maxConcurrentWork",
+      "value": null,
+      "remove": true,
+      "expected": true
+    },
+    {
+      "name": "readonly-archive",
+      "pointer": "/contractCatalog/workScheduling/readOnly",
+      "value": true,
+      "remove": false,
+      "expected": true
+    },
+    {
+      "name": "legacy-number-notation",
+      "pointer": "/contractCatalog/workScheduling/occupiedSlots",
+      "value": 2.0,
+      "remove": false,
+      "expected": true
+    },
+    {
+      "name": "limit-number-notation",
+      "pointer": "/contractCatalog/workScheduling/maxConcurrentWork",
+      "value": 2.0,
+      "remove": false,
+      "expected": true
+    },
+    {
+      "name": "schema-number-notation",
+      "pointer": "/contractCatalog/workScheduling/schemaVersion",
+      "value": 1.0,
+      "remove": false,
+      "expected": true
+    },
+    {
+      "name": "null-metadata",
+      "pointer": "/contractCatalog/workScheduling",
+      "value": null,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "no-metadata",
+      "pointer": "/contractCatalog/workScheduling",
+      "value": null,
+      "remove": true,
+      "expected": false
+    },
+    {
+      "name": "unsupported",
+      "pointer": "/contractCatalog/supported/0/version",
+      "value": 2,
+      "remove": false,
+      "expected": false
+    },
+    {
+      "name": "missing-provider-nullable",
+      "pointer": "/contractCatalog/workScheduling/provider/sourceManifestSha256",
+      "value": null,
+      "remove": true,
+      "expected": true
+    }
+  ]
+}

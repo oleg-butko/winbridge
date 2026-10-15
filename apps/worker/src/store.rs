@@ -23,6 +23,7 @@ mod domain_records;
 pub use domain_records::JournalSnapshot;
 mod operation_pages;
 mod task_records;
+mod work_scheduling;
 pub use task_records::TaskSnapshot;
 pub const JOURNAL_SCHEMA_VERSION: u32 = 12;
 
@@ -41,6 +42,7 @@ pub struct Store {
     authority: JournalAuthority,
     callback_attempt: Option<ExecutionToken>,
     read_only: bool,
+    work_scheduling: Option<winbridge_protocol::WorkSchedulingPolicy>,
 }
 
 impl Store {
@@ -307,6 +309,7 @@ impl Store {
             authority,
             callback_attempt: None,
             read_only: false,
+            work_scheduling: None,
         })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {

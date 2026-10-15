@@ -1,3 +1,23 @@
+## A4.1 — work scheduling candidate, 2026-10-15
+
+[План и ревью](plans/architecture-transition/work-scheduling.md),
+[пользовательская семантика](guides/work-scheduling.md).
+Opt-in global work budget проверяется в той же BEGIN IMMEDIATE, что task/import
+claim; counts из durable leases, включая uncertainty. Fair projects выбираются
+по retained dispatch ordinals. Workflow child не дублирует slot root, Ready app
+освобождает work capacity, сохраняя application lease. Default/config/journal
+сохраняют legacy mode; production limits не менялись. Новых schema migrations нет.
+Readonly catalog metadata + typed Rust/TS reader + UI summary; reasons идут в
+A3 operation pages. Queue count включает queued roots до создания child.
+326 workspace tests, focused pool/workflow tests, Linux/Windows Clippy,
+23 new shared Rust/TS cases, typecheck/build и actual Unix UI passed.
+Native Windows candidate gate ещё впереди. Full A4 открыт; backlog/pause и
+binary/IPC/full resource sets остаются следующими пакетами.
+Installed worker `a8cf019` здоров/idle, controller daemon `545166d`, serve `75826`.
+Desktop не нужен, новых Windows UI окон не будет. Debian ~27 GiB free,
+CARGO_INCREMENTAL=0. Candidate после готового native gate потребует нового
+installed worker для actual work-scheduling contract/pool проверки.
+
 ## A3 завершён; A4.1 начат, 2026-10-15
 
 [Actual installed operation gate](plans/architecture-transition/windows-operation-pages-installed-2026-10-15.md)

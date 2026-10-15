@@ -13,6 +13,8 @@ mod projection;
 pub use projection::*;
 mod operations;
 pub use operations::*;
+mod work_scheduling;
+pub use work_scheduling::*;
 
 mod attention;
 pub use attention::*;

@@ -154,6 +154,7 @@ $oldOutputReport = $env:WINBRIDGE_OUTPUT_GATE_REPORT
 $oldOutputReference = $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER
 $oldTaskCasReference = $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER
 $oldTaskCasReport = $env:WINBRIDGE_TASK_CAS_REPORT
+$oldWorkSchedulingReport = $env:WINBRIDGE_WORK_SCHEDULING_REPORT
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
 $oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
@@ -248,6 +249,7 @@ try {
     if ($ReadinessOnly) {
         if ($NetwatchProfile) { throw 'ReadinessOnly requires an isolated scenario' }
         $env:WINBRIDGE_TASK_CAS_REPORT = $ReportDirectory
+        $env:WINBRIDGE_WORK_SCHEDULING_REPORT = $ReportDirectory
         $groups = @(
             @{ name='readiness-pure-policy'; arguments=@('test','-p','winbridge-core','--test','readiness','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-wire-compatibility'; arguments=@('test','-p','winbridge-protocol','--features','jsonschema','--test','discovery','--test','projection','--test','legacy_baseline','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
@@ -256,6 +258,10 @@ try {
             @{ name='operations-query-contract'; arguments=@('test','-p','winbridge-core','--test','operation_query','-p','winbridge-protocol','--test','operations','--features','jsonschema','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='operations-transaction-snapshot'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::operation_pages::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='operations-native-ipc'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','operations','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='work-scheduling-policy-contract'; arguments=@('test','-p','winbridge-core','--test','work_scheduling','-p','winbridge-protocol','--test','work_scheduling','--features','jsonschema','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='work-scheduling-durable-capacity'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::work_scheduling::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='work-scheduling-native-pool'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','work_scheduling','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='work-scheduling-workflow-handoff'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','workflows','work_scheduling_','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
         )
     }
@@ -416,6 +422,7 @@ try {
     $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER = $oldOutputReference
     $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER = $oldTaskCasReference
     $env:WINBRIDGE_TASK_CAS_REPORT = $oldTaskCasReport
+    $env:WINBRIDGE_WORK_SCHEDULING_REPORT = $oldWorkSchedulingReport
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace
     $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared

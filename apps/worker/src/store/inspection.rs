@@ -64,6 +64,7 @@ impl Store {
             authority,
             callback_attempt: None,
             read_only: true,
+            work_scheduling: None,
         })
     }
 

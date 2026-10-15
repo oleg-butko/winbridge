@@ -223,6 +223,7 @@ def main():
         archive_has_discovery = 'winbridge/apps/worker/tests/discovery.rs' in archive.namelist()
         archive_has_projection = 'winbridge/crates/protocol/tests/projection.rs' in archive.namelist()
         archive_has_operations = 'winbridge/apps/worker/tests/operations.rs' in archive.namelist()
+        archive_has_work_scheduling = 'winbridge/apps/worker/tests/work_scheduling.rs' in archive.namelist()
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
@@ -437,6 +438,8 @@ exit $nativeExit
         expected_groups += ['readiness-native-info-and-scope']
         if archive_has_operations:
             expected_groups += ['operations-query-contract', 'operations-transaction-snapshot', 'operations-native-ipc']
+        if archive_has_work_scheduling:
+            expected_groups += ['work-scheduling-policy-contract', 'work-scheduling-durable-capacity', 'work-scheduling-native-pool', 'work-scheduling-workflow-handoff']
         expected_groups += ['readiness-desktop-contract-check']
         if not result.get('readinessOnly') or [g['name'] for g in result['commands']] != expected_groups or any(g['exitCode'] != 0 for g in result['commands']):
             raise RuntimeError('Incomplete readiness foundation gate')
@@ -444,6 +447,11 @@ exit $nativeExit
         local_schemas = json.loads(subprocess.run([str(ROOT / 'target/debug/winbridge-controller'), '--contract-schemas'], check=True, capture_output=True, text=True, timeout=20).stdout)
         if not proof['passed'] or proof['platform'] != 'windows' or proof['candidateBuild']['sourceCommit'] != result['sourceCommit'] or proof['candidateBuild']['sourceDirty'] or proof['policies']['provider'] != proof['candidateBuild'] or proof['schemas']['provider'] != proof['candidateBuild'] or proof['schemas']['schemas'] != local_schemas['schemas'] or not proof['context']['journalIncarnation']:
             raise RuntimeError('Incomplete native policy/Info proof')
+        if archive_has_work_scheduling:
+            scheduling = json.loads((report / 'work-scheduling-proof.json').read_text(encoding='utf-8-sig'))
+            scenarios = scheduling.get('scenarios', [])
+            if not scheduling.get('passed') or scheduling.get('platform') != 'windows' or scheduling.get('build') != proof['candidateBuild'] or [s['maxConcurrentWork'] for s in scenarios] != [1, 2, None] or any(s['admissions'] != 45 or s['cleanupSlots'] != 0 or s['initialSlots'] != (s['maxConcurrentWork'] or 3) or not s['context']['journalIncarnation'] for s in scenarios):
+                raise RuntimeError('Incomplete actual native three-project capacity proof')
     if args.profiles_only:
         proof = json.loads((report / 'profiles-proof.json').read_text())
         tasks = proof['completed']

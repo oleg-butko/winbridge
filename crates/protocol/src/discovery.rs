@@ -53,6 +53,13 @@ pub struct ContractCatalog {
     )]
     #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
     pub controller_projection: Option<serde_json::Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_catalog"
+    )]
+    #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
+    pub work_scheduling: Option<serde_json::Value>,
 }
 impl ContractCatalog {
     pub fn implemented(provider: BuildIdentity) -> Self {
@@ -60,12 +67,17 @@ impl ContractCatalog {
             schema_version: CATALOG_SCHEMA,
             provider,
             controller_projection: None,
+            work_scheduling: None,
             supported: vec![
                 ContractRef {
                     id: crate::EXTENSION_TRANSPORT.into(),
                     version: 1,
                 },
                 crate::operation_contract(),
+                ContractRef {
+                    id: crate::WORK_SCHEDULING_CONTRACT.into(),
+                    version: 1,
+                },
                 ContractRef {
                     id: WORKER_RPC_CONTRACT.into(),
                     version: 1,
