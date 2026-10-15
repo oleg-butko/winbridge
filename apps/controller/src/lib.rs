@@ -118,6 +118,8 @@ pub struct Controller {
     activity: activity::ActivityLog,
     #[cfg(unix)]
     verification_runs: Mutex<std::collections::HashSet<String>>,
+    #[cfg(unix)]
+    verification_history: Mutex<Option<verification::RecentPlans>>,
 }
 impl Controller {
     pub fn new(config: ControllerConfig) -> Result<Arc<Self>> {
@@ -130,6 +132,8 @@ impl Controller {
             activity,
             #[cfg(unix)]
             verification_runs: Mutex::new(std::collections::HashSet::new()),
+            #[cfg(unix)]
+            verification_history: Mutex::new(None),
         }))
     }
     pub fn status(&self) -> Result<ControllerStatus> {

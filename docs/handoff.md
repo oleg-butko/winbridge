@@ -1,3 +1,17 @@
+## A3.2 завершён; A3.3 начат, 2026-10-15
+
+[Actual installed pair/projection gate](plans/architecture-transition/windows-projection-pair-2026-10-15.md)
+passed: actual worker `35b716a`, build `1792051201472964300`, generation
+`c4b847e1-b167-42d9-b3f5-d1faf5f94933`, прежний journal scope. Controller
+`d817fe0` запущен после перезапуска Debian; current serve session `6371`.
+MCP pair receipt, actual Windows local pipe disconnect/reconnect и actual-data
+browser renderer/task navigation passed. Desktop можно оставить закрытым,
+worker оставить работать. Native windows не создавались.
+Review fixed recent-history sampling >128; four focused tests/Clippy passed.
+Новый code ещё не заменяет runtime evidence `d817fe0`; следующая проверка
+закрепит новый exact consumer. [Следующий A3.3](plans/architecture-transition/operation-pages.md).
+Full A3 не завершён. Debian free ~31 GiB, incremental disabled.
+
 ## A3.2c native projection — кандидат, 2026-10-14
 
 [Контракт и ревью](plans/architecture-transition/readiness-projection.md).

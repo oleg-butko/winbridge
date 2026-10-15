@@ -25,6 +25,11 @@ struct Plan {
     report_directory: PathBuf,
 }
 type VerificationObservation = (BuildIdentity, ControllerAdapter, VerificationView);
+#[derive(Clone)]
+pub(crate) struct RecentPlans {
+    paths: Vec<PathBuf>,
+    truncated: bool,
+}
 enum VerificationFailure {
     Failed(String),
     Indeterminate(String),
@@ -140,27 +145,51 @@ impl Controller {
             return Ok((vec![], false));
         }
         crate::activity::private_directory(&root)?;
-        let mut entries = Vec::new();
-        let mut truncated = false;
-        for (index, entry) in fs::read_dir(&root).map_err(|e| e.to_string())?.enumerate() {
-            if index >= 128 {
-                truncated = true;
-                break;
+        // Directory enumeration order is arbitrary. Sampling its first 128
+        // entries can hide every new verification forever. Rebuild an index on
+        // first use/restart and after admission, retaining only the newest ten.
+        let mut history = self
+            .verification_history
+            .lock()
+            .map_err(|_| "Verification index poisoned")?;
+        if history.is_none() {
+            let mut entries = Vec::new();
+            let mut truncated = false;
+            for entry in fs::read_dir(&root).map_err(|e| e.to_string())? {
+                let entry = entry.map_err(|e| e.to_string())?;
+                if !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
+                    continue;
+                }
+                let path = entry.path().join("plan.json");
+                let metadata = match fs::symlink_metadata(&path) {
+                    Ok(metadata) if metadata.is_file() => metadata,
+                    Ok(_) => return Err("Nonregular verification plan refused".into()),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        truncated = true;
+                        continue;
+                    }
+                    Err(error) => return Err(error.to_string()),
+                };
+                entries.push((
+                    metadata.modified().map_err(|e| e.to_string())?,
+                    entry.path(),
+                ));
+                entries.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+                if entries.len() > PROJECTION_MAX_ITEMS {
+                    entries.pop();
+                    truncated = true;
+                }
             }
-            let entry = entry.map_err(|e| e.to_string())?;
-            if !entry.file_type().map_err(|e| e.to_string())?.is_dir() {
-                continue;
-            }
-            let metadata = entry.metadata().map_err(|e| e.to_string())?;
-            entries.push((
-                metadata.modified().map_err(|e| e.to_string())?,
-                entry.path(),
-            ));
+            *history = Some(RecentPlans {
+                paths: entries.into_iter().map(|(_, path)| path).collect(),
+                truncated,
+            });
         }
-        entries.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-        truncated |= entries.len() > PROJECTION_MAX_ITEMS;
+        let snapshot = history.as_ref().unwrap().clone();
+        drop(history);
+        let mut truncated = snapshot.truncated;
         let mut recent = Vec::new();
-        for (_, directory) in entries.into_iter().take(PROJECTION_MAX_ITEMS) {
+        for directory in snapshot.paths {
             if !directory.join("plan.json").exists() {
                 // A crash between directory creation and plan publication is not
                 // acceptance and must not suppress all other readonly observations.
@@ -400,6 +429,10 @@ impl Controller {
             };
             let directory = self.verification_directory(&request.verification_key, true)?;
             durable_new(&directory.join("plan.json"), &plan)?;
+            *self
+                .verification_history
+                .lock()
+                .map_err(|_| "Verification index poisoned")? = None;
         }
         let key = request.verification_key.clone();
         let spawn = self
@@ -779,6 +812,53 @@ mod tests {
             plan.request
         );
         assert!(directory.join("interruption.json").exists());
+    }
+    #[test]
+    fn recent_index_keeps_newest_admissions_beyond_128_and_rebuilds_after_reopen() {
+        let temp = tempfile::tempdir().unwrap();
+        let config = serde_json::from_value(json!({"schemaVersion":1,"instanceId":"verification-history","nodeId":"controller","stateDirectory":temp.path().join("state"),"controller":{"listenAddress":"127.0.0.1:1143","workerNodeId":"worker"},"projects":[]})).unwrap();
+        let owner = Controller::new(config).unwrap();
+        let receipt: PairVerification =
+            serde_json::from_str(include_str!("../../../tests/fixtures/readiness/pair.json"))
+                .unwrap();
+        for index in 0..140 {
+            let key = format!("verification-{index:04}");
+            let directory = owner.verification_directory(&key, true).unwrap();
+            let request = FencedRequest {
+                request_contract_version: 2,
+                context: receipt.identity.context.clone(),
+                request: LocalRequest::Info,
+            };
+            let plan = Plan {
+                request: VerifyPairRequest {
+                    verification_key: key,
+                    identity: receipt.identity.clone(),
+                },
+                adapter: build_identity(),
+                adapter_kind: ControllerAdapter::Mcp,
+                provider_request: request.clone(),
+                pair_request: request,
+                report_directory: temp.path().join("report"),
+            };
+            let path = directory.join("plan.json");
+            durable_new(&path, &plan).unwrap();
+            fs::File::open(path)
+                .unwrap()
+                .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(index))
+                .unwrap();
+        }
+        let assert_latest = |owner: &Controller| {
+            let (recent, truncated) = owner.recent_verifications().unwrap();
+            assert!(truncated);
+            assert_eq!(recent.len(), PROJECTION_MAX_ITEMS);
+            assert_eq!(recent[0].2.verification_key, "verification-0139");
+            assert_eq!(recent[9].2.verification_key, "verification-0130");
+        };
+        assert_latest(&owner);
+        assert_latest(&owner);
+        // The index is disposable. Durable plans remain the source after restart.
+        *owner.verification_history.lock().unwrap() = None;
+        assert_latest(&owner);
     }
     #[test]
     fn immutable_records_dedup_and_detect_partial_replaced_and_future_data() {
