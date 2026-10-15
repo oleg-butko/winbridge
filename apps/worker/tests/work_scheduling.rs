@@ -74,6 +74,18 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
             worker: worker.clone(),
             ids: Vec::new(),
         };
+        let server = tokio::spawn(winbridge_worker::serve(worker.clone()));
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            match winbridge_transport::call(&endpoint, &LocalRequest::Info).await {
+                Ok(LocalResponse::Info { .. }) => break,
+                result => {
+                    assert!(Instant::now() < deadline, "IPC startup: {result:?}");
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }
+        }
+        let admissions_started = Instant::now();
         let mut ids = BTreeMap::new();
         for project in ["a", "b", "c"] {
             for n in 0..15 {
@@ -83,7 +95,7 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
                         request_id: format!("{project}-{n}"),
                         idempotency_key: format!("{project}-{n}"),
                         project_id: project.into(),
-                        timeout_ms: 15000,
+                        timeout_ms: 120000,
                         snapshot_id: None,
                         command: CommandSource::Direct {
                             executable: env!("CARGO_BIN_EXE_winbridge-fixture").into(),
@@ -99,7 +111,10 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
                 owner.ids.push(task.task_id);
             }
         }
-        let server = tokio::spawn(winbridge_worker::serve(worker.clone()));
+        eprintln!(
+            "work pool {limit:?}: 45 admissions in {:?}",
+            admissions_started.elapsed()
+        );
         let expected = limit.unwrap_or(3) as u32;
         until(|| {
             observation(&worker).occupied_slots == expected
@@ -109,13 +124,22 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
                     .all(|p| started(&worker, &ids[&(*p, 0)]))
         })
         .await;
+        eprintln!(
+            "work pool {limit:?}: initial slots ready in {:?}",
+            admissions_started.elapsed()
+        );
+        let probe_started = Instant::now();
         let LocalResponse::Info { info } =
             winbridge_transport::call(&endpoint, &LocalRequest::Info)
                 .await
-                .unwrap()
+                .unwrap_or_else(|error| panic!("work pool {limit:?}: loaded IPC probe failed after {:?}; server finished={}: {error}", probe_started.elapsed(), server.is_finished()))
         else {
             panic!("native IPC Info");
         };
+        eprintln!(
+            "work pool {limit:?}: loaded IPC Info in {:?}",
+            probe_started.elapsed()
+        );
         let view = interpret_work_scheduling(&info).unwrap();
         assert_eq!(view.occupied_slots, expected);
         assert_eq!(view.queued_operations, 45 - expected);

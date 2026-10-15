@@ -90,3 +90,10 @@ admissions для limit 1/2/legacy, native local IPC API и workflow readiness h
 counts/cancel/freshness) и полным прежним browser scenario. Linux/Windows Clippy,
 typecheck/build и отдельный desktop locked metadata resolution прошли.
 Native Windows gate и actual installed новый pool пока не выполнены.
+
+Первый native run `20261015-060547-6ba88f51`: policy/transaction/operation
+группы прошли, pool test получил timeout первого local IPC Info под backlog.
+Рабочий установленный worker остался здоров/idle. Тест теперь отдельно проверяет
+готовность IPC до admissions и пишет времена admissions/initial slots/loaded
+Info; fixture timeout 120 s отделён от 10 s IPC deadline. Это диагностический
+повтор, не доказательство исправления scheduler; результаты ожидаются.
