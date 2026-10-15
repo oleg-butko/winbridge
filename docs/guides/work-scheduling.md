@@ -1,8 +1,8 @@
 # Общий лимит работ — A4.1
 
-Кандидат 2026-10-15 прошёл [57 native Windows tests и desktop check](../plans/architecture-transition/windows-work-scheduling-gate-2026-10-15.md).
-Новая установленная Windows версия ещё ожидается; текущие рабочие настройки
-не изменены. [Порядок обновления](../validation/architecture-worker-update.md).
+A4.1 завершён 2026-10-15: [native candidate](../plans/architecture-transition/windows-work-scheduling-gate-2026-10-15.md)
+и [установленный Windows exe/MCP/UI](../plans/architecture-transition/windows-work-scheduling-installed-2026-10-15.md)
+проверены. Текущие рабочие настройки не изменены; общий лимит по умолчанию выключен.
 
 WinBridge может ограничивать число одновременно исполняемых команд и импортов
 во всех проектах. Без настройки сохраняется прежний режим: один изменяющий

@@ -1,7 +1,7 @@
 # A4 — поэтапная очередь и общая нагрузка
 
 2026-10-15. Зависимость: A3 actual installed gate завершён. Первый пакет A4.1
-начат; весь A4 не объявляется реализованным заранее.
+завершён; весь A4 не объявляется реализованным заранее.
 
 ## A4.1: work slots и выбор готовых проектов
 
@@ -89,7 +89,7 @@ admissions для limit 1/2/legacy, native local IPC API и workflow readiness h
 прошли на Debian. UI проверен отдельно с настоящим Unix worker (limit 1, queued
 counts/cancel/freshness) и полным прежним browser scenario. Linux/Windows Clippy,
 typecheck/build и отдельный desktop locked metadata resolution прошли.
-Native Windows candidate gate завершён; actual installed новый pool ещё ожидается.
+Native Windows candidate и [actual installed pool/MCP/UI gate](windows-work-scheduling-installed-2026-10-15.md) завершены.
 [Отчёт и границы проверки](windows-work-scheduling-gate-2026-10-15.md).
 
 Первый native run `20261015-060547-6ba88f51`: policy/transaction/operation

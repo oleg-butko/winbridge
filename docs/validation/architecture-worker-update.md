@@ -1,4 +1,11 @@
-# Текущее обновление: A4.1 — 2026-10-15
+# A4.1 — установленная версия проверена, 2026-10-15
+
+Worker `7e49cfc` прошёл [actual installed pool/MCP/UI gate](../plans/architecture-transition/windows-work-scheduling-installed-2026-10-15.md).
+Обновлять runtime сейчас не нужно. Desktop можно держать закрытым; worker оставить
+работать для следующих автоматических тестов. Рабочий общий лимит не включался.
+Ниже сохранена инструкция уже выполненного обновления A4.1.
+
+# Выполненное обновление A4.1 — 2026-10-15
 
 [57 native tests, desktop compile и проверка очереди трёх проектов](../plans/architecture-transition/windows-work-scheduling-gate-2026-10-15.md)
 прошли. Controller Debian обновлён, его actual RPC2 пара с установленным `a8cf019`

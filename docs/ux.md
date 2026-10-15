@@ -143,11 +143,11 @@ Task/import/workflow/application показываются вместе со scop
 новый контракт ему не отправляется. Windows candidate прошёл 48 tests и desktop compile; actual installed MCP/IPC/reconnect и renderer также проверены автоматически.
 
 
-## Общая нагрузка A4.1 — кандидат
+## Общая нагрузка A4.1 — проверена
 
 [Native gate](plans/architecture-transition/windows-work-scheduling-gate-2026-10-15.md)
-пройден; сводка станет доступна после обновления worker/desktop. Рабочий лимит
-автоматически не включается.
+и [actual installed renderer gate](plans/architecture-transition/windows-work-scheduling-installed-2026-10-15.md)
+пройдены. Рабочий лимит автоматически не включается.
 
 Сводка показывает включён ли общий лимит, занятые слоты, ожидание и неопределённое
 освобождение. Причины ожидания сохраняются в общем журнале. Workflow занимает work

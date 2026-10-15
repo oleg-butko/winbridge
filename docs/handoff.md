@@ -1,3 +1,22 @@
+## A4.1 завершён; следующий A4.2 backlog/pause, 2026-10-15
+
+[Installed gate и ревью](plans/architecture-transition/windows-work-scheduling-installed-2026-10-15.md)
+passed: actual worker `7e49cfc`, build `1792075647649211100`, generation
+`5cfc53f0-5cfc-435a-a50e-b8f2ee7fb4eb`, прежняя journal incarnation.
+Установленный exe без rebuild прошёл 3 isolated policies / 135 admissions:
+Info 7/5/5 ms, cancel 95/51/52 ms, cleanup slots 0, все test workers остановлены.
+Parent task `5ac141e6-de96-4011-9ac5-e6f2c545c4ab` succeeded/0; report SHA
+`8ca689487eee038e0e3d5b26483cc54be585e58633fc981dc3fb4c4dfba94ba3`.
+Production renderer прошёл actual Windows metadata/scopes/default/stale checks.
+Actual MCP pair receipt
+`b564d23d4d573535f65a9d072b496ab33bd93b4b1556716667170dd9b063f5ba`.
+Controller `bff20cd`, build `1792075089522830086`, current session
+`6dce72d4-229f-4cdd-aaa9-366e794a900e`; worker healthy/idle, configs прежние.
+Ревью atomic claims/physical release/fairness/workflow handoff важных ошибок не
+выявило. Исправлена harness FileShare ошибка, полный повтор прошёл.
+Desktop не нужен, UI окон нет; worker оставить. Новое обновление пока не требуется.
+Full A4 открыт: следующая A4.2 bounded root admission + раздельная pause.
+
 ## A4.1 — native gate готов, нужен installed update, 2026-10-15
 
 [Отчёт](plans/architecture-transition/windows-work-scheduling-gate-2026-10-15.md),
