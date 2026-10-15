@@ -921,6 +921,9 @@ impl Worker {
                     worker.active_jobs.fetch_sub(1, Ordering::AcqRel);
                 });
             }
+            // This Store lock excludes local completions for the entire project pass.
+            // Inspect the pool once rather than rescanning the queue for each task.
+            let capacity_wait = store.work_capacity_wait()?;
             for task in tasks
                 .iter()
                 .filter(|t| {
@@ -942,6 +945,21 @@ impl Worker {
                             && r.accepted_at_ms < task.accepted_at_ms
                     })
                 {
+                    continue;
+                }
+                // A blocked operation is not ready to launch. Windows path validation
+                // is expensive; repeating it for every queued task can starve IPC.
+                // This is only a preflight: claim_task still checks atomically.
+                if let Some(reason) = capacity_wait.as_deref() {
+                    if task.reason.as_deref()
+                        != Some(reason.strip_prefix("resource busy:").unwrap().trim())
+                    {
+                        store.note_resource_wait(
+                            store::OperationKind::Task,
+                            &task.task_id,
+                            reason,
+                        )?;
+                    }
                     continue;
                 }
                 // Revalidate real paths at launch; never run against a silently changed root/cwd.
@@ -1480,6 +1498,7 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
         .as_ref()
         .map(|_| NetworkTask(tokio::spawn(network::connect(Arc::clone(&worker)))));
     let mut interval = tokio::time::interval(Duration::from_millis(25));
+    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let shutdown = tokio::signal::ctrl_c();
     tokio::pin!(shutdown);
     loop {

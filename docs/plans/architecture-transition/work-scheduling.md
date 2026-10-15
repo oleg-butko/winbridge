@@ -93,7 +93,15 @@ Native Windows gate и actual installed новый pool пока не выпол
 
 Первый native run `20261015-060547-6ba88f51`: policy/transaction/operation
 группы прошли, pool test получил timeout первого local IPC Info под backlog.
-Рабочий установленный worker остался здоров/idle. Тест теперь отдельно проверяет
-готовность IPC до admissions и пишет времена admissions/initial slots/loaded
-Info; fixture timeout 120 s отделён от 10 s IPC deadline. Это диагностический
-повтор, не доказательство исправления scheduler; результаты ожидаются.
+Рабочий установленный worker остался здоров/idle. Для диагностики тест отдельно
+проверял готовность IPC до admissions и писал времена admissions/initial slots/loaded
+Info; fixture timeout 120 s отделён от 10 s IPC deadline. Диагностический run
+`20261015-102946-8f40dd67` прошёл 57 tests/desktop check, но обнаружил 9.5 s
+loaded Info при limit 1. Такой запас до 10 s deadline недостаточен.
+
+Исправление: advisory capacity check перед дорогой Windows path validation;
+actual claim по-прежнему повторяет проверку внутри BEGIN IMMEDIATE. При полном
+pool повторная запись неизменившейся wait reason пропускается. Timer пропускает
+missed ticks вместо очереди устаревших проходов. Regression снова стартует с 45
+durable queued admissions без прогрева IPC и требует Info быстрее 5 s; времена
+сохраняются в checksummed native proof. Исправленный Windows gate ещё ожидается.

@@ -224,6 +224,7 @@ def main():
         archive_has_projection = 'winbridge/crates/protocol/tests/projection.rs' in archive.namelist()
         archive_has_operations = 'winbridge/apps/worker/tests/operations.rs' in archive.namelist()
         archive_has_work_scheduling = 'winbridge/apps/worker/tests/work_scheduling.rs' in archive.namelist()
+        archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
@@ -452,6 +453,8 @@ exit $nativeExit
             scenarios = scheduling.get('scenarios', [])
             if not scheduling.get('passed') or scheduling.get('platform') != 'windows' or scheduling.get('build') != proof['candidateBuild'] or [s['maxConcurrentWork'] for s in scenarios] != [1, 2, None] or any(s['admissions'] != 45 or s['cleanupSlots'] != 0 or s['initialSlots'] != (s['maxConcurrentWork'] or 3) or not s['context']['journalIncarnation'] for s in scenarios):
                 raise RuntimeError('Incomplete actual native three-project capacity proof')
+            if archive_checks_work_latency and any(s.get('prequeuedStartup') is not True or type(s.get('ipcInfoMs')) is not int or not 0 <= s['ipcInfoMs'] < 5000 for s in scenarios):
+                raise RuntimeError('Native prequeued startup/loaded IPC responsiveness proof missing')
     if args.profiles_only:
         proof = json.loads((report / 'profiles-proof.json').read_text())
         tasks = proof['completed']

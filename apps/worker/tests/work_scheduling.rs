@@ -74,17 +74,6 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
             worker: worker.clone(),
             ids: Vec::new(),
         };
-        let server = tokio::spawn(winbridge_worker::serve(worker.clone()));
-        let deadline = Instant::now() + Duration::from_secs(15);
-        loop {
-            match winbridge_transport::call(&endpoint, &LocalRequest::Info).await {
-                Ok(LocalResponse::Info { .. }) => break,
-                result => {
-                    assert!(Instant::now() < deadline, "IPC startup: {result:?}");
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
-            }
-        }
         let admissions_started = Instant::now();
         let mut ids = BTreeMap::new();
         for project in ["a", "b", "c"] {
@@ -115,6 +104,8 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
             "work pool {limit:?}: 45 admissions in {:?}",
             admissions_started.elapsed()
         );
+        // Exercise startup with the entire backlog already durable, without warming IPC.
+        let server = tokio::spawn(winbridge_worker::serve(worker.clone()));
         let expected = limit.unwrap_or(3) as u32;
         until(|| {
             observation(&worker).occupied_slots == expected
@@ -139,6 +130,11 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
         eprintln!(
             "work pool {limit:?}: loaded IPC Info in {:?}",
             probe_started.elapsed()
+        );
+        let ipc_info_ms = probe_started.elapsed().as_millis() as u64;
+        assert!(
+            ipc_info_ms < 5000,
+            "loaded IPC must retain margin below its 10 s timeout"
         );
         let view = interpret_work_scheduling(&info).unwrap();
         assert_eq!(view.occupied_slots, expected);
@@ -211,7 +207,7 @@ async fn actual_three_project_capacity_fairness_old_backlog_cancel_and_native_ip
         }
         until(|| worker.is_idle()).await;
         assert_eq!(observation(&worker).occupied_slots, 0);
-        scenarios.push(serde_json::json!({"maxConcurrentWork":limit,"admissions":45,"initialSlots":view.occupied_slots,"cancelMs":cancel_ms,"cleanupSlots":0,"context":view.context}));
+        scenarios.push(serde_json::json!({"maxConcurrentWork":limit,"admissions":45,"initialSlots":view.occupied_slots,"ipcInfoMs":ipc_info_ms,"prequeuedStartup":true,"cancelMs":cancel_ms,"cleanupSlots":0,"context":view.context}));
         worker.stop();
         server.await.unwrap().unwrap();
         drop(owner);

@@ -41,6 +41,15 @@ impl Store {
         }
         Ok(())
     }
+    /// Advisory only: avoid expensive path resolution while the durable pool is full.
+    /// The actual claim must recheck capacity in its BEGIN IMMEDIATE transaction.
+    pub(crate) fn work_capacity_wait(&self) -> Result<Option<String>> {
+        match Self::require_work_capacity(&self.connection, self.work_scheduling.as_ref()) {
+            Ok(()) => Ok(None),
+            Err(reason) if reason.starts_with("resource busy:") => Ok(Some(reason)),
+            Err(error) => Err(error),
+        }
+    }
     pub(crate) fn fair_projects(&self, projects: &[String]) -> Result<Vec<String>> {
         let mut statement = self
             .connection
