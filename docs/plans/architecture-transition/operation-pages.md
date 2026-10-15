@@ -45,11 +45,12 @@ bounded pages, actual route/readonly UI и Windows native query.
 и schema hash, controller API/CLI/MCP и desktop page. 316 workspace tests и
 отдельная negotiation regression прошли; Linux/Windows-target Clippy,
 TypeScript/build, полный browser scenario с actual Unix worker прошли.
-Нативный Windows gate и installed new/new read-model route ещё ожидаются.
+[Нативный Windows gate](windows-operation-pages-gate-2026-10-15.md) прошёл: 48 tests/desktop compile; installed new/new read-model route ещё ожидается.
 RPC 1/2 не расширены. Protocol-2 schema SHA-256 остаётся
 `dd86d35b8b9ed59aca0bb438491e906b9c25c69970f0121226fdee99b98e9a12`.
 
 Для CLI: `winbridge-controller --config PATH operations REQUEST.json`.
+Путь к REQUEST.json должен быть абсолютным.
 MCP tool: `winbridge_operations`. Вход одинаковый:
 
 ```json

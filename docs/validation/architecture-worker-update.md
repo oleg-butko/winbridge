@@ -1,3 +1,36 @@
+# Текущее обновление: A3.3 — 2026-10-15
+
+Новый общий журнал требует `winbridge.operation-read-model` v1 в worker и нового
+UI в desktop. Установленный `35b716a` исправен; новый контракт в нём отсутствует.
+[48 нативных тестов и desktop compile](../plans/architecture-transition/windows-operation-pages-gate-2026-10-15.md)
+прошли автоматически. Controller Debian уже обновлён и работает; ручной UI checklist
+не нужен. Полный A3 закроется после автоматической проверки установленной пары.
+
+Точный ZIP и SHA-256 сообщает агент; актуальная запись находится в
+`K:\VMs\shared\WinBridge\sources\architecture-update.latest.json`.
+Берите ZIP из этой записи, а не из исторических разделов ниже.
+
+1. Закройте desktop и остановите worker через Ctrl+C.
+2. Обновите `K:\_proj-26\winbridge\src` содержимым каталога `winbridge` из ZIP.
+   Существующие local configs, `target`, `.winbridge` и runtime journal сохраняются.
+3. В PowerShell выполните без `-SkipBuild`:
+
+   ```powershell
+   Set-Location K:\_proj-26\winbridge\src
+   .\scripts\prepare-windows-snapshot.ps1
+   ```
+
+4. Запущенный desktop можно закрыть; worker оставьте работать и сообщите об обновлении.
+   Агент сам проверит actual build/schema, страницы через IPC/WS/CLI/MCP и UI.
+
+Сборка остаётся в `src`, exe в постоянном `K:\_proj-26\winbridge\runtime`:
+новый firewall path не создаётся. Journal schema 12 и RPC 1/2 сохраняются,
+новая миграция БД не требуется. Пакет содержит проверенный runtime code; позднейшие
+изменения — документация. Квитанция новой установленной пары появится после её
+реальной проверки, а не заранее из отчёта кандидата.
+
+## История обновлений
+
 # Обновление для A3.2c — 2026-10-14
 
 Новая сводка «Совместимость компонентов» требует поддержки readonly projection 1

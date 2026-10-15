@@ -1,19 +1,30 @@
-## A3.3 — кандидат согласованного read model, 2026-10-15
+## A3.3 — проверенный кандидат; требуется installed update, 2026-10-15
 
-[Контракт и ограничения](plans/architecture-transition/operation-pages.md).
-Одна SQLite read transaction объединяет task/import/workflow/application,
-revision/event decimal strings, причины, связанные IDs и ресурсы. Scoped keyset
-cursor закрепляет фильтры и admission watermarks. Новый readonly extension
-transport согласуется по exact contract/schema; frozen RPC 1/2 и schema 12 прежние.
-Подключены worker IPC/WS, controller API/CLI/MCP `winbridge_operations`, desktop
-и общий журнал. Unknown/foreign replies и cursor rebind отвергаются.
-316 workspace tests, отдельная negotiation regression, Linux/Windows-target
-Clippy, typecheck/build и полный actual Unix worker UI scenario прошли.
-Windows native gate и actual installed route ещё не выполнены для A3.3;
-готовность не объявлена заранее. Installed worker `35b716a` здоров, остаётся
-launcher для isolated candidate. Controller daemon пока `d817fe0`.
-Desktop можно держать закрытым, worker оставить работать; UI-окон не будет.
-Перед тяжёлой сборкой Debian free 29.6 GiB, incremental disabled.
+[Windows gate/report](plans/architecture-transition/windows-operation-pages-gate-2026-10-15.md):
+code `02970db`, run `20261015-050417-8b310ea9`, task
+`ce8a33b6-0380-487b-9955-ecdc158dfa26` succeeded/0; **48 native tests, 8 groups,
+desktop compile и 10 verified artifacts passed**. Первый run выявил пропущенный
+schemars в desktop lockfile; исправление и полный автоматический повтор прошли.
+316 workspace + negotiation regression, Linux/Windows Clippy, typecheck/build,
+actual Unix IPC/WS/CLI/MCP/UI прошли. RPC 1/2/schema 12 прежние.
+
+[Operation pages](plans/architecture-transition/operation-pages.md): четыре вида,
+one SQLite snapshot, scoped refs/revisions/reasons/resources, admission-fenced
+pagination; exact contract/schema negotiation и readonly extension handlers.
+MCP `winbridge_operations`, CLI и UI подключены. Actual installed worker `35b716a`
+здоров/idle, но новый контракт ещё не объявляет; запрос отвергнут до dispatch.
+Нужен [один update](validation/architecture-worker-update.md). Full A3 открыт;
+после actual new/new read-model gate — A4 queue/resources/fairness.
+
+Controller clean `545166d`, build `1792054890343016109`
+прошёл exact consumer proof и запущен, serve session `16347`,
+generation `ff109089-6ab5-4abc-a470-c9988b62576a`. Actual MCP pair
+`paired-20261015-050741-83112b53` и current Windows projection/browser passed,
+receipt `9e912c90128634cfe3a035e985ffb86a3e6ddd89b49aaaed00f2b27e2a536bfb`.
+Worker build/generation/incarnation прежние; session `c9ea293f-14a8-4205-a3a7-daf740120c23`.
+Desktop можно держать закрытым, worker оставить работать; тестовых окон нет.
+Debian free ~28 GiB, Windows ~52 GiB; incremental disabled, cache reused,
+пользовательские данные/Windows validation directories не очищались.
 
 ## A3.2 завершён; A3.3 начат, 2026-10-15
 
