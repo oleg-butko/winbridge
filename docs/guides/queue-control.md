@@ -1,7 +1,8 @@
 # Очередь и пауза — A4.2
 
-Кандидат в разработке, 2026-10-16. Проверка на Windows и обновление установленного
-worker ещё ожидаются. [План и инварианты](../plans/architecture-transition/queue-control.md).
+Кандидат проверен 2026-10-16: [69 Windows tests и desktop compile](../plans/architecture-transition/windows-queue-control-gate-2026-10-16.md).
+Обновление установленного worker и actual installed gate ещё ожидаются.
+[План и инварианты](../plans/architecture-transition/queue-control.md).
 
 WinBridge различает **приём запроса**, **начало запуска** и **завершение работы**.
 Общий лимит работ A4.1 ограничивает исполнителей. Лимит очереди ограничивает число
@@ -59,4 +60,5 @@ MCP `winbridge_info.info.contractCatalog.queueControl` содержит тот �
 недоступно. Повторные ключи и receipts сохраняются. RPC 1/2 не меняется;
 новая journal schema 13 содержит root index и состояние/квитанции паузы.
 Migration 12→13 создаёт consistent SQLite backup; прежний worker schema 12
-новую БД не открывает. До готового Windows gate рабочий journal не мигрируется.
+новую БД не открывает. Рабочий journal мигрируется только при обычном обновлении
+worker после готового Windows gate; историю, конфиги и журнал удалять не нужно.

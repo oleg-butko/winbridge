@@ -1,27 +1,45 @@
-## A4.2 — кандидат очереди и паузы, 2026-10-16
+## A4.2 — native candidate готов, нужно обновление worker, 2026-10-16
 
-[План и повторное ревью](plans/architecture-transition/queue-control.md),
-[пользовательская семантика](guides/queue-control.md). Bounded root admission
-проверяется внутри BEGIN IMMEDIATE после existing-key и до record/root index/ACK.
-Task/import/workflow считаются один раз; workflow children не занимают root quota.
-Durable QueueMode, CAS revision + command receipt в одной transaction; pause
-не останавливает уже начатого owner. Local-only typed IPC, readonly MCP metadata,
-UI сохраняет command ID/scope/revision до отправки и не исполняет restore.
-Schema 13 создаёт consistent backup schema 12; working journal не мигрировался.
+[Отчёт и ревью](plans/architecture-transition/windows-queue-control-gate-2026-10-16.md),
+[план](plans/architecture-transition/queue-control.md),
+[поведение](guides/queue-control.md),
+[инструкция обновления](validation/architecture-worker-update.md).
+Code `29dba9a`: transactional bounded root admission, durable QueueMode, CAS revision
+и immutable receipts; local-only typed IPC и readonly MCP metadata. Workflow children
+не занимают root quota; dispatch pause не останавливает начатого owner. UI сохраняет
+исходный command/scope/revision до send, lost ACK/reopen не исполняют новую команду.
+Schema 13 создаёт consistent backup schema 12; working journal пока не мигрировался.
 
-336 workspace tests до последнего receipt regression, final core/protocol/store/
-runtime checks, 46 Rust/TS metadata cases, Linux/Windows Clippy, typecheck/build,
-actual Unix queue UI и полный прежний UI regression прошли. Следует clean committed
-workspace/consumer proof и isolated native Windows gate; candidate ещё не installed.
-Ревью исправило fairness для queued tasks удалённого project, добавлены rollback,
-concurrent admission/CAS, child exemption, restart и malformed receipt tests.
+**337 clean workspace tests**, 46 shared Rust/TS cases, Linux/Windows Clippy,
+contracts/typecheck/build, actual Unix queue UI и полный прежний UI regression passed.
+Ревью исправило fairness для queued tasks удалённого project; rollback, concurrent
+admission/CAS, child exemption, restart и malformed receipt проверены.
+Native run `20261016-194546-f0e20b76`, task `0d86baed-b6c4-4349-a3bc-e8b77d74363c`
+succeeded/0: **69 tests / 16 groups, desktop compile, 20 verified artifacts passed**.
+Report SHA `b0bd8dac7210b9556d62e8e7bfac957a464eeed3f184c1d79ddcbc32791ed5ce`.
+Readonly recheck сохранённого run тоже прошёл; новой задачи/сборки не создавал.
+Previous schema-12 exe сохранён в local Windows run для будущего
+`--queue-reference-worker`; path/SHA находятся в report.queueReferenceWorker.
 
-После Debian restart запущен проверенный controller `bff20cd`, serve `50751`;
-worker `7e49cfc` подключён, healthy/idle, generation
-`c2320f8e-e903-4668-8699-48e83e13f413`, journal incarnation прежняя.
-Desktop не нужен, тестовых Windows UI окон не будет. Production budgets не менялись.
-Debian около 26 GiB free, incremental выключен, основной target переиспользуется.
-Локальный codex-session transcript оставлен на месте и исключён из Git/export.
+Controller clean `29dba9a`, build `1792194184549633653`, consumer artifact SHA
+`c36d56200ec0d67f3b9d0c3c6c3f557205f76a91cc61089a5ff66beccba9e3e5` совпал с proof
+и `/proc/PID/exe`; serve `7327`, PID 31211, session
+`90f93baa-71b1-4b3c-9287-8c83c41a3690`. Прежний bff20cd artifact сохранён,
+shutdown graceful; endpoints/configs прежние. Actual MCP RPC2 pair с `7e49cfc`
+прошла; receipt `c0ef052edcdcd86cc417fa51e03eca634b872963407cf323573adc8c56055e45`.
+Installed worker generation `c2320f8e-e903-4668-8699-48e83e13f413`, journal
+incarnation `5a8eb173-4193-4332-b00f-67e3850b2c97` прежние, healthy/idle.
+Queue-control contract у installed старого provider отсутствует — не включён заранее.
+
+Достигнута согласованная граница: нужен один обычный update worker/desktop, затем
+actual installed metadata/control/receipt gate автоматически. ZIP и SHA брать из
+`K:\VMs\shared\WinBridge\sources\architecture-update.latest.json`.
+Production quotas не менять. Desktop можно закрыть, worker оставить до обновления;
+тестовых UI окон нет. Full A4 открыт: A4.3 resource sets, A4.4 independent consumers.
+Debian before build 28,365,783,040 bytes free, Windows before/after
+49,530,875,904 / 47,879,094,272 bytes; incremental выключен, caches переиспользованы,
+Windows directories не удалялись. Локальный codex-session transcript не менялся,
+исключён из Git/export. После native gate изменены только docs.
 
 ## A4.1 завершён; следующий A4.2 backlog/pause, 2026-10-15
 

@@ -163,4 +163,5 @@ work slots: один workflow считается один раз. Приём и 
 UI показывает реальную ревизию и время среза, не оптимистичный результат кнопки.
 Lost ACK сохраняет исходную команду до отправки и после открытия окна; восстановление
 не исполняет запрос. Stale revision требует нового явного решения. Unknown scope,
-offline и read-only запрещают управление. Native candidate gate ещё ожидается.
+offline и read-only запрещают управление. [69 native tests и desktop compile](plans/architecture-transition/windows-queue-control-gate-2026-10-16.md)
+прошли; actual installed управление ожидает обновления worker/desktop.

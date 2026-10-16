@@ -1,7 +1,8 @@
 # A4.2 — bounded root admission и durable pause
 
 2026-10-15. A4.1 installed gate и последующее ревью завершены. Этот план
-проверен до реализации; A4.2 пока не считается готовым.
+проверен до реализации. Кандидат A4.2 прошёл [native gate 2026-10-16](windows-queue-control-gate-2026-10-16.md);
+actual installed новый контракт ожидает обновления worker/desktop.
 
 ## Контракт и владение
 

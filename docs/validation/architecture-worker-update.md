@@ -1,8 +1,46 @@
+# Обновление A4.2 — очередь и пауза, 2026-10-16
+
+[69 native Windows tests, desktop compile и 20 проверенных файлов отчёта](../plans/architecture-transition/windows-queue-control-gate-2026-10-16.md)
+прошли. Debian controller обновлён; actual RPC2 пара со старым worker проверена.
+Установленный `7e49cfc` исправен, но не поддерживает `winbridge.queue-control` v1.
+Для проверки новой функции на установленном runtime нужен один update worker/desktop.
+
+Точный ZIP и SHA-256 сообщает агент; актуальная запись:
+`K:\VMs\shared\WinBridge\sources\architecture-update.latest.json`.
+Используйте ZIP из этой записи, а не исторические пакеты ниже.
+
+1. Закройте desktop и остановите прежний worker через Ctrl+C.
+2. Обновите `K:\_proj-26\winbridge\src` содержимым каталога `winbridge` из ZIP.
+   Существующие local configs, `target`, `.winbridge` и runtime journal сохраняются.
+3. Выполните без `-SkipBuild`:
+
+   ```powershell
+   Set-Location K:\_proj-26\winbridge\src
+   .\scripts\prepare-windows-snapshot.ps1
+   ```
+
+4. Запущенный desktop можно закрыть; worker оставьте работать и сообщите об обновлении.
+   Агент автоматически проверит actual build/schema/metadata и установленный exe
+   с изолированной тестовой queue, затем продолжит A4. Ручной UI checklist не нужен.
+
+Сборка остаётся в `src`, exe — в постоянном `K:\_proj-26\winbridge\runtime`;
+новый firewall path не создаётся. Рабочие quotas автоматически не задаются,
+начальный режим новой queue running. [Семантика очереди и двух pause](../guides/queue-control.md).
+
+Journal migration 12→13 автоматически создаёт consistent SQLite backup
+`journal-v12-<time>-<uuid>.sqlite` рядом с журналом, сохраняет историю и keys.
+Старый worker новую schema 13 не открывает: откат не состоит в простой подмене exe,
+требуется отдельное согласованное восстановление журнала и физических owners.
+RPC 1/2 сохранены. Пакет содержит проверенный runtime code; дальнейший commit
+добавляет документацию. Новый installed контракт не объявляется проверенным заранее.
+
+## История обновлений
+
 # A4.1 — установленная версия проверена, 2026-10-15
 
 Worker `7e49cfc` прошёл [actual installed pool/MCP/UI gate](../plans/architecture-transition/windows-work-scheduling-installed-2026-10-15.md).
-Обновлять runtime сейчас не нужно. Desktop можно держать закрытым; worker оставить
-работать для следующих автоматических тестов. Рабочий общий лимит не включался.
+На момент завершения A4.1 обновлять runtime не требовалось. Desktop можно было
+держать закрытым, worker — оставить для автоматических тестов. Общий лимит не включался.
 Ниже сохранена инструкция уже выполненного обновления A4.1.
 
 # Выполненное обновление A4.1 — 2026-10-15

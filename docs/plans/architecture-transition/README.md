@@ -41,7 +41,15 @@ A3.1 завершён: 286 workspace tests, 24 Rust/TS cases и
 [203 native tests/desktop compile](windows-discovery-gate-2026-10-14.md) passed.
 [A3.2a foundation](readiness-foundation.md) завершён: identities, create-only
 evidence, loaded policy и schema hashes; [39 native tests/desktop check](windows-readiness-gate-2026-10-14.md) passed;
-[полный A3.2](paired-readiness.md) и A3.3 ещё открыты.
+[полный A3.2](paired-readiness.md) и A3.3 завершены; последняя
+[проверка установленного read model](windows-operation-pages-installed-2026-10-15.md)
+прошла автоматически. A4.1 также завершён: [установленный work pool, MCP и UI](windows-work-scheduling-installed-2026-10-15.md).
+На 2026-10-16 [A4.2 — bounded root admission и durable pause](queue-control.md)
+реализован в кандидате `29dba9a`: 337 workspace tests, реальные Unix IPC/UI,
+совместимость Rust/TypeScript и [69 native tests/desktop compile](windows-queue-control-gate-2026-10-16.md)
+прошли. Installed gate ожидает обновления Windows worker/desktop.
+Full resource sets A4.3 и независимые consumers A4.4 остаются
+следующими пакетами; полный A4 открыт.
 
 ## Результат для пользователя и проектов
 
