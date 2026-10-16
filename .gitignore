@@ -1,4 +1,5 @@
 /target/
+/codex-session-*.md
 /node_modules/
 /web-dist/
 /release/

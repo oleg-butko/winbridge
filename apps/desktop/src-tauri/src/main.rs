@@ -196,6 +196,16 @@ async fn worker_rpc_fenced(
     winbridge_transport::call_fenced(address, &request).await.map_err(|e|format!("Ответ worker не подтверждён: {e}. Сохраните исходную incarnation и key; автоматического повтора нет"))
 }
 
+#[tauri::command]
+async fn queue_control(
+    window:tauri::WebviewWindow,
+    endpoint:tauri::State<'_,WorkerEndpoint>,
+    request:winbridge_protocol::QueueControlRequest,
+)->Result<winbridge_protocol::QueueControlResponse,String>{
+    main_only(&window)?;
+    winbridge_transport::queue_control(endpoint.0.as_ref().map_err(Clone::clone)?,&request).await
+}
+
 fn configured_endpoint() -> Result<String, String> {
     let executable =
         std::env::current_exe().map_err(|e| format!("desktop executable path: {e}"))?;
@@ -369,6 +379,7 @@ fn main() {
             save_diagnostic,
             worker_rpc,
             operation_page,
+            queue_control,
             worker_rpc_fenced,
             load_command_drafts,
             save_command_draft,

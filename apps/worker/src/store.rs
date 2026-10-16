@@ -22,10 +22,11 @@ pub use ownership::{
 mod domain_records;
 pub use domain_records::JournalSnapshot;
 mod operation_pages;
+mod queue_control;
 mod task_records;
 mod work_scheduling;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 12;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 13;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -43,6 +44,7 @@ pub struct Store {
     callback_attempt: Option<ExecutionToken>,
     read_only: bool,
     work_scheduling: Option<winbridge_protocol::WorkSchedulingPolicy>,
+    queue_policy: Option<winbridge_protocol::QueuePolicy>,
 }
 
 impl Store {
@@ -303,6 +305,24 @@ impl Store {
                 PRAGMA user_version=12;").map_err(sql)?;
             migration.commit().map_err(sql)?;
         }
+        if version <= 12 {
+            if version == 12 {
+                let backup = path.with_file_name(format!(
+                    "journal-v12-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            Self::migrate_queue_control(&migration)?;
+            migration.commit().map_err(sql)?;
+        }
         let authority = Self::read_authority(&connection)?;
         Ok(Self {
             connection,
@@ -310,6 +330,7 @@ impl Store {
             callback_attempt: None,
             read_only: false,
             work_scheduling: None,
+            queue_policy: None,
         })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {
@@ -360,8 +381,19 @@ impl Store {
         recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
     ) -> Result<TaskRecord> {
         self.guard_callback(None, None)?;
+        let queue_policy = self.loaded_queue_policy();
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
+        if let Some(existing) = Self::existing_task(&transaction, &request)? {
+            return Ok(existing);
+        }
+        Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
         let task = Self::accept_task_on(&transaction, request, command, snapshot, recipe_origin)?;
+        Self::insert_queue_root(
+            &transaction,
+            "task",
+            &task.task_id,
+            &task.submission.project_id,
+        )?;
         transaction.commit().map_err(sql)?;
         Ok(task)
     }

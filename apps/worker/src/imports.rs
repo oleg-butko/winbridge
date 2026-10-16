@@ -47,8 +47,19 @@ impl Store {
         workspace_path: String,
     ) -> Result<ImportRecord> {
         self.guard_callback(None, None)?;
+        let queue_policy = self.loaded_queue_policy();
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
+        if let Some(existing) = Self::existing_import_on(&transaction, &request)? {
+            return Ok(existing);
+        }
+        Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
         let import = Self::accept_import_on(&transaction, request, shared_path, workspace_path)?;
+        Self::insert_queue_root(
+            &transaction,
+            "import",
+            &import.import_id,
+            &import.submission.project_id,
+        )?;
         transaction.commit().map_err(sql)?;
         Ok(import)
     }

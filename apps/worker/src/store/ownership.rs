@@ -282,6 +282,7 @@ impl Store {
         let authority = self.authority.clone();
         let policy = self.work_scheduling.clone();
         let transaction = self.write_transaction(TransactionBehavior::Immediate)?;
+        Self::require_dispatch(&transaction)?;
         Self::require_work_capacity(&transaction, policy.as_ref())?;
         let observed = Self::read_task_snapshot(&transaction, id)?;
         let decision = Self::transition_task_on(&transaction, id, None, TaskEvent::LaunchIntent)?;
@@ -304,6 +305,7 @@ impl Store {
         let authority = self.authority.clone();
         let policy = self.work_scheduling.clone();
         let transaction = self.write_transaction(TransactionBehavior::Immediate)?;
+        Self::require_dispatch(&transaction)?;
         Self::require_work_capacity(&transaction, policy.as_ref())?;
         let mut observed = Self::read_domain::<ImportRecord>(&transaction, id)?;
         if observed.status != TaskStatus::Queued || observed.cancel_requested {

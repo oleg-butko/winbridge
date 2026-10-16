@@ -24,6 +24,9 @@ pub fn project_policy_catalog(
                 policy["workScheduling"] =
                     serde_json::to_value(scheduling).map_err(|e| e.to_string())?;
             }
+            if let Some(queue) = &config.queue_policy {
+                policy["queuePolicy"] = serde_json::to_value(queue).map_err(|e| e.to_string())?;
+            }
             let bytes = canonical_evidence_json(&policy).map_err(|e| e.to_string())?;
             Ok(ProjectPolicyFingerprint {
                 project_id: project.id.clone(),

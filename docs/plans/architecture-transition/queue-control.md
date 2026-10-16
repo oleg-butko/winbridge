@@ -86,3 +86,27 @@ Pause распространяется на выдачу нового claim, а 
 Отдельный local envelope сохраняет readonly контракт A3.3 и не требует брокера,
 Actor library или переделки execution foundation. Для будущего независимого
 Store writer нужна та же persisted policy generation, что описана в A4.1/A4.3.
+
+
+## Кандидат и дополнительное ревью — 2026-10-16
+
+Реализованы DTO/metadata reader, core admission policy, schema 13/root index,
+transactional root admission, durable QueueMode/CAS/receipts, local-only handler,
+transport/schema guard и desktop controls. Сохранение pending command до send
+проверяется readback; reopen не исполняет запрос. Receipt связывается с исходным
+command/context/revision; историческая квитанция не подменяет текущую revision.
+
+В initial local regression прошли 336 workspace tests; добавлен отдельный receipt
+binding regression. 46 общих Rust/TS cases, typecheck/build, Linux/Windows Clippy,
+actual Unix queue UI и полный прежний browser regression прошли. Fixtures ручного
+понижения schema обновлены: они удаляют schema-13 objects из synthetic DB.
+Найдена и исправлена очередь удалённого project при fairness; записанная задача
+получает обычный policy failure вместо вечного ожидания. Native tests сохраняют
+queue proof, включают explicit previous-worker schema refusal с тайм-аутом и
+новой тестовой БД. Старый exe сохраняется как checksummed local cache для будущих
+повторов после обновления runtime; Windows каталоги не удаляются.
+
+До native gate кандидат не считается установленным; рабочие configs/journal
+остаются прежними. Для повторного native gate после перехода установленного
+worker на schema 13 передавать `--queue-reference-worker` с сохранённым schema-12
+exe из успешного report.queueReferenceWorker, не новый рабочий runtime.

@@ -1,0 +1,501 @@
+{
+  "baseInfo": {
+    "protocolVersion": 1,
+    "instanceId": "legacy-fixture",
+    "nodeId": "fixture-windows",
+    "generation": "00000000-0000-4000-8000-000000000001",
+    "platform": "windows",
+    "runtimeValidation": "windows-native",
+    "projects": [],
+    "build": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": null,
+      "buildId": "scheduling-fixture"
+    },
+    "fencedRequests": {
+      "requestContractVersion": 2,
+      "context": {
+        "instanceId": "legacy-fixture",
+        "journalIncarnation": "journal"
+      },
+      "legacyMutationsAllowed": false
+    },
+    "contractCatalog": {
+      "schemaVersion": 1,
+      "provider": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": null,
+        "buildId": "scheduling-fixture"
+      },
+      "supported": [
+        {
+          "id": "winbridge.work-scheduling",
+          "version": 1
+        },
+        {
+          "id": "winbridge.queue-control",
+          "version": 1
+        }
+      ],
+      "workScheduling": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "maxConcurrentWork": 2,
+        "occupiedSlots": 2,
+        "uncertainSlots": 0,
+        "queuedOperations": 5,
+        "observedAtMs": 1792050000000,
+        "readOnly": false
+      },
+      "queueControl": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "revision": "7",
+        "mode": "paused",
+        "policy": {
+          "maxPendingRoots": 3,
+          "maxPendingRootsPerProject": 2
+        },
+        "pendingRoots": 3,
+        "projects": [
+          {
+            "projectId": "a",
+            "pendingRoots": 2
+          },
+          {
+            "projectId": "b",
+            "pendingRoots": 1
+          }
+        ],
+        "blockers": [
+          {
+            "code": "admission_paused"
+          },
+          {
+            "code": "dispatch_paused"
+          },
+          {
+            "code": "global_limit",
+            "limit": 3
+          },
+          {
+            "code": "project_limit",
+            "projectId": "a",
+            "limit": 2
+          }
+        ],
+        "lastCommandId": "user-pause",
+        "changedAtMs": 123,
+        "observedAtMs": 456,
+        "readOnly": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "known paused full queue",
+      "expected": true
+    },
+    {
+      "name": "version",
+      "pointer": "/contractCatalog/queueControl/schemaVersion",
+      "expected": false,
+      "value": 2
+    },
+    {
+      "name": "provider",
+      "pointer": "/contractCatalog/queueControl/provider/buildId",
+      "expected": false,
+      "value": "foreign"
+    },
+    {
+      "name": "scope",
+      "pointer": "/contractCatalog/queueControl/context/journalIncarnation",
+      "expected": false,
+      "value": "foreign"
+    },
+    {
+      "name": "revision leading zero",
+      "pointer": "/contractCatalog/queueControl/revision",
+      "expected": false,
+      "value": "01"
+    },
+    {
+      "name": "revision overflow",
+      "pointer": "/contractCatalog/queueControl/revision",
+      "expected": false,
+      "value": "9223372036854775808"
+    },
+    {
+      "name": "revision decimal number",
+      "pointer": "/contractCatalog/queueControl/revision",
+      "expected": false,
+      "value": 7
+    },
+    {
+      "name": "negative roots",
+      "pointer": "/contractCatalog/queueControl/pendingRoots",
+      "expected": false,
+      "value": -1
+    },
+    {
+      "name": "fraction roots",
+      "pointer": "/contractCatalog/queueControl/pendingRoots",
+      "expected": false,
+      "value": 3.1
+    },
+    {
+      "name": "sum mismatch",
+      "pointer": "/contractCatalog/queueControl/pendingRoots",
+      "expected": false,
+      "value": 4
+    },
+    {
+      "name": "empty project",
+      "pointer": "/contractCatalog/queueControl/projects/0/projectId",
+      "expected": false,
+      "value": ""
+    },
+    {
+      "name": "duplicate project",
+      "pointer": "/contractCatalog/queueControl/projects/1/projectId",
+      "expected": false,
+      "value": "a"
+    },
+    {
+      "name": "unknown mode",
+      "pointer": "/contractCatalog/queueControl/mode",
+      "expected": false,
+      "value": "future"
+    },
+    {
+      "name": "unknown field",
+      "pointer": "/contractCatalog/queueControl/future",
+      "expected": false,
+      "value": true
+    },
+    {
+      "name": "wrong blockers",
+      "pointer": "/contractCatalog/queueControl/blockers",
+      "expected": false,
+      "value": []
+    },
+    {
+      "name": "future blocker",
+      "pointer": "/contractCatalog/queueControl/blockers/0/code",
+      "expected": false,
+      "value": "future"
+    },
+    {
+      "name": "limit mismatch",
+      "pointer": "/contractCatalog/queueControl/blockers/2/limit",
+      "expected": false,
+      "value": 4
+    },
+    {
+      "name": "time overflow",
+      "pointer": "/contractCatalog/queueControl/observedAtMs",
+      "expected": false,
+      "value": 9007199254740992
+    },
+    {
+      "name": "readOnly type",
+      "pointer": "/contractCatalog/queueControl/readOnly",
+      "expected": false,
+      "value": "true"
+    },
+    {
+      "name": "missing body",
+      "pointer": "/contractCatalog/queueControl",
+      "expected": false,
+      "value": null
+    },
+    {
+      "name": "missing provider",
+      "pointer": "/contractCatalog/queueControl/provider",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing context",
+      "pointer": "/contractCatalog/queueControl/context",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing revision",
+      "pointer": "/contractCatalog/queueControl/revision",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing mode",
+      "pointer": "/contractCatalog/queueControl/mode",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing pendingRoots",
+      "pointer": "/contractCatalog/queueControl/pendingRoots",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing projects",
+      "pointer": "/contractCatalog/queueControl/projects",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing blockers",
+      "pointer": "/contractCatalog/queueControl/blockers",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing changedAtMs",
+      "pointer": "/contractCatalog/queueControl/changedAtMs",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing observedAtMs",
+      "pointer": "/contractCatalog/queueControl/observedAtMs",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "missing readOnly",
+      "pointer": "/contractCatalog/queueControl/readOnly",
+      "expected": false,
+      "remove": true
+    },
+    {
+      "name": "decimal version",
+      "pointer": "/contractCatalog/queueControl/schemaVersion",
+      "expected": true,
+      "value": 1.0
+    },
+    {
+      "name": "decimal roots",
+      "pointer": "/contractCatalog/queueControl/pendingRoots",
+      "expected": true,
+      "value": 3.0
+    },
+    {
+      "name": "decimal project count",
+      "pointer": "/contractCatalog/queueControl/projects/0/pendingRoots",
+      "expected": true,
+      "value": 2.0
+    },
+    {
+      "name": "decimal policy",
+      "pointer": "/contractCatalog/queueControl/policy/maxPendingRoots",
+      "expected": true,
+      "value": 3.0
+    },
+    {
+      "name": "decimal blocker",
+      "pointer": "/contractCatalog/queueControl/blockers/2/limit",
+      "expected": true,
+      "value": 3.0
+    },
+    {
+      "name": "readonly archive",
+      "pointer": "/contractCatalog/queueControl/readOnly",
+      "expected": true,
+      "value": true
+    },
+    {
+      "name": "large precise revision",
+      "pointer": "/contractCatalog/queueControl/revision",
+      "expected": true,
+      "value": "9223372036854775807"
+    },
+    {
+      "name": "invalid policy 0",
+      "pointer": "/contractCatalog/queueControl/policy/maxPendingRoots",
+      "expected": false,
+      "value": 0
+    },
+    {
+      "name": "invalid policy 10001",
+      "pointer": "/contractCatalog/queueControl/policy/maxPendingRoots",
+      "expected": false,
+      "value": 10001
+    },
+    {
+      "name": "invalid policy 1.2",
+      "pointer": "/contractCatalog/queueControl/policy/maxPendingRoots",
+      "expected": false,
+      "value": 1.2
+    },
+    {
+      "name": "invalid policy 3",
+      "pointer": "/contractCatalog/queueControl/policy/maxPendingRoots",
+      "expected": false,
+      "value": "3"
+    },
+    {
+      "name": "project limit exceeds global",
+      "pointer": "/contractCatalog/queueControl/policy/maxPendingRootsPerProject",
+      "expected": false,
+      "value": 4
+    },
+    {
+      "name": "mode running",
+      "pointer": "/contractCatalog/queueControl",
+      "expected": true,
+      "value": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "revision": "7",
+        "mode": "running",
+        "policy": null,
+        "pendingRoots": 0,
+        "projects": [],
+        "blockers": [],
+        "lastCommandId": "user-pause",
+        "changedAtMs": 123,
+        "observedAtMs": 456,
+        "readOnly": false
+      }
+    },
+    {
+      "name": "mode admission_paused",
+      "pointer": "/contractCatalog/queueControl",
+      "expected": true,
+      "value": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "revision": "7",
+        "mode": "admission_paused",
+        "policy": null,
+        "pendingRoots": 0,
+        "projects": [],
+        "blockers": [
+          {
+            "code": "admission_paused"
+          }
+        ],
+        "lastCommandId": "user-pause",
+        "changedAtMs": 123,
+        "observedAtMs": 456,
+        "readOnly": false
+      }
+    },
+    {
+      "name": "mode dispatch_paused",
+      "pointer": "/contractCatalog/queueControl",
+      "expected": true,
+      "value": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "revision": "7",
+        "mode": "dispatch_paused",
+        "policy": null,
+        "pendingRoots": 0,
+        "projects": [],
+        "blockers": [
+          {
+            "code": "dispatch_paused"
+          }
+        ],
+        "lastCommandId": "user-pause",
+        "changedAtMs": 123,
+        "observedAtMs": 456,
+        "readOnly": false
+      }
+    },
+    {
+      "name": "mode paused",
+      "pointer": "/contractCatalog/queueControl",
+      "expected": true,
+      "value": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "revision": "7",
+        "mode": "paused",
+        "policy": null,
+        "pendingRoots": 0,
+        "projects": [],
+        "blockers": [
+          {
+            "code": "admission_paused"
+          },
+          {
+            "code": "dispatch_paused"
+          }
+        ],
+        "lastCommandId": "user-pause",
+        "changedAtMs": 123,
+        "observedAtMs": 456,
+        "readOnly": false
+      }
+    }
+  ]
+}

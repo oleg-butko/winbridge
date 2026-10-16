@@ -8,6 +8,7 @@ pub mod desktop_state;
 pub mod diagnostics;
 pub mod notifications;
 pub mod profiles;
+pub mod queue_control;
 pub mod readiness;
 pub mod snapshot;
 pub mod task;

@@ -103,6 +103,7 @@ param(
     [switch]$ReadinessOnly,
     [switch]$TaskCasRuntimeDiagnostic,
     [string]$TaskCasReferenceWorker = '',
+    [string]$QueueReferenceWorker = '',
     [string]$BuildCacheRunId = '',
     [string]$BuildCacheReportSha256 = '',
     [string]$ProjectsPreparation = '',
@@ -155,6 +156,8 @@ $oldOutputReference = $env:WINBRIDGE_OUTPUT_REFERENCE_WORKER
 $oldTaskCasReference = $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER
 $oldTaskCasReport = $env:WINBRIDGE_TASK_CAS_REPORT
 $oldWorkSchedulingReport = $env:WINBRIDGE_WORK_SCHEDULING_REPORT
+$oldQueueControlReport = $env:WINBRIDGE_QUEUE_CONTROL_REPORT
+$oldQueueReferenceWorker = $env:WINBRIDGE_QUEUE_LEGACY_WORKER
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
 $oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
@@ -250,6 +253,14 @@ try {
         if ($NetwatchProfile) { throw 'ReadinessOnly requires an isolated scenario' }
         $env:WINBRIDGE_TASK_CAS_REPORT = $ReportDirectory
         $env:WINBRIDGE_WORK_SCHEDULING_REPORT = $ReportDirectory
+        $env:WINBRIDGE_QUEUE_CONTROL_REPORT = $ReportDirectory
+        if (-not $QueueReferenceWorker -or -not (Test-Path -LiteralPath $QueueReferenceWorker -PathType Leaf)) { throw 'Queue gate requires an explicit previous installed worker executable' }
+        $referenceCopy = Join-Path (Split-Path -Parent $source) 'previous-schema12-worker.exe'
+        $referenceSha = (Get-FileHash -LiteralPath $QueueReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::Copy((Resolve-Path -LiteralPath $QueueReferenceWorker).Path, $referenceCopy, $false)
+        if ((Get-FileHash -LiteralPath $referenceCopy -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha -or (Get-FileHash -LiteralPath $QueueReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha) { throw 'Previous worker changed during cache capture' }
+        $report.queueReferenceWorker = @{path=$referenceCopy;sha256=$referenceSha}
+        $env:WINBRIDGE_QUEUE_LEGACY_WORKER = $referenceCopy
         $groups = @(
             @{ name='readiness-pure-policy'; arguments=@('test','-p','winbridge-core','--test','readiness','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-wire-compatibility'; arguments=@('test','-p','winbridge-protocol','--features','jsonschema','--test','discovery','--test','projection','--test','legacy_baseline','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
@@ -262,6 +273,10 @@ try {
             @{ name='work-scheduling-durable-capacity'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::work_scheduling::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='work-scheduling-native-pool'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','work_scheduling','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='work-scheduling-workflow-handoff'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','workflows','work_scheduling_','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='queue-control-contract'; arguments=@('test','-p','winbridge-core','--test','queue_control','-p','winbridge-protocol','--test','queue_control','--features','jsonschema','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='queue-control-durable-admission'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::queue_control::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='queue-control-native-runtime'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','queue_control','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='queue-control-previous-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','queue_control','previous_worker_refuses_schema_thirteen','--locked','--offline','--','--ignored','--test-threads=1','--nocapture') },
             @{ name='readiness-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
         )
     }
@@ -423,6 +438,8 @@ try {
     $env:WINBRIDGE_TASK_CAS_REFERENCE_WORKER = $oldTaskCasReference
     $env:WINBRIDGE_TASK_CAS_REPORT = $oldTaskCasReport
     $env:WINBRIDGE_WORK_SCHEDULING_REPORT = $oldWorkSchedulingReport
+    $env:WINBRIDGE_QUEUE_CONTROL_REPORT = $oldQueueControlReport
+    $env:WINBRIDGE_QUEUE_LEGACY_WORKER = $oldQueueReferenceWorker
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace
     $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared

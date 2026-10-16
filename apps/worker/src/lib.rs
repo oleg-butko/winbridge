@@ -7,6 +7,7 @@ mod history;
 mod imports;
 mod network;
 mod projection;
+mod queue_control;
 mod recovery;
 mod recovery_pair;
 pub use recovery::RECOVERY_MARKER;
@@ -220,6 +221,7 @@ impl Worker {
             store
         };
         store.configure_work_scheduling(config.work_scheduling.clone())?;
+        store.configure_queue_policy(config.queue_policy.clone())?;
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
                 url: url.clone(),
@@ -611,7 +613,13 @@ impl Worker {
                             };
                             let mut catalog = self.projection_catalog(&context)?;
                             catalog.work_scheduling = Some(
-                                serde_json::to_value(store.work_scheduling_observation(context)?)
+                                serde_json::to_value(
+                                    store.work_scheduling_observation(context.clone())?,
+                                )
+                                .map_err(|e| e.to_string())?,
+                            );
+                            catalog.queue_control = Some(
+                                serde_json::to_value(store.queue_observation(context.clone())?)
                                     .map_err(|e| e.to_string())?,
                             );
                             serde_json::to_value(catalog).map_err(|e| e.to_string())?
@@ -832,15 +840,30 @@ impl Worker {
         let tasks = store.all()?;
         let imports = store.imports(false)?;
         let projects = if self.config.work_scheduling.is_some() {
-            store
-                .fair_projects(
-                    &self
-                        .config
-                        .projects
+            // Retained queued work from a removed project still needs its normal
+            // policy failure/cleanup. Fair selection must not hide it forever.
+            let candidates = self
+                .config
+                .projects
+                .iter()
+                .map(|p| p.id.clone())
+                .chain(
+                    tasks
                         .iter()
-                        .map(|p| p.id.clone())
-                        .collect::<Vec<_>>(),
-                )?
+                        .filter(|t| t.status == TaskStatus::Queued)
+                        .map(|t| t.submission.project_id.clone()),
+                )
+                .chain(
+                    imports
+                        .iter()
+                        .filter(|i| i.status == TaskStatus::Queued)
+                        .map(|i| i.submission.project_id.clone()),
+                )
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            store
+                .fair_projects(&candidates)?
                 .into_iter()
                 .map(Some)
                 .collect::<Vec<_>>()
@@ -923,7 +946,10 @@ impl Worker {
             }
             // This Store lock excludes local completions for the entire project pass.
             // Inspect the pool once rather than rescanning the queue for each task.
-            let capacity_wait = store.work_capacity_wait()?;
+            let capacity_wait = match store.dispatch_wait()? {
+                Some(reason) => Some(reason),
+                None => store.work_capacity_wait()?,
+            };
             for task in tasks
                 .iter()
                 .filter(|t| {
@@ -1561,6 +1587,28 @@ where
         let _permit = permit;
         let operation = async {
             let bytes = winbridge_transport::read_frame(&mut stream).await?;
+            if serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .is_some_and(|v| v.get("queueControlVersion").is_some())
+            {
+                let response = match serde_json::from_slice(&bytes) {
+                    Ok(request) => {
+                        tokio::task::spawn_blocking(move || worker.handle_queue_control(request))
+                            .await
+                            .map_err(std::io::Error::other)?
+                    }
+                    Err(_) => winbridge_protocol::QueueControlResponse {
+                        queue_control_version: 1,
+                        context: None,
+                        result: winbridge_protocol::QueueControlResult::Rejected {
+                            code: winbridge_protocol::QueueControlError::InvalidRequest,
+                            message: "Invalid local queue control envelope; no dispatch".into(),
+                        },
+                    },
+                };
+                let bytes = serde_json::to_vec(&response)?;
+                return winbridge_transport::write_frame(&mut stream, &bytes).await;
+            }
             if serde_json::from_slice::<serde_json::Value>(&bytes)
                 .ok()
                 .is_some_and(|v| v.get("extensionVersion").is_some())

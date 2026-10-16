@@ -174,7 +174,8 @@ def main():
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
-    parser.add_argument('--readiness-only', action='store_true', help='Check typed pair/readiness policy, native Info and fenced scope, legacy wire and desktop compile; no reference worker or UI windows')
+    parser.add_argument('--readiness-only', action='store_true', help='Check readiness, operation pages, scheduling/queue policy, native IPC and desktop compile; no UI windows')
+    parser.add_argument('--queue-reference-worker', help='Read-only Windows path to a retained schema-12 exe for queue migration refusal; defaults to installed worker before the first schema-13 upgrade')
     parser.add_argument('--verify-readiness-run', help='Read-only recheck of an existing terminal readiness run/report; never submit or rebuild')
     parser.add_argument('--task-cas-only', action='store_true', help='Check durable leases/CAS, schema-6/7/8/9/10/11 migration, physical reconciliation, fenced requests, desktop compile and old-worker refusal; no desktop windows')
     parser.add_argument('--task-cas-runtime-diagnostic', action='store_true', help='With --task-cas-only: narrow process/recovery diagnostic with trace and disk usage, without UI or full CAS/reference gate')
@@ -224,6 +225,7 @@ def main():
         archive_has_projection = 'winbridge/crates/protocol/tests/projection.rs' in archive.namelist()
         archive_has_operations = 'winbridge/apps/worker/tests/operations.rs' in archive.namelist()
         archive_has_work_scheduling = 'winbridge/apps/worker/tests/work_scheduling.rs' in archive.namelist()
+        archive_has_queue_control = 'winbridge/apps/worker/tests/queue_control.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
@@ -268,6 +270,14 @@ def main():
         profile_argument = ' -IdentityOnly'
     if args.readiness_only:
         profile_argument = ' -ReadinessOnly'
+        if archive_has_queue_control and not args.verify_readiness_run:
+            fixture = next(p for p in info['projects'] if p['id'] == 'fixture')
+            executable = PureWindowsPath(next(r for r in fixture['recipes'] if r['id'] == 'fixture-success')['command']['executable'])
+            if executable.name.lower() != 'winbridge-fixture.exe':
+                raise RuntimeError('Known installed fixture path required for previous-worker refusal test')
+            if not args.queue_reference_worker and any(c['id'] == 'winbridge.queue-control' for c in info['contractCatalog']['supported']):
+                raise RuntimeError('Installed worker already supports queue control; supply the retained schema-12 exe with --queue-reference-worker, not the new runtime')
+            profile_argument += ' -QueueReferenceWorker ' + ps_string(args.queue_reference_worker or str(executable.parent / 'winbridge-worker.exe'))
     if args.task_fsm_only:
         profile_argument = ' -TaskFsmOnly'
     if args.task_cas_only:
@@ -441,6 +451,8 @@ exit $nativeExit
             expected_groups += ['operations-query-contract', 'operations-transaction-snapshot', 'operations-native-ipc']
         if archive_has_work_scheduling:
             expected_groups += ['work-scheduling-policy-contract', 'work-scheduling-durable-capacity', 'work-scheduling-native-pool', 'work-scheduling-workflow-handoff']
+        if archive_has_queue_control:
+            expected_groups += ['queue-control-contract', 'queue-control-durable-admission', 'queue-control-native-runtime', 'queue-control-previous-worker-refusal']
         expected_groups += ['readiness-desktop-contract-check']
         if not result.get('readinessOnly') or [g['name'] for g in result['commands']] != expected_groups or any(g['exitCode'] != 0 for g in result['commands']):
             raise RuntimeError('Incomplete readiness foundation gate')
@@ -455,6 +467,11 @@ exit $nativeExit
                 raise RuntimeError('Incomplete actual native three-project capacity proof')
             if archive_checks_work_latency and any(s.get('prequeuedStartup') is not True or type(s.get('ipcInfoMs')) is not int or not 0 <= s['ipcInfoMs'] < 5000 for s in scenarios):
                 raise RuntimeError('Native prequeued startup/loaded IPC responsiveness proof missing')
+        if archive_has_queue_control:
+            queue = json.loads((report / 'queue-control-proof.json').read_text(encoding='utf-8-sig'))
+            expected_checks = ['local-only-envelope', 'root-quota', 'duplicate-full-queue', 'dispatch-pause-no-launch', 'live-owner-survives-pause', 'cancel-output-readable', 'receipt-restart-replay', 'no-automatic-resume', 'zero-cleanup-slots']
+            if queue.get('passed') is not True or queue.get('platform') != 'windows' or queue.get('build') != proof['candidateBuild'] or queue.get('checks') != expected_checks or queue['context'] != queue['finalQueue']['context'] or queue['finalQueue']['pendingRoots'] != 0 or queue['finalQueue']['mode'] != 'running':
+                raise RuntimeError('Incomplete native durable queue/runtime proof')
     if args.profiles_only:
         proof = json.loads((report / 'profiles-proof.json').read_text())
         tasks = proof['completed']

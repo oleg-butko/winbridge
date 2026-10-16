@@ -231,6 +231,10 @@ fn work_scheduling_workflow_uses_child_slot_and_ready_app_releases_work_capacity
     config.work_scheduling = Some(WorkSchedulingPolicy {
         max_concurrent_work: 1,
     });
+    config.queue_policy = Some(QueuePolicy {
+        max_pending_roots: 1,
+        max_pending_roots_per_project: Some(1),
+    });
     let worker = WorkerOwner(Worker::open(config).unwrap());
     let queued = accept(&worker, request);
     let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
@@ -241,10 +245,19 @@ fn work_scheduling_workflow_uses_child_slot_and_ready_app_releases_work_capacity
         1,
         "queued root counts once before it has a child"
     );
+    assert_eq!(interpret_queue_control(&info).unwrap().pending_roots, 1);
     let completed = complete(&worker, &queued.workflow_id);
     assert_eq!(completed.status, TaskStatus::Succeeded);
     let app_id = completed.application_id.as_ref().unwrap();
     assert_eq!(app(&worker, app_id).status, ApplicationStatus::Ready);
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!("info")
+    };
+    assert_eq!(
+        interpret_queue_control(&info).unwrap().pending_roots,
+        0,
+        "terminal startup releases root quota while app is alive"
+    );
     let view = || {
         let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
             panic!("info");
@@ -600,7 +613,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();

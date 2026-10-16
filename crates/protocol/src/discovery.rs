@@ -60,6 +60,13 @@ pub struct ContractCatalog {
     )]
     #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
     pub work_scheduling: Option<serde_json::Value>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_catalog"
+    )]
+    #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
+    pub queue_control: Option<serde_json::Value>,
 }
 impl ContractCatalog {
     pub fn implemented(provider: BuildIdentity) -> Self {
@@ -68,12 +75,17 @@ impl ContractCatalog {
             provider,
             controller_projection: None,
             work_scheduling: None,
+            queue_control: None,
             supported: vec![
                 ContractRef {
                     id: crate::EXTENSION_TRANSPORT.into(),
                     version: 1,
                 },
                 crate::operation_contract(),
+                ContractRef {
+                    id: crate::QUEUE_CONTROL_CONTRACT.into(),
+                    version: 1,
+                },
                 ContractRef {
                     id: crate::WORK_SCHEDULING_CONTRACT.into(),
                     version: 1,
@@ -103,7 +115,7 @@ impl ContractCatalog {
 #[derive(Debug)]
 pub enum CatalogObservation {
     Missing,
-    Known(ContractCatalog),
+    Known(Box<ContractCatalog>),
     Unsupported(String),
 }
 
@@ -144,5 +156,5 @@ pub fn interpret_catalog(info: &WorkerInfo) -> CatalogObservation {
             "Invalid, duplicate or oversized catalog entries; no support inferred".into(),
         );
     }
-    CatalogObservation::Known(catalog)
+    CatalogObservation::Known(Box::new(catalog))
 }

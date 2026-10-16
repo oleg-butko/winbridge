@@ -1,4 +1,4 @@
-import type { BuildIdentity, ContractCatalog, ContractRef, ControllerReadinessProjection, ProjectPolicyCatalog, WorkerInfo, WorkSchedulingObservation } from "./contracts";
+import type { BuildIdentity, ContractCatalog, ContractRef, ControllerReadinessProjection, ProjectPolicyCatalog, WorkerInfo, WorkSchedulingObservation, QueueControlObservation, QueueBlocker } from "./contracts";
 
 export type CatalogObservation =
   | { kind: "missing" }
@@ -32,7 +32,7 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
   const raw = info.contractCatalog;
   if (raw === undefined) return { kind: "missing" };
   const invalid = (reason: string): CatalogObservation => ({ kind: "unsupported", reason });
-  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported", "controllerProjection", "workScheduling"]) || raw.schemaVersion !== 1
+  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported", "controllerProjection", "workScheduling", "queueControl"]) || raw.schemaVersion !== 1
     || !Array.isArray(raw.supported)) return invalid("Формат каталога неизвестен. Новые функции не включены.");
   const provider = readBuild(raw.provider);
   const expected = readBuild(info.build);
@@ -46,7 +46,7 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
     seen.add(id);
     return false;
   })) return invalid("В каталоге некорректные или повторяющиеся контракты.");
-  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[], ...(Object.hasOwn(raw, "controllerProjection") ? { controllerProjection: raw.controllerProjection } : {}), ...(Object.hasOwn(raw, "workScheduling") ? { workScheduling: raw.workScheduling } : {}) } };
+  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[], ...(Object.hasOwn(raw, "controllerProjection") ? { controllerProjection: raw.controllerProjection } : {}), ...(Object.hasOwn(raw, "workScheduling") ? { workScheduling: raw.workScheduling } : {}), ...(Object.hasOwn(raw, "queueControl") ? { queueControl: raw.queueControl } : {}) } };
 }
 
 export function interpretWorkScheduling(info: WorkerInfo): WorkSchedulingObservation | null {
@@ -60,6 +60,36 @@ export function interpretWorkScheduling(info: WorkerInfo): WorkSchedulingObserva
     || typeof value.observedAtMs !== "number" || !Number.isSafeInteger(value.observedAtMs) || value.observedAtMs < 0
     || (value.maxConcurrentWork != null && (typeof value.maxConcurrentWork !== "number" || !Number.isInteger(value.maxConcurrentWork) || value.maxConcurrentWork < 1 || value.maxConcurrentWork > 32))) return null;
   return { ...value, provider: readBuild(value.provider)!, maxConcurrentWork: value.maxConcurrentWork ?? null } as unknown as WorkSchedulingObservation;
+}
+
+export function interpretQueueControl(info: WorkerInfo): QueueControlObservation | null {
+  const catalog = interpretCatalog(info);
+  if (catalog.kind !== "known" || !catalog.catalog.supported.some((c) => c.id === "winbridge.queue-control" && c.version === 1)) return null;
+  const value = catalog.catalog.queueControl;
+  const count = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
+  const time = (n: unknown) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
+  if (!object(value) || !keys(value, ["schemaVersion", "provider", "context", "revision", "mode", "policy", "pendingRoots", "projects", "blockers", "lastCommandId", "changedAtMs", "observedAtMs", "readOnly"])
+    || value.schemaVersion !== 1 || !sameBuild(value.provider, info.build) || !sameScope(value.context, info.fencedRequests?.context)
+    || typeof value.revision !== "string" || !/^(0|[1-9][0-9]*)$/.test(value.revision) || value.revision.length > 19 || BigInt(value.revision) > 9223372036854775807n
+    || !["running", "admission_paused", "dispatch_paused", "paused"].includes(value.mode as string)
+    || !count(value.pendingRoots) || !Array.isArray(value.projects) || !Array.isArray(value.blockers)
+    || !optionalString(value.lastCommandId) || typeof value.readOnly !== "boolean" || !time(value.changedAtMs) || !time(value.observedAtMs)) return null;
+  const policy = value.policy;
+  if (policy != null && (!object(policy) || !keys(policy, ["maxPendingRoots", "maxPendingRootsPerProject"])
+    || !count(policy.maxPendingRoots) || policy.maxPendingRoots < 1 || policy.maxPendingRoots > 10000
+    || (policy.maxPendingRootsPerProject != null && (!count(policy.maxPendingRootsPerProject) || policy.maxPendingRootsPerProject < 1 || policy.maxPendingRootsPerProject > policy.maxPendingRoots)))) return null;
+  const seen = new Set<string>(); let total = 0;
+  const blockers: QueueBlocker[] = [];
+  if (["admission_paused", "paused"].includes(value.mode as string)) blockers.push({ code: "admission_paused" });
+  if (["dispatch_paused", "paused"].includes(value.mode as string)) blockers.push({ code: "dispatch_paused" });
+  if (object(policy) && value.pendingRoots >= (policy.maxPendingRoots as number)) blockers.push({ code: "global_limit", limit: policy.maxPendingRoots as number });
+  for (const p of value.projects) {
+    if (!object(p) || !keys(p, ["projectId", "pendingRoots"]) || typeof p.projectId !== "string" || !p.projectId || seen.has(p.projectId) || !count(p.pendingRoots)) return null;
+    seen.add(p.projectId); total += p.pendingRoots;
+    if (object(policy) && typeof policy.maxPendingRootsPerProject === "number" && p.pendingRoots >= policy.maxPendingRootsPerProject) blockers.push({ code: "project_limit", projectId: p.projectId, limit: policy.maxPendingRootsPerProject });
+  }
+  if (total !== value.pendingRoots || value.blockers.length !== blockers.length || value.blockers.some((b, i) => !object(b) || !keys(b, Object.keys(blockers[i])) || Object.entries(blockers[i]).some(([key, expected]) => b[key] !== expected))) return null;
+  return { ...value, provider: readBuild(value.provider)!, policy: object(policy) ? { ...policy, maxPendingRootsPerProject: policy.maxPendingRootsPerProject ?? null } : null, lastCommandId: value.lastCommandId ?? null } as unknown as QueueControlObservation;
 }
 
 type ProjectionObservation = { kind: "missing" | "unsupported" } | { kind: "known"; projection: ControllerReadinessProjection };

@@ -1,3 +1,28 @@
+## A4.2 — кандидат очереди и паузы, 2026-10-16
+
+[План и повторное ревью](plans/architecture-transition/queue-control.md),
+[пользовательская семантика](guides/queue-control.md). Bounded root admission
+проверяется внутри BEGIN IMMEDIATE после existing-key и до record/root index/ACK.
+Task/import/workflow считаются один раз; workflow children не занимают root quota.
+Durable QueueMode, CAS revision + command receipt в одной transaction; pause
+не останавливает уже начатого owner. Local-only typed IPC, readonly MCP metadata,
+UI сохраняет command ID/scope/revision до отправки и не исполняет restore.
+Schema 13 создаёт consistent backup schema 12; working journal не мигрировался.
+
+336 workspace tests до последнего receipt regression, final core/protocol/store/
+runtime checks, 46 Rust/TS metadata cases, Linux/Windows Clippy, typecheck/build,
+actual Unix queue UI и полный прежний UI regression прошли. Следует clean committed
+workspace/consumer proof и isolated native Windows gate; candidate ещё не installed.
+Ревью исправило fairness для queued tasks удалённого project, добавлены rollback,
+concurrent admission/CAS, child exemption, restart и malformed receipt tests.
+
+После Debian restart запущен проверенный controller `bff20cd`, serve `50751`;
+worker `7e49cfc` подключён, healthy/idle, generation
+`c2320f8e-e903-4668-8699-48e83e13f413`, journal incarnation прежняя.
+Desktop не нужен, тестовых Windows UI окон не будет. Production budgets не менялись.
+Debian около 26 GiB free, incremental выключен, основной target переиспользуется.
+Локальный codex-session transcript оставлен на месте и исключён из Git/export.
+
 ## A4.1 завершён; следующий A4.2 backlog/pause, 2026-10-15
 
 [Installed gate и ревью](plans/architecture-transition/windows-work-scheduling-installed-2026-10-15.md)

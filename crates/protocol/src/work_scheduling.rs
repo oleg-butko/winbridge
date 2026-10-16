@@ -38,10 +38,10 @@ fn integer<E: serde::de::Error>(number: serde_json::Number, max: u64) -> Result<
         .map(|v| v as u64)
         .ok_or_else(|| E::custom("Invalid readonly metadata integer"))
 }
-fn read_count<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+pub(crate) fn read_count<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
     integer(serde_json::Number::deserialize(d)?, u32::MAX as u64).map(|v| v as u32)
 }
-fn read_time<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
+pub(crate) fn read_time<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
     integer(serde_json::Number::deserialize(d)?, 9_007_199_254_740_991)
 }
 fn read_limit<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<u16>, D::Error> {

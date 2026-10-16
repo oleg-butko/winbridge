@@ -149,6 +149,59 @@ pub async fn operation_page(
         request,
     )
 }
+/// A distinct local control route; WebSocket and readonly extensions cannot dispatch it.
+pub async fn queue_control(
+    address: &str,
+    request: &winbridge_protocol::QueueControlRequest,
+) -> Result<winbridge_protocol::QueueControlResponse, String> {
+    use winbridge_protocol::*;
+    if request.queue_control_version != 1 {
+        return Err("Unsupported queue control request version; no fallback".into());
+    }
+    let LocalResponse::Info { info } = call(address, &LocalRequest::Info)
+        .await
+        .map_err(|e| e.to_string())?
+    else {
+        return Err("Queue provider unavailable; no change submitted".into());
+    };
+    let Some(view) = interpret_queue_control(&info) else {
+        return Err("Queue control metadata not supported; no change submitted".into());
+    };
+    if view.context != request.context
+        || !interpret_contract_schemas(&info).is_some_and(|s| {
+            s.schemas.iter().any(|s| {
+                s.contract.id == QUEUE_CONTROL_CONTRACT
+                    && s.contract.version == 1
+                    && s.sha256 == queue_control_schema_sha256()
+            })
+        })
+    {
+        return Err(
+            "Queue scope/schema changed; retain original request, no fallback/rebind".into(),
+        );
+    }
+    let message = if matches!(request.command, QueueControlCommand::Set { .. }) {
+        "Queue change acknowledgement unconfirmed; observe original command ID/context before repeating only that exact request"
+    } else {
+        "Readonly queue observation timeout; no change submitted"
+    };
+    let response: QueueControlResponse = call_dto(address, request, message)
+        .await
+        .map_err(|e| e.to_string())?;
+    response.validate_for(request)?;
+    let observation = match &response.result {
+        QueueControlResult::Applied { observation, .. }
+        | QueueControlResult::Observed { observation, .. } => Some(observation),
+        _ => None,
+    };
+    if observation.is_some_and(|o| Some(&o.provider) != info.build.as_ref()) {
+        return Err(
+            "Queue provider changed during request; outcome unconfirmed, retain original command"
+                .into(),
+        );
+    }
+    Ok(response)
+}
 async fn call_dto<Q: serde::Serialize, R: serde::de::DeserializeOwned>(
     address: &str,
     request: &Q,

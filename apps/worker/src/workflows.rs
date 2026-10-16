@@ -49,10 +49,12 @@ impl Store {
         recipe_pins: Option<Vec<WorkflowRecipePin>>,
     ) -> Result<WorkflowRecord> {
         self.guard_callback(None, None)?;
+        let queue_policy = self.loaded_queue_policy();
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(existing) = Self::existing_workflow_on(&transaction, &request)? {
             return Ok(existing);
         }
+        Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
         let mut payload = request.clone();
         payload.request_id.clear();
         let mut workflow = WorkflowRecord {
@@ -90,6 +92,12 @@ impl Store {
                 "local journal: workflow acceptance not stored; acknowledgement rejected".into(),
             );
         }
+        Self::insert_queue_root(
+            &transaction,
+            "workflow",
+            &workflow.workflow_id,
+            &workflow.submission.project_id,
+        )?;
         transaction.commit().map_err(sql)?;
         Ok(workflow)
     }

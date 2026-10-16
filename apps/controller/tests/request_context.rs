@@ -120,6 +120,12 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
     );
     assert_eq!(forwarded_scheduling.occupied_slots, 0);
     assert!(forwarded_scheduling.observed_at_ms >= initial_scheduling.observed_at_ms);
+    let forwarded_queue = interpret_queue_control(&forwarded_info).unwrap();
+    assert_eq!(forwarded_queue.context, context);
+    assert_eq!(forwarded_queue.provider, forwarded_scheduling.provider);
+    assert_eq!(forwarded_queue.mode, QueueMode::Running);
+    assert_eq!(forwarded_queue.revision, "0");
+    assert_eq!(forwarded_queue.pending_roots, 0);
     let mut forwarded_catalog =
         messages[2]["result"]["structuredContent"]["info"]["contractCatalog"].clone();
     let mut advertised = advertised.unwrap();
@@ -136,6 +142,11 @@ async fn actual_controller_worker_and_mcp_preserve_caller_scope_across_restart()
         .unwrap()
         .remove("workScheduling");
     advertised.as_object_mut().unwrap().remove("workScheduling");
+    forwarded_catalog
+        .as_object_mut()
+        .unwrap()
+        .remove("queueControl");
+    advertised.as_object_mut().unwrap().remove("queueControl");
     assert_eq!(forwarded_catalog, advertised);
     assert_eq!(
         messages[2]["result"]["structuredContent"]["info"]["projectPolicies"],

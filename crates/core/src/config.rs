@@ -117,6 +117,8 @@ pub struct WorkerConfig {
     pub output_retention: OutputRetention,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_scheduling: Option<winbridge_protocol::WorkSchedulingPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_policy: Option<winbridge_protocol::QueuePolicy>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -230,6 +232,13 @@ impl WorkerConfig {
         }
         if let Some(policy) = &self.work_scheduling {
             crate::work_scheduling::validate(policy)?;
+        }
+        if self
+            .queue_policy
+            .as_ref()
+            .is_some_and(|p| !winbridge_protocol::valid_queue_policy(p))
+        {
+            return Err("queuePolicy requires maxPendingRoots 1..10000 and optional maxPendingRootsPerProject 1..maxPendingRoots".into());
         }
         if !(4096..=256 * 1024 * 1024).contains(&self.max_output_bytes_per_task) {
             return Err("maxOutputBytesPerTask must be 4096–268435456 bytes".into());
