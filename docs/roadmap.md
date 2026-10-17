@@ -24,9 +24,12 @@ passed; source block завершён.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) реализован как trusted
 library с отдельным authenticated IPC и updater schema 3; 413 local tests и
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
-прошли. Следом production worker adapter/source-control IPC/exact shutdown; перед
-source/build нужен atomic work/resource reservation. Эти части ещё не готовы;
-U1 целиком открыт.
+прошли. [Worker launcher/control](plans/worker-self-update/worker-control.md)
+добавлен как trusted API: exact binding, duplicate-first и supervisor-only IPC;
+SourceHeld атомарно резервирует work slot, named resources пока откладывают grant.
+417 local tests и 9 итоговых целевых tests passed; native gate ожидается.
+Следом authenticated SourceControl/verification, compiler ownership и exact shutdown.
+Source/build/install orchestration и публичное включение не готовы; U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

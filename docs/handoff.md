@@ -1,3 +1,24 @@
+## Самообновление U1: worker launcher/control — 2026-10-17
+
+[Контракт и ограничения](plans/worker-self-update/worker-control.md).
+Trusted worker API запускает supervisor вне своего execution domain, связывает его
+с exact worker/build/config/incarnation и открывает отдельный supervisor-only IPC.
+Обычный CLI/MCP его не включает. Production fixed runtime/external Job guards
+сохраняются; test override private и не является разрешением обходить Job.
+Duplicate-first работает при занятом updater owner lock. SourceHeld атомарно
+занимает общий work slot; named-resource policy пока явно откладывает grant.
+Drain требует updater Draining intent; release при незавершённых file/build/cutover
+phases запрещён. Callback завершения сервера дожидается blocking authority calls.
+Worker schema 15/updater schema 3 не менялись. Source apply, shutdown и install
+через новый канал пока отключены; U1 целиком открыт, A4 отложен.
+
+417 workspace tests и 9 итоговых update/control tests passed. Проверены race task
+claim/source grant, receipt rollback, forged peer/epoch/build/config, повтор при
+живом owner, premature drain и verified release. Clippy, Windows/tests cross-check, fmt/contracts, typecheck/build:ui/scaffold и
+Python/PowerShell syntax passed. Native Windows gate выполняется. Установленный worker не обновляется.
+Следом — fresh authenticated SourceControl, длительная verification без удержания
+Store lock, compiler ownership/cleanup и exact shutdown, затем U2–U3.
+
 ## Самообновление U1: supervisor handoff — 2026-10-17
 
 [Контракт и ограничения](plans/worker-self-update/supervisor.md),

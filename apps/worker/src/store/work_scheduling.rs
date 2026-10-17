@@ -5,12 +5,25 @@ use std::collections::BTreeMap;
 use winbridge_protocol::*;
 
 fn counts(connection: &Connection) -> Result<(u32, u32, u32)> {
+    let version: u32 = connection
+        .pragma_query_value(None, "user_version", |r| r.get(0))
+        .map_err(sql)?;
+    let updates: i64 = if version >= 15 {
+        connection.query_row("SELECT count(*) FROM worker_update_leases WHERE active=1 AND phase!='\"source_pending\"'",[],|r|r.get(0)).map_err(sql)?
+    } else {
+        0
+    };
     let row:(i64,i64,i64)=connection.query_row("SELECT
         (SELECT count(*) FROM resource_leases WHERE state!='released' AND (scope='project_mutation' OR state='uncertain')),
         (SELECT count(*) FROM resource_leases WHERE state='uncertain'),
         (SELECT count(*) FROM tasks WHERE json_extract(record,'$.status')='queued')+(SELECT count(*) FROM imports WHERE json_extract(record,'$.status')='queued')+(SELECT count(*) FROM workflows WHERE status='queued')",[],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).map_err(sql)?;
     Ok((
-        u32::try_from(row.0).map_err(|_| "Invalid occupied slot count")?,
+        u32::try_from(
+            row.0
+                .checked_add(updates)
+                .ok_or("Occupied slot count overflow")?,
+        )
+        .map_err(|_| "Invalid occupied slot count")?,
         u32::try_from(row.1).map_err(|_| "Invalid uncertain slot count")?,
         u32::try_from(row.2).map_err(|_| "Invalid queue count")?,
     ))

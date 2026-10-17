@@ -76,7 +76,10 @@ commands, exe replacement и shutdown ещё не подключены.
 Добавлена trusted library [supervisor handoff](docs/plans/worker-self-update/supervisor.md):
 отдельный процесс, durable intent/PID/epoch и authenticated IPC; 413 local tests и
 [76 native tests / полный candidate build](docs/plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
-прошли. Production worker launcher/source-control/shutdown ещё не подключены.
+прошли. [Worker launcher и supervisor-only lease IPC](docs/plans/worker-self-update/worker-control.md)
+добавлены как trusted API; 417 local tests и 9 итоговых целевых tests прошли,
+native gate ожидается. Source apply/shutdown/install через IPC и публичное включение
+ещё не подключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

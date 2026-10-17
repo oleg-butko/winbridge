@@ -10,7 +10,10 @@ OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-sel
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
-прошли; production worker adapter/source-control/shutdown/install пока отключены.
+прошли. [Worker launcher/control](plans/worker-self-update/worker-control.md) добавляет
+trusted worker API, exact immutable binding и supervisor-only lease IPC. SourceHeld
+атомарно резервирует work slot; named resources пока откладывают grant. Native gate
+этого блока ожидается; SourceControl/file driver/shutdown/install ещё не подключены.
 Worker schema 15 владеет source/drain/quiesce leases и pre-migration startup guard;
 updater не открывает worker journal. Между этими БД нет общей транзакции:
 source effects требуют свежий trusted worker grant и актуальную updater authority.
@@ -21,8 +24,8 @@ receipt, manifest последним. Verified source и parent Building фик�
 readonly inspection показывает сохранённые preimages/held и receipt states.
 Миграция updater schema 1/2 → 3 требует свободный owner lock и verified consistent backup.
 [65 native Windows tests / полный candidate build](plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
-прошли. Supervisor вне task Jobs, local IPC/shutdown, runtime install и bootstrap
-ещё не реализованы; внешняя update capability не объявляется. Installed runtime сохраняется.
+прошли. Worker-owned supervisor/lease IPC реализованы как trusted API; source/build
+orchestration, shutdown, runtime install и bootstrap ещё не реализованы; внешняя update capability не объявляется. Installed runtime сохраняется.
 
 ## Назначение и среда
 

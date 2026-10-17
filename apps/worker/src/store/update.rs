@@ -334,6 +334,7 @@ impl Store {
         command: &WorkerUpdateCommand,
         mut blockers: WorkerUpdateBlockers,
     ) -> Result<WorkerUpdateLease> {
+        let capacity = self.work_scheduling.clone();
         let tx = self.update_transaction()?;
         let current = read(&tx, &spec.update_id)?;
         if current.spec != *spec {
@@ -344,6 +345,25 @@ impl Store {
         }
         if current.revision != command.expected_revision {
             return Err("Worker update revision changed; reload the lease".into());
+        }
+        if command.action == WorkerUpdateAction::AcquireSource
+            && current.phase == WorkerUpdatePhase::SourcePending
+        {
+            // The phase transition itself is the durable update work reservation.
+            // All ordinary claims count it in the same IMMEDIATE transaction.
+            Self::require_work_capacity(&tx, capacity.as_ref())?;
+            let named: Option<String> = tx
+                .query_row(
+                    "SELECT policy FROM resource_policy WHERE singleton=1",
+                    [],
+                    |r| r.get(0),
+                )
+                .map_err(sql)?;
+            if named.is_some() {
+                return Err(
+                    "Named-resource update plan is not implemented; no source/build grant".into(),
+                );
+            }
         }
         let projects = if current.phase == WorkerUpdatePhase::SourcePending {
             Some(spec.projects.as_slice())
@@ -452,6 +472,135 @@ mod tests {
             physical_owners: 0,
             uncertain_owners: 0,
         }
+    }
+    fn other_task(store: &mut Store) -> winbridge_protocol::TaskRecord {
+        use winbridge_protocol::*;
+        store
+            .accept(
+                TaskSubmission {
+                    protocol_version: 1,
+                    request_id: "capacity".into(),
+                    idempotency_key: "capacity".into(),
+                    project_id: "other".into(),
+                    timeout_ms: 5000,
+                    snapshot_id: None,
+                    command: CommandSource::Direct {
+                        executable: "synthetic-not-executed".into(),
+                        arguments: vec![],
+                        working_directory: ".".into(),
+                    },
+                },
+                ResolvedCommand {
+                    executable: "synthetic-not-executed".into(),
+                    arguments: vec![],
+                    working_directory: ".".into(),
+                    timeout_ms: 5000,
+                },
+                None,
+            )
+            .unwrap()
+    }
+    #[test]
+    fn update_grant_and_task_claim_share_one_atomic_work_slot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("journal.sqlite");
+        let mut store = Store::open(&path).unwrap();
+        store.begin_authority().unwrap();
+        store
+            .configure_work_scheduling(Some(winbridge_protocol::WorkSchedulingPolicy {
+                max_concurrent_work: 1,
+            }))
+            .unwrap();
+        let task = other_task(&mut store);
+        let spec = spec(&store);
+        store.begin_worker_update(spec.clone()).unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let mut handles = Vec::new();
+        for update in [true, false] {
+            let (path, barrier, spec, id) = (
+                path.clone(),
+                barrier.clone(),
+                spec.clone(),
+                task.task_id.clone(),
+            );
+            handles.push(std::thread::spawn(move || {
+                let mut s = Store::open(&path).unwrap();
+                s.configure_work_scheduling(Some(winbridge_protocol::WorkSchedulingPolicy {
+                    max_concurrent_work: 1,
+                }))
+                .unwrap();
+                barrier.wait();
+                if update {
+                    s.advance_worker_update(
+                        &spec,
+                        &command("capacity", 0, WorkerUpdateAction::AcquireSource),
+                        empty(),
+                    )
+                    .map(|_| ())
+                } else {
+                    s.claim_task(&id).map(|_| ())
+                }
+            }));
+        }
+        let result: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        assert_eq!(result.iter().filter(|r| r.is_ok()).count(), 1);
+        assert!(result
+            .iter()
+            .filter_map(|r| r.as_ref().err())
+            .all(|e| e.starts_with("resource busy:")));
+        let view = store
+            .work_scheduling_observation(winbridge_protocol::RequestContext {
+                instance_id: "update-test".into(),
+                journal_incarnation: store.journal_authority().incarnation.clone(),
+            })
+            .unwrap();
+        assert_eq!(view.occupied_slots, 1);
+    }
+    #[test]
+    fn ignored_update_grant_does_not_reserve_capacity_and_named_policy_defers() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&dir.path().join("journal.sqlite")).unwrap();
+        store.begin_authority().unwrap();
+        store
+            .configure_work_scheduling(Some(winbridge_protocol::WorkSchedulingPolicy {
+                max_concurrent_work: 1,
+            }))
+            .unwrap();
+        let spec = spec(&store);
+        store.begin_worker_update(spec.clone()).unwrap();
+        store.connection.execute_batch("CREATE TRIGGER ignored_budget BEFORE UPDATE ON worker_update_leases BEGIN SELECT RAISE(IGNORE); END;").unwrap();
+        assert!(store
+            .advance_worker_update(
+                &spec,
+                &command("budget", 0, WorkerUpdateAction::AcquireSource),
+                empty()
+            )
+            .is_err());
+        assert_eq!(
+            store.worker_update_lease(&spec.update_id).unwrap().phase,
+            WorkerUpdatePhase::SourcePending
+        );
+        store
+            .connection
+            .execute_batch("DROP TRIGGER ignored_budget")
+            .unwrap();
+        store
+            .configure_resource_scheduling(Some(winbridge_protocol::ResourceSchedulingPolicy {
+                resources: vec![],
+                projects: vec![],
+            }))
+            .unwrap();
+        assert!(store
+            .advance_worker_update(
+                &spec,
+                &command("named", 0, WorkerUpdateAction::AcquireSource),
+                empty()
+            )
+            .unwrap_err()
+            .contains("Named-resource"));
+        store.configure_resource_scheduling(None).unwrap();
+        let task = other_task(&mut store);
+        assert!(store.claim_task(&task.task_id).is_ok());
     }
     #[test]
     fn accepted_workflow_children_continue_during_global_drain() {

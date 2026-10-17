@@ -1080,6 +1080,7 @@ dependencies = [
  "winbridge-protocol",
  "winbridge-runner",
  "winbridge-transport",
+ "winbridge-update",
  "winbridge-workspace-sync",
 ]
 

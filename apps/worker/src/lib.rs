@@ -18,6 +18,8 @@ mod retention;
 mod settings;
 pub mod store;
 mod update;
+mod update_control;
+pub use update_control::WorkerSupervisorLaunch;
 mod workflows;
 use fs2::FileExt;
 use std::{
@@ -126,6 +128,7 @@ pub struct Worker {
     unreconciled_tasks: Mutex<HashMap<String, String>>,
     inspection: bool,
     execution_domain: Mutex<Option<winbridge_platform::execution_domain::ExecutionDomain>>,
+    update_control: Mutex<Option<Arc<update_control::Registration>>>,
     coverage: Mutex<Option<winbridge_protocol::RecoveryCoverageInfo>>,
     _instance_lock: File,
 }
@@ -263,6 +266,7 @@ impl Worker {
             unreconciled_tasks: Mutex::new(HashMap::new()),
             inspection,
             execution_domain: Mutex::new(None),
+            update_control: Mutex::new(None),
             coverage: Mutex::new(None),
             _instance_lock: lock,
         });
@@ -1555,6 +1559,7 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
         worker.generation
     );
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
+    let control = update_control::start(Arc::clone(&worker))?;
     let network = worker
         .config
         .worker
@@ -1587,6 +1592,9 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
         // so the network owner cannot keep the instance lock across a restart.
         let mut network = network;
         let _ = (&mut network.0).await;
+    }
+    if let Some(control) = control {
+        control.close().await;
     }
     worker.stop();
     while !worker.is_idle() {

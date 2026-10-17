@@ -242,6 +242,7 @@ def main():
         archive_has_queue_control = 'winbridge/apps/worker/tests/queue_control.rs' in archive.namelist()
         archive_has_resource_scheduling = 'winbridge/apps/worker/tests/resource_scheduling.rs' in archive.namelist()
         archive_has_supervisor = 'winbridge/apps/update/src/supervisor.rs' in archive.namelist()
+        archive_has_worker_control = 'winbridge/apps/worker/src/update_control.rs' in archive.namelist()
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
@@ -312,16 +313,18 @@ def main():
                 names.add(name)
             expected = ['update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build']
             prior = json.loads((previous_report / 'report.json').read_text(encoding='utf-8-sig'))
-            if len(prior['commands']) in (7, 9, 10, 11, 12):
+            if len(prior['commands']) in (7, 9, 10, 11, 12, 13):
                 expected += ['update-worker-durable-coordination', 'update-worker-native-coordination', 'update-previous-worker-refusal']
-            if len(prior['commands']) in (9, 10, 11, 12):
+            if len(prior['commands']) in (9, 10, 11, 12, 13):
                 expected += ['update-platform-no-clobber','update-previous-updater-refusal']
-            if len(prior['commands']) in (10, 11, 12):
+            if len(prior['commands']) in (10, 11, 12, 13):
                 expected += ['update-infrastructure-domain']
-            if len(prior['commands']) in (11, 12):
+            if len(prior['commands']) in (11, 12, 13):
                 expected += ['update-supervisor-staged-source']
-            if len(prior['commands']) == 12:
+            if len(prior['commands']) in (12, 13):
                 expected += ['update-supervisor-ipc']
+            if len(prior['commands']) == 13:
+                expected += ['update-worker-control']
             if (prior['platform'] != 'windows' or prior['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', prior['sourceCommit'])
                     or not re.fullmatch(r'[0-9a-f]{64}', prior['sourceArchiveSha256'])
                     or not {'report.json', *(n+'.log' for n in expected)}.issubset(names)
@@ -545,6 +548,19 @@ exit $nativeExit
                     or smoke['ready']['phase'] != 'ready' or smoke['active']['phase'] != 'active' or smoke['stopped']['phase'] != 'stopped'
                     or smoke['build']['sourceCommit'] != result['sourceCommit'] or smoke['build']['sourceDirty'] is not False):
                 raise RuntimeError('Incomplete supervisor smoke on actual staged WinBridge source')
+        if archive_has_supervisor and archive_has_worker_control:
+            expected += ['update-worker-control']
+            control = json.loads((report / 'update-control-proof.json').read_text(encoding='utf-8-sig'))
+            if (control.get('passed') is not True or control.get('platform') != 'windows'
+                    or not all(control.get(k) is True for k in ['forgedPeerRejected','duplicateObserved','sourceVerified','actualSourcePackage','productionEnvironmentDeferred','prematureDrainRejected'])
+                    or any(control.get(k) is not False for k in ['runtimeApplied','sourceEffectsEnabled','windowsOpened'])
+                    or control['workSlots'] != [0,1,1,0]
+                    or control['sourceManifestSha256'] != result['updatePreparation']['manifestSha256']
+                    or [s['phase'] for s in control['stages']] != ['source_pending','source_held','released']
+                    or control['active']['spec']['worker'] != control['binding']
+                    or control['queuedTask']['status'] != 'queued' or control['queuedTask']['processId'] is not None
+                    or control['build']['sourceCommit'] != result['sourceCommit'] or control['build']['sourceDirty'] is not False):
+                raise RuntimeError('Incomplete worker-owned supervisor/source control proof')
         scope = result.get('updatePreparation', {})
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
         archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))

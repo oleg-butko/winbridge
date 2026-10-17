@@ -413,6 +413,8 @@ pub struct SupervisorSpec {
     pub excluded_domain: Option<String>,
     pub endpoint: String,
     pub accepted_at_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker: Option<SupervisorWorkerBinding>,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -437,6 +439,7 @@ pub enum SupervisorAction {
     Observe,
     Handoff,
     Stop,
+    WorkerControl,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -448,6 +451,8 @@ pub struct SupervisorRequest {
     pub expected_revision: u64,
     pub action: SupervisorAction,
     pub token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_command: Option<WorkerUpdateControlCommand>,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -458,4 +463,79 @@ pub struct SupervisorResponse {
     pub launch_id: String,
     pub record: Option<SupervisorRecord>,
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_control: Option<WorkerUpdateControlResponse>,
+}
+
+/// Frozen by the worker launcher; request payloads cannot select another worker.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SupervisorWorkerBinding {
+    pub context: crate::RequestContext,
+    pub generation: String,
+    pub build: crate::BuildIdentity,
+    pub process: SupervisorProcess,
+    pub config_sha256: String,
+    pub endpoint: String,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkerUpdateControlCommand {
+    Observe,
+    BeginSource,
+    Advance { command: WorkerUpdateCommand },
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerUpdateControlRequest {
+    pub control_version: u16,
+    pub binding: SupervisorWorkerBinding,
+    pub update_id: String,
+    pub launch_id: String,
+    pub supervisor: SupervisorProcess,
+    pub updater_owner_id: String,
+    pub updater_epoch: u64,
+    pub command: WorkerUpdateControlCommand,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerUpdateControlResponse {
+    pub control_version: u16,
+    pub binding: SupervisorWorkerBinding,
+    pub update_id: String,
+    pub launch_id: String,
+    pub result: WorkerUpdateControlResult,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum WorkerUpdateControlResult {
+    /// Current observation or original command receipt; never a fresh file grant.
+    Snapshot {
+        lease: Option<Box<WorkerUpdateLease>>,
+    },
+    /// An error does not prove absence of a committed effect. Observe the original ID.
+    Error { message: String },
+}
+impl WorkerUpdateControlResult {
+    pub fn is_error(&self) -> bool {
+        matches!(self, Self::Error { .. })
+    }
+}
+impl WorkerUpdateControlResponse {
+    pub fn into_lease(self) -> Result<Option<WorkerUpdateLease>, String> {
+        match self.result {
+            WorkerUpdateControlResult::Snapshot { lease } => Ok(lease.map(|l| *l)),
+            WorkerUpdateControlResult::Error { message } => Err(message),
+        }
+    }
 }

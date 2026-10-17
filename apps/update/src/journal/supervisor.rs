@@ -94,6 +94,12 @@ impl UpdateJournal {
         directory: &Path,
         id: &str,
     ) -> Result<(UpdateJournalInfo, SupervisorRecord, UpdateRecord)> {
+        Self::supervisor_authority_snapshot(directory, id).map(|(i, s, u, _)| (i, s, u))
+    }
+    pub fn supervisor_authority_snapshot(
+        directory: &Path,
+        id: &str,
+    ) -> Result<(UpdateJournalInfo, SupervisorRecord, UpdateRecord, String)> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
         if schema(&c)? < 3 {
@@ -106,8 +112,15 @@ impl UpdateJournal {
         let r = read(&tx, id)?;
         let state = info(&tx)?;
         let update = record(&tx, &r.spec.update_id)?;
+        let owner: String = tx
+            .query_row(
+                "SELECT owner FROM installation WHERE singleton=1",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(storage)?;
         tx.commit().map_err(storage)?;
-        Ok((state, r, update))
+        Ok((state, r, update, owner))
     }
     pub(crate) fn prepare_supervisor(
         &mut self,

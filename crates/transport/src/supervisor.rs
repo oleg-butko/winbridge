@@ -3,6 +3,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{io, path::Path, time::Duration};
 use tokio::io::{AsyncRead, AsyncWrite};
 pub const TIMEOUT: Duration = Duration::from_secs(3);
+/// Source verification/physical scans can exceed the short handoff deadline.
+pub const CONTROL_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(unix)]
 pub type Stream = tokio::net::UnixStream;
 #[cfg(windows)]
@@ -191,7 +193,15 @@ pub async fn call<Q: Serialize, R: DeserializeOwned>(
     expected_pid: u32,
     request: &Q,
 ) -> io::Result<R> {
-    tokio::time::timeout(TIMEOUT, async {
+    call_with_timeout(address, expected_pid, request, TIMEOUT).await
+}
+pub async fn call_with_timeout<Q: Serialize, R: DeserializeOwned>(
+    address: &str,
+    expected_pid: u32,
+    request: &Q,
+    deadline: Duration,
+) -> io::Result<R> {
+    tokio::time::timeout(deadline, async {
         let stream = connect(address, expected_pid).await?;
         exchange(stream, request).await
     })

@@ -521,6 +521,45 @@ impl UpdateJournal {
         Ok(result)
     }
 
+    /// Duplicate-first observation remains available while the supervisor owns the lock.
+    pub fn find_request(directory: &Path, request: &UpdateRequest) -> Result<Option<UpdateRecord>> {
+        validate_update_key(&request.idempotency_key)
+            .map_err(|e| fail(JournalErrorCode::InvalidRequest, e))?;
+        let payload = encode(request)?;
+        if payload.len() > MAX_RECORD_BYTES / 2 {
+            return Err(fail(
+                JournalErrorCode::InvalidRequest,
+                "Oversized update request",
+            ));
+        }
+        check_files(directory)?;
+        let mut c = connection(&directory.join("updates.sqlite"), true)?;
+        schema(&c)?;
+        let tx = c.transaction().map_err(storage)?;
+        let found: Option<(String, String)> = tx
+            .query_row(
+                "SELECT id,payload FROM updates WHERE key=?1",
+                [&request.idempotency_key],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(storage)?;
+        let result = match found {
+            None => None,
+            Some((id, previous)) => {
+                if payload != previous {
+                    return Err(fail(
+                        JournalErrorCode::KeyConflict,
+                        "Update key was already used with a different payload",
+                    ));
+                }
+                Some(record(&tx, &id)?)
+            }
+        };
+        tx.commit().map_err(storage)?;
+        Ok(result)
+    }
+
     fn check_directory(&self, authority: &UpdateAuthority) -> Result<()> {
         if authority.directory != self.directory {
             return Err(fail(

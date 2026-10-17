@@ -141,6 +141,14 @@ fn validate_inputs(
     let (journal, update) =
         UpdateJournal::read_snapshot(directory, Some(&spec.update_id)).map_err(error)?;
     let update = update.ok_or("Update missing")?;
+    if let Some(worker) = &spec.worker {
+        if worker.process != spec.parent
+            || worker.build.build_id != update.request.expected.worker_build_id
+            || worker.config_sha256 != update.request.expected.worker_config_sha256
+        {
+            return Err("Worker launcher binding differs from accepted installation".into());
+        }
+    }
     if installation_scope(&cfg)? != journal.scope_sha256
         || journal.scope_sha256 != update.request.expected.scope_sha256
         || config_hash(&cfg.worker_config_path)? != update.request.expected.worker_config_sha256
@@ -186,6 +194,46 @@ pub fn prepare(
     config_path: &Path,
     expected_image_sha256: &str,
     domain: Option<&ExecutionDomain>,
+) -> Result<Preparation> {
+    prepare_bound(
+        journal,
+        owner,
+        id,
+        config_path,
+        expected_image_sha256,
+        domain,
+        None,
+    )
+}
+/// Only the worker launcher supplies this binding, never command JSON.
+pub fn prepare_for_worker(
+    journal: &mut UpdateJournal,
+    owner: &UpdateAuthority,
+    id: &str,
+    config_path: &Path,
+    expected_image_sha256: &str,
+    domain: Option<&ExecutionDomain>,
+    worker: SupervisorWorkerBinding,
+) -> Result<Preparation> {
+    prepare_bound(
+        journal,
+        owner,
+        id,
+        config_path,
+        expected_image_sha256,
+        domain,
+        Some(worker),
+    )
+}
+#[allow(clippy::too_many_arguments)]
+fn prepare_bound(
+    journal: &mut UpdateJournal,
+    owner: &UpdateAuthority,
+    id: &str,
+    config_path: &Path,
+    expected_image_sha256: &str,
+    domain: Option<&ExecutionDomain>,
+    worker: Option<SupervisorWorkerBinding>,
 ) -> Result<Preparation> {
     journal.check_source_authority(owner).map_err(error)?;
     match journal.supervisor(id) {
@@ -252,6 +300,7 @@ pub fn prepare(
         excluded_domain: domain.map(|d| d.identity().job_name.clone()),
         endpoint: ipc::endpoint(&runtime.join("update-state"), &launch_id).map_err(error)?,
         accepted_at_ms: now()?,
+        worker,
     };
     let record = journal.prepare_supervisor(owner, spec).map_err(error)?;
     validate_inputs(&record, &runtime.join("update-state"), false)?;
@@ -340,6 +389,56 @@ impl PreparedSupervisor {
     }
 }
 impl SupervisorHandle {
+    /// The child, not the caller, uses its own OS identity/epoch on the worker channel.
+    pub async fn worker_control(
+        &mut self,
+        command: WorkerUpdateControlCommand,
+    ) -> Result<WorkerUpdateControlResponse> {
+        if self.record.phase != SupervisorPhase::Active {
+            return Err("Worker control requires Active supervisor".into());
+        }
+        if self.record.spec.worker.is_none() {
+            return Err("No worker bound to this supervisor".into());
+        }
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 1,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: SupervisorAction::WorkerControl,
+            token: self.token.clone(),
+            worker_command: Some(command),
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 1
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+        {
+            return Err("Supervisor control response binding changed; observe, no replay".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let control = response
+            .worker_control
+            .ok_or("Worker control response missing")?;
+        if Some(&control.binding) != self.record.spec.worker.as_ref()
+            || control.update_id != self.record.spec.update_id
+            || control.launch_id != self.record.spec.launch_id
+        {
+            return Err("Forwarded worker control response belongs to another scope".into());
+        }
+        Ok(control)
+    }
     pub async fn wait_ready(&mut self) -> Result<SupervisorRecord> {
         let deadline = Instant::now() + Duration::from_secs(12);
         loop {
@@ -388,6 +487,7 @@ impl SupervisorHandle {
             expected_revision: self.record.revision,
             action,
             token: self.token.clone(),
+            worker_command: None,
         };
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
             return Err("Supervisor exact process changed; no command".into());
@@ -412,6 +512,45 @@ impl SupervisorHandle {
         self.record = r.clone();
         Ok(r)
     }
+}
+async fn forward_worker(
+    record: &SupervisorRecord,
+    command: WorkerUpdateControlCommand,
+) -> Result<WorkerUpdateControlResponse> {
+    let binding = record
+        .spec
+        .worker
+        .clone()
+        .ok_or("No worker bound to this supervisor")?;
+    if !infrastructure::matches(&binding.process).map_err(error)? {
+        return Err("Bound worker process changed; no rebind".into());
+    }
+    let request = WorkerUpdateControlRequest {
+        control_version: 1,
+        binding: binding.clone(),
+        update_id: record.spec.update_id.clone(),
+        launch_id: record.spec.launch_id.clone(),
+        supervisor: record.process.clone().ok_or("Supervisor process missing")?,
+        updater_owner_id: record.owner_id.clone().ok_or("Supervisor owner missing")?,
+        updater_epoch: record.owner_epoch.ok_or("Supervisor epoch missing")?,
+        command,
+    };
+    let response: WorkerUpdateControlResponse = ipc::call_with_timeout(
+        &binding.endpoint,
+        binding.process.process_id,
+        &request,
+        ipc::CONTROL_TIMEOUT - ipc::TIMEOUT,
+    )
+    .await
+    .map_err(error)?;
+    if response.control_version != 1
+        || response.binding != binding
+        || response.update_id != request.update_id
+        || response.launch_id != request.launch_id
+    {
+        return Err("Worker control response scope/build changed; outcome unconfirmed".into());
+    }
+    Ok(response)
 }
 fn authorize(r: &SupervisorRecord, token: &str, pid: u32, action: SupervisorAction) -> Result<()> {
     if token.len() != 64
@@ -508,10 +647,62 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if request.action == SupervisorAction::WorkerControl
+            || (request.action == SupervisorAction::Stop
+                && r.phase == SupervisorPhase::Active
+                && r.spec.worker.is_some())
+        {
+            let result = async {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 1
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || r.phase != SupervisorPhase::Active
+                {
+                    return Err("Worker control requires exact Active supervisor revision/scope".into());
+                }
+                if request.action == SupervisorAction::Stop {
+                    if request.worker_command.is_some() {
+                        return Err("Stop cannot carry a worker command".into());
+                    }
+                    let observation = forward_worker(&r, WorkerUpdateControlCommand::Observe).await?;
+                    if observation.into_lease().map_or(true, |lease| lease.is_some_and(|l| l.phase != WorkerUpdatePhase::Released))
+                    {
+                        return Err("Supervisor still owns a worker lease, or its release is unknown; preserve both journals".into());
+                    }
+                    return Ok(None);
+                }
+                let command = request.worker_command.clone().ok_or("Worker command missing")?;
+                forward_worker(&r, command).await.map(Some)
+            }.await;
+            match result {
+                Ok(None) => {} // Verified no outstanding worker lease; normal Stop follows.
+                outcome => {
+                    let (worker_control, error) = match outcome {
+                        Ok(v) => (v, None),
+                        Err(e) => (None, Some(e)),
+                    };
+                    let response = SupervisorResponse {
+                        contract_version: 1,
+                        launch_id: r.spec.launch_id.clone(),
+                        // Avoid repeating the potentially large immutable launch spec
+                        // alongside the worker lease in a bounded control reply.
+                        record: None,
+                        error,
+                        worker_control,
+                    };
+                    let _ = ipc::write(&mut stream, &response).await;
+                    continue;
+                }
+            }
+        }
         let result = (|| {
             authorize(&r, &request.token, pid, request.action)?;
             if request.contract_version != 1 || request.launch_id != r.spec.launch_id {
                 return Err("Supervisor contract/scope mismatch".into());
+            }
+            if request.worker_command.is_some() {
+                return Err("Unexpected worker command on supervisor lifecycle action".into());
             }
             match request.action {
                 SupervisorAction::Observe => {
@@ -529,6 +720,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; отдельный supervisor продолжает работу после parent exit. Source/install ещё отключены",
                     ).map_err(error)
                 }
+                SupervisorAction::WorkerControl => Err("Worker control needs the separate async handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     &owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен по явной команде; source/runtime effects не начинались",
@@ -543,6 +735,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     launch_id: r.spec.launch_id.clone(),
                     record: Some(record),
                     error: None,
+                    worker_control: None,
                 }
             }
             Err(e) => SupervisorResponse {
@@ -550,6 +743,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 launch_id: r.spec.launch_id.clone(),
                 record: None,
                 error: Some(e),
+                worker_control: None,
             },
         };
         // Lost ACK does not cancel committed Active. The next Observe is readonly.
@@ -775,6 +969,7 @@ mod tests {
                 expected_revision: current.revision,
                 action: SupervisorAction::Stop,
                 token,
+                worker_command: None,
             };
             if let Some(process) = current.process {
                 let _ = tokio::runtime::Runtime::new()
@@ -816,6 +1011,7 @@ mod tests {
             expected_revision: ready.revision,
             action: SupervisorAction::Handoff,
             token: "0".repeat(64),
+            worker_command: None,
         };
         let rejected: SupervisorResponse =
             ipc::call(&ready.spec.endpoint, h.child.identity.process_id, &bad)
@@ -882,6 +1078,7 @@ mod tests {
             expected_revision: h.record.revision,
             action: SupervisorAction::Handoff,
             token: h.token.clone(),
+            worker_command: None,
         };
         let wrong = ipc::call::<_, SupervisorResponse>(
             &h.record.spec.endpoint,
@@ -1078,6 +1275,7 @@ mod tests {
             expected_revision: record.revision,
             action: SupervisorAction::Observe,
             token: token.clone(),
+            worker_command: None,
         };
         let observed: SupervisorResponse = ipc::call(
             &record.spec.endpoint,
@@ -1168,6 +1366,7 @@ mod tests {
                     expected_revision: ready.revision,
                     action: SupervisorAction::Handoff,
                     token: data["token"].as_str().unwrap().into(),
+                    worker_command: None,
                 };
                 let reply: SupervisorResponse = ipc::call(
                     &ready.spec.endpoint,

@@ -189,6 +189,7 @@ $oldUpdateReferenceWorker = $env:WINBRIDGE_UPDATE_REFERENCE_WORKER
 $oldUpdateReferenceUpdater = $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER
 $oldSourceTransactionReport = $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT
 $oldSupervisorReport = $env:WINBRIDGE_SUPERVISOR_REPORT
+$oldUpdateControlReport = $env:WINBRIDGE_UPDATE_CONTROL_REPORT
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
@@ -216,11 +217,12 @@ try {
         if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
         $prior = Get-Content -LiteralPath $priorReportPath -Raw | ConvertFrom-Json
         $expected = @('update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build')
-        if ($prior.commands.Count -in @(7,9,10,11,12)) { $expected += @('update-worker-durable-coordination','update-worker-native-coordination','update-previous-worker-refusal') }
-        if ($prior.commands.Count -in @(9,10,11,12)) { $expected += @('update-platform-no-clobber','update-previous-updater-refusal') }
-        if ($prior.commands.Count -in @(10,11,12)) { $expected += @('update-infrastructure-domain') }
-        if ($prior.commands.Count -in @(11,12)) { $expected += @('update-supervisor-staged-source') }
-        if ($prior.commands.Count -eq 12) { $expected += @('update-supervisor-ipc') }
+        if ($prior.commands.Count -in @(7,9,10,11,12,13)) { $expected += @('update-worker-durable-coordination','update-worker-native-coordination','update-previous-worker-refusal') }
+        if ($prior.commands.Count -in @(9,10,11,12,13)) { $expected += @('update-platform-no-clobber','update-previous-updater-refusal') }
+        if ($prior.commands.Count -in @(10,11,12,13)) { $expected += @('update-infrastructure-domain') }
+        if ($prior.commands.Count -in @(11,12,13)) { $expected += @('update-supervisor-staged-source') }
+        if ($prior.commands.Count -in @(12,13)) { $expected += @('update-supervisor-ipc') }
+        if ($prior.commands.Count -eq 13) { $expected += @('update-worker-control') }
         if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne $expected.Count -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
         $previousCache = Join-Path $updatePriorRun 'test-build-cache'
         if (-not [IO.Path]::GetFullPath($previousCache).Equals([IO.Path]::GetFullPath($prior.buildCacheDirectory),[StringComparison]::OrdinalIgnoreCase)) { throw 'Choose original update compiler cache owner run' }
@@ -484,6 +486,7 @@ try {
         $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER = $updaterCopy
         $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT = Join-Path $ReportDirectory 'source-transaction-proof.json'
         $env:WINBRIDGE_SUPERVISOR_REPORT = Join-Path $ReportDirectory 'supervisor-proof.json'
+        $env:WINBRIDGE_UPDATE_CONTROL_REPORT = Join-Path $ReportDirectory 'update-control-proof.json'
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
         $env:WINBRIDGE_UPDATE_COORDINATION_REPORT = Join-Path $ReportDirectory 'update-coordination-proof.json'
@@ -499,7 +502,8 @@ try {
             @{name='update-previous-updater-refusal';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','source_transaction','previous_updater_refuses_current_schema_without_writes','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')},
             @{name='update-infrastructure-domain';arguments=@('test','-p','winbridge-platform','--lib','infrastructure','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-supervisor-staged-source';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','supervisor::tests::actual_staged_source_reaches_ready_without_mutation','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')},
-            @{name='update-supervisor-ipc';arguments=@('test','-p','winbridge-transport','--lib','supervisor::tests::busy_pipe_waits_without_sending','--locked','--offline','--','--exact','--test-threads=1','--nocapture')}
+            @{name='update-supervisor-ipc';arguments=@('test','-p','winbridge-transport','--lib','supervisor::tests::busy_pipe_waits_without_sending','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
+            @{name='update-worker-control';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests','--locked','--offline','--','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {
@@ -511,6 +515,8 @@ try {
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
     }
     if ($UpdatePreparationOnly) {
+        $updateControl = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-control-proof.json') -Raw | ConvertFrom-Json
+        if (-not $updateControl.passed -or $updateControl.platform -ne 'windows' -or -not $updateControl.forgedPeerRejected -or -not $updateControl.duplicateObserved -or -not $updateControl.prematureDrainRejected -or -not $updateControl.sourceVerified -or $updateControl.runtimeApplied -or $updateControl.sourceEffectsEnabled -or $updateControl.windowsOpened -or $updateControl.stages.Count -ne 3 -or $updateControl.stages[-1].phase -ne 'released' -or $updateControl.build.sourceDirty -or $updateControl.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Worker-owned launch/control proof incomplete' }
         $supervisor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'supervisor-proof.json') -Raw | ConvertFrom-Json
         if (-not $supervisor.passed -or $supervisor.platform -ne 'windows' -or -not $supervisor.parentExited -or -not $supervisor.survivedParent -or -not $supervisor.exclusiveOwner -or $supervisor.runtimeApplied -or $supervisor.sourceEffectsEnabled -or $supervisor.windowsOpened -or $supervisor.active.phase -ne 'active' -or $supervisor.stopped.phase -ne 'stopped' -or -not $supervisor.active.spec.excludedDomain -or $supervisor.build.sourceDirty -or $supervisor.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Standalone supervisor proof incomplete' }
         $sourceSmoke = Get-Content -LiteralPath (Join-Path $ReportDirectory 'supervisor-source-proof.json') -Raw | ConvertFrom-Json
@@ -582,6 +588,7 @@ try {
     $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER = $oldUpdateReferenceUpdater
     $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT = $oldSourceTransactionReport
     $env:WINBRIDGE_SUPERVISOR_REPORT = $oldSupervisorReport
+    $env:WINBRIDGE_UPDATE_CONTROL_REPORT = $oldUpdateControlReport
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace
