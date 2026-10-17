@@ -20,10 +20,12 @@ passed. [Source transaction](plans/worker-self-update/source-transaction.md) р�
 в trusted library: source lease, preimages, durable intents/receipts, no-clobber moves,
 manifest-last и readonly crash inspection. 405 local tests и
 [65 native Windows tests / полный candidate build](plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
-passed; source block завершён. Следующий блок — infrastructure supervisor.
+passed; source block завершён.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) реализован как trusted
-library с отдельным authenticated IPC и updater schema 3; 413 local tests прошли,
-native gate ожидается. Production worker adapter/source-control IPC/shutdown не готовы;
+library с отдельным authenticated IPC и updater schema 3; 413 local tests и
+[76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
+прошли. Следом production worker adapter/source-control IPC/exact shutdown; перед
+source/build нужен atomic work/resource reservation. Эти части ещё не готовы;
 U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему

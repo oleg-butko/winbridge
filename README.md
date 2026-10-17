@@ -36,7 +36,7 @@
 apps/
   controller/       Debian coordinator; ws:// listener и CLI submit/get/cancel/watch
   worker/           Local execution authority, CLI, SQLite, fixture executable
-  update/           Source/ZIP verifier, independent update journal; runtime apply ещё не реализован
+  update/           Source/ZIP verifier, update journal и supervisor; runtime apply ещё не реализован
   desktop/          Tauri shell с worker IPC bridge, отдельный Cargo package
 crates/
   protocol/         Общие wire DTO и версия протокола
@@ -74,8 +74,9 @@ crash inspection. [65 native tests и полный candidate build](docs/plans/w
 прошли. CLI меняет только update metadata и читает диагностику; внешние source-write
 commands, exe replacement и shutdown ещё не подключены.
 Добавлена trusted library [supervisor handoff](docs/plans/worker-self-update/supervisor.md):
-отдельный процесс, durable intent/PID/epoch и authenticated IPC; 413 local tests
-passed, native gate ожидается. Production worker launcher ещё не подключён.
+отдельный процесс, durable intent/PID/epoch и authenticated IPC; 413 local tests и
+[76 native tests / полный candidate build](docs/plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
+прошли. Production worker launcher/source-control/shutdown ещё не подключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

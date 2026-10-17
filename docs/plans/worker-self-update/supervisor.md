@@ -1,9 +1,11 @@
 # U1: отдельный supervisor и передача владения
 
-2026-10-17. Реализован trusted library блока после [source transaction](source-transaction.md).
+2026-10-17. Реализованы внутренние функции запуска после [source transaction](source-transaction.md).
 Внешний update capability, source driver IPC, worker shutdown и runtime install
 остаются отключены. Этот блок проверяет независимый процесс и его передачу;
-он ещё не подключён к production worker launcher. Native Windows gate ожидается.
+он ещё не подключён к production worker launcher.
+[Native Windows gate](windows-supervisor-gate-2026-10-17.md) прошёл: 76 tests /
+12 groups, actual source smoke, 19 checked artifacts и build четырёх exe.
 
 Launcher использует updater journal, OS owner lock и текущий epoch. Сначала
 сохраняется immutable launch intent; затем запускается проверенная копия установленного

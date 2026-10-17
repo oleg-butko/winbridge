@@ -85,7 +85,9 @@ sequence, не захватывая владение и не создавая о
 Он показывает согласованный parent/launch snapshot, epoch и отдельное наблюдение
 процесса. Active supervisor означает владение инфраструктурой; source/install в этом
 блоке отключены. Запрос запуска через worker/CLI/MCP ещё не подключён, вручную
-вызывать внутренний supervisor mode не требуется. Native gate ожидается.
+вызывать внутренний supervisor mode не требуется.
+[Native gate](../plans/worker-self-update/windows-supervisor-gate-2026-10-17.md):
+76 tests и полный candidate build прошли; installed runtime не обновлялся.
 
 ## Сборка кандидата без остановки worker
 

@@ -5,11 +5,12 @@
 ## Подготовка самообновления — 2026-10-17
 
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
-`apps/update` владеет отдельным updater journal schema 2 (WBUP), installation scope,
+`apps/update` владеет отдельным updater journal schema 3 (WBUP), installation scope,
 OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
-production worker adapter/source-control/shutdown/install пока отключены.
+[76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
+прошли; production worker adapter/source-control/shutdown/install пока отключены.
 Worker schema 15 владеет source/drain/quiesce leases и pre-migration startup guard;
 updater не открывает worker journal. Между этими БД нет общей транзакции:
 source effects требуют свежий trusted worker grant и актуальную updater authority.
@@ -18,7 +19,7 @@ SourceApplying сохраняется до изменений; per-file intent �
 receipt, manifest последним. Verified source и parent Building фиксируются атомарно
 в updater DB, SourceHeld остаётся у worker. Crash/unknown outcome не повторяется;
 readonly inspection показывает сохранённые preimages/held и receipt states.
-Миграция updater schema 1 → 2 требует свободный owner lock и verified consistent backup.
+Миграция updater schema 1/2 → 3 требует свободный owner lock и verified consistent backup.
 [65 native Windows tests / полный candidate build](plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
 прошли. Supervisor вне task Jobs, local IPC/shutdown, runtime install и bootstrap
 ещё не реализованы; внешняя update capability не объявляется. Installed runtime сохраняется.

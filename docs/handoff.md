@@ -1,21 +1,38 @@
 ## Самообновление U1: supervisor handoff — 2026-10-17
 
-[Контракт и ограничения](plans/worker-self-update/supervisor.md).
-Trusted launcher сохраняет intent/PID receipt, child получает следующий updater epoch,
-открывает отдельный SID/peer-bound IPC и ждёт handoff. Active фиксируется до ACK;
-parent drop/exit его не отменяет. До handoff child ограничен тайм-аутом/no-effects,
-после — TTL takeover отсутствует. Unknown launch не повторяется. Stop + parent failure
-атомарны; source-effect admission требует Active/тот же owner. Source/install/shutdown
-команд нет. Worker launcher/source-control IPC integration ещё впереди.
-Updater schema 3 с consistent v1/v2 migration backup; source schema-2 status читается
-readonly без миграции. Worker schema 15 не менялась. Current worker installed 1f3aa9f
-healthy/idle, source/runtime не обновлялись. Native gate ожидается.
-413 workspace tests passed, Clippy и Windows/tests cross-check прошли; final updater
-и contracts/UI checks прошли. Удалены 164 устаревших Debian test executables,
-10,669,626,464 bytes воспроизводимого cache; free после очистки 28,944,531,456 bytes.
-Running controller/main binaries и runtime/config/journals/reports сохранены.
-Наследуемый внешний Job не обходится: диагностический externalJobObserved не даёт
-права production install; policy/проверка окружения обязательны до U4. A4 отложен.
+[Контракт и ограничения](plans/worker-self-update/supervisor.md),
+[native Windows gate](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md).
+Внутренний launcher сохраняет intent/PID receipt, child получает следующий updater
+owner epoch и отдельный authenticated IPC. Active фиксируется до ACK; parent exit
+его не отменяет. До handoff child ограничен no-effects deadline, после — TTL takeover
+отсутствует. Unknown launch не повторяется. Stop + parent failure атомарны.
+Updater schema 3, consistent v1/v2 migration backups; schema-2 source status читается
+readonly. Worker schema 15 не менялась. Production worker launcher/source-control
+IPC/exact shutdown/install пока не готовы; U1 целиком открыт, A4 отложен.
+
+413 workspace tests, final updater/targeted lost-ACK, Clippy, Windows/tests cross-check,
+contracts/typecheck/build:ui/scaffold и Python/PowerShell checks passed.
+Clean `64bb3b5` native gate: **76 tests / 12 groups**, actual ZIP и полный build
+четырёх exe; 19 artifacts проверены. Run `20261017-161030-d0a06df8`, parent task
+`6480fd5d-8e09-4740-8c3d-d1d9bc8874ce` succeeded/0; report SHA
+`52f4000b3b4242dded4a7fbf2ab809f0a6b08bdcd8a6da8467df8620ffb8a335`.
+Ревью/native test исправили отдельный desktop lockfile и bounded busy-pipe connection
+до отправки данных; повторной отправки команды нет. Actual source smoke достиг
+Ready за 8.113 s, manifest до/после тот же.
+
+Установленный worker clean `1f3aa9f`, build `1792228466051801600`, generation
+`994671b4-e10c-469c-8515-b2aa71a4e3dc` прежние; итоговый Info healthy/idle.
+Рабочие source/runtime/config не обновлялись; UI-окон не было. Desktop можно закрыть,
+worker оставить; обновление пока не требуется. Windows K free before/after:
+31,665,422,336 / 30,528,774,144 bytes; Debian final 28,935,110,656 bytes.
+Удалены 164 устаревших Debian test executables, 10,669,626,464 bytes reproducible cache;
+running controller/main binaries и runtime/config/journals/reports сохранены.
+
+Наследуемый внешний Job не обходится: externalJobObserved true в validation task.
+Gate доказывает исключение из указанного test domain и parent exit, но не production
+worker shutdown. До install нужны реальный worker adapter и проверка окружения.
+Следом — source-control IPC/drain/quiesce/exact shutdown; перед source/build
+необходима атомарная work/resource reservation, readonly Info её не заменяет.
 
 ## Самообновление U1: source transaction — 2026-10-17
 
