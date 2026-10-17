@@ -100,7 +100,9 @@ native coordination, previous-worker refusal. Он запускает отдел
 сохраняет `update-coordination-proof.json`, проверяет actual ZIP и собирает четыре
 candidate exe. Reference schema-14 exe копируется create-only с SHA до/после; его
 запуск использует новый тестовый config/state. Installed runtime не заменяется.
-На момент первого code commit native подтверждение этого пакета ещё впереди.
+[Native gate clean b0d5730](windows-worker-coordination-gate-2026-10-17.md) прошёл:
+52 tests, 7 groups, 11 checked artifacts и полный build/staging четырёх exe.
+Renderer по checksummed Windows IPC observations прошёл; installed worker прежний.
 
 Следом: per-file source intents/preimages/receipts + full-tree reconciliation,
 независимый supervisor вне task Jobs, authenticated local handshake и exact

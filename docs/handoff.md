@@ -17,10 +17,19 @@ reconciliation при freeze, повтор admission внутри transaction и
 schema SHA осознанно изменился из-за optional Info metadata:
 `ca892a30ddabf3a3b24942f8d9d04c1c7edef45fa60f28df5566b32f465a25fa`.
 Legacy requests/enums прежние; старая pair evidence не подтверждает новый digest/build.
-Native Windows gate пакета ещё не выполнен на момент этого code commit.
+[Native gate clean b0d5730](plans/worker-self-update/windows-worker-coordination-gate-2026-10-17.md)
+passed: 52 tests / 7 groups, 11 checked artifacts, actual ZIP, полный build/staging
+четырёх exe и production renderer по checksummed Windows IPC observations.
+Run `20261017-102946-eea3af7d`, parent `6804eb6f-dff5-4c24-91b7-72f0d40b4710`
+succeeded/0; report SHA `0c358b3047b02e53d2028b2344e62866b3534467919c6a30a5287a120c7cc91a`.
+Candidate build `1792247503961887500`; runtimeApplied/candidateVerified/windowsOpened
+false. Только compiler caches из original owner `20261017-061527-f4639971`
+переиспользованы под lease, source/state/proofs новые. Windows free before/after
+36,320,370,688 / 34,816,147,456 bytes; Debian final 22,994,698,240 bytes.
 Установленный worker healthy/idle: `1f3aa9f`, build `1792228466051801600`, generation
 `994671b4-e10c-469c-8515-b2aa71a4e3dc`; source/runtime/config не изменялись.
-Desktop не нужен, UI окон не будет; worker оставить для автоматического gate.
+Final readonly health/idle passed; build/generation прежние. UI-окон не было.
+Desktop можно закрыть, worker оставить; ручное обновление сейчас не требуется.
 Следом source transaction/preimages/reconciliation, standalone supervisor,
 local IPC и exact shutdown. U1–U4 открыты; bootstrap пока не запрашивать.
 
