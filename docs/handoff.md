@@ -1,32 +1,49 @@
-## A4.3 — кандидат atomic resource sets, 2026-10-17
+## A4.3 — native candidate готов, нужен update worker, 2026-10-17
 
-[План/ревью](plans/architecture-transition/resource-sets.md),
-[пользовательская семантика](guides/resource-scheduling.md). Реализуются typed
-resource policy/observation, frozen admission/child requirements, persisted owner
-policy, transactional full claims, physical lease handoff/recovery и UI inventory.
-Schema 14 с consistent schema-13 backup; RPC 1/2/operation-page v1 сохраняются.
-Рабочие quotas/resources не включались; installed новый контракт пока отсутствует.
+[Отчёт и ревью](plans/architecture-transition/windows-resource-scheduling-gate-2026-10-17.md),
+[план](plans/architecture-transition/resource-sets.md),
+[поведение](guides/resource-scheduling.md),
+[обновление](validation/architecture-worker-update.md).
+Code `fc5c90e`: frozen root/workflow requirements до ACK, persisted owner policy,
+atomic complete claims с прежним intent/attempt/project lease, physical lifetime/
+uncertainty и fair projects. Build/cache отпускаются при Ready, process resources
+остаются до cleanup. Scope fingerprint включает только собственные binding/defs.
+Schema 14 с consistent backup schema 13; working journal пока 13. RPC 1/2,
+operation-page v1 и прежние schema hashes сохраняются; production policy не включалась.
 
-Local core/protocol, 38 shared metadata cases, 6 Store tests, actual 3-project
-IPC/cancel/config-edit/restart и workflow app handoff tests прошли. Linux/Windows
-Clippy, workspace all-targets check, typecheck и generated contracts passed.
-Первый clean candidate `46c9445` прошёл 346 workspace tests, resource renderer,
-полный прежний UI regression и 79 native tests/20 groups/desktop compile
-(run `20261017-044841-da6e9215`, parent `8c972743-f4f9-49be-ac29-3d5eaa257007`,
-report SHA `81953f98cc79605df627046964a13770dc6eb08f263e5aac9a5cdc131da0e09b`).
-После ревью fingerprint сузился до собственного binding/referenced definitions;
-чужие bindings не сбрасывают готовность project. Следует final clean proof/native
-повтор. Controller binary `46c9445` ещё не deployed; daemon остаётся `29dba9a`.
- Ревью добавило guard первого enable при legacy pending/physical owners
-и запрет disable/remove/kind change удерживаемого ресурса. Полные наборы выдаются
-через прежний execution lease, без отдельного счётчика или resource daemon.
+Final clean **347 workspace tests**, 38 shared Rust/TS cases, Clippy/checks,
+contracts/typecheck/build и renderer passed. Полный UI regression прошёл на `46c9445`;
+после scope-only fix frontend не менялся. Final native `20261017-045801-304be26a`,
+parent `dbca6dff-12e4-4f9b-a13b-b8cacd2386e9` succeeded/0: **80 tests / 20 groups,
+desktop compile, 25 verified artifacts passed**. Report SHA
+`3a0a20de827ca8f3578f12253f702797ebf3f13312e6b5d507886a001c5327f4`.
+Readonly recheck и renderer по checksummed final Windows observations passed.
+Ревью исправило unsafe legacy enable/active resource disable и чужой binding,
+инвалидировавший project evidence; regressions прошли и на Windows.
 
-Установленный `99351ea` healthy/idle, A4.2 завершён. Controller exact `29dba9a`,
-serve `97067`, PID 4195. Для native gate desktop не нужен, UI окон не будет;
-working worker оставить запущенным. Debian около 26 GiB free, incremental выключен.
-Предыдущий schema-12 reference для queue gate:
-`K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\20261016-194546-f0e20b76\previous-schema12-worker.exe`.
-Resource gate дополнительно сохраняет actual schema-13 reference exe.
+Controller exact clean `fc5c90e`, build `1792227308688010918`, SHA
+`6f0ec2888ccf4b009bdbd59483b8d0ad452b61509675f7cac9a99c78fd451f51` совпал с consumer
+proof и /proc/PID/exe. Serve `35492`, PID 24440; прежний `29dba9a` artifact сохранён,
+shutdown graceful, endpoints/configs прежние. Session
+`c0cc059c-1401-491d-be16-ab74960ef689`. Actual MCP RPC2 pair с `99351ea` passed:
+receipt `418729e49f17d13a6f79879df4a95c0c894ff6ebfa376f4474236be1665fc34f`.
+Installed generation `377f2ea2-a0be-4a9d-b2e9-eae49d5ed764`, incarnation
+`5a8eb173-4193-4332-b00f-67e3850b2c97` прежние; health/idle подтверждены.
+Resource contract у installed provider отсутствует — не объявлен включённым заранее.
+
+Достигнута согласованная граница: один обычный update worker/desktop, затем automatic
+actual installed claims/metadata/UI gate. ZIP/SHA — в
+`K:\VMs\shared\WinBridge\sources\architecture-update.latest.json`.
+Существующие local configs/journal сохранять; production limits не менять.
+Desktop можно закрыть, worker оставить до update; UI окон нет. A4.3 не закрыт,
+полный A4 открыт: далее A4.4 независимые consumers, потом A5 actor pilot.
+
+Windows free final before/after 51,842,183,168 / 51,738,898,432 bytes;
+Debian before final build 27,654,430,720 bytes. Incremental выключен, caches
+переиспользованы, Windows directories не удалялись. Runtime source после final
+native gate не менялся. Для будущего native повтора после update нужны retained
+schema-12/13 exe через --queue-reference-worker / --resource-reference-worker;
+пути и SHA сохранены в native report. Local source transcript не менялся/не экспортируется.
 
 ## A4.2 завершён; следующий A4.3 resource sets, 2026-10-17
 

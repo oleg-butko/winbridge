@@ -1,7 +1,7 @@
 # Общие ресурсы нескольких проектов — A4.3
 
-Кандидат в разработке, 2026-10-17. [План и ревью](../plans/architecture-transition/resource-sets.md).
-Native и installed проверки пока не завершены. Рабочие настройки не меняются.
+Кандидат проверен 2026-10-17: [80 native tests и desktop compile](../plans/architecture-transition/windows-resource-scheduling-gate-2026-10-17.md).
+Actual installed контракт ожидает обновления worker/desktop. [План и ревью](../plans/architecture-transition/resource-sets.md). Рабочие настройки не меняются.
 
 Лимит работ ограничивает общую нагрузку. Наборы ресурсов дополнительно защищают
 объявленные конфликты между проектами: общий cache, binary, IPC, port, interactive

@@ -172,5 +172,4 @@ offline и read-only запрещают управление. [69 native tests �
 capacities, used/uncertain units и владельцев со scoped operation/lease IDs.
 Набор выдаётся целиком, причина ожидания сохраняется в журнале. Build/cache и
 process resources имеют разные lifetimes при application Ready. Offline/inspection,
-unknown metadata и truncated inventory отмечаются явно. Native/installed gate
-нового контракта пока не пройдены; production policy не включается автоматически.
+unknown metadata и truncated inventory отмечаются явно. [80 native tests/desktop compile и actual Windows renderer](plans/architecture-transition/windows-resource-scheduling-gate-2026-10-17.md) прошли; installed новый контракт ожидает update. Production policy не включается автоматически.

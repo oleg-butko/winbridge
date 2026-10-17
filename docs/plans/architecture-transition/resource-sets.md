@@ -1,7 +1,7 @@
 # A4.3 — атомарные наборы общих ресурсов
 
 2026-10-17. A4.2 installed gate завершён. План проверен до реализации;
-этот документ не объявляет A4.3 готовым. [Общий порядок](README.md#a4--очередь-двух-трёх-проектов-и-ограничение-нагрузки).
+[Final native gate](windows-resource-scheduling-gate-2026-10-17.md) прошёл; actual installed новый контракт ещё ожидается. [Общий порядок](README.md#a4--очередь-двух-трёх-проектов-и-ограничение-нагрузки).
 
 ## Результат и границы
 
@@ -112,4 +112,4 @@ kind change активного named resource также отклоняется.
 run `20261017-044841-da6e9215`. Последующее ревью сузило project policy fingerprint:
 чужой binding/unused definition не сбрасывает evidence другого project, включая
 нового конкурента за общий cache. Изменение capacity собственного ресурса по-прежнему
-инвалидирует квитанцию. Core regression пройден; финальный native повтор ожидается.
+инвалидирует квитанцию. Core regression, 347 final workspace tests и 80 final native tests/desktop compile прошли; actual installed gate ожидает update.
