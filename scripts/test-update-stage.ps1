@@ -37,4 +37,13 @@ $sources['winbridge-desktop.exe'] = Join-Path $build 'absent.exe'
 Assert-Rejected { New-UpdatePayload $sources $missingStage } 'Missing artifact accepted'
 Assert-True (-not (Test-Path -LiteralPath $missingStage)) 'Partial candidate created before artifact preflight'
 foreach ($name in $sources.Keys) { Assert-True ((Get-FileHash -LiteralPath (Join-Path $runtime $name)).Hash -ceq $before[$name]) 'Installed runtime changed' }
-Write-Output 'Update staging checks passed: complete payload, hashes, create-only paths, missing artifact, unchanged runtime'
+$sourceRoot = Join-Path $ScratchRoot 'source'
+$generatedRoot = Join-Path $sourceRoot 'apps/desktop/src-tauri/gen'
+[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($generatedRoot)) | Out-Null
+$outside = Join-Path $ScratchRoot 'outside-cache'
+[IO.Directory]::CreateDirectory($outside) | Out-Null
+$linkType = if ($env:OS -eq 'Windows_NT') { 'Junction' } else { 'SymbolicLink' }
+New-Item -ItemType $linkType -Path $generatedRoot -Target $outside | Out-Null
+Assert-Rejected { Assert-UpdateBuildPaths -Source $sourceRoot -WorkspaceTarget (Join-Path $sourceRoot 'target') -DesktopTarget (Join-Path $sourceRoot 'apps/desktop/src-tauri/target') } 'Generated build output follows a junction/symlink'
+Assert-True (@(Get-ChildItem -LiteralPath $outside).Count -eq 0) 'Build preflight wrote outside source'
+Write-Output 'Update staging checks passed: complete payload, hashes, create-only paths, missing artifact, unchanged runtime, generated-output link guard'

@@ -1,5 +1,13 @@
 # Create-only payload preparation. This file never copies to installed runtime paths.
 . (Join-Path $PSScriptRoot '../session-runtime.ps1')
+function Assert-UpdateBuildPaths {
+  param([Parameter(Mandatory)][string]$Source, [Parameter(Mandatory)][string]$WorkspaceTarget, [Parameter(Mandatory)][string]$DesktopTarget)
+  # Preserving generated data in a source plan does not authorize a compiler to
+  # follow a junction when it writes its outputs.
+  foreach ($path in @($WorkspaceTarget,(Join-Path $WorkspaceTarget 'debug'),$DesktopTarget,(Join-Path $DesktopTarget 'release'),(Join-Path $Source 'node_modules'),(Join-Path $Source 'web-dist'),(Join-Path $Source 'apps/desktop/src-tauri/gen'),(Join-Path $Source 'apps/desktop/src-tauri/gen/schemas'))) {
+    Assert-SessionDirectory $path
+  }
+}
 function New-UpdatePayload {
   param([Parameter(Mandatory)]$Sources, [Parameter(Mandatory)][string]$Destination)
   $names = @('winbridge-worker.exe','winbridge-fixture.exe','winbridge-desktop.exe','winbridge-update.exe')

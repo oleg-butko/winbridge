@@ -48,6 +48,7 @@ if ($ValidationCacheDirectory) {
     if (-not (Test-Path -LiteralPath $cachePath -PathType Container) -or [IO.DriveInfo]::new([IO.Path]::GetPathRoot($cachePath)).DriveType -ne [IO.DriveType]::Fixed) { throw 'Validation reuse requires existing local compiler caches' }
   }
 }
+Assert-UpdateBuildPaths -Source $source -WorkspaceTarget $workspaceTarget -DesktopTarget $desktopTarget
 $report = [ordered]@{schemaVersion=1;kind='winbridge-update-candidate';status='preparing';runtimeApplied=$false;candidateVerified=$false;sourceDirectory=$source;manifestSha256=$ManifestSha256;storage=@{sourceAvailableBytesBefore=$drive.AvailableFreeSpace;stagingAvailableBytesBefore=$stageDrive.AvailableFreeSpace};commands=@();artifacts=@();error=$null}
 [IO.Directory]::CreateDirectory($stage) | Out-Null
 $oldIncremental = $env:CARGO_INCREMENTAL
