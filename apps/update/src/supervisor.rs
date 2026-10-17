@@ -891,13 +891,8 @@ mod tests {
         .await;
         assert!(wrong.is_err());
         h.child.detached();
-        #[cfg(unix)]
-        let mut stream = tokio::net::UnixStream::connect(&h.record.spec.endpoint)
+        let mut stream = ipc::connect(&h.record.spec.endpoint, h.child.identity.process_id)
             .await
-            .unwrap();
-        #[cfg(windows)]
-        let mut stream = tokio::net::windows::named_pipe::ClientOptions::new()
-            .open(&h.record.spec.endpoint)
             .unwrap();
         winbridge_transport::write_frame(&mut stream, &serde_json::to_vec(&request).unwrap())
             .await

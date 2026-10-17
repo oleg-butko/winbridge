@@ -7,6 +7,10 @@ pub const TIMEOUT: Duration = Duration::from_secs(3);
 pub type Stream = tokio::net::UnixStream;
 #[cfg(windows)]
 pub type Stream = tokio::net::windows::named_pipe::NamedPipeServer;
+#[cfg(unix)]
+pub type ClientStream = tokio::net::UnixStream;
+#[cfg(windows)]
+pub type ClientStream = tokio::net::windows::named_pipe::NamedPipeClient;
 pub struct Listener {
     #[cfg(unix)]
     inner: tokio::net::UnixListener,
@@ -135,11 +139,9 @@ async fn exchange<S: AsyncRead + AsyncWrite + Unpin, Q: Serialize, R: Deserializ
     }
     serde_json::from_slice(&bytes).map_err(io::Error::other)
 }
-pub async fn call<Q: Serialize, R: DeserializeOwned>(
-    address: &str,
-    expected_pid: u32,
-    request: &Q,
-) -> io::Result<R> {
+/// Wait only for an available connection, before any request bytes are sent.
+/// A command exchange is never retried, including after an unknown ACK.
+pub async fn connect(address: &str, expected_pid: u32) -> io::Result<ClientStream> {
     tokio::time::timeout(TIMEOUT, async {
         #[cfg(unix)]
         let stream = {
@@ -155,7 +157,15 @@ pub async fn call<Q: Serialize, R: DeserializeOwned>(
         #[cfg(windows)]
         let stream = {
             use std::os::windows::io::AsRawHandle;
-            let stream = tokio::net::windows::named_pipe::ClientOptions::new().open(address)?;
+            let stream = loop {
+                match tokio::net::windows::named_pipe::ClientOptions::new().open(address) {
+                    Ok(stream) => break stream,
+                    Err(e) if e.raw_os_error() == Some(231) => {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                    Err(e) => return Err(e),
+                }
+            };
             let mut pid = 0;
             if unsafe {
                 windows_sys::Win32::System::Pipes::GetNamedPipeServerProcessId(
@@ -171,8 +181,58 @@ pub async fn call<Q: Serialize, R: DeserializeOwned>(
             }
             stream
         };
+        Ok(stream)
+    })
+    .await
+    .map_err(|_| io::Error::other("Supervisor IPC connect timeout; request not sent"))?
+}
+pub async fn call<Q: Serialize, R: DeserializeOwned>(
+    address: &str,
+    expected_pid: u32,
+    request: &Q,
+) -> io::Result<R> {
+    tokio::time::timeout(TIMEOUT, async {
+        let stream = connect(address, expected_pid).await?;
         exchange(stream, request).await
     })
     .await
     .map_err(|_| io::Error::other("Supervisor IPC timeout; do not resend handoff or spawn"))?
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    use tokio::io::AsyncReadExt;
+
+    #[tokio::test]
+    async fn busy_pipe_waits_without_sending() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            & 0xffffffffffff;
+        let id = format!("{:08x}-0000-4000-8000-{nonce:012x}", std::process::id());
+        let address = endpoint(Path::new("."), &id).unwrap();
+        let mut listener = Listener::bind(&address).unwrap();
+        // Occupy the only instance without letting the listener rotate it yet.
+        let first = tokio::net::windows::named_pipe::ClientOptions::new()
+            .open(&address)
+            .unwrap();
+        let mut pending = tokio::spawn(async move { connect(&address, std::process::id()).await });
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), &mut pending)
+                .await
+                .is_err()
+        );
+        let (first_server, _) = listener.accept().await.unwrap();
+        let client = pending.await.unwrap().unwrap();
+        let (mut server, _) = listener.accept().await.unwrap();
+        let mut byte = [0];
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), server.read_exact(&mut byte))
+                .await
+                .is_err()
+        );
+        drop((first, first_server, client, server));
+    }
 }

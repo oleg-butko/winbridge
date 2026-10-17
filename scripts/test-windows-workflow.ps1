@@ -216,10 +216,11 @@ try {
         if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
         $prior = Get-Content -LiteralPath $priorReportPath -Raw | ConvertFrom-Json
         $expected = @('update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build')
-        if ($prior.commands.Count -in @(7,9,10,11)) { $expected += @('update-worker-durable-coordination','update-worker-native-coordination','update-previous-worker-refusal') }
-        if ($prior.commands.Count -in @(9,10,11)) { $expected += @('update-platform-no-clobber','update-previous-updater-refusal') }
-        if ($prior.commands.Count -in @(10,11)) { $expected += @('update-infrastructure-domain') }
-        if ($prior.commands.Count -eq 11) { $expected += @('update-supervisor-staged-source') }
+        if ($prior.commands.Count -in @(7,9,10,11,12)) { $expected += @('update-worker-durable-coordination','update-worker-native-coordination','update-previous-worker-refusal') }
+        if ($prior.commands.Count -in @(9,10,11,12)) { $expected += @('update-platform-no-clobber','update-previous-updater-refusal') }
+        if ($prior.commands.Count -in @(10,11,12)) { $expected += @('update-infrastructure-domain') }
+        if ($prior.commands.Count -in @(11,12)) { $expected += @('update-supervisor-staged-source') }
+        if ($prior.commands.Count -eq 12) { $expected += @('update-supervisor-ipc') }
         if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne $expected.Count -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
         $previousCache = Join-Path $updatePriorRun 'test-build-cache'
         if (-not [IO.Path]::GetFullPath($previousCache).Equals([IO.Path]::GetFullPath($prior.buildCacheDirectory),[StringComparison]::OrdinalIgnoreCase)) { throw 'Choose original update compiler cache owner run' }
@@ -497,7 +498,8 @@ try {
             @{name='update-platform-no-clobber';arguments=@('test','-p','winbridge-platform','--lib','source_files','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-previous-updater-refusal';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','source_transaction','previous_updater_refuses_current_schema_without_writes','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')},
             @{name='update-infrastructure-domain';arguments=@('test','-p','winbridge-platform','--lib','infrastructure','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-supervisor-staged-source';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','supervisor::tests::actual_staged_source_reaches_ready_without_mutation','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')}
+            @{name='update-supervisor-staged-source';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','supervisor::tests::actual_staged_source_reaches_ready_without_mutation','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')},
+            @{name='update-supervisor-ipc';arguments=@('test','-p','winbridge-transport','--lib','supervisor::tests::busy_pipe_waits_without_sending','--locked','--offline','--','--exact','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {

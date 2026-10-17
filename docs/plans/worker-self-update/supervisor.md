@@ -65,7 +65,9 @@ peer/nonce/image/config, crash до spawn receipt/до handoff, child после
   adapter; production гарантии Job проверяются на Windows.
 - `crates/transport/src/supervisor.rs`: отдельный framed IPC, 3-second request/read/write
   deadlines, bounded DTO, same-user Unix credentials или SID/DACL named pipe.
-  Windows сверяет kernel client/server PID; disconnect до отправки сообщения
+  Windows перед отправкой ждёт busy instance в пределах того же 3-second deadline;
+  повторной отправки команды нет. Отдельный native тест удерживает занятый pipe
+  и проверяет ожидание без отправки данных. Windows сверяет kernel client/server PID; disconnect до отправки сообщения
   не завершает listener. [Client PID](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid),
   [Server PID](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid).
 - `apps/update/src/journal/supervisor.rs`: launch spec, immutable phase receipts,

@@ -312,14 +312,16 @@ def main():
                 names.add(name)
             expected = ['update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build']
             prior = json.loads((previous_report / 'report.json').read_text(encoding='utf-8-sig'))
-            if len(prior['commands']) in (7, 9, 10, 11):
+            if len(prior['commands']) in (7, 9, 10, 11, 12):
                 expected += ['update-worker-durable-coordination', 'update-worker-native-coordination', 'update-previous-worker-refusal']
-            if len(prior['commands']) in (9, 10, 11):
+            if len(prior['commands']) in (9, 10, 11, 12):
                 expected += ['update-platform-no-clobber','update-previous-updater-refusal']
-            if len(prior['commands']) in (10, 11):
+            if len(prior['commands']) in (10, 11, 12):
                 expected += ['update-infrastructure-domain']
-            if len(prior['commands']) == 11:
+            if len(prior['commands']) in (11, 12):
                 expected += ['update-supervisor-staged-source']
+            if len(prior['commands']) == 12:
+                expected += ['update-supervisor-ipc']
             if (prior['platform'] != 'windows' or prior['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', prior['sourceCommit'])
                     or not re.fullmatch(r'[0-9a-f]{64}', prior['sourceArchiveSha256'])
                     or not {'report.json', *(n+'.log' for n in expected)}.issubset(names)
@@ -524,7 +526,7 @@ exit $nativeExit
                     or result['updateReferenceUpdater']['sha256'] != args.update_reference_updater_sha256):
                 raise RuntimeError('Incomplete native source transaction proof')
         if archive_has_supervisor:
-            expected += ['update-infrastructure-domain','update-supervisor-staged-source']
+            expected += ['update-infrastructure-domain','update-supervisor-staged-source','update-supervisor-ipc']
             supervisor = json.loads((report / 'supervisor-proof.json').read_text(encoding='utf-8-sig'))
             if (supervisor.get('kind') != 'supervisor_native_proof' or supervisor.get('passed') is not True
                     or supervisor.get('platform') != 'windows' or not all(supervisor.get(k) is True for k in ['parentExited','survivedParent','exclusiveOwner'])
