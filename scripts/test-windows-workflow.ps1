@@ -45,6 +45,12 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 .PARAMETER IdentityOnly
 Проверяет build identity на настоящей Windows/Git: parent checkout, Unicode paths
 и скрытые index flags. Запускает только protocol tests, без desktop/test worker.
+.PARAMETER UpdatePreparationOnly
+Проверяет updater journal/ZIP, владение исходниками, drain/quiesce и startup guard
+на отдельных worker/journal. Собирает четыре candidate exe без установки и UI-окон.
+.PARAMETER UpdateReferenceWorker
+Путь к известному schema-14 worker.exe. Создаётся проверенная копия для запуска
+с НОВЫМ тестовым journal schema 15; рабочий worker и его журнал не открываются.
 .PARAMETER TaskFsmOnly
 Проверяет A0 baseline и A1 Task FSM: сохранение launch intent до spawn, ошибку записи PID,
 cancel/timeout/process tree, recovery и совместимость существующих workflows.
@@ -108,6 +114,7 @@ param(
     [string]$UpdatePreparationArchivePath = '',
     [string]$UpdatePreparationCacheRunId = '',
     [string]$UpdatePreparationCacheSha256 = '',
+    [string]$UpdateReferenceWorker = '',
     [switch]$TaskFsmOnly,
     [switch]$TaskCasOnly,
     [switch]$ReadinessOnly,
@@ -171,6 +178,8 @@ $oldQueueControlReport = $env:WINBRIDGE_QUEUE_CONTROL_REPORT
 $oldQueueReferenceWorker = $env:WINBRIDGE_QUEUE_LEGACY_WORKER
 $oldResourceReport = $env:WINBRIDGE_RESOURCE_SCHEDULING_REPORT
 $oldResourceReferenceWorker = $env:WINBRIDGE_RESOURCE_LEGACY_WORKER
+$oldUpdateCoordinationReport = $env:WINBRIDGE_UPDATE_COORDINATION_REPORT
+$oldUpdateReferenceWorker = $env:WINBRIDGE_UPDATE_REFERENCE_WORKER
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
 $oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
@@ -196,7 +205,8 @@ try {
         if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
         $prior = Get-Content -LiteralPath $priorReportPath -Raw | ConvertFrom-Json
         $expected = @('update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build')
-        if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne 4 -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
+        if ($prior.commands.Count -eq 7) { $expected += @('update-worker-durable-coordination','update-worker-native-coordination','update-previous-worker-refusal') }
+        if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne $expected.Count -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
         $previousCache = Join-Path $updatePriorRun 'test-build-cache'
         if (-not [IO.Path]::GetFullPath($previousCache).Equals([IO.Path]::GetFullPath($prior.buildCacheDirectory),[StringComparison]::OrdinalIgnoreCase)) { throw 'Choose original update compiler cache owner run' }
         $report.buildCacheRequested = [ordered]@{runId=$UpdatePreparationCacheRunId;sourceCommit=$prior.sourceCommit;reportSha256=$UpdatePreparationCacheSha256}
@@ -240,6 +250,7 @@ try {
     $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
     if ($TaskCasRuntimeDiagnostic -and -not $TaskCasOnly) { throw 'TaskCasRuntimeDiagnostic requires TaskCasOnly' }
     if (($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) -and -not $UpdatePreparationOnly) { throw 'Update cache reuse requires UpdatePreparationOnly' }
+    if ($UpdateReferenceWorker -and -not $UpdatePreparationOnly) { throw 'UpdateReferenceWorker requires UpdatePreparationOnly' }
     $groups = @(
         @{ name = 'core-and-log-reader'; arguments = @('test', '-p', 'winbridge-core', '-p', 'winbridge-log-reader', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'readiness-ipc'; arguments = @('test', '-p', 'winbridge-transport', '--lib', 'readiness', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
@@ -438,11 +449,25 @@ try {
     }
     if ($UpdatePreparationOnly) {
         if ($manifest.dirty -or -not $manifest.includesBuiltUi) { throw 'Update preparation gate requires a clean source archive with built UI' }
+        . (Join-Path $source 'scripts/session-runtime.ps1')
+        if (-not $UpdateReferenceWorker) { throw 'Update coordination gate requires an explicit schema-14 reference exe' }
+        Assert-SessionDirectory ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($UpdateReferenceWorker)))
+        Assert-SessionFile $UpdateReferenceWorker
+        $referenceCopy = Join-Path (Split-Path $source -Parent) 'update-reference-worker.exe'
+        $referenceSha = (Get-FileHash -LiteralPath $UpdateReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::Copy((Resolve-Path -LiteralPath $UpdateReferenceWorker).Path,$referenceCopy,$false)
+        if ((Get-FileHash -LiteralPath $referenceCopy -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha -or (Get-FileHash -LiteralPath $UpdateReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha) { throw 'Update reference changed during capture' }
+        $report.updateReferenceWorker = @{path=$referenceCopy;sha256=$referenceSha}
+        $env:WINBRIDGE_UPDATE_REFERENCE_WORKER = $referenceCopy
+        $env:WINBRIDGE_UPDATE_COORDINATION_REPORT = Join-Path $ReportDirectory 'update-coordination-proof.json'
         $groups = @(
             @{name='update-source-policy-and-fsm';arguments=@('test','-p','winbridge-core','--test','update','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-native-preflight';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-legacy-contracts';arguments=@('test','-p','winbridge-protocol','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-verifier-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')}
+            @{name='update-verifier-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
+            @{name='update-worker-durable-coordination';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::update::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-worker-native-coordination';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_coordination','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-previous-worker-refusal';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_coordination','previous_worker_refuses_schema_fifteen','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {
@@ -454,6 +479,8 @@ try {
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
     }
     if ($UpdatePreparationOnly) {
+        $coordination = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-coordination-proof.json') -Raw | ConvertFrom-Json
+        if (-not $coordination.passed -or $coordination.platform -ne 'windows' -or $coordination.runtimeApplied -or $coordination.windowsOpened -or $coordination.observations.Count -ne 6) { throw 'Native coordination proof incomplete' }
         & (Join-Path $source 'scripts/test-update-stage.ps1') -ScratchRoot (Join-Path (Split-Path $source -Parent) 'update-stage-test')
         if (-not $?) { throw 'Update staging test failed' }
         $candidateDirectory = Join-Path (Split-Path $source -Parent) 'update-candidate'
@@ -512,6 +539,8 @@ try {
     $env:WINBRIDGE_QUEUE_LEGACY_WORKER = $oldQueueReferenceWorker
     $env:WINBRIDGE_RESOURCE_SCHEDULING_REPORT = $oldResourceReport
     $env:WINBRIDGE_RESOURCE_LEGACY_WORKER = $oldResourceReferenceWorker
+    $env:WINBRIDGE_UPDATE_COORDINATION_REPORT = $oldUpdateCoordinationReport
+    $env:WINBRIDGE_UPDATE_REFERENCE_WORKER = $oldUpdateReferenceWorker
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace
     $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared

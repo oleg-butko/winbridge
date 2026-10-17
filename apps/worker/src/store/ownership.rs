@@ -144,12 +144,16 @@ impl Store {
     /// It does not authorize takeover of a live process or restoration of a backup.
     pub fn begin_authority(&mut self) -> Result<JournalAuthority> {
         self.guard_callback(None, None)?;
+        if self.active_worker_update()?.is_some() {
+            return Err("Unfinished worker update blocks new journal authority; reconcile before normal startup".into());
+        }
         let expected = self.authority.clone();
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(sql)?;
         Self::assert_authority(&transaction, &expected)?;
+        Self::require_update_activation(&transaction)?;
         let next = i64::try_from(expected.epoch)
             .ok()
             .and_then(|e| e.checked_add(1))
@@ -180,6 +184,7 @@ impl Store {
             .map_err(sql)?;
         Self::assert_authority(&transaction, &expected)?;
         Self::read_admission_boundary(&transaction, &expected.incarnation)?;
+        Self::require_update_writes(&transaction)?;
         if let Some(token) = callback {
             Self::assert_attempt(&transaction, &token)?;
         }
@@ -285,6 +290,10 @@ impl Store {
         Self::require_dispatch(&transaction)?;
         Self::require_work_capacity(&transaction, policy.as_ref())?;
         let observed = Self::read_task_snapshot(&transaction, id)?;
+        Self::require_update_project_dispatch(
+            &transaction,
+            &observed.record.submission.project_id,
+        )?;
         let decision = Self::transition_task_on(&transaction, id, None, TaskEvent::LaunchIntent)?;
         if decision.effect != TaskEffect::ExecuteAcceptedCommand {
             return Err("local journal: claim did not authorize execution".into());
@@ -308,6 +317,7 @@ impl Store {
         Self::require_dispatch(&transaction)?;
         Self::require_work_capacity(&transaction, policy.as_ref())?;
         let mut observed = Self::read_domain::<ImportRecord>(&transaction, id)?;
+        Self::require_update_project_dispatch(&transaction, &observed.submission.project_id)?;
         if observed.status != TaskStatus::Queued || observed.cancel_requested {
             return Err("local journal: import claim requires queued work".into());
         }

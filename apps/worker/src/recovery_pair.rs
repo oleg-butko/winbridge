@@ -126,6 +126,9 @@ fn source_empty(
     expected: &RequestContext,
     expected_witness: Option<&str>,
 ) -> Result<()> {
+    // An independent updater is outside the managed execution domain. Empty
+    // process inventory alone cannot authorize a new journal/instance here.
+    crate::update::reject_start(state)?;
     require_retired_source(state)?;
     let (authority, _) = Store::read_admission_header(&state.join("journal.sqlite"))?;
     if authority.incarnation != expected.journal_incarnation {
@@ -160,6 +163,7 @@ pub fn prepare_recovery(source: &WorkerConfig, destination: &Path) -> Result<Rec
     }
     let source_state = fs::canonicalize(&source.state_directory).map_err(|e| e.to_string())?;
     let _source_lock = lock_state(&source_state)?;
+    crate::update::reject_start(&source_state)?;
     require_retired_source(&source_state)?;
     let source_store = Store::open_read_only(&source_state.join("journal.sqlite"))?;
     source_store.check_authority()?;

@@ -26,6 +26,16 @@ export type UpdateTransition = {
  * Installation-wide order; a revision is scoped to one update.
  */
 sequence: number, updateId: string, revision: number, previousPhase: UpdatePhase | null, phase: UpdatePhase, occurredAtMs: number, ownerEpoch: number, ownerId: string, command: UpdateCommand | null, };
+export type WorkerUpdateSpec = { updateId: string, instanceId: string, journalIncarnation: string, workerGeneration: string, updaterOwnerId: string, updaterEpoch: number, sourceDirectory: string, baselineManifestSha256: string, targetManifestSha256: string,
+/**
+ * Derived by worker from registered workspace overlap, never caller assertions.
+ */
+projects: Array<string>, };
+export type WorkerUpdatePhase = "source_pending" | "source_held" | "draining" | "quiescing" | "quiesced" | "released";
+export type WorkerUpdateLease = { spec: WorkerUpdateSpec, revision: number, phase: WorkerUpdatePhase, acceptedAtMs: number, updatedAtMs: number, reason: string, };
+export type WorkerUpdateAction = "acquire_source" | "begin_drain" | "close_dispatch" | "confirm_quiesced" | "release";
+export type WorkerUpdateCommand = { commandId: string, expectedRevision: number, action: WorkerUpdateAction, sourceManifestSha256: string | null, reason: string, };
+export type WorkerUpdateBlockers = { acceptedOperations: number, logicalOwners: number, inFlightEffects: number, physicalOwners: number, uncertainOwners: number, };
 export type OperationRef = { context: RequestContext, kind: HistoryKind, operationId: string, };
 export type AdmissionWatermarks = { tasks: string, imports: string, workflows: string, applications: string, };
 export type OperationCursor = { context: RequestContext, querySha256: string, watermarks: AdmissionWatermarks, before: HistoryCursor, };
@@ -184,7 +194,11 @@ export type VerifyPairRequest = { verificationKey: string,
 identity: PairIdentity, };
 export type VerificationStatus = "accepted" | "running" | "succeeded" | "failed" | "indeterminate";
 export type VerificationView = { verificationKey: string, identity: PairIdentity, status: VerificationStatus, stage: string, taskIds: Array<string>, receiptId: string | null, detail: string, };
-export type WorkerInfo = { protocolVersion: number, contractSchemas?: unknown,
+export type WorkerInfo = { protocolVersion: number,
+/**
+ * Open read-only update coordination metadata; it is not an install capability.
+ */
+updateCoordination?: unknown, contractSchemas?: unknown,
 /**
  * Read-only policy fingerprints. Unknown schemas stay opaque on older hops.
  */

@@ -25,9 +25,10 @@ mod operation_pages;
 mod queue_control;
 mod resource_scheduling;
 mod task_records;
+mod update;
 mod work_scheduling;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 14;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 15;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -342,6 +343,24 @@ impl Store {
             Self::migrate_resource_scheduling(&migration)?;
             migration.commit().map_err(sql)?;
         }
+        if version <= 14 {
+            if version == 14 {
+                let backup = path.with_file_name(format!(
+                    "journal-v14-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            Self::migrate_update_coordination(&migration)?;
+            migration.commit().map_err(sql)?;
+        }
         let authority = Self::read_authority(&connection)?;
         Ok(Self {
             connection,
@@ -400,6 +419,9 @@ impl Store {
         recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
     ) -> Result<TaskRecord> {
         self.guard_callback(None, None)?;
+        if let Some(existing) = self.existing(&request)? {
+            return Ok(existing);
+        }
         let queue_policy = self.loaded_queue_policy();
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(existing) = Self::existing_task(&transaction, &request)? {

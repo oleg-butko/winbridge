@@ -68,6 +68,21 @@ fn future_or_malformed_metadata_roundtrips_without_blocking_info() {
 }
 
 #[test]
+fn update_coordination_is_optional_opaque_and_forwarded_by_current_info_codec() {
+    assert!(info().update_coordination.is_none());
+    for raw in [
+        json!(null),
+        json!("future form"),
+        json!({"schemaVersion":99,"newStates":["installing"]}),
+    ] {
+        let mut i = info();
+        i.update_coordination = Some(raw.clone());
+        let decoded: WorkerInfo = serde_json::from_value(serde_json::to_value(i).unwrap()).unwrap();
+        assert_eq!(decoded.update_coordination, Some(raw));
+    }
+}
+
+#[test]
 fn discovery_cases_have_the_same_rust_and_typescript_interpretation() {
     let cases: Value = serde_json::from_str(include_str!(
         "../../../tests/fixtures/discovery/catalog-cases.json"

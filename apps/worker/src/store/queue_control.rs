@@ -126,6 +126,7 @@ impl Store {
         policy: Option<&QueuePolicy>,
         project_id: &str,
     ) -> Result<()> {
+        Self::require_update_admission(c, project_id)?;
         let (_, mode, _, _) = state(c)?;
         if !mode.admission_paused() && policy.is_none() {
             return Ok(());
@@ -261,6 +262,32 @@ impl Store {
             ));
         }
         let payload = serde_json::to_string(&command).map_err(|e| e.to_string())?;
+        // Lost ACK stays reconcilable even after update closed journal writes.
+        let old: Option<(String, String)> = self
+            .connection
+            .query_row(
+                "SELECT payload,receipt FROM queue_commands WHERE id=?1",
+                [command_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(sql)?;
+        if let Some((stored, receipt)) = old {
+            if stored != payload {
+                return Ok(reject(
+                    QueueControlError::KeyConflict,
+                    "Command ID belongs to another queue change",
+                ));
+            }
+            return Ok(QueueControlResult::Applied {
+                observation: observation(&self.connection, policy.as_ref(), context, read_only)?,
+                receipt: serde_json::from_str(&receipt).map_err(|e| e.to_string())?,
+            });
+        }
+        if self.update_frozen()? {
+            return Ok(reject(QueueControlError::Unavailable,
+                "Обновление WinBridge закрыло изменения журнала; состояние пользовательской паузы сохранено"));
+        }
         let tx = self.write_transaction(TransactionBehavior::Immediate)?;
         let old: Option<(String, String)> = tx
             .query_row(
@@ -697,7 +724,7 @@ mod tests {
         drop(s);
         // A reproducible schema-12 fixture, not a user journal or backup.
         let c = Connection::open(&path).unwrap();
-        c.execute_batch("DROP TABLE queue_roots;DROP TABLE queue_commands;DROP TABLE queue_control;DROP INDEX queue_pending_tasks;DROP INDEX queue_pending_imports;DROP INDEX queue_pending_workflows;DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=12;").unwrap();
+        c.execute_batch("DROP TABLE queue_roots;DROP TABLE queue_commands;DROP TABLE queue_control;DROP INDEX queue_pending_tasks;DROP INDEX queue_pending_imports;DROP INDEX queue_pending_workflows;DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=12;").unwrap();
         drop(c);
         let s = Store::open(&path).unwrap();
         assert_eq!(view(&s).pending_roots, 2);

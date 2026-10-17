@@ -105,6 +105,22 @@ impl Store {
             return Err("Invalid cleanup key/plan; preview a batch first".into());
         }
         let payload = serde_json::to_string(&request.plan).map_err(|e| e.to_string())?;
+        let previous: Option<(String, String)> = self
+            .connection
+            .query_row(
+                "SELECT payload,record FROM output_cleanup WHERE key=?1",
+                [&request.idempotency_key],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()
+            .map_err(sql)?;
+        if let Some((old, record)) = previous {
+            if old != payload {
+                return Err("Cleanup key belongs to another plan".into());
+            }
+            return serde_json::from_str(&record).map_err(|e| e.to_string());
+        }
+        self.require_update_administration()?;
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         let existing: Option<(String, String)> = transaction
             .query_row(
@@ -123,6 +139,7 @@ impl Store {
             }
             return serde_json::from_str(&record).map_err(|e| e.to_string());
         }
+        Self::require_update_administration_on(&transaction)?;
         let current = preview(
             &transaction,
             request.plan.project_id.as_deref(),
@@ -188,6 +205,11 @@ impl Worker {
         {
             return Ok(());
         }
+        // Hold Store until the in-flight counter is set; update close cannot miss this thread.
+        let gate = self.store()?;
+        if gate.active_worker_update()?.is_some() {
+            return Ok(());
+        }
         let mut state = self
             .maintenance
             .lock()
@@ -200,6 +222,7 @@ impl Worker {
         }
         state.0 = now;
         self.active_jobs.fetch_add(1, Ordering::AcqRel);
+        drop(gate);
         let worker = Arc::clone(self);
         std::thread::spawn(move || {
             let result = (|| -> Result<()> {

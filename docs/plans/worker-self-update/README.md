@@ -89,6 +89,9 @@ U0 не применяет source plan, не выключает процессы
   entries и без изменения рабочего src.
 - [x] [Native journal/ZIP preparation gate](windows-durable-preparation-gate-2026-10-17.md):
   42 tests, actual ZIP verification, script guards и полный candidate build passed.
+- [x] [Worker source/drain/quiesce coordination](worker-coordination.md): durable lease/CAS,
+  separate user pause, pre-migration startup/recovery guard и readonly UI. Local 393
+  tests passed; native подтверждение этого пакета ещё впереди. Shutdown/IPC не готовы.
 - [ ] Source apply с create-only preimages, per-file intent, full manifest reconciliation;
   source lease и SourceApplying barrier обязательны до первой записи.
 - [ ] Guarded infrastructure spawn вне managed Jobs. Проверить Job membership;

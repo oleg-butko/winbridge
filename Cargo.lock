@@ -1052,6 +1052,7 @@ dependencies = [
  "winbridge-core",
  "winbridge-platform",
  "winbridge-protocol",
+ "winbridge-workspace-sync",
  "windows-sys",
  "zip",
 ]

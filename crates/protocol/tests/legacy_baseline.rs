@@ -108,6 +108,8 @@ fn unnegotiated_hello_and_execution_extensions_fail_closed() {
 fn optional_info_metadata_is_readable_but_not_forwarded_by_the_legacy_codec() {
     let mut wire: Value = serde_json::from_str(INFO).unwrap();
     wire["info"]["contractCatalog"] = json!({"supported": ["executor.run@1"]});
+    wire["info"]["updateCoordination"] =
+        json!({"schemaVersion":1,"lease":{"phase":"source_pending"}});
     let info: frozen_info::FrozenV1WorkerInfo =
         serde_json::from_value(wire["info"].clone()).unwrap();
     assert_eq!(info.instance_id, "legacy-fixture");
@@ -115,6 +117,7 @@ fn optional_info_metadata_is_readable_but_not_forwarded_by_the_legacy_codec() {
     assert!(info.active_task_count.is_none());
     let forwarded = json!({"kind":"info","info":serde_json::to_value(info).unwrap()});
     assert!(forwarded["info"].get("contractCatalog").is_none());
+    assert!(forwarded["info"].get("updateCoordination").is_none());
     let LocalResponse::Info { info } = serde_json::from_value(forwarded).unwrap() else {
         panic!("expected forwarded worker info");
     };

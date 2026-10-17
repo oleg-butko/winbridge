@@ -175,6 +175,7 @@ def main():
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--update-preparation-only', action='store_true', help='Test readonly updater/source planning and build a complete candidate without changing installed runtime or opening windows')
     parser.add_argument('--update-preparation-reuse-run', help='Reuse only compiler caches of a terminal update-preparation run with checksummed successful native groups; always use new source/state/staging')
+    parser.add_argument('--update-reference-worker', help='Explicit read-only Windows schema-14 reference exe for isolated schema-15 refusal; copied into the test runtime')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--readiness-only', action='store_true', help='Check readiness, operation pages, scheduling/queue policy, native IPC and desktop compile; no UI windows')
     parser.add_argument('--queue-reference-worker', help='Read-only Windows path to a retained schema-12 exe for queue migration refusal; defaults to installed worker before the first schema-13 upgrade')
@@ -197,6 +198,8 @@ def main():
     args = parser.parse_args()
     if args.update_preparation_reuse_run and (not args.update_preparation_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.update_preparation_reuse_run)):
         parser.error('--update-preparation-reuse-run requires --update-preparation-only and a valid run ID')
+    if args.update_reference_worker and not args.update_preparation_only:
+        parser.error('--update-reference-worker requires --update-preparation-only')
     if args.verify_readiness_run and (not args.readiness_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.verify_readiness_run)):
         parser.error('--verify-readiness-run requires --readiness-only and a valid saved run ID')
     if (args.queue_reference_worker or args.resource_reference_worker) and not args.readiness_only:
@@ -234,6 +237,7 @@ def main():
         archive_has_work_scheduling = 'winbridge/apps/worker/tests/work_scheduling.rs' in archive.namelist()
         archive_has_queue_control = 'winbridge/apps/worker/tests/queue_control.rs' in archive.namelist()
         archive_has_resource_scheduling = 'winbridge/apps/worker/tests/resource_scheduling.rs' in archive.namelist()
+        archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
@@ -279,6 +283,10 @@ def main():
         profile_argument = ' -IdentityOnly'
     if args.update_preparation_only:
         profile_argument = ' -UpdatePreparationOnly -UpdatePreparationArchivePath $archive'
+        if archive_has_update_coordination:
+            if not args.update_reference_worker:
+                raise RuntimeError('Supply a known schema-14 exe with --update-reference-worker; Info does not attest the installed journal schema')
+            profile_argument += ' -UpdateReferenceWorker ' + ps_string(args.update_reference_worker)
         if args.update_preparation_reuse_run:
             old_id = args.update_preparation_reuse_run
             previous_report = report.parent / old_id
@@ -294,6 +302,8 @@ def main():
                 names.add(name)
             expected = ['update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build']
             prior = json.loads((previous_report / 'report.json').read_text(encoding='utf-8-sig'))
+            if len(prior['commands']) == 7:
+                expected += ['update-worker-durable-coordination', 'update-worker-native-coordination', 'update-previous-worker-refusal']
             if (prior['platform'] != 'windows' or prior['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', prior['sourceCommit'])
                     or not re.fullmatch(r'[0-9a-f]{64}', prior['sourceArchiveSha256'])
                     or not {'report.json', *(n+'.log' for n in expected)}.issubset(names)
@@ -470,6 +480,21 @@ exit $nativeExit
     verify_build_cache_usage(result, cache_receipt or update_cache_receipt, local)
     if args.update_preparation_only:
         expected = ['update-source-policy-and-fsm', 'update-native-preflight', 'update-legacy-contracts', 'update-verifier-build']
+        if archive_has_update_coordination:
+            expected += ['update-worker-durable-coordination', 'update-worker-native-coordination', 'update-previous-worker-refusal']
+            coordination = json.loads((report / 'update-coordination-proof.json').read_text(encoding='utf-8-sig'))
+            observations = coordination.get('observations', [])
+            if (coordination.get('passed') is not True or coordination.get('platform') != 'windows'
+                    or coordination.get('runtimeApplied') is not False or coordination.get('windowsOpened') is not False
+                    or not all(coordination.get(k) is True for k in ['sourceTaskCancelledExplicitly','userPausePreserved','modifiedSourceReleaseRejected','staleReleasePreservedNewGuard'])
+                    or len(observations) != 6
+                    or [v['updateCoordination']['lease']['phase'] for v in observations[:5]] != ['source_pending','source_held','draining','quiescing','quiesced']
+                    or observations[-1].get('updateCoordination') is not None
+                    or not re.fullmatch(r'[0-9a-f]{64}', result.get('updateReferenceWorker',{}).get('sha256',''))):
+                raise RuntimeError('Incomplete native worker update coordination proof')
+            for view in observations:
+                if view['build']['sourceCommit'] != result['sourceCommit'] or view['build']['sourceDirty'] is not False:
+                    raise RuntimeError('Coordination observations belong to another build')
         scope = result.get('updatePreparation', {})
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
         archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))

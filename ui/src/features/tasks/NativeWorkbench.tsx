@@ -16,6 +16,7 @@ import { ReadinessPanel } from "./ReadinessPanel";
 import { WorkSchedulingSummary } from "./WorkSchedulingSummary";
 import { QueueControlPanel } from "./QueueControlPanel";
 import { ResourceSchedulingSummary } from "./ResourceSchedulingSummary";
+import { UpdateCoordinationSummary } from "./UpdateCoordinationSummary";
 import { OutputBuffer } from "./outputBuffer";
 import { SnapshotWorkbench } from "../snapshots/SnapshotWorkbench";
 import { WorkflowWorkbench } from "../workflows/WorkflowWorkbench";
@@ -331,6 +332,7 @@ export function NativeWorkbench() {
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
     </Alert>
     {info && <WorkSchedulingSummary info={info} connected={connected} />}
+    {info && <UpdateCoordinationSummary info={info} connected={connected} />}
     {info && <ResourceSchedulingSummary info={info} connected={connected} />}
     {info && <QueueControlPanel key={`queue:${info.instanceId}:${info.nodeId}`} info={info} connected={connected} />}
     {info && <AttentionInbox key={`${info.instanceId}:${info.nodeId}`} info={info} connected={connected} onTarget={openAttention} />}

@@ -48,7 +48,7 @@ fn strict_queue_commands_and_legacy_hashes_stay_separate() {
     {
         assert_eq!(
             fenced_rpc_schema_sha256(),
-            "dd86d35b8b9ed59aca0bb438491e906b9c25c69970f0121226fdee99b98e9a12"
+            include_str!("../../../tests/fixtures/readiness/fenced-rpc-2.sha256").trim()
         );
         assert_eq!(
             operation_schema_sha256(),

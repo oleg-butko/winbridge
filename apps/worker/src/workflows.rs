@@ -49,6 +49,9 @@ impl Store {
         recipe_pins: Option<Vec<WorkflowRecipePin>>,
     ) -> Result<WorkflowRecord> {
         self.guard_callback(None, None)?;
+        if let Some(existing) = self.existing_workflow(&request)? {
+            return Ok(existing);
+        }
         let queue_policy = self.loaded_queue_policy();
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(existing) = Self::existing_workflow_on(&transaction, &request)? {

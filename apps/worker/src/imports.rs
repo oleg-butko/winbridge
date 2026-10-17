@@ -47,6 +47,9 @@ impl Store {
         workspace_path: String,
     ) -> Result<ImportRecord> {
         self.guard_callback(None, None)?;
+        if let Some(existing) = self.existing_import(&request)? {
+            return Ok(existing);
+        }
         let queue_policy = self.loaded_queue_policy();
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if let Some(existing) = Self::existing_import_on(&transaction, &request)? {
@@ -340,6 +343,9 @@ impl Worker {
         import: ImportRecord,
         token: crate::store::ExecutionToken,
     ) -> Result<()> {
+        self.execution_store(&token, |store| {
+            store.require_update_resume(&import.submission.project_id)
+        })?;
         let id = import.import_id.clone();
         let project = self
             .config

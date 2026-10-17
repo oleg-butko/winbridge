@@ -1,3 +1,29 @@
+## Самообновление U1: worker coordination — 2026-10-17
+
+[Контракт, границы и следующие зависимости](plans/worker-self-update/worker-coordination.md).
+Worker schema 15: durable source/dispatch lease + immutable command receipts,
+single active update, CAS/authority fencing, baseline/target verification worker.
+SourcePending/Held блокируют связанные workspace; Draining запрещает все новые roots,
+children принятого workflow продолжаются. Quiescing закрывает обычные mutations,
+затем Windows physical scan подтверждает Quiesced. User pause сохраняется отдельно.
+Startup marker/DB guard до миграции и под instance lock; authority activation,
+config saves, output cleanup и recovery/new-pair не обходят lease.
+Source verifier общий для updater/worker. Info metadata opaque/read-only, UI объясняет
+состояния и stale/unknown; remote mutation capability/IPC ещё не объявлены.
+
+393 local workspace tests passed. Ревью исправило app/project count, гонку periodic
+reconciliation при freeze, повтор admission внутри transaction и cleanup gate;
+исторические migration fixtures сохраняют свои прежние schema. Actual RPC-2 response
+schema SHA осознанно изменился из-за optional Info metadata:
+`ca892a30ddabf3a3b24942f8d9d04c1c7edef45fa60f28df5566b32f465a25fa`.
+Legacy requests/enums прежние; старая pair evidence не подтверждает новый digest/build.
+Native Windows gate пакета ещё не выполнен на момент этого code commit.
+Установленный worker healthy/idle: `1f3aa9f`, build `1792228466051801600`, generation
+`994671b4-e10c-469c-8515-b2aa71a4e3dc`; source/runtime/config не изменялись.
+Desktop не нужен, UI окон не будет; worker оставить для автоматического gate.
+Следом source transaction/preimages/reconciliation, standalone supervisor,
+local IPC и exact shutdown. U1–U4 открыты; bootstrap пока не запрашивать.
+
 ## Самообновление U1: journal и ZIP preparation — 2026-10-17
 
 Продолжение U0: [реализованная граница и следующие зависимости](plans/worker-self-update/durable-preparation.md).

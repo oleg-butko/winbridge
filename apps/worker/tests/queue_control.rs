@@ -361,7 +361,7 @@ fn previous_worker_refuses_schema_thirteen_without_mutating_the_journal() {
     // This retained gate deliberately exercises schema 13 against schema 12.
     // A4.3 separately checks current schema 14 against the actual installed exe.
     let db = rusqlite::Connection::open(&path).unwrap();
-    db.execute_batch("DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=13; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    db.execute_batch("DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=13; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     drop(db);
     let bytes = fs::read(&path).unwrap();
     let config_path = dir.path().join("worker.local.json");

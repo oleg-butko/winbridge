@@ -216,3 +216,85 @@ pub struct UpdateTransition {
     pub owner_id: String,
     pub command: Option<UpdateCommand>,
 }
+
+/// Worker-side coordination, independent of the updater journal/owner epoch.
+/// Only a trusted local driver may create it; no mutation RPC is registered yet.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerUpdateSpec {
+    pub update_id: String,
+    pub instance_id: String,
+    pub journal_incarnation: String,
+    pub worker_generation: String,
+    pub updater_owner_id: String,
+    pub updater_epoch: u64,
+    pub source_directory: String,
+    pub baseline_manifest_sha256: String,
+    pub target_manifest_sha256: String,
+    /// Derived by worker from registered workspace overlap, never caller assertions.
+    pub projects: Vec<String>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerUpdatePhase {
+    SourcePending,
+    SourceHeld,
+    Draining,
+    Quiescing,
+    Quiesced,
+    Released,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerUpdateLease {
+    pub spec: WorkerUpdateSpec,
+    pub revision: u64,
+    pub phase: WorkerUpdatePhase,
+    pub accepted_at_ms: u64,
+    pub updated_at_ms: u64,
+    pub reason: String,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkerUpdateAction {
+    AcquireSource,
+    BeginDrain,
+    CloseDispatch,
+    ConfirmQuiesced,
+    Release,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerUpdateCommand {
+    pub command_id: String,
+    pub expected_revision: u64,
+    pub action: WorkerUpdateAction,
+    pub source_manifest_sha256: Option<String>,
+    pub reason: String,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerUpdateBlockers {
+    pub accepted_operations: u64,
+    pub logical_owners: u64,
+    pub in_flight_effects: u64,
+    pub physical_owners: u64,
+    pub uncertain_owners: u64,
+}

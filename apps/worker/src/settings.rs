@@ -84,6 +84,8 @@ impl Worker {
         )
     }
     pub fn save_runtime_settings(&self, request: &SaveRuntimeSettings) -> Result<SettingsSaved> {
+        // Serialize config writes with update admission/quiescence, including filesystem IO.
+        let store = self.store()?;
         if request.generation != self.generation
             || !uuid::Uuid::parse_str(&request.request_id)
                 .is_ok_and(|id| id.hyphenated().to_string() == request.request_id)
@@ -134,6 +136,7 @@ impl Worker {
                 "Config changed since preview; reload instead of overwriting another edit".into(),
             );
         }
+        store.require_update_administration()?;
         match write_new(&backup, &before) {
             Ok(()) => {}
             Err(_) if backup.exists() && read(&backup)? == before => {}

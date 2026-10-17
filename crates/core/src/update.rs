@@ -296,6 +296,63 @@ pub fn update_blocks_installation(phase: UpdatePhase) -> bool {
     )
 }
 
+pub fn advance_worker_update(
+    phase: winbridge_protocol::update::WorkerUpdatePhase,
+    command: &winbridge_protocol::update::WorkerUpdateCommand,
+    blockers: &winbridge_protocol::update::WorkerUpdateBlockers,
+) -> Result<winbridge_protocol::update::WorkerUpdatePhase, String> {
+    use winbridge_protocol::update::{WorkerUpdateAction as A, WorkerUpdatePhase as P};
+    validate_update_key(&command.command_id)?;
+    if command.expected_revision > MAX_UPDATE_COUNTER
+        || command.reason.is_empty()
+        || command.reason.len() > 4096
+        || command
+            .reason
+            .chars()
+            .any(|c| c.is_control() && c != '\n' && c != '\t')
+    {
+        return Err("Invalid worker update revision/reason".into());
+    }
+    if command.action != A::Release && command.source_manifest_sha256.is_some() {
+        return Err("Source readback hash belongs only to release".into());
+    }
+    let empty = blockers.accepted_operations == 0
+        && blockers.logical_owners == 0
+        && blockers.in_flight_effects == 0
+        && blockers.physical_owners == 0
+        && blockers.uncertain_owners == 0;
+    match (phase, command.action) {
+        (P::SourcePending, A::AcquireSource)
+        | (P::Draining, A::CloseDispatch)
+        | (P::Quiescing, A::ConfirmQuiesced)
+            if !empty =>
+        {
+            Err(format!(
+                "Update waits for accepted work/owners: {blockers:?}"
+            ))
+        }
+        (P::SourcePending, A::AcquireSource) => Ok(P::SourceHeld),
+        (P::SourceHeld, A::BeginDrain) => Ok(P::Draining),
+        (P::Draining, A::CloseDispatch) => Ok(P::Quiescing),
+        (P::Quiescing, A::ConfirmQuiesced) => Ok(P::Quiesced),
+        (P::SourcePending, A::Release) if command.source_manifest_sha256.is_none() => {
+            Ok(P::Released)
+        }
+        (P::SourceHeld | P::Draining | P::Quiescing | P::Quiesced, A::Release)
+            if command
+                .source_manifest_sha256
+                .as_ref()
+                .is_some_and(|h| valid_hash(h, &[64])) =>
+        {
+            Ok(P::Released)
+        }
+        _ => Err(format!(
+            "Worker update transition rejected: {phase:?} + {:?}",
+            command.action
+        )),
+    }
+}
+
 pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePhase, String> {
     use UpdateEvent as E;
     use UpdatePhase as P;

@@ -15,6 +15,7 @@ pub type Result<T> = std::result::Result<T, String>;
 mod delta;
 mod git_batch;
 mod resume;
+pub mod source_tree;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }

@@ -364,6 +364,14 @@ pub struct JournalInspection {
 #[serde(rename_all = "camelCase")]
 pub struct WorkerInfo {
     pub protocol_version: u16,
+    /// Open read-only update coordination metadata; it is not an install capability.
+    #[serde(
+        default,
+        deserialize_with = "discovery::deserialize_catalog",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(feature = "typescript", ts(optional, type = "unknown"))]
+    pub update_coordination: Option<serde_json::Value>,
     #[serde(
         default,
         deserialize_with = "discovery::deserialize_catalog",

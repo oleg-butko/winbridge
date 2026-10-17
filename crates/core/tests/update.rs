@@ -267,3 +267,79 @@ fn update_request_rejects_unpinned_paths_and_unknown_contract_fields() {
         UpdatePhase::FailedBeforeCutover
     ));
 }
+
+#[test]
+fn worker_source_and_dispatch_grants_require_every_owner_to_be_empty() {
+    let empty = WorkerUpdateBlockers {
+        accepted_operations: 0,
+        logical_owners: 0,
+        in_flight_effects: 0,
+        physical_owners: 0,
+        uncertain_owners: 0,
+    };
+    for (phase, action, next) in [
+        (
+            WorkerUpdatePhase::SourcePending,
+            WorkerUpdateAction::AcquireSource,
+            WorkerUpdatePhase::SourceHeld,
+        ),
+        (
+            WorkerUpdatePhase::Draining,
+            WorkerUpdateAction::CloseDispatch,
+            WorkerUpdatePhase::Quiescing,
+        ),
+        (
+            WorkerUpdatePhase::Quiescing,
+            WorkerUpdateAction::ConfirmQuiesced,
+            WorkerUpdatePhase::Quiesced,
+        ),
+    ] {
+        let command = WorkerUpdateCommand {
+            command_id: "grant".into(),
+            expected_revision: 0,
+            action,
+            source_manifest_sha256: None,
+            reason: "Verified owner inventory".into(),
+        };
+        assert_eq!(
+            advance_worker_update(phase, &command, &empty).unwrap(),
+            next
+        );
+        for i in 0..5 {
+            let mut busy = empty.clone();
+            match i {
+                0 => busy.accepted_operations = 1,
+                1 => busy.logical_owners = 1,
+                2 => busy.in_flight_effects = 1,
+                3 => busy.physical_owners = 1,
+                _ => busy.uncertain_owners = 1,
+            }
+            assert!(advance_worker_update(phase, &command, &busy).is_err());
+        }
+    }
+    let mut release = WorkerUpdateCommand {
+        command_id: "abort".into(),
+        expected_revision: 1,
+        action: WorkerUpdateAction::Release,
+        source_manifest_sha256: None,
+        reason: "Abort before source grant".into(),
+    };
+    assert_eq!(
+        advance_worker_update(WorkerUpdatePhase::SourcePending, &release, &empty).unwrap(),
+        WorkerUpdatePhase::Released
+    );
+    for phase in [
+        WorkerUpdatePhase::SourceHeld,
+        WorkerUpdatePhase::Draining,
+        WorkerUpdatePhase::Quiescing,
+        WorkerUpdatePhase::Quiesced,
+    ] {
+        assert!(advance_worker_update(phase, &release, &empty).is_err());
+    }
+    release.source_manifest_sha256 = Some("a".repeat(64));
+    assert_eq!(
+        advance_worker_update(WorkerUpdatePhase::Quiesced, &release, &empty).unwrap(),
+        WorkerUpdatePhase::Released
+    );
+    assert!(advance_worker_update(WorkerUpdatePhase::Released, &release, &empty).is_err());
+}

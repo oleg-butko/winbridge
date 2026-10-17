@@ -370,6 +370,7 @@ impl Store {
         connection: &Connection,
         flow: &WorkflowRecord,
     ) -> Result<()> {
+        Self::require_update_project_dispatch(connection, &flow.submission.project_id)?;
         let mut statement = connection.prepare(&format!("SELECT {LEASE_COLUMNS} FROM resource_leases WHERE project=?1 AND state!='released'")).map_err(sql)?;
         let leases = statement
             .query_map([&flow.submission.project_id], lease_row)

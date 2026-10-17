@@ -12,7 +12,9 @@ Worker может работать, desktop не требуется, UI-окна
 `winbridge-update` входит в Rust workspace. После `cargo build --workspace --locked`
 появляется в `target/debug`; штатный prepare script пока не устанавливает его в runtime.
 В U1 добавлены [независимый журнал и проверка ZIP](../plans/worker-self-update/durable-preparation.md).
-Source apply, maintenance/shutdown и установка пока не реализованы.
+В worker добавлена [координация исходников и остановки запусков](../plans/worker-self-update/worker-coordination.md)
+с понятным readonly блоком состояния. Она пока используется только trusted driver/tests;
+внешней команды установки нет. Source apply, shutdown и установка пока не реализованы.
 
 ```powershell
 # SHA берётся из проверенного пакета; путь должен быть абсолютным.

@@ -17,6 +17,7 @@ pub use recovery_pair::{
 mod retention;
 mod settings;
 pub mod store;
+mod update;
 mod workflows;
 use fs2::FileExt;
 use std::{
@@ -32,6 +33,7 @@ use std::{
     time::{Duration, Instant},
 };
 use store::Store;
+pub use update::UPDATE_STARTUP_GUARD;
 use winbridge_core::config::WorkerConfig;
 use winbridge_core::task::TaskEffect;
 use winbridge_platform::{trace_process, ManagedChild};
@@ -174,6 +176,10 @@ impl Worker {
                 );
             }
         }
+        if !inspection {
+            recovery::reject_normal_start(&config)?;
+            update::reject_start(&config.state_directory)?;
+        }
         let lock_path = config.state_directory.join("worker.lock");
         reject_symlink(&lock_path)?;
         let lock = OpenOptions::new()
@@ -185,6 +191,11 @@ impl Worker {
             .map_err(|e| e.to_string())?;
         lock.try_lock_exclusive()
             .map_err(|e| format!("stateDirectory is already owned by another worker: {e}"))?;
+        if !inspection {
+            // Recheck under the instance lock: an updater may have installed
+            // the barrier after the first readonly check, before this lock.
+            update::reject_start(&config.state_directory)?;
+        }
         let db_path = config.state_directory.join("journal.sqlite");
         let fresh_journal = !db_path.try_exists().map_err(|e| e.to_string())?;
         for suffix in ["", "-wal", "-shm"] {
@@ -657,6 +668,7 @@ impl Worker {
                             }
                         }),
                         build: Some(winbridge_protocol::build_identity()),
+                        update_coordination: store.active_worker_update()?.map(|lease|serde_json::json!({"schemaVersion":1,"lease":lease,"readOnly":self.inspection,"observedAtMs":store::now_ms()})),
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
                         attention_targets_available: true,
@@ -821,7 +833,11 @@ impl Worker {
                 .lock()
                 .map_err(|_| "recovery scan lock poisoned")?;
             if last.elapsed() >= Duration::from_secs(1) {
-                let result = self.store()?.reconcile_process_resources();
+                let mut store = self.store()?;
+                if store.update_frozen()? {
+                    return Ok(());
+                }
+                let result = store.reconcile_process_resources();
                 if let Err(error) = result {
                     self.record_journal_fault(
                         "physical-reconciliation",
@@ -839,6 +855,9 @@ impl Worker {
             .map_err(|_| "process registry lock poisoned")?;
         // Journal and project admission are inspected while holding both locks.
         let mut store = self.store()?;
+        if store.update_frozen()? {
+            return Ok(());
+        }
         if self.journal_recovery_required()?.is_some() {
             return Ok(());
         }
@@ -1223,7 +1242,9 @@ impl Worker {
                 return Ok(());
             }
         }
-        self.execution_store(&token, |_| Ok(()))?;
+        self.execution_store(&token, |store| {
+            store.require_update_resume(&task.submission.project_id)
+        })?;
         *cleanup
             .lock()
             .map_err(|_| "process cleanup receipt poisoned")? = None;
@@ -1325,7 +1346,10 @@ impl Worker {
         .collect();
         // Recheck fencing immediately before resuming. A failed binding or owner
         // check drops ProcessOwner and kills the still-suspended managed tree.
-        let current = self.execution_store(&token, |store| store.get(&id))?;
+        let current = self.execution_store(&token, |store| {
+            store.require_update_resume(&task.submission.project_id)?;
+            store.get(&id)
+        })?;
         if self.stop.load(Ordering::Acquire) || current.cancel_requested {
             child.cleanup()?;
             child.drain_readers();
