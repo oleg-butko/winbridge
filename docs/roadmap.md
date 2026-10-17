@@ -18,7 +18,9 @@ readonly source preflight, Update FSM и build-only staging прошли
 [52 native Windows tests / полный candidate build](plans/worker-self-update/windows-worker-coordination-gate-2026-10-17.md)
 passed. [Source transaction](plans/worker-self-update/source-transaction.md) реализована
 в trusted library: source lease, preimages, durable intents/receipts, no-clobber moves,
-manifest-last и readonly crash inspection. Local/native gate выполняется.
+manifest-last и readonly crash inspection. 405 local tests и
+[65 native Windows tests / полный candidate build](plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
+passed; source block завершён. Следующий блок — infrastructure supervisor.
 Supervisor/shutdown и local IPC не готовы;
 U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).

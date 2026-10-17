@@ -2,6 +2,24 @@
 
 Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
+## Подготовка самообновления — 2026-10-17
+
+[План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
+`apps/update` владеет отдельным updater journal schema 2 (WBUP), installation scope,
+OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
+Worker schema 15 владеет source/drain/quiesce leases и pre-migration startup guard;
+updater не открывает worker journal. Между этими БД нет общей транзакции:
+source effects требуют свежий trusted worker grant и актуальную updater authority.
+
+SourceApplying сохраняется до изменений; per-file intent → no-clobber move → hash/
+receipt, manifest последним. Verified source и parent Building фиксируются атомарно
+в updater DB, SourceHeld остаётся у worker. Crash/unknown outcome не повторяется;
+readonly inspection показывает сохранённые preimages/held и receipt states.
+Миграция updater schema 1 → 2 требует свободный owner lock и verified consistent backup.
+[65 native Windows tests / полный candidate build](plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
+прошли. Supervisor вне task Jobs, local IPC/shutdown, runtime install и bootstrap
+ещё не реализованы; внешняя update capability не объявляется. Installed runtime сохраняется.
+
 ## Назначение и среда
 
 Этап 7 также завершён: [второй прикладной проект](guides/project-integration.md) использует

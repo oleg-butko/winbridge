@@ -15,7 +15,8 @@ Worker может работать, desktop не требуется, UI-окна
 В worker добавлена [координация исходников и остановки запусков](../plans/worker-self-update/worker-coordination.md)
 с понятным readonly блоком состояния. Она пока используется только trusted driver/tests;
 внешней команды установки нет. [Source transaction](../plans/worker-self-update/source-transaction.md)
-реализована как trusted library driver; native gate ожидается. Shutdown и установка ещё не реализованы.
+реализована как trusted library driver и прошла [автоматический Windows gate](../plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md).
+Shutdown и установка ещё не реализованы.
 
 ```powershell
 # SHA берётся из проверенного пакета; путь должен быть абсолютным.

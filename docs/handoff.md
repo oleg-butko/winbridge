@@ -8,7 +8,18 @@ Updater schema 2 с consistent schema-1 backup/owner-lock migration; worker sche
 worker SourceHeld/startup guard остаётся. 405 local workspace tests passed;
 11 source tests повторно прошли после итоговых style fixes. Clippy/workspace Windows
 cross-check, contracts/typecheck/build:ui/scaffold и Python/PowerShell syntax passed.
-Native Windows source gate ожидается.
+[Native Windows source gate](plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
+clean `fb3752c` passed: 65 tests / 9 groups, actual ZIP, staging guards и полный
+build четырёх exe. Run `20261017-145136-0c69deed`, task
+`8cf6da5f-007b-4775-8646-1d86e9e75747` succeeded/0; 14 artifacts проверены,
+report SHA `386a16889ce65af867cb304106c4219e1fe4053bc248c151a0b891644282be24`.
+Installed `1f3aa9f`, build `1792228466051801600`, generation
+`994671b4-e10c-469c-8515-b2aa71a4e3dc` не менялись; final healthy/idle.
+Windows free before/after 34,595,745,792 / 33,953,144,832 bytes; Debian final
+22,479,953,920 bytes. Original compiler cache owner `20261017-061527-f4639971`
+переиспользован под leases; test state/proof новые, Windows runs не удалялись.
+Desktop можно закрыть, worker оставить. Source block завершён; следующий блок —
+guarded infrastructure supervisor вне managed task Jobs, затем local IPC/shutdown.
 Supervisor/local IPC/shutdown/install/bootstrap не готовы; U1 целиком открыт.
 Установленные Windows source/runtime/config и worker не обновляются. A4 отложен.
 

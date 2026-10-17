@@ -1,7 +1,7 @@
 # U1: применение исходников с сохранением прежних файлов
 
 2026-10-17. Следующий пакет после [worker coordination](worker-coordination.md).
-Библиотечный driver реализован; native Windows gate пока ожидается. Supervisor,
+Библиотечный driver реализован и прошёл [65 native Windows tests / полный candidate build](windows-source-transaction-gate-2026-10-17.md). Supervisor,
 локальный update IPC, shutdown, установка binaries и bootstrap ещё не готовы.
 Рабочий runtime не обновляется. Архитектурный переход A4 остаётся отложенным.
 
@@ -47,8 +47,9 @@ Add/Replace/Remove работают по одному плану; Keep не за
 отклоняется. Это не sandbox от враждебного процесса того же пользователя; границы
 scope/link/junction/hardlink и проверки непосредственно перед эффектами обязательны.
 
-При известной ошибке до первой записи parent становится FailedBeforeCutover;
-после начала SourceApplying — ManualIntervention. Source transaction становится
+При известной ошибке в Prepared parent становится FailedBeforeCutover;
+после durable SourceApplying — ManualIntervention, даже если первый файловый
+эффект ещё не произошёл. Source transaction становится
 Blocked. Если запись ошибки не подтверждена, результат явно сообщает об этом:
 Applying и worker barrier нельзя считать снятыми. При process crash остаются
 Applying, intents, receipts, исходные файлы/staging и worker startup guard.
@@ -105,7 +106,8 @@ Verified не отменяет сохранённый результат. Не �
 
 405 workspace tests passed; 11 source tests повторены после style fixes. Clippy,
 Windows workspace/tests cross-check, TS contracts/typecheck/build:ui/scaffold и
-Python/PowerShell syntax прошли. Это не заменяет ожидаемый native Windows gate.
+Python/PowerShell syntax прошли. [Native Windows gate](windows-source-transaction-gate-2026-10-17.md) также прошёл:
+65 tests / 9 groups, полный candidate build; production install не выполнялся.
 
 ## Проверки и дальнейшая работа
 

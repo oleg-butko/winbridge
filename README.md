@@ -68,8 +68,11 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 и полная Windows сборка](docs/plans/worker-self-update/windows-preparation-gate-2026-10-17.md)
 прошли. Автоматическая установка относится к следующим U1–U4.
 В U1 добавлены [independent journal/CAS/ownership и проверка source ZIP](docs/plans/worker-self-update/durable-preparation.md).
-CLI может создавать/читать только update metadata; source/exe replacement и shutdown
-ещё не подключены, remote update capability не объявляется.
+В trusted library реализована [source transaction](docs/plans/worker-self-update/source-transaction.md):
+preimages, intent/receipt, применение без перезаписи локальных правок и readonly
+crash inspection. [65 native tests и полный candidate build](docs/plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
+прошли. CLI меняет только update metadata и читает диагностику; внешние source-write
+commands, supervisor, exe replacement и shutdown ещё не подключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

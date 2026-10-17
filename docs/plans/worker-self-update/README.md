@@ -28,7 +28,7 @@ Source ownership: предыдущий manifest + actual file SHA. В новом
 пути указаны Add/Replace/Remove/Keep, old/new identity. Неизвестные исходники и
 локальные правки дают blockers, отсутствующий baseline — BootstrapRequired.
 Кэши, локальная конфигурация и runtime data исключены. Никаких удалений в dry-run.
-В U1 source apply получит собственный durable intent/receipt до первой записи;
+U1 source apply использует собственные durable intents/receipts до файловых эффектов;
 реализовывать его как вызов dry-run плюс незащищённый цикл копирования нельзя.
 
 U1 добавляет UpdateRequest (caller key, target archive/hash, expected installed
@@ -93,10 +93,10 @@ U0 не применяет source plan, не выключает процессы
   separate user pause, pre-migration startup/recovery guard и readonly UI. Local 393
   tests и [52 native Windows tests / полный candidate build](windows-worker-coordination-gate-2026-10-17.md)
   passed. Shutdown/IPC не готовы.
-- [ ] [Source transaction](source-transaction.md): trusted driver, create-only preimages,
-  intent/receipt, no-clobber moves, full manifest verification и readonly crash inspection
-  реализованы; local checks/native Windows gate выполняются. Source lease и
-  SourceApplying обязательны до записи; automatic replay/rollback отсутствуют.
+- [x] [Source transaction](source-transaction.md): trusted driver, create-only preimages,
+  intent/receipt, no-clobber moves, full manifest verification и readonly crash inspection.
+  405 local tests и [65 native Windows tests / полный candidate build](windows-source-transaction-gate-2026-10-17.md)
+  passed. Source lease/SourceApplying обязательны до записи; automatic replay/rollback отсутствуют.
 - [ ] Guarded infrastructure spawn вне managed Jobs. Проверить Job membership;
   не включать breakaway для обычных tasks.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
