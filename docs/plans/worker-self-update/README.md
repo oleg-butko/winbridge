@@ -86,7 +86,9 @@ U0 не применяет source plan, не выключает процессы
 - [x] [Независимый update journal](durable-preparation.md): atomic acceptance/transitions,
   CAS/idempotency/receipts, OS owner lock + epoch, readonly inspection и crash tests.
 - [x] Bounded ZIP verification/create-only local source staging без extra/duplicate
-  entries и без изменения рабочего src. Native проверка этого пакета ещё впереди.
+  entries и без изменения рабочего src.
+- [x] [Native journal/ZIP preparation gate](windows-durable-preparation-gate-2026-10-17.md):
+  42 tests, actual ZIP verification, script guards и полный candidate build passed.
 - [ ] Source apply с create-only preimages, per-file intent, full manifest reconciliation;
   source lease и SourceApplying barrier обязательны до первой записи.
 - [ ] Guarded infrastructure spawn вне managed Jobs. Проверить Job membership;

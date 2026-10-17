@@ -14,8 +14,19 @@ Native harness проверяет actual ZIP и может переисполь�
 
 Локально: 382 final workspace tests, затем дополнительный silent-write/readback guard
 и 28 updater tests passed; Clippy, Windows updater cross-check, contracts/typecheck/
-build:ui/scaffold, Python/PowerShell checks passed. Native gate
-нового пакета пока не выполнен. U1 целиком открыт: source lease/apply transaction,
+build:ui/scaffold, Python/PowerShell checks passed.
+[Native gate](plans/worker-self-update/windows-durable-preparation-gate-2026-10-17.md)
+clean `93978bc` passed: 42 tests, actual ZIP verification, script guards и полный
+build/staging четырёх exe. Run `20261017-095021-2614d81f`, parent
+`975d53b8-3862-49c3-bcfb-3639155c8afa` succeeded/0; report SHA
+`62c90e148a049f565aaa84a8b1103f2fdde0d386a3c0c1f5829ae569e8790071`.
+Installed `1f3aa9f`, build `1792228466051801600`, generation
+`994671b4-e10c-469c-8515-b2aa71a4e3dc` прежние, final health/idle passed.
+Windows free before/after 38,396,719,104 / 37,591,474,176 bytes; Debian final
+23,421,390,848 bytes. Native test/workspace/desktop compiler caches переиспользованы
+из проверенного run `20261017-061527-f4639971`; test state/proof всегда новые.
+UI-окон не было. Desktop можно закрыть, worker оставить; update пока не требуется.
+U1 целиком открыт: source lease/apply transaction,
 standalone launch, maintenance/drain/quiesce/startup guard/IPC впереди. Installed
 worker exe/source/runtime/config не заменялись; updater не открывает worker journal.
 Штатные записи validation tasks сохраняет сам worker. A4 остаётся отложенным.

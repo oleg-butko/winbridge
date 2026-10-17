@@ -12,8 +12,8 @@ readonly source preflight, Update FSM и build-only staging прошли
 Следующий U1 — durable source apply, updater supervisor и maintenance; полное
 самообновление ещё не реализовано, bootstrap впереди после isolated gates.
 [U1 journal/CAS/owner lock и bounded ZIP staging](plans/worker-self-update/durable-preparation.md)
-реализованы; source lease/apply и worker lifecycle ещё впереди. Новый native gate
-пока не выполнен; U1 целиком открыт.
+реализованы и прошли [42 native tests/actual ZIP/candidate build](plans/worker-self-update/windows-durable-preparation-gate-2026-10-17.md).
+Source lease/apply и worker lifecycle ещё впереди; U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

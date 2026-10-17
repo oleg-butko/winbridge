@@ -2,8 +2,9 @@
 
 2026-10-17. Это часть [плана U0–U4](README.md), не готовое самообновление.
 Рабочие Windows source/exe/config не заменяются; updater не открывает worker journal.
-Штатные записи validation tasks сохраняет сам worker. Native gate этого
-пакета отмечается отдельно после выполнения, не по результату Linux tests.
+Штатные записи validation tasks сохраняет сам worker.
+[Native gate](windows-durable-preparation-gate-2026-10-17.md) прошёл: 42 tests,
+actual source ZIP verification, script guards и полный candidate build.
 
 ## Реализованная граница
 
@@ -43,7 +44,7 @@ Lifecycle events — внутренний контракт доверенног�
 
 `apps/update/src/archive.rs` проверяет готовый source ZIP целиком без распаковки:
 512 MiB archive, bounded EOCD/directory до allocation, count из EOCD отдельно от
-ZIP parser, только Stored/Deflate, без ZIP64/multipart/prefix/overlap/extra entries,
+ZIP parser, только Stored/Deflate, без ZIP64 end records/multipart/prefix/overlap/extra entries,
 directories, symlinks или encryption. Manifest ограничивает per-file и total bytes,
 Windows paths/case collisions/clean source; actual decompressed bytes и SHA проверяются
 streaming. На Windows read handle запрещает изменение/удаление ZIP во время parsing;
