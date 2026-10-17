@@ -9,6 +9,7 @@ pub mod event_log;
 pub mod execution_domain;
 pub mod process_identity;
 pub mod reports;
+pub mod source_files;
 #[cfg(windows)]
 mod windows;
 

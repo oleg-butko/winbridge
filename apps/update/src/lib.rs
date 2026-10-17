@@ -1,7 +1,8 @@
 //! Update preparation and its independent durable journal.
-//! No source writes, process launch or runtime replacement are implemented yet.
+//! Source effects require a trusted worker lease; runtime replacement is not implemented.
 pub mod archive;
 pub mod journal;
+pub mod source;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{

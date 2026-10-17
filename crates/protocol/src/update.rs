@@ -298,3 +298,74 @@ pub struct WorkerUpdateBlockers {
     pub physical_owners: u64,
     pub uncertain_owners: u64,
 }
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceTransactionPhase {
+    Prepared,
+    Applying,
+    Verified,
+    Blocked,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceFileState {
+    Planned,
+    Intent,
+    Applied,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourceTransactionRecord {
+    pub schema_version: u16,
+    pub update_id: String,
+    pub source_directory: String,
+    pub runtime_directory: String,
+    pub stage_directory: String,
+    pub transaction_directory: String,
+    pub source_directory_identity: String,
+    pub stage_directory_identity: String,
+    pub transaction_directory_identity: String,
+    pub worker_source_spec: WorkerUpdateSpec,
+    pub worker_lease_revision: u64,
+    pub plan_sha256: String,
+    pub total_files: u32,
+    pub revision: u64,
+    pub phase: SourceTransactionPhase,
+    pub accepted_at_ms: u64,
+    pub updated_at_ms: u64,
+    pub reason: Option<String>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourceFileObservation {
+    pub ordinal: u32,
+    pub change: SourceChange,
+    pub state: SourceFileState,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SourceTransactionStatus {
+    pub schema_version: u16,
+    pub kind: String,
+    pub read_only: bool,
+    pub transaction: SourceTransactionRecord,
+    pub applied_files: u32,
+    pub files: Vec<SourceFileObservation>,
+    pub has_more: bool,
+    pub observed_at_ms: u64,
+}

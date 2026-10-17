@@ -93,8 +93,10 @@ U0 не применяет source plan, не выключает процессы
   separate user pause, pre-migration startup/recovery guard и readonly UI. Local 393
   tests и [52 native Windows tests / полный candidate build](windows-worker-coordination-gate-2026-10-17.md)
   passed. Shutdown/IPC не готовы.
-- [ ] Source apply с create-only preimages, per-file intent, full manifest reconciliation;
-  source lease и SourceApplying barrier обязательны до первой записи.
+- [ ] [Source transaction](source-transaction.md): trusted driver, create-only preimages,
+  intent/receipt, no-clobber moves, full manifest verification и readonly crash inspection
+  реализованы; local checks/native Windows gate выполняются. Source lease и
+  SourceApplying обязательны до записи; automatic replay/rollback отсутствуют.
 - [ ] Guarded infrastructure spawn вне managed Jobs. Проверить Job membership;
   не включать breakaway для обычных tasks.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;

@@ -20,7 +20,8 @@ use winbridge_protocol::update::{
     UpdateTransition,
 };
 
-pub const UPDATE_SCHEMA_VERSION: u32 = 1;
+mod source;
+pub const UPDATE_SCHEMA_VERSION: u32 = 2;
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
 type Result<T> = std::result::Result<T, JournalError>;
@@ -145,6 +146,9 @@ impl UpdateAuthority {
     pub fn epoch(&self) -> u64 {
         self.epoch
     }
+    pub fn owner_id(&self) -> &str {
+        &self.owner_id
+    }
 }
 
 pub struct UpdateJournal {
@@ -171,7 +175,7 @@ fn schema(connection: &Connection) -> Result<u32> {
             return Ok(0);
         }
     }
-    if version != UPDATE_SCHEMA_VERSION || app != APPLICATION_ID {
+    if !(1..=UPDATE_SCHEMA_VERSION).contains(&version) || app != APPLICATION_ID {
         return Err(fail(JournalErrorCode::UnsupportedSchema,
             format!("Unsupported update journal (schema {version}); preserve it and use a compatible updater")));
     }
@@ -223,7 +227,7 @@ fn info(connection: &Connection) -> Result<UpdateJournalInfo> {
         return Err(fail(JournalErrorCode::Corrupt, "Sequence overflow"));
     }
     Ok(UpdateJournalInfo {
-        schema_version: UPDATE_SCHEMA_VERSION,
+        schema_version: schema(connection)?,
         installation_id,
         scope_sha256,
         owner_epoch,
@@ -287,6 +291,12 @@ fn record(connection: &Connection, id: &str) -> Result<UpdateRecord> {
     Ok(record)
 }
 fn check_authority(connection: &Connection, authority: &UpdateAuthority) -> Result<()> {
+    if schema(connection)? != UPDATE_SCHEMA_VERSION {
+        return Err(fail(
+            JournalErrorCode::UnsupportedSchema,
+            "Updater schema changed; stop effects",
+        ));
+    }
     let current: (String, String, i64, String) = connection
         .query_row(
             "SELECT installation,scope,epoch,owner FROM installation WHERE singleton=1",
@@ -308,6 +318,35 @@ fn check_authority(connection: &Connection, authority: &UpdateAuthority) -> Resu
         ));
     }
     Ok(())
+}
+
+fn owner_lock(directory: &Path) -> Result<File> {
+    check_files(directory)?;
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{FILE_SHARE_READ, FILE_SHARE_WRITE};
+        options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE);
+    }
+    let lock = options
+        .open(directory.join("owner.lock"))
+        .map_err(storage)?;
+    lock.try_lock_exclusive().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::WouldBlock
+            || e.raw_os_error()
+                .is_some_and(|n| Some(n) == fs2::lock_contended_error().raw_os_error())
+        {
+            fail(
+                JournalErrorCode::OwnerBusy,
+                "Another updater owns this installation",
+            )
+        } else {
+            storage(e)
+        }
+    })?;
+    Ok(lock)
 }
 
 impl UpdateJournal {
@@ -332,9 +371,50 @@ impl UpdateJournal {
         }
         // Refuse newer/foreign databases before WAL/synchronous/migration writes.
         let inspector = connection(&path, true)?;
-        schema(&inspector)?;
+        let initial_schema = schema(&inspector)?;
         drop(inspector);
+        let migration_lock = if initial_schema == 1 {
+            Some(owner_lock(&directory)?)
+        } else {
+            None
+        };
         let mut connection = connection(&path, false)?;
+        if initial_schema == 1 && schema(&connection)? == 1 {
+            let before = info(&connection)?;
+            if before.scope_sha256 != scope_sha256 {
+                return Err(fail(
+                    JournalErrorCode::ScopeMismatch,
+                    "Migration belongs to another installation",
+                ));
+            }
+            let backup = directory.join(format!(
+                "updates-v1-{}-{}.sqlite",
+                now_ms()?,
+                Uuid::new_v4()
+            ));
+            connection
+                .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                .map_err(storage)?;
+            let c = super::journal::connection(&backup, true)?;
+            let integrity: String = c
+                .query_row("PRAGMA quick_check", [], |r| r.get(0))
+                .map_err(storage)?;
+            if schema(&c)? != 1 || info(&c)? != before || integrity != "ok" {
+                return Err(fail(
+                    JournalErrorCode::Corrupt,
+                    "Migration backup verification failed",
+                ));
+            }
+            drop(c);
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&backup)
+                .map_err(storage)?
+                .sync_all()
+                .map_err(storage)?;
+            winbridge_platform::source_files::sync_parent(&backup).map_err(storage)?;
+        }
         connection
             .execute_batch("PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL;")
             .map_err(storage)?;
@@ -352,6 +432,34 @@ impl UpdateJournal {
                 params![Uuid::new_v4().to_string(), scope_sha256],
             )
             .map_err(storage)?;
+            source::migrate(&tx)?;
+        } else if schema(&tx)? == 1 {
+            if migration_lock.is_none() {
+                return Err(fail(
+                    JournalErrorCode::OwnerBusy,
+                    "Journal initialized concurrently; reopen before migration",
+                ));
+            }
+            let previous = info(&tx)?;
+            let epoch = previous
+                .owner_epoch
+                .checked_add(1)
+                .filter(|n| *n <= MAX_UPDATE_COUNTER)
+                .ok_or_else(|| fail(JournalErrorCode::Corrupt, "Migration epoch exhausted"))?;
+            let owner = Uuid::new_v4().to_string();
+            one(tx
+                .execute(
+                    "UPDATE installation SET epoch=?1,owner=?2 WHERE singleton=1",
+                    params![epoch as i64, owner],
+                )
+                .map_err(storage)?)?;
+            source::migrate(&tx)?;
+            if info(&tx)?.owner_epoch != epoch {
+                return Err(fail(
+                    JournalErrorCode::Corrupt,
+                    "Migration epoch readback failed",
+                ));
+            }
         }
         if info(&tx)?.scope_sha256 != scope_sha256 {
             return Err(fail(
@@ -379,7 +487,7 @@ impl UpdateJournal {
     ) -> Result<(UpdateJournalInfo, Option<UpdateRecord>)> {
         check_files(directory)?;
         let mut connection = connection(&directory.join("updates.sqlite"), true)?;
-        if schema(&connection)? != UPDATE_SCHEMA_VERSION {
+        if schema(&connection)? == 0 {
             return Err(fail(
                 JournalErrorCode::UnsupportedSchema,
                 "Update journal is not initialized",
@@ -428,30 +536,7 @@ impl UpdateJournal {
 
     pub fn acquire_owner(&mut self) -> Result<UpdateAuthority> {
         check_files(&self.directory)?;
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true).truncate(false);
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            use windows_sys::Win32::Storage::FileSystem::{FILE_SHARE_READ, FILE_SHARE_WRITE};
-            options.share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE); // Keep lock namespace stable.
-        }
-        let lock = options
-            .open(self.directory.join("owner.lock"))
-            .map_err(storage)?;
-        lock.try_lock_exclusive().map_err(|e| {
-            if e.kind() == std::io::ErrorKind::WouldBlock
-                || e.raw_os_error()
-                    .is_some_and(|code| Some(code) == fs2::lock_contended_error().raw_os_error())
-            {
-                fail(
-                    JournalErrorCode::OwnerBusy,
-                    "Another updater owns this installation",
-                )
-            } else {
-                storage(e)
-            }
-        })?;
+        let lock = owner_lock(&self.directory)?;
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -598,6 +683,16 @@ impl UpdateJournal {
         id: &str,
         command: &UpdateCommand,
     ) -> Result<UpdateRecord> {
+        self.advance_with_source(authority, id, command, false, |_, _| Ok(()))
+    }
+    fn advance_with_source(
+        &mut self,
+        authority: &UpdateAuthority,
+        id: &str,
+        command: &UpdateCommand,
+        source_driver: bool,
+        write_source: impl FnOnce(&Connection, &UpdateRecord) -> Result<()>,
+    ) -> Result<UpdateRecord> {
         self.check_directory(authority)?;
         validate_update_key(&command.idempotency_key)
             .map_err(|e| fail(JournalErrorCode::InvalidRequest, e))?;
@@ -657,6 +752,17 @@ impl UpdateJournal {
             ));
         }
         let mut current = record(&tx, id)?;
+        if !source_driver
+            && matches!(
+                command.event,
+                winbridge_protocol::update::UpdateEvent::BeginSourceApply
+                    | winbridge_protocol::update::UpdateEvent::SourceVerified
+                    | winbridge_protocol::update::UpdateEvent::Fail
+            )
+            && source::unfinished(&tx, id)?
+        {
+            return Err(fail(JournalErrorCode::InvalidRequest,"Source transaction requires coordinated verification/abort; raw lifecycle event cannot bypass file receipts"));
+        }
         if current.revision != command.expected_revision {
             return Err(fail(
                 JournalErrorCode::RevisionConflict,
@@ -694,6 +800,7 @@ impl UpdateJournal {
                 "Lifecycle transition readback mismatch",
             ));
         }
+        write_source(&tx, &current)?;
         tx.commit().map_err(storage)?;
         Ok(current)
     }

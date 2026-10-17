@@ -1,3 +1,17 @@
+## Самообновление U1: source transaction — 2026-10-17
+
+[Контракт и восстановление](plans/worker-self-update/source-transaction.md).
+Trusted library driver реализует pinned preparation/preimages, SourceApplying
+barrier, no-clobber file moves, immutable intent/receipt и manifest-last/full verification.
+Updater schema 2 с consistent schema-1 backup/owner-lock migration; worker schema 15
+не меняется. Readonly source-status/source-inspect; crash/blocked не повторяют effects,
+worker SourceHeld/startup guard остаётся. 405 local workspace tests passed;
+11 source tests повторно прошли после итоговых style fixes. Clippy/workspace Windows
+cross-check, contracts/typecheck/build:ui/scaffold и Python/PowerShell syntax passed.
+Native Windows source gate ожидается.
+Supervisor/local IPC/shutdown/install/bootstrap не готовы; U1 целиком открыт.
+Установленные Windows source/runtime/config и worker не обновляются. A4 отложен.
+
 ## Самообновление U1: worker coordination — 2026-10-17
 
 [Контракт, границы и следующие зависимости](plans/worker-self-update/worker-coordination.md).

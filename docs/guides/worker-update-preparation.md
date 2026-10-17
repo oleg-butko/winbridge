@@ -14,7 +14,8 @@ Worker может работать, desktop не требуется, UI-окна
 В U1 добавлены [независимый журнал и проверка ZIP](../plans/worker-self-update/durable-preparation.md).
 В worker добавлена [координация исходников и остановки запусков](../plans/worker-self-update/worker-coordination.md)
 с понятным readonly блоком состояния. Она пока используется только trusted driver/tests;
-внешней команды установки нет. Source apply, shutdown и установка пока не реализованы.
+внешней команды установки нет. [Source transaction](../plans/worker-self-update/source-transaction.md)
+реализована как trusted library driver; native gate ожидается. Shutdown и установка ещё не реализованы.
 
 ```powershell
 # SHA берётся из проверенного пакета; путь должен быть абсолютным.
@@ -41,7 +42,7 @@ Config по умолчанию — `winbridge-update.local.json` рядом с e
 абсолютный `--config`. Образец: [windows-update.config.json](../../examples/windows-update.config.json).
 В нём source/runtime roots и фактический worker config path. Существующие файлы
 конфигурации не перезаписывать. Incoming — заранее распакованный локальный каталог;
-проверка ZIP уже доступна отдельно, а live source apply появится после worker source lease.
+проверка ZIP доступна отдельно. Source-write команды для пользователя/агента пока нет.
 
 ```powershell
 .\target\debug\winbridge-update.exe verify-archive K:\path\to\source.zip <ZIP_SHA256> <MANIFEST_SHA256>
@@ -53,10 +54,25 @@ Config по умолчанию — `winbridge-update.local.json` рядом с e
 bytes/SHA; распаковки и записи нет. Поддерживаются обычные Stored/Deflate ZIP.
 `journal init` создаёт только отдельную БД `runtime\update-state\updates.sqlite`
 и installation metadata; worker/config/source/exe не меняются. Повтор сохраняет ID.
+Текущая updater schema 2: при наличии schema 1 init мигрирует её только при свободном
+owner lock, предварительно создавая проверенную согласованную SQLite backup.
+Schema 1 остаётся доступной через readonly status без миграции.
 `journal status [UPDATE_ID]` читает согласованный record, owner epoch и последнюю
 sequence, не захватывая владение и не создавая отсутствующую БД. Это диагностика
 будущего supervisor; сейчас пользователю не требуется выполнять команды вручную.
 Запрос установки и внутренние FSM transitions не открыты через CLI/RPC/MCP.
+
+Диагностика подготовленной библиотечным driver операции:
+
+```powershell
+.\target\debug\winbridge-update.exe --config K:\path\to\winbridge-update.local.json journal source-status <UPDATE_ID> 0 100
+.\target\debug\winbridge-update.exe --config K:\path\to\winbridge-update.local.json journal source-inspect <UPDATE_ID> 0 100
+```
+
+Оба вызова readonly. Первый показывает план/intent/receipt; второй — совпадение
+файлов с baseline/target и пути preimages/held. После сбоя повторное применение
+запрещено. Даже совпавший target без квитанции не означает успешное обновление.
+Не удалять staging и не снимать worker startup guard автоматически.
 
 ## Сборка кандидата без остановки worker
 
@@ -89,9 +105,14 @@ sequence, не захватывая владение и не создавая о
 `scripts/test-update-stage.ps1` проверяет create-only staging и неизменность
 тестового runtime на PowerShell. Rust tests проверяют CLI, ownership/path guards
 и Update FSM. `scripts/validate-workflow-native.py --update-preparation-only`
-запускает native tests журнала/ZIP/preflight/FSM, проверку actual source ZIP и полную сборку кандидата через работающий worker в отдельном
+запускает native tests журнала/ZIP/source transaction/FSM, проверку actual source ZIP и полную сборку кандидата через работающий worker в отдельном
 каталоге зарегистрированного fixture-проекта; installed source/runtime не меняются.
-Нужен clean source ZIP с built UI. Это не самообновление; production shutdown и
+Нужен clean source ZIP с built UI и явные ссылки на прежние exe:
+`--update-reference-worker <schema-14 worker>` и
+`--update-reference-updater <schema-1 updater> --update-reference-updater-sha256 <SHA>`.
+Они копируются в тестовый каталог и используются только с новой тестовой БД
+для проверки отказа старой версии. Путь/hash updater берутся из проверенного
+предыдущего candidate report. Это не самообновление; production shutdown и
 замена файлов появятся после U1–U3 gates и первоначального bootstrap.
 
 Для повтора developer gate есть `--update-preparation-reuse-run <run ID>`:

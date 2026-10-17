@@ -16,7 +16,10 @@ readonly source preflight, Update FSM и build-only staging прошли
 [Worker source lease/drain/quiesce/startup guard](plans/worker-self-update/worker-coordination.md)
 реализованы в trusted adapter с readonly UI; 393 local tests и
 [52 native Windows tests / полный candidate build](plans/worker-self-update/windows-worker-coordination-gate-2026-10-17.md)
-passed. Source apply, supervisor/shutdown и local IPC не готовы;
+passed. [Source transaction](plans/worker-self-update/source-transaction.md) реализована
+в trusted library: source lease, preimages, durable intents/receipts, no-clobber moves,
+manifest-last и readonly crash inspection. Local/native gate выполняется.
+Supervisor/shutdown и local IPC не готовы;
 U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему

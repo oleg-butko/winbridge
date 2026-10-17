@@ -173,8 +173,10 @@ def main():
     parser.add_argument('--profiles-only', action='store_true', help='Check two registered projects with a reusable recipe profile, real IPC, cancel and crash/restart; no desktop windows')
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
-    parser.add_argument('--update-preparation-only', action='store_true', help='Test readonly updater/source planning and build a complete candidate without changing installed runtime or opening windows')
+    parser.add_argument('--update-preparation-only', action='store_true', help='Test updater/source transactions on isolated fixtures and build a complete candidate without changing installed runtime or opening windows')
     parser.add_argument('--update-preparation-reuse-run', help='Reuse only compiler caches of a terminal update-preparation run with checksummed successful native groups; always use new source/state/staging')
+    parser.add_argument('--update-reference-updater', help='Retained schema-1 updater path for isolated schema-2 refusal')
+    parser.add_argument('--update-reference-updater-sha256', help='Reviewed SHA-256 of the retained schema-1 updater')
     parser.add_argument('--update-reference-worker', help='Explicit read-only Windows schema-14 reference exe for isolated schema-15 refusal; copied into the test runtime')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--readiness-only', action='store_true', help='Check readiness, operation pages, scheduling/queue policy, native IPC and desktop compile; no UI windows')
@@ -200,6 +202,8 @@ def main():
         parser.error('--update-preparation-reuse-run requires --update-preparation-only and a valid run ID')
     if args.update_reference_worker and not args.update_preparation_only:
         parser.error('--update-reference-worker requires --update-preparation-only')
+    if (args.update_reference_updater or args.update_reference_updater_sha256) and (not args.update_preparation_only or not args.update_reference_updater or not re.fullmatch(r'[0-9a-f]{64}', args.update_reference_updater_sha256 or '')):
+        parser.error('Updater reference requires update preparation, path and SHA-256')
     if args.verify_readiness_run and (not args.readiness_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.verify_readiness_run)):
         parser.error('--verify-readiness-run requires --readiness-only and a valid saved run ID')
     if (args.queue_reference_worker or args.resource_reference_worker) and not args.readiness_only:
@@ -237,6 +241,7 @@ def main():
         archive_has_work_scheduling = 'winbridge/apps/worker/tests/work_scheduling.rs' in archive.namelist()
         archive_has_queue_control = 'winbridge/apps/worker/tests/queue_control.rs' in archive.namelist()
         archive_has_resource_scheduling = 'winbridge/apps/worker/tests/resource_scheduling.rs' in archive.namelist()
+        archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
@@ -283,6 +288,10 @@ def main():
         profile_argument = ' -IdentityOnly'
     if args.update_preparation_only:
         profile_argument = ' -UpdatePreparationOnly -UpdatePreparationArchivePath $archive'
+        if archive_has_source_transaction:
+            if not args.update_reference_updater or not args.update_reference_updater_sha256:
+                raise RuntimeError('Pinned schema-1 updater reference required')
+            profile_argument += ' -UpdateReferenceUpdater ' + ps_string(args.update_reference_updater) + ' -UpdateReferenceUpdaterSha256 ' + ps_string(args.update_reference_updater_sha256)
         if archive_has_update_coordination:
             if not args.update_reference_worker:
                 raise RuntimeError('Supply a known schema-14 exe with --update-reference-worker; Info does not attest the installed journal schema')
@@ -302,8 +311,10 @@ def main():
                 names.add(name)
             expected = ['update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build']
             prior = json.loads((previous_report / 'report.json').read_text(encoding='utf-8-sig'))
-            if len(prior['commands']) == 7:
+            if len(prior['commands']) in (7, 9):
                 expected += ['update-worker-durable-coordination', 'update-worker-native-coordination', 'update-previous-worker-refusal']
+            if len(prior['commands']) == 9:
+                expected += ['update-platform-no-clobber','update-previous-updater-refusal']
             if (prior['platform'] != 'windows' or prior['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', prior['sourceCommit'])
                     or not re.fullmatch(r'[0-9a-f]{64}', prior['sourceArchiveSha256'])
                     or not {'report.json', *(n+'.log' for n in expected)}.issubset(names)
@@ -495,6 +506,18 @@ exit $nativeExit
             for view in observations:
                 if view['build']['sourceCommit'] != result['sourceCommit'] or view['build']['sourceDirty'] is not False:
                     raise RuntimeError('Coordination observations belong to another build')
+        if archive_has_source_transaction:
+            expected += ['update-platform-no-clobber','update-previous-updater-refusal']
+            source = json.loads((report / 'source-transaction-proof.json').read_text(encoding='utf-8-sig'))
+            if (source.get('kind') != 'source_transaction_proof' or source.get('passed') is not True
+                    or source.get('platform') != 'windows' or source.get('sourceVerified') is not True
+                    or source.get('workerLeaseRetained') is not True or source.get('runtimeApplied') is not False
+                    or source.get('windowsOpened') is not False or source['status']['appliedFiles'] != 4
+                    or source['status']['transaction']['phase'] != 'verified' or source['inspection']['sourceMatchesTarget'] is not True
+                    or source['inspection']['canReplay'] is not False or source['build']['sourceCommit'] != result['sourceCommit']
+                    or source['build']['sourceDirty'] is not False
+                    or result['updateReferenceUpdater']['sha256'] != args.update_reference_updater_sha256):
+                raise RuntimeError('Incomplete native source transaction proof')
         scope = result.get('updatePreparation', {})
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
         archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))
