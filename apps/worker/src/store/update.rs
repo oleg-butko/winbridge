@@ -328,6 +328,32 @@ impl Store {
         .transpose()
     }
     /// The physical observations come from Worker after dispatch closure, never agent input.
+    /// A readonly file scan may run after this short transaction. SourcePending
+    /// already blocks new roots in the affected projects; an empty accepted/owner
+    /// set means there is no accepted child which could begin using those files.
+    /// This check is not a source grant or a capacity reservation. The final CAS
+    /// repeats the checks and reserves capacity before acknowledging SourceHeld.
+    pub(crate) fn require_source_verification(
+        &mut self,
+        spec: &WorkerUpdateSpec,
+        command: &WorkerUpdateCommand,
+        mut blockers: WorkerUpdateBlockers,
+    ) -> Result<()> {
+        let tx = self.update_transaction()?;
+        let current = read(&tx, &spec.update_id)?;
+        if current.spec != *spec || current.revision != command.expected_revision {
+            return Err("Worker source verification scope/revision changed".into());
+        }
+        let projects =
+            (current.phase == WorkerUpdatePhase::SourcePending).then_some(spec.projects.as_slice());
+        let logical = Self::update_blockers_on(&tx, projects)?;
+        blockers.accepted_operations = logical.accepted_operations;
+        blockers.logical_owners = logical.logical_owners;
+        advance_worker_update(current.phase, command, &blockers)?;
+        Ok(())
+    }
+
+    /// Commit the grant only after fresh physical/source checks.
     pub(crate) fn advance_worker_update(
         &mut self,
         spec: &WorkerUpdateSpec,

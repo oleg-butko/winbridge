@@ -17,6 +17,9 @@ trusted worker API, exact immutable binding и supervisor-only lease IPC. Source
 Worker schema 15 владеет source/drain/quiesce leases и pre-migration startup guard;
 updater не открывает worker journal. Между этими БД нет общей транзакции:
 source effects требуют свежий trusted worker grant и актуальную updater authority.
+[Fresh SourceControl](plans/worker-self-update/fresh-source-control.md) добавляет
+process-authenticated bounded Info; baseline/release scan вынесен из общего mutex
+с проверками до/после I/O. Native gate этого продолжения ожидается.
 
 SourceApplying сохраняется до изменений; per-file intent → no-clobber move → hash/
 receipt, manifest последним. Verified source и parent Building фиксируются атомарно

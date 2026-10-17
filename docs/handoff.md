@@ -1,3 +1,21 @@
+## Самообновление U1: fresh SourceControl — 2026-10-17
+
+[Контракт](plans/worker-self-update/fresh-source-control.md). Добавлен readonly
+process-authenticated adapter к обычному worker Info: exact PID/birth/build/context,
+config SHA до/после, bounded fresh response без reconnect/rebind. Source driver
+по-прежнему отдельно проверяет свою live lease/owner/revision перед effects.
+Долгое baseline/release чтение выполняется без Store/process registry mutex;
+короткая transaction проверяет admission barrier/accepted owners до scan, затем
+fresh authority/config/revision/blockers и atomic work slot проверяются до grant.
+Scan сам не является source/build grant. Named-resource policy пока откладывает его.
+
+10 worker update/control tests, 13 source/crash tests и 3 coordination regressions
+passed; Clippy passed. Windows/tests cross-check и fmt/script syntax passed; native gate выполняется. Worker/updater
+schema остаются 15/3. Автоматический supervisor source driver, compiler ownership,
+shutdown/install пока отключены; U1 целиком открыт. Installed worker прежний.
+Следом compiler intent/receipt/OS tree cleanup, затем source/build orchestration,
+exact shutdown и U2–U3. A4 отложен.
+
 ## Самообновление U1: worker launcher/control — 2026-10-17
 
 [Контракт и ограничения](plans/worker-self-update/worker-control.md).

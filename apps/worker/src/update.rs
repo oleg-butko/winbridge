@@ -196,6 +196,36 @@ impl Worker {
         spec: &WorkerUpdateSpec,
         command: &WorkerUpdateCommand,
     ) -> Result<WorkerUpdateLease> {
+        self.advance_source_update_checked(spec, command, &|| Ok(()))
+    }
+    pub(crate) fn advance_source_update_checked(
+        &self,
+        spec: &WorkerUpdateSpec,
+        command: &WorkerUpdateCommand,
+        authorize: &dyn Fn() -> Result<()>,
+    ) -> Result<WorkerUpdateLease> {
+        self.advance_source_update_inner(spec, command, authorize, false, &|root, hash| {
+            winbridge_workspace_sync::source_tree::verify_source(root, hash).map(|_| ())
+        })
+    }
+    #[cfg(test)]
+    pub(crate) fn advance_source_update_test_verifier(
+        &self,
+        spec: &WorkerUpdateSpec,
+        command: &WorkerUpdateCommand,
+        authorize: &dyn Fn() -> Result<()>,
+        verify: &dyn Fn(&Path, &str) -> Result<()>,
+    ) -> Result<WorkerUpdateLease> {
+        self.advance_source_update_inner(spec, command, authorize, false, verify)
+    }
+    fn advance_source_update_inner(
+        &self,
+        spec: &WorkerUpdateSpec,
+        command: &WorkerUpdateCommand,
+        authorize: &dyn Fn() -> Result<()>,
+        verified: bool,
+        verify: &dyn Fn(&Path, &str) -> Result<()>,
+    ) -> Result<WorkerUpdateLease> {
         // Scheduler takes active_projects -> Store; keep this order for close/grant.
         let active = self
             .active_projects
@@ -228,6 +258,7 @@ impl Worker {
         if read_guard(&self.config.state_directory)?.is_none_or(|g| g.spec != *spec) {
             return Err("Worker update startup guard missing/changed; no effect permitted".into());
         }
+        authorize()?;
         if command.action != WorkerUpdateAction::Release {
             self.require_update_config_current()?;
         }
@@ -255,21 +286,16 @@ impl Worker {
             physical_owners: 0,
             uncertain_owners: 0,
         };
-        if command.action == WorkerUpdateAction::AcquireSource {
-            winbridge_workspace_sync::source_tree::verify_source(
-                Path::new(&spec.source_directory),
-                &spec.baseline_manifest_sha256,
-            )?;
-            if cfg!(windows)
-                && self
-                    .coverage
-                    .lock()
-                    .map_err(|_| "Coverage lock poisoned")?
-                    .as_ref()
-                    .is_none_or(|c| !c.complete)
-            {
-                blockers.uncertain_owners += 1;
-            }
+        if command.action == WorkerUpdateAction::AcquireSource
+            && cfg!(windows)
+            && self
+                .coverage
+                .lock()
+                .map_err(|_| "Coverage lock poisoned")?
+                .as_ref()
+                .is_none_or(|c| !c.complete)
+        {
+            blockers.uncertain_owners += 1;
         }
         if command.action == WorkerUpdateAction::ConfirmQuiesced {
             if current.phase != WorkerUpdatePhase::Quiescing {
@@ -293,7 +319,9 @@ impl Worker {
                 }
             }
         }
-        if command.action == WorkerUpdateAction::Release
+        let manifest = if command.action == WorkerUpdateAction::AcquireSource {
+            Some(spec.baseline_manifest_sha256.as_str())
+        } else if command.action == WorkerUpdateAction::Release
             && current.phase != WorkerUpdatePhase::SourcePending
         {
             let hash = command
@@ -303,10 +331,18 @@ impl Worker {
             if hash != spec.baseline_manifest_sha256 && hash != spec.target_manifest_sha256 {
                 return Err("Release source manifest is not pinned by the lease".into());
             }
-            winbridge_workspace_sync::source_tree::verify_source(
-                Path::new(&spec.source_directory),
-                hash,
-            )?;
+            Some(hash)
+        } else {
+            None
+        };
+        if let Some(hash) = manifest.filter(|_| !verified) {
+            store.require_source_verification(spec, command, blockers)?;
+            // Never hold the global process registry or journal while scanning
+            // source bytes. The durable admission barrier remains in place.
+            drop(store);
+            drop(active);
+            verify(Path::new(&spec.source_directory), hash)?;
+            return self.advance_source_update_inner(spec, command, authorize, true, verify);
         }
         let lease = store.advance_worker_update(spec, command, blockers)?;
         if lease.phase == WorkerUpdatePhase::Released {

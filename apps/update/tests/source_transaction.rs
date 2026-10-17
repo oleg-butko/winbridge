@@ -378,6 +378,74 @@ fn source_success_preserves_old_files_and_caches_and_manifest_is_last() {
         fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"source_transaction_proof","passed":true,"platform":std::env::consts::OS,"build":wi.build,"sourceVerified":true,"runtimeApplied":false,"windowsOpened":false,"workerLeaseRetained":true,"status":status,"inspection":inspected,"progress":f.control.events})).unwrap()).unwrap();
     }
 }
+
+#[test]
+fn source_transaction_uses_fresh_process_authenticated_worker_ipc() {
+    use winbridge_platform::infrastructure;
+    use winbridge_update::worker_source::WorkerSourceControl;
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = Fixture::new(tmp.path());
+    let io = tokio::runtime::Runtime::new().unwrap();
+    let server = io.spawn(winbridge_worker::serve(f.control.worker.clone()));
+    let info = info(&f.control.worker);
+    let binding = SupervisorWorkerBinding {
+        context: info.fenced_requests.unwrap().context,
+        generation: info.generation,
+        build: info.build.unwrap(),
+        process: infrastructure::stamp(std::process::id()).unwrap(),
+        config_sha256: sha256(&fs::read(&f.config.worker_config_path).unwrap()),
+        endpoint: "unused-source-readonly-adapter".into(),
+    };
+    let mut control = WorkerSourceControl::new(
+        binding.clone(),
+        &f.config.worker_config_path,
+        io.handle().clone(),
+    )
+    .unwrap();
+    let until = Instant::now() + Duration::from_secs(5);
+    while control.observe_worker().is_err() {
+        assert!(
+            Instant::now() < until,
+            "Readonly worker IPC did not become ready"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    prepare_source(&mut f.journal, &f.owner, &f.config, &f.id, &mut control).unwrap();
+    let applied = apply_source(&mut f.journal, &f.owner, &f.config, &f.id, &mut control).unwrap();
+    assert_eq!(applied.phase, SourceTransactionPhase::Verified);
+    assert_eq!(f.journal.get(&f.id).unwrap().phase, UpdatePhase::Building);
+    assert!(control.observe_worker().is_ok());
+
+    // Same IPC endpoint/process is insufficient: every reply must match the
+    // frozen build, journal incarnation and worker generation as well.
+    for field in ["generation", "build", "incarnation", "birth"] {
+        let mut wrong = binding.clone();
+        match field {
+            "generation" => wrong.generation = uuid::Uuid::new_v4().to_string(),
+            "build" => wrong.build.build_id = "different-build".into(),
+            "incarnation" => wrong.context.journal_incarnation = uuid::Uuid::new_v4().to_string(),
+            "birth" => wrong.process.birth.push_str("-changed"),
+            _ => unreachable!(),
+        }
+        let mut other =
+            WorkerSourceControl::new(wrong, &f.config.worker_config_path, io.handle().clone())
+                .unwrap();
+        assert!(other.observe_worker().is_err(), "{field}");
+    }
+    let bytes = fs::read(&f.config.worker_config_path).unwrap();
+    let mut changed = bytes.clone();
+    changed.push(b'\n');
+    fs::write(&f.config.worker_config_path, changed).unwrap();
+    assert!(control.observe_worker().is_err());
+    assert!(
+        WorkerSourceControl::new(binding, &f.config.worker_config_path, io.handle().clone())
+            .is_err()
+    );
+    fs::write(&f.config.worker_config_path, bytes).unwrap();
+    assert!(control.observe_worker().is_ok());
+    f.control.worker.stop();
+    io.block_on(server).unwrap().unwrap();
+}
 #[test]
 fn local_edit_and_staged_tampering_stop_before_source_effects() {
     for tamper in ["source", "staged", "config"] {

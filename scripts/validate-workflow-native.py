@@ -243,6 +243,7 @@ def main():
         archive_has_resource_scheduling = 'winbridge/apps/worker/tests/resource_scheduling.rs' in archive.namelist()
         archive_has_supervisor = 'winbridge/apps/update/src/supervisor.rs' in archive.namelist()
         archive_has_worker_control = 'winbridge/apps/worker/src/update_control.rs' in archive.namelist()
+        archive_has_worker_source = 'winbridge/apps/update/src/worker_source.rs' in archive.namelist()
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
@@ -548,6 +549,12 @@ exit $nativeExit
                     or smoke['ready']['phase'] != 'ready' or smoke['active']['phase'] != 'active' or smoke['stopped']['phase'] != 'stopped'
                     or smoke['build']['sourceCommit'] != result['sourceCommit'] or smoke['build']['sourceDirty'] is not False):
                 raise RuntimeError('Incomplete supervisor smoke on actual staged WinBridge source')
+        if archive_has_worker_source:
+            native_log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            control_log = (report / 'update-worker-control.log').read_text(encoding='utf-8-sig')
+            if ('source_transaction_uses_fresh_process_authenticated_worker_ipc ... ok' not in native_log
+                    or 'source_scan_keeps_info_responsive_and_rechecks_authority_before_grant ... ok' not in control_log):
+                raise RuntimeError('Fresh source IPC/verification responsiveness regressions did not pass')
         if archive_has_supervisor and archive_has_worker_control:
             expected += ['update-worker-control']
             control = json.loads((report / 'update-control-proof.json').read_text(encoding='utf-8-sig'))

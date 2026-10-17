@@ -277,15 +277,14 @@ impl Worker {
         }
         Ok(())
     }
-    fn control(
+    fn control_authority(
         &self,
         reg: &Registration,
         request: &WorkerUpdateControlRequest,
         peer: u32,
-    ) -> Result<Option<WorkerUpdateLease>> {
+    ) -> Result<UpdateRecord> {
         if request.control_version != 1
             || request.binding != reg.binding
-            || request.binding.context != self.request_context()?
             || request.binding.generation != self.generation
         {
             return Err(
@@ -322,6 +321,18 @@ impl Worker {
                     .into(),
             );
         }
+        Ok(update)
+    }
+    fn control(
+        &self,
+        reg: &Registration,
+        request: &WorkerUpdateControlRequest,
+        peer: u32,
+    ) -> Result<Option<WorkerUpdateLease>> {
+        if request.binding.context != self.request_context()? {
+            return Err("Worker journal context changed; no rebind".into());
+        }
+        let update = self.control_authority(reg, request, peer)?;
         let spec = self.update_source_spec(
             &update.update_id,
             &request.updater_owner_id,
@@ -352,43 +363,58 @@ impl Worker {
                 if let Some(receipt) = self.store()?.worker_update_receipt(&spec, command)? {
                     return Ok(Some(receipt));
                 }
-                match command.action {
-                    WorkerUpdateAction::AcquireSource
-                        if !matches!(
-                            update.phase,
-                            UpdatePhase::Requested | UpdatePhase::Preparing
-                        ) =>
-                    {
-                        return Err("Source grant requires Requested/Preparing updater".into());
-                    }
-                    WorkerUpdateAction::BeginDrain
-                    | WorkerUpdateAction::CloseDispatch
-                    | WorkerUpdateAction::ConfirmQuiesced
-                        if update.phase != UpdatePhase::Draining =>
-                    {
-                        return Err("Worker drain/closure requires committed updater Draining intent after candidate verification".into());
-                    }
-                    WorkerUpdateAction::Release
-                        if !matches!(
-                            update.phase,
-                            UpdatePhase::Requested
-                                | UpdatePhase::Preparing
-                                | UpdatePhase::CandidateVerified
-                                | UpdatePhase::Draining
-                                | UpdatePhase::Quiesced
-                        ) =>
-                    {
-                        return Err("Source/compiler/cutover outcome must be reconciled before worker lease release".into());
-                    }
-                    _ => {}
-                }
+                require_parent_phase(update.phase, command.action)?;
                 if command.action != WorkerUpdateAction::Release {
                     self.require_control_current(reg)?;
                 }
-                self.advance_source_update(&spec, command).map(Some)
+                self.advance_source_update_checked(&spec, command, &|| {
+                    // File verification releases Store. Recheck the external
+                    // authority/phase/config before the final grant transaction.
+                    let fresh = self.control_authority(reg, request, peer)?;
+                    require_parent_phase(fresh.phase, command.action)?;
+                    if command.action != WorkerUpdateAction::Release {
+                        self.require_control_current(reg)?;
+                    }
+                    Ok(())
+                })
+                .map(Some)
             }
         }
     }
+}
+
+fn require_parent_phase(phase: UpdatePhase, action: WorkerUpdateAction) -> Result<()> {
+    match action {
+        WorkerUpdateAction::AcquireSource
+            if !matches!(phase, UpdatePhase::Requested | UpdatePhase::Preparing) =>
+        {
+            return Err("Source grant requires Requested/Preparing updater".into());
+        }
+        WorkerUpdateAction::BeginDrain
+        | WorkerUpdateAction::CloseDispatch
+        | WorkerUpdateAction::ConfirmQuiesced
+            if phase != UpdatePhase::Draining =>
+        {
+            return Err("Worker drain/closure requires committed updater Draining intent after candidate verification".into());
+        }
+        WorkerUpdateAction::Release
+            if !matches!(
+                phase,
+                UpdatePhase::Requested
+                    | UpdatePhase::Preparing
+                    | UpdatePhase::CandidateVerified
+                    | UpdatePhase::Draining
+                    | UpdatePhase::Quiesced
+            ) =>
+        {
+            return Err(
+                "Source/compiler/cutover outcome must be reconciled before worker lease release"
+                    .into(),
+            );
+        }
+        _ => {}
+    }
+    Ok(())
 }
 
 pub(crate) struct ControlServer {
@@ -883,6 +909,86 @@ mod tests {
         if let Some(path) = std::env::var_os("WINBRIDGE_UPDATE_CONTROL_REPORT") {
             fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"worker_update_control_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"binding":reg.binding,"active":active,"stages":[pending,held,released],"duplicateObserved":true,"forgedPeerRejected":true,"prematureDrainRejected":true,"workSlots":[0,1,1,0],"queuedTask":queued,"sourceVerified":true,"sourceManifestSha256":f.baseline,"actualSourcePackage":std::env::var_os("WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE").is_some(),"productionEnvironmentDeferred":true,"launchElapsedMs":launch_elapsed_ms,"sourceGrantElapsedMs":grant_elapsed_ms,"runtimeApplied":false,"sourceEffectsEnabled":false,"windowsOpened":false})).unwrap()).unwrap();
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn source_scan_keeps_info_responsive_and_rechecks_authority_before_grant() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let pending = lease(f.control(WorkerUpdateControlCommand::BeginSource).await);
+        let worker = f.worker.clone();
+        let spec = pending.spec.clone();
+        let baseline = f.baseline.clone();
+        let (entered, scanning) = std::sync::mpsc::channel();
+        let (finish, resume) = std::sync::mpsc::channel();
+        let verify = tokio::task::spawn_blocking(move || {
+            let calls = AtomicUsize::new(0);
+            worker.advance_source_update_test_verifier(
+                &spec,
+                &WorkerUpdateCommand {
+                    command_id: "slow-scan".into(),
+                    expected_revision: 0,
+                    action: WorkerUpdateAction::AcquireSource,
+                    source_manifest_sha256: None,
+                    reason: "Controlled slow verification".into(),
+                },
+                &|| {
+                    if calls.fetch_add(1, Ordering::AcqRel) == 0 {
+                        Ok(())
+                    } else {
+                        Err("Updater authority changed during scan".into())
+                    }
+                },
+                &|root, hash| {
+                    entered.send(()).unwrap();
+                    resume.recv_timeout(Duration::from_secs(5)).unwrap();
+                    assert_eq!(hash, baseline);
+                    winbridge_update::verify_source(root, hash).map(|_| ())
+                },
+            )
+        });
+        tokio::task::spawn_blocking(move || scanning.recv_timeout(Duration::from_secs(5)).unwrap())
+            .await
+            .unwrap();
+        let address = winbridge_transport::endpoint(
+            &f.worker.config.state_directory,
+            &f.worker.config.instance_id,
+        )
+        .unwrap();
+        // A real IPC Info must finish while the verifier is deliberately paused.
+        let info = tokio::time::timeout(
+            Duration::from_secs(2),
+            winbridge_transport::call(&address, &LocalRequest::Info),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(matches!(info, LocalResponse::Info { .. }));
+        assert_eq!(f.slots(), 0); // readonly scanning is not a source/build grant
+        assert_eq!(
+            f.worker.store().unwrap().active_worker_update().unwrap(),
+            Some(pending.clone())
+        );
+        finish.send(()).unwrap();
+        assert!(verify
+            .await
+            .unwrap()
+            .unwrap_err()
+            .contains("authority changed"));
+        assert_eq!(
+            f.worker.store().unwrap().active_worker_update().unwrap(),
+            Some(pending)
+        );
+        assert_eq!(f.slots(), 0);
+        lease(
+            f.advance("fresh-acquire", 0, WorkerUpdateAction::AcquireSource)
+                .await,
+        );
+        lease(
+            f.advance("fresh-release", 1, WorkerUpdateAction::Release)
+                .await,
+        );
+        f.stop().await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]

@@ -85,10 +85,10 @@ UI объясняет этот учёт рядом со счётчиком ра�
 Named-resource policy пока приводит к явному defer, без launch/new grant. Перед
 настоящей сборкой нужен frozen update resource plan; обходить build/cache/interactive
 пулы нельзя. В этом пакете нет compiler/file effects. Readonly image/source preflight
-не является разрешением на сборку. Полная проверка baseline/release пока использует
-существующий Store lock; большие source trees могут задерживать другие ответы.
-Перед расширением pipeline нужна отдельная durable verification reservation и
-проверка отзывчивости на настоящем пакете, без удержания Store на время длинного I/O.
+не является разрешением на сборку. [Следующее продолжение](fresh-source-control.md)
+вынесло baseline/release I/O из Store/process registry mutex: admission barrier и
+accepted-owner check предшествуют scan, fresh authority/revision и atomic work grant
+следуют за ним. Native gate этого продолжения ожидается.
 
 Новые source lease/grant требуют parent Requested/Preparing. Drain/closure/physical
 confirmation требуют committed updater Draining intent после candidate verification.
@@ -117,6 +117,6 @@ receipt writes, config changes, global capacity race, premature drain rejection/
 checksummed `update-control-proof.json`; happy path использует настоящий распакованный
 пакет WinBridge readonly. Установленный worker служит только transport тестов.
 
-Следом: source-driver adapter с authenticated bounded WorkerInfo, durable reservation
-для долгой проверки/подготовки и named resources, compiler ownership/cleanup, exact
-shutdown с ACK/physical exit. Затем U2–U4, UI notifications и единственный bootstrap.
+Readonly source-driver adapter добавлен в [следующем блоке](fresh-source-control.md).
+Следом: compiler ownership/cleanup, автоматическое source/build выполнение, named
+resource plan и exact shutdown с ACK/physical exit. Затем U2–U4, UI notifications и единственный bootstrap.
