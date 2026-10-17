@@ -174,6 +174,7 @@ def main():
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--update-preparation-only', action='store_true', help='Test readonly updater/source planning and build a complete candidate without changing installed runtime or opening windows')
+    parser.add_argument('--update-preparation-reuse-run', help='Reuse only compiler caches of a terminal update-preparation run with checksummed successful native groups; always use new source/state/staging')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--readiness-only', action='store_true', help='Check readiness, operation pages, scheduling/queue policy, native IPC and desktop compile; no UI windows')
     parser.add_argument('--queue-reference-worker', help='Read-only Windows path to a retained schema-12 exe for queue migration refusal; defaults to installed worker before the first schema-13 upgrade')
@@ -194,6 +195,8 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
+    if args.update_preparation_reuse_run and (not args.update_preparation_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.update_preparation_reuse_run)):
+        parser.error('--update-preparation-reuse-run requires --update-preparation-only and a valid run ID')
     if args.verify_readiness_run and (not args.readiness_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.verify_readiness_run)):
         parser.error('--verify-readiness-run requires --readiness-only and a valid saved run ID')
     if (args.queue_reference_worker or args.resource_reference_worker) and not args.readiness_only:
@@ -275,6 +278,34 @@ def main():
         profile_argument = ' -IdentityOnly'
     if args.update_preparation_only:
         profile_argument = ' -UpdatePreparationOnly'
+        if args.update_preparation_reuse_run:
+            old_id = args.update_preparation_reuse_run
+            previous_report = report.parent / old_id
+            ready = json.loads((previous_report / 'report.ready.json').read_text(encoding='utf-8-sig'))
+            names = set()
+            for item in ready['files']:
+                name = item['path']
+                if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or name in names or (previous_report / name).is_symlink():
+                    raise RuntimeError('Unsafe update preparation cache artifact')
+                data = (previous_report / name).read_bytes()
+                if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
+                    raise RuntimeError('Update preparation cache artifact checksum mismatch')
+                names.add(name)
+            expected = ['update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build']
+            prior = json.loads((previous_report / 'report.json').read_text(encoding='utf-8-sig'))
+            if (prior['platform'] != 'windows' or prior['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', prior['sourceCommit'])
+                    or not re.fullmatch(r'[0-9a-f]{64}', prior['sourceArchiveSha256'])
+                    or not {'report.json', *(n+'.log' for n in expected)}.issubset(names)
+                    or [g['name'] for g in prior['commands']] != expected or any(g['exitCode'] != 0 for g in prior['commands'])):
+                raise RuntimeError('Previous update preparation native groups were not completed')
+            saved_root = ROOT / '.winbridge/workflow-validation' / old_id
+            saved = json.loads((saved_root / 'task-report.json').read_text())['task']
+            original = json.loads((saved_root / 'request.json').read_text())
+            actual = call(endpoint, {'method':'get_task','taskId':saved['taskId']})['task']
+            if actual['status'] not in {'succeeded','failed'} or actual['submission'] != original or original['projectId'] != args.project or original['idempotencyKey'] != 'native-workflow-'+old_id:
+                raise RuntimeError('Update cache owner must be a confirmed terminal native task in this project')
+            sha = hashlib.sha256((previous_report / 'report.json').read_bytes()).hexdigest()
+            profile_argument += ' -UpdatePreparationCacheRunId ' + ps_string(old_id) + ' -UpdatePreparationCacheSha256 ' + ps_string(sha)
     if args.readiness_only:
         profile_argument = ' -ReadinessOnly'
         if archive_has_queue_control and not args.verify_readiness_run:
@@ -447,6 +478,11 @@ exit $nativeExit
                 or build.get('sourceManifestSha256') != scope.get('manifestSha256')
                 or {a['name'] for a in proof['artifacts']} != {'winbridge-worker.exe','winbridge-fixture.exe','winbridge-desktop.exe','winbridge-update.exe'}):
             raise RuntimeError('Incomplete native update preparation proof')
+        if args.update_preparation_reuse_run:
+            expected_cache = str(PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / args.update_preparation_reuse_run)
+            if (proof.get('validationCacheDirectory') != expected_cache
+                    or result.get('updatePreparationReuse') != {'runId':args.update_preparation_reuse_run,'reportSha256':sha}):
+                raise RuntimeError('Candidate did not reuse the pinned validation cache')
     if bool(result.get('diagnosticOnly', False)) != args.task_cas_runtime_diagnostic:
         raise RuntimeError('Native report diagnostic/full gate scope mismatch')
     if args.task_cas_runtime_diagnostic:

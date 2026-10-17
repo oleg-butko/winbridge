@@ -105,6 +105,8 @@ param(
     [switch]$ProjectsOnly,
     [switch]$IdentityOnly,
     [switch]$UpdatePreparationOnly,
+    [string]$UpdatePreparationCacheRunId = '',
+    [string]$UpdatePreparationCacheSha256 = '',
     [switch]$TaskFsmOnly,
     [switch]$TaskCasOnly,
     [switch]$ReadinessOnly,
@@ -223,6 +225,7 @@ try {
     Set-Location -LiteralPath $source
     $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
     if ($TaskCasRuntimeDiagnostic -and -not $TaskCasOnly) { throw 'TaskCasRuntimeDiagnostic requires TaskCasOnly' }
+    if (($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) -and -not $UpdatePreparationOnly) { throw 'Update cache reuse requires UpdatePreparationOnly' }
     $groups = @(
         @{ name = 'core-and-log-reader'; arguments = @('test', '-p', 'winbridge-core', '-p', 'winbridge-log-reader', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'readiness-ipc'; arguments = @('test', '-p', 'winbridge-transport', '--lib', 'readiness', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
@@ -441,7 +444,18 @@ try {
         if (-not $?) { throw 'Update staging test failed' }
         $candidateDirectory = Join-Path (Split-Path $source -Parent) 'update-candidate'
         $sourceManifestSha = (Get-FileHash -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
-        & (Join-Path $source 'scripts/build-windows-update.ps1') -SourceDirectory $source -ManifestSha256 $sourceManifestSha -StagingDirectory $candidateDirectory -VerifierExecutable (Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')
+        $cacheArguments = @{}
+        if ($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) {
+            if ($UpdatePreparationCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $UpdatePreparationCacheSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid update preparation cache receipt' }
+            $priorReportPath = Join-Path (Join-Path (Split-Path $ReportDirectory -Parent) $UpdatePreparationCacheRunId) 'report.json'
+            if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
+            $prior = Get-Content -LiteralPath $priorReportPath -Raw | ConvertFrom-Json
+            $expected = @('update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build')
+            if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne 4 -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
+            $cacheArguments.ValidationCacheDirectory = Join-Path (Split-Path (Split-Path $source -Parent) -Parent) $UpdatePreparationCacheRunId
+            $report.updatePreparationReuse = @{runId=$UpdatePreparationCacheRunId;reportSha256=$UpdatePreparationCacheSha256}
+        }
+        & (Join-Path $source 'scripts/build-windows-update.ps1') -SourceDirectory $source -ManifestSha256 $sourceManifestSha -StagingDirectory $candidateDirectory -VerifierExecutable (Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe') @cacheArguments
         if (-not $?) { throw 'Update candidate build script failed' }
         $candidate = Get-Content -LiteralPath (Join-Path $candidateDirectory 'candidate-report.json') -Raw | ConvertFrom-Json
         if ($candidate.status -ne 'built' -or $candidate.runtimeApplied -or $candidate.candidateVerified -or $candidate.artifacts.Count -ne 4) { throw 'Candidate preparation proof incomplete' }

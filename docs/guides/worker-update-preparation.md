@@ -22,6 +22,8 @@ Worker может работать, desktop не требуется, UI-окна
 Локальные правки, локальное удаление, неизвестные source-файлы, case/layout conflicts
 не исправляются автоматически. Links/junctions/hardlinks отклоняются.
 Dirty packages не подходят для автоматического обновления.
+Tauri `apps/desktop/src-tauri/gen`, Python caches и root `release` считаются
+генерируемыми данными: они сохраняются и не включаются в source ownership.
 
 Результат — JSON. Exit 0: проверка прошла/нет source blockers. Exit 2: source plan
 содержит blockers, их описание в stdout. Exit 1: ошибочный config/manifest/path/hash,
@@ -70,3 +72,10 @@ Config по умолчанию — `winbridge-update.local.json` рядом с e
 каталоге зарегистрированного fixture-проекта; installed source/runtime не меняются.
 Нужен clean source ZIP с built UI. Это не самообновление; production shutdown и
 замена файлов появятся после U1–U3 gates и первоначального bootstrap.
+
+Для повтора developer gate есть `--update-preparation-reuse-run <run ID>`:
+проверяются checksums прежнего отчёта и terminal task с успешными native groups,
+затем переиспользуются только Rust/desktop compiler caches под exclusive lease.
+Source, test state, staging и итоговый отчёт всегда новые. Default build script
+по-прежнему использует caches в постоянном `src`; test-only
+`ValidationCacheDirectory` не меняет расположение installed runtime.

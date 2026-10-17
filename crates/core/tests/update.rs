@@ -116,6 +116,8 @@ fn path_size_hash_dirty_and_manifest_collisions_are_rejected() {
         "worker.local.json",
         "private.pem",
         "codex-session-example.md",
+        "apps/desktop/src-tauri/gen/schemas/acl-manifests.json",
+        "scripts/__pycache__/helper.pyc",
     ] {
         assert!(
             validate_source_manifest(&manifest(vec![file(path, "a")])).is_err(),

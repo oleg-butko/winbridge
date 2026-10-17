@@ -18,17 +18,26 @@ pub fn valid_hash(value: &str, lengths: &[usize]) -> bool {
 
 /// Preserved paths are not read recursively, hashed, overwritten or backed up.
 pub fn preserved_source_path(path: &str, includes_built_ui: bool) -> bool {
+    let normalized = path.to_lowercase();
+    if normalized == "apps/desktop/src-tauri/gen"
+        || normalized.starts_with("apps/desktop/src-tauri/gen/")
+        || normalized == "release"
+        || normalized.starts_with("release/")
+    {
+        return true;
+    }
     path.split('/').any(|part| {
         let p = part.to_lowercase();
         matches!(
             p.as_str(),
-            ".git" | ".winbridge" | "target" | "node_modules" | "dist"
+            ".git" | ".winbridge" | "target" | "node_modules" | "dist" | "__pycache__"
         ) || p.starts_with(".env")
             || p.ends_with(".local.json")
             || p.ends_with(".pem")
             || p.ends_with(".key")
             || p.ends_with(".pfx")
             || p.ends_with(".p12")
+            || p.ends_with(".pyc")
             || matches!(
                 p.as_str(),
                 "id_rsa" | "id_ed25519" | "credentials" | "credentials.json"
