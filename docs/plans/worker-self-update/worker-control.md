@@ -88,7 +88,7 @@ Named-resource policy пока приводит к явному defer, без la
 не является разрешением на сборку. [Следующее продолжение](fresh-source-control.md)
 вынесло baseline/release I/O из Store/process registry mutex: admission barrier и
 accepted-owner check предшествуют scan, fresh authority/revision и atomic work grant
-следуют за ним. Native gate этого продолжения ожидается.
+следуют за ним. [82 native tests/candidate build](windows-fresh-source-gate-2026-10-17.md) прошли.
 
 Новые source lease/grant требуют parent Requested/Preparing. Drain/closure/physical
 confirmation требуют committed updater Draining intent после candidate verification.

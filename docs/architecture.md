@@ -19,7 +19,7 @@ updater не открывает worker journal. Между этими БД не�
 source effects требуют свежий trusted worker grant и актуальную updater authority.
 [Fresh SourceControl](plans/worker-self-update/fresh-source-control.md) добавляет
 process-authenticated bounded Info; baseline/release scan вынесен из общего mutex
-с проверками до/после I/O. Native gate этого продолжения ожидается.
+с проверками до/после I/O. [82 native tests / candidate build](plans/worker-self-update/windows-fresh-source-gate-2026-10-17.md) прошли.
 
 SourceApplying сохраняется до изменений; per-file intent → no-clobber move → hash/
 receipt, manifest последним. Verified source и parent Building фиксируются атомарно

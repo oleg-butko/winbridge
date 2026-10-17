@@ -105,9 +105,9 @@ U0 не применяет source plan, не выключает процессы
   immutable binding и supervisor-only IPC. SourceHeld атомарно занимает work slot;
   named-resource policy пока откладывает grant. Breakaway запрещён. Публичное включение,
   source/build orchestration и production shutdown остаются следующими задачами.
-- [ ] [Fresh SourceControl](fresh-source-control.md): readonly process-authenticated
-  Info и source scan без общего mutex реализованы; 26 targeted regressions passed,
-  native gate ожидается. Автоматический source/build driver пока не подключён.
+- [x] [Fresh SourceControl](fresh-source-control.md): readonly process-authenticated
+  Info и source scan без общего mutex реализованы; 26 targeted regressions и
+  [82 native tests / candidate build](windows-fresh-source-gate-2026-10-17.md) прошли. Автоматический source/build driver пока не подключён.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

@@ -30,7 +30,7 @@ SourceHeld атомарно резервирует work slot, named resources п
 417 local tests и [80 native tests / полный candidate build](plans/worker-self-update/windows-worker-control-gate-2026-10-17.md) passed.
 [Fresh SourceControl](plans/worker-self-update/fresh-source-control.md) добавлен:
 process-authenticated Info и source scan без общего mutex; 26 targeted regressions
-passed, native gate ожидается. Следом compiler ownership и exact shutdown.
+passed; [82 native tests / candidate build](plans/worker-self-update/windows-fresh-source-gate-2026-10-17.md) прошли. Следом compiler ownership и exact shutdown.
 Source/build/install orchestration и публичное включение не готовы; U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему

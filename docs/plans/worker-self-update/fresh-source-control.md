@@ -53,6 +53,8 @@ scope/revision/authority и снимает только свою lease. Terminal
 - Прежние source/crash и worker coordination tests проверяются повторно.
 
 10 worker update/control, 13 source/crash и 3 coordination regressions и Clippy passed.
-Windows/tests cross-check и fmt/script syntax passed; native gate выполняется. Следом — compiler attempt/OS Job,
+Windows/tests cross-check и fmt/script syntax passed;
+[native gate clean 3e01e56](windows-fresh-source-gate-2026-10-17.md): 82 tests /
+13 groups и полный candidate build прошли. Следом — compiler attempt/OS Job,
 cleanup proof, автоматическое выполнение source driver и exact shutdown; установка
 рабочего Windows runtime до U1–U3 gates не разрешена.

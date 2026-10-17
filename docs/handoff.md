@@ -10,7 +10,14 @@ fresh authority/config/revision/blockers и atomic work slot проверяют�
 Scan сам не является source/build grant. Named-resource policy пока откладывает его.
 
 10 worker update/control tests, 13 source/crash tests и 3 coordination regressions
-passed; Clippy passed. Windows/tests cross-check и fmt/script syntax passed; native gate выполняется. Worker/updater
+passed; Clippy passed. Windows/tests cross-check и fmt/script syntax passed.
+[Native gate clean 3e01e56](plans/worker-self-update/windows-fresh-source-gate-2026-10-17.md)
+passed: 82 tests/13 groups, 21 checked artifacts и полный candidate build.
+Run `20261017-175317-171ce504`, task `f9018010-5548-4892-a3eb-5ec2516b9f82`
+succeeded/0; report SHA `e48db4bb337af5aa0ea42b3d189d34d3161d110e223d14d059fda03853c7239a`.
+Installed build/generation прежние, final healthy/idle. UI-окон не было; desktop можно
+закрыть, worker оставить. Windows free before/after 28,010,450,944 / 27,720,368,128;
+Debian after verification 34,723,389,440 bytes. Worker/updater
 schema остаются 15/3. Автоматический supervisor source driver, compiler ownership,
 shutdown/install пока отключены; U1 целиком открыт. Installed worker прежний.
 Следом compiler intent/receipt/OS tree cleanup, затем source/build orchestration,
