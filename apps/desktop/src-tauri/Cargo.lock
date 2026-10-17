@@ -4450,8 +4450,10 @@ name = "winbridge-transport"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "libc",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tokio-tungstenite",
  "winbridge-platform",
