@@ -1,3 +1,25 @@
+## Самообновление U1: journal и ZIP preparation — 2026-10-17
+
+Продолжение U0: [реализованная граница и следующие зависимости](plans/worker-self-update/durable-preparation.md).
+Отдельная SQLite schema 1/application ID WBUP, installation/scope binding,
+transactional acceptance до ACK, duplicate-first, immutable lifecycle receipts,
+CAS/revision/installation sequence, single active update и readonly snapshot.
+OS owner lock + durable epoch/UUID; crash не повторяет update и не освобождает
+ManualIntervention barrier. SourceApplying failure тоже блокирует installation.
+Bounded source ZIP verification и create-only local staging/readback; live src
+не меняется. CLI verify-archive, journal init/status; RPC/MCP update capability
+и trusted driver transition/accept commands извне не открыты.
+Native harness проверяет actual ZIP и может переиспользовать также test compiler cache
+под lease. Source/test state/staging/reports всегда новые.
+
+Локально: 382 final workspace tests, затем дополнительный silent-write/readback guard
+и 28 updater tests passed; Clippy, Windows updater cross-check, contracts/typecheck/
+build:ui/scaffold, Python/PowerShell checks passed. Native gate
+нового пакета пока не выполнен. U1 целиком открыт: source lease/apply transaction,
+standalone launch, maintenance/drain/quiesce/startup guard/IPC впереди. Installed
+worker exe/source/runtime/config не заменялись; updater не открывает worker journal.
+Штатные записи validation tasks сохраняет сам worker. A4 остаётся отложенным.
+
 ## Самообновление: U0 завершён — 2026-10-17
 
 Пользователь одобрил анализ и поручил реализацию. [План U0–U4](plans/worker-self-update/README.md)

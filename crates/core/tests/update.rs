@@ -192,6 +192,7 @@ fn quiescence_requires_closed_dispatch_and_zero_logical_physical_unknown_owners(
 #[test]
 fn failure_after_shutdown_requires_manual_intervention_and_terminal_states_do_not_retry() {
     for p in [
+        UpdatePhase::SourceApplying,
         UpdatePhase::Stopping,
         UpdatePhase::Replacing,
         UpdatePhase::VerifyingLocal,
@@ -215,4 +216,54 @@ fn failure_after_shutdown_requires_manual_intervention_and_terminal_states_do_no
         assert!(advance_update(p, UpdateEvent::BeginPreparation).is_err());
         assert!(advance_update(p, UpdateEvent::Fail).is_err());
     }
+}
+
+#[test]
+fn update_request_rejects_unpinned_paths_and_unknown_contract_fields() {
+    let mut request = UpdateRequest {
+        contract_version: 1,
+        idempotency_key: "request".into(),
+        source: UpdateSourcePin {
+            archive_name: "winbridge.zip".into(),
+            archive_sha256: "a".repeat(64),
+            manifest_sha256: "b".repeat(64),
+            source_commit: "c".repeat(40),
+        },
+        expected: UpdateInstallationPin {
+            installation_id: "installation".into(),
+            scope_sha256: "d".repeat(64),
+            worker_build_id: "build".into(),
+            worker_config_sha256: "e".repeat(64),
+            baseline_manifest_sha256: "f".repeat(64),
+        },
+    };
+    assert!(validate_update_request(&request).is_ok());
+    for path in [
+        "../winbridge.zip",
+        "C:/winbridge.zip",
+        "dir/source.zip",
+        "CON.zip",
+        "source.ZIP",
+        "source.zip:stream",
+    ] {
+        request.source.archive_name = path.into();
+        assert!(validate_update_request(&request).is_err(), "{path}");
+    }
+    request.source.archive_name = "source.zip".into();
+    request.source.archive_sha256 = "A".repeat(64);
+    assert!(validate_update_request(&request).is_err());
+    request.source.archive_sha256 = "a".repeat(64);
+    request.contract_version = 2;
+    assert!(validate_update_request(&request).is_err());
+    let mut value = serde_json::to_value(&request).unwrap();
+    value["runtimeDirectory"] = serde_json::json!("K:\\elsewhere");
+    assert!(serde_json::from_value::<UpdateRequest>(value).is_err());
+    assert!(serde_json::from_value::<UpdateEvent>(
+        serde_json::json!({"kind":"fail","releaseMaintenance":true})
+    )
+    .is_err());
+    assert!(update_blocks_installation(UpdatePhase::ManualIntervention));
+    assert!(!update_blocks_installation(
+        UpdatePhase::FailedBeforeCutover
+    ));
 }

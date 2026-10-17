@@ -242,6 +242,7 @@ def main():
     reused = None
     manifest_sha = script_sha = ''
     cache_receipt = None
+    update_cache_receipt = None
     if args.task_cas_reuse_build_cache:
         cache_receipt = verify_reusable_build_cache(report.parent, args.task_cas_reuse_build_cache)
         previous = json.loads((ROOT / '.winbridge/workflow-validation' / args.task_cas_reuse_build_cache / 'task-report.json').read_text())['task']
@@ -277,7 +278,7 @@ def main():
     if args.identity_only:
         profile_argument = ' -IdentityOnly'
     if args.update_preparation_only:
-        profile_argument = ' -UpdatePreparationOnly'
+        profile_argument = ' -UpdatePreparationOnly -UpdatePreparationArchivePath $archive'
         if args.update_preparation_reuse_run:
             old_id = args.update_preparation_reuse_run
             previous_report = report.parent / old_id
@@ -305,6 +306,7 @@ def main():
             if actual['status'] not in {'succeeded','failed'} or actual['submission'] != original or original['projectId'] != args.project or original['idempotencyKey'] != 'native-workflow-'+old_id:
                 raise RuntimeError('Update cache owner must be a confirmed terminal native task in this project')
             sha = hashlib.sha256((previous_report / 'report.json').read_bytes()).hexdigest()
+            update_cache_receipt = {'runId':old_id,'sourceCommit':prior['sourceCommit'],'reportSha256':sha}
             profile_argument += ' -UpdatePreparationCacheRunId ' + ps_string(old_id) + ' -UpdatePreparationCacheSha256 ' + ps_string(sha)
     if args.readiness_only:
         profile_argument = ' -ReadinessOnly'
@@ -465,17 +467,21 @@ exit $nativeExit
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
-    verify_build_cache_usage(result, cache_receipt, local)
+    verify_build_cache_usage(result, cache_receipt or update_cache_receipt, local)
     if args.update_preparation_only:
         expected = ['update-source-policy-and-fsm', 'update-native-preflight', 'update-legacy-contracts', 'update-verifier-build']
         scope = result.get('updatePreparation', {})
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
+        archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))
         build = proof.get('workerBuild', {})
         if ([g['name'] for g in result['commands']] != expected or any(g['exitCode'] != 0 for g in result['commands'])
                 or scope.get('passed') is not True or scope.get('runtimeApplied') is not False or scope.get('windowsOpened') is not False
                 or proof.get('status') != 'built' or proof.get('runtimeApplied') is not False or proof.get('candidateVerified') is not False
                 or build.get('sourceDirty') is not False or build.get('sourceCommit') != result['sourceCommit']
                 or build.get('sourceManifestSha256') != scope.get('manifestSha256')
+                or archive_proof.get('kind') != 'source_archive_verified' or archive_proof.get('readOnly') is not True
+                or archive_proof.get('archiveSha256') != digest or archive_proof.get('source',{}).get('sourceCommit') != result['sourceCommit']
+                or archive_proof.get('source',{}).get('manifestSha256') != scope.get('manifestSha256')
                 or {a['name'] for a in proof['artifacts']} != {'winbridge-worker.exe','winbridge-fixture.exe','winbridge-desktop.exe','winbridge-update.exe'}):
             raise RuntimeError('Incomplete native update preparation proof')
         if args.update_preparation_reuse_run:

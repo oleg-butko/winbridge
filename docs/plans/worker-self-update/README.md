@@ -45,6 +45,7 @@ Update store: `updates`, `transitions`, `file_intents`, `file_receipts`,
 | Phase | Допустимые действия | Условие выхода |
 | --- | --- | --- |
 | Requested/Preparing | Pin/copy/verify package, source plan; source apply только после U1. | Полный manifest, source/config/resource guards. |
+| SourceApplying | Только после source lease: durable preimage/intent → файл → receipt. | Полный manifest/readback; неизвестный partial source → ManualIntervention. |
 | Building | Управляемая сборка и staging; старый worker обслуживает другие проекты. | Build exit 0, source readback, artifact hashes. |
 | CandidateVerified | Isolated native smoke/contract/migration test без production effects. | Candidate proof привязан к actual source/binaries. |
 | Draining | Запрет новых roots, children принятого workflow разрешены. | Нет незавершённых roots/apps; user pause не отменяется. |
@@ -82,10 +83,14 @@ U0 не применяет source plan, не выключает процессы
 
 ### U1 — source transaction, supervisor и maintenance
 
-- [ ] Проверенный ZIP import без extra/duplicate entries, bounded decompression;
-  source apply с create-only preimages, per-file intent, full manifest reconciliation.
-- [ ] Updater state store/CAS/idempotency/lock и guarded infrastructure spawn вне
-  managed Jobs. Проверить Job membership; не включать breakaway для обычных tasks.
+- [x] [Независимый update journal](durable-preparation.md): atomic acceptance/transitions,
+  CAS/idempotency/receipts, OS owner lock + epoch, readonly inspection и crash tests.
+- [x] Bounded ZIP verification/create-only local source staging без extra/duplicate
+  entries и без изменения рабочего src. Native проверка этого пакета ещё впереди.
+- [ ] Source apply с create-only preimages, per-file intent, full manifest reconciliation;
+  source lease и SourceApplying barrier обязательны до первой записи.
+- [ ] Guarded infrastructure spawn вне managed Jobs. Проверить Job membership;
+  не включать breakaway для обычных tasks.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

@@ -10,7 +10,22 @@ export type SourcePlan = { changes: Array<SourceChange>, blockers: Array<SourceB
  * Source preconditions only. Never authorizes filesystem writes or shutdown.
  */
 canApply: boolean, };
-export type UpdatePhase = "requested" | "preparing" | "building" | "validating_candidate" | "candidate_verified" | "draining" | "quiesced" | "stopping" | "replacing" | "verifying_local" | "awaiting_controller" | "committed" | "deferred" | "failed_before_cutover" | "manual_intervention";
+export type UpdatePhase = "requested" | "preparing" | "source_applying" | "building" | "validating_candidate" | "candidate_verified" | "draining" | "quiesced" | "stopping" | "replacing" | "verifying_local" | "awaiting_controller" | "committed" | "deferred" | "failed_before_cutover" | "manual_intervention";
+export type UpdateEvent = { "kind": "begin_preparation" } | { "kind": "begin_source_apply" } | { "kind": "source_verified" } | { "kind": "build_succeeded" } | { "kind": "candidate_accepted" } | { "kind": "begin_drain" } | { "kind": "quiesce", "data": { dispatchClosed: boolean, acceptedOperations: number, physicalOwners: number, uncertainOwners: number, } } | { "kind": "begin_shutdown" } | { "kind": "shutdown_verified" } | { "kind": "files_verified" } | { "kind": "local_health_verified" } | { "kind": "controller_confirmed" } | { "kind": "defer" } | { "kind": "fail" };
+export type UpdateSourcePin = {
+/**
+ * Filename only. The installed policy chooses the source delivery directory.
+ */
+archiveName: string, archiveSha256: string, manifestSha256: string, sourceCommit: string, };
+export type UpdateInstallationPin = { installationId: string, scopeSha256: string, workerBuildId: string, workerConfigSha256: string, baselineManifestSha256: string, };
+export type UpdateRequest = { contractVersion: number, idempotencyKey: string, source: UpdateSourcePin, expected: UpdateInstallationPin, };
+export type UpdateRecord = { updateId: string, revision: number, phase: UpdatePhase, request: UpdateRequest, acceptedAtMs: number, updatedAtMs: number, reason: string | null, };
+export type UpdateCommand = { idempotencyKey: string, expectedRevision: number, event: UpdateEvent, reason: string, };
+export type UpdateTransition = {
+/**
+ * Installation-wide order; a revision is scoped to one update.
+ */
+sequence: number, updateId: string, revision: number, previousPhase: UpdatePhase | null, phase: UpdatePhase, occurredAtMs: number, ownerEpoch: number, ownerId: string, command: UpdateCommand | null, };
 export type OperationRef = { context: RequestContext, kind: HistoryKind, operationId: string, };
 export type AdmissionWatermarks = { tasks: string, imports: string, workflows: string, applications: string, };
 export type OperationCursor = { context: RequestContext, querySha256: string, watermarks: AdmissionWatermarks, before: HistoryCursor, };

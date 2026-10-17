@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 publish.workspace = true
 
+[features]
+bundled-sqlite = ["rusqlite/bundled"]
+
 [dependencies]
 winbridge-core.workspace = true
 winbridge-protocol.workspace = true
@@ -11,6 +14,14 @@ winbridge-platform.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10.9"
+rusqlite = "0.40"
+uuid = { version = "1", features = ["v4"] }
+fs2 = "0.4"
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
 
 [dev-dependencies]
 tempfile = "3"

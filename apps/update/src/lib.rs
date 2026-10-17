@@ -1,4 +1,7 @@
-//! Readonly updater preflight. No source writes, process launch or runtime replacement.
+//! Update preparation and its independent durable journal.
+//! No source writes, process launch or runtime replacement are implemented yet.
+pub mod archive;
+pub mod journal;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -98,6 +101,25 @@ pub fn load_config(path: &Path) -> Result<UpdateConfig> {
         return Err("Worker config must be an existing regular file inside runtime".into());
     }
     Ok(config)
+}
+
+/// Stable path binding. Mutable worker config/source identities belong to request preconditions.
+pub fn installation_scope(config: &UpdateConfig) -> Result<String> {
+    let mut paths = Vec::new();
+    for path in [
+        &config.source_directory,
+        &config.runtime_directory,
+        &config.worker_config_path,
+    ] {
+        let canonical = path.canonicalize().map_err(error)?;
+        let value = canonical
+            .to_str()
+            .ok_or("Installation paths must be UTF-8")?;
+        #[cfg(windows)]
+        let value = value.to_lowercase();
+        paths.push(value.to_owned());
+    }
+    Ok(sha256(&serde_json::to_vec(&(1, paths)).map_err(error)?))
 }
 
 fn manifest(root: &Path) -> Result<(SourceManifest, String)> {

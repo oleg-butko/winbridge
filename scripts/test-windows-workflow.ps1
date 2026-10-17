@@ -105,6 +105,7 @@ param(
     [switch]$ProjectsOnly,
     [switch]$IdentityOnly,
     [switch]$UpdatePreparationOnly,
+    [string]$UpdatePreparationArchivePath = '',
     [string]$UpdatePreparationCacheRunId = '',
     [string]$UpdatePreparationCacheSha256 = '',
     [switch]$TaskFsmOnly,
@@ -188,6 +189,19 @@ try {
     }
     $env:CARGO_TARGET_DIR = Join-Path (Split-Path $source -Parent) 'test-build-cache'
     $previousCache = ''
+    if ($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) {
+        if (-not $UpdatePreparationOnly -or $BuildCacheRunId -or $BuildCacheReportSha256 -or $UpdatePreparationCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $UpdatePreparationCacheSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid update preparation cache receipt' }
+        $updatePriorRun = Join-Path (Split-Path (Split-Path $source -Parent) -Parent) $UpdatePreparationCacheRunId
+        $priorReportPath = Join-Path (Join-Path (Split-Path $ReportDirectory -Parent) $UpdatePreparationCacheRunId) 'report.json'
+        if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
+        $prior = Get-Content -LiteralPath $priorReportPath -Raw | ConvertFrom-Json
+        $expected = @('update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build')
+        if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne 4 -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
+        $previousCache = Join-Path $updatePriorRun 'test-build-cache'
+        if (-not [IO.Path]::GetFullPath($previousCache).Equals([IO.Path]::GetFullPath($prior.buildCacheDirectory),[StringComparison]::OrdinalIgnoreCase)) { throw 'Choose original update compiler cache owner run' }
+        $report.buildCacheRequested = [ordered]@{runId=$UpdatePreparationCacheRunId;sourceCommit=$prior.sourceCommit;reportSha256=$UpdatePreparationCacheSha256}
+        $report.updatePreparationReuse = @{runId=$UpdatePreparationCacheRunId;reportSha256=$UpdatePreparationCacheSha256}
+    }
     if ($BuildCacheRunId -or $BuildCacheReportSha256) {
         if ((-not $TaskCasOnly -and -not $ReadinessOnly) -or $TaskCasRuntimeDiagnostic -or $BuildCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $BuildCacheReportSha256 -notmatch '^[0-9a-f]{64}$') {
             throw 'Build-cache reuse requires full CAS/readiness and a pinned prior full-CAS receipt'
@@ -426,9 +440,9 @@ try {
         if ($manifest.dirty -or -not $manifest.includesBuiltUi) { throw 'Update preparation gate requires a clean source archive with built UI' }
         $groups = @(
             @{name='update-source-policy-and-fsm';arguments=@('test','-p','winbridge-core','--test','update','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-native-preflight';arguments=@('test','-p','winbridge-update','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-native-preflight';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-legacy-contracts';arguments=@('test','-p','winbridge-protocol','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-verifier-build';arguments=@('build','-p','winbridge-update','--locked','--offline')}
+            @{name='update-verifier-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')}
         )
     }
     foreach ($group in $groups) {
@@ -444,16 +458,15 @@ try {
         if (-not $?) { throw 'Update staging test failed' }
         $candidateDirectory = Join-Path (Split-Path $source -Parent) 'update-candidate'
         $sourceManifestSha = (Get-FileHash -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+        if (-not $UpdatePreparationArchivePath) { throw 'Update preparation requires the pinned source ZIP path for actual archive verification' }
+        $archiveProof = & (Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe') verify-archive $UpdatePreparationArchivePath $SourceArchiveSha256 $sourceManifestSha
+        if ($LASTEXITCODE -ne 0) { throw 'Actual source ZIP verification failed' }
+        $archiveProof = ($archiveProof -join "`n") | ConvertFrom-Json
+        if ($archiveProof.kind -ne 'source_archive_verified' -or -not $archiveProof.readOnly -or $archiveProof.archiveSha256 -cne $SourceArchiveSha256 -or $archiveProof.source.manifestSha256 -cne $sourceManifestSha -or $archiveProof.source.sourceCommit -cne $manifest.sourceCommit) { throw 'Actual ZIP/source identity proof incomplete' }
+        $archiveProof | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $ReportDirectory 'update-archive-proof.json') -Encoding utf8
         $cacheArguments = @{}
         if ($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) {
-            if ($UpdatePreparationCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $UpdatePreparationCacheSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid update preparation cache receipt' }
-            $priorReportPath = Join-Path (Join-Path (Split-Path $ReportDirectory -Parent) $UpdatePreparationCacheRunId) 'report.json'
-            if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
-            $prior = Get-Content -LiteralPath $priorReportPath -Raw | ConvertFrom-Json
-            $expected = @('update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build')
-            if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne 4 -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
-            $cacheArguments.ValidationCacheDirectory = Join-Path (Split-Path (Split-Path $source -Parent) -Parent) $UpdatePreparationCacheRunId
-            $report.updatePreparationReuse = @{runId=$UpdatePreparationCacheRunId;reportSha256=$UpdatePreparationCacheSha256}
+            $cacheArguments.ValidationCacheDirectory = $updatePriorRun
         }
         & (Join-Path $source 'scripts/build-windows-update.ps1') -SourceDirectory $source -ManifestSha256 $sourceManifestSha -StagingDirectory $candidateDirectory -VerifierExecutable (Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe') @cacheArguments
         if (-not $?) { throw 'Update candidate build script failed' }

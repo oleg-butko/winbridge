@@ -1,4 +1,4 @@
-# Подготовка обновления worker: первый реализованный пакет U0
+# Подготовка обновления worker: U0 и первые части U1
 
 2026-10-17. [Подробный план U0–U4](../plans/worker-self-update/README.md).
 **Автоматическая установка пока не реализована.** Эти команды проверяют исходники
@@ -11,6 +11,8 @@ Worker может работать, desktop не требуется, UI-окна
 
 `winbridge-update` входит в Rust workspace. После `cargo build --workspace --locked`
 появляется в `target/debug`; штатный prepare script пока не устанавливает его в runtime.
+В U1 добавлены [независимый журнал и проверка ZIP](../plans/worker-self-update/durable-preparation.md).
+Source apply, maintenance/shutdown и установка пока не реализованы.
 
 ```powershell
 # SHA берётся из проверенного пакета; путь должен быть абсолютным.
@@ -31,13 +33,28 @@ Tauri `apps/desktop/src-tauri/gen`, Python caches и root `release` считаю
 содержит blockers, их описание в stdout. Exit 1: ошибочный config/manifest/path/hash,
 структурированное сообщение в stderr. `runtimeUpdateReady: false` означает, что
 перезапуск/установка не реализованы. `canApply: true` относится только к исходникам
-и не разрешает shutdown или файловые изменения. CLI ничего не записывает.
+и не разрешает shutdown или файловые изменения. Эти две команды ничего не записывают.
 
 Config по умолчанию — `winbridge-update.local.json` рядом с exe; можно указать
 абсолютный `--config`. Образец: [windows-update.config.json](../../examples/windows-update.config.json).
 В нём source/runtime roots и фактический worker config path. Существующие файлы
 конфигурации не перезаписывать. Incoming — заранее распакованный локальный каталог;
-автоматическая проверка ZIP/import/source apply будет добавлена в U1.
+проверка ZIP уже доступна отдельно, а live source apply появится после worker source lease.
+
+```powershell
+.\target\debug\winbridge-update.exe verify-archive K:\path\to\source.zip <ZIP_SHA256> <MANIFEST_SHA256>
+.\target\debug\winbridge-update.exe --config K:\path\to\winbridge-update.local.json journal init
+.\target\debug\winbridge-update.exe --config K:\path\to\winbridge-update.local.json journal status
+```
+
+`verify-archive` проверяет SHA архива/manifest, точный состав и actual decompressed
+bytes/SHA; распаковки и записи нет. Поддерживаются обычные Stored/Deflate ZIP.
+`journal init` создаёт только отдельную БД `runtime\update-state\updates.sqlite`
+и installation metadata; worker/config/source/exe не меняются. Повтор сохраняет ID.
+`journal status [UPDATE_ID]` читает согласованный record, owner epoch и последнюю
+sequence, не захватывая владение и не создавая отсутствующую БД. Это диагностика
+будущего supervisor; сейчас пользователю не требуется выполнять команды вручную.
+Запрос установки и внутренние FSM transitions не открыты через CLI/RPC/MCP.
 
 ## Сборка кандидата без остановки worker
 
@@ -70,14 +87,14 @@ Config по умолчанию — `winbridge-update.local.json` рядом с e
 `scripts/test-update-stage.ps1` проверяет create-only staging и неизменность
 тестового runtime на PowerShell. Rust tests проверяют CLI, ownership/path guards
 и Update FSM. `scripts/validate-workflow-native.py --update-preparation-only`
-запускает native tests и полную сборку кандидата через работающий worker в отдельном
+запускает native tests журнала/ZIP/preflight/FSM, проверку actual source ZIP и полную сборку кандидата через работающий worker в отдельном
 каталоге зарегистрированного fixture-проекта; installed source/runtime не меняются.
 Нужен clean source ZIP с built UI. Это не самообновление; production shutdown и
 замена файлов появятся после U1–U3 gates и первоначального bootstrap.
 
 Для повтора developer gate есть `--update-preparation-reuse-run <run ID>`:
 проверяются checksums прежнего отчёта и terminal task с успешными native groups,
-затем переиспользуются только Rust/desktop compiler caches под exclusive lease.
+затем переиспользуются только native-test/Rust/desktop compiler caches под exclusive leases.
 Source, test state, staging и итоговый отчёт всегда новые. Default build script
 по-прежнему использует caches в постоянном `src`; test-only
 `ValidationCacheDirectory` не меняет расположение installed runtime.

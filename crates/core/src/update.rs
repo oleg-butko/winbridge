@@ -251,27 +251,49 @@ pub fn plan_source_update(
     })
 }
 
-/// Observations must be established by the owning adapter/store, never an agent assertion.
-#[derive(Clone, Copy, Debug)]
-pub enum UpdateEvent {
-    BeginPreparation,
-    SourceVerified,
-    BuildSucceeded,
-    CandidateAccepted,
-    BeginDrain,
-    Quiesce {
-        dispatch_closed: bool,
-        accepted_operations: u64,
-        physical_owners: u64,
-        uncertain_owners: u64,
-    },
-    BeginShutdown,
-    ShutdownVerified,
-    FilesVerified,
-    LocalHealthVerified,
-    ControllerConfirmed,
-    Defer,
-    Fail,
+pub use winbridge_protocol::update::UpdateEvent;
+
+pub const MAX_UPDATE_COUNTER: u64 = 9_007_199_254_740_991;
+
+pub fn validate_update_key(value: &str) -> Result<(), String> {
+    if value.is_empty() || value.len() > 128 || value.chars().any(char::is_control) {
+        return Err("Update key must contain 1–128 bytes without control characters".into());
+    }
+    Ok(())
+}
+
+pub fn validate_update_request(
+    request: &winbridge_protocol::update::UpdateRequest,
+) -> Result<(), String> {
+    validate_update_key(&request.idempotency_key)?;
+    if request.contract_version != 1 {
+        return Err("Unsupported update request contract".into());
+    }
+    let source = &request.source;
+    validate_source_path(&source.archive_name)?;
+    if source.archive_name.contains('/') || !source.archive_name.ends_with(".zip") {
+        return Err("Update archive must be a ZIP filename, without a directory".into());
+    }
+    if !valid_hash(&source.archive_sha256, &[64])
+        || !valid_hash(&source.manifest_sha256, &[64])
+        || !valid_hash(&source.source_commit, &[40, 64])
+        || !valid_hash(&request.expected.scope_sha256, &[64])
+        || !valid_hash(&request.expected.worker_config_sha256, &[64])
+        || !valid_hash(&request.expected.baseline_manifest_sha256, &[64])
+    {
+        return Err("Update identities require lowercase SHA hashes".into());
+    }
+    validate_update_key(&request.expected.installation_id)?;
+    validate_update_key(&request.expected.worker_build_id)?;
+    Ok(())
+}
+
+/// Manual intervention keeps the installation blocked even though its FSM is terminal.
+pub fn update_blocks_installation(phase: UpdatePhase) -> bool {
+    !matches!(
+        phase,
+        UpdatePhase::Committed | UpdatePhase::Deferred | UpdatePhase::FailedBeforeCutover
+    )
 }
 
 pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePhase, String> {
@@ -279,7 +301,8 @@ pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePh
     use UpdatePhase as P;
     let next = match (phase, event) {
         (P::Requested, E::BeginPreparation) => P::Preparing,
-        (P::Preparing, E::SourceVerified) => P::Building,
+        (P::Preparing, E::BeginSourceApply) => P::SourceApplying,
+        (P::Preparing | P::SourceApplying, E::SourceVerified) => P::Building,
         (P::Building, E::BuildSucceeded) => P::ValidatingCandidate,
         (P::ValidatingCandidate, E::CandidateAccepted) => P::CandidateVerified,
         (P::CandidateVerified, E::BeginDrain) => P::Draining,
@@ -308,9 +331,14 @@ pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePh
             | P::Quiesced,
             E::Fail,
         ) => P::FailedBeforeCutover,
-        (P::Stopping | P::Replacing | P::VerifyingLocal | P::AwaitingController, E::Fail) => {
-            P::ManualIntervention
-        }
+        (
+            P::SourceApplying
+            | P::Stopping
+            | P::Replacing
+            | P::VerifyingLocal
+            | P::AwaitingController,
+            E::Fail,
+        ) => P::ManualIntervention,
         _ => return Err(format!("Update transition rejected: {phase:?} + {event:?}")),
     };
     Ok(next)
