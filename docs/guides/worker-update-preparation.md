@@ -4,6 +4,8 @@
 **Автоматическая установка пока не реализована.** Эти команды проверяют исходники
 и собирают отдельный комплект; рабочие exe, config и journal сохраняются.
 Worker может работать, desktop не требуется, UI-окна не открываются.
+[U0 Windows gate](../plans/worker-self-update/windows-preparation-gate-2026-10-17.md)
+пройден: 19 native tests, output-link guard и сборка всех четырёх binaries.
 
 ## Что уже делает winbridge-update
 

@@ -74,7 +74,7 @@ effects downgrade journal автоматически запрещён; backup с
 - [x] Tests: local edits/deletions/unknown paths, case/path collisions, symlink,
   hardlink, protected data, bad manifest/hash, deterministic plan и cutover failure.
 - [x] Portable PowerShell stage tests и реальный CLI dry-run на exported source.
-- [ ] Automatic native Windows tests и полный build/staging четырёх exe.
+- [x] [Automatic native Windows tests и полный build/staging четырёх exe](windows-preparation-gate-2026-10-17.md): 19 tests, native junction guard, source readback и actual artifact identity прошли.
 
 U0 не применяет source plan, не выключает процессы, не объявляет remote capability.
 Первоначальный build verifier можно собрать вручную при bootstrap; дальнейший

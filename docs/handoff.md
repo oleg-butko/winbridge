@@ -1,9 +1,9 @@
-## Самообновление: подробный план и U0 в работе — 2026-10-17
+## Самообновление: U0 завершён — 2026-10-17
 
 Пользователь одобрил анализ и поручил реализацию. [План U0–U4](plans/worker-self-update/README.md)
 уточнён и повторно проверен: source ownership, standalone supervisor, два журнала,
 maintenance/startup guard, same-schema apply, desktop/migration и bootstrap gates.
-Начат U0: отдельные protocol DTO/core FSM, readonly updater CLI/source plan,
+Реализован U0: отдельные protocol DTO/core FSM, readonly updater CLI/source plan,
 create-only build staging и automatic native preparation scenario.
 [Текущее использование и ограничения](guides/worker-update-preparation.md).
 Self-update capability не объявляется, worker stop/source apply/runtime replace
@@ -11,11 +11,24 @@ Self-update capability не объявляется, worker stop/source apply/run
 Локально passed: 360 workspace tests (13 новых), Clippy с schema/TS features,
 contracts/typecheck/build:ui/scaffold, PowerShell parsing/create-only stage tests.
 Actual clean ZIP `1f3aa9f` прошёл verify-source: 464 файла / 8,214,661 bytes.
-Native preparation/full candidate build ещё ожидает автоматический прогон.
+[Final native gate](plans/worker-self-update/windows-preparation-gate-2026-10-17.md)
+на clean `7a7d15f` passed: 19 native tests, PowerShell junction/create-only guards,
+полный build/staging четырёх exe, source readback и actual worker artifact identity.
+Run `20261017-062536-7f2b8b26`, parent `f4009480-b995-4b27-834e-f86f00178a3b`
+succeeded/0, report SHA `48448556ffb2574b4421a69255ab9a172697700d46761af01912f46ffd29a925`.
+Первый cold run выявил Tauri gen false conflict; исправлен, 13 relevant tests
+повторены. Следующее ревью добавило pre-build output-link guard; final Windows
+repeat проверил его. Только compiler caches переиспользовались; reports/state новые.
 Подключённый worker уже clean `1f3aa9f`, generation
 `994671b4-e10c-469c-8515-b2aa71a4e3dc`, build `1792228466051801600`;
 health/idle подтверждены read-only. Это обновляет последнее наблюдение ниже,
 но не закрывает installed resource gate A4.3.
+Working build/generation до/после прежние, final health/idle подтверждены.
+Windows free final 45,821,747,200 bytes, Debian 27,201,228,800 bytes.
+Ручное обновление сейчас не требуется; worker оставить, desktop можно закрыть.
+Следующий U1 — durable source transaction, standalone supervisor и maintenance.
+U1–U4 остаются открытыми; self-update capability не объявлять и не применять runtime
+автоматически до соответствующих gates. A4 временно отложен по решению пользователя.
 
 ## Внеплановый анализ самообновления — 2026-10-17
 

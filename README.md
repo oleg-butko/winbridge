@@ -36,6 +36,7 @@
 apps/
   controller/       Debian coordinator; ws:// listener и CLI submit/get/cancel/watch
   worker/           Local execution authority, CLI, SQLite, fixture executable
+  update/           Readonly source verifier/plan; runtime replacement ещё не реализован
   desktop/          Tauri shell с worker IPC bridge, отдельный Cargo package
 crates/
   protocol/         Общие wire DTO и версия протокола
@@ -60,6 +61,12 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 `transport` и `platform` входят в workspace. Desktop — отдельный package в `apps/desktop/src-tauri` со своим lockfile, чтобы workspace проверки не требовали GUI SDK. Worker владеет journal/queue/processes; runner, workspace-sync и log-reader реализованы отдельными modules. Core и protocol не зависят от Tauri, конкретной VM или соседнего Netwatch repository.
 
 ## Проверка и запуск
+
+Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):
+`winbridge-update` проверяет исходники и показывает план замен, отдельный build-only
+сценарий собирает staging без остановки установленного worker. [19 native tests
+и полная Windows сборка](docs/plans/worker-self-update/windows-preparation-gate-2026-10-17.md)
+прошли. Автоматическая установка относится к следующим U1–U4.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

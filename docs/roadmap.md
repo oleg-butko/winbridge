@@ -2,12 +2,15 @@
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 
-## Внеплановый анализ самообновления — 2026-10-17
+## Самообновление U0–U4 — 2026-10-17
 
 По просьбе пользователя продолжение A0–A9 временно отложено.
 [Анализ auto-update](analysis/worker-self-update/README.md) одобрен; уточнён
-[план U0–U4](plans/worker-self-update/README.md), реализация U0 начата:
-readonly source preflight, Update FSM и build-only staging.
+[план U0–U4](plans/worker-self-update/README.md). U0 завершён:
+readonly source preflight, Update FSM и build-only staging прошли
+[19 native tests и полную Windows сборку четырёх exe](plans/worker-self-update/windows-preparation-gate-2026-10-17.md).
+Следующий U1 — durable source apply, updater supervisor и maintenance; полное
+самообновление ещё не реализовано, bootstrap впереди после isolated gates.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.
