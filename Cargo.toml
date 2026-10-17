@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/protocol", "crates/core", "crates/platform", "crates/transport", "apps/controller", "apps/worker", "modules/workspace-sync", "modules/log-reader", "modules/runner"]
+members = ["crates/protocol", "crates/core", "crates/platform", "crates/transport", "apps/controller", "apps/worker", "apps/update", "modules/workspace-sync", "modules/log-reader", "modules/runner"]
 exclude = ["apps/desktop/src-tauri"]
 resolver = "2"
 

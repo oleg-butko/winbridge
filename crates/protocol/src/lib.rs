@@ -19,6 +19,7 @@ mod queue_control;
 pub use queue_control::*;
 mod resource_scheduling;
 pub use resource_scheduling::*;
+pub mod update;
 
 mod attention;
 pub use attention::*;

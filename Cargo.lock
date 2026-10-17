@@ -1006,6 +1006,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "winbridge-update"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "winbridge-core",
+ "winbridge-platform",
+ "winbridge-protocol",
+]
+
+[[package]]
 name = "winbridge-worker"
 version = "0.1.0"
 dependencies = [

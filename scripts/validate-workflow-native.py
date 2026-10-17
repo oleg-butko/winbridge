@@ -173,6 +173,7 @@ def main():
     parser.add_argument('--profiles-only', action='store_true', help='Check two registered projects with a reusable recipe profile, real IPC, cancel and crash/restart; no desktop windows')
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
+    parser.add_argument('--update-preparation-only', action='store_true', help='Test readonly updater/source planning and build a complete candidate without changing installed runtime or opening windows')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--readiness-only', action='store_true', help='Check readiness, operation pages, scheduling/queue policy, native IPC and desktop compile; no UI windows')
     parser.add_argument('--queue-reference-worker', help='Read-only Windows path to a retained schema-12 exe for queue migration refusal; defaults to installed worker before the first schema-13 upgrade')
@@ -197,7 +198,7 @@ def main():
         parser.error('--verify-readiness-run requires --readiness-only and a valid saved run ID')
     if (args.queue_reference_worker or args.resource_reference_worker) and not args.readiness_only:
         parser.error('Queue/resource reference workers require --readiness-only')
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only, args.readiness_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only, args.readiness_only, args.update_preparation_only)) > 1:
         parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
@@ -272,6 +273,8 @@ def main():
         profile_argument = ' -ProfilesOnly'
     if args.identity_only:
         profile_argument = ' -IdentityOnly'
+    if args.update_preparation_only:
+        profile_argument = ' -UpdatePreparationOnly'
     if args.readiness_only:
         profile_argument = ' -ReadinessOnly'
         if archive_has_queue_control and not args.verify_readiness_run:
@@ -432,6 +435,18 @@ exit $nativeExit
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
     verify_build_cache_usage(result, cache_receipt, local)
+    if args.update_preparation_only:
+        expected = ['update-source-policy-and-fsm', 'update-native-preflight', 'update-legacy-contracts', 'update-verifier-build']
+        scope = result.get('updatePreparation', {})
+        proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
+        build = proof.get('workerBuild', {})
+        if ([g['name'] for g in result['commands']] != expected or any(g['exitCode'] != 0 for g in result['commands'])
+                or scope.get('passed') is not True or scope.get('runtimeApplied') is not False or scope.get('windowsOpened') is not False
+                or proof.get('status') != 'built' or proof.get('runtimeApplied') is not False or proof.get('candidateVerified') is not False
+                or build.get('sourceDirty') is not False or build.get('sourceCommit') != result['sourceCommit']
+                or build.get('sourceManifestSha256') != scope.get('manifestSha256')
+                or {a['name'] for a in proof['artifacts']} != {'winbridge-worker.exe','winbridge-fixture.exe','winbridge-desktop.exe','winbridge-update.exe'}):
+            raise RuntimeError('Incomplete native update preparation proof')
     if bool(result.get('diagnosticOnly', False)) != args.task_cas_runtime_diagnostic:
         raise RuntimeError('Native report diagnostic/full gate scope mismatch')
     if args.task_cas_runtime_diagnostic:

@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 use ts_rs::{Config, TS};
+use winbridge_protocol::update::*;
 use winbridge_protocol::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -8,6 +9,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        SourceManifest::decl(&config),
+        SourceFile::decl(&config),
+        SourceAction::decl(&config),
+        SourceChange::decl(&config),
+        SourceBlockerCode::decl(&config),
+        SourceBlocker::decl(&config),
+        SourcePlan::decl(&config),
+        UpdatePhase::decl(&config),
         OperationRef::decl(&config),
         AdmissionWatermarks::decl(&config),
         OperationCursor::decl(&config),

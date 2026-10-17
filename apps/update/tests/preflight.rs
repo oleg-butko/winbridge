@@ -1,0 +1,195 @@
+use std::{fs, path::Path, process::Command};
+use winbridge_protocol::update::{SourceFile, SourceManifest};
+use winbridge_update::{load_config, sha256, source_plan, verify_source};
+
+fn tree(root: &Path, contents: &[(&str, &str)]) -> String {
+    fs::create_dir_all(root).unwrap();
+    let mut files = Vec::new();
+    for (name, value) in contents {
+        let path = root.join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, value).unwrap();
+        files.push(SourceFile {
+            path: (*name).into(),
+            bytes: value.len() as u64,
+            sha256: sha256(value.as_bytes()),
+        });
+    }
+    let manifest = SourceManifest {
+        schema_version: 1,
+        source_commit: "a".repeat(40),
+        dirty: false,
+        created_at: "2026-10-17T00:00:00Z".into(),
+        includes_built_ui: false,
+        files,
+    };
+    let bytes = serde_json::to_vec(&manifest).unwrap();
+    fs::write(root.join("winbridge-source-manifest.json"), &bytes).unwrap();
+    sha256(&bytes)
+}
+
+#[test]
+fn cli_plan_is_readonly_and_reports_real_changes_then_local_conflicts() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("src");
+    let incoming = temp.path().join("incoming");
+    let runtime = temp.path().join("runtime");
+    tree(
+        &source,
+        &[("Cargo.toml", "old"), ("src/removed.rs", "gone")],
+    );
+    let expected = tree(
+        &incoming,
+        &[("Cargo.toml", "new"), ("src/added.rs", "added")],
+    );
+    fs::create_dir(&runtime).unwrap();
+    let worker = runtime.join("worker.local.json");
+    fs::write(&worker, "USER CONFIG PRESERVED").unwrap();
+    fs::write(runtime.join("worker.exe"), "ACTIVE RUNTIME PRESERVED").unwrap();
+    let config = runtime.join("update.local.json");
+    fs::write(
+        &config,
+        serde_json::to_vec(&serde_json::json!({"schemaVersion":1,
+        "sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":worker}))
+        .unwrap(),
+    )
+    .unwrap();
+    let before = fs::read(source.join("Cargo.toml")).unwrap();
+    let command = || {
+        Command::new(env!("CARGO_BIN_EXE_winbridge-update"))
+            .arg("--config")
+            .arg(&config)
+            .arg("plan")
+            .arg(&incoming)
+            .arg(&expected)
+            .output()
+            .unwrap()
+    };
+    let first = command();
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let result: serde_json::Value = serde_json::from_slice(&first.stdout).unwrap();
+    assert_eq!(result["plan"]["canApply"], true);
+    assert_eq!(result["runtimeUpdateReady"], false);
+    assert_eq!(result["readOnly"], true);
+    assert_eq!(fs::read(source.join("Cargo.toml")).unwrap(), before);
+    assert!(!source.join("src/added.rs").exists());
+    assert!(source.join("src/removed.rs").exists());
+    fs::write(source.join("Cargo.toml"), "LOCAL EDIT").unwrap();
+    let blocked = command();
+    assert_eq!(blocked.status.code(), Some(2));
+    let result: serde_json::Value = serde_json::from_slice(&blocked.stdout).unwrap();
+    assert_eq!(result["plan"]["canApply"], false);
+    assert_eq!(
+        fs::read_to_string(source.join("Cargo.toml")).unwrap(),
+        "LOCAL EDIT"
+    );
+    assert_eq!(fs::read_to_string(worker).unwrap(), "USER CONFIG PRESERVED");
+    assert_eq!(
+        fs::read_to_string(runtime.join("worker.exe")).unwrap(),
+        "ACTIVE RUNTIME PRESERVED"
+    );
+}
+
+#[test]
+fn source_verification_ignores_preserved_data_but_rejects_unknown_inputs_and_bad_hashes() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let hash = tree(root, &[("Cargo.toml", "approved")]);
+    fs::create_dir(root.join("target")).unwrap();
+    fs::write(root.join("target/generated.rs"), "cache").unwrap();
+    fs::write(root.join(".env"), "DO_NOT_READ_OR_PRINT_123").unwrap();
+    assert!(verify_source(root, &hash).is_ok());
+    assert!(verify_source(root, &"b".repeat(64))
+        .unwrap_err()
+        .contains("mismatch"));
+    fs::write(root.join("unexpected.rs"), "DO_NOT_READ_OR_PRINT_456").unwrap();
+    let error = verify_source(root, &hash).unwrap_err();
+    assert!(error.contains("unmanaged_file"));
+    assert!(!error.contains("DO_NOT_READ_OR_PRINT"));
+    fs::remove_file(root.join("unexpected.rs")).unwrap();
+    fs::write(root.join("Cargo.toml"), "corrupt").unwrap();
+    assert!(verify_source(root, &hash)
+        .unwrap_err()
+        .contains("local_modified"));
+}
+
+#[test]
+fn missing_baseline_does_not_adopt_existing_sources() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("src");
+    let incoming = temp.path().join("incoming");
+    let runtime = temp.path().join("runtime");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&runtime).unwrap();
+    let hash = tree(&incoming, &[("Cargo.toml", "target")]);
+    let worker = runtime.join("worker.local.json");
+    fs::write(&worker, "config").unwrap();
+    let config = temp.path().join("updater.json");
+    fs::write(
+        &config,
+        serde_json::to_vec(&serde_json::json!({"schemaVersion":1,
+        "sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":worker}))
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(
+        source_plan(&load_config(&config).unwrap(), &incoming, &hash)
+            .unwrap_err()
+            .contains("bootstrap")
+    );
+    assert_eq!(fs::read_dir(source).unwrap().count(), 0);
+}
+
+#[test]
+fn source_directory_in_place_of_expected_file_is_refused() {
+    let temp = tempfile::tempdir().unwrap();
+    let hash = tree(temp.path(), &[("Cargo.toml", "text")]);
+    fs::remove_file(temp.path().join("Cargo.toml")).unwrap();
+    fs::create_dir(temp.path().join("Cargo.toml")).unwrap();
+    assert!(verify_source(temp.path(), &hash)
+        .unwrap_err()
+        .contains("path_type_conflict"));
+}
+
+#[test]
+fn hardlinked_owned_file_is_refused() {
+    let temp = tempfile::tempdir().unwrap();
+    let hash = tree(temp.path(), &[("Cargo.toml", "text")]);
+    fs::hard_link(temp.path().join("Cargo.toml"), temp.path().join("other")).unwrap();
+    assert!(verify_source(temp.path(), &hash).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn linked_source_is_refused() {
+    let temp = tempfile::tempdir().unwrap();
+    let hash = tree(temp.path(), &[("Cargo.toml", "text")]);
+    std::os::unix::fs::symlink("Cargo.toml", temp.path().join("linked.rs")).unwrap();
+    assert!(verify_source(temp.path(), &hash).is_err());
+}
+
+#[cfg(windows)]
+#[test]
+fn junction_source_is_refused_without_admin_or_symlink_privileges() {
+    let temp = tempfile::tempdir().unwrap();
+    let hash = tree(temp.path(), &[("Cargo.toml", "text")]);
+    let outside = tempfile::tempdir().unwrap();
+    let junction = temp.path().join("linked");
+    let output = Command::new("cmd.exe")
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(&junction)
+        .arg(outside.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(verify_source(temp.path(), &hash).is_err());
+    fs::remove_dir(junction).unwrap();
+}

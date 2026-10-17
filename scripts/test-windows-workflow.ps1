@@ -104,6 +104,7 @@ param(
     [switch]$ProfilesOnly,
     [switch]$ProjectsOnly,
     [switch]$IdentityOnly,
+    [switch]$UpdatePreparationOnly,
     [switch]$TaskFsmOnly,
     [switch]$TaskCasOnly,
     [switch]$ReadinessOnly,
@@ -228,8 +229,8 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly,$ReadinessOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
-    if ($TaskCasOnly -or $ReadinessOnly) {
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly,$ReadinessOnly,$UpdatePreparationOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($TaskCasOnly -or $ReadinessOnly -or $UpdatePreparationOnly) {
         $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($source))
         $report.storage = [ordered]@{ volume = $drive.Name; availableBytesBefore = $drive.AvailableFreeSpace }
         if ($drive.AvailableFreeSpace -lt 8GB) { throw 'Less than 8 GiB free for an isolated build; no existing run is deleted' }
@@ -418,6 +419,15 @@ try {
             @{ name='companion-desktop-build'; arguments=@('build','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--features','custom-protocol','--locked','--offline') }
         )
     }
+    if ($UpdatePreparationOnly) {
+        if ($manifest.dirty -or -not $manifest.includesBuiltUi) { throw 'Update preparation gate requires a clean source archive with built UI' }
+        $groups = @(
+            @{name='update-source-policy-and-fsm';arguments=@('test','-p','winbridge-core','--test','update','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-native-preflight';arguments=@('test','-p','winbridge-update','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-legacy-contracts';arguments=@('test','-p','winbridge-protocol','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-verifier-build';arguments=@('build','-p','winbridge-update','--locked','--offline')}
+        )
+    }
     foreach ($group in $groups) {
         $log = Join-Path $ReportDirectory ($group.name + '.log')
         $commandArgs = $group.arguments
@@ -425,6 +435,18 @@ try {
         $code = $LASTEXITCODE
         $report.commands += [ordered]@{ name = $group.name; executable = $cargo; arguments = $commandArgs; exitCode = $code; log = (Split-Path $log -Leaf) }
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
+    }
+    if ($UpdatePreparationOnly) {
+        & (Join-Path $source 'scripts/test-update-stage.ps1') -ScratchRoot (Join-Path (Split-Path $source -Parent) 'update-stage-test')
+        if (-not $?) { throw 'Update staging test failed' }
+        $candidateDirectory = Join-Path (Split-Path $source -Parent) 'update-candidate'
+        $sourceManifestSha = (Get-FileHash -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+        & (Join-Path $source 'scripts/build-windows-update.ps1') -SourceDirectory $source -ManifestSha256 $sourceManifestSha -StagingDirectory $candidateDirectory -VerifierExecutable (Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')
+        if (-not $?) { throw 'Update candidate build script failed' }
+        $candidate = Get-Content -LiteralPath (Join-Path $candidateDirectory 'candidate-report.json') -Raw | ConvertFrom-Json
+        if ($candidate.status -ne 'built' -or $candidate.runtimeApplied -or $candidate.candidateVerified -or $candidate.artifacts.Count -ne 4) { throw 'Candidate preparation proof incomplete' }
+        [IO.File]::Copy((Join-Path $candidateDirectory 'candidate-report.json'),(Join-Path $ReportDirectory 'update-candidate-proof.json'),$false)
+        $report.updatePreparation = @{passed=$true;candidateDirectory=$candidateDirectory;manifestSha256=$sourceManifestSha;runtimeApplied=$false;windowsOpened=$false}
     }
     if ($ProjectsOnly) {
         & (Join-Path $source 'scripts/test-projects-native.ps1') -ReportDirectory $ReportDirectory -PreparationPath $ProjectsPreparation
@@ -468,7 +490,7 @@ try {
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
     $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
     $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $oldResumePublication
-    if (($TaskCasOnly -or $ReadinessOnly) -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
+    if (($TaskCasOnly -or $ReadinessOnly -or $UpdatePreparationOnly) -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {

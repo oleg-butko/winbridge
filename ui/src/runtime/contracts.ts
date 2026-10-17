@@ -1,4 +1,16 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type SourceManifest = { schemaVersion: number, sourceCommit: string, dirty: boolean, createdAt: string, includesBuiltUi: boolean, files: Array<SourceFile>, };
+export type SourceFile = { path: string, bytes: number, sha256: string, };
+export type SourceAction = "add" | "replace" | "remove" | "keep";
+export type SourceChange = { path: string, action: SourceAction, previous: SourceFile | null, incoming: SourceFile | null, };
+export type SourceBlockerCode = "local_modified" | "local_missing" | "unmanaged_file" | "path_type_conflict" | "case_conflict" | "layout_change";
+export type SourceBlocker = { path: string, code: SourceBlockerCode, message: string, };
+export type SourcePlan = { changes: Array<SourceChange>, blockers: Array<SourceBlocker>,
+/**
+ * Source preconditions only. Never authorizes filesystem writes or shutdown.
+ */
+canApply: boolean, };
+export type UpdatePhase = "requested" | "preparing" | "building" | "validating_candidate" | "candidate_verified" | "draining" | "quiesced" | "stopping" | "replacing" | "verifying_local" | "awaiting_controller" | "committed" | "deferred" | "failed_before_cutover" | "manual_intervention";
 export type OperationRef = { context: RequestContext, kind: HistoryKind, operationId: string, };
 export type AdmissionWatermarks = { tasks: string, imports: string, workflows: string, applications: string, };
 export type OperationCursor = { context: RequestContext, querySha256: string, watermarks: AdmissionWatermarks, before: HistoryCursor, };

@@ -1,3 +1,33 @@
+## Самообновление: подробный план и U0 в работе — 2026-10-17
+
+Пользователь одобрил анализ и поручил реализацию. [План U0–U4](plans/worker-self-update/README.md)
+уточнён и повторно проверен: source ownership, standalone supervisor, два журнала,
+maintenance/startup guard, same-schema apply, desktop/migration и bootstrap gates.
+Начат U0: отдельные protocol DTO/core FSM, readonly updater CLI/source plan,
+create-only build staging и automatic native preparation scenario.
+[Текущее использование и ограничения](guides/worker-update-preparation.md).
+Self-update capability не объявляется, worker stop/source apply/runtime replace
+ещё не реализованы. Windows runtime не обновлять до isolated gates и bootstrap.
+Локально passed: 360 workspace tests (13 новых), Clippy с schema/TS features,
+contracts/typecheck/build:ui/scaffold, PowerShell parsing/create-only stage tests.
+Actual clean ZIP `1f3aa9f` прошёл verify-source: 464 файла / 8,214,661 bytes.
+Native preparation/full candidate build ещё ожидает автоматический прогон.
+Подключённый worker уже clean `1f3aa9f`, generation
+`994671b4-e10c-469c-8515-b2aa71a4e3dc`, build `1792228466051801600`;
+health/idle подтверждены read-only. Это обновляет последнее наблюдение ниже,
+но не закрывает installed resource gate A4.3.
+
+## Внеплановый анализ самообновления — 2026-10-17
+
+Пользователь временно отложил продолжение архитектурного плана и запросил анализ
+автоматического обновления Windows worker/desktop. [Отчёт и последовательность U0–U4](analysis/worker-self-update/README.md):
+отдельный updater до изменения src, build-only staging, durable maintenance/handoff,
+проверка новой пары и ручная помощь при неоднозначности/migration failure.
+Нужен один bootstrap новой update capability; текущий код её не реализует.
+Выполнен только анализ. Windows runtime/configs/source не менялись; новый Windows
+прогон не запускался. A4.3/полный A4 остаются открытыми; к installed gate вернуться
+после этой внеплановой работы. Последняя подтверждённая runtime готовность — ниже.
+
 ## A4.3 — native candidate готов, нужен update worker, 2026-10-17
 
 [Отчёт и ревью](plans/architecture-transition/windows-resource-scheduling-gate-2026-10-17.md),

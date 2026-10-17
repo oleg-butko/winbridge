@@ -9,6 +9,7 @@
 
 | Отчёт | Дата | Содержание |
 | --- | --- | --- |
+| [Автообновление worker/desktop](worker-self-update/README.md) | 2026-10-17 | Отдельный updater, безопасная подготовка постоянного src, maintenance/handoff, SQLite rollback boundary, tray и автоматические gates. Предложение вне очереди A0–A9. |
 | [Техники консистентности](consistency-techniques/README.md) | 2026-10-13 | Idempotency, IDs, sequence, revision, fencing, outbox/inbox и reconciliation: нынешняя реализация, общие гарантии и порядок внедрения. |
 | [Actor Model + FSM](actor-model-fsm/README.md) | 2026-10-13 | Типизированные переходы, совместимость контрактов, тесты от потребителя и план постепенного перехода с проверкой обеих сторон. |
 | [Actor Model и Kameo](actor-model/README.md) | 2026-10-12 | Внутренние actors, отдельные project executors на Debian/Windows, контракты отчётов, переносимость и стоимость миграции. |

@@ -13,6 +13,7 @@ pub mod readiness;
 pub mod resource_scheduling;
 pub mod snapshot;
 pub mod task;
+pub mod update;
 pub mod work_scheduling;
 pub mod workflow;
 
