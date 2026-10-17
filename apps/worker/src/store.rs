@@ -23,10 +23,11 @@ mod domain_records;
 pub use domain_records::JournalSnapshot;
 mod operation_pages;
 mod queue_control;
+mod resource_scheduling;
 mod task_records;
 mod work_scheduling;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 13;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 14;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -323,6 +324,24 @@ impl Store {
             Self::migrate_queue_control(&migration)?;
             migration.commit().map_err(sql)?;
         }
+        if version <= 13 {
+            if version == 13 {
+                let backup = path.with_file_name(format!(
+                    "journal-v13-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            Self::migrate_resource_scheduling(&migration)?;
+            migration.commit().map_err(sql)?;
+        }
         let authority = Self::read_authority(&connection)?;
         Ok(Self {
             connection,
@@ -388,6 +407,12 @@ impl Store {
         }
         Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
         let task = Self::accept_task_on(&transaction, request, command, snapshot, recipe_origin)?;
+        Self::freeze_resource_root(
+            &transaction,
+            "task",
+            &task.task_id,
+            &task.submission.project_id,
+        )?;
         Self::insert_queue_root(
             &transaction,
             "task",

@@ -1,3 +1,27 @@
+## A4.3 — кандидат atomic resource sets, 2026-10-17
+
+[План/ревью](plans/architecture-transition/resource-sets.md),
+[пользовательская семантика](guides/resource-scheduling.md). Реализуются typed
+resource policy/observation, frozen admission/child requirements, persisted owner
+policy, transactional full claims, physical lease handoff/recovery и UI inventory.
+Schema 14 с consistent schema-13 backup; RPC 1/2/operation-page v1 сохраняются.
+Рабочие quotas/resources не включались; installed новый контракт пока отсутствует.
+
+Local core/protocol, 38 shared metadata cases, 6 Store tests, actual 3-project
+IPC/cancel/config-edit/restart и workflow app handoff tests прошли. Linux/Windows
+Clippy, workspace all-targets check, typecheck и generated contracts passed.
+Full committed workspace/consumer proof, production renderer и native gate ещё
+впереди. Ревью добавило guard первого enable при legacy pending/physical owners
+и запрет disable/remove/kind change удерживаемого ресурса. Полные наборы выдаются
+через прежний execution lease, без отдельного счётчика или resource daemon.
+
+Установленный `99351ea` healthy/idle, A4.2 завершён. Controller exact `29dba9a`,
+serve `97067`, PID 4195. Для native gate desktop не нужен, UI окон не будет;
+working worker оставить запущенным. Debian около 26 GiB free, incremental выключен.
+Предыдущий schema-12 reference для queue gate:
+`K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\20261016-194546-f0e20b76\previous-schema12-worker.exe`.
+Resource gate дополнительно сохраняет actual schema-13 reference exe.
+
 ## A4.2 завершён; следующий A4.3 resource sets, 2026-10-17
 
 [Installed gate и ревью](plans/architecture-transition/windows-queue-control-installed-2026-10-17.md)

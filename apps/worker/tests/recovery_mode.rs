@@ -312,6 +312,7 @@ fn incompatible_inspection_does_not_migrate_but_keeps_normal_start_latched() {
         10,
         11,
         12,
+        13,
         winbridge_worker::store::JOURNAL_SCHEMA_VERSION + 1,
     ] {
         let (_root, cfg, store) = setup();

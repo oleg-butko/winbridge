@@ -1,4 +1,4 @@
-import type { BuildIdentity, ContractCatalog, ContractRef, ControllerReadinessProjection, ProjectPolicyCatalog, WorkerInfo, WorkSchedulingObservation, QueueControlObservation, QueueBlocker } from "./contracts";
+import type { BuildIdentity, ContractCatalog, ContractRef, ControllerReadinessProjection, ProjectPolicyCatalog, WorkerInfo, WorkSchedulingObservation, QueueControlObservation, QueueBlocker, ResourceSchedulingObservation } from "./contracts";
 
 export type CatalogObservation =
   | { kind: "missing" }
@@ -32,7 +32,7 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
   const raw = info.contractCatalog;
   if (raw === undefined) return { kind: "missing" };
   const invalid = (reason: string): CatalogObservation => ({ kind: "unsupported", reason });
-  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported", "controllerProjection", "workScheduling", "queueControl"]) || raw.schemaVersion !== 1
+  if (!object(raw) || !keys(raw, ["schemaVersion", "provider", "supported", "controllerProjection", "workScheduling", "queueControl", "resourceScheduling"]) || raw.schemaVersion !== 1
     || !Array.isArray(raw.supported)) return invalid("Формат каталога неизвестен. Новые функции не включены.");
   const provider = readBuild(raw.provider);
   const expected = readBuild(info.build);
@@ -46,7 +46,46 @@ export function interpretCatalog(info: Pick<WorkerInfo, "contractCatalog" | "bui
     seen.add(id);
     return false;
   })) return invalid("В каталоге некорректные или повторяющиеся контракты.");
-  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[], ...(Object.hasOwn(raw, "controllerProjection") ? { controllerProjection: raw.controllerProjection } : {}), ...(Object.hasOwn(raw, "workScheduling") ? { workScheduling: raw.workScheduling } : {}), ...(Object.hasOwn(raw, "queueControl") ? { queueControl: raw.queueControl } : {}) } };
+  return { kind: "known", catalog: { schemaVersion: 1, provider, supported: raw.supported as ContractRef[], ...(Object.hasOwn(raw, "controllerProjection") ? { controllerProjection: raw.controllerProjection } : {}), ...(Object.hasOwn(raw, "workScheduling") ? { workScheduling: raw.workScheduling } : {}), ...(Object.hasOwn(raw, "queueControl") ? { queueControl: raw.queueControl } : {}), ...(Object.hasOwn(raw, "resourceScheduling") ? { resourceScheduling: raw.resourceScheduling } : {}) } };
+}
+
+export function interpretResourceScheduling(info: WorkerInfo): ResourceSchedulingObservation | null {
+  const catalog = interpretCatalog(info);
+  if (catalog.kind !== "known" || !catalog.catalog.supported.some((c) => c.id === "winbridge.resource-scheduling" && c.version === 1)) return null;
+  const v = catalog.catalog.resourceScheduling;
+  const count = (n: unknown): n is number => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 0xffffffff;
+  if (!object(v) || !keys(v, ["schemaVersion", "provider", "context", "policyGeneration", "enabled", "resources", "owners", "truncated", "observedAtMs", "readOnly"])
+    || v.schemaVersion !== 1 || !sameBuild(v.provider, info.build) || !sameScope(v.context, info.fencedRequests?.context)
+    || typeof v.policyGeneration !== "string" || !/^(0|[1-9][0-9]*)$/.test(v.policyGeneration) || v.policyGeneration.length > 19 || BigInt(v.policyGeneration) > 9223372036854775807n
+    || typeof v.enabled !== "boolean" || typeof v.truncated !== "boolean" || typeof v.readOnly !== "boolean"
+    || !Number.isSafeInteger(v.observedAtMs) || (v.observedAtMs as number) < 0 || !Array.isArray(v.resources) || v.resources.length > 128 || !Array.isArray(v.owners) || v.owners.length > 256) return null;
+  const ids = new Set<string>();
+  for (const r of v.resources) {
+    if (!object(r) || !keys(r, ["id", "kind", "capacity", "usedUnits", "uncertainUnits"]) || typeof r.id !== "string" || !r.id || ids.has(r.id)
+      || !["build", "cache", "binary", "ipc", "port", "interactive"].includes(r.kind as string) || !count(r.usedUnits) || !count(r.uncertainUnits) || r.uncertainUnits > r.usedUnits
+      || (r.capacity != null && (!count(r.capacity) || r.capacity < 1 || r.capacity > 64 || (r.kind !== "build" && r.capacity !== 1)))) return null;
+    ids.add(r.id);
+  }
+  const owners = new Set<string>();
+  const totals = new Map<string, [number, number]>();
+  for (const o of v.owners) {
+    if (!object(o) || !keys(o, ["resourceId", "leaseId", "projectId", "operationKind", "operationId", "units", "state", "applicationLifetime"])
+      || [o.resourceId, o.leaseId, o.projectId, o.operationId].some((s) => typeof s !== "string" || !s)
+      || !count(o.units) || o.units < 1 || o.units > 64 || !["task", "import"].includes(o.operationKind as string)
+      || !["held", "uncertain"].includes(o.state as string) || typeof o.applicationLifetime !== "boolean"
+      || owners.has(JSON.stringify([o.leaseId, o.resourceId])) || (!v.truncated && !ids.has(o.resourceId as string))) return null;
+    if (o.applicationLifetime && v.resources.some((r) => r.id === o.resourceId && ["build", "cache"].includes(r.kind))) return null;
+    owners.add(JSON.stringify([o.leaseId, o.resourceId]));
+    const total = totals.get(o.resourceId as string) ?? [0, 0];
+    total[0] += o.units; if (o.state === "uncertain") total[1] += o.units;
+    totals.set(o.resourceId as string, total);
+  }
+  for (const r of v.resources) {
+    const total = totals.get(r.id) ?? [0, 0];
+    if ((!v.enabled && r.capacity != null) || total[0] > r.usedUnits || total[1] > r.uncertainUnits
+      || (!v.truncated && (total[0] !== r.usedUnits || total[1] !== r.uncertainUnits))) return null;
+  }
+  return { ...v, provider: readBuild(v.provider)!, resources: v.resources.map((r) => ({ ...r, capacity: r.capacity ?? null })) } as unknown as ResourceSchedulingObservation;
 }
 
 export function interpretWorkScheduling(info: WorkerInfo): WorkSchedulingObservation | null {

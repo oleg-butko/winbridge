@@ -1,0 +1,3992 @@
+{
+  "provenance": "Synthetic resource declarations and owners; no user journal/config",
+  "baseInfo": {
+    "protocolVersion": 1,
+    "instanceId": "legacy-fixture",
+    "nodeId": "fixture-windows",
+    "generation": "00000000-0000-4000-8000-000000000001",
+    "platform": "windows",
+    "runtimeValidation": "windows-native",
+    "projects": [],
+    "build": {
+      "version": "0.1.0",
+      "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceDirty": false,
+      "sourceManifestSha256": null,
+      "buildId": "scheduling-fixture"
+    },
+    "fencedRequests": {
+      "requestContractVersion": 2,
+      "context": {
+        "instanceId": "legacy-fixture",
+        "journalIncarnation": "journal"
+      },
+      "legacyMutationsAllowed": false
+    },
+    "contractCatalog": {
+      "schemaVersion": 1,
+      "provider": {
+        "version": "0.1.0",
+        "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sourceDirty": false,
+        "sourceManifestSha256": null,
+        "buildId": "scheduling-fixture"
+      },
+      "supported": [
+        {
+          "id": "winbridge.work-scheduling",
+          "version": 1
+        },
+        {
+          "id": "winbridge.queue-control",
+          "version": 1
+        },
+        {
+          "id": "winbridge.resource-scheduling",
+          "version": 1
+        }
+      ],
+      "workScheduling": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "maxConcurrentWork": 2,
+        "occupiedSlots": 2,
+        "uncertainSlots": 0,
+        "queuedOperations": 5,
+        "observedAtMs": 1792050000000,
+        "readOnly": false
+      },
+      "queueControl": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "revision": "7",
+        "mode": "paused",
+        "policy": {
+          "maxPendingRoots": 3,
+          "maxPendingRootsPerProject": 2
+        },
+        "pendingRoots": 3,
+        "projects": [
+          {
+            "projectId": "a",
+            "pendingRoots": 2
+          },
+          {
+            "projectId": "b",
+            "pendingRoots": 1
+          }
+        ],
+        "blockers": [
+          {
+            "code": "admission_paused"
+          },
+          {
+            "code": "dispatch_paused"
+          },
+          {
+            "code": "global_limit",
+            "limit": 3
+          },
+          {
+            "code": "project_limit",
+            "projectId": "a",
+            "limit": 2
+          }
+        ],
+        "lastCommandId": "user-pause",
+        "changedAtMs": 123,
+        "observedAtMs": 456,
+        "readOnly": false
+      },
+      "resourceScheduling": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "policyGeneration": "1",
+        "enabled": true,
+        "resources": [
+          {
+            "id": "build",
+            "kind": "build",
+            "capacity": 2,
+            "usedUnits": 1,
+            "uncertainUnits": 0
+          },
+          {
+            "id": "cache",
+            "kind": "cache",
+            "capacity": 1,
+            "usedUnits": 1,
+            "uncertainUnits": 1
+          },
+          {
+            "id": "binary",
+            "kind": "binary",
+            "capacity": 1,
+            "usedUnits": 1,
+            "uncertainUnits": 0
+          }
+        ],
+        "owners": [
+          {
+            "resourceId": "build",
+            "leaseId": "lease-a",
+            "projectId": "a",
+            "operationKind": "task",
+            "operationId": "task-a",
+            "units": 1,
+            "state": "held",
+            "applicationLifetime": false
+          },
+          {
+            "resourceId": "cache",
+            "leaseId": "lease-b",
+            "projectId": "b",
+            "operationKind": "import",
+            "operationId": "import-b",
+            "units": 1,
+            "state": "uncertain",
+            "applicationLifetime": false
+          },
+          {
+            "resourceId": "binary",
+            "leaseId": "lease-c",
+            "projectId": "c",
+            "operationKind": "task",
+            "operationId": "task-c",
+            "units": 1,
+            "state": "held",
+            "applicationLifetime": true
+          }
+        ],
+        "truncated": false,
+        "observedAtMs": 1234,
+        "readOnly": false
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "actual-shape",
+      "expected": true
+    },
+    {
+      "name": "unknown-schema",
+      "pointer": "/contractCatalog/resourceScheduling/schemaVersion",
+      "expected": false,
+      "value": 2
+    },
+    {
+      "name": "unknown-field",
+      "pointer": "/contractCatalog/resourceScheduling/future",
+      "expected": false,
+      "value": true
+    },
+    {
+      "name": "negative-time",
+      "pointer": "/contractCatalog/resourceScheduling/observedAtMs",
+      "expected": false,
+      "value": -1
+    },
+    {
+      "name": "unsafe-time",
+      "pointer": "/contractCatalog/resourceScheduling/observedAtMs",
+      "expected": false,
+      "value": 9007199254740992
+    },
+    {
+      "name": "fraction-time",
+      "pointer": "/contractCatalog/resourceScheduling/observedAtMs",
+      "expected": false,
+      "value": 1.2
+    },
+    {
+      "name": "wrong-bool",
+      "pointer": "/contractCatalog/resourceScheduling/enabled",
+      "expected": false,
+      "value": "yes"
+    },
+    {
+      "name": "negative-generation",
+      "pointer": "/contractCatalog/resourceScheduling/policyGeneration",
+      "expected": false,
+      "value": "-1"
+    },
+    {
+      "name": "leading-generation",
+      "pointer": "/contractCatalog/resourceScheduling/policyGeneration",
+      "expected": false,
+      "value": "01"
+    },
+    {
+      "name": "overflow-generation",
+      "pointer": "/contractCatalog/resourceScheduling/policyGeneration",
+      "expected": false,
+      "value": "9223372036854775808"
+    },
+    {
+      "name": "null-body",
+      "pointer": "/contractCatalog/resourceScheduling",
+      "expected": false,
+      "value": null
+    },
+    {
+      "name": "unknown-kind",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/kind",
+      "expected": false,
+      "value": "future"
+    },
+    {
+      "name": "exclusive-capacity",
+      "pointer": "/contractCatalog/resourceScheduling/resources/1/capacity",
+      "expected": false,
+      "value": 2
+    },
+    {
+      "name": "zero-capacity",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/capacity",
+      "expected": false,
+      "value": 0
+    },
+    {
+      "name": "fraction-capacity",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/capacity",
+      "expected": false,
+      "value": 1.5
+    },
+    {
+      "name": "unknown-owner",
+      "pointer": "/contractCatalog/resourceScheduling/owners/0/resourceId",
+      "expected": false,
+      "value": "foreign"
+    },
+    {
+      "name": "zero-units",
+      "pointer": "/contractCatalog/resourceScheduling/owners/0/units",
+      "expected": false,
+      "value": 0
+    },
+    {
+      "name": "wrong-owner-kind",
+      "pointer": "/contractCatalog/resourceScheduling/owners/0/operationKind",
+      "expected": false,
+      "value": "workflow"
+    },
+    {
+      "name": "unknown-owner-state",
+      "pointer": "/contractCatalog/resourceScheduling/owners/0/state",
+      "expected": false,
+      "value": "released"
+    },
+    {
+      "name": "wrong-owner-bool",
+      "pointer": "/contractCatalog/resourceScheduling/owners/0/applicationLifetime",
+      "expected": false,
+      "value": "yes"
+    },
+    {
+      "name": "work-handoff-owner",
+      "pointer": "/contractCatalog/resourceScheduling/owners/0/applicationLifetime",
+      "expected": false,
+      "value": true
+    },
+    {
+      "name": "wrong-sum",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/usedUnits",
+      "expected": false,
+      "value": 0
+    },
+    {
+      "name": "wrong-uncertainty",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/uncertainUnits",
+      "expected": false,
+      "value": 1
+    },
+    {
+      "name": "duplicate-id",
+      "pointer": "/contractCatalog/resourceScheduling/resources/1/id",
+      "expected": false,
+      "value": "build"
+    },
+    {
+      "name": "duplicate-owner",
+      "pointer": "/contractCatalog/resourceScheduling/owners",
+      "expected": false,
+      "value": [
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        }
+      ]
+    },
+    {
+      "name": "foreign-scope",
+      "pointer": "/contractCatalog/resourceScheduling/context/journalIncarnation",
+      "expected": false,
+      "value": "foreign"
+    },
+    {
+      "name": "foreign-build",
+      "pointer": "/contractCatalog/resourceScheduling/provider/buildId",
+      "expected": false,
+      "value": "foreign"
+    },
+    {
+      "name": "truncated-inventory",
+      "pointer": "/contractCatalog/resourceScheduling/truncated",
+      "expected": true,
+      "value": true
+    },
+    {
+      "name": "inspection",
+      "pointer": "/contractCatalog/resourceScheduling/readOnly",
+      "expected": true,
+      "value": true
+    },
+    {
+      "name": "whole-float-units",
+      "pointer": "/contractCatalog/resourceScheduling/owners/0/units",
+      "expected": true,
+      "value": 1.0
+    },
+    {
+      "name": "whole-float-capacity",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/capacity",
+      "expected": true,
+      "value": 2.0
+    },
+    {
+      "name": "whole-float-count",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/usedUnits",
+      "expected": true,
+      "value": 1.0
+    },
+    {
+      "name": "removed-capacity",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/capacity",
+      "expected": true,
+      "value": null
+    },
+    {
+      "name": "missing-capacity",
+      "pointer": "/contractCatalog/resourceScheduling/resources/0/capacity",
+      "expected": true,
+      "remove": true
+    },
+    {
+      "name": "default-policy",
+      "pointer": "/contractCatalog/resourceScheduling",
+      "expected": true,
+      "value": {
+        "schemaVersion": 1,
+        "provider": {
+          "version": "0.1.0",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDirty": false,
+          "sourceManifestSha256": null,
+          "buildId": "scheduling-fixture"
+        },
+        "context": {
+          "instanceId": "legacy-fixture",
+          "journalIncarnation": "journal"
+        },
+        "policyGeneration": "1",
+        "enabled": false,
+        "resources": [],
+        "owners": [],
+        "truncated": false,
+        "observedAtMs": 1234,
+        "readOnly": false
+      }
+    },
+    {
+      "name": "disabled-with-capacity",
+      "pointer": "/contractCatalog/resourceScheduling/enabled",
+      "expected": false,
+      "value": false
+    },
+    {
+      "name": "too-many-resources",
+      "pointer": "/contractCatalog/resourceScheduling/resources",
+      "expected": false,
+      "value": [
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "build",
+          "kind": "build",
+          "capacity": 2,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        },
+        {
+          "id": "cache",
+          "kind": "cache",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 1
+        },
+        {
+          "id": "binary",
+          "kind": "binary",
+          "capacity": 1,
+          "usedUnits": 1,
+          "uncertainUnits": 0
+        }
+      ]
+    },
+    {
+      "name": "too-many-owners",
+      "pointer": "/contractCatalog/resourceScheduling/owners",
+      "expected": false,
+      "value": [
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        },
+        {
+          "resourceId": "build",
+          "leaseId": "lease-a",
+          "projectId": "a",
+          "operationKind": "task",
+          "operationId": "task-a",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "cache",
+          "leaseId": "lease-b",
+          "projectId": "b",
+          "operationKind": "import",
+          "operationId": "import-b",
+          "units": 1,
+          "state": "uncertain",
+          "applicationLifetime": false
+        },
+        {
+          "resourceId": "binary",
+          "leaseId": "lease-c",
+          "projectId": "c",
+          "operationKind": "task",
+          "operationId": "task-c",
+          "units": 1,
+          "state": "held",
+          "applicationLifetime": true
+        }
+      ]
+    }
+  ]
+}

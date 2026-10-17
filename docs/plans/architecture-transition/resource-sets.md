@@ -1,7 +1,7 @@
 # A4.3 — атомарные наборы общих ресурсов
 
 2026-10-17. A4.2 installed gate завершён. План проверен до реализации;
-этот документ не объявляет A4.3 готовым. [Общий порядок](README.md#A4--очередь-двух-трёх-проектов-и-ограничение-нагрузки).
+этот документ не объявляет A4.3 готовым. [Общий порядок](README.md#a4--очередь-двух-трёх-проектов-и-ограничение-нагрузки).
 
 ## Результат и границы
 
@@ -92,3 +92,18 @@ Handoff использует scope существующего lease, чтобы 
 New observation contract не расширяет frozen operation-page v1. Explicit resource
 IDs честно ограничивают обещание: произвольные external effects нельзя автоматически
 классифицировать как безопасные. Actors A5 остаются последующим внутренним refactoring.
+
+## Кандидат и ревью реализации
+
+Targeted local policy/Store/actual IPC/workflow tests, 38 общих Rust/TS cases и
+Linux/Windows Clippy прошли. Worker сохраняет policy epoch в БД; peer Store не
+обходит capacity своим default. Frozen root/child plans и все resource claims
+включены в те же transaction, что acceptance/link/intent/attempt/project lease.
+Проверены concurrent claims и rollback ignored INSERT. Ready handoff выводит
+build/cache из active count через durable lease scope; process resources остаются.
+
+Ревью выявило опасный переход legacy → named resources при незавершённых старых
+admissions/unknown owners. Они не содержат доказанных требований, поэтому enable
+отклоняется до drain/reconciliation; молчаливой перепривязки нет. Disable/remove/
+kind change активного named resource также отклоняется. Дополнительный тест проверяет
+эту границу. Native Windows и actual installed новый контракт ещё ожидаются.

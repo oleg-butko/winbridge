@@ -176,6 +176,7 @@ def main():
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--readiness-only', action='store_true', help='Check readiness, operation pages, scheduling/queue policy, native IPC and desktop compile; no UI windows')
     parser.add_argument('--queue-reference-worker', help='Read-only Windows path to a retained schema-12 exe for queue migration refusal; defaults to installed worker before the first schema-13 upgrade')
+    parser.add_argument('--resource-reference-worker', help='Read-only Windows path to a retained schema-13 exe for resource migration refusal; defaults to installed worker before the first schema-14 upgrade')
     parser.add_argument('--verify-readiness-run', help='Read-only recheck of an existing terminal readiness run/report; never submit or rebuild')
     parser.add_argument('--task-cas-only', action='store_true', help='Check durable leases/CAS, schema-6/7/8/9/10/11 migration, physical reconciliation, fenced requests, desktop compile and old-worker refusal; no desktop windows')
     parser.add_argument('--task-cas-runtime-diagnostic', action='store_true', help='With --task-cas-only: narrow process/recovery diagnostic with trace and disk usage, without UI or full CAS/reference gate')
@@ -194,6 +195,8 @@ def main():
     args = parser.parse_args()
     if args.verify_readiness_run and (not args.readiness_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.verify_readiness_run)):
         parser.error('--verify-readiness-run requires --readiness-only and a valid saved run ID')
+    if (args.queue_reference_worker or args.resource_reference_worker) and not args.readiness_only:
+        parser.error('Queue/resource reference workers require --readiness-only')
     if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only, args.readiness_only)) > 1:
         parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
@@ -226,6 +229,7 @@ def main():
         archive_has_operations = 'winbridge/apps/worker/tests/operations.rs' in archive.namelist()
         archive_has_work_scheduling = 'winbridge/apps/worker/tests/work_scheduling.rs' in archive.namelist()
         archive_has_queue_control = 'winbridge/apps/worker/tests/queue_control.rs' in archive.namelist()
+        archive_has_resource_scheduling = 'winbridge/apps/worker/tests/resource_scheduling.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
@@ -278,6 +282,10 @@ def main():
             if not args.queue_reference_worker and any(c['id'] == 'winbridge.queue-control' for c in info['contractCatalog']['supported']):
                 raise RuntimeError('Installed worker already supports queue control; supply the retained schema-12 exe with --queue-reference-worker, not the new runtime')
             profile_argument += ' -QueueReferenceWorker ' + ps_string(args.queue_reference_worker or str(executable.parent / 'winbridge-worker.exe'))
+            if archive_has_resource_scheduling:
+                if not args.resource_reference_worker and any(c['id'] == 'winbridge.resource-scheduling' for c in info['contractCatalog']['supported']):
+                    raise RuntimeError('Supply retained schema-13 exe with --resource-reference-worker; installed worker already supports resources')
+                profile_argument += ' -ResourceReferenceWorker ' + ps_string(args.resource_reference_worker or str(executable.parent / 'winbridge-worker.exe'))
     if args.task_fsm_only:
         profile_argument = ' -TaskFsmOnly'
     if args.task_cas_only:
@@ -453,6 +461,8 @@ exit $nativeExit
             expected_groups += ['work-scheduling-policy-contract', 'work-scheduling-durable-capacity', 'work-scheduling-native-pool', 'work-scheduling-workflow-handoff']
         if archive_has_queue_control:
             expected_groups += ['queue-control-contract', 'queue-control-durable-admission', 'queue-control-native-runtime', 'queue-control-previous-worker-refusal']
+        if archive_has_resource_scheduling:
+            expected_groups += ['resource-scheduling-contract', 'resource-scheduling-atomic-sets', 'resource-scheduling-native-runtime', 'resource-scheduling-previous-worker-refusal']
         expected_groups += ['readiness-desktop-contract-check']
         if not result.get('readinessOnly') or [g['name'] for g in result['commands']] != expected_groups or any(g['exitCode'] != 0 for g in result['commands']):
             raise RuntimeError('Incomplete readiness foundation gate')
@@ -472,6 +482,11 @@ exit $nativeExit
             expected_checks = ['local-only-envelope', 'root-quota', 'duplicate-full-queue', 'dispatch-pause-no-launch', 'live-owner-survives-pause', 'cancel-output-readable', 'receipt-restart-replay', 'no-automatic-resume', 'zero-cleanup-slots']
             if queue.get('passed') is not True or queue.get('platform') != 'windows' or queue.get('build') != proof['candidateBuild'] or queue.get('checks') != expected_checks or queue['context'] != queue['finalQueue']['context'] or queue['finalQueue']['pendingRoots'] != 0 or queue['finalQueue']['mode'] != 'running':
                 raise RuntimeError('Incomplete native durable queue/runtime proof')
+        if archive_has_resource_scheduling:
+            resources = json.loads((report / 'resource-scheduling-proof.json').read_text(encoding='utf-8-sig'))
+            expected = ['three-project-complete-sets', 'shared-cache-blocker', 'fair-next-project', 'native-info-operation-page', 'fenced-cancel', 'duplicate-same-process', 'frozen-request-after-config-edit', 'restart-same-journal', 'zero-resource-cleanup']
+            if resources.get('passed') is not True or resources['platform'] != 'windows' or resources['build'] != proof['candidateBuild'] or resources['checks'] != expected or resources['context'] != resources['final']['context'] or resources['final']['owners'] or any(r['usedUnits'] for r in resources['final']['resources']):
+                raise RuntimeError('Incomplete native resource set/restart/cleanup proof')
     if args.profiles_only:
         proof = json.loads((report / 'profiles-proof.json').read_text())
         tasks = proof['completed']

@@ -119,6 +119,8 @@ pub struct WorkerConfig {
     pub work_scheduling: Option<winbridge_protocol::WorkSchedulingPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub queue_policy: Option<winbridge_protocol::QueuePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_scheduling: Option<winbridge_protocol::ResourceSchedulingPolicy>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -247,6 +249,16 @@ impl WorkerConfig {
             return Err("projects must contain 1–32 registered projects".into());
         }
         self.validate_recipe_profiles()?;
+        if let Some(policy) = &self.resource_scheduling {
+            crate::resource_scheduling::validate(
+                policy,
+                &self
+                    .projects
+                    .iter()
+                    .map(|p| p.id.clone())
+                    .collect::<Vec<_>>(),
+            )?;
+        }
         let mut ids = HashSet::new();
         let mut roots: Vec<PathBuf> = Vec::new();
         for project in &self.projects {

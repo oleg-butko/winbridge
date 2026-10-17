@@ -235,7 +235,8 @@ fn work_scheduling_workflow_uses_child_slot_and_ready_app_releases_work_capacity
         max_pending_roots: 1,
         max_pending_roots_per_project: Some(1),
     });
-    let worker = WorkerOwner(Worker::open(config).unwrap());
+    config.resource_scheduling=Some(serde_json::from_value(serde_json::json!({"resources":[{"id":"build","kind":"build","capacity":1},{"id":"cache","kind":"cache","capacity":1},{"id":"binary","kind":"binary","capacity":1},{"id":"ipc","kind":"ipc","capacity":1},{"id":"port","kind":"port","capacity":1},{"id":"interactive","kind":"interactive","capacity":1}],"projects":[{"projectId":"fixture","task":[{"resourceId":"build","units":1},{"resourceId":"cache","units":1}],"start":[{"resourceId":"binary","units":1},{"resourceId":"ipc","units":1},{"resourceId":"port","units":1},{"resourceId":"interactive","units":1}]}]})).unwrap());
+    let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
     let queued = accept(&worker, request);
     let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
         panic!("info");
@@ -246,6 +247,14 @@ fn work_scheduling_workflow_uses_child_slot_and_ready_app_releases_work_capacity
         "queued root counts once before it has a child"
     );
     assert_eq!(interpret_queue_control(&info).unwrap().pending_roots, 1);
+    // Edit future bindings before any child exists. The accepted workflow must
+    // still inherit its original start resources, including process lifetime.
+    drop(worker);
+    config.resource_scheduling.as_mut().unwrap().projects[0]
+        .start
+        .clear();
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+
     let completed = complete(&worker, &queued.workflow_id);
     assert_eq!(completed.status, TaskStatus::Succeeded);
     let app_id = completed.application_id.as_ref().unwrap();
@@ -258,6 +267,17 @@ fn work_scheduling_workflow_uses_child_slot_and_ready_app_releases_work_capacity
         0,
         "terminal startup releases root quota while app is alive"
     );
+    let resources = interpret_resource_scheduling(&info).unwrap();
+    for r in &resources.resources {
+        assert_eq!(
+            r.used_units,
+            if r.kind.process_lifetime() { 1 } else { 0 },
+            "handoff {}",
+            r.id
+        );
+    }
+    assert_eq!(resources.owners.len(), 4);
+    assert!(resources.owners.iter().all(|o| o.application_lifetime));
     let view = || {
         let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
             panic!("info");
@@ -301,6 +321,14 @@ fn work_scheduling_workflow_uses_child_slot_and_ready_app_releases_work_capacity
     worker.handle(LocalRequest::Cancel { task_id: id });
     until(&worker, || view().occupied_slots == 0);
     stop(&worker, app_id);
+    let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+        panic!("final info")
+    };
+    assert!(interpret_resource_scheduling(&info)
+        .unwrap()
+        .resources
+        .iter()
+        .all(|r| r.used_units == 0));
     assert_eq!(
         flow(&worker, &completed.workflow_id).status,
         TaskStatus::Succeeded
@@ -613,7 +641,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();

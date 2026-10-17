@@ -10,6 +10,7 @@ pub mod notifications;
 pub mod profiles;
 pub mod queue_control;
 pub mod readiness;
+pub mod resource_scheduling;
 pub mod snapshot;
 pub mod task;
 pub mod work_scheduling;

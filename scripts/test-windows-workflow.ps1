@@ -53,6 +53,12 @@ cancel/timeout/process tree, recovery и совместимость сущест
 Проверяет typed readiness/policy, frozen wire, native Info/request context,
 согласованные страницы операций (SQLite snapshot, scoped contract, реальный IPC) и desktop compile.
 Без schema-6 reference, тестовых UI-окон или изменения рабочего runtime.
+.PARAMETER QueueReferenceWorker
+Сохранённый schema-12 exe для отказа открыть тестовую schema 13; путь/SHA находятся
+в предыдущем report.queueReferenceWorker. Рабочая БД не открывается.
+.PARAMETER ResourceReferenceWorker
+Schema-13 exe для отказа открыть тестовую schema 14. Копия с SHA сохраняется
+в local test run и report.resourceReferenceWorker для будущих повторов.
 .PARAMETER TaskCasOnly
 Проверяет revisions/CAS tasks/imports/workflows/applications/attention,
 миграции schema 6/7/8/9/10/11 → 12, owner/attempt tokens, atomic child links, output/retention rollback,
@@ -104,6 +110,7 @@ param(
     [switch]$TaskCasRuntimeDiagnostic,
     [string]$TaskCasReferenceWorker = '',
     [string]$QueueReferenceWorker = '',
+    [string]$ResourceReferenceWorker = '',
     [string]$BuildCacheRunId = '',
     [string]$BuildCacheReportSha256 = '',
     [string]$ProjectsPreparation = '',
@@ -158,6 +165,8 @@ $oldTaskCasReport = $env:WINBRIDGE_TASK_CAS_REPORT
 $oldWorkSchedulingReport = $env:WINBRIDGE_WORK_SCHEDULING_REPORT
 $oldQueueControlReport = $env:WINBRIDGE_QUEUE_CONTROL_REPORT
 $oldQueueReferenceWorker = $env:WINBRIDGE_QUEUE_LEGACY_WORKER
+$oldResourceReport = $env:WINBRIDGE_RESOURCE_SCHEDULING_REPORT
+$oldResourceReferenceWorker = $env:WINBRIDGE_RESOURCE_LEGACY_WORKER
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
 $oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
@@ -261,6 +270,14 @@ try {
         if ((Get-FileHash -LiteralPath $referenceCopy -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha -or (Get-FileHash -LiteralPath $QueueReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha) { throw 'Previous worker changed during cache capture' }
         $report.queueReferenceWorker = @{path=$referenceCopy;sha256=$referenceSha}
         $env:WINBRIDGE_QUEUE_LEGACY_WORKER = $referenceCopy
+        $env:WINBRIDGE_RESOURCE_SCHEDULING_REPORT = $ReportDirectory
+        if (-not $ResourceReferenceWorker -or -not (Test-Path -LiteralPath $ResourceReferenceWorker -PathType Leaf)) { throw 'Resource gate requires an explicit previous schema-13 installed executable' }
+        $resourceCopy = Join-Path (Split-Path -Parent $source) 'previous-schema13-worker.exe'
+        $resourceSha = (Get-FileHash -LiteralPath $ResourceReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant()
+        [IO.File]::Copy((Resolve-Path -LiteralPath $ResourceReferenceWorker).Path, $resourceCopy, $false)
+        if ((Get-FileHash -LiteralPath $resourceCopy -Algorithm SHA256).Hash.ToLowerInvariant() -cne $resourceSha -or (Get-FileHash -LiteralPath $ResourceReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne $resourceSha) { throw 'Resource reference changed during cache capture' }
+        $report.resourceReferenceWorker = @{path=$resourceCopy;sha256=$resourceSha}
+        $env:WINBRIDGE_RESOURCE_LEGACY_WORKER = $resourceCopy
         $groups = @(
             @{ name='readiness-pure-policy'; arguments=@('test','-p','winbridge-core','--test','readiness','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='readiness-wire-compatibility'; arguments=@('test','-p','winbridge-protocol','--features','jsonschema','--test','discovery','--test','projection','--test','legacy_baseline','--test','request_context','--locked','--offline','--','--test-threads=1','--nocapture') },
@@ -277,6 +294,10 @@ try {
             @{ name='queue-control-durable-admission'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::queue_control::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='queue-control-native-runtime'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','queue_control','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='queue-control-previous-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','queue_control','previous_worker_refuses_schema_thirteen','--locked','--offline','--','--ignored','--test-threads=1','--nocapture') },
+            @{ name='resource-scheduling-contract'; arguments=@('test','-p','winbridge-core','--test','resource_scheduling','-p','winbridge-protocol','--test','resource_scheduling','--features','jsonschema','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='resource-scheduling-atomic-sets'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::resource_scheduling::tests','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='resource-scheduling-native-runtime'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','resource_scheduling','--locked','--offline','--','--test-threads=1','--nocapture') },
+            @{ name='resource-scheduling-previous-worker-refusal'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','resource_scheduling','previous_worker_refuses_schema_fourteen','--locked','--offline','--','--ignored','--test-threads=1','--nocapture') },
             @{ name='readiness-desktop-contract-check'; arguments=@('check','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--locked','--offline') }
         )
     }
@@ -440,6 +461,8 @@ try {
     $env:WINBRIDGE_WORK_SCHEDULING_REPORT = $oldWorkSchedulingReport
     $env:WINBRIDGE_QUEUE_CONTROL_REPORT = $oldQueueControlReport
     $env:WINBRIDGE_QUEUE_LEGACY_WORKER = $oldQueueReferenceWorker
+    $env:WINBRIDGE_RESOURCE_SCHEDULING_REPORT = $oldResourceReport
+    $env:WINBRIDGE_RESOURCE_LEGACY_WORKER = $oldResourceReferenceWorker
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace
     $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared

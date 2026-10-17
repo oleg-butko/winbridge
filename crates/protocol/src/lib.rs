@@ -17,6 +17,8 @@ mod work_scheduling;
 pub use work_scheduling::*;
 mod queue_control;
 pub use queue_control::*;
+mod resource_scheduling;
+pub use resource_scheduling::*;
 
 mod attention;
 pub use attention::*;

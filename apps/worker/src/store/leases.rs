@@ -358,10 +358,12 @@ impl Store {
             }
         }
         let a = &token.authority;
-        let changed=connection.execute("INSERT INTO resource_leases(id,project,kind,operation,attempt,incarnation,epoch,authority,acquired,state,members) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'held','[]')",params![uuid::Uuid::new_v4().to_string(),token.operation.project_id,token.operation.kind.as_str(),token.operation.operation_id,token.attempt_id,a.incarnation,a.epoch as i64,a.authority_id,now_ms() as i64]).map_err(sql)?;
+        let lease = uuid::Uuid::new_v4().to_string();
+        let changed=connection.execute("INSERT INTO resource_leases(id,project,kind,operation,attempt,incarnation,epoch,authority,acquired,state,members) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,'held','[]')",params![lease,token.operation.project_id,token.operation.kind.as_str(),token.operation.operation_id,token.attempt_id,a.incarnation,a.epoch as i64,a.authority_id,now_ms() as i64]).map_err(sql)?;
         if changed != 1 {
             return Err("local journal: resource lease was not stored; dispatch rejected".into());
         }
+        Self::acquire_named_resources(connection, token, &lease)?;
         Ok(())
     }
     pub(crate) fn check_workflow_reservation(

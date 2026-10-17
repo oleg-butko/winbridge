@@ -358,6 +358,11 @@ fn previous_worker_refuses_schema_thirteen_without_mutating_the_journal() {
     let path = cfg.state_directory.join("journal.sqlite");
     let store = winbridge_worker::store::Store::open(&path).unwrap();
     drop(store);
+    // This retained gate deliberately exercises schema 13 against schema 12.
+    // A4.3 separately checks current schema 14 against the actual installed exe.
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=13; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    drop(db);
     let bytes = fs::read(&path).unwrap();
     let config_path = dir.path().join("worker.local.json");
     fs::write(&config_path, serde_json::to_vec(&cfg).unwrap()).unwrap();

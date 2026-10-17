@@ -54,6 +54,12 @@ impl Store {
         }
         Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
         let import = Self::accept_import_on(&transaction, request, shared_path, workspace_path)?;
+        Self::freeze_resource_root(
+            &transaction,
+            "import",
+            &import.import_id,
+            &import.submission.project_id,
+        )?;
         Self::insert_queue_root(
             &transaction,
             "import",

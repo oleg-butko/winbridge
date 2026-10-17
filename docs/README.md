@@ -31,6 +31,7 @@ consistency guards, очередь нескольких проектов, actors
 | [Подключение проекта](guides/project-integration.md) | Регистрация, рецепты и полный цикл нового приложения. |
 | [Место для сборок](guides/build-storage.md) | Измерения, повторное использование caches и безопасная очистка временных артефактов. |
 | [Очередь и пауза A4.2](guides/queue-control.md) | Root quota, раздельные pause, квитанции и восстановление; native и installed checks пройдены. |
+| [Общие ресурсы A4.3](guides/resource-scheduling.md) | Atomic sets и physical lifetime; кандидат, native/installed gate ожидается. |
 | [Общие профили рецептов](guides/project-profiles.md) | Повторное использование команд несколькими проектами. |
 | [Workflow и приложения](guides/workflows.md) | Импорт, сборка, запуск, готовность, логи и остановка. |
 | [Delta-доставка](guides/snapshot-delta.md) | Передача изменений относительно проверенного snapshot. |

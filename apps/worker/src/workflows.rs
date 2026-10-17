@@ -98,6 +98,12 @@ impl Store {
             &workflow.workflow_id,
             &workflow.submission.project_id,
         )?;
+        Self::freeze_resource_root(
+            &transaction,
+            "workflow",
+            &workflow.workflow_id,
+            &workflow.submission.project_id,
+        )?;
         transaction.commit().map_err(sql)?;
         Ok(workflow)
     }
@@ -292,6 +298,13 @@ impl Store {
         }
         let mut updated = flow.clone();
         let import = Self::accept_import_on(&transaction, request, shared, workspace)?;
+        Self::freeze_resource_child(
+            &transaction,
+            &flow.workflow_id,
+            "import",
+            &import.import_id,
+            0,
+        )?;
         updated.steps[0].operation_id = Some(import.import_id);
         update_step(
             &mut updated,
@@ -329,6 +342,13 @@ impl Store {
         }
         let mut updated = flow.clone();
         let task = Self::accept_task_on(&transaction, request, command, snapshot, origin)?;
+        Self::freeze_resource_child(
+            &transaction,
+            &flow.workflow_id,
+            "task",
+            &task.task_id,
+            index,
+        )?;
         if task
             .snapshot
             .as_ref()

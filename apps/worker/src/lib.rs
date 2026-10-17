@@ -222,6 +222,7 @@ impl Worker {
         };
         store.configure_work_scheduling(config.work_scheduling.clone())?;
         store.configure_queue_policy(config.queue_policy.clone())?;
+        store.configure_resource_scheduling(config.resource_scheduling.clone())?;
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
                 url: url.clone(),
@@ -622,6 +623,12 @@ impl Worker {
                                 serde_json::to_value(store.queue_observation(context.clone())?)
                                     .map_err(|e| e.to_string())?,
                             );
+                            catalog.resource_scheduling = Some(
+                                serde_json::to_value(
+                                    store.resource_scheduling_observation(context.clone())?,
+                                )
+                                .map_err(|e| e.to_string())?,
+                            );
                             serde_json::to_value(catalog).map_err(|e| e.to_string())?
                         }),
                         recovery_coverage: self
@@ -839,37 +846,38 @@ impl Worker {
         let workflows = store.workflows(false)?;
         let tasks = store.all()?;
         let imports = store.imports(false)?;
-        let projects = if self.config.work_scheduling.is_some() {
-            // Retained queued work from a removed project still needs its normal
-            // policy failure/cleanup. Fair selection must not hide it forever.
-            let candidates = self
-                .config
-                .projects
-                .iter()
-                .map(|p| p.id.clone())
-                .chain(
-                    tasks
-                        .iter()
-                        .filter(|t| t.status == TaskStatus::Queued)
-                        .map(|t| t.submission.project_id.clone()),
-                )
-                .chain(
-                    imports
-                        .iter()
-                        .filter(|i| i.status == TaskStatus::Queued)
-                        .map(|i| i.submission.project_id.clone()),
-                )
-                .collect::<std::collections::BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>();
-            store
-                .fair_projects(&candidates)?
-                .into_iter()
-                .map(Some)
-                .collect::<Vec<_>>()
-        } else {
-            vec![None]
-        };
+        let projects =
+            if self.config.work_scheduling.is_some() || self.config.resource_scheduling.is_some() {
+                // Retained queued work from a removed project still needs its normal
+                // policy failure/cleanup. Fair selection must not hide it forever.
+                let candidates = self
+                    .config
+                    .projects
+                    .iter()
+                    .map(|p| p.id.clone())
+                    .chain(
+                        tasks
+                            .iter()
+                            .filter(|t| t.status == TaskStatus::Queued)
+                            .map(|t| t.submission.project_id.clone()),
+                    )
+                    .chain(
+                        imports
+                            .iter()
+                            .filter(|i| i.status == TaskStatus::Queued)
+                            .map(|i| i.submission.project_id.clone()),
+                    )
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                store
+                    .fair_projects(&candidates)?
+                    .into_iter()
+                    .map(Some)
+                    .collect::<Vec<_>>()
+            } else {
+                vec![None]
+            };
         for selected_project in projects {
             for import in imports
                 .iter()
@@ -986,6 +994,12 @@ impl Worker {
                             reason,
                         )?;
                     }
+                    continue;
+                }
+                if let Some(reason) =
+                    store.named_resource_wait(store::OperationKind::Task, &task.task_id)?
+                {
+                    store.note_resource_wait(store::OperationKind::Task, &task.task_id, &reason)?;
                     continue;
                 }
                 // Revalidate real paths at launch; never run against a silently changed root/cwd.
