@@ -1,3 +1,26 @@
+## A4.2 завершён; следующий A4.3 resource sets, 2026-10-17
+
+[Installed gate и ревью](plans/architecture-transition/windows-queue-control-installed-2026-10-17.md)
+passed. Worker clean `99351ea`, build `1792224150478905600`, generation
+`377f2ea2-a0be-4a9d-b2e9-eae49d5ed764`, journal incarnation
+`5a8eb173-4193-4332-b00f-67e3850b2c97` прежняя; actual queue-control v1/schemas есть.
+Mode running/revision 0/policy absent; working config/queue не менялись.
+Installed exe SHA `62727ba0f7181b2cd9737903afcf326945123323a7f814cc2f21180d04710628`
+без rebuild прошёл isolated limits/pause/duplicate/cancel/restart/receipt/revision
+и cleanup 0. Test workers остановлены; parent `afc7a052-08a6-43fd-9d52-36b31af9cec7`
+succeeded/0. Report SHA `cfe26e87a92ffb4eb267ed99eeaba1b9c24c427102d9413291dfe0e4f4469c3d`.
+Readonly --finish и production renderer по actual Windows observations passed.
+Actual MCP pair receipt `cbb3ac49d20187e3e197739fcfa3d50339766876648661cdad6b6f34a1eb7743`.
+Controller exact clean `29dba9a` повторно запущен после restart Debian; serve `97067`,
+PID 4195, session `e75e3bb3-45ba-4af4-b96a-aa4e01ea4e0f`; SHA consumer proof прежний.
+Worker healthy/idle; desktop не нужен, UI окон нет. Сейчас обновление не требуется.
+
+Повторное ревью atomic admission/CAS/receipts/authority/UI recovery важных ошибок
+не выявило. Добавлены reusable installed-exe/immutable-request/readonly-finish и
+renderer checks. Full A4 открыт: A4.3 full resource sets, A4.4 independent consumers.
+Debian около 26 GiB free; Windows installed check before/after
+62,572,552,192 / 62,571,175,936 bytes. Сборки/Windows cleanup не было.
+
 ## A4.2 — native candidate готов, нужно обновление worker, 2026-10-16
 
 [Отчёт и ревью](plans/architecture-transition/windows-queue-control-gate-2026-10-16.md),

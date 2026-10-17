@@ -1,4 +1,10 @@
-# Обновление A4.2 — очередь и пауза, 2026-10-16
+# A4.2 — установленная версия проверена, 2026-10-17
+
+Worker `99351ea` прошёл [actual installed queue/MCP/UI gate](../plans/architecture-transition/windows-queue-control-installed-2026-10-17.md).
+Обновление сейчас не требуется. Desktop можно держать закрытым, worker оставить
+работать. Рабочие quotas/pause не включались. Ниже — история выполненного update.
+
+# Выполненное обновление A4.2 — очередь и пауза, 2026-10-16
 
 [69 native Windows tests, desktop compile и 20 проверенных файлов отчёта](../plans/architecture-transition/windows-queue-control-gate-2026-10-16.md)
 прошли. Debian controller обновлён; actual RPC2 пара со старым worker проверена.

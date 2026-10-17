@@ -47,7 +47,7 @@ evidence, loaded policy и schema hashes; [39 native tests/desktop check](window
 На 2026-10-16 [A4.2 — bounded root admission и durable pause](queue-control.md)
 реализован в кандидате `29dba9a`: 337 workspace tests, реальные Unix IPC/UI,
 совместимость Rust/TypeScript и [69 native tests/desktop compile](windows-queue-control-gate-2026-10-16.md)
-прошли. Installed gate ожидает обновления Windows worker/desktop.
+прошли. [Installed gate](windows-queue-control-installed-2026-10-17.md) завершён 2026-10-17; A4.2 закрыт.
 Full resource sets A4.3 и независимые consumers A4.4 остаются
 следующими пакетами; полный A4 открыт.
 

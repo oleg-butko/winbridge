@@ -155,7 +155,7 @@ slot через child; Ready app продолжает работать вне э
 счётчик Windows процессов. Saved snapshot отделён от свежей связи и read-only
 archive. Неподдерживаемая metadata не выдаётся за активную политику.
 
-## Очередь и пауза A4.2 — кандидат
+## Очередь и пауза A4.2 — проверена
 
 [Семантика и восстановление](guides/queue-control.md). Root count отличается от
 work slots: один workflow считается один раз. Приём и запуск приостанавливаются
@@ -164,4 +164,4 @@ UI показывает реальную ревизию и время среза
 Lost ACK сохраняет исходную команду до отправки и после открытия окна; восстановление
 не исполняет запрос. Stale revision требует нового явного решения. Unknown scope,
 offline и read-only запрещают управление. [69 native tests и desktop compile](plans/architecture-transition/windows-queue-control-gate-2026-10-16.md)
-прошли; actual installed управление ожидает обновления worker/desktop.
+прошли; [actual installed управление и renderer](plans/architecture-transition/windows-queue-control-installed-2026-10-17.md) также проверены.

@@ -1,7 +1,7 @@
 # Очередь и пауза — A4.2
 
 Кандидат проверен 2026-10-16: [69 Windows tests и desktop compile](../plans/architecture-transition/windows-queue-control-gate-2026-10-16.md).
-Обновление установленного worker и actual installed gate ещё ожидаются.
+[Установленный worker, MCP и UI проверены](../plans/architecture-transition/windows-queue-control-installed-2026-10-17.md); A4.2 завершён.
 [План и инварианты](../plans/architecture-transition/queue-control.md).
 
 WinBridge различает **приём запроса**, **начало запуска** и **завершение работы**.

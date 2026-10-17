@@ -2,7 +2,7 @@
 
 2026-10-15. A4.1 installed gate и последующее ревью завершены. Этот план
 проверен до реализации. Кандидат A4.2 прошёл [native gate 2026-10-16](windows-queue-control-gate-2026-10-16.md);
-actual installed новый контракт ожидает обновления worker/desktop.
+[actual installed новый контракт проверен](windows-queue-control-installed-2026-10-17.md); A4.2 завершён.
 
 ## Контракт и владение
 
