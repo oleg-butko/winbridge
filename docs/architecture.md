@@ -12,8 +12,8 @@ OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-sel
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
 прошли. [Worker launcher/control](plans/worker-self-update/worker-control.md) добавляет
 trusted worker API, exact immutable binding и supervisor-only lease IPC. SourceHeld
-атомарно резервирует work slot; named resources пока откладывают grant. Native gate
-этого блока ожидается; SourceControl/file driver/shutdown/install ещё не подключены.
+атомарно резервирует work slot; named resources пока откладывают grant.
+[80 native tests / полный candidate build](plans/worker-self-update/windows-worker-control-gate-2026-10-17.md) прошли; SourceControl/file driver/shutdown/install ещё не подключены.
 Worker schema 15 владеет source/drain/quiesce leases и pre-migration startup guard;
 updater не открывает worker journal. Между этими БД нет общей транзакции:
 source effects требуют свежий trusted worker grant и актуальную updater authority.

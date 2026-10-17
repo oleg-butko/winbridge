@@ -15,7 +15,14 @@ Worker schema 15/updater schema 3 не менялись. Source apply, shutdown 
 417 workspace tests и 9 итоговых update/control tests passed. Проверены race task
 claim/source grant, receipt rollback, forged peer/epoch/build/config, повтор при
 живом owner, premature drain и verified release. Clippy, Windows/tests cross-check, fmt/contracts, typecheck/build:ui/scaffold и
-Python/PowerShell syntax passed. Native Windows gate выполняется. Установленный worker не обновляется.
+Python/PowerShell syntax passed. [Native gate](plans/worker-self-update/windows-worker-control-gate-2026-10-17.md)
+clean c705299 passed: 80 tests/13 groups, 21 checked artifacts и 4 candidate exe.
+Run `20261017-174249-58eff6c0`, task `6dbfdff2-a789-43f6-bb90-06f1da3c75bd`
+succeeded/0; report SHA `58484ae7fc24a2d78f743aac90e48341759cd69df4ef0a59207566c74defdfda`.
+Installed build/generation прежние, healthy/idle; source/runtime/config не менялись.
+Worker оставить работать, desktop можно закрыть. Debian free 34,772,668,416 bytes;
+348 old ELF test executables (12,165,789,064 bytes) очищены, основные/running binaries
+и данные сохранены. Windows free before/after 28,252,860,416 / 28,264,001,536 bytes.
 Следом — fresh authenticated SourceControl, длительная verification без удержания
 Store lock, compiler ownership/cleanup и exact shutdown, затем U2–U3.
 

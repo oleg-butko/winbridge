@@ -5,7 +5,8 @@ worker launcher и отдельный supervisor-only IPC. Source apply чере
 shutdown, runtime replacement и публичный CLI/MCP update ещё отключены.
 417 workspace tests и 9 итоговых update/control tests прошли. Clippy, Windows/tests
 cross-check, fmt/contracts, typecheck/build:ui/scaffold и script syntax passed.
-Native gate ожидается; пакет пока не отмечен завершённым.
+[Native gate clean c705299](windows-worker-control-gate-2026-10-17.md): 80 tests /
+13 groups и полный candidate build passed. Блок проверен; U1 целиком открыт.
 
 ## Кто выбирает параметры
 

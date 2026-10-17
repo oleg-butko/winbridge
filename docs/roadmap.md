@@ -27,7 +27,7 @@ library с отдельным authenticated IPC и updater schema 3; 413 local t
 прошли. [Worker launcher/control](plans/worker-self-update/worker-control.md)
 добавлен как trusted API: exact binding, duplicate-first и supervisor-only IPC;
 SourceHeld атомарно резервирует work slot, named resources пока откладывают grant.
-417 local tests и 9 итоговых целевых tests passed; native gate ожидается.
+417 local tests и [80 native tests / полный candidate build](plans/worker-self-update/windows-worker-control-gate-2026-10-17.md) passed.
 Следом authenticated SourceControl/verification, compiler ownership и exact shutdown.
 Source/build/install orchestration и публичное включение не готовы; U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).

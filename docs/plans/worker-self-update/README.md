@@ -100,8 +100,8 @@ U0 не применяет source plan, не выключает процессы
 - [x] [Supervisor library handoff](supervisor.md): guarded launcher, durable receipts и
   отдельный IPC; 413 local tests и [76 native tests / полный candidate build](windows-supervisor-gate-2026-10-17.md)
   прошли. Source/install/shutdown команды отсутствуют.
-- [ ] [Worker launcher/control](worker-control.md) реализован как trusted API; native
-  gate ожидается. Реальный execution domain, fixed runtime и external Job guards,
+- [x] [Worker launcher/control](worker-control.md) реализован как trusted API;
+  [80 native tests и candidate build](windows-worker-control-gate-2026-10-17.md) прошли. Реальный execution domain, fixed runtime и external Job guards,
   immutable binding и supervisor-only IPC. SourceHeld атомарно занимает work slot;
   named-resource policy пока откладывает grant. Breakaway запрещён. Публичное включение,
   source/build orchestration и production shutdown остаются следующими задачами.
