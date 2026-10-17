@@ -141,3 +141,27 @@ pub fn freeze(
         start,
     })
 }
+
+/// Availability may depend on other projects; permission/evidence for this
+/// project depends only on its binding and referenced definitions.
+pub fn project_policy(policy: &ResourceSchedulingPolicy, project: &str) -> serde_json::Value {
+    let binding = policy.projects.iter().find(|p| p.project_id == project);
+    let referenced = binding
+        .into_iter()
+        .flat_map(|p| {
+            p.task
+                .iter()
+                .chain(&p.import)
+                .chain(&p.build)
+                .chain(&p.start)
+        })
+        .map(|r| &r.resource_id)
+        .collect::<HashSet<_>>();
+    let mut definitions = policy
+        .resources
+        .iter()
+        .filter(|r| referenced.contains(&r.id))
+        .collect::<Vec<_>>();
+    definitions.sort_by(|a, b| a.id.cmp(&b.id));
+    serde_json::json!({"enabled":true,"project":binding,"resources":definitions})
+}

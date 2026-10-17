@@ -10,8 +10,14 @@ Schema 14 с consistent schema-13 backup; RPC 1/2/operation-page v1 сохран
 Local core/protocol, 38 shared metadata cases, 6 Store tests, actual 3-project
 IPC/cancel/config-edit/restart и workflow app handoff tests прошли. Linux/Windows
 Clippy, workspace all-targets check, typecheck и generated contracts passed.
-Full committed workspace/consumer proof, production renderer и native gate ещё
-впереди. Ревью добавило guard первого enable при legacy pending/physical owners
+Первый clean candidate `46c9445` прошёл 346 workspace tests, resource renderer,
+полный прежний UI regression и 79 native tests/20 groups/desktop compile
+(run `20261017-044841-da6e9215`, parent `8c972743-f4f9-49be-ac29-3d5eaa257007`,
+report SHA `81953f98cc79605df627046964a13770dc6eb08f263e5aac9a5cdc131da0e09b`).
+После ревью fingerprint сузился до собственного binding/referenced definitions;
+чужие bindings не сбрасывают готовность project. Следует final clean proof/native
+повтор. Controller binary `46c9445` ещё не deployed; daemon остаётся `29dba9a`.
+ Ревью добавило guard первого enable при legacy pending/physical owners
 и запрет disable/remove/kind change удерживаемого ресурса. Полные наборы выдаются
 через прежний execution lease, без отдельного счётчика или resource daemon.
 

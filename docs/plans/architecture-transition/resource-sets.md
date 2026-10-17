@@ -107,3 +107,9 @@ admissions/unknown owners. Они не содержат доказанных т�
 отклоняется до drain/reconciliation; молчаливой перепривязки нет. Disable/remove/
 kind change активного named resource также отклоняется. Дополнительный тест проверяет
 эту границу. Native Windows и actual installed новый контракт ещё ожидаются.
+
+Первый native candidate `46c9445` прошёл 79 tests/20 groups и desktop compile,
+run `20261017-044841-da6e9215`. Последующее ревью сузило project policy fingerprint:
+чужой binding/unused definition не сбрасывает evidence другого project, включая
+нового конкурента за общий cache. Изменение capacity собственного ресурса по-прежнему
+инвалидирует квитанцию. Core regression пройден; финальный native повтор ожидается.

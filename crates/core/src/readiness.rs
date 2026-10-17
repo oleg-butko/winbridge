@@ -29,7 +29,7 @@ pub fn project_policy_catalog(
             }
             if let Some(resources) = &config.resource_scheduling {
                 policy["resourceScheduling"] =
-                    serde_json::to_value(resources).map_err(|e| e.to_string())?;
+                    crate::resource_scheduling::project_policy(resources, &project.id);
             }
             let bytes = canonical_evidence_json(&policy).map_err(|e| e.to_string())?;
             Ok(ProjectPolicyFingerprint {
