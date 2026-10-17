@@ -3,6 +3,7 @@
 pub mod archive;
 pub mod journal;
 pub mod source;
+pub mod supervisor;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{

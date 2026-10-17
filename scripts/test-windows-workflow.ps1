@@ -52,7 +52,7 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 Путь к известному schema-14 worker.exe. Создаётся проверенная копия для запуска
 с НОВЫМ тестовым journal schema 15; рабочий worker и его журнал не открываются.
 .PARAMETER UpdateReferenceUpdater
-Сохранённый schema-1 updater.exe для отказа открыть НОВУЮ тестовую schema 2.
+Сохранённый предыдущий updater.exe для отказа открыть НОВУЮ тестовую schema 3.
 .PARAMETER UpdateReferenceUpdaterSha256
 Проверенный SHA-256 предыдущего updater: source и create-only копия сверяются до запуска.
 .PARAMETER TaskFsmOnly
@@ -188,6 +188,9 @@ $oldUpdateCoordinationReport = $env:WINBRIDGE_UPDATE_COORDINATION_REPORT
 $oldUpdateReferenceWorker = $env:WINBRIDGE_UPDATE_REFERENCE_WORKER
 $oldUpdateReferenceUpdater = $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER
 $oldSourceTransactionReport = $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT
+$oldSupervisorReport = $env:WINBRIDGE_SUPERVISOR_REPORT
+$oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
+$oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
 $oldProfileReport = $env:WINBRIDGE_PROFILE_GATE_REPORT
 $oldResumeShared = $env:WINBRIDGE_RESUME_GATE_SHARED
@@ -213,8 +216,10 @@ try {
         if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
         $prior = Get-Content -LiteralPath $priorReportPath -Raw | ConvertFrom-Json
         $expected = @('update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build')
-        if ($prior.commands.Count -in @(7,9)) { $expected += @('update-worker-durable-coordination','update-worker-native-coordination','update-previous-worker-refusal') }
-        if ($prior.commands.Count -eq 9) { $expected += @('update-platform-no-clobber','update-previous-updater-refusal') }
+        if ($prior.commands.Count -in @(7,9,10,11)) { $expected += @('update-worker-durable-coordination','update-worker-native-coordination','update-previous-worker-refusal') }
+        if ($prior.commands.Count -in @(9,10,11)) { $expected += @('update-platform-no-clobber','update-previous-updater-refusal') }
+        if ($prior.commands.Count -in @(10,11)) { $expected += @('update-infrastructure-domain') }
+        if ($prior.commands.Count -eq 11) { $expected += @('update-supervisor-staged-source') }
         if ($prior.sourceDirty -or $prior.platform -ne 'windows' -or $prior.commands.Count -ne $expected.Count -or @($prior.commands | Where-Object { $_.exitCode -ne 0 }).Count -or (($prior.commands.name -join ',') -cne ($expected -join ','))) { throw 'Previous update preparation did not complete native groups' }
         $previousCache = Join-Path $updatePriorRun 'test-build-cache'
         if (-not [IO.Path]::GetFullPath($previousCache).Equals([IO.Path]::GetFullPath($prior.buildCacheDirectory),[StringComparison]::OrdinalIgnoreCase)) { throw 'Choose original update compiler cache owner run' }
@@ -468,7 +473,7 @@ try {
         if ((Get-FileHash -LiteralPath $referenceCopy -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha -or (Get-FileHash -LiteralPath $UpdateReferenceWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne $referenceSha) { throw 'Update reference changed during capture' }
         $report.updateReferenceWorker = @{path=$referenceCopy;sha256=$referenceSha}
         $env:WINBRIDGE_UPDATE_REFERENCE_WORKER = $referenceCopy
-        if (-not $UpdateReferenceUpdater -or $UpdateReferenceUpdaterSha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Explicit pinned schema-1 updater reference required' }
+        if (-not $UpdateReferenceUpdater -or $UpdateReferenceUpdaterSha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Explicit pinned previous updater reference required' }
         Assert-SessionFile $UpdateReferenceUpdater
         if ((Get-FileHash -LiteralPath $UpdateReferenceUpdater -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdateReferenceUpdaterSha256) { throw 'Previous updater identity mismatch' }
         $updaterCopy = Join-Path (Split-Path $source -Parent) 'update-reference-updater.exe'
@@ -477,6 +482,9 @@ try {
         $report.updateReferenceUpdater = @{path=$updaterCopy;sha256=$UpdateReferenceUpdaterSha256}
         $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER = $updaterCopy
         $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT = Join-Path $ReportDirectory 'source-transaction-proof.json'
+        $env:WINBRIDGE_SUPERVISOR_REPORT = Join-Path $ReportDirectory 'supervisor-proof.json'
+        $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
+        $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
         $env:WINBRIDGE_UPDATE_COORDINATION_REPORT = Join-Path $ReportDirectory 'update-coordination-proof.json'
         $groups = @(
             @{name='update-source-policy-and-fsm';arguments=@('test','-p','winbridge-core','--test','update','--locked','--offline','--','--test-threads=1','--nocapture')},
@@ -487,7 +495,9 @@ try {
             @{name='update-worker-native-coordination';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_coordination','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-previous-worker-refusal';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_coordination','previous_worker_refuses_schema_fifteen','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')},
             @{name='update-platform-no-clobber';arguments=@('test','-p','winbridge-platform','--lib','source_files','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-previous-updater-refusal';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','source_transaction','previous_updater_refuses_schema_two_without_writes','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
+            @{name='update-previous-updater-refusal';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','source_transaction','previous_updater_refuses_current_schema_without_writes','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')},
+            @{name='update-infrastructure-domain';arguments=@('test','-p','winbridge-platform','--lib','infrastructure','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-supervisor-staged-source';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','supervisor::tests::actual_staged_source_reaches_ready_without_mutation','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {
@@ -499,6 +509,10 @@ try {
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
     }
     if ($UpdatePreparationOnly) {
+        $supervisor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'supervisor-proof.json') -Raw | ConvertFrom-Json
+        if (-not $supervisor.passed -or $supervisor.platform -ne 'windows' -or -not $supervisor.parentExited -or -not $supervisor.survivedParent -or -not $supervisor.exclusiveOwner -or $supervisor.runtimeApplied -or $supervisor.sourceEffectsEnabled -or $supervisor.windowsOpened -or $supervisor.active.phase -ne 'active' -or $supervisor.stopped.phase -ne 'stopped' -or -not $supervisor.active.spec.excludedDomain -or $supervisor.build.sourceDirty -or $supervisor.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Standalone supervisor proof incomplete' }
+        $sourceSmoke = Get-Content -LiteralPath (Join-Path $ReportDirectory 'supervisor-source-proof.json') -Raw | ConvertFrom-Json
+        if (-not $sourceSmoke.passed -or $sourceSmoke.platform -ne 'windows' -or $sourceSmoke.runtimeApplied -or $sourceSmoke.sourceEffectsEnabled -or $sourceSmoke.sourceBefore.manifestSha256 -cne $sourceSmoke.sourceAfter.manifestSha256 -or $sourceSmoke.ready.phase -ne 'ready' -or $sourceSmoke.active.phase -ne 'active' -or $sourceSmoke.stopped.phase -ne 'stopped' -or $sourceSmoke.build.sourceCommit -cne $manifest.sourceCommit -or $sourceSmoke.build.sourceDirty) { throw 'Actual staged source supervisor smoke incomplete' }
         $sourceProof = Get-Content -LiteralPath (Join-Path $ReportDirectory 'source-transaction-proof.json') -Raw | ConvertFrom-Json
         if (-not $sourceProof.passed -or $sourceProof.platform -ne 'windows' -or -not $sourceProof.sourceVerified -or -not $sourceProof.workerLeaseRetained -or $sourceProof.runtimeApplied -or $sourceProof.windowsOpened -or $sourceProof.status.appliedFiles -ne 4 -or $sourceProof.status.transaction.phase -ne 'verified' -or -not $sourceProof.inspection.sourceMatchesTarget -or $sourceProof.inspection.canReplay -or $sourceProof.build.sourceDirty -or $sourceProof.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Source transaction proof incomplete' }
         $coordination = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-coordination-proof.json') -Raw | ConvertFrom-Json
@@ -565,6 +579,9 @@ try {
     $env:WINBRIDGE_UPDATE_REFERENCE_WORKER = $oldUpdateReferenceWorker
     $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER = $oldUpdateReferenceUpdater
     $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT = $oldSourceTransactionReport
+    $env:WINBRIDGE_SUPERVISOR_REPORT = $oldSupervisorReport
+    $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
+    $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace
     $env:WINBRIDGE_PROFILE_GATE_REPORT = $oldProfileReport
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared

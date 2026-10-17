@@ -677,7 +677,7 @@ fn progress_failure_blocks_before_source_changes_and_lease_change_stops_apply() 
 // Build a real v1 fixture by removing only the v2 additions from our owned DB.
 fn downgrade_fixture(dir: &Path) {
     let db = Connection::open(dir.join("updates.sqlite")).unwrap();
-    db.execute_batch("DROP TABLE source_file_receipts; DROP TABLE source_file_intents; DROP TABLE source_plans; DROP TABLE source_transactions; PRAGMA user_version=1; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    db.execute_batch("DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; DROP TABLE source_file_receipts; DROP TABLE source_file_intents; DROP TABLE source_plans; DROP TABLE source_transactions; PRAGMA user_version=1; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
 }
 #[test]
 fn schema_one_migration_requires_owner_lock_and_retains_consistent_history_backup() {
@@ -699,7 +699,7 @@ fn schema_one_migration_requires_owner_lock_and_retains_consistent_history_backu
         .starts_with("updates-v1-")));
     drop(f.owner);
     let mut migrated = UpdateJournal::open(&dir, &old_info.scope_sha256).unwrap();
-    assert_eq!(migrated.info().unwrap().schema_version, 2);
+    assert_eq!(migrated.info().unwrap().schema_version, 3);
     assert_eq!(
         migrated.info().unwrap().owner_epoch,
         old_info.owner_epoch + 1
@@ -756,8 +756,8 @@ fn failed_schema_migration_rolls_back_epoch_and_schema() {
     assert_eq!(after.active_update_id, before.active_update_id);
 }
 #[test]
-#[ignore = "Explicit retained schema-one updater required; never touches installed runtime"]
-fn previous_updater_refuses_schema_two_without_writes() {
+#[ignore = "Explicit retained previous updater required; never touches installed runtime"]
+fn previous_updater_refuses_current_schema_without_writes() {
     let reference = PathBuf::from(
         std::env::var_os("WINBRIDGE_UPDATE_REFERENCE_UPDATER")
             .expect("Pinned isolated reference updater"),
@@ -824,4 +824,45 @@ fn failed_prepared_notification_keeps_source_unchanged_and_blocks_replay() {
         fs::read(f.config.source_directory.join("Cargo.toml")).unwrap(),
         b"old"
     );
+}
+
+#[test]
+fn schema_two_source_inspection_stays_readonly_and_migration_fences_old_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = Fixture::new(tmp.path());
+    f.prepare();
+    let dir = f.config.runtime_directory.join("update-state");
+    let before = f.status();
+    let info = f.journal.info().unwrap();
+    let db = f.db();
+    db.execute_batch(
+        "DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; PRAGMA user_version=2;",
+    )
+    .unwrap();
+    drop(db);
+    assert_eq!(
+        UpdateJournal::read_source_status(&dir, &f.id, 0, 100)
+            .unwrap()
+            .files,
+        before.files
+    );
+    assert_eq!(UpdateJournal::inspect(&dir).unwrap().schema_version, 2);
+    assert!(
+        matches!(UpdateJournal::open(&dir,&info.scope_sha256),Err(e) if e.code==winbridge_update::journal::JournalErrorCode::OwnerBusy)
+    );
+    drop(f.owner);
+    let mut migrated = UpdateJournal::open(&dir, &info.scope_sha256).unwrap();
+    assert_eq!(migrated.info().unwrap().schema_version, 3);
+    assert_eq!(migrated.info().unwrap().owner_epoch, info.owner_epoch + 1);
+    let owner = migrated.acquire_owner().unwrap();
+    assert!(apply_source(&mut migrated, &owner, &f.config, &f.id, &mut f.control).is_err());
+    assert_eq!(
+        fs::read(f.config.source_directory.join("Cargo.toml")).unwrap(),
+        b"old"
+    );
+    assert!(fs::read_dir(&dir).unwrap().any(|e| e
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with("updates-v2-")));
 }

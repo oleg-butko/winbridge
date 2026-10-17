@@ -6,6 +6,7 @@ use winbridge_protocol::{
 };
 
 mod readiness;
+pub mod supervisor;
 pub mod websocket;
 pub use readiness::netwatch_health;
 

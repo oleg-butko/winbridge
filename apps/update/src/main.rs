@@ -6,7 +6,7 @@ use std::{
 fn run() -> Result<bool, String> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge updater — preparation and update journal\n  verify-source ABSOLUTE_DIRECTORY EXPECTED_MANIFEST_SHA256\n  verify-archive ABSOLUTE_ZIP ARCHIVE_SHA256 MANIFEST_SHA256\n  [--config PATH] plan ABSOLUTE_INCOMING_DIRECTORY EXPECTED_MANIFEST_SHA256\n  [--config PATH] journal init\n  [--config PATH] journal status [UPDATE_ID]\n  [--config PATH] journal source-status UPDATE_ID [OFFSET] [LIMIT]\n  [--config PATH] journal source-inspect UPDATE_ID [OFFSET] [LIMIT]\nDefault config: winbridge-update.local.json beside this executable.\nOnly journal init writes update-state metadata. Source apply is library-only for the trusted driver. No source-write CLI, runtime replacement, shutdown or automatic update is implemented.");
+        println!("WinBridge updater — preparation and update journal\n  verify-source ABSOLUTE_DIRECTORY EXPECTED_MANIFEST_SHA256\n  verify-archive ABSOLUTE_ZIP ARCHIVE_SHA256 MANIFEST_SHA256\n  [--config PATH] plan ABSOLUTE_INCOMING_DIRECTORY EXPECTED_MANIFEST_SHA256\n  [--config PATH] journal init\n  [--config PATH] journal status [UPDATE_ID]\n  [--config PATH] journal supervisor-status UPDATE_ID_OR_LAUNCH_ID\n  [--config PATH] journal source-status UPDATE_ID [OFFSET] [LIMIT]\n  [--config PATH] journal source-inspect UPDATE_ID [OFFSET] [LIMIT]\nDefault config: winbridge-update.local.json beside this executable.\nSupervisor internal entry is gated by a durable launch and is not a user update command. Only journal init is a public metadata writer. Source apply is library-only for the trusted driver. No source-write CLI, runtime replacement, shutdown or automatic update is implemented.");
         return Ok(true);
     }
     let config_path = if args.first().is_some_and(|a| a == "--config") {
@@ -22,6 +22,27 @@ fn run() -> Result<bool, String> {
             .with_file_name("winbridge-update.local.json")
     };
     match args.as_slice() {
+        [op, action, id] if op == "journal" && action == "supervisor-status" => {
+            let config = winbridge_update::load_config(&config_path)?;
+            let dir = config.runtime_directory.join("update-state");
+            let info = winbridge_update::journal::UpdateJournal::inspect(&dir)
+                .map_err(|e| e.to_string())?;
+            if info.scope_sha256 != winbridge_update::installation_scope(&config)? {
+                return Err("Supervisor journal belongs to another installation".into());
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&winbridge_update::supervisor::inspect(&dir, id)?)
+                    .map_err(|e| e.to_string())?
+            );
+            Ok(true)
+        }
+        [op, id, token] if op == "supervisor-internal" => {
+            tokio::runtime::Runtime::new()
+                .map_err(|e| e.to_string())?
+                .block_on(winbridge_update::supervisor::run(&config_path, id, token))?;
+            Ok(true)
+        }
         [op, action, id, paging @ ..]
             if op == "journal"
                 && matches!(action.as_str(), "source-status" | "source-inspect")

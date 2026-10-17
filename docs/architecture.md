@@ -7,6 +7,9 @@
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
 `apps/update` владеет отдельным updater journal schema 2 (WBUP), installation scope,
 OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
+[Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
+процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
+production worker adapter/source-control/shutdown/install пока отключены.
 Worker schema 15 владеет source/drain/quiesce leases и pre-migration startup guard;
 updater не открывает worker journal. Между этими БД нет общей транзакции:
 source effects требуют свежий trusted worker grant и актуальную updater authority.

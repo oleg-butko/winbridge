@@ -7,6 +7,7 @@ use winbridge_protocol::ResolvedCommand;
 
 pub mod event_log;
 pub mod execution_domain;
+pub mod infrastructure;
 pub mod process_identity;
 pub mod reports;
 pub mod source_files;

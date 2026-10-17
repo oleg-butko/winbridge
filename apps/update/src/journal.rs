@@ -21,7 +21,8 @@ use winbridge_protocol::update::{
 };
 
 mod source;
-pub const UPDATE_SCHEMA_VERSION: u32 = 2;
+mod supervisor;
+pub const UPDATE_SCHEMA_VERSION: u32 = 3;
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
 type Result<T> = std::result::Result<T, JournalError>;
@@ -373,13 +374,15 @@ impl UpdateJournal {
         let inspector = connection(&path, true)?;
         let initial_schema = schema(&inspector)?;
         drop(inspector);
-        let migration_lock = if initial_schema == 1 {
+        let migration_lock = if (1..UPDATE_SCHEMA_VERSION).contains(&initial_schema) {
             Some(owner_lock(&directory)?)
         } else {
             None
         };
         let mut connection = connection(&path, false)?;
-        if initial_schema == 1 && schema(&connection)? == 1 {
+        if (1..UPDATE_SCHEMA_VERSION).contains(&initial_schema)
+            && schema(&connection)? == initial_schema
+        {
             let before = info(&connection)?;
             if before.scope_sha256 != scope_sha256 {
                 return Err(fail(
@@ -388,7 +391,8 @@ impl UpdateJournal {
                 ));
             }
             let backup = directory.join(format!(
-                "updates-v1-{}-{}.sqlite",
+                "updates-v{}-{}-{}.sqlite",
+                initial_schema,
                 now_ms()?,
                 Uuid::new_v4()
             ));
@@ -399,7 +403,7 @@ impl UpdateJournal {
             let integrity: String = c
                 .query_row("PRAGMA quick_check", [], |r| r.get(0))
                 .map_err(storage)?;
-            if schema(&c)? != 1 || info(&c)? != before || integrity != "ok" {
+            if schema(&c)? != initial_schema || info(&c)? != before || integrity != "ok" {
                 return Err(fail(
                     JournalErrorCode::Corrupt,
                     "Migration backup verification failed",
@@ -433,7 +437,8 @@ impl UpdateJournal {
             )
             .map_err(storage)?;
             source::migrate(&tx)?;
-        } else if schema(&tx)? == 1 {
+            supervisor::migrate(&tx)?;
+        } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
                     JournalErrorCode::OwnerBusy,
@@ -453,7 +458,10 @@ impl UpdateJournal {
                     params![epoch as i64, owner],
                 )
                 .map_err(storage)?)?;
-            source::migrate(&tx)?;
+            if schema(&tx)? == 1 {
+                source::migrate(&tx)?;
+            }
+            supervisor::migrate(&tx)?;
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
                     JournalErrorCode::Corrupt,
@@ -607,6 +615,9 @@ impl UpdateJournal {
             }
             return record(&tx, &id);
         }
+        if supervisor::active(&tx)? {
+            return Err(fail(JournalErrorCode::InstallationBusy,"A supervisor launch still owns this installation; inspect it, never spawn a duplicate"));
+        }
         validate_update_request(request).map_err(|e| fail(JournalErrorCode::InvalidRequest, e))?;
         let installed = info(&tx)?;
         if request.expected.installation_id != installed.installation_id
@@ -751,6 +762,7 @@ impl UpdateJournal {
                 "Lifecycle reason must contain 1–4096 bytes of readable text",
             ));
         }
+        supervisor::require_driver(&tx, authority, id, command.event)?;
         let mut current = record(&tx, id)?;
         if !source_driver
             && matches!(

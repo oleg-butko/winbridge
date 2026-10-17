@@ -38,6 +38,20 @@ fn owned(handle: HANDLE) -> io::Result<OwnedHandle> {
     Ok(unsafe { OwnedHandle::from_raw_handle(handle) })
 }
 impl Job {
+    pub fn contains(&self, process: HANDLE) -> io::Result<bool> {
+        let mut member = 0;
+        if unsafe {
+            windows_sys::Win32::System::JobObjects::IsProcessInJob(
+                process,
+                self.0.as_raw_handle(),
+                &mut member,
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(member != 0)
+    }
     /// Reuse the properly configured domain. Surviving processes stay covered;
     /// per-project reconciliation still governs dispatch. Opening this owner
     /// never claims physical emptiness or authorizes recovery cutover.
@@ -373,4 +387,13 @@ mod tests {
         output.read_to_end(&mut bytes).unwrap();
         assert!(bytes.is_empty(), "unexpected user code output: {bytes:?}");
     }
+}
+
+pub fn host_binding_for_process(pid: u32) -> io::Result<(String, u32)> {
+    let (host, _) = host_binding()?;
+    let mut session = 0;
+    if unsafe { ProcessIdToSessionId(pid, &mut session) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((host, session))
 }

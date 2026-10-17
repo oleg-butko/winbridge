@@ -10,6 +10,7 @@ winbridge-platform.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 tokio.workspace = true
+sha2 = "0.10.9"
 tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect", "handshake"] }
 futures-util = { version = "0.3", features = ["sink"] }
 
@@ -18,3 +19,6 @@ windows-sys.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

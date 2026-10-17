@@ -175,8 +175,8 @@ def main():
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--update-preparation-only', action='store_true', help='Test updater/source transactions on isolated fixtures and build a complete candidate without changing installed runtime or opening windows')
     parser.add_argument('--update-preparation-reuse-run', help='Reuse only compiler caches of a terminal update-preparation run with checksummed successful native groups; always use new source/state/staging')
-    parser.add_argument('--update-reference-updater', help='Retained schema-1 updater path for isolated schema-2 refusal')
-    parser.add_argument('--update-reference-updater-sha256', help='Reviewed SHA-256 of the retained schema-1 updater')
+    parser.add_argument('--update-reference-updater', help='Retained previous updater path for isolated current-schema refusal')
+    parser.add_argument('--update-reference-updater-sha256', help='Reviewed SHA-256 of the retained previous updater')
     parser.add_argument('--update-reference-worker', help='Explicit read-only Windows schema-14 reference exe for isolated schema-15 refusal; copied into the test runtime')
     parser.add_argument('--task-fsm-only', action='store_true', help='Check Task FSM, frozen v1 baseline, real launch/PID commit faults, cancel/tree/timeout/recovery and workflow regressions; no desktop windows')
     parser.add_argument('--readiness-only', action='store_true', help='Check readiness, operation pages, scheduling/queue policy, native IPC and desktop compile; no UI windows')
@@ -241,6 +241,7 @@ def main():
         archive_has_work_scheduling = 'winbridge/apps/worker/tests/work_scheduling.rs' in archive.namelist()
         archive_has_queue_control = 'winbridge/apps/worker/tests/queue_control.rs' in archive.namelist()
         archive_has_resource_scheduling = 'winbridge/apps/worker/tests/resource_scheduling.rs' in archive.namelist()
+        archive_has_supervisor = 'winbridge/apps/update/src/supervisor.rs' in archive.namelist()
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
@@ -290,7 +291,7 @@ def main():
         profile_argument = ' -UpdatePreparationOnly -UpdatePreparationArchivePath $archive'
         if archive_has_source_transaction:
             if not args.update_reference_updater or not args.update_reference_updater_sha256:
-                raise RuntimeError('Pinned schema-1 updater reference required')
+                raise RuntimeError('Pinned previous updater reference required')
             profile_argument += ' -UpdateReferenceUpdater ' + ps_string(args.update_reference_updater) + ' -UpdateReferenceUpdaterSha256 ' + ps_string(args.update_reference_updater_sha256)
         if archive_has_update_coordination:
             if not args.update_reference_worker:
@@ -311,10 +312,14 @@ def main():
                 names.add(name)
             expected = ['update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build']
             prior = json.loads((previous_report / 'report.json').read_text(encoding='utf-8-sig'))
-            if len(prior['commands']) in (7, 9):
+            if len(prior['commands']) in (7, 9, 10, 11):
                 expected += ['update-worker-durable-coordination', 'update-worker-native-coordination', 'update-previous-worker-refusal']
-            if len(prior['commands']) == 9:
+            if len(prior['commands']) in (9, 10, 11):
                 expected += ['update-platform-no-clobber','update-previous-updater-refusal']
+            if len(prior['commands']) in (10, 11):
+                expected += ['update-infrastructure-domain']
+            if len(prior['commands']) == 11:
+                expected += ['update-supervisor-staged-source']
             if (prior['platform'] != 'windows' or prior['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', prior['sourceCommit'])
                     or not re.fullmatch(r'[0-9a-f]{64}', prior['sourceArchiveSha256'])
                     or not {'report.json', *(n+'.log' for n in expected)}.issubset(names)
@@ -518,6 +523,26 @@ exit $nativeExit
                     or source['build']['sourceDirty'] is not False
                     or result['updateReferenceUpdater']['sha256'] != args.update_reference_updater_sha256):
                 raise RuntimeError('Incomplete native source transaction proof')
+        if archive_has_supervisor:
+            expected += ['update-infrastructure-domain','update-supervisor-staged-source']
+            supervisor = json.loads((report / 'supervisor-proof.json').read_text(encoding='utf-8-sig'))
+            if (supervisor.get('kind') != 'supervisor_native_proof' or supervisor.get('passed') is not True
+                    or supervisor.get('platform') != 'windows' or not all(supervisor.get(k) is True for k in ['parentExited','survivedParent','exclusiveOwner'])
+                    or any(supervisor.get(k) is not False for k in ['runtimeApplied','sourceEffectsEnabled','windowsOpened'])
+                    or supervisor['active']['phase'] != 'active' or supervisor['stopped']['phase'] != 'stopped'
+                    or not supervisor['active']['spec']['excludedDomain']
+                    or supervisor['active']['spec'] != supervisor['stopped']['spec']
+                    or supervisor['active']['process'] != supervisor['stopped']['process']
+                    or supervisor['build']['sourceCommit'] != result['sourceCommit'] or supervisor['build']['sourceDirty'] is not False):
+                raise RuntimeError('Incomplete native standalone supervisor handoff proof')
+            smoke = json.loads((report / 'supervisor-source-proof.json').read_text(encoding='utf-8-sig'))
+            if (smoke.get('passed') is not True or smoke.get('platform') != 'windows'
+                    or any(smoke.get(k) is not False for k in ['runtimeApplied','sourceEffectsEnabled','windowsOpened'])
+                    or smoke['sourceBefore']['manifestSha256'] != smoke['sourceAfter']['manifestSha256']
+                    or smoke['sourceBefore']['manifestSha256'] != result['updatePreparation']['manifestSha256']
+                    or smoke['ready']['phase'] != 'ready' or smoke['active']['phase'] != 'active' or smoke['stopped']['phase'] != 'stopped'
+                    or smoke['build']['sourceCommit'] != result['sourceCommit'] or smoke['build']['sourceDirty'] is not False):
+                raise RuntimeError('Incomplete supervisor smoke on actual staged WinBridge source')
         scope = result.get('updatePreparation', {})
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
         archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))

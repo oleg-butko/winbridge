@@ -55,9 +55,10 @@ Config по умолчанию — `winbridge-update.local.json` рядом с e
 bytes/SHA; распаковки и записи нет. Поддерживаются обычные Stored/Deflate ZIP.
 `journal init` создаёт только отдельную БД `runtime\update-state\updates.sqlite`
 и installation metadata; worker/config/source/exe не меняются. Повтор сохраняет ID.
-Текущая updater schema 2: при наличии schema 1 init мигрирует её только при свободном
+Текущая updater schema 3: при наличии schema 1/2 init мигрирует её только при свободном
 owner lock, предварительно создавая проверенную согласованную SQLite backup.
-Schema 1 остаётся доступной через readonly status без миграции.
+Schema 1/2 остаются доступными через readonly status без миграции;
+source-status/source-inspect читают schema 2 без обновления.
 `journal status [UPDATE_ID]` читает согласованный record, owner epoch и последнюю
 sequence, не захватывая владение и не создавая отсутствующую БД. Это диагностика
 будущего supervisor; сейчас пользователю не требуется выполнять команды вручную.
@@ -74,6 +75,17 @@ sequence, не захватывая владение и не создавая о
 файлов с baseline/target и пути preimages/held. После сбоя повторное применение
 запрещено. Даже совпавший target без квитанции не означает успешное обновление.
 Не удалять staging и не снимать worker startup guard автоматически.
+
+[Supervisor](../plans/worker-self-update/supervisor.md) имеет отдельный diagnostic CLI:
+
+```powershell
+.\target\debug\winbridge-update.exe --config K:\path\to\winbridge-update.local.json journal supervisor-status <UPDATE_ID_OR_LAUNCH_ID>
+```
+
+Он показывает согласованный parent/launch snapshot, epoch и отдельное наблюдение
+процесса. Active supervisor означает владение инфраструктурой; source/install в этом
+блоке отключены. Запрос запуска через worker/CLI/MCP ещё не подключён, вручную
+вызывать внутренний supervisor mode не требуется. Native gate ожидается.
 
 ## Сборка кандидата без остановки worker
 

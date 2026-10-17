@@ -369,3 +369,93 @@ pub struct SourceTransactionStatus {
     pub has_more: bool,
     pub observed_at_ms: u64,
 }
+
+/// Exact OS identity; birth is a string to preserve Windows FILETIME in JS.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SupervisorProcess {
+    pub process_id: u32,
+    pub birth: String,
+    pub host_id: String,
+    pub session_id: u32,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SupervisorPhase {
+    Intent,
+    Spawned,
+    Ready,
+    Active,
+    Stopped,
+    Indeterminate,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SupervisorSpec {
+    pub launch_id: String,
+    pub update_id: String,
+    pub parent: SupervisorProcess,
+    pub parent_owner_id: String,
+    pub parent_epoch: u64,
+    pub token_sha256: String,
+    pub config_path: String,
+    pub config_sha256: String,
+    pub runtime_directory: String,
+    pub image_path: String,
+    pub image_sha256: String,
+    pub image_identity: String,
+    pub excluded_domain: Option<String>,
+    pub endpoint: String,
+    pub accepted_at_ms: u64,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SupervisorRecord {
+    pub schema_version: u16,
+    pub spec: SupervisorSpec,
+    pub phase: SupervisorPhase,
+    pub revision: u64,
+    pub process: Option<SupervisorProcess>,
+    pub owner_id: Option<String>,
+    pub owner_epoch: Option<u64>,
+    pub updated_at_ms: u64,
+    pub reason: String,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SupervisorAction {
+    Observe,
+    Handoff,
+    Stop,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SupervisorRequest {
+    pub contract_version: u16,
+    pub launch_id: String,
+    pub expected_revision: u64,
+    pub action: SupervisorAction,
+    pub token: String,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SupervisorResponse {
+    pub contract_version: u16,
+    pub launch_id: String,
+    pub record: Option<SupervisorRecord>,
+    pub error: Option<String>,
+}

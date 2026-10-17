@@ -1027,8 +1027,10 @@ name = "winbridge-transport"
 version = "0.1.0"
 dependencies = [
  "futures-util",
+ "libc",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
@@ -1048,10 +1050,12 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tokio",
  "uuid",
  "winbridge-core",
  "winbridge-platform",
  "winbridge-protocol",
+ "winbridge-transport",
  "winbridge-worker",
  "winbridge-workspace-sync",
  "windows-sys",

@@ -1,3 +1,22 @@
+## Самообновление U1: supervisor handoff — 2026-10-17
+
+[Контракт и ограничения](plans/worker-self-update/supervisor.md).
+Trusted launcher сохраняет intent/PID receipt, child получает следующий updater epoch,
+открывает отдельный SID/peer-bound IPC и ждёт handoff. Active фиксируется до ACK;
+parent drop/exit его не отменяет. До handoff child ограничен тайм-аутом/no-effects,
+после — TTL takeover отсутствует. Unknown launch не повторяется. Stop + parent failure
+атомарны; source-effect admission требует Active/тот же owner. Source/install/shutdown
+команд нет. Worker launcher/source-control IPC integration ещё впереди.
+Updater schema 3 с consistent v1/v2 migration backup; source schema-2 status читается
+readonly без миграции. Worker schema 15 не менялась. Current worker installed 1f3aa9f
+healthy/idle, source/runtime не обновлялись. Native gate ожидается.
+413 workspace tests passed, Clippy и Windows/tests cross-check прошли; final updater
+и contracts/UI checks прошли. Удалены 164 устаревших Debian test executables,
+10,669,626,464 bytes воспроизводимого cache; free после очистки 28,944,531,456 bytes.
+Running controller/main binaries и runtime/config/journals/reports сохранены.
+Наследуемый внешний Job не обходится: диагностический externalJobObserved не даёт
+права production install; policy/проверка окружения обязательны до U4. A4 отложен.
+
 ## Самообновление U1: source transaction — 2026-10-17
 
 [Контракт и восстановление](plans/worker-self-update/source-transaction.md).

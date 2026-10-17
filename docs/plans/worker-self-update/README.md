@@ -97,8 +97,10 @@ U0 не применяет source plan, не выключает процессы
   intent/receipt, no-clobber moves, full manifest verification и readonly crash inspection.
   405 local tests и [65 native Windows tests / полный candidate build](windows-source-transaction-gate-2026-10-17.md)
   passed. Source lease/SourceApplying обязательны до записи; automatic replay/rollback отсутствуют.
-- [ ] Guarded infrastructure spawn вне managed Jobs. Проверить Job membership;
-  не включать breakaway для обычных tasks.
+- [ ] [Supervisor handoff](supervisor.md): guarded launcher, durable receipts и
+  независимый actor/IPC реализованы; 413 local tests, native gate ожидается.
+  Breakaway отсутствует, Job exclusion проверяется относительно worker domain;
+  production worker adapter и проверка внешнего окружения ещё впереди.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

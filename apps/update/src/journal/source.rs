@@ -509,7 +509,7 @@ impl UpdateJournal {
         }
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
-        if schema(&c)? != UPDATE_SCHEMA_VERSION {
+        if schema(&c)? < 2 {
             return Err(fail(JournalErrorCode::UnsupportedSchema,"Source status needs updater schema 2; inspect journal, migrate only with a free owner lock"));
         }
         let tx = c.transaction().map_err(storage)?;
