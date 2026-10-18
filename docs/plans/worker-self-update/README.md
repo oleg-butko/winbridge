@@ -108,9 +108,10 @@ U0 не применяет source plan, не выключает процессы
 - [x] [Fresh SourceControl](fresh-source-control.md): readonly process-authenticated
   Info и source scan без общего mutex реализованы; 26 targeted regressions и
   [82 native tests / candidate build](windows-fresh-source-gate-2026-10-17.md) прошли. Автоматический source/build driver пока не подключён.
-- [ ] [Managed compiler](compiler-driver.md) реализован как trusted library:
+- [x] [Managed compiler](compiler-driver.md) реализован как trusted library:
   intent/PID/Job/resume, output и verified cleanup; updater schema 4. 429 workspace
-  tests и 10 итоговых compiler tests passed, native gate ожидается. Source/build
+  tests, 10 итоговых compiler tests и
+  [95 native tests / candidate build](windows-compiler-gate-2026-10-18.md) passed. Source/build
   orchestration и coordinated artifact/abort driver пока не подключены.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.

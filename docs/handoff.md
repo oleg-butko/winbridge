@@ -13,7 +13,13 @@ source lease/parent Building сохраняются до координиров�
 429 workspace tests passed; после итоговых уточнений 10 compiler tests passed.
 Итоговые core/platform checks, Clippy, Windows/tests cross-check, fmt/contracts,
 typecheck/build:ui/scaffold и Python/PowerShell syntax прошли.
-Native gate schema 4 ожидается. Installed worker не изменяется; bootstrap пока
+[Native gate clean 8990bd7](plans/worker-self-update/windows-compiler-gate-2026-10-18.md)
+passed: 95 tests/13 groups, 22 checked artifacts и полный candidate build.
+Run `20261018-034803-ef13a3c8`, task `5d1982b9-6537-44d9-824f-d0ec70e92523`
+succeeded/0; installed worker healthy/idle, build/generation прежние.
+Windows free before/after 29,884,207,104 / 27,965,808,640 bytes; Debian 36,538,798,080.
+UI-окон не было; desktop можно закрыть, worker оставить. Следующий platform block
+закрывает CreateProcess → Job assignment gap. Installed worker не изменяется; bootstrap пока
 не требуется. После этого блока — source/build actor driver, artifact verification,
 abort/release, exact shutdown и U2–U3. A4 остаётся отложенным.
 

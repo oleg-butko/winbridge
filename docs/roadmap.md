@@ -33,7 +33,8 @@ process-authenticated Info и source scan без общего mutex; 26 targeted
 passed; [82 native tests / candidate build](plans/worker-self-update/windows-fresh-source-gate-2026-10-17.md) прошли. Следом compiler ownership и exact shutdown.
 [Managed compiler](plans/worker-self-update/compiler-driver.md) реализован как trusted
 library: intent/PID/Job/resume, output и cleanup, updater schema 4. 429 workspace tests
-и 10 итоговых compiler tests passed; native gate ожидается.
+и 10 итоговых compiler tests passed;
+[95 native tests / candidate build](plans/worker-self-update/windows-compiler-gate-2026-10-18.md) прошли.
 Source/build/install orchestration и публичное включение не готовы; U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему

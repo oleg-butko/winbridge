@@ -75,7 +75,9 @@ build выполняется отдельно прежним build-only сцен
 429 workspace tests прошли; после итогового ревью прошли 10 целевых compiler checks.
 Ревью добавило проверку всей bounded receipt history и отдельный attempt ID;
 Clippy, Windows/tests cross-check, fmt/contracts, typecheck/build:ui/scaffold
-и Python/PowerShell syntax passed; native gate schema 4 ещё не пройден. Далее:
+и Python/PowerShell syntax passed. [Native gate schema 4](windows-compiler-gate-2026-10-18.md)
+прошёл: 95 tests/13 groups, 22 artifacts и полный candidate build; installed worker
+не изменён. Далее:
 автоматическое source/build выполнение в supervisor, artifact verification и
 координированный abort/release, exact shutdown, затем U2–U3 и один bootstrap.
 

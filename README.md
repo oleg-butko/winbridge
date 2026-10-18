@@ -82,7 +82,8 @@ commands, exe replacement и shutdown ещё не подключены.
 ещё не подключены.
 [Managed compiler](docs/plans/worker-self-update/compiler-driver.md) добавляет
 trusted library intent/PID/Job/resume и verified cleanup, updater schema 4.
-429 local tests и 10 итоговых compiler tests passed; native gate ожидается.
+429 local tests, 10 итоговых compiler tests и
+[95 native tests / полный candidate build](docs/plans/worker-self-update/windows-compiler-gate-2026-10-18.md) passed.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.
