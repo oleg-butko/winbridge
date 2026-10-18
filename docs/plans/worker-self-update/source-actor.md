@@ -56,7 +56,9 @@ Test cleanup освобождает только проверенную fixture 
 это не production abort API. Source crash/admission и compiler tests включаются в
 общий rollup. 438 workspace tests, Linux/Windows Clippy и tests cross-check passed.
 Contracts generation/check, typecheck/build:ui/scaffold, 8 export tests, fmt и
-Python/PowerShell syntax passed. Native rollup впереди.
+Python/PowerShell syntax passed. [Native rollup clean fc1965c](windows-source-actor-gate-2026-10-18.md)
+passed: 109 tests/14 groups, 25 artifacts и полный candidate build. Installed
+runtime/source/config прежние.
 
 Следом — managed compiler orchestration, artifact verification и coordinated
 abort/release; затем exact shutdown, U2 cutover и U3 пользовательский companion.

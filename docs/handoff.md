@@ -14,8 +14,12 @@ Config schema 2 задаёт sourcePackagesDirectory; schema 1 сохранен�
 включают responsive mailbox, duplicate/Stop busy, missing policy и corrupt ZIP.
 В fixture исправлены Unix socket path и delay без удержания Store mutex. Test gate
 только cfg(test), production env bypass нет. Contracts generation/check, typecheck/build:ui/scaffold, 8 export tests, fmt и
-Python/PowerShell syntax passed; native rollup впереди. Он объединяет source admission и
-усиленный atomic root-exit test. Installed worker прежний; bootstrap пока не нужен.
+Python/PowerShell syntax passed. [Native rollup clean fc1965c](plans/worker-self-update/windows-source-actor-gate-2026-10-18.md)
+passed: 109 tests/14 groups, 25 artifacts и полный candidate build, включая source
+admission и exact atomic root-exit. Run `20261018-043430-4fccfd01`, task
+`49cc5f0d-2757-4e4e-aa7b-078d32cfab2d` succeeded/0. Installed healthy/idle.
+Windows free before/after 25,554,857,984 / 26,192,838,656 bytes; Debian 33,531,867,136.
+UI-окон не было; desktop можно закрыть, worker оставить. Installed worker прежний; bootstrap пока не нужен.
 Следом compiler/artifact/abort driver, exact shutdown и U2–U3. A4 отложен.
 
 ## Самообновление U1: source admission перед dispatch — 2026-10-18

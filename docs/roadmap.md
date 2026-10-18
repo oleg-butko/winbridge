@@ -41,10 +41,10 @@ CreateProcess/Job gap; [102 native tests / candidate build](plans/worker-self-up
 публичное включение не готовы; U1 целиком открыт.
 [Source admission](plans/worker-self-update/source-admission.md) разделяет durable
 Applying и одноразовый file driver permit; 26 integration tests и Windows cross-check
-passed, native rollup впереди.
+passed; [109 native tests / candidate build](plans/worker-self-update/windows-source-actor-gate-2026-10-18.md) прошли.
 [Source preparation actor](plans/worker-self-update/source-actor.md) связывает ZIP,
 source grant и source driver через internal v2; 438 workspace tests и Linux/Windows
-Clippy passed, native rollup впереди. Build/install и public capability ещё отключены.
+Clippy passed; [109 native tests / candidate build](plans/worker-self-update/windows-source-actor-gate-2026-10-18.md) прошли. Build/install и public capability ещё отключены.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

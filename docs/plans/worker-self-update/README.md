@@ -116,12 +116,13 @@ U0 не применяет source plan, не выключает процессы
 - [x] [Atomic executable adapter](atomic-executable.md) для compiler: Job назначается
   при CreateProcess, bounded handle inheritance и CRT argv;
   [102 native tests / candidate build](windows-atomic-launch-gate-2026-10-18.md) passed.
-- [ ] [Source admission перед dispatch](source-admission.md): one-use fresh commit
+- [x] [Source admission перед dispatch](source-admission.md): one-use fresh commit
   permit, повтор только observe; 26 integration tests и Windows cross-check passed,
-  native rollup впереди.
-- [ ] [Source preparation actor](source-actor.md): ZIP/grant/apply driver и
+  [109 native tests / candidate build](windows-source-actor-gate-2026-10-18.md) passed.
+- [x] [Source preparation actor](source-actor.md): ZIP/grant/apply driver и
   отзывчивый internal v2 mailbox; 438 workspace tests и Linux/Windows Clippy passed,
-  native rollup впереди. Compiler/artifacts/abort не подключены.
+  [109 native tests / candidate build](windows-source-actor-gate-2026-10-18.md) passed.
+  Compiler/artifacts/abort не подключены.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

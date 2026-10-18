@@ -31,7 +31,8 @@ passed. [Atomic executable adapter](plans/worker-self-update/atomic-executable.m
 ZIP/source grant/apply на одном blocking driver с тем же owner epoch; mailbox
 читает consistent view независимо от I/O. Internal protocol 2 и config schema 2
 не меняют persisted journal schemas 4/15 или legacy RPC. 438 local workspace tests
-и Linux/Windows Clippy passed; native rollup впереди. Compiler orchestration и
+и Linux/Windows Clippy passed;
+[109 native tests / candidate build](plans/worker-self-update/windows-source-actor-gate-2026-10-18.md) прошли. Compiler orchestration и
 coordinated abort/release остаются следующими блоками.
 
 SourceApplying сохраняется до изменений; per-file intent → no-clobber move → hash/

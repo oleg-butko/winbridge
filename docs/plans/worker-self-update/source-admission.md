@@ -27,10 +27,11 @@ ACK actor должен означать принятие работы, а не �
 26 source/compiler integration tests passed, включая три новые проверки:
 commit-before-dispatch, потерю permit при owner restart и два конкурирующих
 admissions с единственным свежим разрешением. Windows Clippy/tests cross-check
-passed. Следующий native rollup проверит эти cases и дополнительно exact root exit
-в atomic CreateProcess owner-crash test, помимо пустоты Job и отсутствия user effects.
+passed. [Native rollup clean fc1965c](windows-source-actor-gate-2026-10-18.md)
+прошёл: 109 tests/14 groups, включая эти cases и exact root exit в atomic owner-crash
+test, помимо Empty Job и отсутствия user effects.
 
 Схемы updater/worker прежние: 4/15; новые protocol DTO и persisted fields не нужны.
 [Source actor](source-actor.md) добавляет mailbox и source orchestration; его native
-rollup впереди. Compiler/artifact/abort и exact shutdown ещё не реализованы. U1 целиком открыт; установленный
+rollup прошёл. Compiler/artifact/abort и exact shutdown ещё не реализованы. U1 целиком открыт; установленный
 worker не обновляется, bootstrap пока не нужен.
