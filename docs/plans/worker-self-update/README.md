@@ -179,8 +179,9 @@ U0 не применяет source plan, не выключает процессы
 остаётся заблокирован до U1–U3 gates. Стоимость основной части — lifecycle/fault
 recovery, а не копирование файлов. Новая actor library для U0–U4 не требуется.
 
-[Compiler actor и безопасная отмена до установки](compiler-actor-abort.md) — U1 internal v3/v4, config 3, journal 5; native gate ожидается.
+[Compiler actor и безопасная отмена до установки](compiler-actor-abort.md) — U1 internal v3/v4, config 3, journal 5; native gate пройден.
 
-[Bounded compiler output](compiler-output.md): новый trusted readonly API; native проверка вместе с повтором compiler actor / PowerShell path fix.
+[Bounded compiler output](compiler-output.md): trusted readonly API; native проверка пройдена вместе с compiler actor и PowerShell path fix.
 
-[Artifact identity и ограниченные probes](artifact-identity.md): readonly query четырёх exe и compiler-tree проверка; native gate ожидается, runtime installation не включена.
+[Artifact identity и ограниченные probes](artifact-identity.md): readonly query четырёх exe и compiler-tree проверка;
+[133 native tests / полный candidate build](windows-artifact-identity-gate-2026-10-18.md) пройдены, runtime installation не включена.

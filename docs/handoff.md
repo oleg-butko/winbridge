@@ -1,3 +1,14 @@
+## U1: compiler/artifact native gate пройден — 2026-10-18
+
+[Gate](plans/worker-self-update/windows-artifact-identity-gate-2026-10-18.md): clean
+a91b904, run `20261018-103821-c88c4d20`, Task
+`5c1e0a9b-c20c-4642-b596-653eebc1468d` succeeded/0. 133 native tests / 15 groups,
+полный Rust/native desktop build и четыре bounded role queries passed. 28 ready
+files проверены по bytes/SHA. Исправление staging до probes подтвердилось;
+hard-link guard сохранён. Installed worker прежний/idle 0, errors нет, coverage
+complete. Desktop не нужен, worker оставить. Следом durable compiler report /
+artifact-set binding и exact shutdown; U1/public install ещё не готовы.
+
 ## U1: review и native artifact staging — 2026-10-18
 
 Native clean 06211fe run `20261018-101634-46ac2235`, Task

@@ -91,10 +91,11 @@ internal v2 mailbox и ZIP/grant/apply; 438 workspace tests и Linux/Windows Cli
 и [109 native tests / candidate build](docs/plans/worker-self-update/windows-source-actor-gate-2026-10-18.md)
 passed. [Compiler actor и coordinated abort](docs/plans/worker-self-update/compiler-actor-abort.md)
 добавляют internal v3/v4, config 3 и updater schema 5: intent до ACK, responsive
-status и release только после source/Job/output proof. 453 workspace tests и
-PowerShell fixture passed; native gate впереди. Добавлен [bounded compiler output](docs/plans/worker-self-update/compiler-output.md),
-включая File ID cursor и проверку terminal SHA. Первый Windows compiler actor run
-выявил PowerShell verbatim-path error; resolver исправлен, повтор впереди.
+status и release только после source/Job/output proof. Добавлен [bounded compiler output](docs/plans/worker-self-update/compiler-output.md),
+включая File ID cursor и проверку terminal SHA, и [artifact identity](docs/plans/worker-self-update/artifact-identity.md).
+[133 native tests / полная сборка / четыре exe queries](docs/plans/worker-self-update/windows-artifact-identity-gate-2026-10-18.md)
+прошли; PowerShell paths и независимые payload copies проверены. Durable candidate
+receipt, exact shutdown и activation остаются впереди.
 Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

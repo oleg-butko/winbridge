@@ -47,7 +47,11 @@ source grant и source driver через internal v2; 438 workspace tests и Lin
 Clippy passed; [109 native tests / candidate build](plans/worker-self-update/windows-source-actor-gate-2026-10-18.md) прошли. Build/install и public capability ещё отключены.
 [Compiler admission](plans/worker-self-update/compiler-admission.md) добавляет fresh
 Intent/one-use permit до dispatch; 31 integration tests и Linux/Windows Clippy passed,
-native rollup впереди.
+native rollup пройден.
+[Compiler actor/abort/output/artifact identity](plans/worker-self-update/windows-artifact-identity-gate-2026-10-18.md)
+прошли 133 native tests / 15 groups, полный Rust/desktop build и четыре exe role
+queries. Далее durable compiler-report/artifact-set binding и exact shutdown;
+U1 целиком и public install ещё открыты.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.
