@@ -252,6 +252,7 @@ def main():
         archive_has_artifact_actor = archive_has_worker_control and b'async fn artifact_actor_records_real_fixture_queries' in archive.read('winbridge/apps/worker/src/update_control.rs')
         archive_has_finalization_wiring = 'winbridge/scripts/test-update-candidate-finalization.ps1' in archive.namelist()
         archive_has_installed_set = 'winbridge/apps/update/src/installed_set.rs' in archive.namelist()
+        archive_has_runtime_startup = 'winbridge/scripts/test-update-runtime-startup.ps1' in archive.namelist()
         archive_has_abort_snapshot = b'readonly_abort_snapshot_never_combines_header_and_receipts' in archive.read('winbridge/apps/update/src/journal/abort.rs') if archive_has_compiler_actor else False
         archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
@@ -752,6 +753,23 @@ exit $nativeExit
                     or not all(wiring.get(k) is True for k in ['actualFinalStatement','helperBound','malformedRejected','reportPreserved','metadataMocked'])
                     or any(wiring.get(k) is not False for k in ['runtimeApplied','windowsOpened'])):
                 raise RuntimeError('Candidate finalization wiring regression missing')
+        if archive_has_runtime_startup:
+            expected += ['update-worker-runtime-startup']
+            startup = json.loads((report / 'worker-runtime-startup-proof.json').read_text(encoding='utf-8-sig'))
+            identity = startup['identity']
+            descriptor = next(x for x in proof['artifactIdentities'] if x['name'] == 'winbridge-worker.exe')['query']['descriptor']
+            image = next(x for x in proof['artifactIdentities'] if x['name'] == 'winbridge-worker.exe')['query']['image']
+            if (startup.get('kind') != 'worker_runtime_startup_proof' or startup.get('platform') != 'windows'
+                    or not all(startup.get(k) is True for k in ['passed', 'actualWorkerMain', 'knownFixtureManifest', 'invalidSetRejectedBeforeJournal', 'descriptorFabricationRejected', 'foreignConfigRejected'])
+                    or any(startup.get(k) is not False for k in ['workerJournalOpened', 'updaterJournalChanged', 'runtimeApplied', 'candidateVerified', 'windowsOpened'])
+                    or identity['descriptor'] != descriptor or identity['image']['sha256'] != image['sha256']
+                    or identity['image']['bytes'] != image['bytes'] or identity['kind'] != 'loaded_worker_identity'
+                    or identity['process']['processId'] <= 0):
+                raise RuntimeError('Actual worker startup identity/barrier proof incomplete')
+            log = (report / 'update-worker-runtime-startup.log').read_text(encoding='utf-8-sig')
+            for name in ['verify_runtime_without_manifest_never_bootstraps_or_opens_a_journal', 'known_runtime_rejects_corrupt_foreign_and_changed_set_before_worker_journal', 'correct_file_hashes_cannot_bind_a_fabricated_loaded_worker_descriptor']:
+                if name + ' ... ok' not in log:
+                    raise RuntimeError('Worker startup regression missing: ' + name)
         if archive_has_installed_set or archive_has_abort_snapshot:
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             required = []

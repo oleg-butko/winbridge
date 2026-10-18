@@ -63,6 +63,34 @@ fn compiler_process_helper() {
         .find(|p| p[0] == "--skip")
         .map(|p| p[1].as_str())
         .unwrap();
+    #[cfg(unix)]
+    if let Some(journal) = args.iter().find_map(|a| a.strip_prefix("report-journal=")) {
+        let update = args
+            .iter()
+            .find_map(|a| a.strip_prefix("report-update="))
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        loop {
+            let record = UpdateJournal::inspect_build(Path::new(journal), update).unwrap();
+            if record.phase == UpdateBuildPhase::Running {
+                break;
+            }
+            assert!(
+                matches!(
+                    record.phase,
+                    UpdateBuildPhase::Intent
+                        | UpdateBuildPhase::Spawned
+                        | UpdateBuildPhase::ResumeGranted
+                ),
+                "Unexpected fixture parent state: {record:?}"
+            );
+            assert!(
+                std::time::Instant::now() < deadline,
+                "Fixture never received Running receipt"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
     let mut counter = fs::OpenOptions::new()
         .create(true)
         .append(true)

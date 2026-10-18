@@ -14,6 +14,19 @@ fn report_command(f: &mut Fixture, mode: &str) -> (ResolvedCommand, PathBuf) {
         .join("candidate/candidate-report.json");
     cmd.arguments
         .extend(["--skip".into(), format!("report-file={}", path.display())]);
+    // The Unix development adapter cannot suspend a new child. A tiny helper
+    // could exit before the parent captures its PID. Wait for the real durable
+    // Running receipt, rather than hiding that scheduling race with a sleep.
+    #[cfg(unix)]
+    cmd.arguments.extend([
+        "--skip".into(),
+        format!(
+            "report-journal={}",
+            f.config.runtime_directory.join("update-state").display()
+        ),
+        "--skip".into(),
+        format!("report-update={}", f.id),
+    ]);
     (cmd, path)
 }
 fn run(f: &mut Fixture, cmd: &ResolvedCommand) -> Result<UpdateBuildRecord, String> {
@@ -258,9 +271,11 @@ fn candidate_ready() -> (tempfile::TempDir, Fixture, ResolvedCommand) {
     let tmp = temporary();
     let mut f = ready(tmp.path());
     let (cmd, _) = report_command(&mut f, "synthetic-candidate");
+    let done = run(&mut f, &cmd).unwrap();
     assert_eq!(
-        run(&mut f, &cmd).unwrap().outcome,
-        Some(UpdateBuildOutcome::Succeeded)
+        done.outcome,
+        Some(UpdateBuildOutcome::Succeeded),
+        "{done:?}"
     );
     (tmp, f, cmd)
 }

@@ -137,15 +137,15 @@ U0 не применяет source plan, не выключает процессы
   atomic compiler completion/report receipt и readonly exact-byte verification;
   [139 native tests / полный build](windows-report-binding-gate-2026-10-18.md)
   passed; public install ещё не включён.
-- [ ] [Exact artifact set / atomic receipt + FSM](candidate-artifacts.md): updater
-  schema 7, 477 workspace tests и Linux/Windows Clippy passed; native gate впереди.
-  Source/build/receipt guards и [mailbox v5](artifact-actor.md) реализованы;
-  native 149 tests/full build passed, final script variable исправлена после
-  failed overall gate; combined rollup впереди.
+- [x] [Exact artifact set / atomic receipt + FSM](candidate-artifacts.md) и
+  [mailbox v5](artifact-actor.md): updater schema 7;
+  [156 native tests / full build/four queries/exact-file proof](windows-artifact-actor-gate-2026-10-18.md)
+  passed. Artifact receipt не заменяет worker health/approval.
 - [ ] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
-  [Known installed-set reader](installed-set.md) реализован; publication,
-  early startup/control и baseline acceptance остаются впереди. [Abort snapshot](abort-read-snapshot.md)
-  исправлен; 482 local tests passed, native rollup впереди.
+  [Known installed-set reader](installed-set.md) и abort snapshot прошли тот же
+  native gate. [Early startup guard](runtime-startup.md) подключён; три actual-main
+  negative tests passed locally, положительный native gate впереди. Publication,
+  authenticated live identity и durable baseline acceptance остаются впереди.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

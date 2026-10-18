@@ -5,8 +5,16 @@
 ## Подготовка самообновления — 2026-10-17
 
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
-`apps/update` владеет отдельным updater journal schema 4 (WBUP), installation scope,
+`apps/update` владеет отдельным updater journal schema 7 (WBUP), installation scope,
 OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
+[Artifact actor v5 / atomic artifact receipt](plans/worker-self-update/artifact-actor.md),
+known-set reader и полный candidate build прошли
+[156 native tests / 16 groups](plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md).
+[Ранняя проверка runtime](plans/worker-self-update/runtime-startup.md) подключена
+в normal worker Main: known manifest → четыре pins → собственный loaded descriptor
+до worker journal, без updater writer/migration. Positive actual-main native gate
+ещё впереди. Public update/install, durable old-runtime acceptance и activation
+не включены; последующие описания отдельных blocks сохраняют их исторические gates.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)

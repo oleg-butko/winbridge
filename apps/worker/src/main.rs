@@ -30,7 +30,7 @@ async fn run() -> Result<(), String> {
         return Ok(());
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH prepare-recovery NEW_DIRECTORY (archive/new pair; stays blocked)\n  --config PATH activate-recovery (prepared target config; physical check required)\n  --config PATH info | list\n  --config PATH operations REQUEST.json (readonly; pinned journal scope)\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH verify-runtime (read-only; no journal/scheduler)\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH prepare-recovery NEW_DIRECTORY (archive/new pair; stays blocked)\n  --config PATH activate-recovery (prepared target config; physical check required)\n  --config PATH info | list\n  --config PATH operations REQUEST.json (readonly; pinned journal scope)\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {
@@ -123,7 +123,32 @@ async fn run() -> Result<(), String> {
             Ok(())
         }
         [name] if name == "serve" => {
-            winbridge_worker::serve(winbridge_worker::Worker::open_file(Path::new(&args[1]))?).await
+            // Known-runtime validation precedes opening/migrating the worker journal.
+            let guard =
+                winbridge_worker::runtime_guard::prepare_runtime_guard(Path::new(&args[1]))?;
+            let worker = winbridge_worker::Worker::open_file(Path::new(&args[1]))?;
+            if let Some(guard) = guard {
+                worker.attach_runtime_guard(guard)?;
+            }
+            winbridge_worker::serve(worker).await
+        }
+        [name] if name == "verify-runtime" => {
+            let guard =
+                winbridge_worker::runtime_guard::prepare_runtime_guard(Path::new(&args[1]))?
+                    .ok_or(
+                        "Bootstrap required: no known installed-set manifest; no journal opened",
+                    )?;
+            guard.revalidate()?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "schemaVersion": 1, "kind": "worker_runtime_verification", "readOnly": true,
+                    "identity": guard.identity(), "workerJournalOpened": false,
+                    "schedulerStarted": false, "updateAuthorityEnabled": false
+                }))
+                .map_err(|e| e.to_string())?
+            );
+            Ok(())
         }
         [name] if name == "serve-recovery" => {
             eprintln!("Read-only journal recovery: saved statuses are historical; execution and all changes are blocked. A persistent marker also blocks normal serve after restart.");

@@ -1,6 +1,6 @@
 # U1: известный набор установленного runtime
 
-2026-10-18. Trusted readonly library, без publication/install/startup wiring.
+2026-10-18. Trusted readonly library, без publication/install.
 
 `winbridge-installed-set.json`, format 1, описывает set ID, installation ID,
 scope и четыре фиксированных exe: размеры, SHA-256 и verified artifact descriptors.
@@ -21,8 +21,9 @@ Windows semantics запрета записи/удаления.
 с worker entry, проверяет executable path/File ID/bytes и связывает с PID/birth/
 host/session. Этот constructor предназначен для раннего startup worker с guard
 на всю жизнь процесса. Произвольный caller descriptor не принимается. Сейчас
-normal worker Main его ещё не вызывает; authenticated live-worker control contract
-и positive actual-main gate остаются следующей задачей. Observation/DTO сами
+normal worker Main подключён следующим [startup guard](runtime-startup.md);
+authenticated live-worker control contract и positive actual-main native gate
+остаются следующей задачей. Observation/DTO сами
 по себе не являются разрешением остановки, замены или activation.
 
 Source commit/manifest в installed set относятся к binaries. Их нельзя безусловно

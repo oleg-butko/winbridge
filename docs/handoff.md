@@ -1,3 +1,19 @@
+## U1: ранний startup guard — 2026-10-18
+
+[Контракт](plans/worker-self-update/runtime-startup.md): normal serve с known
+manifest проверяет runtime/installation/config и loaded worker до рабочего journal;
+пять pins удерживаются всю жизнь worker. Readonly verify-runtime не запускает
+scheduler/network/update authority. Три actual-main negative tests passed locally;
+positive actual Windows main проверяется отдельным approved script на четырёх
+настоящих candidate exe. Legacy без manifest остаётся без новой update authority.
+Worker/updater schemas и wire API не меняются. 485 workspace tests, Linux/Windows
+Clippy, contracts/fmt/scaffold, export/runner tests и PowerShell syntax passed.
+В общем local run один быстрый Unix report fixture дал unknown outcome; отдельный
+повтор и 30 диагностических repeats прошли. Ревью выявило возможный exit до PID
+binding; report helper теперь ждёт durable Running вместо timing sleep. Production
+unknown/no-replay поведение не ослаблено, полный повтор passed. Positive native
+gate впереди. Bootstrap/public install ещё не готовы; installed worker здоров.
+
 ## U1: artifact actor native gate пройден — 2026-10-18
 
 [Gate](plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md): clean

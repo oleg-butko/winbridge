@@ -75,6 +75,10 @@ clean 48b8d21 пройден: 156 tests / 16 groups, full build/four actual quer
 exact-file inspection, artifact actor и old-reader refusal. 36 ready files
 проверены. Native blocks выше завершены; весь U1 остаётся открытым. Следом
 normal worker startup/live identity и baseline до SourceApply, затем health/shutdown.
+[Early startup guard](plans/worker-self-update/runtime-startup.md) подключён
+в normal Main до journal; readonly verify-runtime и actual-main negative tests
+добавлены. Positive actual Windows startup gate впереди. Publication/live identity/
+baseline acceptance и весь U1 остаются открытыми.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

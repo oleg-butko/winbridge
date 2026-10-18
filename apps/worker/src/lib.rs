@@ -15,6 +15,7 @@ pub use recovery_pair::{
     activate_recovery, prepare_recovery, PreparationStage, RecoveryActivation, RecoveryPreparation,
 };
 mod retention;
+pub mod runtime_guard;
 mod settings;
 pub mod store;
 mod update;
@@ -111,6 +112,7 @@ impl Drop for ProcessOwner {
     }
 }
 pub struct Worker {
+    runtime_guard: Mutex<Option<Arc<runtime_guard::RuntimeGuard>>>,
     config_path: Mutex<Option<std::path::PathBuf>>,
     maintenance: Mutex<(u64, Option<String>)>,
     maintenance_running: AtomicBool,
@@ -249,6 +251,7 @@ impl Worker {
             }
         });
         let worker = Arc::new(Self {
+            runtime_guard: Mutex::new(None),
             config_path: Mutex::new(config_path),
             maintenance: Mutex::new((0, None)),
             maintenance_running: AtomicBool::new(false),

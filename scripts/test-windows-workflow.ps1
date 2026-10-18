@@ -531,7 +531,8 @@ try {
             @{name='update-worker-control';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-platform-atomic-executable';arguments=@('test','-p','winbridge-platform','--lib','windows_atomic::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-compiler-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::compiler_actor_commits_before_dispatch_stays_responsive_and_aborts_cleanly','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')},
-            @{name='update-artifact-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::artifact_actor_','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
+            @{name='update-artifact-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::artifact_actor_','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')},
+            @{name='update-worker-runtime-startup';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_runtime_startup','--locked','--offline','--','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {
@@ -608,6 +609,9 @@ try {
         [IO.File]::Copy((Join-Path $candidateDirectory 'candidate-files-command.json'),(Join-Path $ReportDirectory 'candidate-files-command.json'),$false)
         $fileProof = Get-Content -LiteralPath (Join-Path $ReportDirectory 'candidate-files-proof.json') -Raw | ConvertFrom-Json
         if ($fileProof.kind -ne 'candidate_file_inspection' -or $fileProof.readOnly -ne $true -or $fileProof.journalBound -ne $false -or $fileProof.runtimeApplied -or $fileProof.candidateVerified -or $fileProof.source.manifestSha256 -cne $sourceManifestSha -or $fileProof.artifacts.Count -ne 4 -or $fileProof.report.sha256 -cne (Get-FileHash -LiteralPath (Join-Path $ReportDirectory 'update-candidate-proof.json') -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Actual candidate exact-file proof incomplete' }
+        $startupRoot = Join-Path (Split-Path $source -Parent) 'runtime-startup-test'
+        & (Join-Path $source 'scripts/test-update-runtime-startup.ps1') -SourceDirectory $source -CandidateDirectory $candidateDirectory -ScratchRoot $startupRoot -ReportPath (Join-Path $ReportDirectory 'worker-runtime-startup-proof.json')
+        if (-not $?) { throw 'Actual worker startup barrier failed' }
         $report.updatePreparation = @{passed=$true;candidateDirectory=$candidateDirectory;manifestSha256=$sourceManifestSha;runtimeApplied=$false;windowsOpened=$false}
     }
     if ($ProjectsOnly) {
