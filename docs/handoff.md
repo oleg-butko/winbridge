@@ -1,3 +1,17 @@
+## Самообновление U1: atomic compiler launch — 2026-10-18
+
+[Контракт и ограничения](plans/worker-self-update/atomic-executable.md).
+Trusted compiler использует отдельный stable Win32 adapter: suspended CreateProcess
+с ordered JOB_LIST, explicit stdio HANDLE_LIST, owned process/thread handles и CRT
+argv. Внешние Jobs сохраняются; breakaway и post-create fallback отсутствуют.
+Обычные worker PATH/.bat/.cmd команды сохраняют прежний adapter. Windows-only tests
+проверяют crash до PID receipt и отсутствие user effects/orphan; schema 4/15 прежние.
+431 workspace tests, Windows Clippy/tests cross-check, fmt и script syntax passed.
+После итогового path/cleanup ревью 10 compiler regressions passed; native gate впереди.
+Installed runtime прежний;
+bootstrap не требуется. Следом source/build actor orchestration, artifacts/abort,
+exact shutdown и U2–U3; A4 отложен.
+
 ## Самообновление U1: managed compiler — 2026-10-18
 
 [Контракт и ограничения](plans/worker-self-update/compiler-driver.md).

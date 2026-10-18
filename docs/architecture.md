@@ -22,7 +22,9 @@ process-authenticated bounded Info; baseline/release scan вынесен из о
 с проверками до/после I/O. [82 native tests / candidate build](plans/worker-self-update/windows-fresh-source-gate-2026-10-17.md) прошли.
 [Managed compiler](plans/worker-self-update/compiler-driver.md) добавляет отдельный
 attempt/FSM/receipts и OS cleanup proof. 429 local workspace tests и 10 итоговых
-compiler tests passed; native gate schema 4 ожидается. Автоматический driver
+compiler tests и [95 native tests / candidate build](plans/worker-self-update/windows-compiler-gate-2026-10-18.md)
+passed. [Atomic executable adapter](plans/worker-self-update/atomic-executable.md)
+закрывает отдельный compiler CreateProcess/Job gap; его native gate ещё впереди. Автоматический driver
 и runtime install пока не включены.
 
 SourceApplying сохраняется до изменений; per-file intent → no-clobber move → hash/

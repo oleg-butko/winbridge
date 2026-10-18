@@ -38,6 +38,9 @@ fn owned(handle: HANDLE) -> io::Result<OwnedHandle> {
     Ok(unsafe { OwnedHandle::from_raw_handle(handle) })
 }
 impl Job {
+    pub(crate) fn raw(&self) -> HANDLE {
+        self.0.as_raw_handle()
+    }
     pub fn contains(&self, process: HANDLE) -> io::Result<bool> {
         let mut member = 0;
         if unsafe {
@@ -336,6 +339,15 @@ pub fn observe(
     }
 }
 
+pub fn host_binding_for_process(pid: u32) -> io::Result<(String, u32)> {
+    let (host, _) = host_binding()?;
+    let mut session = 0;
+    if unsafe { ProcessIdToSessionId(pid, &mut session) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok((host, session))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -387,13 +399,4 @@ mod tests {
         output.read_to_end(&mut bytes).unwrap();
         assert!(bytes.is_empty(), "unexpected user code output: {bytes:?}");
     }
-}
-
-pub fn host_binding_for_process(pid: u32) -> io::Result<(String, u32)> {
-    let (host, _) = host_binding()?;
-    let mut session = 0;
-    if unsafe { ProcessIdToSessionId(pid, &mut session) } == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok((host, session))
 }

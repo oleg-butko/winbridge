@@ -245,6 +245,7 @@ def main():
         archive_has_worker_control = 'winbridge/apps/worker/src/update_control.rs' in archive.namelist()
         archive_has_worker_source = 'winbridge/apps/update/src/worker_source.rs' in archive.namelist()
         archive_has_compiler = 'winbridge/apps/update/src/build.rs' in archive.namelist()
+        archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
@@ -315,18 +316,20 @@ def main():
                 names.add(name)
             expected = ['update-source-policy-and-fsm','update-native-preflight','update-legacy-contracts','update-verifier-build']
             prior = json.loads((previous_report / 'report.json').read_text(encoding='utf-8-sig'))
-            if len(prior['commands']) in (7, 9, 10, 11, 12, 13):
+            if len(prior['commands']) in (7, 9, 10, 11, 12, 13, 14):
                 expected += ['update-worker-durable-coordination', 'update-worker-native-coordination', 'update-previous-worker-refusal']
-            if len(prior['commands']) in (9, 10, 11, 12, 13):
+            if len(prior['commands']) in (9, 10, 11, 12, 13, 14):
                 expected += ['update-platform-no-clobber','update-previous-updater-refusal']
-            if len(prior['commands']) in (10, 11, 12, 13):
+            if len(prior['commands']) in (10, 11, 12, 13, 14):
                 expected += ['update-infrastructure-domain']
-            if len(prior['commands']) in (11, 12, 13):
+            if len(prior['commands']) in (11, 12, 13, 14):
                 expected += ['update-supervisor-staged-source']
-            if len(prior['commands']) in (12, 13):
+            if len(prior['commands']) in (12, 13, 14):
                 expected += ['update-supervisor-ipc']
-            if len(prior['commands']) == 13:
+            if len(prior['commands']) in (13, 14):
                 expected += ['update-worker-control']
+            if len(prior['commands']) == 14:
+                expected += ['update-platform-atomic-executable']
             if (prior['platform'] != 'windows' or prior['sourceDirty'] or not re.fullmatch(r'[0-9a-f]{40}', prior['sourceCommit'])
                     or not re.fullmatch(r'[0-9a-f]{64}', prior['sourceArchiveSha256'])
                     or not {'report.json', *(n+'.log' for n in expected)}.issubset(names)
@@ -584,6 +587,18 @@ exit $nativeExit
                     or control['queuedTask']['status'] != 'queued' or control['queuedTask']['processId'] is not None
                     or control['build']['sourceCommit'] != result['sourceCommit'] or control['build']['sourceDirty'] is not False):
                 raise RuntimeError('Incomplete worker-owned supervisor/source control proof')
+        if archive_has_atomic:
+            expected += ['update-platform-atomic-executable']
+            atomic = json.loads((report / 'atomic-launch-proof.json').read_text(encoding='utf-8-sig'))
+            cases = ['argvAndSuspended','noResume','domainAndPrivateJob','rejectedBeforeCreate','suspendCount','ownerCrashBeforePidReceipt','stdioOnly']
+            if (atomic.get('kind') != 'atomic_executable_proof' or atomic.get('platform') != 'windows'
+                    or any(atomic.get(k) is not False for k in ['runtimeApplied','windowsOpened'])
+                    or any(atomic.get(k,{}).get('passed') is not True for k in cases)
+                    or atomic['ownerCrashBeforePidReceipt'].get('jobEmpty') is not True
+                    or atomic['ownerCrashBeforePidReceipt'].get('userCodeNotRun') is not True
+                    or atomic['stdioOnly'].get('unlistedHandleInherited') is not False or atomic['stdioOnly'].get('stdinEof') is not True
+                    or atomic.get('build',{}).get('sourceCommit') != result['sourceCommit'] or atomic.get('build',{}).get('sourceDirty') is not False):
+                raise RuntimeError('Incomplete atomic executable creation/Job/handle/crash proof')
         scope = result.get('updatePreparation', {})
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
         archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))

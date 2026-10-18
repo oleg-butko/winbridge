@@ -29,7 +29,7 @@ receipts каждого этапа. Migration 1/2/3 → 4 требует owner l
 backup. Worker journal остаётся schema 15. Schema-3 updater должен отказаться открыть
 schema 4 до любых WAL/migration writes. Старые source status остаются readonly.
 
-Последовательность: Intent → создать suspended Windows process/назначить отдельный
+Последовательность: Intent → атомарно создать suspended Windows process с отдельным
 compiler Job → сохранить exact PID/birth/host/session + Job receipt → сохранить
 ResumeGranted → свежие source/authority проверки → resume → Running receipt.
 ResumeGranted после сбоя обозначает неизвестный исход запуска; успех требует
@@ -85,9 +85,9 @@ Dev/test profile оптимизирует стандартную sha2 library, �
 Один и тот же verified ZIP (4,589,622 bytes) на Debian: 2.277 → 0.620 s wall,
 2.20 → 0.56 s CPU. Это локальное измерение одного пакета, не Windows baseline.
 
-До полного production pipeline требуется закрыть crash gap CreateProcess → Job
-assignment: Intent без PID receipt всегда требует manual inspection и не replay.
-Следующий platform block проверит атомарное назначение Jobs при CreateProcess
+[Platform block](atomic-executable.md) добавляет атомарное назначение compiler Job
+при CreateProcess; native gate ещё впереди. Intent без PID receipt по-прежнему
+требует inspection и не replay. Используется назначение Jobs при CreateProcess
 через [PROC_THREAD_ATTRIBUTE_JOB_LIST](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
 [spawn_with_attributes в Rust std](https://doc.rust-lang.org/std/os/windows/process/trait.CommandExt.html#tymethod.spawn_with_attributes)
 пока nightly-only, поэтому требуется отдельный stable Win32 adapter с проверкой

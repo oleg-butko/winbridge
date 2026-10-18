@@ -13,9 +13,47 @@ pub mod reports;
 pub mod source_files;
 #[cfg(windows)]
 mod windows;
+#[cfg(windows)]
+mod windows_atomic;
+
+enum RootChild {
+    Standard(Child),
+    #[cfg(windows)]
+    Atomic(windows_atomic::NativeChild),
+}
+impl RootChild {
+    fn standard(&mut self) -> &mut Child {
+        match self {
+            Self::Standard(child) => child,
+            #[cfg(windows)]
+            Self::Atomic(_) => unreachable!("Standard process setup only"),
+        }
+    }
+    fn id(&self) -> u32 {
+        match self {
+            Self::Standard(child) => child.id(),
+            #[cfg(windows)]
+            Self::Atomic(child) => child.id(),
+        }
+    }
+    fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        match self {
+            Self::Standard(child) => child.try_wait(),
+            #[cfg(windows)]
+            Self::Atomic(child) => child.try_wait(),
+        }
+    }
+    fn wait(&mut self) -> io::Result<ExitStatus> {
+        match self {
+            Self::Standard(child) => child.wait(),
+            #[cfg(windows)]
+            Self::Atomic(child) => child.wait(),
+        }
+    }
+}
 
 pub struct ManagedChild {
-    child: Child,
+    child: RootChild,
     #[cfg(windows)]
     job: windows::Job,
     #[cfg(windows)]
@@ -189,6 +227,58 @@ pub fn require_local_disk(path: &std::path::Path) -> io::Result<()> {
 }
 
 impl ManagedChild {
+    /// Stable Win32 path for trusted absolute .exe commands with CRT argv.
+    /// Process and Job membership are created together; no post-create assign
+    /// gap or breakaway. Other Windows command forms use the existing adapter.
+    pub fn prepare_atomic_executable(
+        command: &ResolvedCommand,
+        job_name: Option<&str>,
+        domain: Option<&execution_domain::ExecutionDomain>,
+    ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
+        #[cfg(not(windows))]
+        {
+            Self::prepare_in_domain(command, job_name, domain)
+        }
+        #[cfg(windows)]
+        {
+            let job = windows::Job::new(job_name)?;
+            let host = if job_name.is_some() {
+                Some(windows::host_binding()?)
+            } else {
+                None
+            };
+            let (child, stdout, stderr) = windows_atomic::spawn(command, &job, domain)?;
+            let mut owner = Self {
+                child: RootChild::Atomic(child),
+                job,
+                identity: None,
+                resumed: false,
+            };
+            if let (Some(name), Some((host_id, session_id))) = (job_name, host) {
+                let RootChild::Atomic(child) = &owner.child else {
+                    unreachable!()
+                };
+                let created = match child.creation_time() {
+                    Ok(time) => time,
+                    Err(error) => {
+                        owner.close_unconfirmed();
+                        return Err(SpawnFailure {
+                            no_process_created: false,
+                            error,
+                        });
+                    }
+                };
+                owner.identity = Some(process_identity::ProcessIdentity {
+                    job_name: name.into(),
+                    host_id,
+                    session_id,
+                    process_id: owner.id(),
+                    creation_time: created,
+                });
+            }
+            Ok((owner, stdout, stderr))
+        }
+    }
     pub fn spawn(
         command: &ResolvedCommand,
     ) -> Result<(Self, OutputReader, OutputReader), SpawnFailure> {
@@ -263,7 +353,7 @@ impl ManagedChild {
         // Own the tree before any further fallible pipe setup. An early return
         // must never drop a bare Child (which does not terminate its process).
         let mut owner = Self {
-            child,
+            child: RootChild::Standard(child),
             #[cfg(windows)]
             job,
             #[cfg(windows)]
@@ -279,7 +369,7 @@ impl ManagedChild {
                 host_id,
                 session_id,
                 process_id: owner.id(),
-                creation_time: windows::creation_time(&owner.child).map_err(|error| {
+                creation_time: windows::creation_time(owner.child.standard()).map_err(|error| {
                     SpawnFailure {
                         no_process_created: false,
                         error,
@@ -288,14 +378,30 @@ impl ManagedChild {
             });
         }
         trace_process("identity.complete", Some(owner.id()));
-        let stdout = Box::new(owner.child.stdout.take().ok_or_else(|| SpawnFailure {
-            no_process_created: false,
-            error: io::Error::other("stdout pipe missing"),
-        })?);
-        let stderr = Box::new(owner.child.stderr.take().ok_or_else(|| SpawnFailure {
-            no_process_created: false,
-            error: io::Error::other("stderr pipe missing"),
-        })?);
+        let stdout =
+            Box::new(
+                owner
+                    .child
+                    .standard()
+                    .stdout
+                    .take()
+                    .ok_or_else(|| SpawnFailure {
+                        no_process_created: false,
+                        error: io::Error::other("stdout pipe missing"),
+                    })?,
+            );
+        let stderr =
+            Box::new(
+                owner
+                    .child
+                    .standard()
+                    .stderr
+                    .take()
+                    .ok_or_else(|| SpawnFailure {
+                        no_process_created: false,
+                        error: io::Error::other("stderr pipe missing"),
+                    })?,
+            );
         trace_process("prepare.complete", Some(owner.id()));
         Ok((owner, stdout, stderr))
     }
@@ -313,7 +419,10 @@ impl ManagedChild {
     pub fn resume(&mut self) -> io::Result<()> {
         #[cfg(windows)]
         if !self.resumed {
-            self.job.resume(&self.child)?;
+            match &mut self.child {
+                RootChild::Standard(child) => self.job.resume(child)?,
+                RootChild::Atomic(child) => child.resume()?,
+            }
             self.resumed = true;
         }
         Ok(())

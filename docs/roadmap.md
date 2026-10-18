@@ -35,7 +35,9 @@ passed; [82 native tests / candidate build](plans/worker-self-update/windows-fre
 library: intent/PID/Job/resume, output и cleanup, updater schema 4. 429 workspace tests
 и 10 итоговых compiler tests passed;
 [95 native tests / candidate build](plans/worker-self-update/windows-compiler-gate-2026-10-18.md) прошли.
-Source/build/install orchestration и публичное включение не готовы; U1 целиком открыт.
+[Atomic compiler launch](plans/worker-self-update/atomic-executable.md) закрывает
+CreateProcess/Job gap; native gate впереди. Source/build/install orchestration и
+публичное включение не готовы; U1 целиком открыт.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

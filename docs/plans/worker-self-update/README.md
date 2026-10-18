@@ -113,6 +113,8 @@ U0 не применяет source plan, не выключает процессы
   tests, 10 итоговых compiler tests и
   [95 native tests / candidate build](windows-compiler-gate-2026-10-18.md) passed. Source/build
   orchestration и coordinated artifact/abort driver пока не подключены.
+- [ ] [Atomic executable adapter](atomic-executable.md) для compiler: Job назначается
+  при CreateProcess, bounded handle inheritance и CRT argv; native gate впереди.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

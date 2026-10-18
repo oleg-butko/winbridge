@@ -282,6 +282,7 @@ pub fn execute_build(
         return Err("Compiler cwd must be the frozen source root".into());
     }
     let executable = Path::new(&command.executable);
+    winbridge_platform::require_local_path_prefix(executable).map_err(error)?;
     winbridge_platform::require_safe_path(executable).map_err(error)?;
     winbridge_platform::require_local_disk(executable).map_err(error)?;
     if !executable.is_file() {
@@ -352,7 +353,7 @@ pub fn execute_build(
     };
     source_guard(j, a, cfg, id, c)?;
     let (mut child, stdout, stderr) =
-        match ManagedChild::prepare(command, r.spec.job_name.as_deref()) {
+        match ManagedChild::prepare_atomic_executable(command, r.spec.job_name.as_deref(), None) {
             Ok(v) => v,
             Err(e) if e.no_process_created => {
                 return complete(
@@ -374,7 +375,7 @@ pub fn execute_build(
                 )
             }
         };
-    // Windows prepare assigns the suspended process to its own compiler Job.
+    // Windows creates the suspended process with its compiler Job already assigned.
     // Unix is a development adapter and never claims this suspended-launch proof.
     let process = match infrastructure::stamp(child.id()) {
         Ok(v) => v,
