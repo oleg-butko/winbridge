@@ -108,7 +108,7 @@ fn now() -> Result<u64> {
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
-fn saved_source_guard(
+pub(crate) fn saved_source_guard(
     j: &mut UpdateJournal,
     a: &UpdateAuthority,
     cfg: &UpdateConfig,
@@ -147,7 +147,7 @@ fn saved_source_guard(
     }
     Ok(s)
 }
-fn source_guard(
+pub(crate) fn source_guard(
     j: &mut UpdateJournal,
     a: &UpdateAuthority,
     cfg: &UpdateConfig,

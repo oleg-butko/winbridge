@@ -1,3 +1,22 @@
+## U1: exact artifact-set receipt — 2026-10-18
+
+[Контракт](plans/worker-self-update/candidate-artifacts.md): typed report parser,
+четыре fixed payload files / роли / source / OS / SHA / File IDs, совместные
+Windows pins до commit. Immutable receipt и Building → ValidatingCandidate
+атомарны; raw CandidateAccepted не разрешает обойти будущий health driver.
+Updater schema 7, consistent migration 6 → 7 + epoch fence; safe abort включает
+candidate digest. Worker schema 15 и legacy/supervisor wire shapes неизменны.
+Mailbox artifact action, old runtime baseline, health/shutdown/install впереди.
+
+477 workspace tests passed; Linux/Windows Clippy all-targets, explicit local
+compiler actor, contracts/fmt, typecheck/scaffold, 8 export tests, Python runner
+и PowerShell syntax passed. Ledger regressions используют явно synthetic query
+receipts и НЕ доказывают executable health. Новый standalone readonly CLI
+`inspect-candidate-files` проверит actual full candidate в native gate; его
+`journalBound` и `candidateVerified` всегда false. Build-only script сохраняет
+отдельные readable command/proof files. Native schema-7 gate ещё впереди.
+Installed worker прежний/исправен; bootstrap пока не требуется.
+
 ## U1: compiler report native gate пройден — 2026-10-18
 
 [Gate](plans/worker-self-update/windows-report-binding-gate-2026-10-18.md): clean

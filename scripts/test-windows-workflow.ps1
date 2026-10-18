@@ -198,6 +198,7 @@ $oldSourcePreparationReport = $env:WINBRIDGE_SOURCE_PREPARATION_REPORT
 $oldCompilerActorReport = $env:WINBRIDGE_COMPILER_ACTOR_REPORT
 $oldCompilerOutputReport = $env:WINBRIDGE_COMPILER_OUTPUT_REPORT
 $oldCompilerReportProof = $env:WINBRIDGE_COMPILER_REPORT_PROOF
+$oldCandidateArtifactProof = $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF
 $oldUpdateTestPwsh = $env:WINBRIDGE_UPDATE_TEST_PWSH
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
@@ -505,6 +506,7 @@ try {
         $env:WINBRIDGE_COMPILER_ACTOR_REPORT = Join-Path $ReportDirectory 'compiler-actor-proof.json'
         $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = Join-Path $ReportDirectory 'compiler-output-proof.json'
         $env:WINBRIDGE_COMPILER_REPORT_PROOF = Join-Path $ReportDirectory 'compiler-report-binding-proof.json'
+        $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF = Join-Path $ReportDirectory 'candidate-artifact-set-proof.json'
         $env:WINBRIDGE_UPDATE_TEST_PWSH = (Get-Process -Id $PID).Path
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
@@ -552,8 +554,11 @@ try {
         if ($outputProof.kind -ne 'compiler_output_proof' -or $outputProof.passed -ne $true -or $outputProof.platform -ne 'windows' -or $outputProof.build.sourceDirty -or $outputProof.build.sourceCommit -cne $manifest.sourceCommit -or $outputProof.runtimeApplied -or $outputProof.windowsOpened -or $outputProof.live.phase -ne 'running' -or $outputProof.live.captureComplete -or $outputProof.live.proofVerified -or $outputProof.final.phase -ne 'completed' -or $outputProof.final.captureComplete -ne $true -or $outputProof.final.proofVerified -ne $true) { throw 'Compiler output proof incomplete' }
         $actor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-actor-proof.json') -Raw | ConvertFrom-Json
         $reportBinding = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-report-binding-proof.json') -Raw | ConvertFrom-Json
-        if ($reportBinding.kind -ne 'compiler_report_binding_proof' -or $reportBinding.passed -ne $true -or $reportBinding.platform -ne 'windows' -or $reportBinding.build.sourceDirty -or $reportBinding.build.sourceCommit -cne $manifest.sourceCommit -or $reportBinding.runtimeApplied -or $reportBinding.candidateVerified -or $reportBinding.windowsOpened -or $reportBinding.snapshot.journal.schemaVersion -ne 6 -or $reportBinding.snapshot.build.phase -ne 'completed' -or $reportBinding.snapshot.build.outcome -ne 'succeeded' -or $reportBinding.snapshot.build.cleanupVerified -ne $true -or $null -eq $reportBinding.snapshot.intent -or $reportBinding.receipt.bytes -le 0 -or $reportBinding.receipt.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Compiler report durable binding proof incomplete' }
+        if ($reportBinding.kind -ne 'compiler_report_binding_proof' -or $reportBinding.passed -ne $true -or $reportBinding.platform -ne 'windows' -or $reportBinding.build.sourceDirty -or $reportBinding.build.sourceCommit -cne $manifest.sourceCommit -or $reportBinding.runtimeApplied -or $reportBinding.candidateVerified -or $reportBinding.windowsOpened -or $reportBinding.snapshot.journal.schemaVersion -ne 7 -or $reportBinding.snapshot.build.phase -ne 'completed' -or $reportBinding.snapshot.build.outcome -ne 'succeeded' -or $reportBinding.snapshot.build.cleanupVerified -ne $true -or $null -eq $reportBinding.snapshot.intent -or $reportBinding.receipt.bytes -le 0 -or $reportBinding.receipt.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Compiler report durable binding proof incomplete' }
         foreach ($check in @('intentBeforeDispatch','atomicCompletion','duplicateObserved')) { if ($reportBinding.$check -ne $true) { throw "Compiler report check missing: $check" } }
+        $artifactSet = Get-Content -LiteralPath (Join-Path $ReportDirectory 'candidate-artifact-set-proof.json') -Raw | ConvertFrom-Json
+        if ($artifactSet.kind -ne 'candidate_artifact_set_proof' -or $artifactSet.passed -ne $true -or $artifactSet.platform -ne 'windows' -or $artifactSet.build.sourceDirty -or $artifactSet.build.sourceCommit -cne $manifest.sourceCommit -or $artifactSet.runtimeApplied -or $artifactSet.candidateVerified -or $artifactSet.windowsOpened -or $artifactSet.parent.phase -ne 'validating_candidate' -or $artifactSet.record.inspection.artifacts.Count -ne 4 -or $artifactSet.record.inspection.candidateVerified -or $artifactSet.record.inspection.runtimeApplied) { throw 'Candidate artifact-set durable proof incomplete' }
+        foreach ($check in @('syntheticQueryReceipts','atomicParentTransition','rawHealthBypassRejected','duplicateObserved')) { if ($artifactSet.$check -ne $true) { throw "Candidate artifact-set check missing: $check" } }
         if ($actor.kind -ne 'supervisor_compiler_actor_proof' -or $actor.passed -ne $true -or $actor.platform -ne 'windows' -or $actor.build.sourceDirty -or $actor.build.sourceCommit -cne $manifest.sourceCommit -or $actor.runtimeApplied -or $actor.candidateVerified -or $actor.windowsOpened) { throw 'Compiler actor proof identity incomplete' }
         foreach ($check in @('singleCompiler','mailboxResponsive','rawReleaseRejected','busyAbortRejected','coordinatedAbortCompleted','compilerReportBound')) { if ($actor.$check -ne $true) { throw "Compiler actor check missing: $check" } }
         if ($actor.accepted.build.phase -ne 'intent' -or $actor.busy.build.phase -ne 'running' -or $actor.final.build.phase -ne 'completed' -or $actor.final.build.outcome -ne 'succeeded' -or $actor.final.build.cleanupVerified -ne $true -or $actor.final.driverActive -ne $false -or $null -ne $actor.final.driverError -or $actor.abort.phase -ne 'completed' -or $actor.abort.workerReleased.phase -ne 'released') { throw 'Compiler actor lifecycle/abort proof incomplete' }
@@ -589,6 +594,10 @@ try {
         if ($candidate.status -ne 'built' -or $candidate.runtimeApplied -or $candidate.candidateVerified -or $candidate.artifacts.Count -ne 4) { throw 'Candidate preparation proof incomplete' }
         if ($candidate.artifactIdentityChecked -ne $true -or $candidate.artifactIdentities.Count -ne 4) { throw 'Candidate executable identity proof incomplete' }
         [IO.File]::Copy((Join-Path $candidateDirectory 'candidate-report.json'),(Join-Path $ReportDirectory 'update-candidate-proof.json'),$false)
+        [IO.File]::Copy((Join-Path $candidateDirectory 'candidate-files-proof.json'),(Join-Path $ReportDirectory 'candidate-files-proof.json'),$false)
+        [IO.File]::Copy((Join-Path $candidateDirectory 'candidate-files-command.json'),(Join-Path $ReportDirectory 'candidate-files-command.json'),$false)
+        $fileProof = Get-Content -LiteralPath (Join-Path $ReportDirectory 'candidate-files-proof.json') -Raw | ConvertFrom-Json
+        if ($fileProof.kind -ne 'candidate_file_inspection' -or $fileProof.readOnly -ne $true -or $fileProof.journalBound -ne $false -or $fileProof.runtimeApplied -or $fileProof.candidateVerified -or $fileProof.source.manifestSha256 -cne $sourceManifestSha -or $fileProof.artifacts.Count -ne 4 -or $fileProof.report.sha256 -cne (Get-FileHash -LiteralPath (Join-Path $ReportDirectory 'update-candidate-proof.json') -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Actual candidate exact-file proof incomplete' }
         $report.updatePreparation = @{passed=$true;candidateDirectory=$candidateDirectory;manifestSha256=$sourceManifestSha;runtimeApplied=$false;windowsOpened=$false}
     }
     if ($ProjectsOnly) {
@@ -642,6 +651,7 @@ try {
     $env:WINBRIDGE_COMPILER_ACTOR_REPORT = $oldCompilerActorReport
     $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = $oldCompilerOutputReport
     $env:WINBRIDGE_COMPILER_REPORT_PROOF = $oldCompilerReportProof
+    $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF = $oldCandidateArtifactProof
     $env:WINBRIDGE_UPDATE_TEST_PWSH = $oldUpdateTestPwsh
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource

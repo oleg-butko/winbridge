@@ -57,6 +57,10 @@ U1 целиком и public install ещё открыты.
 wire shapes. 467 workspace tests и Linux/Windows Clippy passed;
 [139 native tests / полный build](plans/worker-self-update/windows-report-binding-gate-2026-10-18.md)
 прошли. Следующий блок — durable artifact-set/old runtime guards.
+[Exact artifact set](plans/worker-self-update/candidate-artifacts.md) реализован
+как trusted readonly verifier и atomic receipt/FSM driver, updater schema 7.
+477 workspace tests и Linux/Windows Clippy passed; native gate ещё впереди.
+Artifact receipt не разрешает health/install; mailbox и old runtime guards остаются.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

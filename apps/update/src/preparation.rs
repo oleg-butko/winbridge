@@ -116,7 +116,7 @@ pub(crate) fn source(
 impl crate::build::BuildControl for Control {}
 // PowerShell's authorization manager rejects verbatim paths even for a local
 // drive. Preserve the checked file/root; change only its command-line spelling.
-fn tool_path(path: &Path) -> Result<String> {
+pub(crate) fn tool_path(path: &Path) -> Result<String> {
     if !path.is_absolute() {
         return Err("Build tool paths must be absolute; drive-relative paths are forbidden".into());
     }

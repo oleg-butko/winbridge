@@ -71,6 +71,64 @@ fn compiler_process_helper() {
     writeln!(counter, "{} {mode}", std::process::id()).unwrap();
     drop(counter);
     match mode {
+        "synthetic-candidate" => {
+            let path = args
+                .windows(2)
+                .find_map(|p| {
+                    (p[0] == "--skip")
+                        .then(|| p[1].strip_prefix("report-file="))
+                        .flatten()
+                })
+                .unwrap();
+            let path = Path::new(path);
+            let stage = path.parent().unwrap();
+            fs::create_dir(stage).unwrap();
+            let payload = stage.join("payload");
+            fs::create_dir(&payload).unwrap();
+            let source = std::env::current_dir().unwrap().canonicalize().unwrap();
+            let sha = sha256(&fs::read(source.join("winbridge-source-manifest.json")).unwrap());
+            let verified = winbridge_update::verify_source(&source, &sha).unwrap();
+            let build = winbridge_protocol::BuildIdentity {
+                version: "0.1.0".into(),
+                source_commit: Some(verified.source_commit.clone()),
+                source_dirty: false,
+                source_manifest_sha256: Some(sha.clone()),
+                build_id: "synthetic-compiler-contract-fixture".into(),
+            };
+            let mut artifacts = vec![];
+            let mut queries = vec![];
+            for (name, role) in [
+                (
+                    "winbridge-worker.exe",
+                    winbridge_protocol::ArtifactRole::Worker,
+                ),
+                (
+                    "winbridge-fixture.exe",
+                    winbridge_protocol::ArtifactRole::Fixture,
+                ),
+                (
+                    "winbridge-desktop.exe",
+                    winbridge_protocol::ArtifactRole::Desktop,
+                ),
+                (
+                    "winbridge-update.exe",
+                    winbridge_protocol::ArtifactRole::Updater,
+                ),
+            ] {
+                let mut bytes = b"synthetic artifact; no executable health proof".to_vec();
+                bytes.extend_from_slice(winbridge_protocol::ARTIFACT_QUERY_MARKER);
+                bytes.extend_from_slice(name.as_bytes());
+                fs::write(payload.join(name), bytes).unwrap();
+                let image = winbridge_update::artifact::inspect_image(&payload.join(name)).unwrap();
+                artifacts.push(
+                    serde_json::json!({"name":name,"bytes":image.bytes,"sha256":image.sha256}),
+                );
+                queries.push(serde_json::json!({"name":name,"query":{"schemaVersion":1,"kind":"artifact_query","readOnly":true,"candidateVerified":false,"image":image,"descriptor":{"schemaVersion":1,"kind":"winbridge_artifact","queryContract":1,"role":role,"build":build,"targetOs":std::env::consts::OS,"targetArch":std::env::consts::ARCH},"process":infrastructure::stamp(std::process::id()).unwrap(),"cleanupVerified":true}}));
+            }
+            let report = serde_json::json!({"schemaVersion":1,"kind":"winbridge-update-candidate","status":"built","runtimeApplied":false,"candidateVerified":false,"sourceDirectory":source,"manifestSha256":sha,"storage":{},"commands":[{"name":"synthetic-contract-fixture","executable":std::env::current_exe().unwrap(),"arguments":[],"exitCode":0,"log":"fixture.log"}],"artifacts":artifacts,"error":null,"source":verified,"workerBuild":build,"artifactIdentities":queries,"artifactIdentityChecked":true});
+            fs::write(path, serde_json::to_vec(&report).unwrap()).unwrap();
+            std::process::exit(0);
+        }
         "report" | "empty-report" | "oversized-report" => {
             let path = args
                 .windows(2)
@@ -663,7 +721,7 @@ fn schema_three_migration_backs_up_history_and_does_not_rebind_source_owner() {
     let mut f = ready(tmp.path());
     let cmd = command(&f, "success");
     let directory = f.config.runtime_directory.join("update-state");
-    f.db().execute_batch("DROP TABLE update_build_reports; DROP TABLE update_build_report_intents; DROP TABLE update_abort_receipts; DROP TABLE update_aborts; DROP TABLE update_build_receipts; DROP TABLE update_builds; PRAGMA user_version=3; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.db().execute_batch("DROP TABLE candidate_artifact_sets; DROP TABLE update_build_reports; DROP TABLE update_build_report_intents; DROP TABLE update_abort_receipts; DROP TABLE update_aborts; DROP TABLE update_build_receipts; DROP TABLE update_builds; PRAGMA user_version=3; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let old = UpdateJournal::inspect(&directory).unwrap();
     assert_eq!(old.schema_version, 3);
     assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err()); // owner lock still held

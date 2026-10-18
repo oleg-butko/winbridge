@@ -135,7 +135,6 @@ try {
   }
   $report.artifactIdentityChecked = $true
   $report.status = 'built'
-  Write-Host 'Candidate built and executable identities checked. Worker health verification and installation have not run.'
 } catch {
   $report.status = 'failed'
   $report.error = $_.Exception.Message
@@ -150,4 +149,23 @@ try {
   $report.storage.stagingAvailableBytesAfter = $stageDrive.AvailableFreeSpace
   if ($ValidationCacheDirectory) { $report.storage.validationCacheAvailableBytesAfter = $cacheDrive.AvailableFreeSpace }
   Write-NewJson (Join-Path $stage 'candidate-report.json') $report
+}
+# Validate the published exact report against the actual four payload files. This
+# is standalone diagnostics; only the managed compiler journal can bind its result.
+try {
+  [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+  $OutputEncoding = [Text.UTF8Encoding]::new($false)
+  $reportSha = (Get-FileHash -LiteralPath (Join-Path $stage 'candidate-report.json') -Algorithm SHA256).Hash.ToLowerInvariant()
+  $fileArguments = @('inspect-candidate-files',$source,$ManifestSha256,$stage,$reportSha)
+  $fileText = & $candidateHelper @fileArguments 2> (Join-Path $stage 'candidate-files-stderr.log')
+  $fileCode = $LASTEXITCODE
+  Write-NewJson (Join-Path $stage 'candidate-files-command.json') @{executable=$candidateHelper;arguments=$fileArguments;exitCode=$fileCode}
+  if ($fileCode -ne 0) { throw 'Candidate exact-file inspection failed; see candidate-files-stderr.log; no install' }
+  $fileProof = ($fileText -join "`n") | ConvertFrom-Json
+  if ($fileProof.kind -ne 'candidate_file_inspection' -or $fileProof.readOnly -ne $true -or $fileProof.journalBound -ne $false -or $fileProof.runtimeApplied -or $fileProof.candidateVerified -or $fileProof.report.sha256 -cne $reportSha -or $fileProof.source.manifestSha256 -cne $ManifestSha256 -or $fileProof.artifacts.Count -ne 4) { throw 'Candidate exact-file proof incomplete; no install' }
+  Write-NewJson (Join-Path $stage 'candidate-files-proof.json') $fileProof
+  Write-Host 'Candidate built; executable identities and exact payload files checked. Worker health verification and installation have not run.'
+} finally {
+  [Console]::OutputEncoding = $oldUpdateConsoleEncoding
+  $OutputEncoding = $oldUpdatePipelineEncoding
 }

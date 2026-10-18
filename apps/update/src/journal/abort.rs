@@ -17,7 +17,8 @@ PRAGMA user_version=5;").map_err(storage)
 fn digest<T: Serialize>(value: &T) -> Result<String> {
     Ok(crate::sha256(encode(value)?.as_bytes()))
 }
-pub(super) fn evidence(c: &Connection, id: &str) -> Result<(Option<String>, Option<String>)> {
+pub(crate) type AbortEvidence = (Option<String>, Option<String>, Option<String>);
+pub(super) fn evidence(c: &Connection, id: &str) -> Result<AbortEvidence> {
     let source = match source::header(c, id) {
         Ok(r) => Some(digest(&r)?),
         Err(e) if e.code == JournalErrorCode::NotFound => None,
@@ -28,7 +29,12 @@ pub(super) fn evidence(c: &Connection, id: &str) -> Result<(Option<String>, Opti
         Err(e) if e.code == JournalErrorCode::NotFound => None,
         Err(e) => return Err(e),
     };
-    Ok((source, build))
+    let candidate = match candidate::read(c, id) {
+        Ok(r) => Some(digest(&r)?),
+        Err(e) if e.code == JournalErrorCode::NotFound => None,
+        Err(e) => return Err(e),
+    };
+    Ok((source, build, candidate))
 }
 fn validate(r: &AbortRecord) -> Result<()> {
     let bad = || {
@@ -50,10 +56,14 @@ fn validate(r: &AbortRecord) -> Result<()> {
         || winbridge_core::update::advance_update(r.spec.original_phase, UpdateEvent::BeginAbort)
             .is_err()
         || r.reason.len() > 4096
-        || [&r.spec.source_digest, &r.spec.build_digest]
-            .into_iter()
-            .flatten()
-            .any(|h| !valid_hash(h, &[64]))
+        || [
+            &r.spec.source_digest,
+            &r.spec.build_digest,
+            &r.spec.candidate_digest,
+        ]
+        .into_iter()
+        .flatten()
+        .any(|h| !valid_hash(h, &[64]))
         || r.source_sha256
             .as_ref()
             .is_some_and(|h| !valid_hash(h, &[64]))
@@ -253,7 +263,7 @@ impl UpdateJournal {
         }
         read(&c, id)
     }
-    pub(crate) fn abort_evidence(&self, id: &str) -> Result<(Option<String>, Option<String>)> {
+    pub(crate) fn abort_evidence(&self, id: &str) -> Result<AbortEvidence> {
         evidence(&self.connection, id)
     }
     pub(crate) fn admit_abort(
@@ -281,7 +291,11 @@ impl UpdateJournal {
                 || spec.owner_epoch != a.epoch
                 || spec.original_phase != update.phase
                 || evidence(c, &spec.update_id)?
-                    != (spec.source_digest.clone(), spec.build_digest.clone())
+                    != (
+                        spec.source_digest.clone(),
+                        spec.build_digest.clone(),
+                        spec.candidate_digest.clone(),
+                    )
             {
                 return Err(fail(
                     JournalErrorCode::StaleOwner,
@@ -435,7 +449,12 @@ impl UpdateJournal {
                 && r.cleanup_verified
                 && r.worker_before.as_ref().is_some_and(|l| &l.spec == spec)
                 && r.release_command.as_ref() == Some(command)
-                && evidence(&tx, id)? == (r.spec.source_digest, r.spec.build_digest),
+                && evidence(&tx, id)?
+                    == (
+                        r.spec.source_digest,
+                        r.spec.build_digest,
+                        r.spec.candidate_digest,
+                    ),
         )
     }
 }
@@ -458,6 +477,7 @@ mod tests {
                 runtime_identity: "root-identity".into(),
                 source_digest: None,
                 build_digest: None,
+                candidate_digest: None,
                 accepted_at_ms: 1,
             },
             revision: 0,

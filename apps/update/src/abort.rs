@@ -40,6 +40,8 @@ pub struct AbortSpec {
     pub runtime_identity: String,
     pub source_digest: Option<String>,
     pub build_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_digest: Option<String>,
     pub accepted_at_ms: u64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -114,7 +116,8 @@ pub fn admit(
     {
         return Err("Unfinished/unknown source or compiler outcome requires manual inspection; no lease release".into());
     }
-    let (source_digest, build_digest) = j.abort_evidence(&sup.spec.update_id).map_err(err)?;
+    let (source_digest, build_digest, candidate_digest) =
+        j.abort_evidence(&sup.spec.update_id).map_err(err)?;
     let (record, fresh) = j
         .admit_abort(
             a,
@@ -130,6 +133,7 @@ pub fn admit(
                 .map_err(err)?,
                 source_digest,
                 build_digest,
+                candidate_digest,
                 accepted_at_ms: now()?,
             },
         )
@@ -151,13 +155,17 @@ fn guarded(j: &mut UpdateJournal, a: &UpdateAuthority, r: &AbortRecord) -> Resul
         .map_err(err)?
             != r.spec.runtime_identity
         || j.abort_evidence(&r.spec.update_id).map_err(err)?
-            != (r.spec.source_digest.clone(), r.spec.build_digest.clone())
+            != (
+                r.spec.source_digest.clone(),
+                r.spec.build_digest.clone(),
+                r.spec.candidate_digest.clone(),
+            )
     {
         return Err("Abort source/build/root/owner evidence changed; preserve barriers".into());
     }
     Ok(())
 }
-fn compiler_empty(build: &UpdateBuildRecord) -> Result<()> {
+pub(crate) fn compiler_empty(build: &UpdateBuildRecord) -> Result<()> {
     if build.phase != UpdateBuildPhase::Completed || !build.cleanup_verified {
         return Err("Compiler cleanup not confirmed".into());
     }

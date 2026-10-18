@@ -137,7 +137,10 @@ U0 не применяет source plan, не выключает процессы
   atomic compiler completion/report receipt и readonly exact-byte verification;
   [139 native tests / полный build](windows-report-binding-gate-2026-10-18.md)
   passed; public install ещё не включён.
-- [ ] Durable artifact-set receipt, old runtime preimages и candidate FSM driver.
+- [ ] [Exact artifact set / atomic receipt + FSM](candidate-artifacts.md): updater
+  schema 7, 477 workspace tests и Linux/Windows Clippy passed; native gate впереди.
+  Source/build/receipt guards реализованы, mailbox action ещё не подключён.
+- [ ] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

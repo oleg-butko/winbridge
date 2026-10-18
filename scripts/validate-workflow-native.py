@@ -248,6 +248,7 @@ def main():
         archive_has_source_actor = 'winbridge/apps/update/src/preparation.rs' in archive.namelist()
         archive_has_compiler_actor = 'winbridge/apps/update/src/abort.rs' in archive.namelist()
         archive_has_compiler_output = 'winbridge/apps/update/src/build_output.rs' in archive.namelist()
+        archive_has_candidate_artifacts = 'winbridge/apps/update/src/candidate.rs' in archive.namelist()
         archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
         archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
@@ -659,7 +660,7 @@ exit $nativeExit
                     or binding['build']['sourceDirty'] is not False
                     or any(binding.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])
                     or not all(binding.get(k) is True for k in ['intentBeforeDispatch','atomicCompletion','duplicateObserved'])
-                    or saved['journal']['schemaVersion'] != 6 or saved['build']['phase'] != 'completed'
+                    or saved['journal']['schemaVersion'] != (7 if archive_has_candidate_artifacts else 6) or saved['build']['phase'] != 'completed'
                     or saved['build']['outcome'] != 'succeeded' or saved['build']['cleanupVerified'] is not True
                     or saved['evidence'] != evidence or evidence['bytes'] <= 0
                     or not re.fullmatch(r'[0-9a-f]{64}', evidence['sha256'])
@@ -670,6 +671,32 @@ exit $nativeExit
             for name in ['is_admitted_before_dispatch_and_committed_with_completion', 'rejects_same_size_edits_file_and_parent_replacements', 'missing_empty_or_oversized_never_becomes_success_or_replays', 'ignored_receipt_rolls_back_success_and_cannot_be_adopted', 'generic_and_schema_five_history_cannot_adopt_later_report', 'existing_staging_is_rejected_before_intent_or_process']:
                 if 'compiler::report::compiler_report_' + name + ' ... ok' not in log:
                     raise RuntimeError('Compiler report regression missing: ' + name)
+        if archive_has_candidate_artifacts:
+            artifact_set = json.loads((report / 'candidate-artifact-set-proof.json').read_text(encoding='utf-8-sig'))
+            if (artifact_set.get('kind') != 'candidate_artifact_set_proof' or artifact_set.get('passed') is not True
+                    or artifact_set.get('platform') != 'windows' or artifact_set['build']['sourceCommit'] != result['sourceCommit']
+                    or artifact_set['build']['sourceDirty'] is not False
+                    or not all(artifact_set.get(k) is True for k in ['syntheticQueryReceipts','atomicParentTransition','rawHealthBypassRejected','duplicateObserved'])
+                    or any(artifact_set.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])
+                    or artifact_set['parent']['phase'] != 'validating_candidate'
+                    or len(artifact_set['record']['inspection']['artifacts']) != 4
+                    or artifact_set['record']['inspection']['candidateVerified'] is not False):
+                raise RuntimeError('Incomplete artifact receipt/FSM proof; synthetic receipts do not prove executable health')
+            files = json.loads((report / 'candidate-files-proof.json').read_text(encoding='utf-8-sig'))
+            if (files.get('kind') != 'candidate_file_inspection' or files.get('readOnly') is not True
+                    or any(files.get(k) is not False for k in ['journalBound','candidateVerified','runtimeApplied'])
+                    or files['source']['sourceCommit'] != result['sourceCommit'] or files['source']['manifestSha256'] != scope['manifestSha256']
+                    or files['report']['sha256'] != hashlib.sha256((report / 'update-candidate-proof.json').read_bytes()).hexdigest()
+                    or len(files['artifacts']) != 4):
+                raise RuntimeError('Actual candidate exact-file proof incomplete')
+            for a in files['artifacts']:
+                expected_artifact = next(x for x in proof['artifactIdentities'] if x['name'] == a['name'])['query']
+                if a['image'] != expected_artifact['image'] or a['descriptor'] != expected_artifact['descriptor']:
+                    raise RuntimeError('Candidate exact-file evidence differs from actual executable queries')
+            log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            for name in ['candidate_artifact_receipt_and_parent_phase_commit_together_without_install_permission', 'candidate_artifact_ignored_writes_roll_back_parent_and_allow_only_readonly_recheck', 'candidate_artifact_tamper_blocks_receipt_and_retains_building_and_source_barrier', 'candidate_artifact_corrupt_role_with_recomputed_fingerprint_is_rejected', 'schema_six_migration_preserves_report_history_and_does_not_rebind_candidate_authority']:
+                if 'compiler::report::' + name + ' ... ok' not in log:
+                    raise RuntimeError('Candidate artifact ledger regression missing: ' + name)
         if archive_has_compiler_actor:
             expected += ['update-compiler-actor']
             actor = json.loads((report / 'compiler-actor-proof.json').read_text(encoding='utf-8-sig'))

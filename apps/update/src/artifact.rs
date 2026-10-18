@@ -1,5 +1,5 @@
 //! Readonly identity probes. This never approves a candidate or changes runtime.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, OpenOptions},
@@ -22,8 +22,8 @@ const MAX_QUERY_BYTES: usize = 64 * 1024;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImageEvidence {
     pub path: String,
     pub bytes: u64,
@@ -31,10 +31,10 @@ pub struct ImageEvidence {
     pub file_identity: String,
     pub query_supported: bool,
 }
-struct Pinned {
+pub(crate) struct Pinned {
     file: File,
     path: PathBuf,
-    evidence: ImageEvidence,
+    pub(crate) evidence: ImageEvidence,
 }
 fn open(path: &Path) -> Result<File> {
     let mut o = OpenOptions::new();
@@ -46,7 +46,7 @@ fn open(path: &Path) -> Result<File> {
     }
     o.open(path).map_err(error)
 }
-fn pin(path: &Path) -> Result<Pinned> {
+pub(crate) fn pin(path: &Path) -> Result<Pinned> {
     if !path.is_absolute() {
         return Err("Artifact image needs an absolute local path".into());
     }

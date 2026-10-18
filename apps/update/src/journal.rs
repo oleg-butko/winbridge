@@ -23,14 +23,16 @@ use winbridge_protocol::update::{
 mod abort;
 mod build;
 mod build_report;
+mod candidate;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 6;
+pub const UPDATE_SCHEMA_VERSION: u32 = 7;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
     Source,
     Abort,
+    Candidate,
 }
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
@@ -450,6 +452,7 @@ impl UpdateJournal {
             build::migrate(&tx)?;
             abort::migrate(&tx)?;
             build_report::migrate(&tx)?;
+            candidate::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -484,6 +487,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 5 {
                 build_report::migrate(&tx)?;
+            }
+            if schema(&tx)? == 6 {
+                candidate::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
@@ -845,7 +851,10 @@ impl UpdateJournal {
             ));
         }
         supervisor::require_driver(&tx, authority, id, command.event)?;
-        if driver != Driver::Abort {
+        if driver != Driver::Abort
+            && !(driver == Driver::Candidate
+                && command.event == winbridge_protocol::update::UpdateEvent::BuildSucceeded)
+        {
             build::require_driver(&tx, id, command.event)?;
         }
         abort::require_driver(&tx, id, command.event, driver)?;

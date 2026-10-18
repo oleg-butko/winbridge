@@ -233,7 +233,10 @@ pub(super) fn require_driver(c: &Connection, id: &str, event: UpdateEvent) -> Re
     if exists
         && matches!(
             event,
-            UpdateEvent::BuildSucceeded | UpdateEvent::Fail | UpdateEvent::Defer
+            UpdateEvent::BuildSucceeded
+                | UpdateEvent::CandidateAccepted
+                | UpdateEvent::Fail
+                | UpdateEvent::Defer
         )
     {
         return Err(fail(JournalErrorCode::PreconditionsChanged,"Compiler cleanup/artifacts require the coordinated driver; raw lifecycle event cannot bypass receipts"));

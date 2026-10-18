@@ -203,7 +203,7 @@ fn compiler_report_generic_and_schema_five_history_cannot_adopt_later_report() {
     let cmd = command(&f, "success");
     let done = run(&mut f, &cmd).unwrap();
     let directory = f.config.runtime_directory.join("update-state");
-    f.db().execute_batch("DROP TABLE update_build_reports; DROP TABLE update_build_report_intents; PRAGMA user_version=5; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.db().execute_batch("DROP TABLE candidate_artifact_sets; DROP TABLE update_build_reports; DROP TABLE update_build_report_intents; PRAGMA user_version=5; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let old = UpdateJournal::inspect(&directory).unwrap();
     assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err());
     drop(f.owner);
@@ -246,6 +246,181 @@ fn compiler_report_generic_and_schema_five_history_cannot_adopt_later_report() {
         db.query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))
             .unwrap(),
         5
+    );
+    assert_eq!(
+        db.query_row("PRAGMA quick_check", [], |r| r.get::<_, String>(0))
+            .unwrap(),
+        "ok"
+    );
+}
+
+fn candidate_ready() -> (tempfile::TempDir, Fixture, ResolvedCommand) {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let (cmd, _) = report_command(&mut f, "synthetic-candidate");
+    assert_eq!(
+        run(&mut f, &cmd).unwrap().outcome,
+        Some(UpdateBuildOutcome::Succeeded)
+    );
+    (tmp, f, cmd)
+}
+fn record_candidate(
+    f: &mut Fixture,
+) -> Result<winbridge_update::candidate::ArtifactSetRecord, String> {
+    winbridge_update::candidate::verify_and_record(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        &mut f.control,
+    )
+}
+#[test]
+fn candidate_artifact_receipt_and_parent_phase_commit_together_without_install_permission() {
+    let (_tmp, mut f, _) = candidate_ready();
+    let before = f.journal.get(&f.id).unwrap();
+    let record = record_candidate(&mut f).unwrap();
+    assert_eq!(
+        f.journal.get(&f.id).unwrap().phase,
+        UpdatePhase::ValidatingCandidate
+    );
+    assert_eq!(record.parent_revision, before.revision + 1);
+    assert!(!record.inspection.candidate_verified);
+    assert!(!record.inspection.runtime_applied);
+    assert_eq!(record_candidate(&mut f).unwrap(), record);
+    for sql in [
+        "DELETE FROM candidate_artifact_sets",
+        "UPDATE candidate_artifact_sets SET record='{}'",
+    ] {
+        assert!(f.db().execute_batch(sql).is_err());
+    }
+    let parent = f.journal.get(&f.id).unwrap();
+    assert!(f
+        .journal
+        .advance(
+            &f.owner,
+            &f.id,
+            &UpdateCommand {
+                idempotency_key: "raw-health-bypass".into(),
+                expected_revision: parent.revision,
+                event: UpdateEvent::CandidateAccepted,
+                reason: "Artifact receipt does not prove health".into()
+            }
+        )
+        .is_err());
+    assert_eq!(f.journal.get(&f.id).unwrap(), parent);
+    assert_eq!(
+        fs::read_to_string(f.config.source_directory.join("target/compiler-runs.log"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    if let Some(path) = std::env::var_os("WINBRIDGE_CANDIDATE_ARTIFACT_PROOF") {
+        fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"candidate_artifact_set_proof","passed":true,"platform":std::env::consts::OS,"build":winbridge_protocol::build_identity(),"record":record,"parent":parent,"syntheticQueryReceipts":true,"atomicParentTransition":true,"rawHealthBypassRejected":true,"duplicateObserved":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false})).unwrap()).unwrap();
+    }
+}
+#[test]
+fn candidate_artifact_ignored_writes_roll_back_parent_and_allow_only_readonly_recheck() {
+    for sql in ["CREATE TRIGGER ignore_candidate BEFORE INSERT ON candidate_artifact_sets BEGIN SELECT RAISE(IGNORE); END;", "CREATE TRIGGER ignore_candidate BEFORE INSERT ON transitions WHEN NEW.command_key='candidate-artifacts-v1' BEGIN SELECT RAISE(IGNORE); END;"] {
+        let (_tmp,mut f,_)=candidate_ready();let parent=f.journal.get(&f.id).unwrap(); f.db().execute_batch(sql).unwrap();
+        assert!(record_candidate(&mut f).is_err()); assert_eq!(f.journal.get(&f.id).unwrap(),parent);
+        assert!(UpdateJournal::inspect_candidate_artifacts(&f.config.runtime_directory.join("update-state"),&f.id).is_err());
+        f.db().execute_batch("DROP TRIGGER ignore_candidate;").unwrap(); record_candidate(&mut f).unwrap();
+        assert_eq!(fs::read_to_string(f.config.source_directory.join("target/compiler-runs.log")).unwrap().lines().count(),1);
+    }
+}
+#[test]
+fn candidate_artifact_tamper_blocks_receipt_and_retains_building_and_source_barrier() {
+    let (_tmp, mut f, _) = candidate_ready();
+    let parent = f.journal.get(&f.id).unwrap();
+    let path = f
+        .config
+        .runtime_directory
+        .join("update")
+        .join(&f.id)
+        .join("candidate/payload/winbridge-worker.exe");
+    let mut bytes = fs::read(&path).unwrap();
+    bytes[0] = b'X';
+    fs::write(path, bytes).unwrap();
+    assert!(record_candidate(&mut f).is_err());
+    assert_eq!(f.journal.get(&f.id).unwrap(), parent);
+    assert_eq!(parent.phase, UpdatePhase::Building);
+    assert_eq!(
+        info(&f.control.worker).update_coordination.unwrap()["lease"]["phase"],
+        "source_held"
+    );
+}
+#[test]
+fn candidate_artifact_corrupt_role_with_recomputed_fingerprint_is_rejected() {
+    let (_tmp, mut f, _) = candidate_ready();
+    let mut record = record_candidate(&mut f).unwrap();
+    record.inspection.artifacts[0].descriptor.role = winbridge_protocol::ArtifactRole::Desktop;
+    record.inspection.set_sha256 = sha256(
+        &serde_json::to_vec(&(
+            &record.inspection.report,
+            &record.inspection.payload_directory_identity,
+            &record.inspection.artifacts,
+        ))
+        .unwrap(),
+    );
+    f.db()
+        .execute_batch("DROP TRIGGER candidate_set_immutable;")
+        .unwrap();
+    f.db()
+        .execute(
+            "UPDATE candidate_artifact_sets SET record=?1 WHERE id=?2",
+            rusqlite::params![serde_json::to_string(&record).unwrap(), f.id],
+        )
+        .unwrap();
+    assert!(UpdateJournal::inspect_candidate_artifacts(
+        &f.config.runtime_directory.join("update-state"),
+        &f.id
+    )
+    .is_err());
+}
+#[test]
+fn schema_six_migration_preserves_report_history_and_does_not_rebind_candidate_authority() {
+    let (_tmp, mut f, _) = candidate_ready();
+    let dir = f.config.runtime_directory.join("update-state");
+    let before = snapshot(&f);
+    f.db().execute_batch("DROP TABLE candidate_artifact_sets; PRAGMA user_version=6; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    let old = UpdateJournal::inspect(&dir).unwrap();
+    assert!(UpdateJournal::open(&dir, &old.scope_sha256).is_err());
+    drop(f.owner);
+    drop(f.journal);
+    let mut j = UpdateJournal::open(&dir, &old.scope_sha256).unwrap();
+    let owner = j.acquire_owner().unwrap();
+    let after = UpdateJournal::inspect_build_report(&dir, &f.id).unwrap();
+    assert_eq!(after.build, before.build);
+    assert_eq!(after.intent, before.intent);
+    assert_eq!(after.evidence, before.evidence);
+    assert!(read_verified(&f.config, &f.id).is_ok());
+    assert!(winbridge_update::candidate::verify_and_record(
+        &mut j,
+        &owner,
+        &f.config,
+        &f.id,
+        &mut f.control
+    )
+    .is_err());
+    assert!(UpdateJournal::inspect_candidate_artifacts(&dir, &f.id).is_err());
+    let backup = fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("updates-v6-")
+        })
+        .unwrap();
+    let db =
+        Connection::open_with_flags(backup, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    assert_eq!(
+        db.query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))
+            .unwrap(),
+        6
     );
     assert_eq!(
         db.query_row("PRAGMA quick_check", [], |r| r.get::<_, String>(0))
