@@ -10,8 +10,8 @@ export type SourcePlan = { changes: Array<SourceChange>, blockers: Array<SourceB
  * Source preconditions only. Never authorizes filesystem writes or shutdown.
  */
 canApply: boolean, };
-export type UpdatePhase = "requested" | "preparing" | "source_applying" | "building" | "validating_candidate" | "candidate_verified" | "draining" | "quiesced" | "stopping" | "replacing" | "verifying_local" | "awaiting_controller" | "committed" | "deferred" | "failed_before_cutover" | "manual_intervention";
-export type UpdateEvent = { "kind": "begin_preparation" } | { "kind": "begin_source_apply" } | { "kind": "source_verified" } | { "kind": "build_succeeded" } | { "kind": "candidate_accepted" } | { "kind": "begin_drain" } | { "kind": "quiesce", "data": { dispatchClosed: boolean, acceptedOperations: number, physicalOwners: number, uncertainOwners: number, } } | { "kind": "begin_shutdown" } | { "kind": "shutdown_verified" } | { "kind": "files_verified" } | { "kind": "local_health_verified" } | { "kind": "controller_confirmed" } | { "kind": "defer" } | { "kind": "fail" };
+export type UpdatePhase = "requested" | "preparing" | "source_applying" | "building" | "validating_candidate" | "candidate_verified" | "draining" | "quiesced" | "stopping" | "replacing" | "verifying_local" | "awaiting_controller" | "aborting" | "committed" | "deferred" | "failed_before_cutover" | "manual_intervention";
+export type UpdateEvent = { "kind": "begin_preparation" } | { "kind": "begin_source_apply" } | { "kind": "source_verified" } | { "kind": "build_succeeded" } | { "kind": "candidate_accepted" } | { "kind": "begin_drain" } | { "kind": "quiesce", "data": { dispatchClosed: boolean, acceptedOperations: number, physicalOwners: number, uncertainOwners: number, } } | { "kind": "begin_shutdown" } | { "kind": "shutdown_verified" } | { "kind": "files_verified" } | { "kind": "local_health_verified" } | { "kind": "controller_confirmed" } | { "kind": "begin_abort" } | { "kind": "abort_completed" } | { "kind": "defer" } | { "kind": "fail" };
 export type UpdateSourcePin = {
 /**
  * Filename only. The installed policy chooses the source delivery directory.
@@ -45,7 +45,7 @@ export type SupervisorProcess = { processId: number, birth: string, hostId: stri
 export type SupervisorPhase = "intent" | "spawned" | "ready" | "active" | "stopped" | "indeterminate";
 export type SupervisorSpec = { launchId: string, updateId: string, parent: SupervisorProcess, parentOwnerId: string, parentEpoch: number, tokenSha256: string, configPath: string, configSha256: string, runtimeDirectory: string, imagePath: string, imageSha256: string, imageIdentity: string, excludedDomain: string | null, endpoint: string, acceptedAtMs: number, worker?: SupervisorWorkerBinding | null, };
 export type SupervisorRecord = { schemaVersion: number, spec: SupervisorSpec, phase: SupervisorPhase, revision: number, process: SupervisorProcess | null, ownerId: string | null, ownerEpoch: number | null, updatedAtMs: number, reason: string, };
-export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation";
+export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover";
 export type SupervisorRequest = { contractVersion: number, launchId: string, expectedRevision: number, action: SupervisorAction, token: string, workerCommand?: WorkerUpdateControlCommand | null, };
 export type SupervisorResponse = { contractVersion: number, launchId: string, record: SupervisorRecord | null, error: string | null, workerControl?: WorkerUpdateControlResponse | null, preparation?: UpdatePreparationView | null, };
 export type UpdatePreparationView = { schemaVersion: number, observedAtMs: number, update: UpdateRecord, source: SourceTransactionRecord | null, sourceAppliedFiles: number, build: UpdateBuildRecord | null,
@@ -58,7 +58,7 @@ export type WorkerUpdateControlCommand = { "action": "observe" } | { "action": "
 export type WorkerUpdateControlRequest = { controlVersion: number, binding: SupervisorWorkerBinding, updateId: string, launchId: string, supervisor: SupervisorProcess, updaterOwnerId: string, updaterEpoch: number, command: WorkerUpdateControlCommand, };
 export type WorkerUpdateControlResponse = { controlVersion: number, binding: SupervisorWorkerBinding, updateId: string, launchId: string, result: WorkerUpdateControlResult, };
 export type WorkerUpdateControlResult = { "kind": "snapshot", lease: WorkerUpdateLease | null, } | { "kind": "error", message: string, };
-export type SourceTransactionPhase = "prepared" | "applying" | "verified" | "blocked";
+export type SourceTransactionPhase = "prepared" | "applying" | "verified" | "blocked" | "aborted";
 export type SourceFileState = "planned" | "intent" | "applied";
 export type SourceTransactionRecord = { schemaVersion: number, updateId: string, sourceDirectory: string, runtimeDirectory: string, stageDirectory: string, transactionDirectory: string, sourceDirectoryIdentity: string, stageDirectoryIdentity: string, transactionDirectoryIdentity: string, workerSourceSpec: WorkerUpdateSpec, workerLeaseRevision: number, planSha256: string, totalFiles: number, revision: number, phase: SourceTransactionPhase, acceptedAtMs: number, updatedAtMs: number, reason: string | null, };
 export type SourceFileObservation = { ordinal: number, change: SourceChange, state: SourceFileState, };

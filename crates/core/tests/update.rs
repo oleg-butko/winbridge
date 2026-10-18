@@ -372,3 +372,35 @@ fn compiler_fsm_requires_pid_before_resume_and_never_replays_terminal_state() {
         }
     }
 }
+
+#[test]
+fn abort_preserves_barrier_until_completion_and_rejects_unknown_or_cutover_states() {
+    use UpdateEvent as E;
+    use UpdatePhase as P;
+    assert_eq!(
+        advance_update(P::Building, E::BeginAbort).unwrap(),
+        P::Aborting
+    );
+    assert!(update_blocks_installation(P::Aborting));
+    assert_eq!(
+        advance_update(P::Aborting, E::AbortCompleted).unwrap(),
+        P::FailedBeforeCutover
+    );
+    assert!(!update_blocks_installation(P::FailedBeforeCutover));
+    assert_eq!(
+        advance_update(P::Aborting, E::Fail).unwrap(),
+        P::ManualIntervention
+    );
+    assert!(update_blocks_installation(P::ManualIntervention));
+    for phase in [
+        P::SourceApplying,
+        P::Stopping,
+        P::Replacing,
+        P::VerifyingLocal,
+        P::AwaitingController,
+        P::ManualIntervention,
+        P::Committed,
+    ] {
+        assert!(advance_update(phase, E::BeginAbort).is_err());
+    }
+}

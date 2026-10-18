@@ -403,6 +403,17 @@ pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePh
         (P::Replacing, E::FilesVerified) => P::VerifyingLocal,
         (P::VerifyingLocal, E::LocalHealthVerified) => P::AwaitingController,
         (P::AwaitingController, E::ControllerConfirmed) => P::Committed,
+        (
+            P::Requested
+            | P::Preparing
+            | P::Building
+            | P::ValidatingCandidate
+            | P::CandidateVerified
+            | P::Draining
+            | P::Quiesced,
+            E::BeginAbort,
+        ) => P::Aborting,
+        (P::Aborting, E::AbortCompleted) => P::FailedBeforeCutover,
         (P::Draining, E::Defer) => P::Deferred,
         (
             P::Requested
@@ -415,7 +426,8 @@ pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePh
             E::Fail,
         ) => P::FailedBeforeCutover,
         (
-            P::SourceApplying
+            P::Aborting
+            | P::SourceApplying
             | P::Stopping
             | P::Replacing
             | P::VerifyingLocal

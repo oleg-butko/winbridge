@@ -20,10 +20,17 @@ use winbridge_protocol::update::{
     UpdateTransition,
 };
 
+mod abort;
 mod build;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 4;
+pub const UPDATE_SCHEMA_VERSION: u32 = 5;
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Driver {
+    Lifecycle,
+    Source,
+    Abort,
+}
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
 type Result<T> = std::result::Result<T, JournalError>;
@@ -440,6 +447,7 @@ impl UpdateJournal {
             source::migrate(&tx)?;
             supervisor::migrate(&tx)?;
             build::migrate(&tx)?;
+            abort::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -466,7 +474,10 @@ impl UpdateJournal {
             if schema(&tx)? == 2 {
                 supervisor::migrate(&tx)?;
             }
-            build::migrate(&tx)?;
+            if schema(&tx)? == 3 {
+                build::migrate(&tx)?;
+            }
+            abort::migrate(&tx)?;
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
                     JournalErrorCode::Corrupt,
@@ -748,6 +759,26 @@ impl UpdateJournal {
         source_driver: bool,
         write_source: impl FnOnce(&Connection, &UpdateRecord) -> Result<()>,
     ) -> Result<UpdateRecord> {
+        self.advance_with_driver(
+            authority,
+            id,
+            command,
+            if source_driver {
+                Driver::Source
+            } else {
+                Driver::Lifecycle
+            },
+            write_source,
+        )
+    }
+    fn advance_with_driver(
+        &mut self,
+        authority: &UpdateAuthority,
+        id: &str,
+        command: &UpdateCommand,
+        driver: Driver,
+        write_source: impl FnOnce(&Connection, &UpdateRecord) -> Result<()>,
+    ) -> Result<UpdateRecord> {
         self.check_directory(authority)?;
         validate_update_key(&command.idempotency_key)
             .map_err(|e| fail(JournalErrorCode::InvalidRequest, e))?;
@@ -807,9 +838,12 @@ impl UpdateJournal {
             ));
         }
         supervisor::require_driver(&tx, authority, id, command.event)?;
-        build::require_driver(&tx, id, command.event)?;
+        if driver != Driver::Abort {
+            build::require_driver(&tx, id, command.event)?;
+        }
+        abort::require_driver(&tx, id, command.event, driver)?;
         let mut current = record(&tx, id)?;
-        if !source_driver
+        if driver == Driver::Lifecycle
             && matches!(
                 command.event,
                 winbridge_protocol::update::UpdateEvent::BeginSourceApply

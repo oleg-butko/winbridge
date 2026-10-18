@@ -317,13 +317,14 @@ impl Worker {
             || update.request.expected.worker_build_id != reg.binding.build.build_id
             || update.request.expected.worker_config_sha256 != reg.binding.config_sha256
             || sup.spec.config_sha256 != reg.config_sha256
-            || matches!(
-                update.phase,
-                UpdatePhase::Committed
-                    | UpdatePhase::Deferred
-                    | UpdatePhase::FailedBeforeCutover
-                    | UpdatePhase::ManualIntervention
-            )
+            || !matches!(request.command, WorkerUpdateControlCommand::Observe)
+                && matches!(
+                    update.phase,
+                    UpdatePhase::Committed
+                        | UpdatePhase::Deferred
+                        | UpdatePhase::FailedBeforeCutover
+                        | UpdatePhase::ManualIntervention
+                )
         {
             return Err(
                 "Only the exact active supervisor/current updater epoch can control this worker"
@@ -373,6 +374,7 @@ impl Worker {
                     return Ok(Some(receipt));
                 }
                 require_parent_phase(update.phase, command.action)?;
+                require_abort_proof(reg, request, &spec, update.phase, command)?;
                 if command.action != WorkerUpdateAction::Release {
                     self.require_control_current(reg)?;
                 }
@@ -381,6 +383,7 @@ impl Worker {
                     // authority/phase/config before the final grant transaction.
                     let fresh = self.control_authority(reg, request, peer)?;
                     require_parent_phase(fresh.phase, command.action)?;
+                    require_abort_proof(reg, request, &spec, fresh.phase, command)?;
                     if command.action != WorkerUpdateAction::Release {
                         self.require_control_current(reg)?;
                     }
@@ -390,6 +393,32 @@ impl Worker {
             }
         }
     }
+}
+
+fn require_abort_proof(
+    reg: &Registration,
+    request: &WorkerUpdateControlRequest,
+    spec: &WorkerUpdateSpec,
+    phase: UpdatePhase,
+    command: &WorkerUpdateCommand,
+) -> Result<()> {
+    if phase == UpdatePhase::Aborting
+        && (command.action != WorkerUpdateAction::Release
+            || !UpdateJournal::abort_release_authorized(
+                &reg.directory,
+                &request.update_id,
+                &request.updater_owner_id,
+                request.updater_epoch,
+                spec,
+                command,
+            )
+            .map_err(|e| e.to_string())?)
+    {
+        return Err(
+            "Abort release requires a durable matching source/compiler cleanup receipt".into(),
+        );
+    }
+    Ok(())
 }
 
 fn require_parent_phase(phase: UpdatePhase, action: WorkerUpdateAction) -> Result<()> {
@@ -411,6 +440,7 @@ fn require_parent_phase(phase: UpdatePhase, action: WorkerUpdateAction) -> Resul
                 phase,
                 UpdatePhase::Requested
                     | UpdatePhase::Preparing
+                    | UpdatePhase::Aborting
                     | UpdatePhase::CandidateVerified
                     | UpdatePhase::Draining
                     | UpdatePhase::Quiesced
@@ -557,6 +587,19 @@ mod tests {
     };
     use winbridge_protocol::*;
 
+    const BUILD_ACTOR_SCRIPT: &str = r#"[CmdletBinding()]
+param([string]$SourceDirectory,[string]$ManifestSha256,[string]$StagingDirectory,[string]$VerifierExecutable)
+$ErrorActionPreference='Stop'
+[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$target=Join-Path $SourceDirectory 'target'
+New-Item -ItemType Directory -Path $target -Force | Out-Null
+[IO.File]::AppendAllText((Join-Path $target 'actor-runs.log'),"$PID`n")
+Write-Output 'compiler actor stdout Привет ✓'
+[Console]::Error.WriteLine('compiler actor diagnostic')
+Start-Sleep -Milliseconds 1500
+New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
+[IO.File]::WriteAllText((Join-Path $StagingDirectory 'fixture.json'),($PSBoundParameters | ConvertTo-Json -Compress))
+"#;
     struct Fixture {
         worker: Arc<Worker>,
         server: tokio::task::JoinHandle<Result<()>>,
@@ -572,6 +615,13 @@ mod tests {
             Self::with_source_policy(actual, false).await
         }
         async fn with_source_policy(actual: Option<PathBuf>, enabled: bool) -> Self {
+            Self::with_build_policy(actual, enabled, None).await
+        }
+        async fn with_build_policy(
+            actual: Option<PathBuf>,
+            enabled: bool,
+            powershell: Option<PathBuf>,
+        ) -> Self {
             let root = if enabled {
                 // Keep the 6 GiB guard on local disk and Unix sockets below
                 // sockaddr_un's path limit; /tmp may be a small tmpfs.
@@ -632,17 +682,28 @@ mod tests {
                 update_config["schemaVersion"] = serde_json::json!(2);
                 update_config["sourcePackagesDirectory"] = serde_json::json!(packages);
                 let next = b"[package]\nname='control-fixture-updated'\nversion='0.2.0'\n";
+                let mut files = vec![SourceFile {
+                    path: "Cargo.toml".into(),
+                    bytes: next.len() as u64,
+                    sha256: winbridge_update::sha256(next),
+                }];
+                if let Some(exe) = powershell {
+                    update_config["schemaVersion"] = serde_json::json!(3);
+                    update_config["build"] =
+                        serde_json::json!({"powershellExecutable":exe,"timeoutMs":20000});
+                    files.push(SourceFile {
+                        path: "scripts/build-windows-update.ps1".into(),
+                        bytes: BUILD_ACTOR_SCRIPT.len() as u64,
+                        sha256: winbridge_update::sha256(BUILD_ACTOR_SCRIPT.as_bytes()),
+                    });
+                }
                 let manifest = SourceManifest {
                     schema_version: 1,
                     source_commit: "b".repeat(40),
                     dirty: false,
                     created_at: "2026-10-18T00:00:00Z".into(),
                     includes_built_ui: false,
-                    files: vec![SourceFile {
-                        path: "Cargo.toml".into(),
-                        bytes: next.len() as u64,
-                        sha256: winbridge_update::sha256(next),
-                    }],
+                    files,
                 };
                 let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
                 let path = packages.join("fixture.zip");
@@ -657,6 +718,14 @@ mod tests {
                     )
                     .unwrap();
                     zip.write_all(bytes).unwrap();
+                }
+                if update_config["schemaVersion"] == 3 {
+                    zip.start_file(
+                        "winbridge/scripts/build-windows-update.ps1",
+                        zip::write::SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                    zip.write_all(BUILD_ACTOR_SCRIPT.as_bytes()).unwrap();
                 }
                 zip.finish().unwrap();
                 Some(UpdateSourcePin {
@@ -790,10 +859,12 @@ mod tests {
         async fn stop(&mut self) {
             let h = self.supervisor.as_mut().unwrap();
             let process = h.record.process.clone().unwrap();
-            assert_eq!(
-                h.command(SupervisorAction::Stop).await.unwrap().phase,
-                SupervisorPhase::Stopped
-            );
+            if h.record.phase != SupervisorPhase::Stopped {
+                assert_eq!(
+                    h.command(SupervisorAction::Stop).await.unwrap().phase,
+                    SupervisorPhase::Stopped
+                );
+            }
             let until = Instant::now() + Duration::from_secs(5);
             while infrastructure::matches(&process).unwrap_or(false) {
                 assert!(Instant::now() < until);
@@ -1168,29 +1239,255 @@ mod tests {
                 .unwrap(),
         );
         assert_eq!(held.phase, WorkerUpdatePhase::SourceHeld);
-        assert_eq!(f.slots(), 1);
+        let context = f.worker.request_context().unwrap();
+        assert_eq!(
+            f.worker
+                .store()
+                .unwrap()
+                .work_scheduling_observation(context)
+                .unwrap()
+                .occupied_slots,
+            1
+        );
         let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
         winbridge_update::verify_source(&cfg.source_directory, &f.request.source.manifest_sha256)
             .unwrap();
-        // Explicit fixture cleanup after verified source and absent compiler. This
-        // is not a production abort API or a release permitted through IPC.
-        let release = WorkerUpdateCommand {
-            command_id: "source-actor-fixture-release".into(),
-            expected_revision: held.revision,
-            action: WorkerUpdateAction::Release,
-            source_manifest_sha256: Some(f.request.source.manifest_sha256.clone()),
-            reason: "Verified source-only fixture cleanup".into(),
-        };
+        assert!(h.build_candidate().await.unwrap_err().contains("schema 3"));
+        assert!(h.preparation(false).await.unwrap().build.is_none());
+        let aborted = h.abort_before_cutover().await.unwrap();
         assert_eq!(
-            f.worker
-                .advance_source_update(&held.spec, &release)
-                .unwrap()
-                .phase,
+            aborted.phase,
+            winbridge_update::abort::AbortPhase::Completed
+        );
+        assert_eq!(
+            aborted.worker_released.as_ref().unwrap().phase,
             WorkerUpdatePhase::Released
         );
         if let Some(path) = std::env::var_os("WINBRIDGE_SOURCE_PREPARATION_REPORT") {
-            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"supervisor_source_preparation_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"busy":busy,"final":final_view,"duplicate":duplicate,"mailboxResponsive":true,"stopWhileBusyRejected":true,"duplicateObserved":true,"fixtureSourceApplied":true,"workerLeaseRetained":true,"fixtureLeaseReleasedExplicitly":true,"runtimeApplied":false,"windowsOpened":false})).unwrap()).unwrap();
+            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"supervisor_source_preparation_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"busy":busy,"final":final_view,"duplicate":duplicate,"mailboxResponsive":true,"stopWhileBusyRejected":true,"duplicateObserved":true,"fixtureSourceApplied":true,"workerLeaseRetained":true,"coordinatedAbortCompleted":true,"abort":aborted,"runtimeApplied":false,"windowsOpened":false})).unwrap()).unwrap();
         }
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    #[ignore = "Explicit local PowerShell executable required; isolated owned source/runtime only"]
+    async fn compiler_actor_commits_before_dispatch_stays_responsive_and_aborts_cleanly() {
+        let exe = PathBuf::from(
+            std::env::var_os("WINBRIDGE_UPDATE_TEST_PWSH")
+                .expect("Pinned local PowerShell fixture"),
+        );
+        let mut f = Fixture::with_build_policy(None, true, Some(exe)).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        h.preparation(true).await.unwrap();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let accepted = h.build_candidate().await.unwrap();
+        assert_eq!(
+            accepted.build.as_ref().unwrap().phase,
+            UpdateBuildPhase::Intent
+        );
+        assert!(accepted.driver_active);
+        let duplicate = h.build_candidate().await.unwrap();
+        assert_eq!(
+            duplicate.build.as_ref().unwrap().spec,
+            accepted.build.as_ref().unwrap().spec
+        );
+        let busy = loop {
+            let v = tokio::time::timeout(Duration::from_secs(2), h.preparation(false))
+                .await
+                .unwrap()
+                .unwrap();
+            if v.build
+                .as_ref()
+                .is_some_and(|b| b.phase == UpdateBuildPhase::Running)
+            {
+                break v;
+            }
+            assert!(v.driver_active, "{:?}", v);
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(h
+            .command(SupervisorAction::Stop)
+            .await
+            .unwrap_err()
+            .contains("driver active"));
+        assert!(h
+            .abort_before_cutover()
+            .await
+            .unwrap_err()
+            .contains("driver active"));
+        let final_view = loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                break v;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(
+            final_view.driver_error.is_none(),
+            "{:?}",
+            final_view.driver_error
+        );
+        let build = final_view.build.as_ref().unwrap();
+        assert_eq!(build.phase, UpdateBuildPhase::Completed);
+        assert_eq!(build.outcome, Some(UpdateBuildOutcome::Succeeded));
+        assert!(build.cleanup_verified);
+        let held = lease(
+            h.worker_control(WorkerUpdateControlCommand::Observe)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(held.phase, WorkerUpdatePhase::SourceHeld);
+        let raw = h
+            .worker_control(WorkerUpdateControlCommand::Advance {
+                command: WorkerUpdateCommand {
+                    command_id: "premature-build-release".into(),
+                    expected_revision: held.revision,
+                    action: WorkerUpdateAction::Release,
+                    source_manifest_sha256: Some(f.request.source.manifest_sha256.clone()),
+                    reason: "Raw release must not bypass compiler cleanup".into(),
+                },
+            })
+            .await
+            .unwrap();
+        assert!(raw.into_lease().unwrap_err().contains("reconciled"));
+        assert_eq!(h.build_candidate().await.unwrap().build, final_view.build);
+        let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+        assert_eq!(
+            fs::read_to_string(cfg.source_directory.join("target/actor-runs.log"))
+                .unwrap()
+                .lines()
+                .count(),
+            1
+        );
+        let logs = cfg
+            .runtime_directory
+            .join("update")
+            .join(&final_view.update.update_id)
+            .join("compiler")
+            .join(&build.spec.attempt_id);
+        assert!(
+            String::from_utf8(fs::read(logs.join("stdout.bin")).unwrap())
+                .unwrap()
+                .contains("Привет ✓")
+        );
+        assert!(
+            String::from_utf8(fs::read(logs.join("stderr.bin")).unwrap())
+                .unwrap()
+                .contains("diagnostic")
+        );
+        let abort = h.abort_before_cutover().await.unwrap();
+        assert_eq!(abort.phase, winbridge_update::abort::AbortPhase::Completed);
+        assert!(abort.cleanup_verified);
+        assert_eq!(
+            abort.worker_released.as_ref().unwrap().phase,
+            WorkerUpdatePhase::Released
+        );
+        assert_eq!(f.slots(), 0);
+        winbridge_update::verify_source(&cfg.source_directory, &f.request.source.manifest_sha256)
+            .unwrap();
+        if let Some(path) = std::env::var_os("WINBRIDGE_COMPILER_ACTOR_REPORT") {
+            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"supervisor_compiler_actor_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"busy":busy,"duplicate":duplicate,"final":final_view,"abort":abort,"singleCompiler":true,"mailboxResponsive":true,"rawReleaseRejected":true,"busyAbortRejected":true,"coordinatedAbortCompleted":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false})).unwrap()).unwrap();
+        }
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn abort_without_file_effects_releases_only_its_pending_lease() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        let pending = lease(
+            h.worker_control(WorkerUpdateControlCommand::BeginSource)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(pending.phase, WorkerUpdatePhase::SourcePending);
+        let aborted = h.abort_before_cutover().await.unwrap();
+        assert_eq!(
+            aborted.phase,
+            winbridge_update::abort::AbortPhase::Completed
+        );
+        assert!(aborted.source_sha256.is_none());
+        assert_eq!(
+            aborted.worker_released.as_ref().unwrap().phase,
+            WorkerUpdatePhase::Released
+        );
+        assert_eq!(f.slots(), 0);
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn changed_source_blocks_abort_and_retains_worker_barrier() {
+        let mut f = Fixture::with_source_policy(None, true).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        h.preparation(true).await.unwrap();
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                assert!(v.driver_error.is_none());
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+        let cargo = cfg.source_directory.join("Cargo.toml");
+        let original = fs::read(&cargo).unwrap();
+        fs::write(&cargo, b"user changed source").unwrap();
+        assert!(h
+            .abort_before_cutover()
+            .await
+            .unwrap_err()
+            .contains("Abort остановлен"));
+        let directory = cfg.runtime_directory.join("update-state");
+        let blocked = UpdateJournal::inspect_abort(&directory, &h.record.spec.update_id).unwrap();
+        assert_eq!(blocked.phase, winbridge_update::abort::AbortPhase::Blocked);
+        assert_eq!(
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id))
+                .unwrap()
+                .1
+                .unwrap()
+                .phase,
+            UpdatePhase::ManualIntervention
+        );
+        let held = lease(
+            h.worker_control(WorkerUpdateControlCommand::Observe)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(held.phase, WorkerUpdatePhase::SourceHeld);
+        assert!(h.abort_before_cutover().await.is_err());
+        assert_eq!(
+            UpdateJournal::inspect_abort(&directory, &h.record.spec.update_id).unwrap(),
+            blocked
+        );
+        // Explicit restoration/cleanup of this owned fixture only. It is not a
+        // production recovery path and does not erase the blocked receipt.
+        fs::write(&cargo, original).unwrap();
+        let command = WorkerUpdateCommand {
+            command_id: "manual-owned-fixture-cleanup".into(),
+            expected_revision: held.revision,
+            action: WorkerUpdateAction::Release,
+            source_manifest_sha256: Some(f.request.source.manifest_sha256.clone()),
+            reason: "Restored and verified owned test source".into(),
+        };
+        f.worker
+            .advance_source_update(&held.spec, &command)
+            .unwrap();
         f.stop().await;
     }
 

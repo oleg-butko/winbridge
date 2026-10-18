@@ -97,6 +97,7 @@ pub enum UpdatePhase {
     Replacing,
     VerifyingLocal,
     AwaitingController,
+    Aborting,
     Committed,
     Deferred,
     FailedBeforeCutover,
@@ -135,6 +136,8 @@ pub enum UpdateEvent {
     FilesVerified,
     LocalHealthVerified,
     ControllerConfirmed,
+    BeginAbort,
+    AbortCompleted,
     Defer,
     Fail,
 }
@@ -386,6 +389,7 @@ pub enum SourceTransactionPhase {
     Applying,
     Verified,
     Blocked,
+    Aborted,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -521,6 +525,10 @@ pub enum SupervisorAction {
     /// Internal v2, authenticated preparation only; no runtime replacement.
     PrepareSource,
     ObservePreparation,
+    /// Internal v3, command comes only from the frozen local build policy.
+    BuildCandidate,
+    /// Internal v4, release only after coordinated pre-cutover cleanup proof.
+    AbortBeforeCutover,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

@@ -228,6 +228,19 @@ fn set_phase(
     }
     Ok(())
 }
+pub(super) fn abort_prepared(c: &Connection, id: &str) -> Result<()> {
+    match header(c, id) {
+        Ok(r) if r.phase == SourceTransactionPhase::Prepared => set_phase(
+            c,
+            &r,
+            SourceTransactionPhase::Aborted,
+            "Подготовка исходников отменена до file effects",
+        ),
+        Ok(_) => Ok(()),
+        Err(e) if e.code == JournalErrorCode::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
 fn observation(
     c: &Connection,
     id: &str,

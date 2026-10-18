@@ -193,6 +193,8 @@ $oldUpdateControlReport = $env:WINBRIDGE_UPDATE_CONTROL_REPORT
 $oldUpdateBuildReport = $env:WINBRIDGE_UPDATE_BUILD_REPORT
 $oldAtomicReport = $env:WINBRIDGE_ATOMIC_GATE_REPORT
 $oldSourcePreparationReport = $env:WINBRIDGE_SOURCE_PREPARATION_REPORT
+$oldCompilerActorReport = $env:WINBRIDGE_COMPILER_ACTOR_REPORT
+$oldUpdateTestPwsh = $env:WINBRIDGE_UPDATE_TEST_PWSH
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
@@ -494,6 +496,8 @@ try {
         $env:WINBRIDGE_UPDATE_BUILD_REPORT = Join-Path $ReportDirectory 'update-build-proof.json'
         $env:WINBRIDGE_ATOMIC_GATE_REPORT = Join-Path $ReportDirectory 'atomic-launch-proof.json'
         $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = Join-Path $ReportDirectory 'source-preparation-proof.json'
+        $env:WINBRIDGE_COMPILER_ACTOR_REPORT = Join-Path $ReportDirectory 'compiler-actor-proof.json'
+        $env:WINBRIDGE_UPDATE_TEST_PWSH = (Get-Process -Id $PID).Path
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
         $env:WINBRIDGE_UPDATE_COORDINATION_REPORT = Join-Path $ReportDirectory 'update-coordination-proof.json'
@@ -511,7 +515,8 @@ try {
             @{name='update-supervisor-staged-source';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','supervisor::tests::actual_staged_source_reaches_ready_without_mutation','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')},
             @{name='update-supervisor-ipc';arguments=@('test','-p','winbridge-transport','--lib','supervisor::tests::busy_pipe_waits_without_sending','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
             @{name='update-worker-control';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-platform-atomic-executable';arguments=@('test','-p','winbridge-platform','--lib','windows_atomic::tests','--locked','--offline','--','--test-threads=1','--nocapture')}
+            @{name='update-platform-atomic-executable';arguments=@('test','-p','winbridge-platform','--lib','windows_atomic::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-compiler-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::compiler_actor_commits_before_dispatch_stays_responsive_and_aborts_cleanly','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {
@@ -531,10 +536,14 @@ try {
         if ($atomic.ownerCrashBeforePidReceipt.jobEmpty -ne $true -or $atomic.ownerCrashBeforePidReceipt.rootExited -ne $true -or $atomic.ownerCrashBeforePidReceipt.userCodeNotRun -ne $true -or $atomic.stdioOnly.unlistedHandleInherited -ne $false -or $atomic.stdioOnly.stdinEof -ne $true) { throw 'Atomic cleanup/handle proof incomplete' }
         $preparation = Get-Content -LiteralPath (Join-Path $ReportDirectory 'source-preparation-proof.json') -Raw | ConvertFrom-Json
         if ($preparation.kind -ne 'supervisor_source_preparation_proof' -or $preparation.passed -ne $true -or $preparation.platform -ne 'windows' -or $preparation.build.sourceDirty -or $preparation.build.sourceCommit -cne $manifest.sourceCommit -or $preparation.runtimeApplied -or $preparation.windowsOpened) { throw 'Source preparation proof identity incomplete' }
-        foreach ($check in @('mailboxResponsive','stopWhileBusyRejected','duplicateObserved','fixtureSourceApplied','workerLeaseRetained','fixtureLeaseReleasedExplicitly')) {
+        foreach ($check in @('mailboxResponsive','stopWhileBusyRejected','duplicateObserved','fixtureSourceApplied','workerLeaseRetained','coordinatedAbortCompleted')) {
             if ($preparation.$check -ne $true) { throw "Source preparation check missing: $check" }
         }
         if ($preparation.accepted.update.phase -ne 'preparing' -or $preparation.accepted.driverActive -ne $true -or $preparation.busy.driverActive -ne $true -or $preparation.final.driverActive -ne $false -or $null -ne $preparation.final.driverError -or $preparation.final.update.phase -ne 'building' -or $preparation.final.source.phase -ne 'verified' -or $preparation.final.sourceAppliedFiles -ne 2 -or $null -ne $preparation.final.build) { throw 'Source preparation lifecycle proof incomplete' }
+        $actor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-actor-proof.json') -Raw | ConvertFrom-Json
+        if ($actor.kind -ne 'supervisor_compiler_actor_proof' -or $actor.passed -ne $true -or $actor.platform -ne 'windows' -or $actor.build.sourceDirty -or $actor.build.sourceCommit -cne $manifest.sourceCommit -or $actor.runtimeApplied -or $actor.candidateVerified -or $actor.windowsOpened) { throw 'Compiler actor proof identity incomplete' }
+        foreach ($check in @('singleCompiler','mailboxResponsive','rawReleaseRejected','busyAbortRejected','coordinatedAbortCompleted')) { if ($actor.$check -ne $true) { throw "Compiler actor check missing: $check" } }
+        if ($actor.accepted.build.phase -ne 'intent' -or $actor.busy.build.phase -ne 'running' -or $actor.final.build.phase -ne 'completed' -or $actor.final.build.outcome -ne 'succeeded' -or $actor.final.build.cleanupVerified -ne $true -or $actor.final.driverActive -ne $false -or $null -ne $actor.final.driverError -or $actor.abort.phase -ne 'completed' -or $actor.abort.workerReleased.phase -ne 'released') { throw 'Compiler actor lifecycle/abort proof incomplete' }
         $compiler = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-build-proof.json') -Raw | ConvertFrom-Json
         if (-not $compiler.passed -or $compiler.platform -ne 'windows' -or -not $compiler.compilationFixture -or -not $compiler.duplicateObserved -or -not $compiler.workerLeaseRetained -or $compiler.runtimeApplied -or $compiler.candidateVerified -or $compiler.windowsOpened -or $compiler.record.phase -ne 'completed' -or $compiler.record.outcome -ne 'succeeded' -or -not $compiler.record.cleanupVerified -or $compiler.record.exitCode -ne 0 -or $compiler.build.sourceDirty -or $compiler.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Managed compiler fixture proof incomplete' }
         $updateControl = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-control-proof.json') -Raw | ConvertFrom-Json
@@ -614,6 +623,8 @@ try {
     $env:WINBRIDGE_UPDATE_BUILD_REPORT = $oldUpdateBuildReport
     $env:WINBRIDGE_ATOMIC_GATE_REPORT = $oldAtomicReport
     $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = $oldSourcePreparationReport
+    $env:WINBRIDGE_COMPILER_ACTOR_REPORT = $oldCompilerActorReport
+    $env:WINBRIDGE_UPDATE_TEST_PWSH = $oldUpdateTestPwsh
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace

@@ -21,7 +21,7 @@ pub(super) fn active(c: &Connection) -> Result<bool> {
 fn is_active(phase: SupervisorPhase) -> bool {
     phase != SupervisorPhase::Stopped
 }
-fn read(c: &Connection, id: &str) -> Result<SupervisorRecord> {
+pub(super) fn read(c: &Connection, id: &str) -> Result<SupervisorRecord> {
     let row:Option<(String,String,i64,i64)>=c.query_row("SELECT record,spec,revision,active FROM supervisor_launches WHERE update_id=?1 OR launch_id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional().map_err(storage)?;
     let (json, spec, rev, active) =
         row.ok_or_else(|| fail(JournalErrorCode::NotFound, "Supervisor launch not found"))?;
@@ -82,6 +82,28 @@ fn persist(c: &Connection, old: &SupervisorRecord, next: &SupervisorRecord) -> R
         ));
     }
     Ok(())
+}
+pub(super) fn stop_after_abort(c: &Connection, a: &UpdateAuthority, id: &str) -> Result<()> {
+    let old = read(c, id)?;
+    if old.phase != SupervisorPhase::Active
+        || old.owner_id.as_deref() != Some(a.owner_id.as_str())
+        || old.owner_epoch != Some(a.epoch)
+    {
+        return Err(fail(
+            JournalErrorCode::StaleOwner,
+            "Abort completion requires its active supervisor",
+        ));
+    }
+    let mut next = old.clone();
+    next.phase = SupervisorPhase::Stopped;
+    next.revision = next
+        .revision
+        .checked_add(1)
+        .filter(|v| *v <= MAX_UPDATE_COUNTER)
+        .ok_or_else(|| fail(JournalErrorCode::Corrupt, "Supervisor revision exhausted"))?;
+    next.updated_at_ms = now_ms()?.max(old.updated_at_ms);
+    next.reason = "Отмена до установки подтверждена; worker lease освобождена".into();
+    persist(c, &old, &next)
 }
 impl UpdateJournal {
     pub fn preparation_snapshot(
@@ -247,7 +269,16 @@ impl UpdateJournal {
                 "Supervisor revision exceeds supported counter",
             ));
         }
-        if phase == SupervisorPhase::Stopped {
+        let terminal_stop = phase == SupervisorPhase::Stopped
+            && matches!(
+                record(
+                    &self.connection,
+                    &read(&self.connection, id)?.spec.update_id
+                )?
+                .phase,
+                UpdatePhase::ManualIntervention | UpdatePhase::FailedBeforeCutover
+            );
+        if phase == SupervisorPhase::Stopped && !terminal_stop {
             let old = read(&self.connection, id)?;
             let update = record(&self.connection, &old.spec.update_id)?;
             let command = UpdateCommand {
@@ -342,7 +373,15 @@ impl UpdateJournal {
             (SupervisorPhase::Ready | SupervisorPhase::Active, SupervisorPhase::Stopped) => child,
             _ => false,
         };
-        if !allowed || record(&tx, &old.spec.update_id)?.phase != UpdatePhase::Requested {
+        let update_phase = record(&tx, &old.spec.update_id)?.phase;
+        if !allowed
+            || !(update_phase == UpdatePhase::Requested
+                || phase == SupervisorPhase::Stopped
+                    && matches!(
+                        update_phase,
+                        UpdatePhase::ManualIntervention | UpdatePhase::FailedBeforeCutover
+                    ))
+        {
             return Err(fail(
                 JournalErrorCode::PreconditionsChanged,
                 "Supervisor transition/owner/effect scope rejected",

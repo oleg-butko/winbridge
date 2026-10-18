@@ -89,7 +89,10 @@ trusted library intent/PID/Job/resume и verified cleanup, updater schema 4.
 [Source preparation actor](docs/plans/worker-self-update/source-actor.md) добавляет
 internal v2 mailbox и ZIP/grant/apply; 438 workspace tests и Linux/Windows Clippy
 и [109 native tests / candidate build](docs/plans/worker-self-update/windows-source-actor-gate-2026-10-18.md)
-passed. Compiler/install и public update пока отключены.
+passed. [Compiler actor и coordinated abort](docs/plans/worker-self-update/compiler-actor-abort.md)
+добавляют internal v3/v4, config 3 и updater schema 5: intent до ACK, responsive
+status и release только после source/Job/output proof. 453 workspace tests и
+PowerShell fixture passed; native gate впереди. Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

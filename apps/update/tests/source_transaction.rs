@@ -140,6 +140,7 @@ impl Fixture {
             runtime_directory: runtime.clone(),
             worker_config_path,
             source_packages_directory: None,
+            build: None,
         };
         fs::write(root.join("update.local.json"),serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":config.worker_config_path})).unwrap()).unwrap();
         let zip_path = root.join("source.zip");
@@ -905,7 +906,7 @@ fn progress_failure_blocks_before_source_changes_and_lease_change_stops_apply() 
 // Build a real v1 fixture by removing only the v2 additions from our owned DB.
 fn downgrade_fixture(dir: &Path) {
     let db = Connection::open(dir.join("updates.sqlite")).unwrap();
-    db.execute_batch("DROP TABLE update_build_receipts; DROP TABLE update_builds; DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; DROP TABLE source_file_receipts; DROP TABLE source_file_intents; DROP TABLE source_plans; DROP TABLE source_transactions; PRAGMA user_version=1; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    db.execute_batch("DROP TABLE update_abort_receipts; DROP TABLE update_aborts; DROP TABLE update_build_receipts; DROP TABLE update_builds; DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; DROP TABLE source_file_receipts; DROP TABLE source_file_intents; DROP TABLE source_plans; DROP TABLE source_transactions; PRAGMA user_version=1; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
 }
 #[test]
 fn schema_one_migration_requires_owner_lock_and_retains_consistent_history_backup() {
@@ -1067,7 +1068,7 @@ fn schema_two_source_inspection_stays_readonly_and_migration_fences_old_grant() 
     let info = f.journal.info().unwrap();
     let db = f.db();
     db.execute_batch(
-        "DROP TABLE update_build_receipts; DROP TABLE update_builds; DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; PRAGMA user_version=2;",
+        "DROP TABLE update_abort_receipts; DROP TABLE update_aborts; DROP TABLE update_build_receipts; DROP TABLE update_builds; DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; PRAGMA user_version=2;",
     )
     .unwrap();
     drop(db);
@@ -1099,4 +1100,92 @@ fn schema_two_source_inspection_stays_readonly_and_migration_fences_old_grant() 
         .file_name()
         .to_string_lossy()
         .starts_with("updates-v2-")));
+}
+
+#[test]
+fn raw_abort_events_cannot_bypass_coordinated_driver() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = Fixture::new(tmp.path());
+    let before = f.journal.get(&f.id).unwrap();
+    for event in [UpdateEvent::BeginAbort, UpdateEvent::AbortCompleted] {
+        assert!(f
+            .journal
+            .advance(
+                &f.owner,
+                &f.id,
+                &UpdateCommand {
+                    idempotency_key: format!("raw-{event:?}"),
+                    expected_revision: before.revision,
+                    event,
+                    reason: "Raw event cannot release source/compiler authority".into()
+                }
+            )
+            .is_err());
+        assert_eq!(f.journal.get(&f.id).unwrap(), before);
+    }
+}
+
+#[test]
+fn schema_four_migration_backs_up_history_and_fences_existing_source_grants() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut f = Fixture::new(tmp.path());
+    f.prepare();
+    f.apply().unwrap();
+    let directory = f.config.runtime_directory.join("update-state");
+    let saved = UpdateJournal::read_source_status(&directory, &f.id, 0, 100).unwrap();
+    f.db().execute_batch("DROP TABLE update_abort_receipts; DROP TABLE update_aborts; PRAGMA user_version=4; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    let old = UpdateJournal::inspect(&directory).unwrap();
+    assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err());
+    assert_eq!(UpdateJournal::inspect(&directory).unwrap(), old);
+    drop(f.owner);
+    drop(f.journal);
+    let mut j = UpdateJournal::open(&directory, &old.scope_sha256).unwrap();
+    assert_eq!(j.info().unwrap().schema_version, 5);
+    assert_eq!(j.info().unwrap().owner_epoch, old.owner_epoch + 1);
+    let backup = fs::read_dir(&directory)
+        .unwrap()
+        .map(|v| v.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("updates-v4-")
+        })
+        .unwrap();
+    let db =
+        Connection::open_with_flags(backup, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    assert_eq!(
+        db.query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))
+            .unwrap(),
+        4
+    );
+    assert_eq!(
+        db.query_row("PRAGMA quick_check", [], |r| r.get::<_, String>(0))
+            .unwrap(),
+        "ok"
+    );
+    let owner = j.acquire_owner().unwrap();
+    assert!(owner.epoch() > saved.transaction.worker_source_spec.updater_epoch);
+    let after = UpdateJournal::read_source_status(&directory, &f.id, 0, 100).unwrap();
+    assert_eq!(after.transaction, saved.transaction);
+    assert_eq!(after.files, saved.files);
+    assert!(matches!(
+        begin_source_apply(&mut j, &owner, &f.config, &f.id, &mut f.control).unwrap(),
+        SourceApplyAdmission::Observed(_)
+    ));
+    let command = winbridge_protocol::ResolvedCommand {
+        executable: std::env::current_exe().unwrap().to_str().unwrap().into(),
+        arguments: vec![],
+        working_directory: f.config.source_directory.to_str().unwrap().into(),
+        timeout_ms: 1000,
+    };
+    assert!(winbridge_update::build::admit_build(
+        &mut j,
+        &owner,
+        &f.config,
+        &f.id,
+        "after-migration",
+        &command
+    )
+    .is_err());
 }

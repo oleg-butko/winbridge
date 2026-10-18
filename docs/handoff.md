@@ -1,3 +1,13 @@
+## Самообновление U1: compiler mailbox и coordinated abort — 2026-10-18
+
+[Реализация и границы](plans/worker-self-update/compiler-actor-abort.md): внутренние
+v3 build / v4 abort, config 3, updater journal 5. Compiler Intent до ACK, один
+execution permit; source/Job/output proof до worker Release. Runtime apply,
+public update и bootstrap не включены. 453 workspace tests, отдельный PowerShell
+actor fixture, Linux/Windows Clippy all-targets, fmt, generated contracts,
+typecheck/build:ui/scaffold, 8 export tests и syntax checks passed. Native gate
+этого блока ещё не выполнен.
+
 ## Самообновление U1: compiler admission до dispatch — 2026-10-18
 
 [Контракт](plans/worker-self-update/compiler-admission.md). admit_build сохраняет

@@ -246,6 +246,7 @@ def main():
         archive_has_worker_source = 'winbridge/apps/update/src/worker_source.rs' in archive.namelist()
         archive_has_compiler = 'winbridge/apps/update/src/build.rs' in archive.namelist()
         archive_has_source_actor = 'winbridge/apps/update/src/preparation.rs' in archive.namelist()
+        archive_has_compiler_actor = 'winbridge/apps/update/src/abort.rs' in archive.namelist()
         archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
         archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
         archive_checks_atomic_root_exit = archive_has_atomic and b'original_root_exited' in archive.read('winbridge/crates/platform/src/windows_atomic.rs')
@@ -581,7 +582,7 @@ exit $nativeExit
             final = preparation.get('final',{})
             if (preparation.get('kind') != 'supervisor_source_preparation_proof' or preparation.get('passed') is not True
                     or preparation.get('platform') != 'windows' or any(preparation.get(k) is not False for k in ['runtimeApplied','windowsOpened'])
-                    or not all(preparation.get(k) is True for k in ['mailboxResponsive','stopWhileBusyRejected','duplicateObserved','fixtureSourceApplied','workerLeaseRetained','fixtureLeaseReleasedExplicitly'])
+                    or not all(preparation.get(k) is True for k in ['mailboxResponsive','stopWhileBusyRejected','duplicateObserved','fixtureSourceApplied','workerLeaseRetained','coordinatedAbortCompleted' if archive_has_compiler_actor else 'fixtureLeaseReleasedExplicitly'])
                     or preparation.get('build',{}).get('sourceCommit') != result['sourceCommit'] or preparation.get('build',{}).get('sourceDirty') is not False
                     or preparation.get('accepted',{}).get('update',{}).get('phase') != 'preparing' or preparation.get('accepted',{}).get('driverActive') is not True
                     or preparation.get('busy',{}).get('driverActive') is not True or final.get('driverActive') is not False or final.get('driverError') is not None
@@ -634,6 +635,24 @@ exit $nativeExit
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
         archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))
         build = proof.get('workerBuild', {})
+        if archive_has_compiler_actor:
+            expected += ['update-compiler-actor']
+            actor = json.loads((report / 'compiler-actor-proof.json').read_text(encoding='utf-8-sig'))
+            if (actor.get('kind') != 'supervisor_compiler_actor_proof' or actor.get('passed') is not True
+                    or actor.get('platform') != 'windows'
+                    or not all(actor.get(k) is True for k in ['singleCompiler','mailboxResponsive','rawReleaseRejected','busyAbortRejected','coordinatedAbortCompleted'])
+                    or any(actor.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])
+                    or actor.get('build',{}).get('sourceCommit') != result['sourceCommit'] or actor['build']['sourceDirty'] is not False
+                    or actor['accepted']['build']['phase'] != 'intent' or actor['busy']['build']['phase'] != 'running'
+                    or actor['final']['build']['phase'] != 'completed' or actor['final']['build']['outcome'] != 'succeeded'
+                    or actor['final']['build']['cleanupVerified'] is not True or actor['final']['driverActive'] is not False
+                    or actor['final']['driverError'] is not None or actor['abort']['phase'] != 'completed'
+                    or actor['abort']['workerReleased']['phase'] != 'released'):
+                raise RuntimeError('Incomplete compiler actor/verified abort proof')
+            log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            for test in ['compiler::compiler_admission_commits_intent_before_dispatch_and_never_mints_a_second_grant', 'compiler::dropped_compiler_permission_remains_an_observation_after_owner_restart']:
+                if test + ' ... ok' not in log:
+                    raise RuntimeError('Compiler one-use admission test missing: ' + test)
         if ([g['name'] for g in result['commands']] != expected or any(g['exitCode'] != 0 for g in result['commands'])
                 or scope.get('passed') is not True or scope.get('runtimeApplied') is not False or scope.get('windowsOpened') is not False
                 or proof.get('status') != 'built' or proof.get('runtimeApplied') is not False or proof.get('candidateVerified') is not False

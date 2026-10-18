@@ -633,7 +633,7 @@ fn schema_three_migration_backs_up_history_and_does_not_rebind_source_owner() {
     let mut f = ready(tmp.path());
     let cmd = command(&f, "success");
     let directory = f.config.runtime_directory.join("update-state");
-    f.db().execute_batch("DROP TABLE update_build_receipts; DROP TABLE update_builds; PRAGMA user_version=3; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.db().execute_batch("DROP TABLE update_abort_receipts; DROP TABLE update_aborts; DROP TABLE update_build_receipts; DROP TABLE update_builds; PRAGMA user_version=3; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let old = UpdateJournal::inspect(&directory).unwrap();
     assert_eq!(old.schema_version, 3);
     assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err()); // owner lock still held
@@ -641,7 +641,10 @@ fn schema_three_migration_backs_up_history_and_does_not_rebind_source_owner() {
     drop(f.owner);
     drop(f.journal);
     let mut j = UpdateJournal::open(&directory, &old.scope_sha256).unwrap();
-    assert_eq!(j.info().unwrap().schema_version, 4);
+    assert_eq!(
+        j.info().unwrap().schema_version,
+        winbridge_update::journal::UPDATE_SCHEMA_VERSION
+    );
     assert!(j.info().unwrap().owner_epoch > old.owner_epoch);
     let backup = fs::read_dir(&directory)
         .unwrap()

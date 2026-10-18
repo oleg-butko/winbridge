@@ -245,3 +245,10 @@ evidence и актуальный source archive находятся в handoff. �
 cleanup или другой delivery adapter остаются отдельными расширениями с собственными
 критериями. SDK/plugins без потребителя не вводить. Старые snapshots/reports/history
 не очищать; после reboot заново проверять связь и build identity.
+
+### U1: compiler mailbox и coordinated abort — 2026-10-18
+
+[Реализация и границы](plans/worker-self-update/compiler-actor-abort.md): внутренние
+v3 build / v4 abort, config 3, updater journal 5. Compiler Intent до ACK, один
+execution permit; source/Job/output proof до worker Release. Runtime apply,
+public update и bootstrap не включены. Native gate этого блока ещё не выполнен.

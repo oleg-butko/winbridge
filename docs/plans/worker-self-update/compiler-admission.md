@@ -19,10 +19,12 @@ Intent сохраняется; restart/повтор ключа не создаё
 Синхронный execute_build сохраняет прежние live проверки до admission и использует
 тот же permit path. Успешная сборка остаётся отдельной от candidate verification.
 
-31 source/compiler tests passed, в том числе пять новых: commit-before-dispatch,
-единственный execution grant, dropped permit/owner restart, source edit после ACK,
+31 source/compiler tests passed, в том числе пять новых: admission/one-use grant,
+dropped permit/owner restart, source edit после ACK,
 offline worker и concurrent admissions. Helper записывает начало user code только
 в generated target/compiler-runs.log; проверяется ровно один запуск либо его отсутствие.
 Linux/Windows Clippy/tests cross-check и fmt passed. Native rollup впереди, schemas
 updater/worker прежние 4/15. Actor compiler command/local build policy ещё не подключены.
 Следом они, bounded output read, artifacts/abort, exact shutdown и U2–U3.
+
+Реализация actor/policy и дальнейшая схема 5 описаны в [compiler actor / abort](compiler-actor-abort.md); перечисленная выше schema 4 относится к admission commit.

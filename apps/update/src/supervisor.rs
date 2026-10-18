@@ -479,6 +479,101 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    pub async fn build_candidate(&mut self) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let q = SupervisorRequest {
+            contract_version: 3,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: SupervisorAction::BuildCandidate,
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &q,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 3
+            || response.launch_id != q.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Compiler reply scope/version changed".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Compiler view missing")?;
+        if view.schema_version != 1 || view.update.update_id != self.record.spec.update_id {
+            return Err("Compiler view belongs to another update".into());
+        }
+        Ok(view)
+    }
+    /// Authenticated admission, then readonly receipt polling. Lost ACK never
+    /// grants a second execution; terminal failure retains the worker barrier.
+    pub async fn abort_before_cutover(&mut self) -> Result<crate::abort::AbortRecord> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let q = SupervisorRequest {
+            contract_version: 4,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: SupervisorAction::AbortBeforeCutover,
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &q,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 4
+            || response.launch_id != q.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Abort response scope/version changed".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Abort admission view missing")?;
+        if view.schema_version != 1 || view.update.update_id != self.record.spec.update_id {
+            return Err("Abort view belongs to another update".into());
+        }
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            let receipt =
+                UpdateJournal::inspect_abort(&self.directory, &self.record.spec.update_id)
+                    .map_err(error)?;
+            match receipt.phase {
+                crate::abort::AbortPhase::Completed => {
+                    self.record = UpdateJournal::inspect_supervisor(&self.directory, &q.launch_id)
+                        .map_err(error)?;
+                    if self.record.phase != SupervisorPhase::Stopped {
+                        return Err("Abort completion/supervisor stop differs".into());
+                    }
+                    return Ok(receipt);
+                }
+                crate::abort::AbortPhase::Blocked => return Err(receipt.reason),
+                _ => {}
+            }
+            if Instant::now() >= deadline || self.child.exited().map_err(error)? {
+                return Err(
+                    "Abort outcome unconfirmed; inspect saved receipt, do not replay".into(),
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    }
     pub async fn wait_ready(&mut self) -> Result<SupervisorRecord> {
         let deadline = Instant::now() + Duration::from_secs(12);
         loop {
@@ -516,9 +611,12 @@ impl SupervisorHandle {
     pub async fn command(&mut self, action: SupervisorAction) -> Result<SupervisorRecord> {
         if matches!(
             action,
-            SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation
+            SupervisorAction::PrepareSource
+                | SupervisorAction::ObservePreparation
+                | SupervisorAction::BuildCandidate
+                | SupervisorAction::AbortBeforeCutover
         ) {
-            return Err("Use the typed v2 preparation method for this action".into());
+            return Err("Use the typed preparation/compiler method for this action".into());
         }
         if action == SupervisorAction::Handoff {
             if self.handoff_sent || self.record.phase != SupervisorPhase::Ready {
@@ -676,7 +774,14 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 .err()
                 .map(|e| e.chars().take(1000).collect::<String>());
             if let Some(e) = &driver_error {
-                eprintln!("Source preparation stopped: {e}; preserve both journals and barrier, no automatic retry");
+                eprintln!("Update preparation stopped: {e}; preserve both journals and barrier, no automatic retry");
+            }
+            let saved = UpdateJournal::inspect_supervisor(&directory, id).map_err(error)?;
+            if saved.phase == SupervisorPhase::Stopped {
+                return Ok(());
+            }
+            if saved != r {
+                return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
         }
@@ -722,6 +827,157 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if request.action == SupervisorAction::AbortBeforeCutover {
+            let mut admitted = None;
+            let outcome = (|| {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 4
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Abort needs exact Active worker-bound v4 supervisor".into());
+                }
+                match UpdateJournal::inspect_abort(&directory, &r.spec.update_id) {
+                    Ok(_) => {}
+                    Err(e) if e.code == JournalErrorCode::NotFound => {
+                        if work.is_some() {
+                            return Err("Preparation driver active; wait for confirmed source/compiler cleanup".into());
+                        }
+                        let (journal, owner) = idle.as_mut().ok_or("Abort owner unavailable")?;
+                        match crate::abort::admit(journal, owner, &r)? {
+                            crate::abort::AbortAdmission::New(permit) => admitted = Some(permit),
+                            crate::abort::AbortAdmission::Observed(_) => {}
+                        }
+                    }
+                    Err(e) => return Err(error(e)),
+                }
+                UpdateJournal::preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some() || admitted.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)
+            })();
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 4,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = response.error.is_none();
+            let _ = ipc::write(&mut stream, &response).await;
+            if let Some(permit) = admitted.filter(|_| dispatch) {
+                let (mut journal, owner) =
+                    idle.take().ok_or("Abort owner missing after admission")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result = permit.execute(&mut journal, &owner, &spec, io).map(|_| ());
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
+        if request.action == SupervisorAction::BuildCandidate {
+            let mut admitted = None;
+            let outcome = (|| {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 3
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Compiler needs exact Active worker-bound v3 supervisor".into());
+                }
+                let saved = UpdateJournal::preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)?;
+                if saved.update.phase == UpdatePhase::Aborting
+                    || saved
+                        .source
+                        .as_ref()
+                        .is_some_and(|s| s.phase == SourceTransactionPhase::Aborted)
+                {
+                    return Err("Abort status requires supervisor contract v4".into());
+                }
+                if saved.build.is_some() {
+                    return Ok(saved);
+                }
+                if work.is_some()
+                    || saved.update.phase != UpdatePhase::Building
+                    || driver_error.is_some()
+                {
+                    return Err(
+                        "Verified source, idle driver and no unresolved preparation error required"
+                            .into(),
+                    );
+                }
+                let (journal, owner) = idle.as_mut().ok_or("Compiler owner unavailable")?;
+                let (cfg, cmd) = crate::preparation::build_command(journal, &r)?;
+                match crate::build::admit_build(
+                    journal,
+                    owner,
+                    &cfg,
+                    &r.spec.update_id,
+                    "supervisor-candidate-build-v1",
+                    &cmd,
+                )? {
+                    crate::build::BuildAdmission::New(permit) => admitted = Some(permit),
+                    crate::build::BuildAdmission::Observed(_) => {}
+                }
+                UpdateJournal::preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    admitted.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)
+            })();
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 3,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = response.error.is_none();
+            let _ = ipc::write(&mut stream, &response).await;
+            if let Some(permit) = admitted.filter(|_| dispatch) {
+                let (mut journal, owner) = idle
+                    .take()
+                    .ok_or("Compiler owner missing after admission")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                driver_error = None;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result =
+                        crate::preparation::compiler(&mut journal, &owner, &spec, *permit, io);
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
         if matches!(
             request.action,
             SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation
@@ -729,7 +985,9 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             let mut start = false;
             let outcome = (|| {
                 authorize(&r, &request.token, pid, request.action)?;
-                if request.contract_version != 2
+                if !(request.contract_version == 2
+                    || request.contract_version == 4
+                        && request.action == SupervisorAction::ObservePreparation)
                     || request.launch_id != r.spec.launch_id
                     || request.worker_command.is_some()
                     || r.phase != SupervisorPhase::Active
@@ -761,20 +1019,30 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         start = true;
                     }
                 }
-                UpdateJournal::preparation_snapshot(
+                let view = UpdateJournal::preparation_snapshot(
                     &directory,
                     &r.spec.update_id,
                     work.is_some() || start,
                     driver_error.clone(),
                 )
-                .map_err(error)
+                .map_err(error)?;
+                if request.contract_version == 2
+                    && (view.update.phase == UpdatePhase::Aborting
+                        || view
+                            .source
+                            .as_ref()
+                            .is_some_and(|s| s.phase == SourceTransactionPhase::Aborted))
+                {
+                    return Err("Abort status requires supervisor contract v4".into());
+                }
+                Ok(view)
             })();
             let (preparation, error) = match outcome {
                 Ok(v) => (Some(v), None),
                 Err(e) => (None, Some(e)),
             };
             let response = SupervisorResponse {
-                contract_version: 2,
+                contract_version: request.contract_version,
                 launch_id: r.spec.launch_id.clone(),
                 record: None,
                 error,
@@ -910,7 +1178,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

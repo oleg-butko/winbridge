@@ -112,3 +112,108 @@ pub(crate) fn source(
     let _ = fs::metadata(stage).map_err(|e| e.to_string())?;
     Ok(())
 }
+
+impl crate::build::BuildControl for Control {}
+/// Resolve a fixed WinBridge build, never command JSON from an agent.
+pub(crate) fn build_command(
+    journal: &mut UpdateJournal,
+    record: &SupervisorRecord,
+) -> Result<(UpdateConfig, winbridge_protocol::ResolvedCommand)> {
+    let cfg = configuration(record)?;
+    let policy = cfg
+        .build
+        .as_ref()
+        .ok_or("Configure build policy with updater config schema 3")?;
+    let source = cfg
+        .source_directory
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let runtime = cfg
+        .runtime_directory
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let script = source.join("scripts/build-windows-update.ps1");
+    let (manifest, sha) = winbridge_workspace_sync::source_tree::read_manifest(&source)?;
+    let update = journal
+        .get(&record.spec.update_id)
+        .map_err(|e| e.to_string())?;
+    if sha != update.request.source.manifest_sha256
+        || !manifest
+            .files
+            .iter()
+            .any(|f| f.path == "scripts/build-windows-update.ps1")
+    {
+        return Err("The fixed build script must belong to the pinned source manifest".into());
+    }
+    winbridge_platform::require_safe_path(&script).map_err(|e| e.to_string())?;
+    if crate::supervisor::image_sha256(Path::new(&record.spec.image_path))?
+        != record.spec.image_sha256
+    {
+        return Err("Pinned supervisor verifier image changed; no build".into());
+    }
+    let text = |path: &Path| {
+        path.to_str()
+            .map(str::to_owned)
+            .ok_or_else(|| "Build paths must be UTF-8".to_string())
+    };
+    let cmd = winbridge_protocol::ResolvedCommand {
+        executable: text(
+            &policy
+                .powershell_executable
+                .canonicalize()
+                .map_err(|e| e.to_string())?,
+        )?,
+        arguments: vec![
+            "-NoLogo".into(),
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-File".into(),
+            text(&script)?,
+            "-SourceDirectory".into(),
+            text(&source)?,
+            "-ManifestSha256".into(),
+            sha,
+            "-StagingDirectory".into(),
+            text(
+                &runtime
+                    .join("update")
+                    .join(&update.update_id)
+                    .join("candidate"),
+            )?,
+            "-VerifierExecutable".into(),
+            record.spec.image_path.clone(),
+        ],
+        working_directory: text(&source)?,
+        timeout_ms: policy.timeout_ms,
+    };
+    Ok((cfg, cmd))
+}
+pub(crate) fn compiler(
+    journal: &mut UpdateJournal,
+    owner: &UpdateAuthority,
+    record: &SupervisorRecord,
+    permit: crate::build::BuildPermit,
+    io: Handle,
+) -> Result<()> {
+    let cfg = configuration(record)?;
+    let mut control = Control {
+        worker: WorkerSourceControl::new(
+            record.spec.worker.clone().ok_or("Worker binding missing")?,
+            &cfg.worker_config_path,
+            io,
+        )?,
+        record: record.clone(),
+    };
+    let result = permit.execute(journal, owner, &cfg, &mut control)?;
+    if result.phase != UpdateBuildPhase::Completed
+        || result.outcome != Some(UpdateBuildOutcome::Succeeded)
+        || !result.cleanup_verified
+    {
+        return Err(format!(
+            "Compiler did not complete successfully: {}; preserve source barrier",
+            result.reason
+        ));
+    }
+    // This is compiler success only; no candidate/lease/install promotion.
+    Ok(())
+}

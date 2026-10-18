@@ -17,6 +17,11 @@
 - Без изменения services, startup, firewall, TLS и установки global dependencies.
 - Не изменять рабочий Windows runtime до isolated U1–U3 gates и bootstrap.
 
+Compiler actor / [coordinated abort](compiler-actor-abort.md): internal v3/v4,
+config 3, journal 5. Отмена до cutover проходит Aborting → FailedBeforeCutover
+только после source/compiler/worker release proof; неизвестный исход остаётся
+ManualIntervention. Candidate verification и runtime replacement ещё впереди.
+
 ## Контракты и данные
 
 U0 вводит отдельные DTO source manifest/plan и UpdatePhase. Legacy RPC/AttentionTarget
@@ -111,8 +116,8 @@ U0 не применяет source plan, не выключает процессы
 - [x] [Managed compiler](compiler-driver.md) реализован как trusted library:
   intent/PID/Job/resume, output и verified cleanup; updater schema 4. 429 workspace
   tests, 10 итоговых compiler tests и
-  [95 native tests / candidate build](windows-compiler-gate-2026-10-18.md) passed. Source/build
-  compiler orchestration и coordinated artifact/abort driver пока не подключены.
+  [95 native tests / candidate build](windows-compiler-gate-2026-10-18.md) passed. Compiler
+  orchestration и coordinated artifact/abort driver пока не подключены.
 - [x] [Atomic executable adapter](atomic-executable.md) для compiler: Job назначается
   при CreateProcess, bounded handle inheritance и CRT argv;
   [102 native tests / candidate build](windows-atomic-launch-gate-2026-10-18.md) passed.
@@ -173,3 +178,5 @@ U0 не применяет source plan, не выключает процессы
 не снимаются обновлением. Source plan не даёт разрешения apply. Опасный apply
 остаётся заблокирован до U1–U3 gates. Стоимость основной части — lifecycle/fault
 recovery, а не копирование файлов. Новая actor library для U0–U4 не требуется.
+
+[Compiler actor и безопасная отмена до установки](compiler-actor-abort.md) — U1 internal v3/v4, config 3, journal 5; native gate ожидается.

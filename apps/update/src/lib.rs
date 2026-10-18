@@ -1,5 +1,6 @@
 //! Update preparation and its independent durable journal.
 //! Source effects require a trusted worker lease; runtime replacement is not implemented.
+pub mod abort;
 pub mod archive;
 pub mod build;
 pub mod journal;
@@ -36,6 +37,15 @@ pub struct UpdateConfig {
     pub worker_config_path: PathBuf,
     #[serde(default)]
     pub source_packages_directory: Option<PathBuf>,
+    #[serde(default)]
+    pub build: Option<PowerShellBuildPolicy>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PowerShellBuildPolicy {
+    pub powershell_executable: PathBuf,
+    pub timeout_ms: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -85,11 +95,24 @@ pub fn load_config(path: &Path) -> Result<UpdateConfig> {
     if !matches!(
         (
             config.schema_version,
-            config.source_packages_directory.is_some()
+            config.source_packages_directory.is_some(),
+            config.build.is_some()
         ),
-        (1, false) | (2, true)
+        (1, false, false) | (2, true, false) | (3, true, true)
     ) {
         return Err("Unsupported updater config schema".into());
+    }
+    if let Some(build) = &config.build {
+        if build.timeout_ms == 0 || build.timeout_ms > 3_600_000 {
+            return Err("Build timeout must be 1..3600000 ms".into());
+        }
+        winbridge_platform::require_local_path_prefix(&build.powershell_executable)
+            .map_err(error)?;
+        winbridge_platform::require_safe_path(&build.powershell_executable).map_err(error)?;
+        winbridge_platform::require_local_disk(&build.powershell_executable).map_err(error)?;
+        if !build.powershell_executable.is_file() {
+            return Err("PowerShell build executable must be an existing local file".into());
+        }
     }
     if let Some(directory) = &config.source_packages_directory {
         // Delivery may be HGFS. It is read-only input, never journal/build storage.

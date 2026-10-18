@@ -1,7 +1,11 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "sourcePackagesDirectory": "K:\\VMs\\shared\\WinBridge\\sources",
   "sourceDirectory": "K:\\_proj-26\\winbridge\\src",
   "runtimeDirectory": "K:\\_proj-26\\winbridge\\runtime",
-  "workerConfigPath": "K:\\_proj-26\\winbridge\\runtime\\winbridge-worker.snapshot.local.json"
+  "workerConfigPath": "K:\\_proj-26\\winbridge\\runtime\\winbridge-worker.snapshot.local.json",
+  "build": {
+    "powershellExecutable": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+    "timeoutMs": 3600000
+  }
 }
