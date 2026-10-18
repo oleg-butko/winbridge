@@ -1,3 +1,27 @@
+## U1: runtime manifest, abort snapshot и Windows fixture staging — 2026-10-18
+
+[Installed-set reader/pins](plans/worker-self-update/installed-set.md) добавлены
+как trusted readonly API: known manifest вместо auto-adoption, scope/roles/source/
+hash/File ID guards. Publication, normal worker startup/control, durable baseline
+до SourceApply и replacement ещё НЕ подключены. [Abort read snapshot](plans/worker-self-update/abort-read-snapshot.md)
+исправляет реальную race header/history, найденную full local run; deterministic
+two-connection WAL regression и affected source actor passed.
+
+Native clean 9b0fb0b run `20261018-151002-c0223f35`, Task
+`ad02318d-8f75-4a28-9745-8efb348e351d` failed/1 в positive artifact actor:
+payload оказался с extra compiler files. 149 предыдущих tests и negative actor
+passed; новый full candidate build не выполнялся. Portable finalization wiring
+passed. 31 ready files проверены; Windows free before/after 23,111,782,400 /
+23,058,837,504 bytes. Fixture теперь компилирует в target и create-only копирует
+четыре exe в payload; extra-file запрет сохранён, error показывает bounded names.
+Оба updated explicit local actor tests passed. Installed worker прежний/idle 0,
+errors none, coverage complete; actual runtime/config/journal не менялись.
+
+Full local повтор после snapshot fix: 482 workspace tests, Linux/Windows Clippy,
+contracts/fmt/typecheck/scaffold, portable PowerShell, export/runner tests passed;
+combined native repeat впереди. U1 целиком
+не завершён, bootstrap не нужен, A4 остаётся на паузе.
+
 ## U1: artifact actor и finalization fix — 2026-10-18
 
 [Supervisor v5](plans/worker-self-update/artifact-actor.md): authenticated readonly

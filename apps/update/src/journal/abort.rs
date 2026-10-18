@@ -140,6 +140,13 @@ fn proof_preserved(old: &AbortRecord, next: &AbortRecord) -> bool {
         && next.updated_at_ms >= old.updated_at_ms
 }
 fn read(c: &Connection, id: &str) -> Result<AbortRecord> {
+    read_with_interleave(c, id, || {})
+}
+fn read_with_interleave(
+    c: &Connection,
+    id: &str,
+    after_header: impl FnOnce(),
+) -> Result<AbortRecord> {
     let row: Option<(String, String, i64, String)> = c
         .query_row(
             "SELECT record,spec,revision,phase FROM update_aborts WHERE id=?1",
@@ -159,6 +166,7 @@ fn read(c: &Connection, id: &str) -> Result<AbortRecord> {
     {
         return Err(fail(JournalErrorCode::Corrupt, "Abort indexes differ"));
     }
+    after_header();
     let mut q=c.prepare("SELECT revision,record FROM update_abort_receipts WHERE id=?1 ORDER BY revision LIMIT 6").map_err(storage)?;
     let mut rows = q.query([id]).map_err(storage)?;
     let mut previous: Option<AbortRecord> = None;
@@ -251,17 +259,25 @@ pub(super) fn require_driver(
     }
     Ok(())
 }
+fn inspect_snapshot(
+    directory: &Path,
+    id: &str,
+    after_header: impl FnOnce(),
+) -> Result<AbortRecord> {
+    check_files(directory)?;
+    let mut c = connection(&directory.join("updates.sqlite"), true)?;
+    if schema(&c)? < 5 {
+        return Err(fail(
+            JournalErrorCode::UnsupportedSchema,
+            "Abort inspection requires updater schema 5 or newer",
+        ));
+    }
+    let tx = c.transaction().map_err(storage)?;
+    read_with_interleave(&tx, id, after_header)
+}
 impl UpdateJournal {
     pub fn inspect_abort(directory: &Path, id: &str) -> Result<AbortRecord> {
-        check_files(directory)?;
-        let c = connection(&directory.join("updates.sqlite"), true)?;
-        if schema(&c)? != UPDATE_SCHEMA_VERSION {
-            return Err(fail(
-                JournalErrorCode::UnsupportedSchema,
-                "Abort inspection requires schema 5",
-            ));
-        }
-        read(&c, id)
+        inspect_snapshot(directory, id, || {})
     }
     pub(crate) fn abort_evidence(&self, id: &str) -> Result<AbortEvidence> {
         evidence(&self.connection, id)
@@ -564,5 +580,38 @@ mod tests {
         assert!(persist(&c, &completed, &next(&completed, AbortPhase::Intent)).is_err());
         assert!(c.execute("DELETE FROM update_aborts", []).is_err());
         assert_eq!(read(&c, &intent.spec.update_id).unwrap(), completed);
+    }
+    #[test]
+    fn readonly_abort_snapshot_never_combines_header_and_receipts_from_different_commits() {
+        for use_snapshot in [false, true] {
+            let (c, intent) = fixture();
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("updates.sqlite");
+            c.execute("VACUUM INTO ?1", [path.to_str().unwrap()])
+                .unwrap();
+            let mut writer = Connection::open(&path).unwrap();
+            writer.execute_batch("PRAGMA journal_mode=WAL; PRAGMA application_id=1463965008; PRAGMA user_version=7;").unwrap();
+            let verified = next(&intent, AbortPhase::Verified);
+            let mut commit_new = || {
+                let tx = writer.transaction().unwrap();
+                persist(&tx, &intent, &verified).unwrap();
+                tx.commit().unwrap();
+            };
+            let result = if use_snapshot {
+                inspect_snapshot(dir.path(), &intent.spec.update_id, commit_new)
+            } else {
+                let reader = connection(&path, true).unwrap();
+                read_with_interleave(&reader, &intent.spec.update_id, &mut commit_new)
+            };
+            if use_snapshot {
+                assert_eq!(result.unwrap(), intent);
+            } else {
+                assert_eq!(result.unwrap_err().code, JournalErrorCode::Corrupt);
+            }
+            assert_eq!(
+                UpdateJournal::inspect_abort(dir.path(), &intent.spec.update_id).unwrap(),
+                verified
+            );
+        }
     }
 }

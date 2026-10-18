@@ -66,6 +66,10 @@ explicit fixture tests и 477 workspace tests passed. Native 149 tests/build/que
 passed, overall gate failed из-за final PowerShell variable; readonly actual-file
 диагностика passed, variable исправлена с portable regression. Combined native
 rollup впереди; old runtime guards, health/shutdown и U2–U3 ещё не готовы.
+[Known installed set](plans/worker-self-update/installed-set.md) reader/pins добавлен;
+startup/control/publication ещё не подключены. [Abort read snapshot](plans/worker-self-update/abort-read-snapshot.md)
+исправляет false Corrupt при concurrent commit. 482 local tests passed; Windows
+artifact fixture staging исправлен после отказа extra-file guard, repeat впереди.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

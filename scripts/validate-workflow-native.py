@@ -251,6 +251,8 @@ def main():
         archive_has_candidate_artifacts = 'winbridge/apps/update/src/candidate.rs' in archive.namelist()
         archive_has_artifact_actor = archive_has_worker_control and b'async fn artifact_actor_records_real_fixture_queries' in archive.read('winbridge/apps/worker/src/update_control.rs')
         archive_has_finalization_wiring = 'winbridge/scripts/test-update-candidate-finalization.ps1' in archive.namelist()
+        archive_has_installed_set = 'winbridge/apps/update/src/installed_set.rs' in archive.namelist()
+        archive_has_abort_snapshot = b'readonly_abort_snapshot_never_combines_header_and_receipts' in archive.read('winbridge/apps/update/src/journal/abort.rs') if archive_has_compiler_actor else False
         archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
         archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
@@ -750,6 +752,16 @@ exit $nativeExit
                     or not all(wiring.get(k) is True for k in ['actualFinalStatement','helperBound','malformedRejected','reportPreserved','metadataMocked'])
                     or any(wiring.get(k) is not False for k in ['runtimeApplied','windowsOpened'])):
                 raise RuntimeError('Candidate finalization wiring regression missing')
+        if archive_has_installed_set or archive_has_abort_snapshot:
+            log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            required = []
+            if archive_has_installed_set:
+                required += ['installed_set::tests::' + name for name in ['known_installed_set_pins_exact_files_without_execution_or_adoption','missing_or_foreign_manifest_never_adopts_present_binaries','mixed_dirty_duplicate_or_changed_runtime_is_rejected_against_known_manifest','pinned_installed_files_reject_changes_or_detect_them_before_use']]
+            if archive_has_abort_snapshot:
+                required += ['journal::abort::tests::readonly_abort_snapshot_never_combines_header_and_receipts_from_different_commits']
+            for name in required:
+                if name + ' ... ok' not in log:
+                    raise RuntimeError('Installed-set/snapshot regression missing: ' + name)
         if ([g['name'] for g in result['commands']] != expected or any(g['exitCode'] != 0 for g in result['commands'])
                 or scope.get('passed') is not True or scope.get('runtimeApplied') is not False or scope.get('windowsOpened') is not False
                 or proof.get('status') != 'built' or proof.get('runtimeApplied') is not False or proof.get('candidateVerified') is not False

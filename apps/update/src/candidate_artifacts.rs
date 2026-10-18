@@ -287,7 +287,7 @@ fn check_payload_entries(payload: &Path) -> Result<()> {
             .iter()
             .any(|e| !ARTIFACTS.iter().any(|(name, _)| e.file_name() == *name))
     {
-        return Err("Candidate payload must contain only the four fixed artifact files".into());
+        return Err(format!("Candidate payload must contain only the four fixed artifact files; observed entries (up to 5): {}",entries.iter().map(|e|e.file_name().to_string_lossy().into_owned()).collect::<Vec<_>>().join(", ")));
     }
     Ok(())
 }

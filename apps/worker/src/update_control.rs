@@ -630,10 +630,14 @@ foreach ($role in @('worker','fixture','desktop','updater')) {
   $file=Join-Path $target "artifact-$role.rs"
   [IO.File]::WriteAllText($file,$rust)
   $image=Join-Path $payload $name
-  & $rustc --edition=2021 $file -o $image 2>&1 | ForEach-Object { Write-Output $_ }
+  $compiled=Join-Path $target $name
+  & $rustc --edition=2021 $file -o $compiled 2>&1 | ForEach-Object { Write-Output $_ }
   $code=$LASTEXITCODE
-  $commands+=@{name="compile-$role";executable=$rustc;arguments=@('--edition=2021',$file,'-o',$image);exitCode=$code;log="compile-$role.log"}
+  $commands+=@{name="compile-$role";executable=$rustc;arguments=@('--edition=2021',$file,'-o',$compiled);exitCode=$code;log="compile-$role.log"}
   if ($code -ne 0) {throw "Fixture Rust compile failed: $role"}
+  # Windows rustc/linker may emit auxiliary files. Only the four independent
+  # exe copies belong to payload; preserve build outputs under ignored target.
+  [IO.File]::Copy($compiled,$image,$false)
   $text=& $VerifierExecutable artifact-query $image $role
   if ($LASTEXITCODE -ne 0) {throw "Fixture query failed: $role"}
   $query=($text -join "`n") | ConvertFrom-Json

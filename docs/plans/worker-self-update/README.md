@@ -143,6 +143,9 @@ U0 не применяет source plan, не выключает процессы
   native 149 tests/full build passed, final script variable исправлена после
   failed overall gate; combined rollup впереди.
 - [ ] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
+  [Known installed-set reader](installed-set.md) реализован; publication,
+  early startup/control и baseline acceptance остаются впереди. [Abort snapshot](abort-read-snapshot.md)
+  исправлен; 482 local tests passed, native rollup впереди.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.
