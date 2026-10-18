@@ -599,6 +599,7 @@ Write-Output 'compiler actor stdout Привет ✓'
 Start-Sleep -Milliseconds 1500
 New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
 [IO.File]::WriteAllText((Join-Path $StagingDirectory 'fixture.json'),($PSBoundParameters | ConvertTo-Json -Compress))
+[IO.File]::WriteAllText((Join-Path $StagingDirectory 'candidate-report.json'),'{"kind":"compiler-report-fixture","candidateVerified":false,"runtimeApplied":false}')
 "#;
     struct Fixture {
         worker: Arc<Worker>,
@@ -1387,6 +1388,12 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
         assert_eq!(build.phase, UpdateBuildPhase::Completed);
         assert_eq!(build.outcome, Some(UpdateBuildOutcome::Succeeded));
         assert!(build.cleanup_verified);
+        let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+        let (report_receipt, report_bytes) =
+            winbridge_update::build_report::read_verified(&cfg, &build.spec.update_id).unwrap();
+        assert!(String::from_utf8(report_bytes)
+            .unwrap()
+            .contains("compiler-report-fixture"));
         let held = lease(
             h.worker_control(WorkerUpdateControlCommand::Observe)
                 .await
@@ -1442,7 +1449,7 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
         winbridge_update::verify_source(&cfg.source_directory, &f.request.source.manifest_sha256)
             .unwrap();
         if let Some(path) = std::env::var_os("WINBRIDGE_COMPILER_ACTOR_REPORT") {
-            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"supervisor_compiler_actor_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"busy":busy,"duplicate":duplicate,"final":final_view,"abort":abort,"singleCompiler":true,"mailboxResponsive":true,"rawReleaseRejected":true,"busyAbortRejected":true,"coordinatedAbortCompleted":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false})).unwrap()).unwrap();
+            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"supervisor_compiler_actor_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"busy":busy,"duplicate":duplicate,"final":final_view,"abort":abort,"singleCompiler":true,"mailboxResponsive":true,"rawReleaseRejected":true,"busyAbortRejected":true,"coordinatedAbortCompleted":true,"compilerReportBound":true,"reportReceipt":report_receipt,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false})).unwrap()).unwrap();
         }
         f.stop().await;
     }

@@ -219,6 +219,7 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<UpdateBuildRecord> {
             "Build source pin differs from update",
         ));
     }
+    build_report::read(c, &r)?;
     Ok(r)
 }
 pub(super) fn require_driver(c: &Connection, id: &str, event: UpdateEvent) -> Result<()> {
@@ -272,6 +273,7 @@ impl UpdateJournal {
         &mut self,
         a: &UpdateAuthority,
         spec: UpdateBuildSpec,
+        require_report: bool,
     ) -> Result<UpdateBuildRecord> {
         self.check_directory(a)?;
         let tx = self
@@ -339,6 +341,15 @@ impl UpdateJournal {
                 params![r.spec.attempt_id, encode(&r)?],
             )
             .map_err(storage)?)?;
+        if require_report {
+            let intent = crate::build_report::admit(&r.spec).map_err(storage)?;
+            one(tx
+                .execute(
+                    "INSERT INTO update_build_report_intents VALUES(?1,?2)",
+                    params![r.spec.attempt_id, encode(&intent)?],
+                )
+                .map_err(storage)?)?;
+        }
         if read(&tx, &r.spec.update_id)? != r {
             return Err(fail(
                 JournalErrorCode::Corrupt,
@@ -352,7 +363,16 @@ impl UpdateJournal {
         &mut self,
         a: &UpdateAuthority,
         previous: &UpdateBuildRecord,
+        next: UpdateBuildRecord,
+    ) -> Result<UpdateBuildRecord> {
+        self.advance_build_with_report(a, previous, next, None)
+    }
+    pub(crate) fn advance_build_with_report(
+        &mut self,
+        a: &UpdateAuthority,
+        previous: &UpdateBuildRecord,
         mut next: UpdateBuildRecord,
+        report: Option<crate::build_report::ReportEvidence>,
     ) -> Result<UpdateBuildRecord> {
         self.check_directory(a)?;
         let tx = self
@@ -393,6 +413,14 @@ impl UpdateJournal {
             .ok_or_else(|| fail(JournalErrorCode::Corrupt, "Build revision exhausted"))?;
         next.updated_at_ms = now_ms()?.max(current.updated_at_ms);
         validate(&next)?;
+        if let Some(report) = report {
+            one(tx
+                .execute(
+                    "INSERT INTO update_build_reports VALUES(?1,?2)",
+                    params![next.spec.attempt_id, encode(&report)?],
+                )
+                .map_err(storage)?)?;
+        }
         one(tx.execute("UPDATE update_builds SET record=?1,revision=?2,phase=?3 WHERE id=?4 AND revision=?5",params![encode(&next)?,next.revision as i64,encode(&next.phase)?,next.spec.attempt_id,current.revision as i64]).map_err(storage)?)?;
         one(tx
             .execute(

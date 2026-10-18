@@ -6,6 +6,8 @@ use winbridge_update::build::{
 };
 
 impl BuildControl for Control {}
+#[path = "compiler_report_cases.rs"]
+mod report;
 // Compiler tests use the local Cargo volume, not a potentially small /tmp tmpfs.
 fn temporary() -> tempfile::TempDir {
     tempfile::tempdir_in(std::env::current_exe().unwrap().parent().unwrap()).unwrap()
@@ -69,6 +71,28 @@ fn compiler_process_helper() {
     writeln!(counter, "{} {mode}", std::process::id()).unwrap();
     drop(counter);
     match mode {
+        "report" | "empty-report" | "oversized-report" => {
+            let path = args
+                .windows(2)
+                .find_map(|p| {
+                    (p[0] == "--skip")
+                        .then(|| p[1].strip_prefix("report-file="))
+                        .flatten()
+                })
+                .unwrap();
+            let path = Path::new(path);
+            fs::create_dir(path.parent().unwrap()).unwrap();
+            let bytes = match mode {
+                "empty-report" => vec![],
+                "oversized-report" => {
+                    vec![b' '; winbridge_update::build_report::MAX_REPORT_BYTES as usize + 1]
+                }
+                _ => br#"{"status":"built","candidateVerified":false,"runtimeApplied":false}"#
+                    .to_vec(),
+            };
+            fs::write(path, bytes).unwrap();
+            std::process::exit(0);
+        }
         "live" => {
             println!("live compiler Привет ✓");
             std::io::stdout().flush().unwrap();
@@ -639,7 +663,7 @@ fn schema_three_migration_backs_up_history_and_does_not_rebind_source_owner() {
     let mut f = ready(tmp.path());
     let cmd = command(&f, "success");
     let directory = f.config.runtime_directory.join("update-state");
-    f.db().execute_batch("DROP TABLE update_abort_receipts; DROP TABLE update_aborts; DROP TABLE update_build_receipts; DROP TABLE update_builds; PRAGMA user_version=3; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.db().execute_batch("DROP TABLE update_build_reports; DROP TABLE update_build_report_intents; DROP TABLE update_abort_receipts; DROP TABLE update_aborts; DROP TABLE update_build_receipts; DROP TABLE update_builds; PRAGMA user_version=3; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let old = UpdateJournal::inspect(&directory).unwrap();
     assert_eq!(old.schema_version, 3);
     assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err()); // owner lock still held

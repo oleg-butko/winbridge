@@ -1,3 +1,21 @@
+## U1: durable compiler report binding — 2026-10-18
+
+[Контракт](plans/worker-self-update/compiler-report-binding.md): updater schema 6,
+report intent до dispatch, runtime/update directory IDs, bounded report bytes /
+File ID / SHA, atomic report receipt + successful compiler completion. Trusted
+readonly API возвращает exact verified bytes; legacy/generic build не присваивает
+поздний report. BuildRecord/Spec и supervisor v1–v4 wire shape неизменны; worker
+schema остаётся 15. Потеря обязательного report оставляет Indeterminate, replay нет.
+
+467 workspace tests passed, включая шесть новых report regressions: file/parent
+replacement, same-size edit, hard links, missing/empty/oversize, ignored SQLite
+receipt/completion writes, existing staging, schema-5 backup/epoch/no-adoption.
+Linux/Windows Clippy all-targets, TypeScript/build:ui/scaffold, Python runner tests,
+8 export tests, PowerShell syntax, explicit local compiler actor и
+generated-contract check passed; native schema-6 gate впереди. Native
+runner требует отдельный report-binding proof и подтверждение actor receipt.
+Installed worker прежний/исправен; bootstrap/public install не включены.
+
 ## U1: compiler/artifact native gate пройден — 2026-10-18
 
 [Gate](plans/worker-self-update/windows-artifact-identity-gate-2026-10-18.md): clean

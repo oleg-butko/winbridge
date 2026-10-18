@@ -248,6 +248,7 @@ def main():
         archive_has_source_actor = 'winbridge/apps/update/src/preparation.rs' in archive.namelist()
         archive_has_compiler_actor = 'winbridge/apps/update/src/abort.rs' in archive.namelist()
         archive_has_compiler_output = 'winbridge/apps/update/src/build_output.rs' in archive.namelist()
+        archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
         archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
         archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
@@ -649,6 +650,26 @@ exit $nativeExit
             for test in ['compiler::compiler_output_pages_preserve_utf8_bytes_scope_and_terminal_proof','compiler::compiler_output_rejects_same_size_tamper_replacement_and_cursor_rebind','compiler::compiler_live_output_is_readonly_and_does_not_claim_capture_completed']:
                 if test + ' ... ok' not in log:
                     raise RuntimeError('Compiler output regression missing: ' + test)
+        if archive_has_compiler_report:
+            binding = json.loads((report / 'compiler-report-binding-proof.json').read_text(encoding='utf-8-sig'))
+            saved = binding['snapshot']
+            evidence = binding['receipt']
+            if (binding.get('kind') != 'compiler_report_binding_proof' or binding.get('passed') is not True
+                    or binding.get('platform') != 'windows' or binding['build']['sourceCommit'] != result['sourceCommit']
+                    or binding['build']['sourceDirty'] is not False
+                    or any(binding.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])
+                    or not all(binding.get(k) is True for k in ['intentBeforeDispatch','atomicCompletion','duplicateObserved'])
+                    or saved['journal']['schemaVersion'] != 6 or saved['build']['phase'] != 'completed'
+                    or saved['build']['outcome'] != 'succeeded' or saved['build']['cleanupVerified'] is not True
+                    or saved['evidence'] != evidence or evidence['bytes'] <= 0
+                    or not re.fullmatch(r'[0-9a-f]{64}', evidence['sha256'])
+                    or evidence['buildSpecSha256'] != saved['intent']['buildSpecSha256']
+                    or evidence['attemptId'] != saved['build']['spec']['attemptId']):
+                raise RuntimeError('Incomplete atomic compiler report binding proof')
+            log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            for name in ['is_admitted_before_dispatch_and_committed_with_completion', 'rejects_same_size_edits_file_and_parent_replacements', 'missing_empty_or_oversized_never_becomes_success_or_replays', 'ignored_receipt_rolls_back_success_and_cannot_be_adopted', 'generic_and_schema_five_history_cannot_adopt_later_report', 'existing_staging_is_rejected_before_intent_or_process']:
+                if 'compiler::report::compiler_report_' + name + ' ... ok' not in log:
+                    raise RuntimeError('Compiler report regression missing: ' + name)
         if archive_has_compiler_actor:
             expected += ['update-compiler-actor']
             actor = json.loads((report / 'compiler-actor-proof.json').read_text(encoding='utf-8-sig'))
@@ -663,6 +684,8 @@ exit $nativeExit
                     or actor['final']['driverError'] is not None or actor['abort']['phase'] != 'completed'
                     or actor['abort']['workerReleased']['phase'] != 'released'):
                 raise RuntimeError('Incomplete compiler actor/verified abort proof')
+            if archive_has_compiler_report and (actor.get('compilerReportBound') is not True or actor['reportReceipt']['attemptId'] != actor['final']['build']['spec']['attemptId']):
+                raise RuntimeError('Compiler actor did not bind its own report')
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             for test in ['compiler::compiler_admission_commits_intent_before_dispatch_and_never_mints_a_second_grant', 'compiler::dropped_compiler_permission_remains_an_observation_after_owner_restart']:
                 if test + ' ... ok' not in log:

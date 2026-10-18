@@ -169,6 +169,12 @@ fn logs(spec: &UpdateBuildSpec) -> PathBuf {
         .join("compiler")
         .join(&spec.attempt_id)
 }
+fn guard_report(j: &UpdateJournal, record: &UpdateBuildRecord) -> Result<()> {
+    if let Some(intent) = j.build_report_intent(record).map_err(error)? {
+        crate::build_report::guard(&record.spec, &intent)?;
+    }
+    Ok(())
+}
 fn output_file(path: &Path) -> Result<File> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
     let mut options = OpenOptions::new();
@@ -267,7 +273,26 @@ fn complete(
         next.stdout = Some(stdout);
         next.stderr = Some(stderr);
     }
-    j.advance_build(a, r, next).map_err(error)
+    let report = if outcome == UpdateBuildOutcome::Succeeded {
+        match j.build_report_intent(r).map_err(error)? {
+            Some(intent) => match crate::build_report::capture(&r.spec, &intent) {
+                Ok((proof, _)) => Some(proof),
+                Err(e) => {
+                    return unknown(
+                        j,
+                        a,
+                        r,
+                        &format!("Compiler exited, but candidate report could not be bound: {e}"),
+                    )
+                }
+            },
+            None => None,
+        }
+    } else {
+        None
+    };
+    j.advance_build_with_report(a, r, next, report)
+        .map_err(error)
 }
 fn unknown(
     j: &mut UpdateJournal,
@@ -332,6 +357,7 @@ pub fn admit_build(
                 runtime_available_bytes_before: runtime_free,
                 accepted_at_ms: now()?,
             },
+            cfg.build.is_some(),
         )
         .map_err(error)?;
     Ok(BuildAdmission::New(Box::new(BuildPermit { record: r })))
@@ -439,6 +465,7 @@ fn execute_admitted(
         }
     };
     source_guard(j, a, cfg, &id, c)?;
+    guard_report(j, &r)?;
     crate::verify_source(&cfg.source_directory, &r.spec.source_manifest_sha256)?;
     available(&r.spec.source_directory, &r.spec.runtime_directory)?;
     let (mut child, stdout, stderr) =
@@ -509,6 +536,7 @@ fn execute_admitted(
         c.build_progress(&r)?;
         crate::verify_source(&cfg.source_directory, &r.spec.source_manifest_sha256)?;
         source_guard(j, a, cfg, &id, c)?;
+        guard_report(j, &r)?;
         child.resume().map_err(error)?;
         let mut running = r.clone();
         running.phase = UpdateBuildPhase::Running;

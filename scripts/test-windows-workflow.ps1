@@ -197,6 +197,7 @@ $oldAtomicReport = $env:WINBRIDGE_ATOMIC_GATE_REPORT
 $oldSourcePreparationReport = $env:WINBRIDGE_SOURCE_PREPARATION_REPORT
 $oldCompilerActorReport = $env:WINBRIDGE_COMPILER_ACTOR_REPORT
 $oldCompilerOutputReport = $env:WINBRIDGE_COMPILER_OUTPUT_REPORT
+$oldCompilerReportProof = $env:WINBRIDGE_COMPILER_REPORT_PROOF
 $oldUpdateTestPwsh = $env:WINBRIDGE_UPDATE_TEST_PWSH
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
@@ -503,6 +504,7 @@ try {
         $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = Join-Path $ReportDirectory 'source-preparation-proof.json'
         $env:WINBRIDGE_COMPILER_ACTOR_REPORT = Join-Path $ReportDirectory 'compiler-actor-proof.json'
         $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = Join-Path $ReportDirectory 'compiler-output-proof.json'
+        $env:WINBRIDGE_COMPILER_REPORT_PROOF = Join-Path $ReportDirectory 'compiler-report-binding-proof.json'
         $env:WINBRIDGE_UPDATE_TEST_PWSH = (Get-Process -Id $PID).Path
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
@@ -549,8 +551,11 @@ try {
         $outputProof = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-output-proof.json') -Raw | ConvertFrom-Json
         if ($outputProof.kind -ne 'compiler_output_proof' -or $outputProof.passed -ne $true -or $outputProof.platform -ne 'windows' -or $outputProof.build.sourceDirty -or $outputProof.build.sourceCommit -cne $manifest.sourceCommit -or $outputProof.runtimeApplied -or $outputProof.windowsOpened -or $outputProof.live.phase -ne 'running' -or $outputProof.live.captureComplete -or $outputProof.live.proofVerified -or $outputProof.final.phase -ne 'completed' -or $outputProof.final.captureComplete -ne $true -or $outputProof.final.proofVerified -ne $true) { throw 'Compiler output proof incomplete' }
         $actor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-actor-proof.json') -Raw | ConvertFrom-Json
+        $reportBinding = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-report-binding-proof.json') -Raw | ConvertFrom-Json
+        if ($reportBinding.kind -ne 'compiler_report_binding_proof' -or $reportBinding.passed -ne $true -or $reportBinding.platform -ne 'windows' -or $reportBinding.build.sourceDirty -or $reportBinding.build.sourceCommit -cne $manifest.sourceCommit -or $reportBinding.runtimeApplied -or $reportBinding.candidateVerified -or $reportBinding.windowsOpened -or $reportBinding.snapshot.journal.schemaVersion -ne 6 -or $reportBinding.snapshot.build.phase -ne 'completed' -or $reportBinding.snapshot.build.outcome -ne 'succeeded' -or $reportBinding.snapshot.build.cleanupVerified -ne $true -or $null -eq $reportBinding.snapshot.intent -or $reportBinding.receipt.bytes -le 0 -or $reportBinding.receipt.sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Compiler report durable binding proof incomplete' }
+        foreach ($check in @('intentBeforeDispatch','atomicCompletion','duplicateObserved')) { if ($reportBinding.$check -ne $true) { throw "Compiler report check missing: $check" } }
         if ($actor.kind -ne 'supervisor_compiler_actor_proof' -or $actor.passed -ne $true -or $actor.platform -ne 'windows' -or $actor.build.sourceDirty -or $actor.build.sourceCommit -cne $manifest.sourceCommit -or $actor.runtimeApplied -or $actor.candidateVerified -or $actor.windowsOpened) { throw 'Compiler actor proof identity incomplete' }
-        foreach ($check in @('singleCompiler','mailboxResponsive','rawReleaseRejected','busyAbortRejected','coordinatedAbortCompleted')) { if ($actor.$check -ne $true) { throw "Compiler actor check missing: $check" } }
+        foreach ($check in @('singleCompiler','mailboxResponsive','rawReleaseRejected','busyAbortRejected','coordinatedAbortCompleted','compilerReportBound')) { if ($actor.$check -ne $true) { throw "Compiler actor check missing: $check" } }
         if ($actor.accepted.build.phase -ne 'intent' -or $actor.busy.build.phase -ne 'running' -or $actor.final.build.phase -ne 'completed' -or $actor.final.build.outcome -ne 'succeeded' -or $actor.final.build.cleanupVerified -ne $true -or $actor.final.driverActive -ne $false -or $null -ne $actor.final.driverError -or $actor.abort.phase -ne 'completed' -or $actor.abort.workerReleased.phase -ne 'released') { throw 'Compiler actor lifecycle/abort proof incomplete' }
         $compiler = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-build-proof.json') -Raw | ConvertFrom-Json
         if (-not $compiler.passed -or $compiler.platform -ne 'windows' -or -not $compiler.compilationFixture -or -not $compiler.duplicateObserved -or -not $compiler.workerLeaseRetained -or $compiler.runtimeApplied -or $compiler.candidateVerified -or $compiler.windowsOpened -or $compiler.record.phase -ne 'completed' -or $compiler.record.outcome -ne 'succeeded' -or -not $compiler.record.cleanupVerified -or $compiler.record.exitCode -ne 0 -or $compiler.build.sourceDirty -or $compiler.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Managed compiler fixture proof incomplete' }
@@ -636,6 +641,7 @@ try {
     $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = $oldSourcePreparationReport
     $env:WINBRIDGE_COMPILER_ACTOR_REPORT = $oldCompilerActorReport
     $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = $oldCompilerOutputReport
+    $env:WINBRIDGE_COMPILER_REPORT_PROOF = $oldCompilerReportProof
     $env:WINBRIDGE_UPDATE_TEST_PWSH = $oldUpdateTestPwsh
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource

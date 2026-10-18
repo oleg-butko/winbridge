@@ -127,10 +127,16 @@ U0 не применяет source plan, не выключает процессы
 - [x] [Source preparation actor](source-actor.md): ZIP/grant/apply driver и
   отзывчивый internal v2 mailbox; 438 workspace tests и Linux/Windows Clippy passed,
   [109 native tests / candidate build](windows-source-actor-gate-2026-10-18.md) passed.
-  Compiler/artifacts/abort не подключены.
-- [ ] [Compiler admission до dispatch](compiler-admission.md): fresh Intent/one-use
-  permit, actual live checks перед процессом; 31 source/compiler tests и Linux/Windows
-  Clippy passed, native rollup впереди. Actor build policy/dispatch ещё не подключены.
+  Compiler actor и coordinated abort добавлены следующим блоком.
+- [x] [Compiler admission до dispatch](compiler-admission.md),
+  [compiler actor/abort](compiler-actor-abort.md), [output](compiler-output.md) и
+  [artifact queries](artifact-identity.md):
+  [133 native tests / полный build](windows-artifact-identity-gate-2026-10-18.md)
+  passed. Durable candidate approval/install остаются впереди.
+- [ ] [Compiler report binding](compiler-report-binding.md): updater schema 6,
+  atomic compiler completion/report receipt и readonly exact-byte verification;
+  local/native проверки текущего блока ещё выполняются.
+- [ ] Durable artifact-set receipt, old runtime preimages и candidate FSM driver.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

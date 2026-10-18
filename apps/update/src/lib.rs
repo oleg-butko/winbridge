@@ -5,6 +5,7 @@ pub mod archive;
 pub mod artifact;
 pub mod build;
 pub mod build_output;
+pub mod build_report;
 pub mod journal;
 mod preparation;
 pub mod source;

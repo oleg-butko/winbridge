@@ -22,9 +22,10 @@ use winbridge_protocol::update::{
 
 mod abort;
 mod build;
+mod build_report;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 5;
+pub const UPDATE_SCHEMA_VERSION: u32 = 6;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -448,6 +449,7 @@ impl UpdateJournal {
             supervisor::migrate(&tx)?;
             build::migrate(&tx)?;
             abort::migrate(&tx)?;
+            build_report::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -477,7 +479,12 @@ impl UpdateJournal {
             if schema(&tx)? == 3 {
                 build::migrate(&tx)?;
             }
-            abort::migrate(&tx)?;
+            if schema(&tx)? == 4 {
+                abort::migrate(&tx)?;
+            }
+            if schema(&tx)? == 5 {
+                build_report::migrate(&tx)?;
+            }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
                     JournalErrorCode::Corrupt,
