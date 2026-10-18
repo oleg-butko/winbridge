@@ -101,9 +101,33 @@ try {
     'winbridge-update.exe' = Join-Path $workspaceTarget 'debug/winbridge-update.exe'
     'winbridge-desktop.exe' = Join-Path $desktopTarget 'release/winbridge-desktop.exe'
   }
+  # Queries remain children of the managed compiler (or the isolated native
+  # validation Job). Their helper adds its own bounded Job and stdio capture.
+  # Unsupported old desktop files are rejected by the marker before execution.
+  $queryHelper = $artifacts['winbridge-update.exe']
+  $roles = [ordered]@{'winbridge-worker.exe'='worker';'winbridge-fixture.exe'='fixture';'winbridge-desktop.exe'='desktop';'winbridge-update.exe'='updater'}
+  $report.artifactIdentities = @()
+  foreach ($name in $roles.Keys) {
+    $role = $roles[$name]
+    Write-Host "WinBridge candidate: readonly identity $role; no UI/configuration"
+    $logName = 'identity-'+$role+'.log'
+    $queryText = @(& $queryHelper artifact-query $artifacts[$name] $role 2>&1 | Tee-Object -FilePath (Join-Path $stage $logName))
+    $queryCode = $LASTEXITCODE
+    $report.commands += @{name=('identity-'+$role);executable=$queryHelper;arguments=@('artifact-query',$artifacts[$name],$role);exitCode=$queryCode;log=$logName}
+    if ($queryCode -ne 0) { throw "Artifact identity query failed: $role; see $logName" }
+    $query = ($queryText -join "`n") | ConvertFrom-Json
+    $d = $query.descriptor
+    if ($query.kind -ne 'artifact_query' -or $query.readOnly -ne $true -or $query.candidateVerified -ne $false -or $query.cleanupVerified -ne $true -or $query.image.querySupported -ne $true -or $d.schemaVersion -ne 1 -or $d.queryContract -ne 1 -or $d.role -cne $role -or $d.targetOs -cne 'windows' -or $d.build.sourceDirty -ne $false -or $d.build.sourceCommit -cne $verified.sourceCommit -or $d.build.sourceManifestSha256 -cne $ManifestSha256 -or $d.build.version -cne $identity.version) { throw "Artifact identity source/role/contract mismatch: $name" }
+    $report.artifactIdentities += @{name=$name;query=$query}
+  }
   $report.artifacts = @(New-UpdatePayload $artifacts (Join-Path $stage 'payload'))
+  foreach ($artifact in $report.artifacts) {
+    $query = @($report.artifactIdentities | Where-Object { $_.name -ceq $artifact.name })[0].query
+    if ($artifact.sha256 -cne $query.image.sha256 -or $artifact.bytes -ne $query.image.bytes) { throw "Artifact changed between identity query and payload staging: $($artifact.name)" }
+  }
+  $report.artifactIdentityChecked = $true
   $report.status = 'built'
-  Write-Host 'Candidate built. Installation and native candidate verification have not run.'
+  Write-Host 'Candidate built and executable identities checked. Worker health verification and installation have not run.'
 } catch {
   $report.status = 'failed'
   $report.error = $_.Exception.Message

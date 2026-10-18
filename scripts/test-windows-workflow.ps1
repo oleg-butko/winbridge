@@ -578,6 +578,7 @@ try {
         if (-not $?) { throw 'Update candidate build script failed' }
         $candidate = Get-Content -LiteralPath (Join-Path $candidateDirectory 'candidate-report.json') -Raw | ConvertFrom-Json
         if ($candidate.status -ne 'built' -or $candidate.runtimeApplied -or $candidate.candidateVerified -or $candidate.artifacts.Count -ne 4) { throw 'Candidate preparation proof incomplete' }
+        if ($candidate.artifactIdentityChecked -ne $true -or $candidate.artifactIdentities.Count -ne 4) { throw 'Candidate executable identity proof incomplete' }
         [IO.File]::Copy((Join-Path $candidateDirectory 'candidate-report.json'),(Join-Path $ReportDirectory 'update-candidate-proof.json'),$false)
         $report.updatePreparation = @{passed=$true;candidateDirectory=$candidateDirectory;manifestSha256=$sourceManifestSha;runtimeApplied=$false;windowsOpened=$false}
     }

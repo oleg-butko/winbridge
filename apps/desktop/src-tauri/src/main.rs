@@ -225,6 +225,26 @@ fn configured_endpoint() -> Result<String, String> {
 }
 
 fn main() {
+    let arguments: Vec<_> = std::env::args_os().skip(1).collect();
+    if arguments
+        .first()
+        .is_some_and(|arg| arg == "--artifact-info")
+    {
+        if arguments.len() != 1 {
+            eprintln!("Unsupported artifact query arguments; desktop UI was not started");
+            std::process::exit(1);
+        }
+        match serde_json::to_string(&winbridge_protocol::artifact_descriptor(
+            winbridge_protocol::ArtifactRole::Desktop,
+        )) {
+            Ok(json) => println!("{json}"),
+            Err(e) => {
+                eprintln!("Artifact descriptor: {e}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     let report_directory = std::env::current_exe()
         .map_err(|e| e.to_string())
         .and_then(|exe| {

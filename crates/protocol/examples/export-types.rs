@@ -9,6 +9,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        ArtifactRole::decl(&config),
+        ArtifactDescriptor::decl(&config),
         SourceManifest::decl(&config),
         SourceFile::decl(&config),
         SourceAction::decl(&config),

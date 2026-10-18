@@ -117,6 +117,9 @@ impl crate::build::BuildControl for Control {}
 // PowerShell's authorization manager rejects verbatim paths even for a local
 // drive. Preserve the checked file/root; change only its command-line spelling.
 fn tool_path(path: &Path) -> Result<String> {
+    if !path.is_absolute() {
+        return Err("Build tool paths must be absolute; drive-relative paths are forbidden".into());
+    }
     winbridge_platform::require_local_path_prefix(path).map_err(|e| e.to_string())?;
     let text = path.to_str().ok_or("Build paths must be UTF-8")?;
     #[cfg(windows)]

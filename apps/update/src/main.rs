@@ -5,11 +5,43 @@ use std::{
 
 fn run() -> Result<bool, String> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if let [op, image, role] = args.as_slice() {
+        if op == "artifact-query" {
+            let role = match role.as_str() {
+                "worker" => winbridge_protocol::ArtifactRole::Worker,
+                "fixture" => winbridge_protocol::ArtifactRole::Fixture,
+                "desktop" => winbridge_protocol::ArtifactRole::Desktop,
+                "updater" => winbridge_protocol::ArtifactRole::Updater,
+                _ => return Err("Unknown artifact role".into()),
+            };
+            let report = winbridge_update::artifact::query_image(Path::new(image), role)?;
+            println!(
+                "{}",
+                serde_json::to_string(&report).map_err(|e| e.to_string())?
+            );
+            return Ok(true);
+        }
+    }
     if args == ["--build-info"] {
         println!(
             "{}",
             serde_json::to_string(&winbridge_protocol::build_identity())
                 .map_err(|e| e.to_string())?
+        );
+        return Ok(true);
+    }
+    if args.first().is_some_and(|arg| arg == "--artifact-info") {
+        if args.len() != 1 {
+            return Err(
+                "Unsupported artifact query arguments; no configuration or work executed".into(),
+            );
+        }
+        println!(
+            "{}",
+            serde_json::to_string(&winbridge_protocol::artifact_descriptor(
+                winbridge_protocol::ArtifactRole::Updater
+            ))
+            .map_err(|e| e.to_string())?
         );
         return Ok(true);
     }

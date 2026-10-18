@@ -503,3 +503,64 @@ fn fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd() {
     assert!(output.stderr.is_empty());
     assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
 }
+
+#[test]
+fn worker_and_fixture_artifact_queries_ignore_config_and_never_execute_work() {
+    use winbridge_protocol::{ArtifactDescriptor, ArtifactRole, ARTIFACT_QUERY_MARKER};
+    for (image, role) in [
+        (env!("CARGO_BIN_EXE_winbridge-worker"), ArtifactRole::Worker),
+        (
+            env!("CARGO_BIN_EXE_winbridge-fixture"),
+            ArtifactRole::Fixture,
+        ),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let bin = root.path().join("bin");
+        let cwd = root.path().join("cwd");
+        fs::create_dir(&bin).unwrap();
+        fs::create_dir(&cwd).unwrap();
+        let bytes = fs::read(image).unwrap();
+        assert!(bytes
+            .windows(ARTIFACT_QUERY_MARKER.len())
+            .any(|w| w == ARTIFACT_QUERY_MARKER));
+        let copy = bin.join(Path::new(image).file_name().unwrap());
+        fs::copy(image, &copy).unwrap();
+        let config = bin.join("winbridge-worker.local.json");
+        fs::write(
+            &config,
+            b"invalid; readonly artifact query must ignore this",
+        )
+        .unwrap();
+        let out = std::process::Command::new(&copy)
+            .arg("--artifact-info")
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let d: ArtifactDescriptor = serde_json::from_slice(&out.stdout).unwrap();
+        assert_eq!(d.role, role);
+        assert_eq!(d.schema_version, 1);
+        assert_eq!(d.query_contract, 1);
+        assert_eq!(d.target_os, std::env::consts::OS);
+        assert_eq!(d.target_arch, std::env::consts::ARCH);
+        assert_eq!(d.build.version, env!("CARGO_PKG_VERSION"));
+        let invalid = std::process::Command::new(&copy)
+            .args(["--artifact-info", "--unsupported"])
+            .current_dir(&cwd)
+            .output()
+            .unwrap();
+        assert!(!invalid.status.success());
+        assert!(invalid.stdout.is_empty());
+        assert!(out.stderr.is_empty());
+        assert_eq!(fs::read_dir(&cwd).unwrap().count(), 0);
+        assert_eq!(fs::read_dir(&bin).unwrap().count(), 2);
+        assert_eq!(
+            fs::read(&config).unwrap(),
+            b"invalid; readonly artifact query must ignore this"
+        );
+    }
+}

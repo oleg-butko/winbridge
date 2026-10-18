@@ -1,4 +1,6 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type ArtifactRole = "worker" | "fixture" | "desktop" | "updater";
+export type ArtifactDescriptor = { schemaVersion: number, kind: string, queryContract: number, role: ArtifactRole, build: BuildIdentity, targetOs: string, targetArch: string, };
 export type SourceManifest = { schemaVersion: number, sourceCommit: string, dirty: boolean, createdAt: string, includesBuiltUi: boolean, files: Array<SourceFile>, };
 export type SourceFile = { path: string, bytes: number, sha256: string, };
 export type SourceAction = "add" | "replace" | "remove" | "keep";

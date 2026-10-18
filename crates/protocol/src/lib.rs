@@ -1,4 +1,6 @@
 //! Shared wire contracts and the local worker read model.
+mod artifact;
+pub use artifact::*;
 
 use serde::{Deserialize, Serialize};
 mod request_context;

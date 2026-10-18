@@ -273,3 +273,21 @@ Failure fixture сохраняет bounded stdout/stderr и делает coordin
 worker подтвердил cancelled, idle 0, complete coverage и прежний generation.
 Installed source 1f3aa9f / runtime/config/journal не менялись; bootstrap не нужен.
 Автоматический повтор разрешён пользователем. A4 остаётся на паузе.
+
+## U1: artifact identity/probe и абсолютные tool paths — 2026-10-18
+
+[Контракт](plans/worker-self-update/artifact-identity.md). Четыре exe получают
+--artifact-info; static marker проверяется до запуска legacy desktop. Bounded
+Job/stdout/stderr query не читает config, не пишет state, не разрешает installation.
+Build-only script проверяет четыре role/source identities внутри compiler tree
+и сверяет SHA с payload. Durable artifact-set receipt/health/shutdown ещё впереди.
+11 preflight tests и worker/fixture metadata checks passed; Linux/Windows Clippy
+all-targets passed. Native проверка desktop/query и полный повтор ещё впереди.
+
+Второй native run 6ae7382 `20261018-095232-7c0952a3` завершился failed/1
+штатно с report.ready.json: 20 passed tests, один новый unit test выявил допустимый
+для общего prefix helper drive-relative `K:relative`. Tool resolver теперь
+отдельно требует is_absolute; schema-3 PowerShell executable тоже.
+Windows free before/after 25,076,011,008 / 25,038,508,032 bytes; installed worker
+idle 0, прежний generation, recovery/maintenance errors нет. Первый run и
+PowerShell AuthorizationManager diagnosis сохранены ниже. Gate ещё НЕ пройден.

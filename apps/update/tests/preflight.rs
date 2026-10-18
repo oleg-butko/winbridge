@@ -286,3 +286,113 @@ fn updater_build_identity_query_needs_no_config_and_creates_no_state() {
         b"Invalid default configuration; identity query must ignore it"
     );
 }
+
+#[test]
+fn updater_artifact_query_ignores_invalid_config_and_embeds_its_capability_marker() {
+    let root = tempfile::tempdir().unwrap();
+    let bin = root.path().join("bin");
+    let cwd = root.path().join("cwd");
+    fs::create_dir(&bin).unwrap();
+    fs::create_dir(&cwd).unwrap();
+    let original = Path::new(env!("CARGO_BIN_EXE_winbridge-update"));
+    let bytes = fs::read(original).unwrap();
+    assert!(bytes
+        .windows(winbridge_protocol::ARTIFACT_QUERY_MARKER.len())
+        .any(|w| w == winbridge_protocol::ARTIFACT_QUERY_MARKER));
+    let image = bin.join(original.file_name().unwrap());
+    fs::copy(original, &image).unwrap();
+    let config = bin.join("winbridge-update.local.json");
+    fs::write(&config, b"invalid configuration; must never be read").unwrap();
+    let out = Command::new(&image)
+        .arg("--artifact-info")
+        .current_dir(&cwd)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let d: winbridge_protocol::ArtifactDescriptor = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(d.role, winbridge_protocol::ArtifactRole::Updater);
+    assert_eq!(d.schema_version, 1);
+    assert_eq!(d.query_contract, 1);
+    assert_eq!(d.kind, "winbridge_artifact");
+    assert_eq!(d.target_os, std::env::consts::OS);
+    assert_eq!(d.target_arch, std::env::consts::ARCH);
+    assert_eq!(d.build.version, env!("CARGO_PKG_VERSION"));
+    let invalid = Command::new(&image)
+        .args(["--artifact-info", "--unsupported"])
+        .current_dir(&cwd)
+        .output()
+        .unwrap();
+    assert!(!invalid.status.success());
+    assert!(invalid.stdout.is_empty());
+    assert!(out.stderr.is_empty());
+    assert_eq!(fs::read_dir(&cwd).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(&bin).unwrap().count(), 2);
+    assert_eq!(
+        fs::read(&config).unwrap(),
+        b"invalid configuration; must never be read"
+    );
+}
+
+#[test]
+fn unsupported_artifact_is_never_started_and_marker_scan_is_bounded() {
+    use winbridge_update::artifact::{inspect_image, query_image};
+    let root = tempfile::tempdir().unwrap();
+    let image = root.path().join("legacy-desktop.exe");
+    fs::write(&image, b"Legacy binary without an identity-query contract").unwrap();
+    assert!(!inspect_image(&image).unwrap().query_supported);
+    assert!(
+        query_image(&image, winbridge_protocol::ArtifactRole::Desktop)
+            .unwrap_err()
+            .contains("executable was not started")
+    );
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+    let mut bytes = vec![b'x'; 65530];
+    bytes.extend_from_slice(winbridge_protocol::ARTIFACT_QUERY_MARKER);
+    bytes.extend_from_slice(b"tail");
+    fs::write(&image, &bytes).unwrap();
+    let evidence = inspect_image(&image).unwrap();
+    assert!(evidence.query_supported);
+    assert_eq!(evidence.bytes, bytes.len() as u64);
+    assert_eq!(evidence.sha256, sha256(&bytes));
+    let big = root.path().join("oversized.exe");
+    fs::File::create(&big)
+        .unwrap()
+        .set_len(256 * 1024 * 1024 + 1)
+        .unwrap();
+    assert!(inspect_image(&big).is_err());
+    assert!(inspect_image(Path::new("relative.exe")).is_err());
+}
+#[test]
+fn managed_artifact_probe_checks_role_cleans_tree_and_ignores_configuration() {
+    let root = tempfile::tempdir().unwrap();
+    let original = Path::new(env!("CARGO_BIN_EXE_winbridge-update"));
+    let copy = root.path().join(original.file_name().unwrap());
+    fs::copy(original, &copy).unwrap();
+    let config = root.path().join("winbridge-update.local.json");
+    fs::write(&config, b"invalid; probe must not load configuration").unwrap();
+    let report =
+        winbridge_update::artifact::query_image(&copy, winbridge_protocol::ArtifactRole::Updater)
+            .unwrap();
+    assert!(report.read_only && report.cleanup_verified && !report.candidate_verified);
+    assert_eq!(
+        report.descriptor.role,
+        winbridge_protocol::ArtifactRole::Updater
+    );
+    assert!(report.image.query_supported);
+    assert_eq!(report.image.sha256, sha256(&fs::read(&copy).unwrap()));
+    assert!(winbridge_update::artifact::query_image(
+        &copy,
+        winbridge_protocol::ArtifactRole::Desktop
+    )
+    .unwrap_err()
+    .contains("role/contract/target mismatch"));
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 2);
+    assert_eq!(
+        fs::read(config).unwrap(),
+        b"invalid; probe must not load configuration"
+    );
+}

@@ -182,3 +182,5 @@ recovery, а не копирование файлов. Новая actor library 
 [Compiler actor и безопасная отмена до установки](compiler-actor-abort.md) — U1 internal v3/v4, config 3, journal 5; native gate ожидается.
 
 [Bounded compiler output](compiler-output.md): новый trusted readonly API; native проверка вместе с повтором compiler actor / PowerShell path fix.
+
+[Artifact identity и ограниченные probes](artifact-identity.md): readonly query четырёх exe и compiler-tree проверка; native gate ожидается, runtime installation не включена.

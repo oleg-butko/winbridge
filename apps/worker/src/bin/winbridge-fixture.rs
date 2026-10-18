@@ -9,10 +9,28 @@ use std::{
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // Candidate identity inspection must not create runs.log or execute a fixture.
+    if args
+        .first()
+        .is_some_and(|arg| matches!(arg.as_str(), "--artifact-info" | "--build-info"))
+        && args.len() != 1
+    {
+        eprintln!("Unsupported identity query arguments; fixture was not run");
+        return ExitCode::FAILURE;
+    }
     if args == ["--build-info"] {
         println!(
             "{}",
             serde_json::to_string(&winbridge_protocol::build_identity()).unwrap()
+        );
+        return ExitCode::SUCCESS;
+    }
+    if args == ["--artifact-info"] {
+        println!(
+            "{}",
+            serde_json::to_string(&winbridge_protocol::artifact_descriptor(
+                winbridge_protocol::ArtifactRole::Fixture
+            ))
+            .unwrap()
         );
         return ExitCode::SUCCESS;
     }

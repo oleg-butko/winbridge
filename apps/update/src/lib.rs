@@ -2,6 +2,7 @@
 //! Source effects require a trusted worker lease; runtime replacement is not implemented.
 pub mod abort;
 pub mod archive;
+pub mod artifact;
 pub mod build;
 pub mod build_output;
 pub mod journal;
@@ -104,6 +105,9 @@ pub fn load_config(path: &Path) -> Result<UpdateConfig> {
         return Err("Unsupported updater config schema".into());
     }
     if let Some(build) = &config.build {
+        if !build.powershell_executable.is_absolute() {
+            return Err("PowerShell build executable must use an absolute local path".into());
+        }
         if build.timeout_ms == 0 || build.timeout_ms > 3_600_000 {
             return Err("Build timeout must be 1..3600000 ms".into());
         }
