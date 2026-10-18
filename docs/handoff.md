@@ -1,3 +1,17 @@
+## U1: shared runtime identity DTO — 2026-10-18
+
+[Контракт](plans/worker-self-update/runtime-identity-contract.md): RuntimeImageEvidence
+и LoadedWorkerIdentity перенесены в protocol; старые app-update Rust paths оставлены
+re-export, JSON bytes/order и schemas 15/7 прежние. Generated TS добавлен. Два
+exact-byte/unknown-authority-field tests, legacy contracts, четыре installed-set
+и 11 report/ledger tests passed; workspace check, Linux/Windows Clippy all-targets,
+fmt/contracts/typecheck/scaffold passed. Нового runtime control действия пока нет.
+Следом readonly control v2 ObserveRuntime с exact active supervisor/worker binding
+и fresh config checks, затем durable baseline до SourceApply. Registration image
+SHA остаётся updater SHA; worker image identity нельзя подменить этим полем.
+Native startup/pin gate ниже остаётся evidence для tested d3c9ed6; DTO refactor не
+объявляет новый native execution. Installed worker прежний/healthy, bootstrap не нужен.
+
 ## U1: actual worker startup/pins native gate пройден — 2026-10-18
 
 [Gate](plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md): source

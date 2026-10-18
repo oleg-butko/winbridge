@@ -83,6 +83,9 @@ baseline acceptance и весь U1 остаются открытыми.
 пройден: 159 tests / 17 groups, full candidate build, readonly Main и отдельный
 actual serve/пять pins/owned idle stop. Bootstrap/install не включены. Далее
 live identity/control и durable baseline до SourceApply; U1 остаётся открытым.
+[Shared runtime identity DTO](plans/worker-self-update/runtime-identity-contract.md)
+перенесены в protocol с exact-byte tests и generated TS, без wire/schema changes.
+Control v2/live identity и durable baseline до source effects остаются следующими.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

@@ -1,5 +1,5 @@
 //! Readonly identity probes. This never approves a candidate or changes runtime.
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, OpenOptions},
@@ -22,15 +22,7 @@ const MAX_QUERY_BYTES: usize = 64 * 1024;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ImageEvidence {
-    pub path: String,
-    pub bytes: u64,
-    pub sha256: String,
-    pub file_identity: String,
-    pub query_supported: bool,
-}
+pub use winbridge_protocol::RuntimeImageEvidence as ImageEvidence;
 pub(crate) struct Pinned {
     file: File,
     path: PathBuf,

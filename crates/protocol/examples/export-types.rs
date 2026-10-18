@@ -11,6 +11,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let declarations = [
         ArtifactRole::decl(&config),
         ArtifactDescriptor::decl(&config),
+        RuntimeImageEvidence::decl(&config),
+        LoadedWorkerIdentity::decl(&config),
         SourceManifest::decl(&config),
         SourceFile::decl(&config),
         SourceAction::decl(&config),

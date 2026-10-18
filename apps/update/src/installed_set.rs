@@ -3,7 +3,8 @@ use crate::artifact::{ImageEvidence, Pinned};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use winbridge_platform::source_files::directory_identity;
-use winbridge_protocol::{update::SupervisorProcess, ArtifactDescriptor, ArtifactRole};
+pub use winbridge_protocol::LoadedWorkerIdentity;
+use winbridge_protocol::{ArtifactDescriptor, ArtifactRole};
 type Result<T> = std::result::Result<T, String>;
 pub const MANIFEST_NAME: &str = "winbridge-installed-set.json";
 const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
@@ -52,18 +53,6 @@ pub struct PinnedInstalledSet {
     observation: InstalledSetObservation,
     _manifest: Pinned,
     _images: Vec<Pinned>,
-}
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LoadedWorkerIdentity {
-    pub schema_version: u16,
-    pub kind: String,
-    pub process: SupervisorProcess,
-    pub runtime_identity: String,
-    pub set_id: String,
-    pub manifest_sha256: String,
-    pub descriptor: ArtifactDescriptor,
-    pub image: ImageEvidence,
 }
 fn valid_manifest(m: &InstalledSetManifest, installation: &str, scope: &str) -> Result<()> {
     if m.schema_version != 1
