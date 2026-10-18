@@ -8,6 +8,14 @@ use std::{
 };
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // Candidate identity inspection must not create runs.log or execute a fixture.
+    if args == ["--build-info"] {
+        println!(
+            "{}",
+            serde_json::to_string(&winbridge_protocol::build_identity()).unwrap()
+        );
+        return ExitCode::SUCCESS;
+    }
     let mode = args.first().map(String::as_str).unwrap_or("success");
     let mut counter = OpenOptions::new()
         .create(true)

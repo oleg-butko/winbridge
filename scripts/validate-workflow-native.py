@@ -246,6 +246,7 @@ def main():
         archive_has_worker_source = 'winbridge/apps/update/src/worker_source.rs' in archive.namelist()
         archive_has_compiler = 'winbridge/apps/update/src/build.rs' in archive.namelist()
         archive_has_source_actor = 'winbridge/apps/update/src/preparation.rs' in archive.namelist()
+        archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
         archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
         archive_checks_atomic_root_exit = archive_has_atomic and b'original_root_exited' in archive.read('winbridge/crates/platform/src/windows_atomic.rs')
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
@@ -571,6 +572,10 @@ exit $nativeExit
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             if 'compiler::compiler_owner_crash_keeps_durable_attempt_and_never_replays_it ... ok' not in log:
                 raise RuntimeError('Windows compiler owner-crash/dedup test did not pass')
+        if archive_checks_artifact_queries:
+            for log_name, test in [('update-native-preflight.log', 'updater_build_identity_query_needs_no_config_and_creates_no_state'), ('update-worker-native-coordination.log', 'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd')]:
+                if test + ' ... ok' not in (report / log_name).read_text(encoding='utf-8-sig'):
+                    raise RuntimeError('Readonly artifact identity test missing: ' + test)
         if archive_has_source_actor:
             preparation = json.loads((report / 'source-preparation-proof.json').read_text(encoding='utf-8-sig'))
             final = preparation.get('final',{})

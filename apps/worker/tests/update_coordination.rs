@@ -482,3 +482,24 @@ fn previous_worker_refuses_schema_fifteen_without_mutating_journal() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("journal schema 15 is unsupported"));
     assert_eq!(fs::read(path).unwrap(), before);
 }
+
+#[test]
+fn fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd() {
+    let root = tempfile::tempdir().unwrap();
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_winbridge-fixture"))
+        .arg("--build-info")
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let identity: winbridge_protocol::BuildIdentity =
+        serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(identity.version, env!("CARGO_PKG_VERSION"));
+    assert!(!identity.build_id.is_empty());
+    assert!(output.stderr.is_empty());
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+}

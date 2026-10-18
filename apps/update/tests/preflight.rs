@@ -244,3 +244,45 @@ fn package_policy_requires_explicit_config_two_and_is_readonly_when_delivery_is_
     assert_eq!(fs::read(worker).unwrap(), b"preserved configuration");
     assert!(!runtime.join("update-state").exists());
 }
+
+#[test]
+fn updater_build_identity_query_needs_no_config_and_creates_no_state() {
+    let root = tempfile::tempdir().unwrap();
+    let bin = root.path().join("bin");
+    let cwd = root.path().join("cwd");
+    fs::create_dir(&bin).unwrap();
+    fs::create_dir(&cwd).unwrap();
+    let image = bin.join(if cfg!(windows) {
+        "winbridge-update.exe"
+    } else {
+        "winbridge-update"
+    });
+    fs::copy(env!("CARGO_BIN_EXE_winbridge-update"), &image).unwrap();
+    let config = bin.join("winbridge-update.local.json");
+    fs::write(
+        &config,
+        b"Invalid default configuration; identity query must ignore it",
+    )
+    .unwrap();
+    let output = Command::new(image)
+        .arg("--build-info")
+        .current_dir(&cwd)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let identity: winbridge_protocol::BuildIdentity =
+        serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(identity.version, env!("CARGO_PKG_VERSION"));
+    assert!(!identity.build_id.is_empty());
+    assert!(output.stderr.is_empty());
+    assert_eq!(fs::read_dir(cwd).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(bin).unwrap().count(), 2);
+    assert_eq!(
+        fs::read(config).unwrap(),
+        b"Invalid default configuration; identity query must ignore it"
+    );
+}

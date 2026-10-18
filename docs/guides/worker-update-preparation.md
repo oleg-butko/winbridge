@@ -167,3 +167,15 @@ View показывает сохранённые parent/source/build phases, fil
 обновление. При source failure сохраняются journals/preimages/worker guard;
 повтор того же запроса не продолжает файловые действия. Coordinated abort/release,
 compiler orchestration и runtime install — следующие шаги.
+
+
+### Версия файлов candidate
+
+В новой версии `winbridge-update --build-info` и `winbridge-fixture --build-info`
+выводят тот же BuildIdentity JSON, что worker/desktop. Запрос не читает local config,
+не создаёт journal и не выполняет fixture. Это позволяет будущему artifact verifier
+сравнить source commit/manifest/build ID до установки. Сам запрос не проверяет
+полный binary set и не подтверждает работу нового worker.
+
+Два новых readonly CLI checks и прежние preflight/coordination checks прошли на
+Debian; Windows cross-check/Clippy прошёл. Native checks входят в следующий rollup.

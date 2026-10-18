@@ -1,3 +1,14 @@
+## Самообновление U1: readonly identity остальных exe — 2026-10-18
+
+Updater/fixture поддерживают --build-info до config/fixture effects. Query возвращает
+BuildIdentity, не читает даже неверный default config и не создаёт journal/runs.log.
+8 preflight и 4 coordination tests passed; Windows Clippy/tests cross-check, fmt и
+Python syntax passed. Два новых CLI checks войдут в следующий native rollup; его
+script проверяет реальные test names. Полный artifact verifier ещё не реализован.
+Installed worker прежний. Следующий блок — fresh compiler admission до actor ACK,
+управляемый compiler driver в supervisor и fixed local build policy; затем artifacts,
+coordinated abort/release, exact shutdown, U2–U3. A4 отложен.
+
 ## Самообновление U1: source preparation actor — 2026-10-18
 
 [Контракт](plans/worker-self-update/source-actor.md). Internal supervisor v2 принимает
