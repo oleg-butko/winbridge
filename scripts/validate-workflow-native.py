@@ -308,25 +308,6 @@ def main():
             if not args.update_reference_worker:
                 raise RuntimeError('Supply a known schema-14 exe with --update-reference-worker; Info does not attest the installed journal schema')
             profile_argument += ' -UpdateReferenceWorker ' + ps_string(args.update_reference_worker)
-        if archive_has_artifact_probes:
-            identities = proof.get('artifactIdentities', [])
-            roles = {'winbridge-worker.exe':'worker','winbridge-fixture.exe':'fixture','winbridge-desktop.exe':'desktop','winbridge-update.exe':'updater'}
-            if proof.get('artifactIdentityChecked') is not True or len(identities) != 4 or {i['name'] for i in identities} != set(roles):
-                raise RuntimeError('Missing candidate artifact identity set')
-            artifacts = {a['name']: a for a in proof['artifacts']}
-            for identity in identities:
-                q = identity['query']; d = q['descriptor']; a = artifacts[identity['name']]
-                if (q.get('kind') != 'artifact_query' or q.get('readOnly') is not True or q.get('candidateVerified') is not False
-                        or q.get('cleanupVerified') is not True or q['image']['querySupported'] is not True
-                        or d.get('schemaVersion') != 1 or d.get('queryContract') != 1 or d.get('role') != roles[identity['name']]
-                        or d.get('targetOs') != 'windows' or d.get('targetArch') != 'x86_64'
-                        or d['build']['sourceDirty'] is not False or d['build']['sourceCommit'] != result['sourceCommit']
-                        or d['build']['sourceManifestSha256'] != scope['manifestSha256'] or d['build']['version'] != build['version']
-                        or q['image']['sha256'] != a['sha256'] or q['image']['bytes'] != a['bytes']):
-                    raise RuntimeError('Candidate role/source/hash/cleanup mismatch: ' + identity['name'])
-            for log_name, test in [('update-native-preflight.log','updater_artifact_query_ignores_invalid_config_and_embeds_its_capability_marker'),('update-native-preflight.log','unsupported_artifact_is_never_started_and_marker_scan_is_bounded'),('update-native-preflight.log','managed_artifact_probe_checks_role_cleans_tree_and_ignores_configuration'),('update-worker-native-coordination.log','worker_and_fixture_artifact_queries_ignore_config_and_never_execute_work')]:
-                if test + ' ... ok' not in (report / log_name).read_text(encoding='utf-8-sig'):
-                    raise RuntimeError('Artifact identity regression missing: ' + test)
         if args.update_preparation_reuse_run:
             old_id = args.update_preparation_reuse_run
             previous_report = report.parent / old_id
@@ -696,6 +677,25 @@ exit $nativeExit
                 or archive_proof.get('source',{}).get('manifestSha256') != scope.get('manifestSha256')
                 or {a['name'] for a in proof['artifacts']} != {'winbridge-worker.exe','winbridge-fixture.exe','winbridge-desktop.exe','winbridge-update.exe'}):
             raise RuntimeError('Incomplete native update preparation proof')
+        if archive_has_artifact_probes:
+            identities = proof.get('artifactIdentities', [])
+            roles = {'winbridge-worker.exe':'worker','winbridge-fixture.exe':'fixture','winbridge-desktop.exe':'desktop','winbridge-update.exe':'updater'}
+            if proof.get('artifactIdentityChecked') is not True or len(identities) != 4 or {i['name'] for i in identities} != set(roles):
+                raise RuntimeError('Missing candidate artifact identity set')
+            artifacts = {a['name']: a for a in proof['artifacts']}
+            for identity in identities:
+                q = identity['query']; d = q['descriptor']; a = artifacts[identity['name']]
+                if (q.get('kind') != 'artifact_query' or q.get('readOnly') is not True or q.get('candidateVerified') is not False
+                        or q.get('cleanupVerified') is not True or q['image']['querySupported'] is not True
+                        or d.get('schemaVersion') != 1 or d.get('queryContract') != 1 or d.get('role') != roles[identity['name']]
+                        or d.get('targetOs') != 'windows' or d.get('targetArch') != 'x86_64'
+                        or d['build']['sourceDirty'] is not False or d['build']['sourceCommit'] != result['sourceCommit']
+                        or d['build']['sourceManifestSha256'] != scope['manifestSha256'] or d['build']['version'] != build['version']
+                        or q['image']['sha256'] != a['sha256'] or q['image']['bytes'] != a['bytes']):
+                    raise RuntimeError('Candidate role/source/hash/cleanup mismatch: ' + identity['name'])
+            for log_name, test in [('update-native-preflight.log','updater_artifact_query_ignores_invalid_config_and_embeds_its_capability_marker'),('update-native-preflight.log','unsupported_artifact_is_never_started_and_marker_scan_is_bounded'),('update-native-preflight.log','managed_artifact_probe_checks_role_cleans_tree_and_ignores_configuration'),('update-worker-native-coordination.log','worker_and_fixture_artifact_queries_ignore_config_and_never_execute_work')]:
+                if test + ' ... ok' not in (report / log_name).read_text(encoding='utf-8-sig'):
+                    raise RuntimeError('Artifact identity regression missing: ' + test)
         if args.update_preparation_reuse_run:
             expected_cache = str(PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / args.update_preparation_reuse_run)
             if (proof.get('validationCacheDirectory') != expected_cache

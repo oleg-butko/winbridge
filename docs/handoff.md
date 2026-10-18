@@ -1,3 +1,12 @@
+## U1: исправление Debian validation runner — 2026-10-18
+
+В a8e6ce8 artifact-result checks ошибочно выполнялись до submit; Windows task
+не создавался. Checks перенесены после чтения итогового candidate proof.
+Два mock-IPC regression tests подтверждают admission до result inspection и
+запрет submit при active user work. Rust/runtime код не менялся; 460 tests и
+предыдущие Clippy/UI checks остаются актуальны. Следующий native run проверит
+все изменения после двух реальных failed runs, установка ещё отключена.
+
 ## U1: artifact identity/probe и абсолютные tool paths — 2026-10-18
 
 [Контракт](plans/worker-self-update/artifact-identity.md). Четыре exe получают
