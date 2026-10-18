@@ -383,6 +383,162 @@ fn source_success_preserves_old_files_and_caches_and_manifest_is_last() {
 }
 
 #[test]
+fn source_apply_admission_commits_before_dispatch_and_only_fresh_permit_writes() {
+    let root = tempfile::tempdir().unwrap();
+    let mut f = Fixture::new(root.path());
+    f.prepare();
+    let SourceApplyAdmission::New(permit) =
+        begin_source_apply(&mut f.journal, &f.owner, &f.config, &f.id, &mut f.control).unwrap()
+    else {
+        panic!("Fresh source permit required")
+    };
+    assert_eq!(permit.record().phase, SourceTransactionPhase::Applying);
+    assert_eq!(
+        f.journal.get(&f.id).unwrap().phase,
+        UpdatePhase::SourceApplying
+    );
+    assert_eq!(
+        fs::read(f.config.source_directory.join("Cargo.toml")).unwrap(),
+        b"old"
+    );
+    assert!(f
+        .status()
+        .files
+        .iter()
+        .all(|v| v.state == SourceFileState::Planned));
+    assert!(matches!(
+        begin_source_apply(&mut f.journal, &f.owner, &f.config, &f.id, &mut f.control).unwrap(),
+        SourceApplyAdmission::Observed(_)
+    ));
+    assert!(f.apply().is_err());
+    let record = permit
+        .apply(&mut f.journal, &f.owner, &f.config, &mut f.control)
+        .unwrap();
+    assert_eq!(record.phase, SourceTransactionPhase::Verified);
+    assert_eq!(f.journal.get(&f.id).unwrap().phase, UpdatePhase::Building);
+    assert_eq!(
+        fs::read(f.config.source_directory.join("Cargo.toml")).unwrap(),
+        b"new"
+    );
+}
+
+#[test]
+fn dropped_source_apply_permit_is_not_recreated_after_owner_restart() {
+    let root = tempfile::tempdir().unwrap();
+    let mut f = Fixture::new(root.path());
+    f.prepare();
+    let SourceApplyAdmission::New(permit) =
+        begin_source_apply(&mut f.journal, &f.owner, &f.config, &f.id, &mut f.control).unwrap()
+    else {
+        panic!("Fresh source permit required")
+    };
+    drop(permit);
+    drop(f.owner);
+    f.owner = f.journal.acquire_owner().unwrap();
+    let SourceApplyAdmission::Observed(record) =
+        begin_source_apply(&mut f.journal, &f.owner, &f.config, &f.id, &mut f.control).unwrap()
+    else {
+        panic!("Restart must observe, never dispatch")
+    };
+    assert_eq!(record.phase, SourceTransactionPhase::Applying);
+    assert!(f.apply().is_err());
+    assert_eq!(
+        fs::read(f.config.source_directory.join("Cargo.toml")).unwrap(),
+        b"old"
+    );
+    assert!(f
+        .status()
+        .files
+        .iter()
+        .all(|v| v.state == SourceFileState::Planned));
+    let inspection = inspect_source(
+        &f.config.runtime_directory.join("update-state"),
+        &f.id,
+        0,
+        100,
+    )
+    .unwrap();
+    assert!(!inspection.can_replay);
+    assert!(f
+        .config
+        .runtime_directory
+        .join("state")
+        .join(winbridge_worker::UPDATE_STARTUP_GUARD)
+        .exists());
+}
+
+#[test]
+fn concurrent_source_apply_admissions_cannot_mint_two_effect_permits() {
+    struct ParallelControl {
+        worker: Arc<Worker>,
+        barrier: Arc<std::sync::Barrier>,
+    }
+    impl SourceControl for ParallelControl {
+        fn observe_worker(&mut self) -> Result<WorkerInfo, String> {
+            self.barrier.wait();
+            Ok(info(&self.worker))
+        }
+    }
+    let root = tempfile::tempdir().unwrap();
+    let mut f = Fixture::new(root.path());
+    f.prepare();
+    let barrier = Arc::new(std::sync::Barrier::new(2));
+    let directory = f.config.runtime_directory.join("update-state");
+    let scope = installation_scope(&f.config).unwrap();
+    let results = std::thread::scope(|threads| {
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let mut control = ParallelControl {
+                    worker: f.control.worker.clone(),
+                    barrier: barrier.clone(),
+                };
+                let directory = &directory;
+                let scope = &scope;
+                let owner = &f.owner;
+                let config = &f.config;
+                let id = &f.id;
+                threads.spawn(move || {
+                    let mut journal = UpdateJournal::open(directory, scope).unwrap();
+                    begin_source_apply(&mut journal, owner, config, id, &mut control)
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    let mut permits = results.into_iter().filter_map(|r| match r {
+        Ok(SourceApplyAdmission::New(permit)) => Some(permit),
+        Ok(SourceApplyAdmission::Observed(record)) => {
+            assert_eq!(record.phase, SourceTransactionPhase::Applying);
+            None
+        }
+        Err(_) => None, // A concurrent CAS/key conflict grants no effect permission.
+    });
+    let permit = permits
+        .next()
+        .expect("Exactly one freshly committed transition");
+    assert!(permits.next().is_none());
+    assert!(f
+        .status()
+        .files
+        .iter()
+        .all(|v| v.state == SourceFileState::Planned));
+    assert_eq!(
+        fs::read(f.config.source_directory.join("Cargo.toml")).unwrap(),
+        b"old"
+    );
+    permit
+        .apply(&mut f.journal, &f.owner, &f.config, &mut f.control)
+        .unwrap();
+    assert_eq!(
+        f.status().transaction.phase,
+        SourceTransactionPhase::Verified
+    );
+}
+
+#[test]
 fn source_transaction_uses_fresh_process_authenticated_worker_ipc() {
     use winbridge_platform::infrastructure;
     use winbridge_update::worker_source::WorkerSourceControl;

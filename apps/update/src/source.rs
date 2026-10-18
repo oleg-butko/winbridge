@@ -505,13 +505,13 @@ fn target_files_match(source: &Path, target: &SourceManifest) -> Result<()> {
     }
     Ok(())
 }
-fn apply_inner(
+fn begin_apply_inner(
     journal: &mut UpdateJournal,
     authority: &UpdateAuthority,
     config: &UpdateConfig,
     id: &str,
     control: &mut impl SourceControl,
-) -> Result<SourceTransactionRecord> {
+) -> Result<SourceApplyAdmission> {
     let r = journal
         .source_guard(authority, id, SourceTransactionPhase::Prepared)
         .map_err(err)?;
@@ -529,7 +529,6 @@ fn apply_inner(
     )?;
     let changes = journal.source_plan(id).map_err(err)?;
     let transaction = Path::new(&r.transaction_directory);
-    let source = Path::new(&r.source_directory);
     let incoming = Path::new(&r.stage_directory).join("source");
     verify_source(&incoming, &r.worker_source_spec.target_manifest_sha256)?;
     let (target, _) = read_manifest(&incoming)?;
@@ -541,14 +540,105 @@ fn apply_inner(
             matches_file(&artifact(transaction, "prepared", i as u32), pin)?;
         }
     }
-    journal
-        .change_source_phase(
+    let (record, fresh) = journal
+        .change_source_phase_once(
             authority,
             id,
             SourceTransactionPhase::Applying,
             "Применение исходников: намерения и прежние файлы сохранены",
         )
         .map_err(err)?;
+    if !fresh {
+        return Ok(SourceApplyAdmission::Observed(Box::new(record)));
+    }
+    Ok(SourceApplyAdmission::New(Box::new(SourceApplyPermit {
+        record,
+        changes,
+        target,
+    })))
+}
+
+/// A transient, one-use grant minted only by a freshly committed Applying transition.
+/// It is neither serializable nor clonable; a saved Applying record is not a grant.
+pub struct SourceApplyPermit {
+    record: SourceTransactionRecord,
+    changes: Vec<SourceChange>,
+    target: SourceManifest,
+}
+pub enum SourceApplyAdmission {
+    New(Box<SourceApplyPermit>),
+    Observed(Box<SourceTransactionRecord>),
+}
+impl SourceApplyPermit {
+    pub fn record(&self) -> &SourceTransactionRecord {
+        &self.record
+    }
+    /// Consume the fresh grant on a blocking driver thread. Dropping it preserves
+    /// Applying and its worker barrier; reopening a journal cannot recreate it.
+    pub fn apply(
+        self,
+        journal: &mut UpdateJournal,
+        authority: &UpdateAuthority,
+        config: &UpdateConfig,
+        control: &mut impl SourceControl,
+    ) -> Result<SourceTransactionRecord> {
+        let id = self.record.update_id.clone();
+        let result = apply_permit_inner(journal, authority, config, self, control);
+        finish_apply_result(
+            journal,
+            authority,
+            &id,
+            result,
+            &[SourceTransactionPhase::Applying],
+        )
+    }
+}
+/// Commit Applying before an actor acknowledges or dispatches any file work.
+/// Repeated calls return observations and never mint another effect permission.
+pub fn begin_source_apply(
+    journal: &mut UpdateJournal,
+    authority: &UpdateAuthority,
+    config: &UpdateConfig,
+    id: &str,
+    control: &mut impl SourceControl,
+) -> Result<SourceApplyAdmission> {
+    journal.check_source_authority(authority).map_err(err)?;
+    let record = journal.source_header(id).map_err(err)?;
+    if record.phase != SourceTransactionPhase::Prepared {
+        return Ok(SourceApplyAdmission::Observed(Box::new(record)));
+    }
+    let result = begin_apply_inner(journal, authority, config, id, control);
+    finish_apply_result(
+        journal,
+        authority,
+        id,
+        result,
+        &[SourceTransactionPhase::Prepared],
+    )
+}
+fn apply_permit_inner(
+    journal: &mut UpdateJournal,
+    authority: &UpdateAuthority,
+    config: &UpdateConfig,
+    permit: SourceApplyPermit,
+    control: &mut impl SourceControl,
+) -> Result<SourceTransactionRecord> {
+    let SourceApplyPermit {
+        record: r,
+        changes,
+        target,
+    } = permit;
+    let id = r.update_id.as_str();
+    let transaction = Path::new(&r.transaction_directory);
+    let source = Path::new(&r.source_directory);
+    guards(
+        journal,
+        authority,
+        config,
+        &r,
+        control,
+        SourceTransactionPhase::Applying,
+    )?;
     progress(control, id, SourceCheckpoint::Applying, None)?;
     for (i, change) in changes.iter().enumerate() {
         let ordinal = i as u32;
@@ -678,23 +768,26 @@ pub fn apply_source(
     id: &str,
     control: &mut impl SourceControl,
 ) -> Result<SourceTransactionRecord> {
-    journal.check_source_authority(authority).map_err(err)?;
-    let current = journal.source_header(id).map_err(err)?;
-    if current.phase == SourceTransactionPhase::Verified {
-        return Ok(current);
+    match begin_source_apply(journal, authority, config, id, control)? {
+        SourceApplyAdmission::New(permit) => permit.apply(journal, authority, config, control),
+        SourceApplyAdmission::Observed(record) if record.phase == SourceTransactionPhase::Verified => Ok(*record),
+        SourceApplyAdmission::Observed(_) => Err("Unfinished/blocked source transaction cannot replay effects; manual reconciliation required".into()),
     }
-    if current.phase != SourceTransactionPhase::Prepared {
-        return Err("Unfinished/blocked source transaction cannot replay effects; manual reconciliation required".into());
-    }
-    match apply_inner(journal, authority, config, id, control) {
-        Ok(r) => Ok(r),
+}
+fn finish_apply_result<T>(
+    journal: &mut UpdateJournal,
+    authority: &UpdateAuthority,
+    id: &str,
+    result: Result<T>,
+    blockable: &[SourceTransactionPhase],
+) -> Result<T> {
+    match result {
+        Ok(value) => Ok(value),
         Err(error) => {
-            if journal.source_header(id).is_ok_and(|r| {
-                matches!(
-                    r.phase,
-                    SourceTransactionPhase::Prepared | SourceTransactionPhase::Applying
-                )
-            }) {
+            if journal
+                .source_header(id)
+                .is_ok_and(|r| blockable.contains(&r.phase))
+            {
                 let reason=format!("Изменение исходников остановлено: {error}. Сохраните preimages/held и оба журнала; не снимайте блокировку и не повторяйте применение.");
                 let reason = if reason.len() > 4000 {
                     "Изменение исходников остановлено; сохраните staging, прежние файлы и журналы. Требуется ручная проверка."

@@ -115,6 +115,9 @@ U0 не применяет source plan, не выключает процессы
   orchestration и coordinated artifact/abort driver пока не подключены.
 - [ ] [Atomic executable adapter](atomic-executable.md) для compiler: Job назначается
   при CreateProcess, bounded handle inheritance и CRT argv; native gate впереди.
+- [ ] [Source admission перед dispatch](source-admission.md): one-use fresh commit
+  permit, повтор только observe; 26 integration tests и Windows cross-check passed,
+  native rollup впереди.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

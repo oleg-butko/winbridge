@@ -661,15 +661,28 @@ mod tests {
             creation_time: child.birth.parse().unwrap(),
         };
         let until = Instant::now() + Duration::from_secs(5);
-        while !matches!(observe_process(&identity), ProcessObservation::Empty(_)) {
+        while !matches!(observe_process(&identity), ProcessObservation::Empty(_))
+            || !original_root_exited(&child)
+        {
             assert!(Instant::now() < until);
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(!root.path().join("runs.log").exists());
         proof(
             "ownerCrashBeforePidReceipt",
-            serde_json::json!({"passed":true,"child":child,"jobEmpty":true,"userCodeNotRun":true}),
+            serde_json::json!({"passed":true,"child":child,"jobEmpty":true,"rootExited":true,"userCodeNotRun":true}),
         );
+    }
+    fn original_root_exited(process: &winbridge_protocol::update::SupervisorProcess) -> bool {
+        match infrastructure::matches(process) {
+            Ok(matches) => !matches,
+            Err(error)
+                if error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(87) =>
+            {
+                true
+            } // Absent, nonzero PID.
+            Err(error) => panic!("Root process observation unavailable: {error}"),
+        }
     }
     #[test]
     #[ignore = "Owned handle inheritance helper"]

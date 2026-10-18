@@ -246,7 +246,9 @@ def main():
         archive_has_worker_source = 'winbridge/apps/update/src/worker_source.rs' in archive.namelist()
         archive_has_compiler = 'winbridge/apps/update/src/build.rs' in archive.namelist()
         archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
+        archive_checks_atomic_root_exit = archive_has_atomic and b'original_root_exited' in archive.read('winbridge/crates/platform/src/windows_atomic.rs')
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
+        archive_has_source_admission = archive_has_source_transaction and b'pub fn begin_source_apply(' in archive.read('winbridge/apps/update/src/source.rs')
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
     run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
@@ -568,6 +570,11 @@ exit $nativeExit
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             if 'compiler::compiler_owner_crash_keeps_durable_attempt_and_never_replays_it ... ok' not in log:
                 raise RuntimeError('Windows compiler owner-crash/dedup test did not pass')
+        if archive_has_source_admission:
+            log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            for test in ['source_apply_admission_commits_before_dispatch_and_only_fresh_permit_writes', 'dropped_source_apply_permit_is_not_recreated_after_owner_restart', 'concurrent_source_apply_admissions_cannot_mint_two_effect_permits']:
+                if test + ' ... ok' not in log:
+                    raise RuntimeError('Source admission/one-use dispatch test missing: ' + test)
         if archive_has_worker_source:
             native_log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             control_log = (report / 'update-worker-control.log').read_text(encoding='utf-8-sig')
@@ -599,6 +606,8 @@ exit $nativeExit
                     or atomic['stdioOnly'].get('unlistedHandleInherited') is not False or atomic['stdioOnly'].get('stdinEof') is not True
                     or atomic.get('build',{}).get('sourceCommit') != result['sourceCommit'] or atomic.get('build',{}).get('sourceDirty') is not False):
                 raise RuntimeError('Incomplete atomic executable creation/Job/handle/crash proof')
+            if archive_checks_atomic_root_exit and atomic['ownerCrashBeforePidReceipt'].get('rootExited') is not True:
+                raise RuntimeError('Atomic owner-crash root exit was not verified')
         scope = result.get('updatePreparation', {})
         proof = json.loads((report / 'update-candidate-proof.json').read_text(encoding='utf-8-sig'))
         archive_proof = json.loads((report / 'update-archive-proof.json').read_text(encoding='utf-8-sig'))

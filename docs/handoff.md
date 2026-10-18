@@ -1,3 +1,15 @@
+## Самообновление U1: source admission перед dispatch — 2026-10-18
+
+[Контракт](plans/worker-self-update/source-admission.md). Fresh commit parent/source
+Applying выдаёт одноразовый непередаваемый SourceApplyPermit; повтор/receipt лишь
+наблюдает. Исполнение можно передать blocking thread после ACK. Dropped permit и
+owner restart не создают новый grant; barrier сохраняется. Синхронный API использует
+тот же путь. 26 source/compiler integration tests и Windows Clippy/tests cross-check
+passed; 3 новые проверки admission/restart/race. Native rollup впереди; он также
+усиливает atomic owner-crash proof проверкой exact root exit. Schema 4/15 прежние.
+Actor mailbox/orchestration, artifacts/abort и exact shutdown ещё не подключены.
+Installed worker прежний, bootstrap пока не требуется; A4 отложен.
+
 ## Самообновление U1: atomic compiler launch — 2026-10-18
 
 [Контракт и ограничения](plans/worker-self-update/atomic-executable.md).

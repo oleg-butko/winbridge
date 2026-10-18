@@ -364,6 +364,17 @@ impl UpdateJournal {
         phase: SourceTransactionPhase,
         reason: &str,
     ) -> Result<SourceTransactionRecord> {
+        self.change_source_phase_once(authority, id, phase, reason)
+            .map(|(record, _)| record)
+    }
+    pub(crate) fn change_source_phase_once(
+        &mut self,
+        authority: &UpdateAuthority,
+        id: &str,
+        phase: SourceTransactionPhase,
+        reason: &str,
+    ) -> Result<(SourceTransactionRecord, bool)> {
+        let mut fresh = false;
         let current = header(&self.connection, id)?;
         let update = record(&self.connection, id)?;
         let event = match (current.phase, phase) {
@@ -405,9 +416,11 @@ impl UpdateJournal {
                     }
                 }
             }
-            set_phase(c, &current, phase, reason)
+            set_phase(c, &current, phase, reason)?;
+            fresh = true;
+            Ok(())
         })?;
-        header(&self.connection, id)
+        Ok((header(&self.connection, id)?, fresh))
     }
     pub(crate) fn source_file_intent(
         &mut self,

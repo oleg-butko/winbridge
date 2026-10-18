@@ -526,7 +526,7 @@ try {
         foreach ($case in @('argvAndSuspended','noResume','domainAndPrivateJob','rejectedBeforeCreate','suspendCount','ownerCrashBeforePidReceipt','stdioOnly')) {
             if ($atomic.$case.passed -ne $true) { throw "Atomic executable case missing: $case" }
         }
-        if ($atomic.ownerCrashBeforePidReceipt.jobEmpty -ne $true -or $atomic.ownerCrashBeforePidReceipt.userCodeNotRun -ne $true -or $atomic.stdioOnly.unlistedHandleInherited -ne $false -or $atomic.stdioOnly.stdinEof -ne $true) { throw 'Atomic cleanup/handle proof incomplete' }
+        if ($atomic.ownerCrashBeforePidReceipt.jobEmpty -ne $true -or $atomic.ownerCrashBeforePidReceipt.rootExited -ne $true -or $atomic.ownerCrashBeforePidReceipt.userCodeNotRun -ne $true -or $atomic.stdioOnly.unlistedHandleInherited -ne $false -or $atomic.stdioOnly.stdinEof -ne $true) { throw 'Atomic cleanup/handle proof incomplete' }
         $compiler = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-build-proof.json') -Raw | ConvertFrom-Json
         if (-not $compiler.passed -or $compiler.platform -ne 'windows' -or -not $compiler.compilationFixture -or -not $compiler.duplicateObserved -or -not $compiler.workerLeaseRetained -or $compiler.runtimeApplied -or $compiler.candidateVerified -or $compiler.windowsOpened -or $compiler.record.phase -ne 'completed' -or $compiler.record.outcome -ne 'succeeded' -or -not $compiler.record.cleanupVerified -or $compiler.record.exitCode -ne 0 -or $compiler.build.sourceDirty -or $compiler.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Managed compiler fixture proof incomplete' }
         $updateControl = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-control-proof.json') -Raw | ConvertFrom-Json

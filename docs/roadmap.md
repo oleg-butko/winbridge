@@ -38,6 +38,9 @@ library: intent/PID/Job/resume, output и cleanup, updater schema 4. 429 workspa
 [Atomic compiler launch](plans/worker-self-update/atomic-executable.md) закрывает
 CreateProcess/Job gap; native gate впереди. Source/build/install orchestration и
 публичное включение не готовы; U1 целиком открыт.
+[Source admission](plans/worker-self-update/source-admission.md) разделяет durable
+Applying и одноразовый file driver permit; 26 integration tests и Windows cross-check
+passed, native rollup впереди.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.
