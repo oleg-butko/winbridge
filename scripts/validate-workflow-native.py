@@ -244,6 +244,7 @@ def main():
         archive_has_supervisor = 'winbridge/apps/update/src/supervisor.rs' in archive.namelist()
         archive_has_worker_control = 'winbridge/apps/worker/src/update_control.rs' in archive.namelist()
         archive_has_worker_source = 'winbridge/apps/update/src/worker_source.rs' in archive.namelist()
+        archive_has_compiler = 'winbridge/apps/update/src/build.rs' in archive.namelist()
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
@@ -549,6 +550,21 @@ exit $nativeExit
                     or smoke['ready']['phase'] != 'ready' or smoke['active']['phase'] != 'active' or smoke['stopped']['phase'] != 'stopped'
                     or smoke['build']['sourceCommit'] != result['sourceCommit'] or smoke['build']['sourceDirty'] is not False):
                 raise RuntimeError('Incomplete supervisor smoke on actual staged WinBridge source')
+        if archive_has_compiler:
+            compiler = json.loads((report / 'update-build-proof.json').read_text(encoding='utf-8-sig'))
+            record = compiler.get('record', {})
+            if (compiler.get('passed') is not True or compiler.get('platform') != 'windows'
+                    or not all(compiler.get(k) is True for k in ['compilationFixture','duplicateObserved','workerLeaseRetained'])
+                    or any(compiler.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])
+                    or record.get('phase') != 'completed' or record.get('outcome') != 'succeeded'
+                    or record.get('cleanupVerified') is not True or record.get('exitCode') != 0
+                    or record.get('spec',{}).get('platform') != 'windows' or not record.get('spec',{}).get('jobName')
+                    or not record.get('process') or not record.get('stdout') or not record.get('stderr')
+                    or compiler['build']['sourceCommit'] != result['sourceCommit'] or compiler['build']['sourceDirty'] is not False):
+                raise RuntimeError('Incomplete managed compiler fixture proof; this is not candidate/install approval')
+            log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            if 'compiler::compiler_owner_crash_keeps_durable_attempt_and_never_replays_it ... ok' not in log:
+                raise RuntimeError('Windows compiler owner-crash/dedup test did not pass')
         if archive_has_worker_source:
             native_log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             control_log = (report / 'update-worker-control.log').read_text(encoding='utf-8-sig')

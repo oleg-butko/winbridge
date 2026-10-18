@@ -350,6 +350,30 @@ impl ManagedChild {
             Ok(true)
         } // SIGKILL plus joined pipe readers and reaped child is the portable test adapter.
     }
+
+    /// Release owned handles after cleanup became indeterminate, without an
+    /// unbounded wait in Drop. This does not prove process/tree exit. The caller
+    /// must retain its durable barrier and reconcile the saved physical identity.
+    pub fn close_unconfirmed(self) {
+        let mut owned = std::mem::ManuallyDrop::new(self);
+        let _ = owned.terminate_tree();
+        // SAFETY: take each resource-owning field exactly once. ManuallyDrop
+        // suppresses the original destructor; no original field is accessed
+        // after the extracted resources are dropped.
+        let mut child = unsafe { std::ptr::read(&owned.child) };
+        // Closing this owned Windows Job also requests kill-on-close. No PID or
+        // foreign Job is opened for termination, and no breakaway is requested.
+        #[cfg(windows)]
+        {
+            let job = unsafe { std::ptr::read(&owned.job) };
+            let identity = unsafe { std::ptr::read(&owned.identity) };
+            drop(identity);
+            drop(job);
+        }
+        let _ = child.try_wait();
+        // Child::drop closes handles without waiting; ManagedChild::drop never runs.
+        drop(child);
+    }
 }
 
 impl Drop for ManagedChild {

@@ -55,10 +55,10 @@ Config по умолчанию — `winbridge-update.local.json` рядом с e
 bytes/SHA; распаковки и записи нет. Поддерживаются обычные Stored/Deflate ZIP.
 `journal init` создаёт только отдельную БД `runtime\update-state\updates.sqlite`
 и installation metadata; worker/config/source/exe не меняются. Повтор сохраняет ID.
-Текущая updater schema 3: при наличии schema 1/2 init мигрирует её только при свободном
+Текущая updater schema 4: при наличии schema 1/2/3 init мигрирует её только при свободном
 owner lock, предварительно создавая проверенную согласованную SQLite backup.
-Schema 1/2 остаются доступными через readonly status без миграции;
-source-status/source-inspect читают schema 2 без обновления.
+Schema 1/2/3 остаются доступными через readonly status без миграции;
+source-status/source-inspect читают schema 2/3 без обновления.
 `journal status [UPDATE_ID]` читает согласованный record, owner epoch и последнюю
 sequence, не захватывая владение и не создавая отсутствующую БД. Это диагностика
 будущего supervisor; сейчас пользователю не требуется выполнять команды вручную.
@@ -88,6 +88,21 @@ sequence, не захватывая владение и не создавая о
 вызывать внутренний supervisor mode не требуется.
 [Native gate](../plans/worker-self-update/windows-supervisor-gate-2026-10-17.md):
 76 tests и полный candidate build прошли; installed runtime не обновлялся.
+
+### Диагностика compiler attempt
+
+Trusted [compiler driver](../plans/worker-self-update/compiler-driver.md) сохраняет
+intent, PID/Job, output и cleanup отдельно от worker journal. Public build/update
+команда пока не включена. Saved phase не означает живой процесс или готовность
+установки; readonly inspection показывает их отдельно и не делает replay:
+
+```powershell
+.\target\debug\winbridge-update.exe --config K:\path\to\winbridge-update.local.json journal build-status <UPDATE_ID_OR_ATTEMPT_ID>
+```
+
+`attemptId` — ID попытки процесса, `buildId` в BuildIdentity — версия бинарника.
+Не удаляйте guard/journals и не повторяйте compiler после Running/Indeterminate.
+Координированный abort/release и автоматический supervisor driver ещё в работе.
 
 ## Сборка кандидата без остановки worker
 
@@ -124,7 +139,7 @@ sequence, не захватывая владение и не создавая о
 каталоге зарегистрированного fixture-проекта; installed source/runtime не меняются.
 Нужен clean source ZIP с built UI и явные ссылки на прежние exe:
 `--update-reference-worker <schema-14 worker>` и
-`--update-reference-updater <schema-1 updater> --update-reference-updater-sha256 <SHA>`.
+`--update-reference-updater <schema-3 updater> --update-reference-updater-sha256 <SHA>`.
 Они копируются в тестовый каталог и используются только с новой тестовой БД
 для проверки отказа старой версии. Путь/hash updater берутся из проверенного
 предыдущего candidate report. Это не самообновление; production shutdown и

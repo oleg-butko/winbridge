@@ -1,3 +1,22 @@
+## Самообновление U1: managed compiler — 2026-10-18
+
+[Контракт и ограничения](plans/worker-self-update/compiler-driver.md).
+Trusted library сохраняет compiler intent/PID/Job/resume receipts до Windows effects,
+отдельно собирает stdout/stderr и подтверждает root/tree/readers cleanup.
+Timeout/nonzero, ignored writes, source edits, history corruption и duplicate не
+создают второй процесс. Attempt ID отделён от binary build identity. Readonly
+`journal build-status` не продолжает попытку даже при текущем Empty Job.
+Updater schema 4: consistent v1/v2/v3 migration backup и old-binary refusal;
+worker schema остаётся 15. Новая source/build orchestration ещё не подключена;
+source lease/parent Building сохраняются до координированного artifact/abort driver.
+
+429 workspace tests passed; после итоговых уточнений 10 compiler tests passed.
+Итоговые core/platform checks, Clippy, Windows/tests cross-check, fmt/contracts,
+typecheck/build:ui/scaffold и Python/PowerShell syntax прошли.
+Native gate schema 4 ожидается. Installed worker не изменяется; bootstrap пока
+не требуется. После этого блока — source/build actor driver, artifact verification,
+abort/release, exact shutdown и U2–U3. A4 остаётся отложенным.
+
 ## Самообновление U1: fresh SourceControl — 2026-10-17
 
 [Контракт](plans/worker-self-update/fresh-source-control.md). Добавлен readonly

@@ -20,9 +20,10 @@ use winbridge_protocol::update::{
     UpdateTransition,
 };
 
+mod build;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 3;
+pub const UPDATE_SCHEMA_VERSION: u32 = 4;
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
 type Result<T> = std::result::Result<T, JournalError>;
@@ -438,6 +439,7 @@ impl UpdateJournal {
             .map_err(storage)?;
             source::migrate(&tx)?;
             supervisor::migrate(&tx)?;
+            build::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -461,7 +463,10 @@ impl UpdateJournal {
             if schema(&tx)? == 1 {
                 source::migrate(&tx)?;
             }
-            supervisor::migrate(&tx)?;
+            if schema(&tx)? == 2 {
+                supervisor::migrate(&tx)?;
+            }
+            build::migrate(&tx)?;
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
                     JournalErrorCode::Corrupt,
@@ -802,6 +807,7 @@ impl UpdateJournal {
             ));
         }
         supervisor::require_driver(&tx, authority, id, command.event)?;
+        build::require_driver(&tx, id, command.event)?;
         let mut current = record(&tx, id)?;
         if !source_driver
             && matches!(

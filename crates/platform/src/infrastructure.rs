@@ -264,6 +264,39 @@ mod tests {
         wrong.birth.push('0');
         assert!(!matches(&wrong).unwrap());
     }
+    #[test]
+    fn unconfirmed_owned_cleanup_does_not_wait_for_process_lifetime() {
+        use std::time::{Duration, Instant};
+        let root = tempfile::tempdir().unwrap();
+        let command = winbridge_protocol::ResolvedCommand {
+            executable: std::env::current_exe().unwrap().to_str().unwrap().into(),
+            arguments: [
+                "--exact",
+                "infrastructure::tests::unconfirmed_lifetime_helper",
+                "--ignored",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect(),
+            working_directory: root.path().to_str().unwrap().into(),
+            timeout_ms: 1000,
+        };
+        let (child, _stdout, _stderr) = crate::ManagedChild::prepare(&command, None).unwrap();
+        let identity = stamp(child.id()).unwrap();
+        let at = Instant::now();
+        child.close_unconfirmed();
+        assert!(at.elapsed() < Duration::from_secs(2));
+        let until = Instant::now() + Duration::from_secs(5);
+        while matches(&identity).unwrap_or(false) {
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+    #[test]
+    #[ignore = "Owned process lifetime fixture"]
+    fn unconfirmed_lifetime_helper() {
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
     #[cfg(windows)]
     #[test]
     fn managed_domain_cannot_launch_infrastructure() {

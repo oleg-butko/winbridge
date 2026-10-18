@@ -43,7 +43,7 @@ fn binding(r: &SourceTransactionRecord) -> Result<String> {
         r.accepted_at_ms,
     ))
 }
-fn header(c: &Connection, id: &str) -> Result<SourceTransactionRecord> {
+pub(super) fn header(c: &Connection, id: &str) -> Result<SourceTransactionRecord> {
     let row: Option<(String, String, i64, String)> = c
         .query_row(
             "SELECT record,binding,revision,phase FROM source_transactions WHERE id=?1",

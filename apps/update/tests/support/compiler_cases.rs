@@ -1,0 +1,775 @@
+use super::*;
+use winbridge_platform::infrastructure;
+use winbridge_protocol::ResolvedCommand;
+use winbridge_update::build::{execute_build, BuildControl, MAX_OUTPUT_BYTES};
+
+impl BuildControl for Control {}
+// Compiler tests use the local Cargo volume, not a potentially small /tmp tmpfs.
+fn temporary() -> tempfile::TempDir {
+    tempfile::tempdir_in(std::env::current_exe().unwrap().parent().unwrap()).unwrap()
+}
+fn command(f: &Fixture, mode: &str) -> ResolvedCommand {
+    ResolvedCommand {
+        executable: std::env::current_exe()
+            .unwrap()
+            .canonicalize()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .into(),
+        arguments: vec![
+            "--exact".into(),
+            "compiler::compiler_process_helper".into(),
+            "--ignored".into(),
+            "--nocapture".into(),
+            "--skip".into(),
+            mode.into(),
+        ],
+        working_directory: f
+            .config
+            .source_directory
+            .canonicalize()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .into(),
+        timeout_ms: if mode == "tree" { 1500 } else { 20000 },
+    }
+}
+fn ready(root: &Path) -> Fixture {
+    let mut f = Fixture::new(root);
+    f.prepare();
+    f.apply().unwrap();
+    f
+}
+fn log(r: &UpdateBuildRecord, stream: &str) -> PathBuf {
+    Path::new(&r.spec.runtime_directory)
+        .join("update")
+        .join(&r.spec.update_id)
+        .join("compiler")
+        .join(&r.spec.attempt_id)
+        .join(format!("{stream}.bin"))
+}
+#[test]
+#[ignore = "Owned compiler process fixture"]
+fn compiler_process_helper() {
+    let args: Vec<_> = std::env::args().collect();
+    let mode = args
+        .windows(2)
+        .find(|p| p[0] == "--skip")
+        .map(|p| p[1].as_str())
+        .unwrap();
+    match mode {
+        "success" => {
+            std::thread::sleep(Duration::from_millis(50));
+            println!("compiler stdout Привет ✓");
+            eprintln!("compiler diagnostic");
+            std::process::exit(0);
+        }
+        "failed" => {
+            std::thread::sleep(Duration::from_millis(50));
+            std::process::exit(7);
+        }
+        "quota" => {
+            let bytes = vec![b'q'; 1024 * 1024];
+            let mut out = std::io::stdout().lock();
+            let mut err = std::io::stderr().lock();
+            for _ in 0..20 {
+                out.write_all(&bytes).unwrap();
+                err.write_all(&bytes).unwrap();
+            }
+            std::process::exit(0);
+        }
+        "tree" => {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "compiler::compiler_process_helper",
+                    "--ignored",
+                    "--nocapture",
+                    "--skip",
+                    "long",
+                ])
+                .spawn()
+                .unwrap();
+            println!(
+                "compiler-child {}",
+                serde_json::to_string(&infrastructure::stamp(child.id()).unwrap()).unwrap()
+            );
+            let _ = child.wait();
+        }
+        "long" => std::thread::sleep(Duration::from_secs(60)),
+        _ => panic!("Unknown compiler fixture mode"),
+    }
+}
+#[test]
+fn compiler_success_receipts_output_and_duplicate_never_respawn() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build-once",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    assert_eq!(r.phase, UpdateBuildPhase::Completed);
+    assert_eq!(r.outcome, Some(UpdateBuildOutcome::Succeeded));
+    assert_eq!(r.exit_code, Some(0));
+    assert!(r.cleanup_verified);
+    let bytes = fs::read(log(&r, "stdout")).unwrap();
+    assert!(String::from_utf8_lossy(&bytes).contains("Привет ✓"));
+    assert_eq!(r.stdout.as_ref().unwrap().sha256, sha256(&bytes));
+    assert_eq!(
+        r.stdout.as_ref().unwrap().retained_bytes,
+        bytes.len() as u64
+    );
+    assert!(r.spec.source_available_bytes_before >= 6 * 1024 * 1024 * 1024);
+    assert_eq!(f.journal.get(&f.id).unwrap().phase, UpdatePhase::Building); // exit 0 is not candidate approval
+    assert_eq!(
+        execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "build-once",
+            &cmd,
+            &mut f.control
+        )
+        .unwrap(),
+        r
+    );
+    let mut other = cmd.clone();
+    other.arguments.push("changed".into());
+    assert!(execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build-once",
+        &other,
+        &mut f.control
+    )
+    .is_err());
+    assert!(f
+        .journal
+        .advance(
+            &f.owner,
+            &f.id,
+            &UpdateCommand {
+                idempotency_key: "forged-success".into(),
+                expected_revision: 3,
+                event: UpdateEvent::BuildSucceeded,
+                reason: "Raw metadata cannot approve compiler".into()
+            }
+        )
+        .is_err());
+    assert!(f
+        .config
+        .runtime_directory
+        .join("state")
+        .join(winbridge_worker::UPDATE_STARTUP_GUARD)
+        .exists());
+    let lease: WorkerUpdateLease = serde_json::from_value(
+        info(&f.control.worker).update_coordination.unwrap()["lease"].clone(),
+    )
+    .unwrap();
+    assert_eq!(lease.phase, WorkerUpdatePhase::SourceHeld);
+    let inspection = winbridge_update::build::inspect_build(
+        &f.config.runtime_directory.join("update-state"),
+        &f.id,
+    )
+    .unwrap();
+    assert!(inspection.read_only && !inspection.can_replay);
+    if let Some(path) = std::env::var_os("WINBRIDGE_UPDATE_BUILD_REPORT") {
+        fs::write(
+            path,
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "schemaVersion":1,"kind":"update_build_fixture_proof","passed":true,
+                "platform":std::env::consts::OS,"build":winbridge_protocol::build_identity(),
+                "record":r,"inspection":inspection,"workerLease":lease,
+                "compilationFixture":true,"duplicateObserved":true,"workerLeaseRetained":true,
+                "runtimeApplied":false,"candidateVerified":false,"windowsOpened":false,
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    }
+}
+
+struct Edited<'a> {
+    control: &'a mut Control,
+    path: PathBuf,
+}
+impl SourceControl for Edited<'_> {
+    fn observe_worker(&mut self) -> Result<WorkerInfo, String> {
+        self.control.observe_worker()
+    }
+}
+impl BuildControl for Edited<'_> {
+    fn build_progress(&mut self, r: &UpdateBuildRecord) -> Result<(), String> {
+        if r.phase == UpdateBuildPhase::Spawned {
+            fs::write(&self.path, b"late local edit").unwrap();
+        }
+        Ok(())
+    }
+}
+#[test]
+fn compiler_source_changed_after_pid_receipt_never_gets_windows_resume() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let mut c = Edited {
+        control: &mut f.control,
+        path: f.config.source_directory.join("Cargo.toml"),
+    };
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut c,
+    )
+    .unwrap();
+    assert_eq!(r.phase, UpdateBuildPhase::Indeterminate);
+    assert!(!r.cleanup_verified);
+    assert!(r.reason.contains("final source/config/output proof failed"));
+    assert_eq!(
+        execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "build",
+            &cmd,
+            &mut c
+        )
+        .unwrap(),
+        r
+    );
+    #[cfg(windows)]
+    assert_eq!(fs::metadata(log(&r, "stdout")).unwrap().len(), 0);
+}
+#[test]
+fn compiler_failure_and_timeout_have_verified_owned_tree_cleanup() {
+    for mode in ["failed", "tree"] {
+        let tmp = temporary();
+        let mut f = ready(tmp.path());
+        let cmd = command(&f, mode);
+        let r = execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "build",
+            &cmd,
+            &mut f.control,
+        )
+        .unwrap();
+        assert_eq!(r.phase, UpdateBuildPhase::Completed);
+        assert!(r.cleanup_verified);
+        if mode == "failed" {
+            assert_eq!(r.outcome, Some(UpdateBuildOutcome::Failed));
+            assert_eq!(r.exit_code, Some(7));
+        } else {
+            assert_eq!(r.outcome, Some(UpdateBuildOutcome::TimedOut));
+            let out = String::from_utf8(fs::read(log(&r, "stdout")).unwrap()).unwrap();
+            let json = out
+                .lines()
+                .find_map(|l| l.strip_prefix("compiler-child "))
+                .expect("Child was launched before timeout");
+            let child: SupervisorProcess = serde_json::from_str(json).unwrap();
+            assert!(!infrastructure::matches(&child).unwrap_or(false));
+        }
+        assert_eq!(
+            execute_build(
+                &mut f.journal,
+                &f.owner,
+                &f.config,
+                &f.id,
+                "build",
+                &cmd,
+                &mut f.control
+            )
+            .unwrap(),
+            r
+        );
+    }
+}
+#[test]
+fn compiler_output_quota_drains_both_pipes_without_blocking() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "quota");
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    assert_eq!(r.outcome, Some(UpdateBuildOutcome::Succeeded));
+    for (name, proof) in [
+        ("stdout", r.stdout.as_ref().unwrap()),
+        ("stderr", r.stderr.as_ref().unwrap()),
+    ] {
+        assert_eq!(proof.retained_bytes, MAX_OUTPUT_BYTES);
+        assert!(proof.observed_bytes > MAX_OUTPUT_BYTES);
+        let bytes = fs::read(log(&r, name)).unwrap();
+        assert_eq!(bytes.len() as u64, MAX_OUTPUT_BYTES);
+        assert_eq!(proof.sha256, sha256(&bytes));
+    }
+}
+
+#[test]
+fn compiler_readonly_inspection_rejects_corrupt_old_receipt_bindings() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    let db = f.db();
+    db.execute_batch("DROP TRIGGER build_receipt_immutable;")
+        .unwrap();
+    let original: String = db
+        .query_row(
+            "SELECT record FROM update_build_receipts WHERE id=?1 AND revision=0",
+            [&r.spec.attempt_id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let mut damaged: UpdateBuildRecord = serde_json::from_str(&original).unwrap();
+    damaged.spec.owner_id = uuid::Uuid::new_v4().to_string();
+    damaged.spec.worker_source_spec.updater_owner_id = damaged.spec.owner_id.clone();
+    db.execute(
+        "UPDATE update_build_receipts SET record=?1 WHERE id=?2 AND revision=0",
+        rusqlite::params![serde_json::to_string(&damaged).unwrap(), r.spec.attempt_id],
+    )
+    .unwrap();
+    assert!(
+        UpdateJournal::inspect_build(&f.config.runtime_directory.join("update-state"), &f.id)
+            .is_err()
+    );
+    assert!(execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control
+    )
+    .is_err());
+}
+struct Fault<'a> {
+    control: &'a mut Control,
+    db: PathBuf,
+    phase: UpdateBuildPhase,
+    sql: &'static str,
+    fired: bool,
+}
+impl SourceControl for Fault<'_> {
+    fn observe_worker(&mut self) -> Result<WorkerInfo, String> {
+        self.control.observe_worker()
+    }
+}
+impl BuildControl for Fault<'_> {
+    fn build_progress(&mut self, r: &UpdateBuildRecord) -> Result<(), String> {
+        if r.phase == self.phase && !self.fired {
+            self.fired = true;
+            Connection::open(&self.db)
+                .unwrap()
+                .execute_batch(self.sql)
+                .unwrap();
+        }
+        Ok(())
+    }
+}
+#[test]
+fn compiler_ignored_intent_and_pid_receipt_never_authorize_replay() {
+    for table in ["update_builds", "update_build_receipts"] {
+        let tmp = temporary();
+        let mut f = ready(tmp.path());
+        let cmd = command(&f, "success");
+        f.db().execute_batch(&format!("CREATE TRIGGER compiler_fault BEFORE INSERT ON {table} BEGIN SELECT RAISE(IGNORE); END;")).unwrap();
+        assert!(execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "build",
+            &cmd,
+            &mut f.control
+        )
+        .is_err());
+        assert!(UpdateJournal::inspect_build(
+            &f.config.runtime_directory.join("update-state"),
+            &f.id
+        )
+        .is_err());
+        assert!(!f
+            .config
+            .runtime_directory
+            .join("update")
+            .join(&f.id)
+            .join("compiler")
+            .exists());
+    }
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let mut c=Fault {control:&mut f.control,db:f.config.runtime_directory.join("update-state/updates.sqlite"),phase:UpdateBuildPhase::Intent,
+        sql:"CREATE TRIGGER compiler_fault BEFORE UPDATE ON update_builds BEGIN SELECT RAISE(IGNORE); END;",fired:false};
+    assert!(execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut c
+    )
+    .is_err());
+    let r = UpdateJournal::inspect_build(&f.config.runtime_directory.join("update-state"), &f.id)
+        .unwrap();
+    assert_eq!(r.phase, UpdateBuildPhase::Intent);
+    assert!(r.process.is_none());
+    assert_eq!(
+        execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "build",
+            &cmd,
+            &mut c
+        )
+        .unwrap(),
+        r
+    );
+    #[cfg(windows)]
+    assert_eq!(fs::metadata(log(&r, "stdout")).unwrap().len(), 0);
+}
+#[test]
+fn compiler_ignored_resume_receipt_cleans_suspended_process_and_keeps_history() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "long");
+    let mut c=Fault {control:&mut f.control,db:f.config.runtime_directory.join("update-state/updates.sqlite"),phase:UpdateBuildPhase::Spawned,
+        sql:"CREATE TRIGGER compiler_fault BEFORE INSERT ON update_build_receipts BEGIN SELECT RAISE(IGNORE); END;",fired:false};
+    assert!(execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut c
+    )
+    .is_err());
+    let r = UpdateJournal::inspect_build(&f.config.runtime_directory.join("update-state"), &f.id)
+        .unwrap();
+    assert_eq!(r.phase, UpdateBuildPhase::Spawned);
+    assert!(!infrastructure::matches(r.process.as_ref().unwrap()).unwrap_or(false));
+    assert_eq!(
+        execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "build",
+            &cmd,
+            &mut c
+        )
+        .unwrap(),
+        r
+    );
+    #[cfg(windows)]
+    assert_eq!(fs::metadata(log(&r, "stdout")).unwrap().len(), 0);
+}
+
+#[test]
+fn compiler_lost_actual_start_receipt_keeps_resume_uncertain_and_never_replays() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "long");
+    let mut c=Fault {control:&mut f.control,db:f.config.runtime_directory.join("update-state/updates.sqlite"),phase:UpdateBuildPhase::ResumeGranted,
+        sql:"CREATE TRIGGER compiler_fault BEFORE INSERT ON update_build_receipts BEGIN SELECT RAISE(IGNORE); END;",fired:false};
+    assert!(execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut c
+    )
+    .is_err());
+    let saved =
+        UpdateJournal::inspect_build(&f.config.runtime_directory.join("update-state"), &f.id)
+            .unwrap();
+    assert_eq!(saved.phase, UpdateBuildPhase::ResumeGranted);
+    assert!(!saved.cleanup_verified);
+    assert_eq!(
+        execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "build",
+            &cmd,
+            &mut c
+        )
+        .unwrap(),
+        saved
+    );
+    assert!(f
+        .config
+        .runtime_directory
+        .join("state")
+        .join(winbridge_worker::UPDATE_STARTUP_GUARD)
+        .exists());
+}
+
+#[test]
+fn compiler_source_edits_config_changes_and_owner_restart_do_not_start_new_effects() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let original = fs::read(f.config.source_directory.join("Cargo.toml")).unwrap();
+    fs::write(f.config.source_directory.join("Cargo.toml"), b"local edit").unwrap();
+    assert!(execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control
+    )
+    .is_err());
+    assert!(
+        UpdateJournal::inspect_build(&f.config.runtime_directory.join("update-state"), &f.id)
+            .is_err()
+    );
+    fs::write(f.config.source_directory.join("Cargo.toml"), original).unwrap();
+    let bytes = fs::read(&f.config.worker_config_path).unwrap();
+    let mut changed = bytes.clone();
+    changed.push(b'\n');
+    fs::write(&f.config.worker_config_path, changed).unwrap();
+    assert!(execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control
+    )
+    .is_err());
+    fs::write(&f.config.worker_config_path, bytes).unwrap();
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    drop(f.owner);
+    let owner = f.journal.acquire_owner().unwrap();
+    assert!(owner.epoch() > r.spec.owner_epoch);
+    assert_eq!(
+        execute_build(
+            &mut f.journal,
+            &owner,
+            &f.config,
+            &f.id,
+            "build",
+            &cmd,
+            &mut f.control
+        )
+        .unwrap(),
+        r
+    );
+    assert_eq!(
+        UpdateJournal::inspect_build(&f.config.runtime_directory.join("update-state"), &f.id)
+            .unwrap(),
+        r
+    );
+}
+
+#[test]
+fn schema_three_migration_backs_up_history_and_does_not_rebind_source_owner() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let directory = f.config.runtime_directory.join("update-state");
+    f.db().execute_batch("DROP TABLE update_build_receipts; DROP TABLE update_builds; PRAGMA user_version=3; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    let old = UpdateJournal::inspect(&directory).unwrap();
+    assert_eq!(old.schema_version, 3);
+    assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err()); // owner lock still held
+    assert_eq!(UpdateJournal::inspect(&directory).unwrap(), old);
+    drop(f.owner);
+    drop(f.journal);
+    let mut j = UpdateJournal::open(&directory, &old.scope_sha256).unwrap();
+    assert_eq!(j.info().unwrap().schema_version, 4);
+    assert!(j.info().unwrap().owner_epoch > old.owner_epoch);
+    let backup = fs::read_dir(&directory)
+        .unwrap()
+        .map(|v| v.unwrap().path())
+        .find(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("updates-v3-")
+        })
+        .unwrap();
+    let db =
+        Connection::open_with_flags(backup, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    assert_eq!(
+        db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        3
+    );
+    assert_eq!(
+        db.query_row("SELECT count(*) FROM transitions", [], |r| r
+            .get::<_, i64>(0))
+            .unwrap(),
+        4
+    );
+    assert_eq!(
+        db.query_row("PRAGMA quick_check", [], |r| r.get::<_, String>(0))
+            .unwrap(),
+        "ok"
+    );
+    let owner = j.acquire_owner().unwrap();
+    assert!(execute_build(
+        &mut j,
+        &owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control
+    )
+    .is_err());
+    assert!(UpdateJournal::inspect_build(&directory, &f.id).is_err());
+}
+
+#[cfg(windows)]
+struct Crash<'a>(&'a mut Control);
+#[cfg(windows)]
+impl SourceControl for Crash<'_> {
+    fn observe_worker(&mut self) -> Result<WorkerInfo, String> {
+        self.0.observe_worker()
+    }
+}
+#[cfg(windows)]
+impl BuildControl for Crash<'_> {
+    fn build_progress(&mut self, r: &UpdateBuildRecord) -> Result<(), String> {
+        if r.phase == UpdateBuildPhase::Running {
+            std::process::exit(83)
+        }
+        Ok(())
+    }
+}
+#[cfg(windows)]
+#[test]
+#[ignore = "Owned compiler owner-crash helper"]
+fn compiler_crash_helper() {
+    let root = PathBuf::from(std::env::var_os("WINBRIDGE_COMPILER_CRASH_ROOT").unwrap());
+    let mut f = ready(&root);
+    let cmd = command(&f, "long");
+    let mut c = Crash(&mut f.control);
+    execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut c,
+    )
+    .unwrap();
+    panic!("Crash checkpoint not reached");
+}
+#[cfg(windows)]
+#[test]
+fn compiler_owner_crash_keeps_durable_attempt_and_never_replays_it() {
+    let tmp = temporary();
+    let exit = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "compiler::compiler_crash_helper",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("WINBRIDGE_COMPILER_CRASH_ROOT", tmp.path())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .unwrap();
+    assert_eq!(exit.code(), Some(83));
+    let cfg = winbridge_update::load_config(&tmp.path().join("update.local.json")).unwrap();
+    let dir = cfg.runtime_directory.join("update-state");
+    let info = UpdateJournal::inspect(&dir).unwrap();
+    let id = info.active_update_id.unwrap();
+    let saved = UpdateJournal::inspect_build(&dir, &id).unwrap();
+    assert_eq!(saved.phase, UpdateBuildPhase::Running);
+    assert!(!saved.cleanup_verified);
+    let until = Instant::now() + Duration::from_secs(5);
+    while infrastructure::matches(saved.process.as_ref().unwrap()).unwrap_or(false) {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let inspection = winbridge_update::build::inspect_build(&dir, &id).unwrap();
+    assert_eq!(inspection.physical_kind, "empty");
+    assert!(!inspection.can_replay);
+    struct Offline;
+    impl SourceControl for Offline {
+        fn observe_worker(&mut self) -> Result<WorkerInfo, String> {
+            panic!("Duplicate must not need a new grant")
+        }
+    }
+    impl BuildControl for Offline {}
+    let mut j = UpdateJournal::open(&dir, &info.scope_sha256).unwrap();
+    let owner = j.acquire_owner().unwrap();
+    assert_eq!(
+        execute_build(
+            &mut j,
+            &owner,
+            &cfg,
+            &id,
+            "build",
+            &saved.spec.command,
+            &mut Offline
+        )
+        .unwrap(),
+        saved
+    );
+    assert!(cfg
+        .runtime_directory
+        .join("state")
+        .join(winbridge_worker::UPDATE_STARTUP_GUARD)
+        .exists());
+}

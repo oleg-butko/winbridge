@@ -353,6 +353,32 @@ pub fn advance_worker_update(
     }
 }
 
+pub fn advance_build_phase(
+    phase: UpdateBuildPhase,
+    next: UpdateBuildPhase,
+) -> Result<UpdateBuildPhase, String> {
+    use UpdateBuildPhase as P;
+    if matches!(
+        (phase, next),
+        (P::Intent, P::Spawned | P::Completed | P::Indeterminate)
+            | (
+                P::Spawned,
+                P::ResumeGranted | P::Completed | P::Indeterminate
+            )
+            | (
+                P::ResumeGranted,
+                P::Running | P::Completed | P::Indeterminate
+            )
+            | (P::Running, P::Completed | P::Indeterminate)
+    ) {
+        Ok(next)
+    } else {
+        Err(format!(
+            "Compiler transition rejected: {phase:?} → {next:?}"
+        ))
+    }
+}
+
 pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePhase, String> {
     use UpdateEvent as E;
     use UpdatePhase as P;

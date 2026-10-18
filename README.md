@@ -80,6 +80,9 @@ commands, exe replacement и shutdown ещё не подключены.
 добавлены как trusted API; 417 local tests и
 [80 native tests / полный candidate build](docs/plans/worker-self-update/windows-worker-control-gate-2026-10-17.md) прошли. Source apply/shutdown/install через IPC и публичное включение
 ещё не подключены.
+[Managed compiler](docs/plans/worker-self-update/compiler-driver.md) добавляет
+trusted library intent/PID/Job/resume и verified cleanup, updater schema 4.
+429 local tests и 10 итоговых compiler tests passed; native gate ожидается.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

@@ -20,6 +20,9 @@ use winbridge_update::{
 use winbridge_worker::Worker;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
+#[path = "support/compiler_cases.rs"]
+mod compiler;
+
 fn info(w: &Worker) -> WorkerInfo {
     let LocalResponse::Info { info } = w.handle(LocalRequest::Info) else {
         panic!("Info")
@@ -745,7 +748,7 @@ fn progress_failure_blocks_before_source_changes_and_lease_change_stops_apply() 
 // Build a real v1 fixture by removing only the v2 additions from our owned DB.
 fn downgrade_fixture(dir: &Path) {
     let db = Connection::open(dir.join("updates.sqlite")).unwrap();
-    db.execute_batch("DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; DROP TABLE source_file_receipts; DROP TABLE source_file_intents; DROP TABLE source_plans; DROP TABLE source_transactions; PRAGMA user_version=1; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    db.execute_batch("DROP TABLE update_build_receipts; DROP TABLE update_builds; DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; DROP TABLE source_file_receipts; DROP TABLE source_file_intents; DROP TABLE source_plans; DROP TABLE source_transactions; PRAGMA user_version=1; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
 }
 #[test]
 fn schema_one_migration_requires_owner_lock_and_retains_consistent_history_backup() {
@@ -767,7 +770,10 @@ fn schema_one_migration_requires_owner_lock_and_retains_consistent_history_backu
         .starts_with("updates-v1-")));
     drop(f.owner);
     let mut migrated = UpdateJournal::open(&dir, &old_info.scope_sha256).unwrap();
-    assert_eq!(migrated.info().unwrap().schema_version, 3);
+    assert_eq!(
+        migrated.info().unwrap().schema_version,
+        winbridge_update::journal::UPDATE_SCHEMA_VERSION
+    );
     assert_eq!(
         migrated.info().unwrap().owner_epoch,
         old_info.owner_epoch + 1
@@ -904,7 +910,7 @@ fn schema_two_source_inspection_stays_readonly_and_migration_fences_old_grant() 
     let info = f.journal.info().unwrap();
     let db = f.db();
     db.execute_batch(
-        "DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; PRAGMA user_version=2;",
+        "DROP TABLE update_build_receipts; DROP TABLE update_builds; DROP TABLE supervisor_receipts; DROP TABLE supervisor_launches; PRAGMA user_version=2;",
     )
     .unwrap();
     drop(db);
@@ -920,7 +926,10 @@ fn schema_two_source_inspection_stays_readonly_and_migration_fences_old_grant() 
     );
     drop(f.owner);
     let mut migrated = UpdateJournal::open(&dir, &info.scope_sha256).unwrap();
-    assert_eq!(migrated.info().unwrap().schema_version, 3);
+    assert_eq!(
+        migrated.info().unwrap().schema_version,
+        winbridge_update::journal::UPDATE_SCHEMA_VERSION
+    );
     assert_eq!(migrated.info().unwrap().owner_epoch, info.owner_epoch + 1);
     let owner = migrated.acquire_owner().unwrap();
     assert!(apply_source(&mut migrated, &owner, &f.config, &f.id, &mut f.control).is_err());

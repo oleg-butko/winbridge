@@ -343,3 +343,32 @@ fn worker_source_and_dispatch_grants_require_every_owner_to_be_empty() {
     );
     assert!(advance_worker_update(WorkerUpdatePhase::Released, &release, &empty).is_err());
 }
+
+#[test]
+fn compiler_fsm_requires_pid_before_resume_and_never_replays_terminal_state() {
+    use winbridge_core::update::advance_build_phase;
+    use winbridge_protocol::update::UpdateBuildPhase as P;
+    assert_eq!(
+        advance_build_phase(P::Intent, P::Spawned).unwrap(),
+        P::Spawned
+    );
+    assert_eq!(
+        advance_build_phase(P::Spawned, P::ResumeGranted).unwrap(),
+        P::ResumeGranted
+    );
+    assert_eq!(
+        advance_build_phase(P::ResumeGranted, P::Running).unwrap(),
+        P::Running
+    );
+    assert!(advance_build_phase(P::Spawned, P::Running).is_err());
+    assert_eq!(
+        advance_build_phase(P::Running, P::Completed).unwrap(),
+        P::Completed
+    );
+    assert!(advance_build_phase(P::Intent, P::Running).is_err());
+    for terminal in [P::Completed, P::Indeterminate] {
+        for next in [P::Intent, P::Spawned, P::Running, P::Completed] {
+            assert!(advance_build_phase(terminal, next).is_err());
+        }
+    }
+}

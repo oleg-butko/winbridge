@@ -21,3 +21,11 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 winbridge-workspace-sync = { path = "modules/workspace-sync" }
 winbridge-log-reader = { path = "modules/log-reader" }
 winbridge-runner = { path = "modules/runner" }
+
+# Update/source verification hashes complete binaries and manifests even in local
+# development. Keep the standard SHA-256 implementation fast in dev/test builds.
+[profile.dev.package.sha2]
+opt-level = 2
+
+[profile.test.package.sha2]
+opt-level = 2

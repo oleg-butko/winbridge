@@ -299,6 +299,84 @@ pub struct WorkerUpdateBlockers {
     pub uncertain_owners: u64,
 }
 
+/// Internal trusted compiler driver contract; not registered as an agent command.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateBuildSpec {
+    pub attempt_id: String,
+    pub update_id: String,
+    pub request_key: String,
+    pub platform: String,
+    pub owner_id: String,
+    pub owner_epoch: u64,
+    pub worker_source_spec: WorkerUpdateSpec,
+    pub worker_lease_revision: u64,
+    pub source_directory: String,
+    pub runtime_directory: String,
+    pub source_manifest_sha256: String,
+    pub command: crate::ResolvedCommand,
+    pub job_name: Option<String>,
+    pub source_available_bytes_before: u64,
+    pub runtime_available_bytes_before: u64,
+    pub accepted_at_ms: u64,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateBuildPhase {
+    Intent,
+    Spawned,
+    ResumeGranted,
+    Running,
+    Completed,
+    Indeterminate,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateBuildOutcome {
+    Succeeded,
+    Failed,
+    TimedOut,
+    SpawnFailed,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateBuildOutput {
+    pub retained_bytes: u64,
+    pub observed_bytes: u64,
+    pub sha256: String,
+    pub error: Option<String>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateBuildRecord {
+    pub schema_version: u16,
+    pub spec: UpdateBuildSpec,
+    pub revision: u64,
+    pub phase: UpdateBuildPhase,
+    pub process: Option<SupervisorProcess>,
+    pub outcome: Option<UpdateBuildOutcome>,
+    pub exit_code: Option<i32>,
+    pub cleanup_verified: bool,
+    pub stdout: Option<UpdateBuildOutput>,
+    pub stderr: Option<UpdateBuildOutput>,
+    pub updated_at_ms: u64,
+    pub reason: String,
+}
+
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]

@@ -58,7 +58,7 @@ struct Coordination {
     read_only: bool,
     observed_at_ms: u64,
 }
-fn live_lease(
+pub(crate) fn live_lease(
     control: &mut impl SourceControl,
     update: &UpdateRecord,
     expected: Option<&SourceTransactionRecord>,

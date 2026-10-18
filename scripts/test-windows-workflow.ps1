@@ -190,6 +190,7 @@ $oldUpdateReferenceUpdater = $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER
 $oldSourceTransactionReport = $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT
 $oldSupervisorReport = $env:WINBRIDGE_SUPERVISOR_REPORT
 $oldUpdateControlReport = $env:WINBRIDGE_UPDATE_CONTROL_REPORT
+$oldUpdateBuildReport = $env:WINBRIDGE_UPDATE_BUILD_REPORT
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
@@ -487,6 +488,7 @@ try {
         $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT = Join-Path $ReportDirectory 'source-transaction-proof.json'
         $env:WINBRIDGE_SUPERVISOR_REPORT = Join-Path $ReportDirectory 'supervisor-proof.json'
         $env:WINBRIDGE_UPDATE_CONTROL_REPORT = Join-Path $ReportDirectory 'update-control-proof.json'
+        $env:WINBRIDGE_UPDATE_BUILD_REPORT = Join-Path $ReportDirectory 'update-build-proof.json'
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
         $env:WINBRIDGE_UPDATE_COORDINATION_REPORT = Join-Path $ReportDirectory 'update-coordination-proof.json'
@@ -515,6 +517,8 @@ try {
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
     }
     if ($UpdatePreparationOnly) {
+        $compiler = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-build-proof.json') -Raw | ConvertFrom-Json
+        if (-not $compiler.passed -or $compiler.platform -ne 'windows' -or -not $compiler.compilationFixture -or -not $compiler.duplicateObserved -or -not $compiler.workerLeaseRetained -or $compiler.runtimeApplied -or $compiler.candidateVerified -or $compiler.windowsOpened -or $compiler.record.phase -ne 'completed' -or $compiler.record.outcome -ne 'succeeded' -or -not $compiler.record.cleanupVerified -or $compiler.record.exitCode -ne 0 -or $compiler.build.sourceDirty -or $compiler.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Managed compiler fixture proof incomplete' }
         $updateControl = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-control-proof.json') -Raw | ConvertFrom-Json
         if (-not $updateControl.passed -or $updateControl.platform -ne 'windows' -or -not $updateControl.forgedPeerRejected -or -not $updateControl.duplicateObserved -or -not $updateControl.prematureDrainRejected -or -not $updateControl.sourceVerified -or $updateControl.runtimeApplied -or $updateControl.sourceEffectsEnabled -or $updateControl.windowsOpened -or $updateControl.stages.Count -ne 3 -or $updateControl.stages[-1].phase -ne 'released' -or $updateControl.build.sourceDirty -or $updateControl.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Worker-owned launch/control proof incomplete' }
         $supervisor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'supervisor-proof.json') -Raw | ConvertFrom-Json
@@ -589,6 +593,7 @@ try {
     $env:WINBRIDGE_SOURCE_TRANSACTION_REPORT = $oldSourceTransactionReport
     $env:WINBRIDGE_SUPERVISOR_REPORT = $oldSupervisorReport
     $env:WINBRIDGE_UPDATE_CONTROL_REPORT = $oldUpdateControlReport
+    $env:WINBRIDGE_UPDATE_BUILD_REPORT = $oldUpdateBuildReport
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace

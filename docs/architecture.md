@@ -5,7 +5,7 @@
 ## Подготовка самообновления — 2026-10-17
 
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
-`apps/update` владеет отдельным updater journal schema 3 (WBUP), installation scope,
+`apps/update` владеет отдельным updater journal schema 4 (WBUP), installation scope,
 OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
@@ -20,12 +20,16 @@ source effects требуют свежий trusted worker grant и актуал�
 [Fresh SourceControl](plans/worker-self-update/fresh-source-control.md) добавляет
 process-authenticated bounded Info; baseline/release scan вынесен из общего mutex
 с проверками до/после I/O. [82 native tests / candidate build](plans/worker-self-update/windows-fresh-source-gate-2026-10-17.md) прошли.
+[Managed compiler](plans/worker-self-update/compiler-driver.md) добавляет отдельный
+attempt/FSM/receipts и OS cleanup proof. 429 local workspace tests и 10 итоговых
+compiler tests passed; native gate schema 4 ожидается. Автоматический driver
+и runtime install пока не включены.
 
 SourceApplying сохраняется до изменений; per-file intent → no-clobber move → hash/
 receipt, manifest последним. Verified source и parent Building фиксируются атомарно
 в updater DB, SourceHeld остаётся у worker. Crash/unknown outcome не повторяется;
 readonly inspection показывает сохранённые preimages/held и receipt states.
-Миграция updater schema 1/2 → 3 требует свободный owner lock и verified consistent backup.
+Миграция updater schema 1/2/3 → 4 требует свободный owner lock и verified consistent backup.
 [65 native Windows tests / полный candidate build](plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
 прошли. Worker-owned supervisor/lease IPC реализованы как trusted API; source/build
 orchestration, shutdown, runtime install и bootstrap ещё не реализованы; внешняя update capability не объявляется. Installed runtime сохраняется.

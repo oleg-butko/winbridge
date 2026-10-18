@@ -1,6 +1,7 @@
 //! Update preparation and its independent durable journal.
 //! Source effects require a trusted worker lease; runtime replacement is not implemented.
 pub mod archive;
+pub mod build;
 pub mod journal;
 pub mod source;
 pub mod supervisor;
