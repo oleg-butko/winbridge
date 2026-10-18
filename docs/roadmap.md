@@ -54,8 +54,9 @@ queries. Далее durable compiler-report/artifact-set binding и exact shutdo
 U1 целиком и public install ещё открыты.
 [Compiler report binding](plans/worker-self-update/compiler-report-binding.md)
 добавляет updater schema 6 и atomic completion/report receipt, не меняя legacy
-wire shapes. 467 workspace tests и Linux/Windows Clippy passed; native gate
-нового блока ещё впереди. Следующий блок — durable artifact-set/old runtime guards.
+wire shapes. 467 workspace tests и Linux/Windows Clippy passed;
+[139 native tests / полный build](plans/worker-self-update/windows-report-binding-gate-2026-10-18.md)
+прошли. Следующий блок — durable artifact-set/old runtime guards.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

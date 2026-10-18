@@ -1,3 +1,14 @@
+## U1: compiler report native gate пройден — 2026-10-18
+
+[Gate](plans/worker-self-update/windows-report-binding-gate-2026-10-18.md): clean
+914df7c, run `20261018-110211-6ecc2e54`, Task
+`65d0be5f-474f-43e0-8341-a6ae4025a164` succeeded/0. 139 native tests / 15 groups,
+schema-5 → 6 refusal/backup, compiler report + actor receipt и полный candidate
+build прошли. Все 29 ready files проверены. Installed worker прежний/idle 0,
+coverage complete, errors нет. Desktop не нужен; worker оставить работать.
+Далее exact artifact set / durable receipt и old runtime guards; U1/install
+не завершены. Новый readonly artifact parser уже разрабатывается, без установки.
+
 ## U1: durable compiler report binding — 2026-10-18
 
 [Контракт](plans/worker-self-update/compiler-report-binding.md): updater schema 6,

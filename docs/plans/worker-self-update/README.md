@@ -133,9 +133,10 @@ U0 не применяет source plan, не выключает процессы
   [artifact queries](artifact-identity.md):
   [133 native tests / полный build](windows-artifact-identity-gate-2026-10-18.md)
   passed. Durable candidate approval/install остаются впереди.
-- [ ] [Compiler report binding](compiler-report-binding.md): updater schema 6,
+- [x] [Compiler report binding](compiler-report-binding.md): updater schema 6,
   atomic compiler completion/report receipt и readonly exact-byte verification;
-  local/native проверки текущего блока ещё выполняются.
+  [139 native tests / полный build](windows-report-binding-gate-2026-10-18.md)
+  passed; public install ещё не включён.
 - [ ] Durable artifact-set receipt, old runtime preimages и candidate FSM driver.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
