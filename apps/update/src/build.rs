@@ -18,6 +18,14 @@ use winbridge_protocol::{update::*, ResolvedCommand};
 type Result<T> = std::result::Result<T, String>;
 pub const MAX_OUTPUT_BYTES: u64 = 16 * 1024 * 1024;
 const MIN_FREE_BYTES: u64 = 6 * 1024 * 1024 * 1024;
+fn available(source: &str, runtime: &str) -> Result<(u64, u64)> {
+    let source_free = fs2::available_space(source).map_err(error)?;
+    let runtime_free = fs2::available_space(runtime).map_err(error)?;
+    if source_free < MIN_FREE_BYTES || runtime_free < MIN_FREE_BYTES {
+        return Err(format!("Compiler deferred: less than 6 GiB free; source={source_free}, runtime={runtime_free}; no cache deleted"));
+    }
+    Ok((source_free, runtime_free))
+}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,12 +108,11 @@ fn now() -> Result<u64> {
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
-fn source_guard(
+fn saved_source_guard(
     j: &mut UpdateJournal,
     a: &UpdateAuthority,
     cfg: &UpdateConfig,
     id: &str,
-    c: &mut impl SourceControl,
 ) -> Result<SourceTransactionRecord> {
     j.check_source_authority(a).map_err(error)?;
     let u = j.get(id).map_err(error)?;
@@ -133,6 +140,22 @@ fn source_guard(
             "Verified source/config/scope/Building required before compiler effects".into(),
         );
     }
+    if s.worker_source_spec.updater_owner_id != a.owner_id()
+        || s.worker_source_spec.updater_epoch != a.epoch()
+    {
+        return Err("Saved compiler source grant belongs to another owner/epoch".into());
+    }
+    Ok(s)
+}
+fn source_guard(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    cfg: &UpdateConfig,
+    id: &str,
+    c: &mut impl SourceControl,
+) -> Result<SourceTransactionRecord> {
+    let s = saved_source_guard(j, a, cfg, id)?;
+    let u = j.get(id).map_err(error)?;
     let lease = live_lease(c, &u, Some(&s))?;
     if lease.spec.updater_owner_id != a.owner_id() || lease.spec.updater_epoch != a.epoch() {
         return Err("Compiler source grant belongs to another owner/epoch".into());
@@ -260,24 +283,21 @@ fn unknown(
 /// Caller supplies a command from trusted local build policy, never agent JSON.
 /// Repeating this request returns its saved record, including unfinished intent;
 /// it never spawns again. A successful process is not candidate/install approval.
-pub fn execute_build(
+/// Metadata acceptance only. It does not authorize OS effects from a saved lease.
+/// Fresh source and worker observations run when the one-use permit is executed.
+pub fn admit_build(
     j: &mut UpdateJournal,
     a: &UpdateAuthority,
     cfg: &UpdateConfig,
     id: &str,
     key: &str,
     command: &ResolvedCommand,
-    c: &mut impl BuildControl,
-) -> Result<UpdateBuildRecord> {
+) -> Result<BuildAdmission> {
     j.check_source_authority(a).map_err(error)?;
     if let Some(r) = j.existing_build(id, key, command).map_err(error)? {
-        return Ok(r);
+        return Ok(BuildAdmission::Observed(Box::new(r)));
     }
-    let s = source_guard(j, a, cfg, id, c)?;
-    crate::verify_source(
-        &cfg.source_directory,
-        &j.get(id).map_err(error)?.request.source.manifest_sha256,
-    )?;
+    let s = saved_source_guard(j, a, cfg, id)?;
     if command.working_directory != s.source_directory {
         return Err("Compiler cwd must be the frozen source root".into());
     }
@@ -288,14 +308,10 @@ pub fn execute_build(
     if !executable.is_file() {
         return Err("Compiler executable must be an existing local file".into());
     }
-    let source_free = fs2::available_space(&s.source_directory).map_err(error)?;
-    let runtime_free = fs2::available_space(&s.runtime_directory).map_err(error)?;
-    if source_free < MIN_FREE_BYTES || runtime_free < MIN_FREE_BYTES {
-        return Err(format!("Compiler deferred: less than 6 GiB free; source={source_free}, runtime={runtime_free}; no cache deleted"));
-    }
+    let (source_free, runtime_free) = available(&s.source_directory, &s.runtime_directory)?;
     let attempt_id = uuid::Uuid::new_v4().to_string();
     let target_manifest = j.get(id).map_err(error)?.request.source.manifest_sha256;
-    let mut r = j
+    let r = j
         .accept_build(
             a,
             UpdateBuildSpec {
@@ -318,6 +334,77 @@ pub fn execute_build(
             },
         )
         .map_err(error)?;
+    Ok(BuildAdmission::New(Box::new(BuildPermit { record: r })))
+}
+/// Only the freshly inserted Intent creates this non-serializable/non-Clone grant.
+pub struct BuildPermit {
+    record: UpdateBuildRecord,
+}
+pub enum BuildAdmission {
+    New(Box<BuildPermit>),
+    Observed(Box<UpdateBuildRecord>),
+}
+impl BuildPermit {
+    pub fn record(&self) -> &UpdateBuildRecord {
+        &self.record
+    }
+    pub fn execute(
+        self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        cfg: &UpdateConfig,
+        c: &mut impl BuildControl,
+    ) -> Result<UpdateBuildRecord> {
+        let r = self.record;
+        j.check_source_authority(a).map_err(error)?;
+        if j.existing_build(&r.spec.update_id, &r.spec.request_key, &r.spec.command)
+            .map_err(error)?
+            .as_ref()
+            != Some(&r)
+            || r.phase != UpdateBuildPhase::Intent
+        {
+            return Err("Compiler admission changed; no process or replay permitted".into());
+        }
+        source_guard(j, a, cfg, &r.spec.update_id, c)?;
+        crate::verify_source(&cfg.source_directory, &r.spec.source_manifest_sha256)?;
+        execute_admitted(j, a, cfg, r, c)
+    }
+}
+/// Original synchronous API: validates live source before admission and observes
+/// existing attempts without creating another process or permission.
+pub fn execute_build(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    cfg: &UpdateConfig,
+    id: &str,
+    key: &str,
+    command: &ResolvedCommand,
+    c: &mut impl BuildControl,
+) -> Result<UpdateBuildRecord> {
+    j.check_source_authority(a).map_err(error)?;
+    if let Some(r) = j.existing_build(id, key, command).map_err(error)? {
+        return Ok(r);
+    }
+    // Keep the original synchronous pre-admission contract for library callers.
+    source_guard(j, a, cfg, id, c)?;
+    crate::verify_source(
+        &cfg.source_directory,
+        &j.get(id).map_err(error)?.request.source.manifest_sha256,
+    )?;
+    match admit_build(j, a, cfg, id, key, command)? {
+        BuildAdmission::New(permit) => permit.execute(j, a, cfg, c),
+        BuildAdmission::Observed(record) => Ok(*record),
+    }
+}
+fn execute_admitted(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    cfg: &UpdateConfig,
+    mut r: UpdateBuildRecord,
+    c: &mut impl BuildControl,
+) -> Result<UpdateBuildRecord> {
+    let id = r.spec.update_id.clone();
+    let command = r.spec.command.clone();
     // No user code can be launched before the durable intent and observer succeed.
     if let Err(e) = c.build_progress(&r) {
         return unknown(
@@ -351,9 +438,11 @@ pub fn execute_build(
             )
         }
     };
-    source_guard(j, a, cfg, id, c)?;
+    source_guard(j, a, cfg, &id, c)?;
+    crate::verify_source(&cfg.source_directory, &r.spec.source_manifest_sha256)?;
+    available(&r.spec.source_directory, &r.spec.runtime_directory)?;
     let (mut child, stdout, stderr) =
-        match ManagedChild::prepare_atomic_executable(command, r.spec.job_name.as_deref(), None) {
+        match ManagedChild::prepare_atomic_executable(&command, r.spec.job_name.as_deref(), None) {
             Ok(v) => v,
             Err(e) if e.no_process_created => {
                 return complete(
@@ -412,14 +501,14 @@ pub fn execute_build(
     let readers = (drain(stdout, stdout_file), drain(stderr, stderr_file));
     let start = (|| {
         c.build_progress(&r)?;
-        source_guard(j, a, cfg, id, c)?;
+        source_guard(j, a, cfg, &id, c)?;
         let mut permit = r.clone();
         permit.phase = UpdateBuildPhase::ResumeGranted;
         permit.reason = "Сохранено разрешение resume; выполнение ещё не подтверждено".into();
         r = j.advance_build(a, &r, permit).map_err(error)?;
         c.build_progress(&r)?;
         crate::verify_source(&cfg.source_directory, &r.spec.source_manifest_sha256)?;
-        source_guard(j, a, cfg, id, c)?;
+        source_guard(j, a, cfg, &id, c)?;
         child.resume().map_err(error)?;
         let mut running = r.clone();
         running.phase = UpdateBuildPhase::Running;
@@ -498,7 +587,7 @@ pub fn execute_build(
         }
     };
     let final_verification: Result<()> = (|| {
-        source_guard(j, a, cfg, id, c)?;
+        source_guard(j, a, cfg, &id, c)?;
         crate::verify_source(&cfg.source_directory, &r.spec.source_manifest_sha256)?;
         for (name, proof) in [("stdout", &outputs.0), ("stderr", &outputs.1)] {
             let bytes = crate::read(&logdir.join(format!("{name}.bin")), MAX_OUTPUT_BYTES)?;

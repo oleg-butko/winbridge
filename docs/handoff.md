@@ -1,3 +1,19 @@
+## Самообновление U1: compiler admission до dispatch — 2026-10-18
+
+[Контракт](plans/worker-self-update/compiler-admission.md). admit_build сохраняет
+Intent и возвращает fresh one-use BuildPermit без worker RPC/полного source scan.
+Это acceptance metadata; execute заново требует live lease/source/config и actual
+owner, затем перед OS create повторяет source/≥6 GiB checks. Saved row/duplicate/
+dropped permit/new owner не создают execution grant. Старый execute_build сохраняет
+pre-admission live validation. Schemas 4/15 прежние, новые DTO не нужны.
+
+31 source/compiler tests passed, включая 5 новых admission/duplicate/restart/source/
+offline/race checks с реальным счётчиком user-code starts в generated target.
+Linux/Windows Clippy/tests cross-check и fmt passed; native rollup впереди.
+Следующий блок — fixed local PowerShell build policy и compiler actor dispatch,
+bounded output read, artifacts/coordinated abort, exact shutdown, U2–U3.
+Installed worker прежний; bootstrap пока не нужен. A4 отложен.
+
 ## Самообновление U1: readonly identity остальных exe — 2026-10-18
 
 Updater/fixture поддерживают --build-info до config/fixture effects. Query возвращает

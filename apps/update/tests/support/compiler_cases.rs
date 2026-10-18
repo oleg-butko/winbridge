@@ -1,7 +1,9 @@
 use super::*;
 use winbridge_platform::infrastructure;
 use winbridge_protocol::ResolvedCommand;
-use winbridge_update::build::{execute_build, BuildControl, MAX_OUTPUT_BYTES};
+use winbridge_update::build::{
+    admit_build, execute_build, BuildAdmission, BuildControl, MAX_OUTPUT_BYTES,
+};
 
 impl BuildControl for Control {}
 // Compiler tests use the local Cargo volume, not a potentially small /tmp tmpfs.
@@ -59,6 +61,13 @@ fn compiler_process_helper() {
         .find(|p| p[0] == "--skip")
         .map(|p| p[1].as_str())
         .unwrap();
+    let mut counter = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("target/compiler-runs.log")
+        .unwrap();
+    writeln!(counter, "{} {mode}", std::process::id()).unwrap();
+    drop(counter);
     match mode {
         "success" => {
             std::thread::sleep(Duration::from_millis(50));
@@ -772,4 +781,277 @@ fn compiler_owner_crash_keeps_durable_attempt_and_never_replays_it() {
         .join("state")
         .join(winbridge_worker::UPDATE_STARTUP_GUARD)
         .exists());
+}
+
+#[test]
+fn compiler_admission_commits_intent_before_dispatch_and_never_mints_a_second_grant() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let BuildAdmission::New(permit) = admit_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "admitted-build",
+        &cmd,
+    )
+    .unwrap() else {
+        panic!("Fresh compiler permission")
+    };
+    assert_eq!(permit.record().phase, UpdateBuildPhase::Intent);
+    assert!(permit.record().process.is_none());
+    let saved =
+        UpdateJournal::inspect_build(&f.config.runtime_directory.join("update-state"), &f.id)
+            .unwrap();
+    assert_eq!(saved, *permit.record());
+    assert!(!f
+        .config
+        .source_directory
+        .join("target/compiler-runs.log")
+        .exists());
+    assert!(!f
+        .config
+        .runtime_directory
+        .join("update")
+        .join(&f.id)
+        .join("compiler")
+        .exists());
+    assert!(matches!(
+        admit_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "admitted-build",
+            &cmd
+        )
+        .unwrap(),
+        BuildAdmission::Observed(_)
+    ));
+    let done = permit
+        .execute(&mut f.journal, &f.owner, &f.config, &mut f.control)
+        .unwrap();
+    assert_eq!(done.outcome, Some(UpdateBuildOutcome::Succeeded));
+    let observed = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "admitted-build",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    assert_eq!(observed, done);
+    assert_eq!(
+        fs::read_to_string(f.config.source_directory.join("target/compiler-runs.log"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn dropped_compiler_permission_remains_an_observation_after_owner_restart() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let BuildAdmission::New(permit) = admit_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "dropped-build",
+        &cmd,
+    )
+    .unwrap() else {
+        panic!("Fresh compiler permission")
+    };
+    let expected = permit.record().clone();
+    drop(permit);
+    drop(f.owner);
+    f.owner = f.journal.acquire_owner().unwrap();
+    let BuildAdmission::Observed(saved) = admit_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "dropped-build",
+        &cmd,
+    )
+    .unwrap() else {
+        panic!("Restart cannot recreate execution permission")
+    };
+    assert_eq!(*saved, expected);
+    assert_eq!(saved.phase, UpdateBuildPhase::Intent);
+    assert_eq!(
+        execute_build(
+            &mut f.journal,
+            &f.owner,
+            &f.config,
+            &f.id,
+            "dropped-build",
+            &cmd,
+            &mut f.control
+        )
+        .unwrap(),
+        expected
+    );
+    assert!(!f
+        .config
+        .source_directory
+        .join("target/compiler-runs.log")
+        .exists());
+    assert!(f
+        .config
+        .runtime_directory
+        .join("state")
+        .join(winbridge_worker::UPDATE_STARTUP_GUARD)
+        .exists());
+}
+
+#[test]
+fn compiler_permission_rechecks_source_before_any_process_or_log_creation() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let BuildAdmission::New(permit) = admit_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "changed-source",
+        &cmd,
+    )
+    .unwrap() else {
+        panic!("Fresh compiler permission")
+    };
+    fs::write(
+        f.config.source_directory.join("Cargo.toml"),
+        b"preserved local edit",
+    )
+    .unwrap();
+    assert!(permit
+        .execute(&mut f.journal, &f.owner, &f.config, &mut f.control)
+        .is_err());
+    let saved = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "changed-source",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    assert_eq!(saved.phase, UpdateBuildPhase::Intent);
+    assert!(saved.process.is_none());
+    assert!(!f
+        .config
+        .source_directory
+        .join("target/compiler-runs.log")
+        .exists());
+    assert!(!f
+        .config
+        .runtime_directory
+        .join("update")
+        .join(&f.id)
+        .join("compiler")
+        .exists());
+    assert_eq!(
+        fs::read(f.config.source_directory.join("Cargo.toml")).unwrap(),
+        b"preserved local edit"
+    );
+}
+
+#[test]
+fn compiler_admission_never_treats_a_saved_source_grant_as_live_permission() {
+    struct Offline;
+    impl SourceControl for Offline {
+        fn observe_worker(&mut self) -> Result<WorkerInfo, String> {
+            Err("Fixture worker unavailable".into())
+        }
+    }
+    impl BuildControl for Offline {}
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let BuildAdmission::New(permit) = admit_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "offline-worker",
+        &cmd,
+    )
+    .unwrap() else {
+        panic!("Fresh metadata admission")
+    };
+    assert!(permit
+        .execute(&mut f.journal, &f.owner, &f.config, &mut Offline)
+        .unwrap_err()
+        .contains("unavailable"));
+    assert!(!f
+        .config
+        .source_directory
+        .join("target/compiler-runs.log")
+        .exists());
+    assert!(!f
+        .config
+        .runtime_directory
+        .join("update")
+        .join(&f.id)
+        .join("compiler")
+        .exists());
+}
+
+#[test]
+fn concurrent_compiler_admissions_grant_exactly_one_execution() {
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let barrier = Arc::new(std::sync::Barrier::new(2));
+    let directory = f.config.runtime_directory.join("update-state");
+    let scope = installation_scope(&f.config).unwrap();
+    let results = std::thread::scope(|threads| {
+        let handles: Vec<_> = (0..2)
+            .map(|_| {
+                let barrier = barrier.clone();
+                let directory = &directory;
+                let scope = &scope;
+                let owner = &f.owner;
+                let cfg = &f.config;
+                let id = &f.id;
+                let cmd = &cmd;
+                threads.spawn(move || {
+                    let mut journal = UpdateJournal::open(directory, scope).unwrap();
+                    barrier.wait();
+                    admit_build(&mut journal, owner, cfg, id, "racing-build", cmd)
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    let mut permits = results.into_iter().filter_map(|r| match r {
+        Ok(BuildAdmission::New(p)) => Some(p),
+        Ok(BuildAdmission::Observed(_)) | Err(_) => None,
+    });
+    let permit = permits.next().expect("One fresh commit");
+    assert!(permits.next().is_none());
+    let done = permit
+        .execute(&mut f.journal, &f.owner, &f.config, &mut f.control)
+        .unwrap();
+    assert_eq!(done.outcome, Some(UpdateBuildOutcome::Succeeded));
+    assert_eq!(
+        fs::read_to_string(f.config.source_directory.join("target/compiler-runs.log"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
 }

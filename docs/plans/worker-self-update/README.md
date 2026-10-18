@@ -112,7 +112,7 @@ U0 не применяет source plan, не выключает процессы
   intent/PID/Job/resume, output и verified cleanup; updater schema 4. 429 workspace
   tests, 10 итоговых compiler tests и
   [95 native tests / candidate build](windows-compiler-gate-2026-10-18.md) passed. Source/build
-  orchestration и coordinated artifact/abort driver пока не подключены.
+  compiler orchestration и coordinated artifact/abort driver пока не подключены.
 - [x] [Atomic executable adapter](atomic-executable.md) для compiler: Job назначается
   при CreateProcess, bounded handle inheritance и CRT argv;
   [102 native tests / candidate build](windows-atomic-launch-gate-2026-10-18.md) passed.
@@ -123,6 +123,9 @@ U0 не применяет source plan, не выключает процессы
   отзывчивый internal v2 mailbox; 438 workspace tests и Linux/Windows Clippy passed,
   [109 native tests / candidate build](windows-source-actor-gate-2026-10-18.md) passed.
   Compiler/artifacts/abort не подключены.
+- [ ] [Compiler admission до dispatch](compiler-admission.md): fresh Intent/one-use
+  permit, actual live checks перед процессом; 31 source/compiler tests и Linux/Windows
+  Clippy passed, native rollup впереди. Actor build policy/dispatch ещё не подключены.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.
