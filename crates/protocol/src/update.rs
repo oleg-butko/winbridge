@@ -646,3 +646,42 @@ impl WorkerUpdateControlResponse {
         }
     }
 }
+
+/// Readonly byte cursor for a single compiler attempt; no caller-selected path.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateCompilerOutputRequest {
+    pub attempt_id: String,
+    pub stream: crate::OutputStream,
+    pub offset: u64,
+    pub limit_bytes: u32,
+    pub file_identity: Option<String>,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateCompilerOutputPage {
+    pub schema_version: u16,
+    pub kind: String,
+    pub read_only: bool,
+    pub update_id: String,
+    pub attempt_id: String,
+    pub build_revision: u64,
+    pub observed_at_ms: u64,
+    pub phase: UpdateBuildPhase,
+    pub stream: crate::OutputStream,
+    pub offset: u64,
+    pub next_offset: u64,
+    pub available_bytes: u64,
+    pub file_identity: Option<String>,
+    pub bytes: Vec<u8>,
+    pub has_more: bool,
+    pub capture_complete: bool,
+    pub proof_verified: bool,
+    pub observed_bytes: Option<u64>,
+    pub quota_truncated: Option<bool>,
+    pub output_error: Option<String>,
+}

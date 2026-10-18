@@ -34,6 +34,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         UpdateBuildPhase::decl(&config),
         UpdateBuildOutcome::decl(&config),
         UpdateBuildOutput::decl(&config),
+        UpdateCompilerOutputRequest::decl(&config),
+        UpdateCompilerOutputPage::decl(&config),
         UpdateBuildRecord::decl(&config),
         SupervisorProcess::decl(&config),
         SupervisorPhase::decl(&config),

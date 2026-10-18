@@ -92,7 +92,10 @@ internal v2 mailbox и ZIP/grant/apply; 438 workspace tests и Linux/Windows Cli
 passed. [Compiler actor и coordinated abort](docs/plans/worker-self-update/compiler-actor-abort.md)
 добавляют internal v3/v4, config 3 и updater schema 5: intent до ACK, responsive
 status и release только после source/Job/output proof. 453 workspace tests и
-PowerShell fixture passed; native gate впереди. Install и public update отключены.
+PowerShell fixture passed; native gate впереди. Добавлен [bounded compiler output](docs/plans/worker-self-update/compiler-output.md),
+включая File ID cursor и проверку terminal SHA. Первый Windows compiler actor run
+выявил PowerShell verbatim-path error; resolver исправлен, повтор впереди.
+Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

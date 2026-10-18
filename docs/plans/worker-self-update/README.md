@@ -180,3 +180,5 @@ U0 не применяет source plan, не выключает процессы
 recovery, а не копирование файлов. Новая actor library для U0–U4 не требуется.
 
 [Compiler actor и безопасная отмена до установки](compiler-actor-abort.md) — U1 internal v3/v4, config 3, journal 5; native gate ожидается.
+
+[Bounded compiler output](compiler-output.md): новый trusted readonly API; native проверка вместе с повтором compiler actor / PowerShell path fix.

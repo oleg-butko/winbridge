@@ -194,6 +194,7 @@ $oldUpdateBuildReport = $env:WINBRIDGE_UPDATE_BUILD_REPORT
 $oldAtomicReport = $env:WINBRIDGE_ATOMIC_GATE_REPORT
 $oldSourcePreparationReport = $env:WINBRIDGE_SOURCE_PREPARATION_REPORT
 $oldCompilerActorReport = $env:WINBRIDGE_COMPILER_ACTOR_REPORT
+$oldCompilerOutputReport = $env:WINBRIDGE_COMPILER_OUTPUT_REPORT
 $oldUpdateTestPwsh = $env:WINBRIDGE_UPDATE_TEST_PWSH
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
@@ -497,6 +498,7 @@ try {
         $env:WINBRIDGE_ATOMIC_GATE_REPORT = Join-Path $ReportDirectory 'atomic-launch-proof.json'
         $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = Join-Path $ReportDirectory 'source-preparation-proof.json'
         $env:WINBRIDGE_COMPILER_ACTOR_REPORT = Join-Path $ReportDirectory 'compiler-actor-proof.json'
+        $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = Join-Path $ReportDirectory 'compiler-output-proof.json'
         $env:WINBRIDGE_UPDATE_TEST_PWSH = (Get-Process -Id $PID).Path
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
@@ -540,6 +542,8 @@ try {
             if ($preparation.$check -ne $true) { throw "Source preparation check missing: $check" }
         }
         if ($preparation.accepted.update.phase -ne 'preparing' -or $preparation.accepted.driverActive -ne $true -or $preparation.busy.driverActive -ne $true -or $preparation.final.driverActive -ne $false -or $null -ne $preparation.final.driverError -or $preparation.final.update.phase -ne 'building' -or $preparation.final.source.phase -ne 'verified' -or $preparation.final.sourceAppliedFiles -ne 2 -or $null -ne $preparation.final.build) { throw 'Source preparation lifecycle proof incomplete' }
+        $outputProof = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-output-proof.json') -Raw | ConvertFrom-Json
+        if ($outputProof.kind -ne 'compiler_output_proof' -or $outputProof.passed -ne $true -or $outputProof.platform -ne 'windows' -or $outputProof.build.sourceDirty -or $outputProof.build.sourceCommit -cne $manifest.sourceCommit -or $outputProof.runtimeApplied -or $outputProof.windowsOpened -or $outputProof.live.phase -ne 'running' -or $outputProof.live.captureComplete -or $outputProof.live.proofVerified -or $outputProof.final.phase -ne 'completed' -or $outputProof.final.captureComplete -ne $true -or $outputProof.final.proofVerified -ne $true) { throw 'Compiler output proof incomplete' }
         $actor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'compiler-actor-proof.json') -Raw | ConvertFrom-Json
         if ($actor.kind -ne 'supervisor_compiler_actor_proof' -or $actor.passed -ne $true -or $actor.platform -ne 'windows' -or $actor.build.sourceDirty -or $actor.build.sourceCommit -cne $manifest.sourceCommit -or $actor.runtimeApplied -or $actor.candidateVerified -or $actor.windowsOpened) { throw 'Compiler actor proof identity incomplete' }
         foreach ($check in @('singleCompiler','mailboxResponsive','rawReleaseRejected','busyAbortRejected','coordinatedAbortCompleted')) { if ($actor.$check -ne $true) { throw "Compiler actor check missing: $check" } }
@@ -624,6 +628,7 @@ try {
     $env:WINBRIDGE_ATOMIC_GATE_REPORT = $oldAtomicReport
     $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = $oldSourcePreparationReport
     $env:WINBRIDGE_COMPILER_ACTOR_REPORT = $oldCompilerActorReport
+    $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = $oldCompilerOutputReport
     $env:WINBRIDGE_UPDATE_TEST_PWSH = $oldUpdateTestPwsh
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource

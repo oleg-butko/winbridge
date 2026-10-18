@@ -69,6 +69,12 @@ fn compiler_process_helper() {
     writeln!(counter, "{} {mode}", std::process::id()).unwrap();
     drop(counter);
     match mode {
+        "live" => {
+            println!("live compiler Привет ✓");
+            std::io::stdout().flush().unwrap();
+            std::thread::sleep(Duration::from_millis(1500));
+            std::process::exit(0);
+        }
         "success" => {
             std::thread::sleep(Duration::from_millis(50));
             println!("compiler stdout Привет ✓");
@@ -1057,4 +1063,174 @@ fn concurrent_compiler_admissions_grant_exactly_one_execution() {
             .count(),
         1
     );
+}
+
+fn output_query(r: &UpdateBuildRecord, limit_bytes: u32) -> UpdateCompilerOutputRequest {
+    UpdateCompilerOutputRequest {
+        attempt_id: r.spec.attempt_id.clone(),
+        stream: winbridge_protocol::OutputStream::Stdout,
+        offset: 0,
+        limit_bytes,
+        file_identity: None,
+    }
+}
+#[test]
+fn compiler_output_pages_preserve_utf8_bytes_scope_and_terminal_proof() {
+    use winbridge_update::build_output::read_compiler_output;
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    let before = f.journal.get(&f.id).unwrap();
+    let mut q = output_query(&r, 3);
+    let mut bytes = vec![];
+    let mut pages = 0;
+    loop {
+        let page = read_compiler_output(&f.config, &f.id, &q).unwrap();
+        assert!(page.read_only && page.proof_verified && page.capture_complete);
+        assert!(page.bytes.len() <= 3);
+        assert_eq!(page.quota_truncated, Some(false));
+        bytes.extend_from_slice(&page.bytes);
+        pages += 1;
+        if !page.has_more {
+            break;
+        }
+        q.offset = page.next_offset;
+        q.file_identity = page.file_identity;
+    }
+    assert!(String::from_utf8(bytes).unwrap().contains("Привет ✓"));
+    assert!(pages > 3);
+    assert_eq!(f.journal.get(&f.id).unwrap(), before);
+    let mut bad = output_query(&r, 0);
+    assert!(read_compiler_output(&f.config, &f.id, &bad).is_err());
+    bad.limit_bytes = 65537;
+    assert!(read_compiler_output(&f.config, &f.id, &bad).is_err());
+    bad.limit_bytes = 1;
+    bad.attempt_id = uuid::Uuid::new_v4().to_string();
+    assert!(read_compiler_output(&f.config, &f.id, &bad).is_err());
+    bad.attempt_id = "../outside".into();
+    assert!(read_compiler_output(&f.config, &f.id, &bad).is_err());
+    let mut other = f.config.clone();
+    other.runtime_directory = tmp.path().into();
+    assert!(read_compiler_output(&other, &f.id, &output_query(&r, 3)).is_err());
+}
+#[test]
+fn compiler_output_rejects_same_size_tamper_replacement_and_cursor_rebind() {
+    use winbridge_update::build_output::read_compiler_output;
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "success");
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut f.control,
+    )
+    .unwrap();
+    let mut q = output_query(&r, 3);
+    let first = read_compiler_output(&f.config, &f.id, &q).unwrap();
+    q.offset = first.next_offset;
+    q.file_identity = first.file_identity;
+    let path = log(&r, "stdout");
+    let original = fs::read(&path).unwrap();
+    let mut changed = original.clone();
+    changed[0] ^= 1;
+    fs::write(&path, changed).unwrap();
+    assert!(read_compiler_output(&f.config, &f.id, &q)
+        .unwrap_err()
+        .contains("SHA-256"));
+    fs::write(&path, &original).unwrap();
+    fs::rename(&path, path.with_extension("original")).unwrap();
+    fs::write(&path, &original).unwrap();
+    assert!(read_compiler_output(&f.config, &f.id, &q)
+        .unwrap_err()
+        .contains("replaced"));
+    let mut no_identity = output_query(&r, 3);
+    no_identity.offset = 3;
+    assert!(read_compiler_output(&f.config, &f.id, &no_identity).is_err());
+    let mut wrong_stream = q.clone();
+    wrong_stream.stream = winbridge_protocol::OutputStream::Stderr;
+    assert!(read_compiler_output(&f.config, &f.id, &wrong_stream).is_err());
+    fs::remove_file(&path).unwrap();
+    assert!(read_compiler_output(&f.config, &f.id, &q).is_err());
+    assert_eq!(f.journal.get(&f.id).unwrap().phase, UpdatePhase::Building);
+}
+#[test]
+fn compiler_live_output_is_readonly_and_does_not_claim_capture_completed() {
+    struct Live<'a> {
+        control: &'a mut Control,
+        cfg: UpdateConfig,
+        id: String,
+        page: Option<UpdateCompilerOutputPage>,
+    }
+    impl SourceControl for Live<'_> {
+        fn observe_worker(&mut self) -> Result<WorkerInfo, String> {
+            self.control.observe_worker()
+        }
+    }
+    impl BuildControl for Live<'_> {
+        fn build_progress(&mut self, r: &UpdateBuildRecord) -> Result<(), String> {
+            if r.phase == UpdateBuildPhase::Running {
+                let until = Instant::now() + Duration::from_secs(5);
+                loop {
+                    let page = winbridge_update::build_output::read_compiler_output(
+                        &self.cfg,
+                        &self.id,
+                        &output_query(r, 65536),
+                    )?;
+                    if String::from_utf8_lossy(&page.bytes).contains("Привет ✓") {
+                        assert!(!page.capture_complete && !page.proof_verified);
+                        assert!(page.observed_bytes.is_none() && page.quota_truncated.is_none());
+                        self.page = Some(page);
+                        break;
+                    }
+                    assert!(Instant::now() < until);
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+            Ok(())
+        }
+    }
+    let tmp = temporary();
+    let mut f = ready(tmp.path());
+    let cmd = command(&f, "live");
+    let mut live = Live {
+        control: &mut f.control,
+        cfg: f.config.clone(),
+        id: f.id.clone(),
+        page: None,
+    };
+    let r = execute_build(
+        &mut f.journal,
+        &f.owner,
+        &f.config,
+        &f.id,
+        "build",
+        &cmd,
+        &mut live,
+    )
+    .unwrap();
+    assert_eq!(r.outcome, Some(UpdateBuildOutcome::Succeeded));
+    let final_page = winbridge_update::build_output::read_compiler_output(
+        &f.config,
+        &f.id,
+        &output_query(&r, 65536),
+    )
+    .unwrap();
+    assert!(final_page.capture_complete && final_page.proof_verified);
+    if let Some(path) = std::env::var_os("WINBRIDGE_COMPILER_OUTPUT_REPORT") {
+        fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"compiler_output_proof","passed":true,"platform":std::env::consts::OS,"build":winbridge_protocol::build_identity(),"live":live.page.unwrap(),"final":final_page,"runtimeApplied":false,"windowsOpened":false})).unwrap()).unwrap();
+    }
 }

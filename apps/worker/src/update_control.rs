@@ -893,12 +893,26 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
                                 _ => break,
                             }
                         }
+                        if h.record.phase != SupervisorPhase::Stopped {
+                            let _ = h.abort_before_cutover().await;
+                        }
                         let lease = worker
                             .store()
                             .ok()
                             .and_then(|s| s.active_worker_update().ok())
                             .flatten();
-                        if let Some(lease) = lease {
+                        let compiler_known = UpdateJournal::preparation_snapshot(
+                            &Path::new(&h.record.spec.runtime_directory).join("update-state"),
+                            &h.record.spec.update_id,
+                            false,
+                            None,
+                        )
+                        .is_ok_and(|v| {
+                            v.build.is_none_or(|b| {
+                                b.phase == UpdateBuildPhase::Completed && b.cleanup_verified
+                            })
+                        });
+                        if let Some(lease) = lease.filter(|_| compiler_known) {
                             let source = Path::new(&lease.spec.source_directory);
                             let verified = [
                                 &lease.spec.target_manifest_sha256,
@@ -917,7 +931,9 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
                                 let _ = worker.advance_source_update(&lease.spec, &command);
                             }
                         }
-                        let _ = h.command(SupervisorAction::Stop).await;
+                        if h.record.phase != SupervisorPhase::Stopped {
+                            let _ = h.command(SupervisorAction::Stop).await;
+                        }
                     }
                 })
             })
@@ -1334,6 +1350,34 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
             assert!(Instant::now() < deadline);
             tokio::time::sleep(Duration::from_millis(20)).await;
         };
+        if let Some(error) = &final_view.driver_error {
+            let build = final_view
+                .build
+                .as_ref()
+                .expect("Failure keeps compiler receipt");
+            let logs = Path::new(&build.spec.runtime_directory)
+                .join("update")
+                .join(&build.spec.update_id)
+                .join("compiler")
+                .join(&build.spec.attempt_id);
+            let output = |name: &str| {
+                use std::io::Read;
+                let mut bytes = vec![];
+                if let Ok(f) = fs::File::open(logs.join(format!("{name}.bin"))) {
+                    let _ = f.take(65536).read_to_end(&mut bytes);
+                }
+                String::from_utf8_lossy(&bytes).into_owned()
+            };
+            let (stdout, stderr) = (output("stdout"), output("stderr"));
+            if let Some(path) = std::env::var_os("WINBRIDGE_COMPILER_ACTOR_REPORT") {
+                let path = PathBuf::from(path).with_file_name("compiler-actor-failure.json");
+                let bytes=serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"compiler_actor_failure","build":build_identity(),"view":final_view,"stdout":stdout,"stderr":stderr,"runtimeApplied":false,"windowsOpened":false})).unwrap();
+                fs::write(path, bytes).unwrap();
+            }
+            // Report first; cleanup is the same coordinated production abort.
+            let cleanup = h.abort_before_cutover().await;
+            panic!("{error}; stdout={stdout}; stderr={stderr}; coordinated abort={cleanup:?}");
+        }
         assert!(
             final_view.driver_error.is_none(),
             "{:?}",

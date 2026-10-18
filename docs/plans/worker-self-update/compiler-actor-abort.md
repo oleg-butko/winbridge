@@ -65,3 +65,11 @@ Live compiler output для UI, независимая проверка полн
 и public capability остаются следующими частями U1–U4.
 
 Local gate: 453 workspace tests и отдельный real PowerShell actor fixture passed; Linux/Windows Clippy all-targets, fmt, contracts, typecheck/build:ui/scaffold и 8 export tests passed. Native rollup ожидается.
+
+Первый Windows run `20261018-093814-ca0a18e6` НЕ прошёл: 124 tests succeeded,
+compiler actor exit 1. PowerShell authorization manager отклонил verbatim
+local path; отдельная normal/extended диагностика подтвердила отличие. Resolver
+исправляет только spelling аргументов, не ExecutionPolicy. Test failure теперь
+сохраняет bounded output и выполняет coordinated abort. Изолированный родительский
+Task отменён; установленный worker подтвердил idle/complete recovery coverage.
+Повтор native gate ожидается.

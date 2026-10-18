@@ -3,6 +3,7 @@
 pub mod abort;
 pub mod archive;
 pub mod build;
+pub mod build_output;
 pub mod journal;
 mod preparation;
 pub mod source;

@@ -114,6 +114,19 @@ pub(crate) fn source(
 }
 
 impl crate::build::BuildControl for Control {}
+// PowerShell's authorization manager rejects verbatim paths even for a local
+// drive. Preserve the checked file/root; change only its command-line spelling.
+fn tool_path(path: &Path) -> Result<String> {
+    winbridge_platform::require_local_path_prefix(path).map_err(|e| e.to_string())?;
+    let text = path.to_str().ok_or("Build paths must be UTF-8")?;
+    #[cfg(windows)]
+    if let Some(plain) = text.strip_prefix(r"\\?\") {
+        winbridge_platform::require_local_path_prefix(Path::new(plain))
+            .map_err(|e| e.to_string())?;
+        return Ok(plain.to_owned());
+    }
+    Ok(text.to_owned())
+}
 /// Resolve a fixed WinBridge build, never command JSON from an agent.
 pub(crate) fn build_command(
     journal: &mut UpdateJournal,
@@ -151,13 +164,8 @@ pub(crate) fn build_command(
     {
         return Err("Pinned supervisor verifier image changed; no build".into());
     }
-    let text = |path: &Path| {
-        path.to_str()
-            .map(str::to_owned)
-            .ok_or_else(|| "Build paths must be UTF-8".to_string())
-    };
     let cmd = winbridge_protocol::ResolvedCommand {
-        executable: text(
+        executable: tool_path(
             &policy
                 .powershell_executable
                 .canonicalize()
@@ -168,22 +176,22 @@ pub(crate) fn build_command(
             "-NoProfile".into(),
             "-NonInteractive".into(),
             "-File".into(),
-            text(&script)?,
+            tool_path(&script)?,
             "-SourceDirectory".into(),
-            text(&source)?,
+            tool_path(&source)?,
             "-ManifestSha256".into(),
             sha,
             "-StagingDirectory".into(),
-            text(
+            tool_path(
                 &runtime
                     .join("update")
                     .join(&update.update_id)
                     .join("candidate"),
             )?,
             "-VerifierExecutable".into(),
-            record.spec.image_path.clone(),
+            tool_path(Path::new(&record.spec.image_path))?,
         ],
-        working_directory: text(&source)?,
+        working_directory: source.to_str().ok_or("Build cwd must be UTF-8")?.to_owned(),
         timeout_ms: policy.timeout_ms,
     };
     Ok((cfg, cmd))
@@ -216,4 +224,28 @@ pub(crate) fn compiler(
     }
     // This is compiler success only; no candidate/lease/install promotion.
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    #[test]
+    fn powershell_paths_preserve_local_drive_and_reject_unc_device_paths() {
+        assert_eq!(
+            tool_path(Path::new(r"\\?\K:\source with space\build.ps1")).unwrap(),
+            r"K:\source with space\build.ps1"
+        );
+        assert_eq!(
+            tool_path(Path::new(r"K:\source\build.ps1")).unwrap(),
+            r"K:\source\build.ps1"
+        );
+        for p in [
+            r"\\server\share\script.ps1",
+            r"\\?\UNC\server\share\script.ps1",
+            r"\\.\pipe\device",
+            r"K:relative",
+        ] {
+            assert!(tool_path(Path::new(p)).is_err(), "{p}");
+        }
+    }
 }

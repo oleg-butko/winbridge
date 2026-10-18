@@ -1,3 +1,23 @@
+## U1: compiler output и исправление PowerShell paths — 2026-10-18
+
+[Bounded output](plans/worker-self-update/compiler-output.md): typed readonly byte
+pages, File ID cursor, live/terminal distinction и retained SHA proof. 18 compiler
+regressions, explicit PowerShell actor и 8 worker-control tests passed locally.
+Linux/Windows Clippy all-targets, fmt, contracts/typecheck/build:ui/scaffold
+passed также после path fix; native повтор ещё впереди.
+
+Первый native run clean d2c7fdd `20261018-093814-ca0a18e6` прошёл 124 tests,
+но compiler actor завершился exit 1; gate НЕ пройден, candidate build не выполнен.
+Отдельная Windows диагностика `f5420c13-3c16-4836-bd70-7a5f662d3dda` подтвердила:
+PowerShell принимает K:\… и отклоняет эквивалентный \\?\K:\… с
+AuthorizationManager check failed. Fixed resolver теперь передаёт tool paths без
+verbatim prefix, сохраняя canonical cwd/source identity и запрет UNC/devices.
+Failure fixture сохраняет bounded stdout/stderr и делает coordinated abort.
+Незавершённый validation Task `37321e75-f4fa-49bf-ad2b-ed4265dbc2f9` отменён явно;
+worker подтвердил cancelled, idle 0, complete coverage и прежний generation.
+Installed source 1f3aa9f / runtime/config/journal не менялись; bootstrap не нужен.
+Автоматический повтор разрешён пользователем. A4 остаётся на паузе.
+
 ## Самообновление U1: compiler mailbox и coordinated abort — 2026-10-18
 
 [Реализация и границы](plans/worker-self-update/compiler-actor-abort.md): внутренние
