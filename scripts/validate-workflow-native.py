@@ -245,6 +245,7 @@ def main():
         archive_has_worker_control = 'winbridge/apps/worker/src/update_control.rs' in archive.namelist()
         archive_has_worker_source = 'winbridge/apps/update/src/worker_source.rs' in archive.namelist()
         archive_has_compiler = 'winbridge/apps/update/src/build.rs' in archive.namelist()
+        archive_has_source_actor = 'winbridge/apps/update/src/preparation.rs' in archive.namelist()
         archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
         archive_checks_atomic_root_exit = archive_has_atomic and b'original_root_exited' in archive.read('winbridge/crates/platform/src/windows_atomic.rs')
         archive_has_source_transaction = 'winbridge/apps/update/tests/source_transaction.rs' in archive.namelist()
@@ -570,6 +571,22 @@ exit $nativeExit
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             if 'compiler::compiler_owner_crash_keeps_durable_attempt_and_never_replays_it ... ok' not in log:
                 raise RuntimeError('Windows compiler owner-crash/dedup test did not pass')
+        if archive_has_source_actor:
+            preparation = json.loads((report / 'source-preparation-proof.json').read_text(encoding='utf-8-sig'))
+            final = preparation.get('final',{})
+            if (preparation.get('kind') != 'supervisor_source_preparation_proof' or preparation.get('passed') is not True
+                    or preparation.get('platform') != 'windows' or any(preparation.get(k) is not False for k in ['runtimeApplied','windowsOpened'])
+                    or not all(preparation.get(k) is True for k in ['mailboxResponsive','stopWhileBusyRejected','duplicateObserved','fixtureSourceApplied','workerLeaseRetained','fixtureLeaseReleasedExplicitly'])
+                    or preparation.get('build',{}).get('sourceCommit') != result['sourceCommit'] or preparation.get('build',{}).get('sourceDirty') is not False
+                    or preparation.get('accepted',{}).get('update',{}).get('phase') != 'preparing' or preparation.get('accepted',{}).get('driverActive') is not True
+                    or preparation.get('busy',{}).get('driverActive') is not True or final.get('driverActive') is not False or final.get('driverError') is not None
+                    or final.get('update',{}).get('phase') != 'building' or final.get('source',{}).get('phase') != 'verified'
+                    or final.get('sourceAppliedFiles') != 2 or final.get('build') is not None or final.get('source') != preparation.get('duplicate',{}).get('source')):
+                raise RuntimeError('Incomplete supervisor source preparation/mailbox/dedup proof')
+            log = (report / 'update-worker-control.log').read_text(encoding='utf-8-sig')
+            for name in ['source_preparation_actor_stays_responsive_and_never_replays_dispatch', 'source_preparation_rejects_unconfigured_policy_before_intent', 'source_preparation_archive_failure_is_reported_and_never_retried']:
+                if name + ' ... ok' not in log:
+                    raise RuntimeError('Source actor test missing: ' + name)
         if archive_has_source_admission:
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             for test in ['source_apply_admission_commits_before_dispatch_and_only_fresh_permit_writes', 'dropped_source_apply_permit_is_not_recreated_after_owner_restart', 'concurrent_source_apply_admissions_cannot_mint_two_effect_permits']:

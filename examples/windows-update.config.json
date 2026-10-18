@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "sourcePackagesDirectory": "K:\\VMs\\shared\\WinBridge\\sources",
   "sourceDirectory": "K:\\_proj-26\\winbridge\\src",
   "runtimeDirectory": "K:\\_proj-26\\winbridge\\runtime",
   "workerConfigPath": "K:\\_proj-26\\winbridge\\runtime\\winbridge-worker.snapshot.local.json"

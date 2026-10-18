@@ -31,6 +31,6 @@ passed. Следующий native rollup проверит эти cases и доп
 в atomic CreateProcess owner-crash test, помимо пустоты Job и отсутствия user effects.
 
 Схемы updater/worker прежние: 4/15; новые protocol DTO и persisted fields не нужны.
-Supervisor mailbox, автоматическая source/build orchestration, artifact verification,
-abort/release и exact shutdown ещё не реализованы. U1 целиком открыт; установленный
+[Source actor](source-actor.md) добавляет mailbox и source orchestration; его native
+rollup впереди. Compiler/artifact/abort и exact shutdown ещё не реализованы. U1 целиком открыт; установленный
 worker не обновляется, bootstrap пока не нужен.

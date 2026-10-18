@@ -151,3 +151,19 @@ intent, PID/Job, output и cleanup отдельно от worker journal. Public 
 Source, test state, staging и итоговый отчёт всегда новые. Default build script
 по-прежнему использует caches в постоянном `src`; test-only
 `ValidationCacheDirectory` не меняет расположение installed runtime.
+
+
+### Подготовка исходников через internal supervisor v2
+
+[Source actor](../plans/worker-self-update/source-actor.md) умеет связать pinned ZIP,
+worker source grant и применение исходников. Config schema 2 содержит
+sourcePackagesDirectory ([пример](../../examples/windows-update.config.json)).
+Обычный запуск worker/CLI/MCP пока не включает эту функцию. Schema 1 продолжает
+обслуживать прежние readonly/source-control сценарии; переписывать установленный
+config перед bootstrap не требуется.
+
+View показывает сохранённые parent/source/build phases, file receipts, время,
+состояние driver и ошибку отдельно. Preparing/Building не означают установленное
+обновление. При source failure сохраняются journals/preimages/worker guard;
+повтор того же запроса не продолжает файловые действия. Coordinated abort/release,
+compiler orchestration и runtime install — следующие шаги.

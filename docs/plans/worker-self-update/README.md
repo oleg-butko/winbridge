@@ -119,6 +119,9 @@ U0 не применяет source plan, не выключает процессы
 - [ ] [Source admission перед dispatch](source-admission.md): one-use fresh commit
   permit, повтор только observe; 26 integration tests и Windows cross-check passed,
   native rollup впереди.
+- [ ] [Source preparation actor](source-actor.md): ZIP/grant/apply driver и
+  отзывчивый internal v2 mailbox; 438 workspace tests и Linux/Windows Clippy passed,
+  native rollup впереди. Compiler/artifacts/abort не подключены.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.

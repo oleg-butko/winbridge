@@ -84,6 +84,59 @@ fn persist(c: &Connection, old: &SupervisorRecord, next: &SupervisorRecord) -> R
     Ok(())
 }
 impl UpdateJournal {
+    pub fn preparation_snapshot(
+        directory: &Path,
+        id: &str,
+        driver_active: bool,
+        driver_error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        check_files(directory)?;
+        let mut c = connection(&directory.join("updates.sqlite"), true)?;
+        if schema(&c)? != UPDATE_SCHEMA_VERSION {
+            return Err(fail(
+                JournalErrorCode::UnsupportedSchema,
+                "Preparation view requires the current updater schema",
+            ));
+        }
+        let tx = c.transaction().map_err(storage)?;
+        let update = record(&tx, id)?;
+        let source = match source::header(&tx, id) {
+            Ok(value) => Some(value),
+            Err(e) if e.code == JournalErrorCode::NotFound => None,
+            Err(e) => return Err(e),
+        };
+        let count: i64 = tx
+            .query_row(
+                "SELECT count(*) FROM source_file_receipts WHERE update_id=?1",
+                [id],
+                |r| r.get(0),
+            )
+            .map_err(storage)?;
+        let count = counter(count)?;
+        if count > source.as_ref().map_or(0, |s| u64::from(s.total_files)) {
+            return Err(fail(
+                JournalErrorCode::Corrupt,
+                "Invalid source receipt count",
+            ));
+        }
+        let build = match build::read(&tx, id) {
+            Ok(value) => Some(value),
+            Err(e) if e.code == JournalErrorCode::NotFound => None,
+            Err(e) => return Err(e),
+        };
+        let view = UpdatePreparationView {
+            schema_version: 1,
+            observed_at_ms: now_ms()?,
+            update,
+            source,
+            source_applied_files: count as u32,
+            build,
+            driver_active,
+            driver_error,
+        };
+        tx.commit().map_err(storage)?;
+        Ok(view)
+    }
     pub fn supervisor(&mut self, id: &str) -> Result<SupervisorRecord> {
         read(&self.connection, id)
     }

@@ -84,6 +84,11 @@ commands, exe replacement и shutdown ещё не подключены.
 trusted library intent/PID/Job/resume и verified cleanup, updater schema 4.
 429 local tests, 10 итоговых compiler tests и
 [95 native tests / полный candidate build](docs/plans/worker-self-update/windows-compiler-gate-2026-10-18.md) passed.
+[Atomic compiler launch](docs/plans/worker-self-update/atomic-executable.md) прошёл
+[102 native tests / candidate build](docs/plans/worker-self-update/windows-atomic-launch-gate-2026-10-18.md).
+[Source preparation actor](docs/plans/worker-self-update/source-actor.md) добавляет
+internal v2 mailbox и ZIP/grant/apply; 438 workspace tests и Linux/Windows Clippy
+passed, native rollup впереди. Compiler/install и public update пока отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

@@ -518,6 +518,9 @@ pub enum SupervisorAction {
     Handoff,
     Stop,
     WorkerControl,
+    /// Internal v2, authenticated preparation only; no runtime replacement.
+    PrepareSource,
+    ObservePreparation,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -543,6 +546,24 @@ pub struct SupervisorResponse {
     pub error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worker_control: Option<WorkerUpdateControlResponse>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preparation: Option<UpdatePreparationView>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdatePreparationView {
+    pub schema_version: u16,
+    pub observed_at_ms: u64,
+    pub update: UpdateRecord,
+    pub source: Option<SourceTransactionRecord>,
+    pub source_applied_files: u32,
+    pub build: Option<UpdateBuildRecord>,
+    /// Observation of this supervisor's blocking driver, separate from saved state.
+    pub driver_active: bool,
+    pub driver_error: Option<String>,
 }
 
 /// Frozen by the worker launcher; request payloads cannot select another worker.

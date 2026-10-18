@@ -27,6 +27,13 @@ pub(crate) struct Registration {
     ready: AtomicBool,
     launching: AtomicBool,
     in_flight: AtomicUsize,
+    #[cfg(test)]
+    test_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
+}
+#[cfg(test)]
+struct ControlTestGate {
+    entered: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
 }
 pub enum WorkerSupervisorLaunch {
     Started(Box<SupervisorHandle>),
@@ -134,6 +141,8 @@ impl Worker {
             ready: AtomicBool::new(false),
             launching: AtomicBool::new(false),
             in_flight: AtomicUsize::new(0),
+            #[cfg(test)]
+            test_gate: std::sync::Mutex::new(None),
         }));
         Ok(binding)
     }
@@ -494,6 +503,20 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 let _callback = callback;
                 let worker = w;
                 let registration = r;
+                #[cfg(test)]
+                if matches!(request.command, WorkerUpdateControlCommand::BeginSource) {
+                    let gate = registration.test_gate.lock().unwrap().take();
+                    if let Some(gate) = gate {
+                        if let Some(entered) = gate.entered.lock().unwrap().take() {
+                            let _ = entered.send(());
+                        }
+                        gate.release
+                            .lock()
+                            .unwrap()
+                            .recv_timeout(std::time::Duration::from_secs(10))
+                            .map_err(|e| format!("Fixture control gate stopped: {e}"))?;
+                    }
+                }
                 worker.control(&registration, &request, peer)
             })
             .await;
@@ -546,7 +569,24 @@ mod tests {
     }
     impl Fixture {
         async fn new(actual: Option<PathBuf>) -> Self {
-            let root = tempfile::tempdir().unwrap();
+            Self::with_source_policy(actual, false).await
+        }
+        async fn with_source_policy(actual: Option<PathBuf>, enabled: bool) -> Self {
+            let root = if enabled {
+                // Keep the 6 GiB guard on local disk and Unix sockets below
+                // sockaddr_un's path limit; /tmp may be a small tmpfs.
+                #[cfg(windows)]
+                let parent = std::env::current_exe()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_owned();
+                #[cfg(not(windows))]
+                let parent = PathBuf::from("/var/tmp");
+                tempfile::tempdir_in(parent).unwrap()
+            } else {
+                tempfile::tempdir().unwrap()
+            };
             let source = actual.clone().unwrap_or_else(|| root.path().join("source"));
             let runtime = root.path().join("runtime");
             let other = root.path().join("other");
@@ -584,7 +624,51 @@ mod tests {
             let config = runtime.join("winbridge-worker.local.json");
             fs::write(&config,serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"instanceId":format!("control-{}",uuid::Uuid::new_v4()),"nodeId":"worker","stateDirectory":root.path().join("state"),"worker":{"keepRunningOnUiExit":true},"workScheduling":{"maxConcurrentWork":1},"projects":[{"id":"source","workspaceRoot":source,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]},{"id":"other","workspaceRoot":other,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]})).unwrap()).unwrap();
             let updater_config = runtime.join("winbridge-update.local.json");
-            fs::write(&updater_config,serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":config})).unwrap()).unwrap();
+            let mut update_config = serde_json::json!({"schemaVersion":1,"sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":config});
+            let source_pin = if enabled {
+                use std::io::Write;
+                let packages = root.path().join("packages");
+                fs::create_dir(&packages).unwrap();
+                update_config["schemaVersion"] = serde_json::json!(2);
+                update_config["sourcePackagesDirectory"] = serde_json::json!(packages);
+                let next = b"[package]\nname='control-fixture-updated'\nversion='0.2.0'\n";
+                let manifest = SourceManifest {
+                    schema_version: 1,
+                    source_commit: "b".repeat(40),
+                    dirty: false,
+                    created_at: "2026-10-18T00:00:00Z".into(),
+                    includes_built_ui: false,
+                    files: vec![SourceFile {
+                        path: "Cargo.toml".into(),
+                        bytes: next.len() as u64,
+                        sha256: winbridge_update::sha256(next),
+                    }],
+                };
+                let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+                let path = packages.join("fixture.zip");
+                let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+                for (name, bytes) in [
+                    ("Cargo.toml", next.as_slice()),
+                    ("winbridge-source-manifest.json", manifest_bytes.as_slice()),
+                ] {
+                    zip.start_file(
+                        format!("winbridge/{name}"),
+                        zip::write::SimpleFileOptions::default(),
+                    )
+                    .unwrap();
+                    zip.write_all(bytes).unwrap();
+                }
+                zip.finish().unwrap();
+                Some(UpdateSourcePin {
+                    archive_name: "fixture.zip".into(),
+                    archive_sha256: winbridge_update::sha256(&fs::read(path).unwrap()),
+                    manifest_sha256: winbridge_update::sha256(&manifest_bytes),
+                    source_commit: manifest.source_commit,
+                })
+            } else {
+                None
+            };
+            fs::write(&updater_config, serde_json::to_vec(&update_config).unwrap()).unwrap();
             let binary = std::env::current_exe()
                 .unwrap()
                 .parent()
@@ -608,12 +692,12 @@ mod tests {
             let request = UpdateRequest {
                 contract_version: 1,
                 idempotency_key: "worker-launch".into(),
-                source: UpdateSourcePin {
+                source: source_pin.unwrap_or_else(|| UpdateSourcePin {
                     archive_name: "fixture.zip".into(),
                     archive_sha256: "b".repeat(64),
                     manifest_sha256: baseline.clone(),
                     source_commit: manifest.source_commit.clone(),
-                },
+                }),
                 expected: UpdateInstallationPin {
                     installation_id: info.installation_id,
                     scope_sha256: info.scope_sha256,
@@ -630,6 +714,13 @@ mod tests {
                 .ready
                 .load(Ordering::Acquire)
             {
+                if server.is_finished() {
+                    worker.stop();
+                    panic!(
+                        "Fixture worker serve failed before control readiness: {:?}",
+                        server.await.unwrap()
+                    );
+                }
                 assert!(Instant::now() < deadline);
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
@@ -715,32 +806,51 @@ mod tests {
     }
     impl Drop for Fixture {
         fn drop(&mut self) {
-            // Owned test state only. Normal tests use async stop; this prevents
-            // assertion failures from abandoning an accepted detached supervisor.
-            if let Some(lease) = self
-                .worker
-                .store()
-                .ok()
-                .and_then(|s| s.active_worker_update().ok())
-                .flatten()
-            {
-                let command = WorkerUpdateCommand {
-                    command_id: uuid::Uuid::new_v4().to_string(),
-                    expected_revision: lease.revision,
-                    action: WorkerUpdateAction::Release,
-                    source_manifest_sha256: Some(self.baseline.clone()),
-                    reason: "Fixture cleanup with unchanged verified source".into(),
-                };
-                let _ = self.worker.advance_source_update(&lease.spec, &command);
-            }
-            if let Some(mut h) = self.supervisor.take() {
-                let _ = std::thread::spawn(move || {
-                    tokio::runtime::Runtime::new().unwrap().block_on(async {
+            // Owned fixtures only. Wait for an admitted driver before considering
+            // release; a failed assertion must not abandon a detached supervisor.
+            let worker = self.worker.clone();
+            let supervisor = self.supervisor.take();
+            let _ = std::thread::spawn(move || {
+                tokio::runtime::Runtime::new().unwrap().block_on(async {
+                    if let Some(mut h) = supervisor {
+                        let deadline = Instant::now() + Duration::from_secs(15);
+                        loop {
+                            match h.preparation(false).await {
+                                Ok(view) if view.driver_active && Instant::now() < deadline => {
+                                    tokio::time::sleep(Duration::from_millis(50)).await
+                                }
+                                _ => break,
+                            }
+                        }
+                        let lease = worker
+                            .store()
+                            .ok()
+                            .and_then(|s| s.active_worker_update().ok())
+                            .flatten();
+                        if let Some(lease) = lease {
+                            let source = Path::new(&lease.spec.source_directory);
+                            let verified = [
+                                &lease.spec.target_manifest_sha256,
+                                &lease.spec.baseline_manifest_sha256,
+                            ]
+                            .into_iter()
+                            .find(|sha| winbridge_update::verify_source(source, sha).is_ok());
+                            if let Some(sha) = verified {
+                                let command = WorkerUpdateCommand {
+                                    command_id: uuid::Uuid::new_v4().to_string(),
+                                    expected_revision: lease.revision,
+                                    action: WorkerUpdateAction::Release,
+                                    source_manifest_sha256: Some(sha.clone()),
+                                    reason: "Verified owned fixture cleanup".into(),
+                                };
+                                let _ = worker.advance_source_update(&lease.spec, &command);
+                            }
+                        }
                         let _ = h.command(SupervisorAction::Stop).await;
-                    })
+                    }
                 })
-                .join();
-            }
+            })
+            .join();
             self.worker.stop();
             self.server.abort();
         }
@@ -988,6 +1098,163 @@ mod tests {
             f.advance("fresh-release", 1, WorkerUpdateAction::Release)
                 .await,
         );
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn source_preparation_actor_stays_responsive_and_never_replays_dispatch() {
+        let mut f = Fixture::with_source_policy(None, true).await;
+        f.launch().await;
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        *f.worker
+            .control_registration()
+            .unwrap()
+            .test_gate
+            .lock()
+            .unwrap() = Some(Arc::new(ControlTestGate {
+            entered: std::sync::Mutex::new(Some(entered_tx)),
+            release: std::sync::Mutex::new(release_rx),
+        }));
+        let h = f.supervisor.as_mut().unwrap();
+        let accepted = h.preparation(true).await.unwrap();
+        assert_eq!(accepted.update.phase, UpdatePhase::Preparing);
+        assert!(accepted.driver_active);
+        tokio::time::timeout(Duration::from_secs(5), entered_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        let busy = tokio::time::timeout(Duration::from_secs(2), h.preparation(false))
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(busy.driver_active);
+        assert!(busy.source.is_none());
+        let again = h.preparation(true).await.unwrap();
+        assert_eq!(again.update, accepted.update);
+        assert!(h
+            .command(SupervisorAction::Stop)
+            .await
+            .unwrap_err()
+            .contains("driver active"));
+        release_tx.send(()).unwrap();
+        let until = Instant::now() + Duration::from_secs(15);
+        let final_view = loop {
+            let view = h.preparation(false).await.unwrap();
+            if !view.driver_active {
+                break view;
+            }
+            assert!(Instant::now() < until);
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        };
+        assert!(
+            final_view.driver_error.is_none(),
+            "{:?}",
+            final_view.driver_error
+        );
+        assert_eq!(final_view.update.phase, UpdatePhase::Building);
+        assert_eq!(
+            final_view.source.as_ref().unwrap().phase,
+            SourceTransactionPhase::Verified
+        );
+        assert_eq!(final_view.source_applied_files, 2);
+        assert!(final_view.build.is_none());
+        let duplicate = h.preparation(true).await.unwrap();
+        assert_eq!(duplicate.update, final_view.update);
+        assert_eq!(duplicate.source, final_view.source);
+        let held = lease(
+            h.worker_control(WorkerUpdateControlCommand::Observe)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(held.phase, WorkerUpdatePhase::SourceHeld);
+        assert_eq!(f.slots(), 1);
+        let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+        winbridge_update::verify_source(&cfg.source_directory, &f.request.source.manifest_sha256)
+            .unwrap();
+        // Explicit fixture cleanup after verified source and absent compiler. This
+        // is not a production abort API or a release permitted through IPC.
+        let release = WorkerUpdateCommand {
+            command_id: "source-actor-fixture-release".into(),
+            expected_revision: held.revision,
+            action: WorkerUpdateAction::Release,
+            source_manifest_sha256: Some(f.request.source.manifest_sha256.clone()),
+            reason: "Verified source-only fixture cleanup".into(),
+        };
+        assert_eq!(
+            f.worker
+                .advance_source_update(&held.spec, &release)
+                .unwrap()
+                .phase,
+            WorkerUpdatePhase::Released
+        );
+        if let Some(path) = std::env::var_os("WINBRIDGE_SOURCE_PREPARATION_REPORT") {
+            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"supervisor_source_preparation_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"busy":busy,"final":final_view,"duplicate":duplicate,"mailboxResponsive":true,"stopWhileBusyRejected":true,"duplicateObserved":true,"fixtureSourceApplied":true,"workerLeaseRetained":true,"fixtureLeaseReleasedExplicitly":true,"runtimeApplied":false,"windowsOpened":false})).unwrap()).unwrap();
+        }
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn source_preparation_rejects_unconfigured_policy_before_intent() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        assert!(h
+            .preparation(true)
+            .await
+            .unwrap_err()
+            .contains("sourcePackagesDirectory"));
+        let view = h.preparation(false).await.unwrap();
+        assert_eq!(view.update.phase, UpdatePhase::Requested);
+        assert_eq!(view.update.revision, 0);
+        assert!(!view.driver_active);
+        assert!(view.source.is_none());
+        assert!(h
+            .worker_control(WorkerUpdateControlCommand::Observe)
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap()
+            .is_none());
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn source_preparation_archive_failure_is_reported_and_never_retried() {
+        let mut f = Fixture::with_source_policy(None, true).await;
+        f.launch().await;
+        let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+        fs::write(
+            cfg.source_packages_directory.unwrap().join("fixture.zip"),
+            b"damaged fixture",
+        )
+        .unwrap();
+        let h = f.supervisor.as_mut().unwrap();
+        h.preparation(true).await.unwrap();
+        let until = Instant::now() + Duration::from_secs(10);
+        let failed = loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                break v;
+            }
+            assert!(Instant::now() < until);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(failed.driver_error.is_some());
+        assert!(failed.source.is_none());
+        assert_eq!(failed.update.phase, UpdatePhase::Preparing);
+        let duplicate = h.preparation(true).await.unwrap();
+        assert_eq!(duplicate.update, failed.update);
+        assert_eq!(duplicate.driver_error, failed.driver_error);
+        assert!(!duplicate.driver_active);
+        winbridge_update::verify_source(&cfg.source_directory, &f.baseline).unwrap();
+        assert!(h
+            .worker_control(WorkerUpdateControlCommand::Observe)
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap()
+            .is_none());
         f.stop().await;
     }
 

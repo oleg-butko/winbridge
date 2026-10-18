@@ -3,6 +3,7 @@
 pub mod archive;
 pub mod build;
 pub mod journal;
+mod preparation;
 pub mod source;
 pub mod supervisor;
 pub mod worker_source;
@@ -26,13 +27,15 @@ pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateConfig {
     pub schema_version: u16,
     pub source_directory: PathBuf,
     pub runtime_directory: PathBuf,
     pub worker_config_path: PathBuf,
+    #[serde(default)]
+    pub source_packages_directory: Option<PathBuf>,
 }
 
 #[derive(Debug, Serialize)]
@@ -79,8 +82,19 @@ fn local_directory(path: &Path) -> Result<PathBuf> {
 pub fn load_config(path: &Path) -> Result<UpdateConfig> {
     let config: UpdateConfig = serde_json::from_slice(&read(path, 64 * 1024)?)
         .map_err(|_| "Invalid updater local configuration/fields")?;
-    if config.schema_version != 1 {
+    if !matches!(
+        (
+            config.schema_version,
+            config.source_packages_directory.is_some()
+        ),
+        (1, false) | (2, true)
+    ) {
         return Err("Unsupported updater config schema".into());
+    }
+    if let Some(directory) = &config.source_packages_directory {
+        // Delivery may be HGFS. It is read-only input, never journal/build storage.
+        winbridge_platform::require_local_path_prefix(directory).map_err(error)?;
+        winbridge_platform::require_safe_path(directory).map_err(error)?;
     }
     let source = local_directory(&config.source_directory)?;
     let runtime = local_directory(&config.runtime_directory)?;

@@ -1082,6 +1082,7 @@ dependencies = [
  "winbridge-transport",
  "winbridge-update",
  "winbridge-workspace-sync",
+ "zip",
 ]
 
 [[package]]

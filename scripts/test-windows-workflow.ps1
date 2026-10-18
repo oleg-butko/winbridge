@@ -192,6 +192,7 @@ $oldSupervisorReport = $env:WINBRIDGE_SUPERVISOR_REPORT
 $oldUpdateControlReport = $env:WINBRIDGE_UPDATE_CONTROL_REPORT
 $oldUpdateBuildReport = $env:WINBRIDGE_UPDATE_BUILD_REPORT
 $oldAtomicReport = $env:WINBRIDGE_ATOMIC_GATE_REPORT
+$oldSourcePreparationReport = $env:WINBRIDGE_SOURCE_PREPARATION_REPORT
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
 $oldProcessTrace = $env:WINBRIDGE_PROCESS_TRACE
@@ -492,6 +493,7 @@ try {
         $env:WINBRIDGE_UPDATE_CONTROL_REPORT = Join-Path $ReportDirectory 'update-control-proof.json'
         $env:WINBRIDGE_UPDATE_BUILD_REPORT = Join-Path $ReportDirectory 'update-build-proof.json'
         $env:WINBRIDGE_ATOMIC_GATE_REPORT = Join-Path $ReportDirectory 'atomic-launch-proof.json'
+        $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = Join-Path $ReportDirectory 'source-preparation-proof.json'
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
         $env:WINBRIDGE_UPDATE_COORDINATION_REPORT = Join-Path $ReportDirectory 'update-coordination-proof.json'
@@ -527,6 +529,12 @@ try {
             if ($atomic.$case.passed -ne $true) { throw "Atomic executable case missing: $case" }
         }
         if ($atomic.ownerCrashBeforePidReceipt.jobEmpty -ne $true -or $atomic.ownerCrashBeforePidReceipt.rootExited -ne $true -or $atomic.ownerCrashBeforePidReceipt.userCodeNotRun -ne $true -or $atomic.stdioOnly.unlistedHandleInherited -ne $false -or $atomic.stdioOnly.stdinEof -ne $true) { throw 'Atomic cleanup/handle proof incomplete' }
+        $preparation = Get-Content -LiteralPath (Join-Path $ReportDirectory 'source-preparation-proof.json') -Raw | ConvertFrom-Json
+        if ($preparation.kind -ne 'supervisor_source_preparation_proof' -or $preparation.passed -ne $true -or $preparation.platform -ne 'windows' -or $preparation.build.sourceDirty -or $preparation.build.sourceCommit -cne $manifest.sourceCommit -or $preparation.runtimeApplied -or $preparation.windowsOpened) { throw 'Source preparation proof identity incomplete' }
+        foreach ($check in @('mailboxResponsive','stopWhileBusyRejected','duplicateObserved','fixtureSourceApplied','workerLeaseRetained','fixtureLeaseReleasedExplicitly')) {
+            if ($preparation.$check -ne $true) { throw "Source preparation check missing: $check" }
+        }
+        if ($preparation.accepted.update.phase -ne 'preparing' -or $preparation.accepted.driverActive -ne $true -or $preparation.busy.driverActive -ne $true -or $preparation.final.driverActive -ne $false -or $null -ne $preparation.final.driverError -or $preparation.final.update.phase -ne 'building' -or $preparation.final.source.phase -ne 'verified' -or $preparation.final.sourceAppliedFiles -ne 2 -or $null -ne $preparation.final.build) { throw 'Source preparation lifecycle proof incomplete' }
         $compiler = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-build-proof.json') -Raw | ConvertFrom-Json
         if (-not $compiler.passed -or $compiler.platform -ne 'windows' -or -not $compiler.compilationFixture -or -not $compiler.duplicateObserved -or -not $compiler.workerLeaseRetained -or $compiler.runtimeApplied -or $compiler.candidateVerified -or $compiler.windowsOpened -or $compiler.record.phase -ne 'completed' -or $compiler.record.outcome -ne 'succeeded' -or -not $compiler.record.cleanupVerified -or $compiler.record.exitCode -ne 0 -or $compiler.build.sourceDirty -or $compiler.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Managed compiler fixture proof incomplete' }
         $updateControl = Get-Content -LiteralPath (Join-Path $ReportDirectory 'update-control-proof.json') -Raw | ConvertFrom-Json
@@ -605,6 +613,7 @@ try {
     $env:WINBRIDGE_UPDATE_CONTROL_REPORT = $oldUpdateControlReport
     $env:WINBRIDGE_UPDATE_BUILD_REPORT = $oldUpdateBuildReport
     $env:WINBRIDGE_ATOMIC_GATE_REPORT = $oldAtomicReport
+    $env:WINBRIDGE_SOURCE_PREPARATION_REPORT = $oldSourcePreparationReport
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource
     $env:WINBRIDGE_PROCESS_TRACE = $oldProcessTrace

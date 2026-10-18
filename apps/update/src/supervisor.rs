@@ -1,4 +1,5 @@
-//! Trusted standalone launcher. No worker/source/install mutation is exposed.
+//! Trusted standalone launcher and authenticated source preparation mailbox.
+//! Runtime installation and public update commands remain disabled.
 use crate::{
     installation_scope,
     journal::{JournalErrorCode, UpdateAuthority, UpdateJournal},
@@ -439,6 +440,45 @@ impl SupervisorHandle {
         }
         Ok(control)
     }
+    pub async fn preparation(&mut self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed; no command".into());
+        }
+        let q = SupervisorRequest {
+            contract_version: 2,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::PrepareSource
+            } else {
+                SupervisorAction::ObservePreparation
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &q,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 2
+            || response.launch_id != q.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Preparation reply scope/version changed".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Preparation view missing")?;
+        if view.schema_version != 1 || view.update.update_id != self.record.spec.update_id {
+            return Err("Preparation view belongs to another update".into());
+        }
+        Ok(view)
+    }
     pub async fn wait_ready(&mut self) -> Result<SupervisorRecord> {
         let deadline = Instant::now() + Duration::from_secs(12);
         loop {
@@ -474,6 +514,12 @@ impl SupervisorHandle {
         }
     }
     pub async fn command(&mut self, action: SupervisorAction) -> Result<SupervisorRecord> {
+        if matches!(
+            action,
+            SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation
+        ) {
+            return Err("Use the typed v2 preparation method for this action".into());
+        }
         if action == SupervisorAction::Handoff {
             if self.handoff_sent || self.record.phase != SupervisorPhase::Ready {
                 return Err("Handoff requires Ready".into());
@@ -513,7 +559,7 @@ impl SupervisorHandle {
         Ok(r)
     }
 }
-async fn forward_worker(
+pub(crate) async fn forward_worker(
     record: &SupervisorRecord,
     command: WorkerUpdateControlCommand,
 ) -> Result<WorkerUpdateControlResponse> {
@@ -563,7 +609,8 @@ fn authorize(r: &SupervisorRecord, token: &str, pid: u32, action: SupervisorActi
     }
     Ok(())
 }
-/// Gated internal entry. It has no source/runtime/worker mutation operations.
+/// Gated internal entry; source preparation requires a v2 action and frozen policy.
+/// Runtime replacement/shutdown are not registered.
 pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     if token.len() != 64 {
         return Err("Invalid supervisor startup token".into());
@@ -617,13 +664,41 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             "Supervisor владеет отдельным журналом; ожидает handoff, effects запрещены",
         )
         .map_err(error)?;
+    let mut idle = Some((journal, owner));
+    type Work = tokio::task::JoinHandle<(UpdateJournal, UpdateAuthority, Result<()>)>;
+    let mut work: Option<Work> = None;
+    let mut driver_error: Option<String> = None;
     let ready_deadline = Instant::now() + Duration::from_secs(12);
     loop {
-        journal.check_source_authority(&owner).map_err(error)?;
+        if work.as_ref().is_some_and(|w| w.is_finished()) {
+            let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
+            driver_error = outcome
+                .err()
+                .map(|e| e.chars().take(1000).collect::<String>());
+            if let Some(e) = &driver_error {
+                eprintln!("Source preparation stopped: {e}; preserve both journals and barrier, no automatic retry");
+            }
+            idle = Some((journal, owner));
+        }
+        if let Some((journal, owner)) = &idle {
+            journal.check_source_authority(owner).map_err(error)?;
+        } else {
+            let (info, saved, _, current_owner) =
+                UpdateJournal::supervisor_authority_snapshot(&directory, id).map_err(error)?;
+            if saved != r
+                || Some(info.owner_epoch) != r.owner_epoch
+                || Some(&current_owner) != r.owner_id.as_ref()
+            {
+                return Err("Preparation authority changed; no replay or takeover".into());
+            }
+        }
         if r.phase == SupervisorPhase::Ready && Instant::now() >= ready_deadline {
+            let (journal, owner) = idle
+                .as_mut()
+                .ok_or("Ready supervisor cannot own an active source driver")?;
             journal
                 .advance_supervisor(
-                    &owner,
+                    owner,
                     id,
                     r.revision,
                     SupervisorPhase::Stopped,
@@ -647,6 +722,111 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if matches!(
+            request.action,
+            SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation
+        ) {
+            let mut start = false;
+            let outcome = (|| {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 2
+                    || request.launch_id != r.spec.launch_id
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                    || request.expected_revision > r.revision
+                {
+                    return Err("Preparation needs exact Active worker-bound v2 supervisor".into());
+                }
+                if request.action == SupervisorAction::PrepareSource {
+                    if request.expected_revision != r.revision {
+                        return Err("Preparation supervisor revision changed".into());
+                    }
+                    let snapshot = UpdateJournal::preparation_snapshot(
+                        &directory,
+                        &r.spec.update_id,
+                        work.is_some(),
+                        driver_error.clone(),
+                    )
+                    .map_err(error)?;
+                    if snapshot.update.phase == UpdatePhase::Requested && work.is_none() {
+                        let cfg = crate::preparation::configuration(&r)?;
+                        if cfg.source_packages_directory.is_none() {
+                            return Err("Configure sourcePackagesDirectory with updater config schema 2 before preparation".into());
+                        }
+                        let (journal, owner) = idle
+                            .as_mut()
+                            .ok_or("Preparation driver already owns the journal")?;
+                        journal.advance(owner,&r.spec.update_id,&UpdateCommand { idempotency_key: "supervisor-source-preparation-v1".into(), expected_revision: snapshot.update.revision, event: UpdateEvent::BeginPreparation, reason: "Подготовка исходников принята supervisor; установка runtime не выполняется".into() }).map_err(error)?;
+                        start = true;
+                    }
+                }
+                UpdateJournal::preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some() || start,
+                    driver_error.clone(),
+                )
+                .map_err(error)
+            })();
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 2,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = start && response.error.is_none();
+            // Accepted work survives a lost ACK. Intent precedes dispatch even then.
+            let _ = ipc::write(&mut stream, &response).await;
+            if dispatch {
+                let (mut journal, owner) = idle
+                    .take()
+                    .ok_or("Preparation owner missing after admission")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result = crate::preparation::source(&mut journal, &owner, &spec, io);
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
+        if work.is_some()
+            && !(request.action == SupervisorAction::Observe
+                || request.action == SupervisorAction::WorkerControl
+                    && matches!(
+                        request.worker_command,
+                        Some(WorkerUpdateControlCommand::Observe)
+                    ))
+        {
+            let busy_error = (|| -> Result<()> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 1 || request.launch_id != r.spec.launch_id {
+                    return Err("Supervisor contract/scope mismatch".into());
+                }
+                Err(
+                    "Source driver active; mutation/stop deferred, inspect preparation status"
+                        .into(),
+                )
+            })()
+            .unwrap_err();
+            let response = SupervisorResponse {
+                contract_version: 1,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error: Some(busy_error),
+                worker_control: None,
+                preparation: None,
+            };
+            let _ = ipc::write(&mut stream, &response).await;
+            continue;
+        }
         if request.action == SupervisorAction::WorkerControl
             || (request.action == SupervisorAction::Stop
                 && r.phase == SupervisorPhase::Active
@@ -690,6 +870,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         record: None,
                         error,
                         worker_control,
+                        preparation: None,
                     };
                     let _ = ipc::write(&mut stream, &response).await;
                     continue;
@@ -704,6 +885,15 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             if request.worker_command.is_some() {
                 return Err("Unexpected worker command on supervisor lifecycle action".into());
             }
+            if request.action == SupervisorAction::Observe {
+                if request.expected_revision > r.revision {
+                    return Err("Future supervisor revision".into());
+                }
+                return Ok(r.clone());
+            }
+            let (journal, owner) = idle
+                .as_mut()
+                .ok_or("Preparation driver active; mutation deferred")?;
             match request.action {
                 SupervisorAction::Observe => {
                     if request.expected_revision > r.revision {
@@ -716,14 +906,14 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         validate_inputs(&r, &directory, false)?;
                     }
                     journal.advance_supervisor(
-                        &owner, id, request.expected_revision, SupervisorPhase::Active, None,
-                        "Handoff сохранён; отдельный supervisor продолжает работу после parent exit. Source/install ещё отключены",
+                        owner, id, request.expected_revision, SupervisorPhase::Active, None,
+                        "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl => Err("Worker control needs the separate async handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
-                    &owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
-                    "Supervisor остановлен по явной команде; source/runtime effects не начинались",
+                    owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
+                    "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
                 ).map_err(error),
             }
         })();
@@ -736,6 +926,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     record: Some(record),
                     error: None,
                     worker_control: None,
+                    preparation: None,
                 }
             }
             Err(e) => SupervisorResponse {
@@ -744,6 +935,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 record: None,
                 error: Some(e),
                 worker_control: None,
+                preparation: None,
             },
         };
         // Lost ACK does not cancel committed Active. The next Observe is readonly.
@@ -769,8 +961,11 @@ pub fn inspect(directory: &Path, id: &str) -> Result<serde_json::Value> {
         .process
         .as_ref()
         .and_then(|p| infrastructure::job_observation(p).ok().flatten());
+    let source_preparation_configured = record.spec.worker.is_some()
+        && crate::preparation::configuration(&record)
+            .is_ok_and(|c| c.source_packages_directory.is_some());
     Ok(
-        serde_json::json!({"externalJobObserved":external_job,"schemaVersion":1,"kind":"supervisor_status","readOnly":true,"sourceEffectsEnabled":false,"runtimeApplied":false,"journalEpochCurrent":record.owner_epoch.is_some_and(|e|e==info.owner_epoch),"update":update,"journal":info,"physicalObservation":physical,"record":record}),
+        serde_json::json!({"sourcePreparationConfigured":source_preparation_configured,"publicUpdateCapabilityEnabled":false,"externalJobObserved":external_job,"schemaVersion":1,"kind":"supervisor_status","readOnly":true,"sourceEffectsEnabled":false,"runtimeApplied":false,"journalEpochCurrent":record.owner_epoch.is_some_and(|e|e==info.owner_epoch),"update":update,"journal":info,"physicalObservation":physical,"record":record}),
     )
 }
 

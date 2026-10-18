@@ -42,6 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         SupervisorAction::decl(&config),
         SupervisorRequest::decl(&config),
         SupervisorResponse::decl(&config),
+        UpdatePreparationView::decl(&config),
         SupervisorWorkerBinding::decl(&config),
         WorkerUpdateControlCommand::decl(&config),
         WorkerUpdateControlRequest::decl(&config),

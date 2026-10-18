@@ -45,9 +45,14 @@ export type SupervisorProcess = { processId: number, birth: string, hostId: stri
 export type SupervisorPhase = "intent" | "spawned" | "ready" | "active" | "stopped" | "indeterminate";
 export type SupervisorSpec = { launchId: string, updateId: string, parent: SupervisorProcess, parentOwnerId: string, parentEpoch: number, tokenSha256: string, configPath: string, configSha256: string, runtimeDirectory: string, imagePath: string, imageSha256: string, imageIdentity: string, excludedDomain: string | null, endpoint: string, acceptedAtMs: number, worker?: SupervisorWorkerBinding | null, };
 export type SupervisorRecord = { schemaVersion: number, spec: SupervisorSpec, phase: SupervisorPhase, revision: number, process: SupervisorProcess | null, ownerId: string | null, ownerEpoch: number | null, updatedAtMs: number, reason: string, };
-export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control";
+export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation";
 export type SupervisorRequest = { contractVersion: number, launchId: string, expectedRevision: number, action: SupervisorAction, token: string, workerCommand?: WorkerUpdateControlCommand | null, };
-export type SupervisorResponse = { contractVersion: number, launchId: string, record: SupervisorRecord | null, error: string | null, workerControl?: WorkerUpdateControlResponse | null, };
+export type SupervisorResponse = { contractVersion: number, launchId: string, record: SupervisorRecord | null, error: string | null, workerControl?: WorkerUpdateControlResponse | null, preparation?: UpdatePreparationView | null, };
+export type UpdatePreparationView = { schemaVersion: number, observedAtMs: number, update: UpdateRecord, source: SourceTransactionRecord | null, sourceAppliedFiles: number, build: UpdateBuildRecord | null,
+/**
+ * Observation of this supervisor's blocking driver, separate from saved state.
+ */
+driverActive: boolean, driverError: string | null, };
 export type SupervisorWorkerBinding = { context: RequestContext, generation: string, build: BuildIdentity, process: SupervisorProcess, configSha256: string, endpoint: string, };
 export type WorkerUpdateControlCommand = { "action": "observe" } | { "action": "begin_source" } | { "action": "advance", command: WorkerUpdateCommand, };
 export type WorkerUpdateControlRequest = { controlVersion: number, binding: SupervisorWorkerBinding, updateId: string, launchId: string, supervisor: SupervisorProcess, updaterOwnerId: string, updaterEpoch: number, command: WorkerUpdateControlCommand, };

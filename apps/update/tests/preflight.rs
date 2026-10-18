@@ -205,3 +205,42 @@ fn junction_source_is_refused_without_admin_or_symlink_privileges() {
     assert!(verify_source(temp.path(), &hash).is_err());
     fs::remove_dir(junction).unwrap();
 }
+
+#[test]
+fn package_policy_requires_explicit_config_two_and_is_readonly_when_delivery_is_offline() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("source");
+    let runtime = root.path().join("runtime");
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&runtime).unwrap();
+    let worker = runtime.join("worker.local.json");
+    fs::write(&worker, b"preserved configuration").unwrap();
+    let path = runtime.join("update.local.json");
+    let base = serde_json::json!({"schemaVersion":1,"sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":worker});
+    let write =
+        |cfg: &serde_json::Value| fs::write(&path, serde_json::to_vec(cfg).unwrap()).unwrap();
+    write(&base);
+    assert!(load_config(&path)
+        .unwrap()
+        .source_packages_directory
+        .is_none());
+    let mut cfg = base.clone();
+    cfg["schemaVersion"] = serde_json::json!(2);
+    write(&cfg);
+    assert!(load_config(&path).is_err());
+    cfg["sourcePackagesDirectory"] = serde_json::json!(root.path().join("offline-delivery"));
+    write(&cfg);
+    assert!(load_config(&path)
+        .unwrap()
+        .source_packages_directory
+        .is_some());
+    cfg["schemaVersion"] = serde_json::json!(1);
+    write(&cfg);
+    assert!(load_config(&path).is_err());
+    cfg["schemaVersion"] = serde_json::json!(2);
+    cfg["sourcePackagesDirectory"] = serde_json::json!("relative/delivery");
+    write(&cfg);
+    assert!(load_config(&path).is_err());
+    assert_eq!(fs::read(worker).unwrap(), b"preserved configuration");
+    assert!(!runtime.join("update-state").exists());
+}

@@ -121,7 +121,7 @@ fn validate(r: &UpdateBuildRecord) -> Result<()> {
     }
     Ok(())
 }
-fn read(c: &Connection, id: &str) -> Result<UpdateBuildRecord> {
+pub(super) fn read(c: &Connection, id: &str) -> Result<UpdateBuildRecord> {
     struct Row {
         json: String,
         spec: String,

@@ -27,6 +27,12 @@ passed. [Atomic executable adapter](plans/worker-self-update/atomic-executable.m
 закрывает отдельный compiler CreateProcess/Job gap;
 [102 native tests / candidate build](plans/worker-self-update/windows-atomic-launch-gate-2026-10-18.md) прошли. Автоматический driver
 и runtime install пока не включены.
+[Source preparation actor](plans/worker-self-update/source-actor.md) выполняет
+ZIP/source grant/apply на одном blocking driver с тем же owner epoch; mailbox
+читает consistent view независимо от I/O. Internal protocol 2 и config schema 2
+не меняют persisted journal schemas 4/15 или legacy RPC. 438 local workspace tests
+и Linux/Windows Clippy passed; native rollup впереди. Compiler orchestration и
+coordinated abort/release остаются следующими блоками.
 
 SourceApplying сохраняется до изменений; per-file intent → no-clobber move → hash/
 receipt, manifest последним. Verified source и parent Building фиксируются атомарно

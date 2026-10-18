@@ -1,3 +1,23 @@
+## Самообновление U1: source preparation actor — 2026-10-18
+
+[Контракт](plans/worker-self-update/source-actor.md). Internal supervisor v2 принимает
+source preparation после fresh Preparing commit. Owner/journal временно принадлежат
+одному blocking driver; Observe читает consistent saved view и не ждёт worker reply.
+Pinned ZIP → SourceHeld → preimages → fresh SourceApplyPermit → Verified/Building.
+Source lease остаётся; compiler/artifacts/abort/shutdown/install не подключены.
+Config schema 2 задаёт sourcePackagesDirectory; schema 1 сохранена для прежних
+сценариев, source start без новой policy отклоняется до intent. Journal schemas
+4/15 и legacy RPC hashes прежние; новые actions/DTO не сохраняются в БД. V1 replies
+сохраняют прежнюю JSON форму. Normal worker main/MCP публично функцию не включают.
+
+438 workspace tests и Linux/Windows Clippy/tests cross-check passed; 6 control tests
+включают responsive mailbox, duplicate/Stop busy, missing policy и corrupt ZIP.
+В fixture исправлены Unix socket path и delay без удержания Store mutex. Test gate
+только cfg(test), production env bypass нет. Contracts generation/check, typecheck/build:ui/scaffold, 8 export tests, fmt и
+Python/PowerShell syntax passed; native rollup впереди. Он объединяет source admission и
+усиленный atomic root-exit test. Installed worker прежний; bootstrap пока не нужен.
+Следом compiler/artifact/abort driver, exact shutdown и U2–U3. A4 отложен.
+
 ## Самообновление U1: source admission перед dispatch — 2026-10-18
 
 [Контракт](plans/worker-self-update/source-admission.md). Fresh commit parent/source

@@ -139,6 +139,7 @@ impl Fixture {
             source_directory: source.clone(),
             runtime_directory: runtime.clone(),
             worker_config_path,
+            source_packages_directory: None,
         };
         fs::write(root.join("update.local.json"),serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":config.worker_config_path})).unwrap()).unwrap();
         let zip_path = root.join("source.zip");
