@@ -86,7 +86,8 @@ Dev/test profile оптимизирует стандартную sha2 library, �
 2.20 → 0.56 s CPU. Это локальное измерение одного пакета, не Windows baseline.
 
 [Platform block](atomic-executable.md) добавляет атомарное назначение compiler Job
-при CreateProcess; native gate ещё впереди. Intent без PID receipt по-прежнему
+при CreateProcess; [102 native tests / candidate build](windows-atomic-launch-gate-2026-10-18.md)
+прошли. Intent без PID receipt по-прежнему
 требует inspection и не replay. Используется назначение Jobs при CreateProcess
 через [PROC_THREAD_ATTRIBUTE_JOB_LIST](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute).
 [spawn_with_attributes в Rust std](https://doc.rust-lang.org/std/os/windows/process/trait.CommandExt.html#tymethod.spawn_with_attributes)

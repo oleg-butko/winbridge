@@ -19,7 +19,12 @@ argv. Внешние Jobs сохраняются; breakaway и post-create fallb
 Обычные worker PATH/.bat/.cmd команды сохраняют прежний adapter. Windows-only tests
 проверяют crash до PID receipt и отсутствие user effects/orphan; schema 4/15 прежние.
 431 workspace tests, Windows Clippy/tests cross-check, fmt и script syntax passed.
-После итогового path/cleanup ревью 10 compiler regressions passed; native gate впереди.
+После итогового path/cleanup ревью 10 compiler regressions passed.
+[Native gate clean 11566cb](plans/worker-self-update/windows-atomic-launch-gate-2026-10-18.md)
+passed: 102 tests/14 groups, 24 artifacts и полный candidate build; installed healthy/idle.
+Run `20261018-040345-92ee23bc`, task `81f6284b-339e-45ef-a4eb-2fe478ffd334`.
+Windows free before/after 26,389,467,136 / 26,163,970,048 bytes; Debian 36,498,391,040.
+UI-окон не было; desktop можно закрыть, worker оставить.
 Installed runtime прежний;
 bootstrap не требуется. Следом source/build actor orchestration, artifacts/abort,
 exact shutdown и U2–U3; A4 отложен.

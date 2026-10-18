@@ -47,7 +47,10 @@ Native harness собирает fixture заранее, исполняет tests
 `atomic-launch-proof.json` с exact build identity; GUI/runtime install отключены.
 
 431 workspace tests, Windows Clippy/tests cross-check, fmt, scaffold и script syntax
-прошли; итоговые 10 compiler regressions также passed. Native gate впереди.
+прошли; итоговые 10 compiler regressions также passed.
+[Native gate clean 11566cb](windows-atomic-launch-gate-2026-10-18.md) passed:
+102 tests/14 groups, 24 artifacts и полный candidate build. Exact root-exit
+assertion добавляется в следующем source admission rollup.
 U1 целиком открыт: source/build orchestration, artifact verification, coordinated
 abort/release и exact shutdown ещё не подключены. Обновление установленного worker
 для этого изолированного gate не требуется.

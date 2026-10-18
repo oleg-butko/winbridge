@@ -36,7 +36,8 @@ library: intent/PID/Job/resume, output и cleanup, updater schema 4. 429 workspa
 и 10 итоговых compiler tests passed;
 [95 native tests / candidate build](plans/worker-self-update/windows-compiler-gate-2026-10-18.md) прошли.
 [Atomic compiler launch](plans/worker-self-update/atomic-executable.md) закрывает
-CreateProcess/Job gap; native gate впереди. Source/build/install orchestration и
+CreateProcess/Job gap; [102 native tests / candidate build](plans/worker-self-update/windows-atomic-launch-gate-2026-10-18.md)
+прошли. Source/build/install orchestration и
 публичное включение не готовы; U1 целиком открыт.
 [Source admission](plans/worker-self-update/source-admission.md) разделяет durable
 Applying и одноразовый file driver permit; 26 integration tests и Windows cross-check
