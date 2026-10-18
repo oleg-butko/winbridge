@@ -41,6 +41,16 @@ identity control, durable baseline до SourceApply, persistent cutover/activati
 guards, publication, shutdown и runtime replacement остаются следующими шагами.
 Само наличие известного набора не разрешает install и не завершает U1.
 
+Дополнительный `scripts/test-update-runtime-lifetime.ps1` подготовлен для
+настоящего `serve` в этом fixture runtime: уникальный instance ID, controller
+отключён, direct commands/recipes недоступны, исходный worker state отсутствует.
+Проверяет отказ write-open всех пяти файлов во время работы и освобождение handles
+после остановки своего idle PID; bytes и updater DB должны сохраниться. Это forced
+fixture stop, не graceful shutdown/activation. Original generated config сохраняется
+как fixture artifact. Script принимает только путь внутри конкретного validation
+run, проверяет source/helper/image hashes и публикует отдельный proof/ready pair.
+Проверка времени жизни ещё не выполнена; рабочий runtime не используется.
+
 Локально: 485 workspace tests, Linux/Windows Clippy all-targets, contracts/fmt,
 scaffold, Python export/runner и PowerShell syntax passed. Initial full run один
 раз получил unknown в быстром Unix report fixture; отдельный повтор и 30 repeats

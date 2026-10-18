@@ -94,8 +94,13 @@ passed. [Compiler actor и coordinated abort](docs/plans/worker-self-update/comp
 status и release только после source/Job/output proof. Добавлен [bounded compiler output](docs/plans/worker-self-update/compiler-output.md),
 включая File ID cursor и проверку terminal SHA, и [artifact identity](docs/plans/worker-self-update/artifact-identity.md).
 [133 native tests / полная сборка / четыре exe queries](docs/plans/worker-self-update/windows-artifact-identity-gate-2026-10-18.md)
-прошли; PowerShell paths и независимые payload copies проверены. Durable candidate
-receipt, exact shutdown и activation остаются впереди.
+прошли; PowerShell paths и независимые payload copies проверены. Затем
+[artifact actor и durable receipt/FSM](docs/plans/worker-self-update/artifact-actor.md)
+прошли [156 native tests / полный build](docs/plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md).
+[Ранняя проверка известного runtime](docs/plans/worker-self-update/runtime-startup.md)
+подключена до открытия worker journal; её positive native gate выполняется.
+Loaded identity/control, baseline до source effects, health, exact shutdown и
+activation остаются впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
