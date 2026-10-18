@@ -70,6 +70,11 @@ rollup впереди; old runtime guards, health/shutdown и U2–U3 ещё н�
 startup/control/publication ещё не подключены. [Abort read snapshot](plans/worker-self-update/abort-read-snapshot.md)
 исправляет false Corrupt при concurrent commit. 482 local tests passed; Windows
 artifact fixture staging исправлен после отказа extra-file guard, repeat впереди.
+[Combined native gate](plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md)
+clean 48b8d21 пройден: 156 tests / 16 groups, full build/four actual queries,
+exact-file inspection, artifact actor и old-reader refusal. 36 ready files
+проверены. Native blocks выше завершены; весь U1 остаётся открытым. Следом
+normal worker startup/live identity и baseline до SourceApply, затем health/shutdown.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

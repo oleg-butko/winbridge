@@ -1,3 +1,15 @@
+## U1: artifact actor native gate пройден — 2026-10-18
+
+[Gate](plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md): clean
+48b8d21, run `20261018-153922-df4b0630`, Task
+`eb05e4e8-7459-4079-a5ef-6341fbe53170` succeeded/0. 156 native tests / 16 groups,
+полный Rust/native desktop build, четыре queries и actual exact-file inspection
+passed. Все 36 ready files проверены. Artifact actor positive/negative, schema 7,
+known-set pins, abort read snapshot и исправления staging/finalization подтверждены.
+Installed source/generation прежние, idle 0/errors none/coverage complete.
+Desktop не нужен, worker оставить. U1 не завершён; normal startup/live identity,
+baseline до SourceApply и exact shutdown дальше, bootstrap пока не требуется.
+
 ## U1: runtime manifest, abort snapshot и Windows fixture staging — 2026-10-18
 
 [Installed-set reader/pins](plans/worker-self-update/installed-set.md) добавлены
