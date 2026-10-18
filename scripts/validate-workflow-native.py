@@ -249,6 +249,8 @@ def main():
         archive_has_compiler_actor = 'winbridge/apps/update/src/abort.rs' in archive.namelist()
         archive_has_compiler_output = 'winbridge/apps/update/src/build_output.rs' in archive.namelist()
         archive_has_candidate_artifacts = 'winbridge/apps/update/src/candidate.rs' in archive.namelist()
+        archive_has_artifact_actor = archive_has_worker_control and b'async fn artifact_actor_records_real_fixture_queries' in archive.read('winbridge/apps/worker/src/update_control.rs')
+        archive_has_finalization_wiring = 'winbridge/scripts/test-update-candidate-finalization.ps1' in archive.namelist()
         archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
         archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
@@ -717,6 +719,37 @@ exit $nativeExit
             for test in ['compiler::compiler_admission_commits_intent_before_dispatch_and_never_mints_a_second_grant', 'compiler::dropped_compiler_permission_remains_an_observation_after_owner_restart']:
                 if test + ' ... ok' not in log:
                     raise RuntimeError('Compiler one-use admission test missing: ' + test)
+        if archive_has_artifact_actor:
+            expected += ['update-artifact-actor']
+            actor = json.loads((report / 'artifact-actor-proof.json').read_text(encoding='utf-8-sig'))
+            if (actor.get('kind') != 'artifact_actor_proof' or actor.get('passed') is not True or actor.get('platform') != 'windows'
+                    or actor['build']['sourceCommit'] != result['sourceCommit'] or actor['build']['sourceDirty'] is not False
+                    or not all(actor.get(k) is True for k in ['realFixtureQueries','singleCompiler','mailboxResponsive','rawReleaseRejected','candidateDigestBound'])
+                    or any(actor.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])
+                    or actor['final']['update']['phase'] != 'validating_candidate' or actor['final']['driverError'] is not None
+                    or actor['abort']['phase'] != 'completed' or not actor['abort']['spec'].get('candidateDigest')
+                    or len(actor['record']['inspection']['artifacts']) != 4):
+                raise RuntimeError('Artifact actor fixture query/receipt/abort proof incomplete; not production worker health')
+            rejection = json.loads((report / 'artifact-actor-rejection-proof.json').read_text(encoding='utf-8-sig'))
+            if (rejection.get('kind') != 'artifact_actor_rejection_proof' or rejection.get('passed') is not True
+                    or rejection.get('platform') != 'windows' or rejection['build']['sourceCommit'] != result['sourceCommit']
+                    or rejection['build']['sourceDirty'] is not False
+                    or rejection.get('receiptAbsent') is not True or rejection.get('retryRejected') is not True
+                    or rejection['failed']['update']['phase'] != 'building' or not rejection['failed']['driverError']
+                    or rejection['abort']['phase'] != 'completed'
+                    or any(rejection.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])):
+                raise RuntimeError('Artifact actor rejection proof incomplete')
+            log = (report / 'update-artifact-actor.log').read_text(encoding='utf-8-sig')
+            for name in ['artifact_actor_records_real_fixture_queries_and_retains_health_barrier','artifact_actor_rejects_incomplete_report_and_aborts_without_adoption']:
+                if 'update_control::tests::' + name + ' ... ok' not in log:
+                    raise RuntimeError('Artifact actor regression missing: ' + name)
+        if archive_has_finalization_wiring:
+            wiring = json.loads((report / 'candidate-finalization-wiring-proof.json').read_text(encoding='utf-8-sig'))
+            if (wiring.get('kind') != 'candidate_finalization_wiring_proof' or wiring.get('passed') is not True
+                    or wiring.get('platform') != 'windows'
+                    or not all(wiring.get(k) is True for k in ['actualFinalStatement','helperBound','malformedRejected','reportPreserved','metadataMocked'])
+                    or any(wiring.get(k) is not False for k in ['runtimeApplied','windowsOpened'])):
+                raise RuntimeError('Candidate finalization wiring regression missing')
         if ([g['name'] for g in result['commands']] != expected or any(g['exitCode'] != 0 for g in result['commands'])
                 or scope.get('passed') is not True or scope.get('runtimeApplied') is not False or scope.get('windowsOpened') is not False
                 or proof.get('status') != 'built' or proof.get('runtimeApplied') is not False or proof.get('candidateVerified') is not False

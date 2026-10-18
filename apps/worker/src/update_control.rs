@@ -601,6 +601,50 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
 [IO.File]::WriteAllText((Join-Path $StagingDirectory 'fixture.json'),($PSBoundParameters | ConvertTo-Json -Compress))
 [IO.File]::WriteAllText((Join-Path $StagingDirectory 'candidate-report.json'),'{"kind":"compiler-report-fixture","candidateVerified":false,"runtimeApplied":false}')
 "#;
+    // Real tiny executables validate metadata/process/report interoperability.
+    // They are explicitly fixture artifacts, never replacements for WinBridge.
+    const ARTIFACT_ACTOR_SCRIPT: &str = r##"[CmdletBinding()]
+param([string]$SourceDirectory,[string]$ManifestSha256,[string]$StagingDirectory,[string]$VerifierExecutable)
+$ErrorActionPreference='Stop'
+$PSNativeCommandUseErrorActionPreference=$false
+[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$OutputEncoding=[Text.UTF8Encoding]::new($false)
+$target=Join-Path $SourceDirectory 'target'
+New-Item -ItemType Directory -Path $target -Force | Out-Null
+[IO.File]::AppendAllText((Join-Path $target 'actor-runs.log'),"$PID`n")
+New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
+$payload=Join-Path $StagingDirectory 'payload'
+New-Item -ItemType Directory -Path $payload | Out-Null
+$verifiedText=& $VerifierExecutable verify-source $SourceDirectory $ManifestSha256
+if ($LASTEXITCODE -ne 0) { throw 'Fixture source verification failed' }
+$verified=($verifiedText -join "`n") | ConvertFrom-Json
+$os=if ([Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Windows)) {'windows'} else {'linux'}
+$arch=switch ([Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()) {'X64' {'x86_64'} 'Arm64' {'aarch64'} default {throw 'Unsupported fixture architecture'}}
+$build=@{version='0.1.0';sourceCommit=$verified.sourceCommit;sourceDirty=$false;sourceManifestSha256=$ManifestSha256;buildId='artifact-actor-fixture'}
+$commands=@(); $artifacts=@(); $queries=@()
+$rustc=(Get-Command rustc -ErrorAction Stop).Source
+foreach ($role in @('worker','fixture','desktop','updater')) {
+  $name=switch ($role) {'updater' {'winbridge-update.exe'} default {"winbridge-$role.exe"}}
+  $descriptor=@{schemaVersion=1;kind='winbridge_artifact';queryContract=1;role=$role;build=$build;targetOs=$os;targetArch=$arch} | ConvertTo-Json -Depth 8 -Compress
+  $rust='fn main(){std::hint::black_box(b"\0WinBridge.ArtifactQuery.contract-1\0");let args:Vec<_>=std::env::args().skip(1).collect();if args!=["--artifact-info"]{std::process::exit(2)};println!("{}",r#"'+$descriptor+'"#);}'
+  $file=Join-Path $target "artifact-$role.rs"
+  [IO.File]::WriteAllText($file,$rust)
+  $image=Join-Path $payload $name
+  & $rustc --edition=2021 $file -o $image 2>&1 | ForEach-Object { Write-Output $_ }
+  $code=$LASTEXITCODE
+  $commands+=@{name="compile-$role";executable=$rustc;arguments=@('--edition=2021',$file,'-o',$image);exitCode=$code;log="compile-$role.log"}
+  if ($code -ne 0) {throw "Fixture Rust compile failed: $role"}
+  $text=& $VerifierExecutable artifact-query $image $role
+  if ($LASTEXITCODE -ne 0) {throw "Fixture query failed: $role"}
+  $query=($text -join "`n") | ConvertFrom-Json
+  $commands+=@{name="identity-$role";executable=$VerifierExecutable;arguments=@('artifact-query',$image,$role);exitCode=0;log="identity-$role.log"}
+  $artifacts+=@{name=$name;bytes=$query.image.bytes;sha256=$query.image.sha256}
+  $queries+=@{name=$name;query=$query}
+}
+$report=@{schemaVersion=1;kind='winbridge-update-candidate';status='built';runtimeApplied=$false;candidateVerified=$false;sourceDirectory=$SourceDirectory;manifestSha256=$ManifestSha256;storage=@{};commands=$commands;artifacts=$artifacts;error=$null;source=$verified;workerBuild=$build;artifactIdentities=$queries;artifactIdentityChecked=$true}
+[IO.File]::WriteAllText((Join-Path $StagingDirectory 'candidate-report.json'),($report | ConvertTo-Json -Depth 24))
+Write-Output 'Four fixture executables built and queried; no WinBridge runtime health claimed'
+"##;
     struct Fixture {
         worker: Arc<Worker>,
         server: tokio::task::JoinHandle<Result<()>>,
@@ -622,6 +666,14 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
             actual: Option<PathBuf>,
             enabled: bool,
             powershell: Option<PathBuf>,
+        ) -> Self {
+            Self::with_build_script(actual, enabled, powershell, BUILD_ACTOR_SCRIPT).await
+        }
+        async fn with_build_script(
+            actual: Option<PathBuf>,
+            enabled: bool,
+            powershell: Option<PathBuf>,
+            build_script: &str,
         ) -> Self {
             let root = if enabled {
                 // Keep the 6 GiB guard on local disk and Unix sockets below
@@ -690,12 +742,11 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
                 }];
                 if let Some(exe) = powershell {
                     update_config["schemaVersion"] = serde_json::json!(3);
-                    update_config["build"] =
-                        serde_json::json!({"powershellExecutable":exe,"timeoutMs":20000});
+                    update_config["build"] = serde_json::json!({"powershellExecutable":exe,"timeoutMs":if build_script==BUILD_ACTOR_SCRIPT {20000} else {60000}});
                     files.push(SourceFile {
                         path: "scripts/build-windows-update.ps1".into(),
-                        bytes: BUILD_ACTOR_SCRIPT.len() as u64,
-                        sha256: winbridge_update::sha256(BUILD_ACTOR_SCRIPT.as_bytes()),
+                        bytes: build_script.len() as u64,
+                        sha256: winbridge_update::sha256(build_script.as_bytes()),
                     });
                 }
                 let manifest = SourceManifest {
@@ -726,7 +777,7 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
                         zip::write::SimpleFileOptions::default(),
                     )
                     .unwrap();
-                    zip.write_all(BUILD_ACTOR_SCRIPT.as_bytes()).unwrap();
+                    zip.write_all(build_script.as_bytes()).unwrap();
                 }
                 zip.finish().unwrap();
                 Some(UpdateSourcePin {
@@ -1450,6 +1501,185 @@ New-Item -ItemType Directory -Path $StagingDirectory | Out-Null
             .unwrap();
         if let Some(path) = std::env::var_os("WINBRIDGE_COMPILER_ACTOR_REPORT") {
             fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"supervisor_compiler_actor_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"busy":busy,"duplicate":duplicate,"final":final_view,"abort":abort,"singleCompiler":true,"mailboxResponsive":true,"rawReleaseRejected":true,"busyAbortRejected":true,"coordinatedAbortCompleted":true,"compilerReportBound":true,"reportReceipt":report_receipt,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false})).unwrap()).unwrap();
+        }
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    #[ignore = "Explicit local PowerShell and Rust compiler; owned fixture executables only"]
+    async fn artifact_actor_records_real_fixture_queries_and_retains_health_barrier() {
+        let exe = PathBuf::from(
+            std::env::var_os("WINBRIDGE_UPDATE_TEST_PWSH")
+                .expect("Pinned local PowerShell fixture"),
+        );
+        let mut f = Fixture::with_build_script(None, true, Some(exe), ARTIFACT_ACTOR_SCRIPT).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        assert!(h.verify_candidate_artifacts().await.is_err());
+        h.preparation(true).await.unwrap();
+        let deadline = Instant::now() + Duration::from_secs(120);
+        loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert!(h.verify_candidate_artifacts().await.is_err());
+        h.build_candidate().await.unwrap();
+        loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+                assert_eq!(
+                    v.build.as_ref().unwrap().outcome,
+                    Some(UpdateBuildOutcome::Succeeded)
+                );
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let accepted = h.verify_candidate_artifacts().await.unwrap();
+        assert!(accepted.driver_active);
+        assert_eq!(accepted.update.phase, UpdatePhase::Building);
+        let duplicate = h.verify_candidate_artifacts().await.unwrap();
+        let completed = loop {
+            let v = tokio::time::timeout(Duration::from_secs(2), h.preparation(false))
+                .await
+                .unwrap()
+                .unwrap();
+            if !v.driver_active {
+                assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+                break v;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert_eq!(completed.update.phase, UpdatePhase::ValidatingCandidate);
+        let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+        let record = UpdateJournal::inspect_candidate_artifacts(
+            &cfg.runtime_directory.join("update-state"),
+            &completed.update.update_id,
+        )
+        .unwrap();
+        assert_eq!(record.inspection.artifacts.len(), 4);
+        assert!(!record.inspection.candidate_verified);
+        assert_eq!(
+            h.verify_candidate_artifacts().await.unwrap().update,
+            completed.update
+        );
+        assert_eq!(
+            fs::read_to_string(cfg.source_directory.join("target/actor-runs.log"))
+                .unwrap()
+                .lines()
+                .count(),
+            1
+        );
+        let held = lease(
+            h.worker_control(WorkerUpdateControlCommand::Observe)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(held.phase, WorkerUpdatePhase::SourceHeld);
+        let release = h
+            .worker_control(WorkerUpdateControlCommand::Advance {
+                command: WorkerUpdateCommand {
+                    command_id: "artifact-premature-release".into(),
+                    expected_revision: held.revision,
+                    action: WorkerUpdateAction::Release,
+                    source_manifest_sha256: Some(f.request.source.manifest_sha256.clone()),
+                    reason: "Artifact receipt is not health/install permission".into(),
+                },
+            })
+            .await
+            .unwrap();
+        assert!(release.into_lease().is_err());
+        let aborted = h.abort_before_cutover().await.unwrap();
+        assert_eq!(
+            aborted.phase,
+            winbridge_update::abort::AbortPhase::Completed
+        );
+        assert!(aborted.spec.candidate_digest.is_some());
+        assert_eq!(f.slots(), 0);
+        if let Some(path) = std::env::var_os("WINBRIDGE_ARTIFACT_ACTOR_REPORT") {
+            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"artifact_actor_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"accepted":accepted,"duplicate":duplicate,"final":completed,"record":record,"abort":aborted,"realFixtureQueries":true,"singleCompiler":true,"mailboxResponsive":true,"rawReleaseRejected":true,"candidateDigestBound":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false})).unwrap()).unwrap();
+        }
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    #[ignore = "Explicit local PowerShell; intentionally incomplete owned report fixture"]
+    async fn artifact_actor_rejects_incomplete_report_and_aborts_without_adoption() {
+        let exe = PathBuf::from(
+            std::env::var_os("WINBRIDGE_UPDATE_TEST_PWSH")
+                .expect("Pinned local PowerShell fixture"),
+        );
+        let mut f = Fixture::with_build_policy(None, true, Some(exe)).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        h.preparation(true).await.unwrap();
+        loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        h.build_candidate().await.unwrap();
+        loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+                break;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        h.verify_candidate_artifacts().await.unwrap();
+        let failed = loop {
+            let v = h.preparation(false).await.unwrap();
+            if !v.driver_active {
+                break v;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(
+            failed
+                .driver_error
+                .as_ref()
+                .is_some_and(|e| e.contains("contract/JSON")
+                    || e.contains("Candidate payload directory unavailable")),
+            "{:?}",
+            failed.driver_error
+        );
+        assert_eq!(failed.update.phase, UpdatePhase::Building);
+        assert!(h.verify_candidate_artifacts().await.is_err());
+        let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+        assert!(UpdateJournal::inspect_candidate_artifacts(
+            &cfg.runtime_directory.join("update-state"),
+            &failed.update.update_id
+        )
+        .is_err());
+        let held = lease(
+            h.worker_control(WorkerUpdateControlCommand::Observe)
+                .await
+                .unwrap(),
+        );
+        assert_eq!(held.phase, WorkerUpdatePhase::SourceHeld);
+        let abort = h.abort_before_cutover().await.unwrap();
+        assert_eq!(abort.phase, winbridge_update::abort::AbortPhase::Completed);
+        assert!(abort.spec.candidate_digest.is_none());
+        assert_eq!(f.slots(), 0);
+        if let Some(path) = std::env::var_os("WINBRIDGE_ARTIFACT_ACTOR_REPORT") {
+            let path = PathBuf::from(path).with_file_name("artifact-actor-rejection-proof.json");
+            fs::write(path,serde_json::to_vec_pretty(&serde_json::json!({"schemaVersion":1,"kind":"artifact_actor_rejection_proof","passed":true,"platform":std::env::consts::OS,"build":build_identity(),"failed":failed,"abort":abort,"receiptAbsent":true,"retryRejected":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false})).unwrap()).unwrap();
         }
         f.stop().await;
     }

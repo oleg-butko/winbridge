@@ -61,6 +61,11 @@ wire shapes. 467 workspace tests и Linux/Windows Clippy passed;
 как trusted readonly verifier и atomic receipt/FSM driver, updater schema 7.
 477 workspace tests и Linux/Windows Clippy passed; native gate ещё впереди.
 Artifact receipt не разрешает health/install; mailbox и old runtime guards остаются.
+[Artifact actor v5](plans/worker-self-update/artifact-actor.md) подключён; два
+explicit fixture tests и 477 workspace tests passed. Native 149 tests/build/query
+passed, overall gate failed из-за final PowerShell variable; readonly actual-file
+диагностика passed, variable исправлена с portable regression. Combined native
+rollup впереди; old runtime guards, health/shutdown и U2–U3 ещё не готовы.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

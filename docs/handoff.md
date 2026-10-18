@@ -1,3 +1,23 @@
+## U1: artifact actor и finalization fix — 2026-10-18
+
+[Supervisor v5](plans/worker-self-update/artifact-actor.md): authenticated readonly
+artifact driver в responsive mailbox, duplicate observation, explicit active-kind,
+atomic receipt/FSM и candidate-digest safe abort. Установки/health approval нет.
+Два explicit local tests passed: rustc/четыре actual fixture metadata queries и
+incomplete-report refusal/abort. 477 workspace tests, Linux/Windows Clippy,
+fmt/contracts, typecheck/build:ui/scaffold, export/runner tests passed.
+
+[Native 94d9a35 run](plans/worker-self-update/windows-artifact-set-diagnostic-2026-10-18.md)
+`20261018-145111-7277b3db`, Task `cabd8b2c-1b85-4be7-a24f-bd70dd0a7075` failed/1:
+149 tests и full build/four queries passed, final script variable ошибочна.
+Readonly Task `b95883dd-ce36-4875-9da8-44e8f2bc31e9` succeeded: actual same candidate
+files inspected. Fixed `$queryHelper`; portable regression выполняет реальный
+final try/finally statement с metadata mock и включён до full native build.
+Combined native rollup ещё впереди. Installed source 1f3aa9f/generation 994671b4
+не менялись, idle 0/errors none/coverage complete. Desktop закрыт, worker оставить.
+Следом old runtime/loaded image guards, full product layout и exact shutdown;
+bootstrap пока не требуется, A4 на паузе.
+
 ## U1: exact artifact-set receipt — 2026-10-18
 
 [Контракт](plans/worker-self-update/candidate-artifacts.md): typed report parser,

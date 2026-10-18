@@ -157,9 +157,9 @@ try {
   $OutputEncoding = [Text.UTF8Encoding]::new($false)
   $reportSha = (Get-FileHash -LiteralPath (Join-Path $stage 'candidate-report.json') -Algorithm SHA256).Hash.ToLowerInvariant()
   $fileArguments = @('inspect-candidate-files',$source,$ManifestSha256,$stage,$reportSha)
-  $fileText = & $candidateHelper @fileArguments 2> (Join-Path $stage 'candidate-files-stderr.log')
+  $fileText = & $queryHelper @fileArguments 2> (Join-Path $stage 'candidate-files-stderr.log')
   $fileCode = $LASTEXITCODE
-  Write-NewJson (Join-Path $stage 'candidate-files-command.json') @{executable=$candidateHelper;arguments=$fileArguments;exitCode=$fileCode}
+  Write-NewJson (Join-Path $stage 'candidate-files-command.json') @{executable=$queryHelper;arguments=$fileArguments;exitCode=$fileCode}
   if ($fileCode -ne 0) { throw 'Candidate exact-file inspection failed; see candidate-files-stderr.log; no install' }
   $fileProof = ($fileText -join "`n") | ConvertFrom-Json
   if ($fileProof.kind -ne 'candidate_file_inspection' -or $fileProof.readOnly -ne $true -or $fileProof.journalBound -ne $false -or $fileProof.runtimeApplied -or $fileProof.candidateVerified -or $fileProof.report.sha256 -cne $reportSha -or $fileProof.source.manifestSha256 -cne $ManifestSha256 -or $fileProof.artifacts.Count -ne 4) { throw 'Candidate exact-file proof incomplete; no install' }

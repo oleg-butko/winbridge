@@ -37,7 +37,8 @@ triggers. Миграция 6 → 7 требует owner lock, verified consisten
 fence. Старые compiler/report receipts сохраняются без перепривязки. Safe abort
 дополнительно закрепляет digest artifact receipt; отсутствующее значение в старой
 истории не дописывается задним числом. Worker schema остаётся 15; legacy RPC и
-supervisor v1–v4 wire shapes не меняются. Mailbox artifact action ещё не подключён.
+supervisor v1–v4 wire shapes не меняются. [Mailbox v5](artifact-actor.md) добавлен
+следующим блоком; его native gate ещё впереди.
 
 Standalone readonly команда:
 

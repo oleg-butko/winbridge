@@ -529,6 +529,8 @@ pub enum SupervisorAction {
     BuildCandidate,
     /// Internal v4, release only after coordinated pre-cutover cleanup proof.
     AbortBeforeCutover,
+    /// Internal v5, readonly file validation and atomic metadata receipt only.
+    VerifyCandidateArtifacts,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

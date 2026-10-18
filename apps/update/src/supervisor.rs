@@ -514,6 +514,45 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// Readonly driver dispatch. A saved receipt is observed without revalidation
+    /// or process effects; this does not approve candidate health/installation.
+    pub async fn verify_candidate_artifacts(&mut self) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let q = SupervisorRequest {
+            contract_version: 5,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: SupervisorAction::VerifyCandidateArtifacts,
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &q,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 5
+            || response.launch_id != q.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Artifact reply scope/version changed".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response
+            .preparation
+            .ok_or("Artifact preparation view missing")?;
+        if view.schema_version != 1 || view.update.update_id != self.record.spec.update_id {
+            return Err("Artifact reply belongs to another update".into());
+        }
+        Ok(view)
+    }
     /// Authenticated admission, then readonly receipt polling. Lost ACK never
     /// grants a second execution; terminal failure retains the worker barrier.
     pub async fn abort_before_cutover(&mut self) -> Result<crate::abort::AbortRecord> {
@@ -765,11 +804,13 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut idle = Some((journal, owner));
     type Work = tokio::task::JoinHandle<(UpdateJournal, UpdateAuthority, Result<()>)>;
     let mut work: Option<Work> = None;
+    let mut artifacts_active = false;
     let mut driver_error: Option<String> = None;
     let ready_deadline = Instant::now() + Duration::from_secs(12);
     loop {
         if work.as_ref().is_some_and(|w| w.is_finished()) {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
+            artifacts_active = false;
             driver_error = outcome
                 .err()
                 .map(|e| e.chars().take(1000).collect::<String>());
@@ -888,6 +929,90 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             }
             continue;
         }
+        if request.action == SupervisorAction::VerifyCandidateArtifacts {
+            let mut start = false;
+            let outcome = (|| {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 5
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err(
+                        "Artifact verification requires exact Active worker-bound v5 supervisor"
+                            .into(),
+                    );
+                }
+                let saved = UpdateJournal::preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)?;
+                match UpdateJournal::inspect_candidate_artifacts(&directory, &r.spec.update_id) {
+                    Ok(_) => return Ok(saved),
+                    Err(e) if e.code == JournalErrorCode::NotFound => {}
+                    Err(e) => return Err(error(e)),
+                }
+                if work.is_some() {
+                    if artifacts_active {
+                        return Ok(saved);
+                    }
+                    return Err("Another preparation driver is active".into());
+                }
+                if driver_error.is_some() {
+                    return Err("Preparation failure must be inspected/aborted before artifact verification".into());
+                }
+                let cfg = crate::preparation::configuration(&r)?;
+                let (journal, owner) = idle.as_mut().ok_or("Artifact owner unavailable")?;
+                crate::build::saved_source_guard(journal, owner, &cfg, &r.spec.update_id)?;
+                if saved.build.as_ref().is_none_or(|b| {
+                    b.phase != UpdateBuildPhase::Completed
+                        || b.outcome != Some(UpdateBuildOutcome::Succeeded)
+                        || !b.cleanup_verified
+                        || b.spec.owner_id != owner.owner_id()
+                        || b.spec.owner_epoch != owner.epoch()
+                }) {
+                    return Err(
+                        "Successful current compiler required before artifact verification".into(),
+                    );
+                }
+                start = true;
+                UpdateJournal::preparation_snapshot(&directory, &r.spec.update_id, true, None)
+                    .map_err(error)
+            })();
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 5,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = response.error.is_none();
+            let _ = ipc::write(&mut stream, &response).await;
+            if start && dispatch {
+                let (mut journal, owner) =
+                    idle.take().ok_or("Artifact owner missing after dispatch")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                driver_error = None;
+                artifacts_active = true;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result =
+                        crate::preparation::candidate_artifacts(&mut journal, &owner, &spec, io);
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
         if request.action == SupervisorAction::BuildCandidate {
             let mut admitted = None;
             let outcome = (|| {
@@ -986,7 +1111,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             let outcome = (|| {
                 authorize(&r, &request.token, pid, request.action)?;
                 if !(request.contract_version == 2
-                    || request.contract_version == 4
+                    || matches!(request.contract_version, 4 | 5)
                         && request.action == SupervisorAction::ObservePreparation)
                     || request.launch_id != r.spec.launch_id
                     || request.worker_command.is_some()
@@ -1178,7 +1303,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

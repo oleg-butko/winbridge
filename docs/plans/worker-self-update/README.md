@@ -139,7 +139,9 @@ U0 не применяет source plan, не выключает процессы
   passed; public install ещё не включён.
 - [ ] [Exact artifact set / atomic receipt + FSM](candidate-artifacts.md): updater
   schema 7, 477 workspace tests и Linux/Windows Clippy passed; native gate впереди.
-  Source/build/receipt guards реализованы, mailbox action ещё не подключён.
+  Source/build/receipt guards и [mailbox v5](artifact-actor.md) реализованы;
+  native 149 tests/full build passed, final script variable исправлена после
+  failed overall gate; combined rollup впереди.
 - [ ] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.

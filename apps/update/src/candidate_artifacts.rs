@@ -154,7 +154,12 @@ pub fn inspect_candidate_files(
         return Err("Compiler report changed during standalone capture".into());
     }
     let payload = stage.join("payload");
-    let payload_identity = directory_identity(&payload).map_err(err)?;
+    let payload_identity = directory_identity(&payload).map_err(|e| {
+        format!(
+            "Candidate payload directory unavailable: {}: {e}",
+            payload.display()
+        )
+    })?;
     let (artifacts, _pins) = check_report(&verified, &source, &payload, &bytes)?;
     for a in &artifacts {
         if crate::artifact::inspect_image(Path::new(&a.image.path))? != a.image {
@@ -423,7 +428,12 @@ pub(crate) fn inspect_pinned(
         .join(&report.update_id)
         .join("candidate");
     let payload = candidate.join("payload");
-    let payload_identity = directory_identity(&payload).map_err(err)?;
+    let payload_identity = directory_identity(&payload).map_err(|e| {
+        format!(
+            "Candidate payload directory unavailable: {}: {e}",
+            payload.display()
+        )
+    })?;
     let (artifacts, pins) = check_report(&verified, &source, &payload, &bytes)?;
     // Recheck every retained image and root while Windows pins still deny write/delete.
     for a in &artifacts {

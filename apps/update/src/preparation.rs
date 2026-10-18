@@ -228,6 +228,30 @@ pub(crate) fn compiler(
     // This is compiler success only; no candidate/lease/install promotion.
     Ok(())
 }
+pub(crate) fn candidate_artifacts(
+    journal: &mut UpdateJournal,
+    owner: &UpdateAuthority,
+    record: &SupervisorRecord,
+    io: Handle,
+) -> Result<()> {
+    let cfg = configuration(record)?;
+    let mut control = Control {
+        worker: WorkerSourceControl::new(
+            record.spec.worker.clone().ok_or("Worker binding missing")?,
+            &cfg.worker_config_path,
+            io,
+        )?,
+        record: record.clone(),
+    };
+    crate::candidate::verify_and_record(
+        journal,
+        owner,
+        &cfg,
+        &record.spec.update_id,
+        &mut control,
+    )?;
+    Ok(())
+}
 
 #[cfg(all(test, windows))]
 mod tests {

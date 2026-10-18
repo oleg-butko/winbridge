@@ -199,6 +199,7 @@ $oldCompilerActorReport = $env:WINBRIDGE_COMPILER_ACTOR_REPORT
 $oldCompilerOutputReport = $env:WINBRIDGE_COMPILER_OUTPUT_REPORT
 $oldCompilerReportProof = $env:WINBRIDGE_COMPILER_REPORT_PROOF
 $oldCandidateArtifactProof = $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF
+$oldArtifactActorReport = $env:WINBRIDGE_ARTIFACT_ACTOR_REPORT
 $oldUpdateTestPwsh = $env:WINBRIDGE_UPDATE_TEST_PWSH
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
@@ -507,6 +508,9 @@ try {
         $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = Join-Path $ReportDirectory 'compiler-output-proof.json'
         $env:WINBRIDGE_COMPILER_REPORT_PROOF = Join-Path $ReportDirectory 'compiler-report-binding-proof.json'
         $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF = Join-Path $ReportDirectory 'candidate-artifact-set-proof.json'
+        $env:WINBRIDGE_ARTIFACT_ACTOR_REPORT = Join-Path $ReportDirectory 'artifact-actor-proof.json'
+        & (Join-Path $source 'scripts/test-update-candidate-finalization.ps1') -ReportPath (Join-Path $ReportDirectory 'candidate-finalization-wiring-proof.json')
+        if (-not $?) { throw 'Portable candidate finalization wiring test failed' }
         $env:WINBRIDGE_UPDATE_TEST_PWSH = (Get-Process -Id $PID).Path
         $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $source
         $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = Join-Path $ReportDirectory 'supervisor-source-proof.json'
@@ -526,7 +530,8 @@ try {
             @{name='update-supervisor-ipc';arguments=@('test','-p','winbridge-transport','--lib','supervisor::tests::busy_pipe_waits_without_sending','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
             @{name='update-worker-control';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-platform-atomic-executable';arguments=@('test','-p','winbridge-platform','--lib','windows_atomic::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-compiler-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::compiler_actor_commits_before_dispatch_stays_responsive_and_aborts_cleanly','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')}
+            @{name='update-compiler-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::compiler_actor_commits_before_dispatch_stays_responsive_and_aborts_cleanly','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')},
+            @{name='update-artifact-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::artifact_actor_','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {
@@ -559,6 +564,11 @@ try {
         $artifactSet = Get-Content -LiteralPath (Join-Path $ReportDirectory 'candidate-artifact-set-proof.json') -Raw | ConvertFrom-Json
         if ($artifactSet.kind -ne 'candidate_artifact_set_proof' -or $artifactSet.passed -ne $true -or $artifactSet.platform -ne 'windows' -or $artifactSet.build.sourceDirty -or $artifactSet.build.sourceCommit -cne $manifest.sourceCommit -or $artifactSet.runtimeApplied -or $artifactSet.candidateVerified -or $artifactSet.windowsOpened -or $artifactSet.parent.phase -ne 'validating_candidate' -or $artifactSet.record.inspection.artifacts.Count -ne 4 -or $artifactSet.record.inspection.candidateVerified -or $artifactSet.record.inspection.runtimeApplied) { throw 'Candidate artifact-set durable proof incomplete' }
         foreach ($check in @('syntheticQueryReceipts','atomicParentTransition','rawHealthBypassRejected','duplicateObserved')) { if ($artifactSet.$check -ne $true) { throw "Candidate artifact-set check missing: $check" } }
+        $artifactActor = Get-Content -LiteralPath (Join-Path $ReportDirectory 'artifact-actor-proof.json') -Raw | ConvertFrom-Json
+        if ($artifactActor.kind -ne 'artifact_actor_proof' -or $artifactActor.passed -ne $true -or $artifactActor.platform -ne 'windows' -or $artifactActor.build.sourceDirty -or $artifactActor.build.sourceCommit -cne $manifest.sourceCommit -or $artifactActor.runtimeApplied -or $artifactActor.candidateVerified -or $artifactActor.windowsOpened -or $artifactActor.final.update.phase -ne 'validating_candidate' -or $null -ne $artifactActor.final.driverError -or $artifactActor.record.inspection.artifacts.Count -ne 4 -or $artifactActor.abort.phase -ne 'completed' -or -not $artifactActor.abort.spec.candidateDigest) { throw 'Artifact actor real fixture proof incomplete' }
+        foreach ($check in @('realFixtureQueries','singleCompiler','mailboxResponsive','rawReleaseRejected','candidateDigestBound')) { if ($artifactActor.$check -ne $true) { throw "Artifact actor check missing: $check" } }
+        $rejection = Get-Content -LiteralPath (Join-Path $ReportDirectory 'artifact-actor-rejection-proof.json') -Raw | ConvertFrom-Json
+        if ($rejection.kind -ne 'artifact_actor_rejection_proof' -or $rejection.passed -ne $true -or $rejection.platform -ne 'windows' -or $rejection.build.sourceDirty -or $rejection.build.sourceCommit -cne $manifest.sourceCommit -or $rejection.receiptAbsent -ne $true -or $rejection.retryRejected -ne $true -or $rejection.failed.update.phase -ne 'building' -or -not $rejection.failed.driverError -or $rejection.abort.phase -ne 'completed' -or $rejection.runtimeApplied -or $rejection.candidateVerified -or $rejection.windowsOpened) { throw 'Artifact actor rejection/abort proof incomplete' }
         if ($actor.kind -ne 'supervisor_compiler_actor_proof' -or $actor.passed -ne $true -or $actor.platform -ne 'windows' -or $actor.build.sourceDirty -or $actor.build.sourceCommit -cne $manifest.sourceCommit -or $actor.runtimeApplied -or $actor.candidateVerified -or $actor.windowsOpened) { throw 'Compiler actor proof identity incomplete' }
         foreach ($check in @('singleCompiler','mailboxResponsive','rawReleaseRejected','busyAbortRejected','coordinatedAbortCompleted','compilerReportBound')) { if ($actor.$check -ne $true) { throw "Compiler actor check missing: $check" } }
         if ($actor.accepted.build.phase -ne 'intent' -or $actor.busy.build.phase -ne 'running' -or $actor.final.build.phase -ne 'completed' -or $actor.final.build.outcome -ne 'succeeded' -or $actor.final.build.cleanupVerified -ne $true -or $actor.final.driverActive -ne $false -or $null -ne $actor.final.driverError -or $actor.abort.phase -ne 'completed' -or $actor.abort.workerReleased.phase -ne 'released') { throw 'Compiler actor lifecycle/abort proof incomplete' }
@@ -652,6 +662,7 @@ try {
     $env:WINBRIDGE_COMPILER_OUTPUT_REPORT = $oldCompilerOutputReport
     $env:WINBRIDGE_COMPILER_REPORT_PROOF = $oldCompilerReportProof
     $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF = $oldCandidateArtifactProof
+    $env:WINBRIDGE_ARTIFACT_ACTOR_REPORT = $oldArtifactActorReport
     $env:WINBRIDGE_UPDATE_TEST_PWSH = $oldUpdateTestPwsh
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource
