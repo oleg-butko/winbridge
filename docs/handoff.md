@@ -1,3 +1,21 @@
+## U1: actual worker startup/pins native gate пройден — 2026-10-18
+
+[Gate](plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md): source
+d3c9ed6, run `20261018-160143-62159cbf`, Task
+`7d5526c6-d8be-4e09-81f0-7795f5cc8d07` succeeded/0: 159 native tests / 17 groups,
+full build/four queries/exact files и actual readonly Main positive/negative passed.
+Все 38 ready files проверены. Follow-up Task `1c5bfea2-b598-4782-9bbe-a70184375472`
+succeeded/0: actual serve удерживал пять pins, после forced owned idle stop handles
+освободились, bytes/updater DB сохранены. Late proof имеет отдельный ready marker.
+Новая runner integration не требует повторного build для уже выполненного follow-up;
+combined pipeline с её дополнительным вызовом ещё не запускался. Scripts syntax,
+Python runner/export и scaffold checks passed; Rust код совпадает с tested d3c9ed6.
+Readonly debug verification заняла 9.4 s: activation deadline должен учитывать
+hashing до IPC. Тестовый worker остановлен; installed worker прежний/idle 0/errors
+none/coverage complete. Desktop закрыт, worker оставить; bootstrap не требуется.
+Далее authenticated live identity/control и durable baseline до SourceApply,
+затем health/exact shutdown/runtime transaction/activation. U1 открыт, A4 на паузе.
+
 ## U1: ранний startup guard — 2026-10-18
 
 [Контракт](plans/worker-self-update/runtime-startup.md): normal serve с known

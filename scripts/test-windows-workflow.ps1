@@ -612,6 +612,10 @@ try {
         $startupRoot = Join-Path (Split-Path $source -Parent) 'runtime-startup-test'
         & (Join-Path $source 'scripts/test-update-runtime-startup.ps1') -SourceDirectory $source -CandidateDirectory $candidateDirectory -ScratchRoot $startupRoot -ReportPath (Join-Path $ReportDirectory 'worker-runtime-startup-proof.json')
         if (-not $?) { throw 'Actual worker startup barrier failed' }
+        $candidateWorker = @($candidate.artifactIdentities | Where-Object { $_.name -ceq 'winbridge-worker.exe' })
+        if ($candidateWorker.Count -ne 1) { throw 'Expected exactly one queried candidate worker' }
+        & (Join-Path $source 'scripts/test-update-runtime-lifetime.ps1') -SourceDirectory $source -RuntimeDirectory (Join-Path $startupRoot 'runtime') -ExpectedWorkerSha256 $candidateWorker[0].query.image.sha256 -ExpectedSourceManifestSha256 $sourceManifestSha -ReportPath (Join-Path $ReportDirectory 'worker-runtime-lifetime-proof.json')
+        if (-not $?) { throw 'Actual worker runtime pin lifetime failed' }
         $report.updatePreparation = @{passed=$true;candidateDirectory=$candidateDirectory;manifestSha256=$sourceManifestSha;runtimeApplied=$false;windowsOpened=$false}
     }
     if ($ProjectsOnly) {

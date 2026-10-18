@@ -22,8 +22,8 @@ Windows semantics запрета записи/удаления.
 host/session. Этот constructor предназначен для раннего startup worker с guard
 на всю жизнь процесса. Произвольный caller descriptor не принимается. Сейчас
 normal worker Main подключён следующим [startup guard](runtime-startup.md);
-authenticated live-worker control contract и positive actual-main native gate
-остаются следующей задачей. Observation/DTO сами
+positive actual-main/lifetime [native gate](windows-runtime-startup-gate-2026-10-18.md)
+пройден; authenticated live-worker control contract остаётся следующей задачей. Observation/DTO сами
 по себе не являются разрешением остановки, замены или activation.
 
 Source commit/manifest в installed set относятся к binaries. Их нельзя безусловно
@@ -38,5 +38,5 @@ exact shutdown, runtime transaction и activation ещё не реализова
 
 Четыре tests проверяют readonly/no-adoption, missing/foreign manifest, dirty/mixed/
 duplicate/changed/hard-linked files и удержание Windows pins. Проверка bind текущего
-постороннего процесса отрицательная; positive worker startup пока не подтверждён.
+постороннего процесса отрицательная; positive worker startup/lifetime подтверждены отдельным actual-main native gate.
 Native readiness — в handoff, весь U1 остаётся открыт.

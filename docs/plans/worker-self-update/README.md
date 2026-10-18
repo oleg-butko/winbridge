@@ -144,7 +144,8 @@ U0 не применяет source plan, не выключает процессы
 - [ ] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
   [Known installed-set reader](installed-set.md) и abort snapshot прошли тот же
   native gate. [Early startup guard](runtime-startup.md) подключён; три actual-main
-  negative tests passed locally, положительный native gate впереди. Publication,
+  negative tests и положительный [native gate / lifetime follow-up](windows-runtime-startup-gate-2026-10-18.md)
+  passed: 159 tests / full build и actual serve с пятью pins. Publication,
   authenticated live identity и durable baseline acceptance остаются впереди.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.

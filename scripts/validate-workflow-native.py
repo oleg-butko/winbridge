@@ -253,6 +253,8 @@ def main():
         archive_has_finalization_wiring = 'winbridge/scripts/test-update-candidate-finalization.ps1' in archive.namelist()
         archive_has_installed_set = 'winbridge/apps/update/src/installed_set.rs' in archive.namelist()
         archive_has_runtime_startup = 'winbridge/scripts/test-update-runtime-startup.ps1' in archive.namelist()
+        archive_has_runtime_lifetime = ('winbridge/scripts/test-update-runtime-lifetime.ps1' in archive.namelist()
+                                        and b'worker-runtime-lifetime-proof.json' in archive.read('winbridge/scripts/test-windows-workflow.ps1'))
         archive_has_abort_snapshot = b'readonly_abort_snapshot_never_combines_header_and_receipts' in archive.read('winbridge/apps/update/src/journal/abort.rs') if archive_has_compiler_actor else False
         archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
@@ -770,6 +772,17 @@ exit $nativeExit
             for name in ['verify_runtime_without_manifest_never_bootstraps_or_opens_a_journal', 'known_runtime_rejects_corrupt_foreign_and_changed_set_before_worker_journal', 'correct_file_hashes_cannot_bind_a_fabricated_loaded_worker_descriptor']:
                 if name + ' ... ok' not in log:
                     raise RuntimeError('Worker startup regression missing: ' + name)
+        if archive_has_runtime_lifetime:
+            lifetime = json.loads((report / 'worker-runtime-lifetime-proof.json').read_text(encoding='utf-8-sig'))
+            worker = next(x for x in proof['artifactIdentities'] if x['name'] == 'winbridge-worker.exe')['query']
+            names = ['winbridge-installed-set.json', 'winbridge-worker.exe', 'winbridge-fixture.exe', 'winbridge-desktop.exe', 'winbridge-update.exe']
+            if (lifetime.get('kind') != 'worker_runtime_lifetime_proof' or lifetime.get('platform') != 'windows'
+                    or not all(lifetime.get(k) is True for k in ['passed', 'actualWorkerMain', 'ownedProcessStopped', 'forcedFixtureStop', 'workerJournalCreated'])
+                    or any(lifetime.get(k) is not False for k in ['updaterJournalChanged', 'gracefulShutdownVerified', 'activationVerified', 'runtimeApplied', 'windowsOpened'])
+                    or lifetime['acceptedTaskCount'] != 0 or lifetime['build'] != worker['descriptor']['build']
+                    or lifetime['imageSha256'] != worker['image']['sha256'] or lifetime['processId'] <= 0
+                    or lifetime['deniedWhileRunning'] != names or lifetime['releasedAfterExit'] != names):
+                raise RuntimeError('Actual worker serve/file-pin lifetime proof incomplete; forced idle stop is not activation')
         if archive_has_installed_set or archive_has_abort_snapshot:
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             required = []

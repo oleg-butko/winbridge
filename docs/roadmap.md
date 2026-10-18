@@ -79,6 +79,10 @@ normal worker startup/live identity и baseline до SourceApply, затем hea
 в normal Main до journal; readonly verify-runtime и actual-main negative tests
 добавлены. Positive actual Windows startup gate впереди. Publication/live identity/
 baseline acceptance и весь U1 остаются открытыми.
+[Actual startup/pin lifetime gate](plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md)
+пройден: 159 tests / 17 groups, full candidate build, readonly Main и отдельный
+actual serve/пять pins/owned idle stop. Bootstrap/install не включены. Далее
+live identity/control и durable baseline до SourceApply; U1 остаётся открытым.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

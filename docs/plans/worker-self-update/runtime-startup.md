@@ -49,11 +49,13 @@ guards, publication, shutdown и runtime replacement остаются следу
 fixture stop, не graceful shutdown/activation. Original generated config сохраняется
 как fixture artifact. Script принимает только путь внутри конкретного validation
 run, проверяет source/helper/image hashes и публикует отдельный proof/ready pair.
-Проверка времени жизни ещё не выполнена; рабочий runtime не используется.
+[Native gate](windows-runtime-startup-gate-2026-10-18.md) пройден отдельным
+follow-up: actual serve/pins/owned idle stop. Рабочий runtime не использовался.
 
 Локально: 485 workspace tests, Linux/Windows Clippy all-targets, contracts/fmt,
 scaffold, Python export/runner и PowerShell syntax passed. Initial full run один
 раз получил unknown в быстром Unix report fixture; отдельный повтор и 30 repeats
 прошли. Ревью устранило возможный exit до PID binding: report helper ждёт реальный
 durable Running, без временного sleep. Production unknown/no-replay semantics
-не менялись; повтор полного suite passed. Positive native gate пока впереди.
+не менялись; повтор полного suite passed. Positive native gate пройден: 159 tests,
+17 groups/full build/actual Main плюс отдельный lifetime follow-up.

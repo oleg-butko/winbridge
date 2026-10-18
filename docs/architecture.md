@@ -12,8 +12,8 @@ known-set reader и полный candidate build прошли
 [156 native tests / 16 groups](plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md).
 [Ранняя проверка runtime](plans/worker-self-update/runtime-startup.md) подключена
 в normal worker Main: known manifest → четыре pins → собственный loaded descriptor
-до worker journal, без updater writer/migration. Positive actual-main native gate
-ещё впереди. Public update/install, durable old-runtime acceptance и activation
+до worker journal, без updater writer/migration. [Actual Main / lifetime gate](plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md)
+пройден: 159 native tests/full build и отдельный serve/pins proof. Public update/install, durable old-runtime acceptance и activation
 не включены; последующие описания отдельных blocks сохраняют их исторические gates.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;

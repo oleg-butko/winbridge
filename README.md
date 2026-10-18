@@ -98,8 +98,8 @@ status и release только после source/Job/output proof. Добавл�
 [artifact actor и durable receipt/FSM](docs/plans/worker-self-update/artifact-actor.md)
 прошли [156 native tests / полный build](docs/plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md).
 [Ранняя проверка известного runtime](docs/plans/worker-self-update/runtime-startup.md)
-подключена до открытия worker journal; её positive native gate выполняется.
-Loaded identity/control, baseline до source effects, health, exact shutdown и
+подключена до открытия worker journal; [159 native tests / actual Main и pins](docs/plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md) passed.
+Authenticated live identity/control, baseline до source effects, health, exact shutdown и
 activation остаются впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 
