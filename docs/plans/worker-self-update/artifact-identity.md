@@ -26,9 +26,9 @@ Query report всегда имеет `candidateVerified=false`: это identity,
 Build-only script выполняет эти probes **внутри managed compiler tree**, после
 компиляции и до его завершения. Отдельный probe journal не нужен: compiler intent,
 PID/Job, terminal/output и физический cleanup покрывают всех этих потомков.
-Script проверяет role/source commit/manifest/clean flag/version всех четырёх exe,
-пишет command/log и identity report, затем сверяет staged payload SHA/bytes с
-проверенными файлами. Отдельные build IDs debug/release exe могут различаться.
+Script сначала создаёт независимые payload copies (Cargo outputs могут быть
+hard links к deps cache), затем проверяет role/source commit/manifest/clean
+flag/version этих четырёх exe, пишет command/log и сверяет payload SHA/bytes. Отдельные build IDs debug/release exe могут различаться.
 Новый updater helper берётся из только что собранного target; installed runtime
 не запускается и не заменяется.
 
@@ -39,3 +39,15 @@ Verification boot, worker/desktop shutdown, file replacement, recovery UI и pub
 MCP update всё ещё отключены. Bootstrap установленного worker пока не требуется.
 
 Local gate: 460 workspace tests, 11 preflight tests, metadata queries worker/fixture, Linux/Windows Clippy all-targets, fmt, contracts, typecheck/build:ui/scaffold, 8 export tests и script syntax passed. Native gate ожидается.
+
+Review после реализации: повторный scan теперь сравнивает File ID/размер/SHA
+пути, а не только SHA и ID уже открытого handle. Unix filesystem replacement
+regression и 11 preflight tests passed; Linux/Windows Clippy passed. Для native
+PowerShell build/validation wrappers явно задаётся UTF-8 с восстановлением после
+скрипта: Windows path-diagnostic ранее показал OEM decoding mojibake. Эти review
+правки идут отдельно от уже запущенного immutable native archive 06211fe.
+
+Native clean 06211fe: 133 tests / 15 groups и Rust/desktop compilation passed,
+но итоговый gate failed на Cargo output hard link. Independent-copy ordering
+исправлен без снятия hard-link guard; portable test изменяет cache alias после
+копирования и подтверждает неизменность payload. Повтор native ожидается.

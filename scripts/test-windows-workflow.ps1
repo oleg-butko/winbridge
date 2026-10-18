@@ -170,6 +170,8 @@ $report = [ordered]@{ schemaVersion = 1; platform = 'windows'; passed = $false; 
     sourceCommit = $manifest.sourceCommit; sourceDirty = $manifest.dirty; diagnosticOnly = [bool]$TaskCasRuntimeDiagnostic; readinessOnly = [bool]$ReadinessOnly; startedAt = [DateTime]::UtcNow.ToString('o'); commands = @(); error = $null }
 New-Item -ItemType Directory -Path $ReportDirectory -ErrorAction Stop | Out-Null
 $reportPath = Join-Path $ReportDirectory 'report.json'
+$oldWorkflowConsoleEncoding = [Console]::OutputEncoding
+$oldWorkflowPipelineEncoding = $OutputEncoding
 $oldTarget = $env:CARGO_TARGET_DIR
 $oldIncremental = $env:CARGO_INCREMENTAL
 $oldTemp = $env:TEMP
@@ -206,6 +208,8 @@ $oldResumePublication = $env:WINBRIDGE_RESUME_GATE_PUBLICATION
 $oldLocation = Get-Location
 $cacheLease = $null
 try {
+    [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+    $OutputEncoding = [Text.UTF8Encoding]::new($false)
     . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
     foreach ($file in $manifest.files) {
         $filePath = Join-Path $source $file.path
@@ -603,6 +607,8 @@ try {
     $report.error = $_.Exception.Message
     Write-Output $report.error
 } finally {
+    [Console]::OutputEncoding = $oldWorkflowConsoleEncoding
+    $OutputEncoding = $oldWorkflowPipelineEncoding
     if ($cacheLease) { $cacheLease.Dispose() }
     Set-Location -LiteralPath $oldLocation.Path
     $env:CARGO_TARGET_DIR = $oldTarget

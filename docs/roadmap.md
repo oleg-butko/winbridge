@@ -291,3 +291,8 @@ all-targets passed. Native проверка desktop/query и полный пов
 Windows free before/after 25,076,011,008 / 25,038,508,032 bytes; installed worker
 idle 0, прежний generation, recovery/maintenance errors нет. Первый run и
 PowerShell AuthorizationManager diagnosis сохранены ниже. Gate ещё НЕ пройден.
+
+U1 native 06211fe: 133 tests / 15 groups и полный Rust/desktop compile passed;
+финальная identity-проверка отказалась от Cargo hard link. Create-only payload
+copy перенесён перед probes; hard-link isolation portable test passed. File ID
+review и UTF-8 wrappers также добавлены. Полный gate и U1 ещё открыты.

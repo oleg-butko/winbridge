@@ -1,3 +1,22 @@
+## U1: review и native artifact staging — 2026-10-18
+
+Native clean 06211fe run `20261018-101634-46ac2235`, Task
+`816bfa89-5c28-41a6-9132-4e185e2f16f9`: все 133 tests / 15 groups passed,
+включая compiler actor, safe abort, output, artifact probes и absolute paths.
+Полный Rust/desktop build тоже прошёл, но gate НЕ завершён: identity query
+Cargo worker.exe отклонён как hard link. Диагностический readonly Task
+`760b0aa6-f79f-48f7-9584-88f78e10626a` сохранил failed-candidate-report.json и
+identity-worker.log в shared. Gate исправлен без ослабления проверки: create-only
+payload copies теперь создаются ДО probes, helper/queries работают с ними.
+Portable hard-link isolation regression добавлен; повтор native впереди.
+Windows free before/after: 25,842,319,360 / 25,685,712,896 bytes.
+
+Code review также исправил повторный File ID check пути после query (Unix
+same-bytes replacement regression + 11 preflight, Linux/Windows Clippy passed).
+PowerShell wrappers временно используют UTF-8 и восстанавливают encoding;
+ранняя диагностика уже показала OEM mojibake. Installed worker не менялся,
+bootstrap пока не требуется. Далее durable artifact-set receipt и exact shutdown.
+
 ## U1: исправление Debian validation runner — 2026-10-18
 
 В a8e6ce8 artifact-result checks ошибочно выполнялись до submit; Windows task

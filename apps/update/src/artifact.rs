@@ -104,6 +104,11 @@ fn pin(path: &Path) -> Result<Pinned> {
         evidence,
     })
 }
+fn same_image(before: &ImageEvidence, after: &ImageEvidence) -> bool {
+    before.file_identity == after.file_identity
+        && before.bytes == after.bytes
+        && before.sha256 == after.sha256
+}
 pub fn inspect_image(path: &Path) -> Result<ImageEvidence> {
     Ok(pin(path)?.evidence)
 }
@@ -257,9 +262,10 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
     {
         return Err("Artifact descriptor role/contract/target mismatch".into());
     }
+    let after = pin(&pinned.path)?;
     if winbridge_platform::file_identity(&pinned.file).map_err(error)?
         != pinned.evidence.file_identity
-        || pin(&pinned.path)?.evidence.sha256 != pinned.evidence.sha256
+        || !same_image(&pinned.evidence, &after.evidence)
     {
         return Err("Artifact changed during query".into());
     }
@@ -273,4 +279,32 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
         process,
         cleanup_verified: true,
     })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    #[test]
+    fn same_bytes_at_a_replaced_path_never_rebind_the_pinned_image() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("image");
+        std::fs::write(&path, b"original").unwrap();
+        let before = pin(&path).unwrap();
+        std::fs::rename(&path, root.path().join("original-image")).unwrap();
+        std::fs::write(&path, b"original").unwrap();
+        let replaced = pin(&path).unwrap();
+        assert_eq!(before.evidence.sha256, replaced.evidence.sha256);
+        assert_ne!(
+            before.evidence.file_identity,
+            replaced.evidence.file_identity
+        );
+        assert!(!same_image(&before.evidence, &replaced.evidence));
+        std::fs::write(&path, b"modified").unwrap();
+        let edited = pin(&path).unwrap();
+        assert_eq!(
+            replaced.evidence.file_identity,
+            edited.evidence.file_identity
+        );
+        assert!(!same_image(&replaced.evidence, &edited.evidence));
+    }
 }

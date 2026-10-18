@@ -52,8 +52,12 @@ Assert-UpdateBuildPaths -Source $source -WorkspaceTarget $workspaceTarget -Deskt
 $report = [ordered]@{schemaVersion=1;kind='winbridge-update-candidate';status='preparing';runtimeApplied=$false;candidateVerified=$false;sourceDirectory=$source;manifestSha256=$ManifestSha256;storage=@{sourceAvailableBytesBefore=$drive.AvailableFreeSpace;stagingAvailableBytesBefore=$stageDrive.AvailableFreeSpace};commands=@();artifacts=@();error=$null}
 [IO.Directory]::CreateDirectory($stage) | Out-Null
 $oldIncremental = $env:CARGO_INCREMENTAL
+$oldUpdateConsoleEncoding = [Console]::OutputEncoding
+$oldUpdatePipelineEncoding = $OutputEncoding
 Push-Location $source
 try {
+  [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+  $OutputEncoding = [Text.UTF8Encoding]::new($false)
   if ($ValidationCacheDirectory) {
     $cacheDrive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($ValidationCacheDirectory))
     $report.storage.validationCacheAvailableBytesBefore = $cacheDrive.AvailableFreeSpace
@@ -104,23 +108,27 @@ try {
   # Queries remain children of the managed compiler (or the isolated native
   # validation Job). Their helper adds its own bounded Job and stdio capture.
   # Unsupported old desktop files are rejected by the marker before execution.
-  $queryHelper = $artifacts['winbridge-update.exe']
+  # Cargo exports may hard-link its deps cache. Probe only independent,
+  # create-only payload copies; keep the verifier's hard-link rejection intact.
+  $payloadDirectory = Join-Path $stage 'payload'
+  $report.artifacts = @(New-UpdatePayload $artifacts $payloadDirectory)
+  $queryHelper = Join-Path $payloadDirectory 'winbridge-update.exe'
   $roles = [ordered]@{'winbridge-worker.exe'='worker';'winbridge-fixture.exe'='fixture';'winbridge-desktop.exe'='desktop';'winbridge-update.exe'='updater'}
   $report.artifactIdentities = @()
   foreach ($name in $roles.Keys) {
     $role = $roles[$name]
     Write-Host "WinBridge candidate: readonly identity $role; no UI/configuration"
     $logName = 'identity-'+$role+'.log'
-    $queryText = @(& $queryHelper artifact-query $artifacts[$name] $role 2>&1 | Tee-Object -FilePath (Join-Path $stage $logName))
+    $image = Join-Path $payloadDirectory $name
+    $queryText = @(& $queryHelper artifact-query $image $role 2>&1 | Tee-Object -FilePath (Join-Path $stage $logName))
     $queryCode = $LASTEXITCODE
-    $report.commands += @{name=('identity-'+$role);executable=$queryHelper;arguments=@('artifact-query',$artifacts[$name],$role);exitCode=$queryCode;log=$logName}
+    $report.commands += @{name=('identity-'+$role);executable=$queryHelper;arguments=@('artifact-query',$image,$role);exitCode=$queryCode;log=$logName}
     if ($queryCode -ne 0) { throw "Artifact identity query failed: $role; see $logName" }
     $query = ($queryText -join "`n") | ConvertFrom-Json
     $d = $query.descriptor
     if ($query.kind -ne 'artifact_query' -or $query.readOnly -ne $true -or $query.candidateVerified -ne $false -or $query.cleanupVerified -ne $true -or $query.image.querySupported -ne $true -or $d.schemaVersion -ne 1 -or $d.queryContract -ne 1 -or $d.role -cne $role -or $d.targetOs -cne 'windows' -or $d.build.sourceDirty -ne $false -or $d.build.sourceCommit -cne $verified.sourceCommit -or $d.build.sourceManifestSha256 -cne $ManifestSha256 -or $d.build.version -cne $identity.version) { throw "Artifact identity source/role/contract mismatch: $name" }
     $report.artifactIdentities += @{name=$name;query=$query}
   }
-  $report.artifacts = @(New-UpdatePayload $artifacts (Join-Path $stage 'payload'))
   foreach ($artifact in $report.artifacts) {
     $query = @($report.artifactIdentities | Where-Object { $_.name -ceq $artifact.name })[0].query
     if ($artifact.sha256 -cne $query.image.sha256 -or $artifact.bytes -ne $query.image.bytes) { throw "Artifact changed between identity query and payload staging: $($artifact.name)" }
@@ -133,6 +141,8 @@ try {
   $report.error = $_.Exception.Message
   throw
 } finally {
+  [Console]::OutputEncoding = $oldUpdateConsoleEncoding
+  $OutputEncoding = $oldUpdatePipelineEncoding
   if ($validationCacheLease) { $validationCacheLease.Dispose() }
   $env:CARGO_INCREMENTAL = $oldIncremental
   Pop-Location
