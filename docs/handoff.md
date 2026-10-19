@@ -1,3 +1,20 @@
+## U1: native test boundary corrected; combined repeat next — 2026-10-19
+
+29b4401 gate `20261019-112352-a49287c3` / Task
+`75f1319b-556b-48c5-9b28-a92814d31c95` terminal failed1 in updater lib tests.
+The new DeleteFileW fixture deleted before metadata, so optional-path guard saw
+missing entry and returned Ok; its PermissionDenied assertion was incorrect.
+Five ready files verified; SHA
+`6a1c45b59301dd882acb14f85d713acfafcac9fff9d81eaf57f861fc24ade1fe`.
+Production worker remains healthy/idle0, generation unchanged; no manual update.
+
+Corrected Windows-only fixture now reads metadata, performs actual DeleteFileW,
+then opens for link check to require real PermissionDenied; releases last handle
+and checks full-validation retry. Runtime code bf0573a/29b4401 unchanged. Windows
+Clippy passed; 530 local tests from previous full run remain applicable (this test
+is Windows-only). Commit/export and repeat the combined native gate using the
+same original cache owner and schema-8 reference. No installed changes or UI.
+
 ## U1: compatibility + sidecar correction native retry running — 2026-10-19
 
 Previous goal turn made progress: bf0573a guard fix and 29b4401 live/config

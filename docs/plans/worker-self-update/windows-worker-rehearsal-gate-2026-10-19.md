@@ -36,3 +36,26 @@ Fresh installed-worker Info after failure: source 1f3aa9f/build 1792228466051801
 generation `994671b4-e10c-469c-8515-b2aa71a4e3dc`, connected/idle0, no maintenance or
 recovery error. No production runtime replaced; no UI windows. Leave worker running,
 desktop unnecessary. The authorized automatic correction/retry needs no manual update.
+
+
+## First compatibility retry: correct the test boundary
+
+Clean 29b4401, run `20261019-112352-a49287c3`, Task
+`75f1319b-556b-48c5-9b28-a92814d31c95` failed in the second group.
+The new Windows-only test called DeleteFileW before entering path validation;
+Rust then treated the optional directory entry as absent and validation correctly
+returned Ok. The assertion expecting PermissionDenied was wrong. This run did
+not demonstrate failure of the new production retry logic or of compatibility.
+
+All five ready files verified. Report SHA
+`6a1c45b59301dd882acb14f85d713acfafcac9fff9d81eaf57f861fc24ade1fe`.
+Windows free 21,412,536,320 → 21,492,977,664 bytes. Installed worker remains
+connected/idle0, generation unchanged, no recovery/maintenance fault.
+
+The corrected test reads metadata first, calls real DeleteFileW while holding a
+share-delete handle, then attempts the guard's real hard-link handle open. It
+requires PermissionDenied from that open, closes the last handle and requires
+the subsequent complete validation to succeed with the file absent. This matches
+the actual metadata/open race; it neither accepts arbitrary outcomes nor changes
+production validation. Windows all-target Clippy passed; automatic native repeat
+remains required. Working runtime and validation reports preserved, no UI.

@@ -170,19 +170,25 @@ fn actual_delete_pending_sidecar_is_revalidated_after_last_handle_closes() {
             .unwrap(),
     );
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    assert_ne!(unsafe { DeleteFileW(wide.as_ptr()) }, 0);
     let mut calls = 0;
     safe_with(&path, |p| {
         calls += 1;
-        let result = winbridge_platform::require_safe_path(p);
         if calls == 1 {
+            // Match the real guard's metadata -> handle-open boundary. Deleting
+            // before metadata lets Rust report an optional missing entry, which
+            // is already safe and does not exercise an inaccessible open.
+            assert!(fs::symlink_metadata(p)?.is_file());
+            assert_ne!(unsafe { DeleteFileW(wide.as_ptr()) }, 0);
+            let result = winbridge_platform::require_single_link(p);
             assert_eq!(
                 result.as_ref().unwrap_err().kind(),
                 std::io::ErrorKind::PermissionDenied
             );
             drop(held.take());
+            result
+        } else {
+            winbridge_platform::require_safe_path(p)
         }
-        result
     })
     .unwrap();
     assert_eq!(calls, 2);
