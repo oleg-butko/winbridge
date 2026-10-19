@@ -1,3 +1,17 @@
+## U1: native preimages library gate running — 2026-10-19
+
+Clean source 823abd0, archive `winbridge-20261019T104419Z-823abd0-df43707a.zip`,
+SHA `2469278343f935c9555bd96e2e9fff70459e3ddb0c0f5cb5421371879403c4ff`.
+Run `20261019-064446-fb0614ea`, Task `e30bf515-e139-45be-8cbb-598d491e68bb`
+confirmed running, local runner session 69250, log
+`.winbridge/update-preparation/runtime-preimages-native.log`. Expected native checks
+include the new copy/ledger/fault cases and Windows read-pin release, previous
+schema-8 updater refusal, full build/Main/pins. No result yet; wait same task/handle,
+verify ready files only after terminal status. Original cache owner reused;
+reference updater path/SHA below. Installed worker stays, desktop not needed,
+no windows or production replacement. While running: implement supervisor v8
+fast admission/status + blocking preimages driver and its positive native fixture.
+
 ## U1: previous-runtime preimages library — 2026-10-19
 
 [Preimages](plans/worker-self-update/runtime-preimages.md), updater schema 9:
