@@ -138,6 +138,7 @@ param(
     [switch]$Help
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lib/update-schema.ps1')
 $PSNativeCommandUseErrorActionPreference = $false
 if ($Help -or -not $ReportDirectory -or -not $SourceArchiveSha256) {
     Write-Host @'

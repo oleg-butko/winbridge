@@ -77,3 +77,20 @@ The observed native kind/raw code is logged. This host's removal test must not b
 reported as reproducing Access denied: that branch has separate controlled fault
 coverage, including persistent denial and unsafe replacement. Production policy
 is unchanged. Windows all-target Clippy passed; combined repeat is still needed.
+
+
+## Portable boundary: all native tests passed; missing helper import
+
+Source 7ed3900, run `20261019-113708-5fe0af67`, Task
+`96f5965b-5a8e-49ba-ac90-3f9d3d84c01c`: all **206 tests / 19 groups passed**.
+Real removal test logged NotFound / OS Some(2). Authenticated v3 compatibility,
+post-hash config rejection and original coordinated abort all passed.
+The combined gate still failed before candidate build because the new early
+Assert-WinBridgeUpdaterSchema call preceded the helper's later dot-source.
+The helper is now imported at script startup. No runtime behavior is changed.
+
+36 ready files checked, report SHA
+`3a26c51feda0d16d8fc38989d24330a92bd5827350955b54c009f1cbff550fa8`.
+Windows free 21,421,084,672 → 21,586,993,152 bytes. Installed worker healthy/idle0,
+generation unchanged. Full candidate/config/rehearsal/Main/pins still require the
+corrected script; do not mark the complete gate passed from these tests alone.
