@@ -123,15 +123,27 @@ fn safe(path: &Path) -> Result<()> {
     safe_with(path, winbridge_platform::require_safe_path)
 }
 fn safe_with(path: &Path, mut validate: impl FnMut(&Path) -> std::io::Result<()>) -> Result<()> {
-    // SQLite can remove WAL/SHM between the guard's metadata lookup and its
-    // hard-link handle open. Revalidate the entire path once after NotFound;
-    // never ignore an unsafe replacement or replay a database/file operation.
-    let first = validate(path);
-    let result = match first {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => validate(path),
-        other => other,
-    };
-    result.map_err(|e| storage(format!("Update path {}: {e}", path.display())))
+    // Optional SQLite WAL/SHM can disappear or be delete-pending on Windows.
+    // Retry only complete readonly validation, never the DB/file effect. A
+    // persistent denial or an unsafe replacement still fails closed.
+    let sidecar = matches!(
+        path.file_name().and_then(|s| s.to_str()),
+        Some("updates.sqlite-wal" | "updates.sqlite-shm")
+    );
+    for attempt in 0..3 {
+        match validate(path) {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound && attempt == 0 => {}
+            Err(e)
+                if sidecar && e.kind() == std::io::ErrorKind::PermissionDenied && attempt < 2 =>
+            {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            result => {
+                return result.map_err(|e| storage(format!("Update path {}: {e}", path.display())))
+            }
+        }
+    }
+    unreachable!("Final path validation always returns its result")
 }
 fn check_files(directory: &Path) -> Result<()> {
     safe(directory)?;

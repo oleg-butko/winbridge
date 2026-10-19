@@ -131,7 +131,12 @@ pub fn require_safe_path(path: &std::path::Path) -> io::Result<()> {
                 }
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => return Err(io::Error::other(format!("{}: {e}", ancestor.display()))),
+            Err(e) => {
+                return Err(io::Error::new(
+                    e.kind(),
+                    format!("{}: {e}", ancestor.display()),
+                ))
+            }
         }
     }
     Ok(())
