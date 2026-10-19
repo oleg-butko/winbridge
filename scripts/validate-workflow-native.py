@@ -254,6 +254,8 @@ def main():
         archive_has_installed_set = 'winbridge/apps/update/src/installed_set.rs' in archive.namelist()
         archive_has_runtime_startup = 'winbridge/scripts/test-update-runtime-startup.ps1' in archive.namelist()
         archive_has_runtime_control = 'winbridge/apps/worker/src/update_control/tests/runtime_control_cases.rs' in archive.namelist()
+        archive_has_runtime_baseline = (archive_has_runtime_control
+                                        and b'baselineIntentBeforeAck' in archive.read('winbridge/apps/worker/src/update_control/tests/runtime_control_cases.rs'))
         archive_has_runtime_lifetime = ('winbridge/scripts/test-update-runtime-lifetime.ps1' in archive.namelist()
                                         and b'worker-runtime-lifetime-proof.json' in archive.read('winbridge/scripts/test-windows-workflow.ps1'))
         archive_has_abort_snapshot = b'readonly_abort_snapshot_never_combines_header_and_receipts' in archive.read('winbridge/apps/update/src/journal/abort.rs') if archive_has_compiler_actor else False
@@ -789,6 +791,18 @@ exit $nativeExit
                     raise RuntimeError('Runtime control regression missing: ' + name)
             if 'runtime_identity_roundtrip_from_pinned_process ... ok' not in (report / 'update-runtime-identity-control.log').read_text(encoding='utf-8-sig'):
                 raise RuntimeError('Actual copied-process runtime identity test missing')
+            if archive_has_runtime_baseline:
+                baseline = control['baseline']
+                intent, receipt = baseline['intent'], baseline['receipt']
+                if (not all(control.get(k) is True for k in ['baselineIntentBeforeAck', 'baselineMailboxResponsive', 'baselineSourceBlocked', 'baselineDuplicateObserved'])
+                        or receipt['loadedWorker'] != control['identity']
+                        or receipt['parentRevision'] != intent['parentRevision'] + 1
+                        or intent['worker']['process'] != control['identity']['process']
+                        or intent['worker']['build'] != control['build']
+                        or receipt['installed']['images'][0] != control['identity']['image']):
+                    raise RuntimeError('Durable old-runtime baseline native proof incomplete')
+                if 'runtime_baseline_actor_retains_failed_intent_and_blocks_source_without_replay ... ok' not in log:
+                    raise RuntimeError('Runtime baseline failure/replay regression missing')
         if archive_has_runtime_lifetime:
             lifetime = json.loads((report / 'worker-runtime-lifetime-proof.json').read_text(encoding='utf-8-sig'))
             worker = next(x for x in proof['artifactIdentities'] if x['name'] == 'winbridge-worker.exe')['query']

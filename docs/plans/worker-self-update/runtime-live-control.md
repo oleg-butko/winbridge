@@ -76,3 +76,8 @@ regression immediately repeats three observations without sleep or intervening
 status calls. Busy remains valid while the first query is genuinely active.
 The working worker was healthy; only the isolated fixture failed. New native
 execution remains required; schema-8 baseline WIP is excluded from this retry.
+
+Combined native retry clean 256b182 passed: [165 tests / 19 groups, full build,
+actual Main и pin lifetime](windows-runtime-control-gate-2026-10-18.md).
+43 ready files verified; both earlier isolated fixture failures are resolved.
+This gate covers schema 7/live identity; schema-8 baseline still needs its own gate.

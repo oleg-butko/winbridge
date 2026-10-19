@@ -1265,6 +1265,85 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn runtime_baseline_actor_retains_failed_intent_and_blocks_source_without_replay() {
+        let mut f = Fixture::with_source_policy(None, true).await;
+        f.launch().await;
+        let reg = f.worker.control_registration().unwrap();
+        let h = f.supervisor.as_mut().unwrap();
+        let initial = h.runtime_baseline(false).await.unwrap();
+        assert_eq!(initial.schema_version, 2);
+        assert_eq!(
+            initial.runtime_baseline,
+            Some(RuntimeBaselineView::NotAdmitted)
+        );
+        assert!(h
+            .command(SupervisorAction::CaptureRuntimeBaseline)
+            .await
+            .is_err());
+        let legacy = h.preparation(false).await.unwrap();
+        assert_eq!(legacy.schema_version, 1);
+        assert!(!serde_json::to_value(legacy)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("runtimeBaseline"));
+        let accepted = h.runtime_baseline(true).await.unwrap();
+        assert!(matches!(
+            accepted.runtime_baseline,
+            Some(RuntimeBaselineView::Pending {
+                intent_revision: 1,
+                ..
+            })
+        ));
+        assert!(accepted.driver_active);
+        let id = h.record.spec.update_id.clone();
+        let retained = UpdateJournal::inspect_runtime_baseline(&reg.directory, &id).unwrap();
+        assert_eq!(retained.intent.as_ref().unwrap().parent_revision, 1);
+        assert!(retained.receipt.is_none());
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let failed = loop {
+            let view = h.runtime_baseline(false).await.unwrap();
+            if !view.driver_active {
+                break view;
+            }
+            assert!(Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert!(failed
+            .driver_error
+            .as_ref()
+            .unwrap()
+            .contains("Bootstrap required"));
+        assert!(h
+            .runtime_baseline(true)
+            .await
+            .unwrap_err()
+            .contains("must be inspected/aborted"));
+        assert!(h
+            .preparation(true)
+            .await
+            .unwrap_err()
+            .contains("Runtime baseline pending"));
+        assert_eq!(
+            UpdateJournal::inspect_runtime_baseline(&reg.directory, &id).unwrap(),
+            retained
+        );
+        let final_view = h.runtime_baseline(false).await.unwrap();
+        assert_eq!(final_view.update.phase, UpdatePhase::Requested);
+        assert_eq!(final_view.update.revision, 1);
+        assert!(final_view.source.is_none());
+        assert_eq!(f.slots(), 0);
+        assert!(f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .is_none());
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn worker_owned_launch_and_authenticated_source_control_roundtrip() {
         let mut f =
             Fixture::new(std::env::var_os("WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE").map(PathBuf::from))

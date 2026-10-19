@@ -6,9 +6,10 @@
 
 В U1 добавлен [durable runtime baseline](plans/worker-self-update/runtime-baseline.md):
 updater schema 8, atomic intent/receipt с parent transitions и запретом source effects
-пока baseline pending. Это trusted library; supervisor v7/native schema-8 gate,
+пока baseline pending. Trusted library и supervisor v7 admission/status реализованы; native schema-8 gate,
 preimages/health/shutdown/install остаются впереди. Installed runtime не обновлялся.
-Отдельный schema-7 Windows повтор проверяет исправление ложного Busy в live control.
+[Schema-7 live control gate](plans/worker-self-update/windows-runtime-control-gate-2026-10-18.md)
+прошёл: 165 native tests / 19 groups, full build и actual Main/pin lifetime.
 
 
 По просьбе пользователя продолжение A0–A9 временно отложено.

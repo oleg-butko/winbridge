@@ -112,6 +112,24 @@ impl UpdateJournal {
         driver_active: bool,
         driver_error: Option<String>,
     ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, false)
+    }
+    /// Internal v7 projection: baseline and parent use one SQLite read snapshot.
+    pub fn runtime_preparation_snapshot(
+        directory: &Path,
+        id: &str,
+        driver_active: bool,
+        driver_error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, true)
+    }
+    fn preparation_snapshot_inner(
+        directory: &Path,
+        id: &str,
+        driver_active: bool,
+        driver_error: Option<String>,
+        include_baseline: bool,
+    ) -> Result<UpdatePreparationView> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
         if schema(&c)? != UPDATE_SCHEMA_VERSION {
@@ -147,7 +165,7 @@ impl UpdateJournal {
             Err(e) => return Err(e),
         };
         let view = UpdatePreparationView {
-            schema_version: 1,
+            schema_version: if include_baseline { 2 } else { 1 },
             observed_at_ms: now_ms()?,
             update,
             source,
@@ -155,6 +173,11 @@ impl UpdateJournal {
             build,
             driver_active,
             driver_error,
+            runtime_baseline: if include_baseline {
+                Some(super::runtime_baseline::read(&tx, id)?.view())
+            } else {
+                None
+            },
         };
         tx.commit().map_err(storage)?;
         Ok(view)

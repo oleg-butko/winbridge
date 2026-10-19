@@ -36,6 +36,26 @@ pub struct RuntimeBaselineSnapshot {
     pub intent: Option<RuntimeBaselineIntent>,
     pub receipt: Option<RuntimeBaselineReceipt>,
 }
+impl RuntimeBaselineSnapshot {
+    pub(crate) fn view(&self) -> winbridge_protocol::update::RuntimeBaselineView {
+        use winbridge_protocol::update::RuntimeBaselineView;
+        match (&self.intent, &self.receipt) {
+            (Some(intent), Some(receipt)) => RuntimeBaselineView::Verified {
+                intent_revision: intent.parent_revision,
+                receipt_revision: receipt.parent_revision,
+                observed_at_ms: receipt.observed_at_ms,
+                set_id: receipt.loaded_worker.set_id.clone(),
+                worker_process: receipt.loaded_worker.process.clone(),
+                worker_image_sha256: receipt.loaded_worker.image.sha256.clone(),
+            },
+            (Some(intent), None) => RuntimeBaselineView::Pending {
+                intent_revision: intent.parent_revision,
+                admitted_at_ms: intent.admitted_at_ms,
+            },
+            _ => RuntimeBaselineView::NotAdmitted,
+        }
+    }
+}
 pub(crate) fn digest(value: &impl Serialize) -> Result<String> {
     Ok(crate::sha256(
         &serde_json::to_vec(value).map_err(|e| e.to_string())?,

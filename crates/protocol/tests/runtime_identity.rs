@@ -5,6 +5,30 @@ use winbridge_protocol::{
 };
 
 #[test]
+fn runtime_baseline_states_are_typed_and_reject_mixed_authority_fields() {
+    use winbridge_protocol::update::RuntimeBaselineView;
+    assert_eq!(
+        serde_json::to_string(&RuntimeBaselineView::NotAdmitted).unwrap(),
+        r#"{"phase":"not_admitted"}"#
+    );
+    let pending = RuntimeBaselineView::Pending {
+        intent_revision: 1,
+        admitted_at_ms: 42,
+    };
+    assert_eq!(
+        serde_json::to_string(&pending).unwrap(),
+        r#"{"phase":"pending","intentRevision":1,"admittedAtMs":42}"#
+    );
+    let mut forged = serde_json::to_value(pending).unwrap();
+    forged["canInstall"] = true.into();
+    assert!(serde_json::from_value::<RuntimeBaselineView>(forged).is_err());
+    assert!(serde_json::from_str::<RuntimeBaselineView>(
+        r#"{"phase":"verified","intentRevision":1}"#
+    )
+    .is_err());
+}
+
+#[test]
 fn runtime_image_keeps_existing_bytes_and_rejects_grant_fields() {
     let hash = "a".repeat(64);
     let image = RuntimeImageEvidence {

@@ -105,6 +105,8 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<RuntimeBaselineSnapshot> 
             || sup.spec.update_id != id
             || sup.spec.worker.as_ref() != Some(&i.worker)
             || sup.spec.config_sha256 != i.config_sha256
+            || sup.owner_id.as_deref() != Some(i.owner_id.as_str())
+            || sup.owner_epoch != Some(i.owner_epoch)
             || i.worker.build.build_id != current.request.expected.worker_build_id
             || i.worker.config_sha256 != current.request.expected.worker_config_sha256
         {

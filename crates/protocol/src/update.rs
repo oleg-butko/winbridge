@@ -536,6 +536,9 @@ pub enum SupervisorAction {
     VerifyCandidateArtifacts,
     /// Internal v6, readonly identity of the exact bound live worker.
     ObserveWorkerRuntime,
+    /// Internal v7: persist the old-runtime baseline before source effects.
+    CaptureRuntimeBaseline,
+    ObserveRuntimeBaseline,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -579,6 +582,37 @@ pub struct UpdatePreparationView {
     /// Observation of this supervisor's blocking driver, separate from saved state.
     pub driver_active: bool,
     pub driver_error: Option<String>,
+    /// Only v7 replies include this projection; v1-v6 keep their JSON shape.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_baseline: Option<RuntimeBaselineView>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "phase", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RuntimeBaselineView {
+    NotAdmitted,
+    Pending {
+        #[serde(rename = "intentRevision")]
+        intent_revision: u64,
+        #[serde(rename = "admittedAtMs")]
+        admitted_at_ms: u64,
+    },
+    Verified {
+        #[serde(rename = "intentRevision")]
+        intent_revision: u64,
+        #[serde(rename = "receiptRevision")]
+        receipt_revision: u64,
+        #[serde(rename = "observedAtMs")]
+        observed_at_ms: u64,
+        #[serde(rename = "setId")]
+        set_id: String,
+        #[serde(rename = "workerProcess")]
+        worker_process: SupervisorProcess,
+        #[serde(rename = "workerImageSha256")]
+        worker_image_sha256: String,
+    },
 }
 
 /// Frozen by the worker launcher; request payloads cannot select another worker.

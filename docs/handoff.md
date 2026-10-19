@@ -1,3 +1,37 @@
+## U1: baseline supervisor v7 / typed status — 2026-10-18
+
+[Baseline](plans/worker-self-update/runtime-baseline.md): CaptureRuntimeBaseline
+сохраняет intent до ACK, один blocking driver с исходной authority выполняет capture,
+ObserveRuntimeBaseline читает consistent metadata независимо от hashing. Typed
+NotAdmitted/Pending/Verified projection доступен только v7/view schema 2; v1–v6
+сохраняют прежний schema-1 JSON без нового поля. Pending/failure блокируют source;
+failed driver явно требует inspection/abort, запрос status не повторяет I/O.
+Дополнительный review связывает intent owner/epoch с retained supervisor owner.
+500 workspace tests и восемь повторных integrity tests passed; fmt/generated
+contracts/typecheck/scaffold/exporter/PowerShell syntax passed. Linux/Windows Clippy all-targets passed. Positive copied-process native fixture
+расширен: intent before ACK, held query/status/duplicate/source block, retained
+receipt и historical duplicate при изменённом config. Проверка ещё не исполнялась;
+test harness и synthetic other roles не являются candidate health/activation.
+Next native schema-8 gate использует сохранённый schema-7 updater из run
+`20261018-160143-62159cbf`, SHA
+`70a5ce95c3d705d92b8546a979626d3db03193962979cefee0c625bf91a0922b`;
+worker reference остаётся установленным schema14. Установленный runtime не менялся.
+U1/public install/health/shutdown всё ещё открыты. Далее native gate, затем runtime
+preimages и candidate health/rehearsal; ручной bootstrap пока не нужен.
+
+## U1: live runtime control native gate passed — 2026-10-18
+
+[Gate](plans/worker-self-update/windows-runtime-control-gate-2026-10-18.md): clean
+256b182, run `20261018-204941-965a8934`, Task
+`1276429a-ff9b-46c3-81ed-673de1a85395` succeeded/0. 165 tests / 19 groups,
+full four-exe build/queries/exact files, actual Main и combined pin lifetime passed.
+Все 43 ready files проверены; report SHA
+`d57e5d937afe745fea91ed1af1eacc0d5b92ab1dd13abdedaaafddd1a3139b55`.
+Windows free before/after 21,688,569,856 / 21,313,851,392 bytes. Installed worker
+прежний, connected/idle0/error null. Desktop можно закрыть; worker оставить.
+Schema-8 baseline и internal v7 разрабатываются отдельно; native для них впереди.
+U1 целиком/public install остаются открытыми, bootstrap не требуется.
+
 ## U1: durable old-runtime baseline library — 2026-10-18
 
 [Baseline](plans/worker-self-update/runtime-baseline.md), updater schema 8: immutable

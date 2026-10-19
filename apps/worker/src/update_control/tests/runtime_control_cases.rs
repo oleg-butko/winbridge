@@ -74,14 +74,9 @@ async fn runtime_identity_process_helper() {
             .canonicalize()
             .unwrap()
     );
-    let mut f = Fixture::with_build_script_at(
-        None,
-        false,
-        None,
-        BUILD_ACTOR_SCRIPT,
-        Some((root, binaries)),
-    )
-    .await;
+    let mut f =
+        Fixture::with_build_script_at(None, true, None, BUILD_ACTOR_SCRIPT, Some((root, binaries)))
+            .await;
     f.launch().await;
     let reg = f.worker.control_registration().unwrap();
     let before = UpdateJournal::read_snapshot(
@@ -170,9 +165,104 @@ async fn runtime_identity_process_helper() {
             .unwrap(),
         before
     );
+    // Capture uses the real supervisor PID and the same pinned worker, but now
+    // writes durable metadata before ACK. No source/lease/runtime effect follows.
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    *reg.runtime_verified_gate.lock().unwrap() = Some(Arc::new(ControlTestGate {
+        entered: std::sync::Mutex::new(Some(entered_tx)),
+        release: std::sync::Mutex::new(release_rx),
+    }));
+    let h = f.supervisor.as_mut().unwrap();
+    let accepted = h.runtime_baseline(true).await.unwrap();
+    assert!(accepted.driver_active);
+    assert!(matches!(
+        accepted.runtime_baseline,
+        Some(RuntimeBaselineView::Pending {
+            intent_revision: 1,
+            ..
+        })
+    ));
+    let id = h.record.spec.update_id.clone();
+    let admitted = UpdateJournal::inspect_runtime_baseline(&reg.directory, &id).unwrap();
+    assert!(admitted.intent.is_some() && admitted.receipt.is_none());
+    tokio::time::timeout(Duration::from_secs(35), entered_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    let status = tokio::time::timeout(Duration::from_secs(2), h.runtime_baseline(false))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(status.driver_active);
+    assert!(matches!(
+        status.runtime_baseline,
+        Some(RuntimeBaselineView::Pending { .. })
+    ));
+    assert_eq!(h.runtime_baseline(true).await.unwrap().update.revision, 1);
+    assert!(h
+        .preparation(true)
+        .await
+        .unwrap_err()
+        .contains("Runtime baseline"));
+    assert_eq!(h.observe().await.unwrap().phase, SupervisorPhase::Active);
+    release_tx.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(40);
+    let completed = loop {
+        let view = h.runtime_baseline(false).await.unwrap();
+        assert!(view.driver_error.is_none(), "{:?}", view.driver_error);
+        if !view.driver_active
+            && matches!(
+                view.runtime_baseline,
+                Some(RuntimeBaselineView::Verified { .. })
+            )
+        {
+            break view;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Baseline receipt was not completed"
+        );
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    };
+    let baseline = UpdateJournal::inspect_runtime_baseline(&reg.directory, &id).unwrap();
+    assert_eq!(baseline.receipt.as_ref().unwrap().loaded_worker, identity);
+    assert_eq!(completed.update.revision, 2);
+    assert_eq!(completed.update.phase, UpdatePhase::Requested);
+    assert!(completed.source.is_none());
+    // Historical duplicates do not rehash or rebind after a config edit.
+    let config = fs::read(&f.updater_config).unwrap();
+    fs::write(&f.updater_config, [config.as_slice(), b" "].concat()).unwrap();
+    assert_eq!(
+        h.runtime_baseline(true).await.unwrap().update,
+        completed.update
+    );
+    fs::write(&f.updater_config, config).unwrap();
+    assert_eq!(
+        UpdateJournal::inspect_runtime_baseline(&reg.directory, &id).unwrap(),
+        baseline
+    );
+    assert_eq!(f.slots(), 0);
+    assert!(f
+        .worker
+        .store()
+        .unwrap()
+        .active_worker_update()
+        .unwrap()
+        .is_none());
     f.stop().await;
     let proof = value("runtime-proof=");
     let report = serde_json::json!({"schemaVersion":1,"kind":"runtime_identity_control_proof","passed":true,"platform":"windows","build":build_identity(),"identity":identity,"actualCopiedProcess":true,"workerEntryPointIsTestHarness":true,"syntheticOtherRoleDescriptors":true,"supervisorAuthenticated":true,"configChangesAfterHashRejected":true,"sourceGenerationIndependent":true,"journalMutexReleased":true,"noLeaseOrSlot":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false});
+    let mut report = report;
+    report["baseline"] = serde_json::to_value(baseline).unwrap();
+    for check in [
+        "baselineIntentBeforeAck",
+        "baselineMailboxResponsive",
+        "baselineSourceBlocked",
+        "baselineDuplicateObserved",
+    ] {
+        report[check] = true.into();
+    }
     fs::write(proof, serde_json::to_vec_pretty(&report).unwrap()).unwrap();
 }
 

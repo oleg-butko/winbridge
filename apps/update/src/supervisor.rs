@@ -439,6 +439,51 @@ impl SupervisorHandle {
         control.into_runtime_identity()
     }
     /// Read status concurrently with a long readonly runtime observation.
+    /// V7 admission is durable before ACK. Status never retries file/IPC work.
+    pub async fn runtime_baseline(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let q = SupervisorRequest {
+            contract_version: 7,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::CaptureRuntimeBaseline
+            } else {
+                SupervisorAction::ObserveRuntimeBaseline
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &q,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 7
+            || response.launch_id != q.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Runtime baseline reply scope/version changed".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response
+            .preparation
+            .ok_or("Runtime baseline view missing")?;
+        if view.schema_version != 2
+            || view.runtime_baseline.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Runtime baseline reply belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     pub async fn observe(&self) -> Result<SupervisorRecord> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
             return Err("Supervisor exact process changed; no observation".into());
@@ -743,6 +788,8 @@ impl SupervisorHandle {
                 | SupervisorAction::AbortBeforeCutover
                 | SupervisorAction::VerifyCandidateArtifacts
                 | SupervisorAction::ObserveWorkerRuntime
+                | SupervisorAction::CaptureRuntimeBaseline
+                | SupervisorAction::ObserveRuntimeBaseline
         ) {
             return Err("Use the typed preparation/compiler method for this action".into());
         }
@@ -971,6 +1018,94 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if matches!(
+            request.action,
+            SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 7
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err(
+                        "Runtime baseline requires exact Active worker-bound v7 supervisor".into(),
+                    );
+                }
+                let saved = UpdateJournal::runtime_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)?;
+                if request.action == SupervisorAction::ObserveRuntimeBaseline
+                    || matches!(
+                        saved.runtime_baseline,
+                        Some(RuntimeBaselineView::Verified { .. })
+                    )
+                {
+                    return Ok(saved);
+                }
+                if work.is_some() {
+                    if saved.update.phase == UpdatePhase::Requested
+                        && matches!(
+                            saved.runtime_baseline,
+                            Some(RuntimeBaselineView::Pending { .. })
+                        )
+                    {
+                        return Ok(saved);
+                    }
+                    return Err("Another preparation driver is active".into());
+                }
+                if driver_error.is_some() {
+                    return Err("Runtime baseline failure must be inspected/aborted; status never replays it".into());
+                }
+                crate::preparation::configuration(&r)?;
+                let (journal, owner) = idle.as_mut().ok_or("Runtime baseline owner unavailable")?;
+                journal.admit_runtime_baseline(owner, &r).map_err(error)?;
+                start = true;
+                UpdateJournal::runtime_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    true,
+                    None,
+                )
+                .map_err(error)
+            })();
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 7,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = start && response.error.is_none();
+            // Lost ACK does not revoke admission; only readonly work is dispatched.
+            let _ = ipc::write(&mut stream, &response).await;
+            if dispatch {
+                let (mut journal, owner) = idle
+                    .take()
+                    .ok_or("Runtime baseline owner missing after admission")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result = crate::runtime_baseline::capture(&mut journal, &owner, &spec, io)
+                        .map(|_| ());
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
         if request.action == SupervisorAction::ObserveWorkerRuntime {
             let version = if request.contract_version == 6 { 6 } else { 1 };
             let allowed = (|| -> Result<()> {
@@ -1289,7 +1424,12 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         driver_error.clone(),
                     )
                     .map_err(error)?;
-                    if snapshot.update.phase == UpdatePhase::Requested && work.is_none() {
+                    if snapshot.update.phase == UpdatePhase::Requested && work.is_some() {
+                        return Err(
+                            "Runtime baseline driver active; source preparation deferred".into(),
+                        );
+                    }
+                    if snapshot.update.phase == UpdatePhase::Requested {
                         let cfg = crate::preparation::configuration(&r)?;
                         if cfg.source_packages_directory.is_none() {
                             return Err("Configure sourcePackagesDirectory with updater config schema 2 before preparation".into());
@@ -1463,7 +1603,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

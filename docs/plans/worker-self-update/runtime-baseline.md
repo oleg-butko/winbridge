@@ -1,6 +1,6 @@
 # U1: durable baseline установленного runtime
 
-2026-10-18. Trusted library; supervisor mailbox и public update ещё не подключены.
+2026-10-18. Trusted library и internal supervisor v7; public update ещё не подключён.
 Updater schema 8, worker schema 15. Это проверка исходного состояния перед source
 apply, а не разрешение остановки процессов или установки новой версии.
 
@@ -34,12 +34,18 @@ request, sequence/revision, events/keys, owner/epoch и времена. Изме
 Migration 7 → 8 использует прежний exclusive owner lock и consistent SQLite backup,
 повышает epoch, сохраняет историю и ничего не принимает автоматически. Updater
 старой версии обязан отклонить schema 8 без записи. Полный native gate schema 8
-ещё впереди. Сейчас Windows повтор проверяет schema 7/live-control fix отдельно.
+ещё впереди. Schema-7 live control уже прошёл отдельный native gate.
 
-Следом: internal supervisor v7 admission/status, responsive hashing, native
-positive receipt fixture и previous-version refusal. Затем runtime preimages,
+Internal supervisor v7 добавляет CaptureRuntimeBaseline / ObserveRuntimeBaseline.
+Admission сохраняет intent до ACK; blocking capture не удерживает mailbox.
+Typed projection различает NotAdmitted / Pending / Verified. V7 view имеет schema 2;
+v1–v6 по-прежнему возвращают schema 1 без нового JSON поля. Driver failure остаётся
+видимым, status не повторяет hashing/IPC; source admission сохраняет запрет.
+
+Следом: native positive receipt fixture и previous-version refusal. Затем runtime preimages,
 candidate health/rehearsal, approval, exact shutdown и installation transaction.
 
-Локально: 498 workspace tests passed, включая восемь baseline DB fixtures.
+Локально: 500 workspace tests passed, включая восемь baseline DB fixtures,
+actor failure/no-replay и typed projection/legacy-shape checks.
 Migration fixtures старых версий удаляют новые таблицы перед downgrade; production
 migration не использует IF NOT EXISTS для обхода неожиданных таблиц.
