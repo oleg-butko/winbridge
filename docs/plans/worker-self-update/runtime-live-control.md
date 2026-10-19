@@ -68,3 +68,11 @@ fixture получил первую identity и достиг post-hash checkpoin
 пока сам runtime query остаётся held. Permanent lock по-прежнему fail до 10 s gate.
 Windows Clippy passed, native повтор впереди. 35 ready files сохранены/проверены,
 installed worker healthy; full candidate build в failed run не выполнялся.
+
+Native db2e565 repeat `20261018-203256-077d1a67` reached the next query but
+failed on a false Busy: response publication preceded JoinSet retirement.
+Supervisor now retires the completed task before sending its reply. The mailbox
+regression immediately repeats three observations without sleep or intervening
+status calls. Busy remains valid while the first query is genuinely active.
+The working worker was healthy; only the isolated fixture failed. New native
+execution remains required; schema-8 baseline WIP is excluded from this retry.

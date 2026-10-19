@@ -1,3 +1,17 @@
+## U1: повтор native control — гонка завершения query — 2026-10-18
+
+Run `20261018-203256-077d1a67`, source db2e565, Task
+`8129ff22-538d-4a89-af8c-88101e7be06b` failed/1: 164 tests passed;
+следующий runtime query получил ложный Busy после ответа на предыдущий.
+Supervisor отправлял ответ до завершения/удаления JoinSet entry. Исправление
+публикует ответ только после retirement query; regression повторяет три запроса
+подряд без sleep/status roundtrip. Native повтор впереди, gate/U1 открыты.
+Все 35 ready files проверены; report SHA
+`89f42a1e98a1e0056cb4817af5357f81f313d316cec00f4d610fa1cf50004c8f`.
+Windows free before/after: 21,781,127,168 / 21,750,173,696 bytes.
+Installed worker idle/healthy, generation прежний; production runtime не менялся.
+Schema-8 baseline разрабатывается отдельно и в этот повтор не входит.
+
 ## U1: native runtime fixture — исправление проверки mutex — 2026-10-18
 
 Native clean 5b3d591, run `20261018-201934-bbddb98b`, Task

@@ -1243,6 +1243,15 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
                 .await
                 .unwrap_err()
                 .contains("Bootstrap required"));
+            // Receipt of the previous reply must mean its query slot is free.
+            // No status roundtrip or delay may be required between observations.
+            for _ in 0..3 {
+                assert!(h
+                    .runtime_identity()
+                    .await
+                    .unwrap_err()
+                    .contains("Bootstrap required"));
+            }
         }
         assert_eq!(f.slots(), 0);
         assert!(f

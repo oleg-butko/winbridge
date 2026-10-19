@@ -904,7 +904,13 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut driver_error: Option<String> = None;
     let ready_deadline = Instant::now() + Duration::from_secs(12);
     loop {
-        while runtime_reads.try_join_next().is_some() {}
+        // Retire the completed query before publishing its response. Otherwise
+        // a caller receiving that response can race the next accept and get a
+        // false Busy from a completed but not-yet-collected JoinSet entry.
+        while let Some(done) = runtime_reads.try_join_next() {
+            let (mut stream, response) = done.map_err(error)?;
+            let _ = ipc::write(&mut stream, &response).await;
+        }
         if work.as_ref().is_some_and(|w| w.is_finished()) {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
             artifacts_active = false;
@@ -1014,7 +1020,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         preparation: None,
                         error,
                     };
-                    let _ = ipc::write(&mut stream, &response).await;
+                    (stream, response)
                 });
             }
             continue;
