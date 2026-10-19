@@ -180,9 +180,18 @@ fn actual_delete_pending_sidecar_is_revalidated_after_last_handle_closes() {
             assert!(fs::symlink_metadata(p)?.is_file());
             assert_ne!(unsafe { DeleteFileW(wide.as_ptr()) }, 0);
             let result = winbridge_platform::require_single_link(p);
-            assert_eq!(
-                result.as_ref().unwrap_err().kind(),
-                std::io::ErrorKind::PermissionDenied
+            let error = result.as_ref().expect_err("Deleted entry must not open");
+            // Windows/filesystem versions expose classic delete-pending or
+            // POSIX-style removal here. Both require full path revalidation;
+            // success, an unrelated I/O error or skipping the retry is a failure.
+            assert!(matches!(
+                error.kind(),
+                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
+            ));
+            eprintln!(
+                "Native SQLite sidecar deletion boundary: {:?}, OS {:?}",
+                error.kind(),
+                error.raw_os_error()
             );
             drop(held.take());
             result

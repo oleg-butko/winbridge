@@ -59,3 +59,21 @@ the subsequent complete validation to succeed with the file absent. This matches
 the actual metadata/open race; it neither accepts arbitrary outcomes nor changes
 production validation. Windows all-target Clippy passed; automatic native repeat
 remains required. Working runtime and validation reports preserved, no UI.
+
+
+## Corrected boundary: host reports NotFound
+
+Clean 0327204, run `20261019-112845-985c1652`, Task
+`10c55041-01fc-41b1-9426-30449c5d3d41` terminal failed1 in updater tests.
+The metadata/open race was reached, but the host's open returned NotFound rather
+than PermissionDenied. Five ready files verified; report SHA
+`1b2df0adc2441e04caf293795d2f6ec43055ee622035922641fc8b940476fc62`.
+Windows free 21,431,177,216 → 21,434,384,384 bytes. Installed worker healthy/idle0.
+
+The test now permits only the two removal outcomes already handled by the guard:
+NotFound or PermissionDenied. It still requires a failed actual open, exactly one
+subsequent full validation and an absent file after closing the retained handle.
+The observed native kind/raw code is logged. This host's removal test must not be
+reported as reproducing Access denied: that branch has separate controlled fault
+coverage, including persistent denial and unsafe replacement. Production policy
+is unchanged. Windows all-target Clippy passed; combined repeat is still needed.

@@ -1,3 +1,21 @@
+## U1: portable native removal assertion corrected; repeat next — 2026-10-19
+
+0327204 / run `20261019-112845-985c1652` / Task
+`10c55041-01fc-41b1-9426-30449c5d3d41` terminal failed1 in updater lib tests:
+the real metadata/open deletion race returned NotFound on this host, not Access
+denied. Five ready files verified; SHA
+`1b2df0adc2441e04caf293795d2f6ec43055ee622035922641fc8b940476fc62`.
+Worker healthy/idle0, generation unchanged. No working runtime behavior failed.
+
+Windows-only test now requires actual open failure of either supported removal
+kind (NotFound/PermissionDenied), logs native kind/code and still checks exactly
+one full-validation retry / final absence. No arbitrary-error acceptance or skip.
+This host does not reproduce original kernel error 5 through deletion; that guard
+branch is fault-injected separately with persistent-denial/hardlink rejection tests.
+Runtime bf0573a/29b4401 unchanged; Windows Clippy passed, Linux 530 tests unchanged.
+Commit/export and automatically repeat with same original cache/schema-8 reference.
+No bootstrap/desktop required. Full native gate and durable health receipts remain.
+
 ## U1: corrected-boundary combined native retry running — 2026-10-19
 
 Clean source `03272045432ca4e1ad05f2d4ea28c1545abb233b`, archive
