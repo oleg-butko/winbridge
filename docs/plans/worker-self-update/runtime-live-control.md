@@ -61,3 +61,10 @@ Review для следующего runtime transaction: durable startup marker �
 отсутствию manifest посреди cutover. Один `journal init` не объявляет installation,
 поэтому writer metadata сам по себе не должен блокировать обычный legacy/dev serve.
 Этот guard относится к будущему install transaction; текущий блок exe не заменяет.
+
+Native 5b3d591 run `20261018-201934-bbddb98b` failed: 164 tests passed, positive
+fixture получил первую identity и достиг post-hash checkpoint, но single try_lock
+соревновался с обычным scheduler. Проверка исправлена на bounded 2 s acquisition,
+пока сам runtime query остаётся held. Permanent lock по-прежнему fail до 10 s gate.
+Windows Clippy passed, native повтор впереди. 35 ready files сохранены/проверены,
+installed worker healthy; full candidate build в failed run не выполнялся.

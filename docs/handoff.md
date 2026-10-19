@@ -1,3 +1,17 @@
+## U1: native runtime fixture — исправление проверки mutex — 2026-10-18
+
+Native clean 5b3d591, run `20261018-201934-bbddb98b`, Task
+`69b6a2e7-9f7a-4972-a7bd-0be89c48278b` failed/1: 164 tests passed, positive
+copied-process test получил корректную identity, но затем его single try_lock
+попал на обычный scheduler Store lock. Это не доказывает удержание Store запросом.
+Проверка заменена на bounded 2 s acquisition при всё ещё удержанном 10 s checkpoint;
+poison/permanent lock по-прежнему fail. Windows Clippy all-targets passed.
+35 ready files проверены; report SHA
+`ad6b58bb1e7f82102dcaea4668fcad1b45671aeea026d961ee546efd76e85680`.
+Windows free before/after 21,942,714,368 / 21,840,375,808 bytes. Full candidate build
+не выполнялся; positive control gate и U1 ещё открыты. Installed worker прежний,
+idle 0, errors none. Автоматический повтор разрешён; bootstrap не требуется.
+
 ## U1: live runtime control v2 / supervisor v6 — 2026-10-18
 
 [Реализация](plans/worker-self-update/runtime-live-control.md): readonly ObserveRuntime

@@ -120,8 +120,27 @@ async fn runtime_identity_process_helper() {
             result = &mut query => panic!("Runtime verification checkpoint not reached: {result:?}"),
             result = tokio::time::timeout(Duration::from_secs(35),entered_rx) => {result.unwrap().unwrap();}
         }
-        // File hashing/checkpoint does not retain the journal mutex.
-        assert!(f.worker.store.try_lock().is_ok());
+        // The ordinary scheduler may briefly own Store. It must become
+        // available while the runtime query remains held at this checkpoint;
+        // a lock held for the entire query fails before its 10 s gate expires.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            match f.worker.store.try_lock() {
+                Ok(store) => {
+                    drop(store);
+                    break;
+                }
+                Err(std::sync::TryLockError::Poisoned(_)) => {
+                    panic!("Worker journal mutex poisoned")
+                }
+                Err(std::sync::TryLockError::WouldBlock) => {}
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Runtime observation retained the journal mutex"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
         assert_eq!(
             f.supervisor
                 .as_ref()
