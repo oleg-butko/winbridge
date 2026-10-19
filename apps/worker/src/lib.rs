@@ -1,6 +1,7 @@
 //! Windows execution authority. The Unix runner is a development/test adapter.
 mod artifacts;
 mod attention;
+pub mod compatibility;
 mod domain;
 mod extensions;
 mod history;

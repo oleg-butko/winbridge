@@ -22,7 +22,7 @@ pub struct WorkerRehearsalInspection {
     pub candidate_verified: bool,
     pub runtime_applied: bool,
 }
-fn supports(pin: &Pinned) -> Result<bool> {
+pub(crate) fn supports(pin: &Pinned, marker: &[u8]) -> Result<bool> {
     // Inspect the retained handle, with bounded memory, before executing any
     // switch that an older binary might interpret as a normal start.
     let mut file = pin.file.try_clone().map_err(|e| e.to_string())?;
@@ -40,13 +40,10 @@ fn supports(pin: &Pinned) -> Result<bool> {
             return Err("Rehearsal image grew".into());
         }
         tail.extend_from_slice(&buffer[..n]);
-        if tail
-            .windows(WORKER_REHEARSAL_MARKER.len())
-            .any(|w| w == WORKER_REHEARSAL_MARKER)
-        {
+        if tail.windows(marker.len()).any(|w| w == marker) {
             return Ok(true);
         }
-        let retain = WORKER_REHEARSAL_MARKER.len() - 1;
+        let retain = marker.len() - 1;
         if tail.len() > retain {
             tail.drain(..tail.len() - retain);
         }
@@ -85,7 +82,7 @@ pub fn inspect(
     if pin.evidence.sha256 != expected_sha256 {
         return Err("Rehearsal image SHA mismatch; executable not started".into());
     }
-    if !supports(&pin)? {
+    if !supports(&pin, WORKER_REHEARSAL_MARKER)? {
         return Err("UnsupportedWorkerRehearsal: marker absent; executable not started".into());
     }
     let identity = artifact::query_image(image, ArtifactRole::Worker)?;

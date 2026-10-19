@@ -536,8 +536,8 @@ try {
             @{name='update-platform-atomic-executable';arguments=@('test','-p','winbridge-platform','--lib','windows_atomic::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-compiler-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::compiler_actor_commits_before_dispatch_stays_responsive_and_aborts_cleanly','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')},
             @{name='update-artifact-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::artifact_actor_','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')},
-            @{name='update-worker-runtime-startup';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_runtime_startup','--test','update_rehearsal','--locked','--offline','--','--test-threads=1','--nocapture')},
-            @{name='update-runtime-identity-contract';arguments=@('test','-p','winbridge-protocol','--test','runtime_identity','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-worker-runtime-startup';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_runtime_startup','--test','update_rehearsal','--test','update_compatibility','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-runtime-identity-contract';arguments=@('test','-p','winbridge-protocol','--test','runtime_identity','--test','worker_compatibility','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-runtime-identity-control';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::runtime::runtime_identity_roundtrip_from_pinned_process','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')}
         )
     }
@@ -555,6 +555,8 @@ try {
         foreach ($check in @('passed','actualCopiedProcess','workerEntryPointIsTestHarness','syntheticOtherRoleDescriptors','supervisorAuthenticated','configChangesAfterHashRejected','sourceGenerationIndependent','journalMutexReleased','noLeaseOrSlot')) {
             if ($runtimeIdentity.$check -ne $true) { throw "Runtime control check missing: $check" }
         }
+        if ($runtimeIdentity.compatibilityAuthenticated -ne $true -or $runtimeIdentity.compatibility.schemaVersion -ne 1 -or $runtimeIdentity.compatibility.kind -cne 'worker_runtime_compatibility' -or $runtimeIdentity.compatibility.workerJournalSchema -le 0 -or $runtimeIdentity.compatibility.workerConfigSha256 -cne $runtimeIdentity.baseline.intent.worker.configSha256 -or $runtimeIdentity.compatibility.generation -cne $runtimeIdentity.baseline.intent.worker.generation -or ($runtimeIdentity.compatibility.identity | ConvertTo-Json -Depth 20 -Compress) -cne ($runtimeIdentity.identity | ConvertTo-Json -Depth 20 -Compress)) { throw 'Authenticated worker runtime compatibility proof incomplete' }
+        Assert-WinBridgeUpdaterSchema -SourceDirectory $source -ReportedSchema $runtimeIdentity.compatibility.updaterJournalSchema
         foreach ($check in @('baselineIntentBeforeAck','baselineMailboxResponsive','baselineSourceBlocked','baselineDuplicateObserved')) {
             if ($runtimeIdentity.$check -ne $true) { throw "Runtime baseline check missing: $check" }
         }
@@ -630,6 +632,8 @@ try {
         [IO.File]::Copy((Join-Path $candidateDirectory 'candidate-files-command.json'),(Join-Path $ReportDirectory 'candidate-files-command.json'),$false)
         $fileProof = Get-Content -LiteralPath (Join-Path $ReportDirectory 'candidate-files-proof.json') -Raw | ConvertFrom-Json
         if ($fileProof.kind -ne 'candidate_file_inspection' -or $fileProof.readOnly -ne $true -or $fileProof.journalBound -ne $false -or $fileProof.runtimeApplied -or $fileProof.candidateVerified -or $fileProof.source.manifestSha256 -cne $sourceManifestSha -or $fileProof.artifacts.Count -ne 4 -or $fileProof.report.sha256 -cne (Get-FileHash -LiteralPath (Join-Path $ReportDirectory 'update-candidate-proof.json') -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Actual candidate exact-file proof incomplete' }
+        & (Join-Path $source 'scripts/test-update-worker-compatibility.ps1') -CandidateDirectory $candidateDirectory -ScratchDirectory (Join-Path (Split-Path $source -Parent) 'worker-config-check') -ReportPath (Join-Path $ReportDirectory 'worker-config-check-proof.json')
+        if (-not $?) { throw 'Candidate worker readonly config compatibility failed' }
         & (Join-Path $source 'scripts/test-update-worker-rehearsal.ps1') -SourceDirectory $source -CandidateDirectory $candidateDirectory -ScratchDirectory (Join-Path (Split-Path $source -Parent) 'worker-rehearsal-state') -ReportPath (Join-Path $ReportDirectory 'worker-rehearsal-proof.json')
         if (-not $?) { throw 'Candidate worker fresh-state rehearsal failed' }
         $startupRoot = Join-Path (Split-Path $source -Parent) 'runtime-startup-test'

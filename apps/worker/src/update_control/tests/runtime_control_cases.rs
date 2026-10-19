@@ -91,6 +91,27 @@ async fn runtime_identity_process_helper() {
         .runtime_identity()
         .await
         .unwrap();
+    let compatibility = f
+        .supervisor
+        .as_ref()
+        .unwrap()
+        .runtime_compatibility()
+        .await
+        .unwrap();
+    compatibility.validate_binding(&reg.binding).unwrap();
+    assert_eq!(compatibility.identity, identity);
+    assert_eq!(
+        compatibility.worker_journal_schema,
+        crate::store::JOURNAL_SCHEMA_VERSION
+    );
+    assert_eq!(
+        compatibility.updater_journal_schema,
+        winbridge_update::journal::UPDATE_SCHEMA_VERSION
+    );
+    assert_eq!(
+        compatibility.worker_config_sha256,
+        reg.binding.config_sha256
+    );
     assert_eq!(identity.process, reg.binding.process);
     assert_eq!(identity.process.process_id, std::process::id());
     assert_eq!(identity.descriptor.build, build_identity());
@@ -109,7 +130,7 @@ async fn runtime_identity_process_helper() {
             entered: std::sync::Mutex::new(Some(entered_tx)),
             release: std::sync::Mutex::new(release_rx),
         }));
-        let query = f.supervisor.as_ref().unwrap().runtime_identity();
+        let query = f.supervisor.as_ref().unwrap().runtime_compatibility();
         tokio::pin!(query);
         tokio::select! {
             result = &mut query => panic!("Runtime verification checkpoint not reached: {result:?}"),
@@ -422,6 +443,8 @@ async fn runtime_identity_process_helper() {
     let report = serde_json::json!({"schemaVersion":1,"kind":"runtime_identity_control_proof","passed":true,"platform":"windows","build":build_identity(),"identity":identity,"actualCopiedProcess":true,"workerEntryPointIsTestHarness":true,"syntheticOtherRoleDescriptors":true,"supervisorAuthenticated":true,"configChangesAfterHashRejected":true,"sourceGenerationIndependent":true,"journalMutexReleased":true,"noLeaseOrSlot":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false});
     let mut report = report;
     report["baseline"] = serde_json::to_value(baseline).unwrap();
+    report["compatibilityAuthenticated"] = true.into();
+    report["compatibility"] = serde_json::to_value(compatibility).unwrap();
     report["preimages"] = serde_json::to_value(preimages).unwrap();
     report["preimagesAbort"] = serde_json::to_value(first_abort).unwrap();
     report["cancelledPreimages"] = serde_json::to_value(cancelled_preimages).unwrap();

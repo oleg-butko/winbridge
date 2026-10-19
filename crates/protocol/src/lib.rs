@@ -3,6 +3,8 @@ mod artifact;
 pub use artifact::*;
 mod worker_rehearsal;
 pub use worker_rehearsal::*;
+mod worker_compatibility;
+pub use worker_compatibility::*;
 mod runtime_identity;
 pub use runtime_identity::*;
 

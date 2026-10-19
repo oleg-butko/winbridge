@@ -544,6 +544,8 @@ pub enum SupervisorAction {
     /// Internal v8: create-only previous-runtime generation and its saved status.
     ArchiveRuntimePreimages,
     ObserveRuntimePreimages,
+    /// Internal v9: authenticated current-worker schemas/config; readonly.
+    ObserveWorkerCompatibility,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -672,6 +674,8 @@ pub enum WorkerUpdateControlCommand {
     Observe,
     /// Worker control v2 only; never a lease or mutation command.
     ObserveRuntime,
+    /// Worker control v3 only; no caller-selected schema or config.
+    ObserveCompatibility,
     BeginSource,
     Advance {
         command: WorkerUpdateCommand,
@@ -714,6 +718,9 @@ pub enum WorkerUpdateControlResult {
     RuntimeIdentity {
         identity: Box<crate::LoadedWorkerIdentity>,
     },
+    RuntimeCompatibility {
+        compatibility: Box<crate::WorkerRuntimeCompatibility>,
+    },
     /// An error does not prove absence of a committed effect. Observe the original ID.
     Error { message: String },
 }
@@ -730,7 +737,8 @@ impl WorkerUpdateControlResponse {
         match self.result {
             WorkerUpdateControlResult::Snapshot { lease } => Ok(lease.map(|l| *l)),
             WorkerUpdateControlResult::Error { message } => Err(message),
-            WorkerUpdateControlResult::RuntimeIdentity { .. } => {
+            WorkerUpdateControlResult::RuntimeIdentity { .. }
+            | WorkerUpdateControlResult::RuntimeCompatibility { .. } => {
                 Err("Runtime identity is not a lease receipt".into())
             }
         }
@@ -742,9 +750,23 @@ impl WorkerUpdateControlResponse {
         match self.result {
             WorkerUpdateControlResult::RuntimeIdentity { identity } => Ok(*identity),
             WorkerUpdateControlResult::Error { message } => Err(message),
-            WorkerUpdateControlResult::Snapshot { .. } => {
+            WorkerUpdateControlResult::Snapshot { .. }
+            | WorkerUpdateControlResult::RuntimeCompatibility { .. } => {
                 Err("Lease receipt is not a runtime identity".into())
             }
+        }
+    }
+    pub fn into_runtime_compatibility(self) -> Result<crate::WorkerRuntimeCompatibility, String> {
+        if self.control_version != 3 {
+            return Err("Runtime compatibility requires worker control v3; no fallback".into());
+        }
+        match self.result {
+            WorkerUpdateControlResult::RuntimeCompatibility { compatibility } => {
+                compatibility.validate_binding(&self.binding)?;
+                Ok(*compatibility)
+            }
+            WorkerUpdateControlResult::Error { message } => Err(message),
+            _ => Err("Expected typed runtime compatibility; no fallback".into()),
         }
     }
 }

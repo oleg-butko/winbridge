@@ -308,6 +308,7 @@ impl Worker {
                     | WorkerUpdateControlCommand::BeginSource
                     | WorkerUpdateControlCommand::Advance { .. }
             ) | (2, WorkerUpdateControlCommand::ObserveRuntime)
+                | (3, WorkerUpdateControlCommand::ObserveCompatibility)
         );
         if !version_matches
             || request.binding != reg.binding
@@ -358,7 +359,11 @@ impl Worker {
         request: &WorkerUpdateControlRequest,
         peer: u32,
     ) -> Result<WorkerUpdateControlResult> {
-        if request.command != WorkerUpdateControlCommand::ObserveRuntime {
+        if !matches!(
+            request.command,
+            WorkerUpdateControlCommand::ObserveRuntime
+                | WorkerUpdateControlCommand::ObserveCompatibility
+        ) {
             return self.control(reg, request, peer).map(|lease| {
                 WorkerUpdateControlResult::Snapshot {
                     lease: lease.map(Box::new),
@@ -402,6 +407,34 @@ impl Worker {
         if request.binding.context != self.request_context()? {
             return Err("Worker journal context changed during runtime observation".into());
         }
+        if request.command == WorkerUpdateControlCommand::ObserveCompatibility {
+            let schema: u32 = self
+                .store()?
+                .connection
+                .query_row("PRAGMA user_version", [], |r| r.get(0))
+                .map_err(|e| e.to_string())?;
+            if schema != crate::store::JOURNAL_SCHEMA_VERSION {
+                return Err("Loaded worker journal schema changed; no compatibility grant".into());
+            }
+            let updater = UpdateJournal::inspect(&reg.directory).map_err(|e| e.to_string())?;
+            self.control_authority(reg, request, peer)?;
+            self.require_control_config_current(reg)?;
+            return Ok(WorkerUpdateControlResult::RuntimeCompatibility {
+                compatibility: Box::new(winbridge_protocol::WorkerRuntimeCompatibility {
+                    schema_version: 1,
+                    kind: "worker_runtime_compatibility".into(),
+                    identity: identity.clone(),
+                    context: reg.binding.context.clone(),
+                    generation: self.generation.clone(),
+                    worker_config_sha256: reg.binding.config_sha256.clone(),
+                    worker_config_schema: self.config.schema_version,
+                    worker_journal_schema: schema,
+                    updater_journal_schema: updater.schema_version,
+                    protocol_version: winbridge_protocol::PROTOCOL_VERSION,
+                    observed_at_ms: crate::store::now_ms(),
+                }),
+            });
+        }
         Ok(WorkerUpdateControlResult::RuntimeIdentity {
             identity: Box::new(identity.clone()),
         })
@@ -428,7 +461,8 @@ impl Worker {
         )?;
         match &request.command {
             WorkerUpdateControlCommand::Observe => self.store()?.existing_worker_update(&spec),
-            WorkerUpdateControlCommand::ObserveRuntime => {
+            WorkerUpdateControlCommand::ObserveRuntime
+            | WorkerUpdateControlCommand::ObserveCompatibility => {
                 Err("Runtime observation is not a lease request".into())
             }
             WorkerUpdateControlCommand::BeginSource => {
@@ -596,7 +630,11 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 request.update_id.clone(),
             );
             let (w, r) = (worker.clone(), state.clone());
-            let control_version = if request.control_version == 2 { 2 } else { 1 };
+            let control_version = match request.control_version {
+                2 => 2,
+                3 => 3,
+                _ => 1,
+            };
             struct Callback(Arc<Registration>);
             impl Drop for Callback {
                 fn drop(&mut self) {
@@ -615,6 +653,7 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                     request.command,
                     WorkerUpdateControlCommand::BeginSource
                         | WorkerUpdateControlCommand::ObserveRuntime
+                        | WorkerUpdateControlCommand::ObserveCompatibility
                 ) {
                     let gate = registration.test_gate.lock().unwrap().take();
                     if let Some(gate) = gate {
@@ -1148,8 +1187,29 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
             .await
             .unwrap_err()
             .contains("supervisor v6"));
+        let error = f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .runtime_compatibility()
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("Bootstrap required"),
+            "Unexpected compatibility observation failure: {error}"
+        );
+        assert!(f
+            .supervisor
+            .as_mut()
+            .unwrap()
+            .worker_control(WorkerUpdateControlCommand::ObserveCompatibility)
+            .await
+            .unwrap_err()
+            .contains("supervisor v6/v9"));
         for case in [
             "v1-runtime",
+            "v2-compatibility",
+            "v3-lease",
             "v2-lease",
             "version",
             "peer",
@@ -1162,6 +1222,13 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
             let mut peer = q.supervisor.process_id;
             match case {
                 "v1-runtime" => forged.control_version = 1,
+                "v2-compatibility" => {
+                    forged.command = WorkerUpdateControlCommand::ObserveCompatibility
+                }
+                "v3-lease" => {
+                    forged.control_version = 3;
+                    forged.command = WorkerUpdateControlCommand::BeginSource;
+                }
                 "v2-lease" => forged.command = WorkerUpdateControlCommand::BeginSource,
                 "version" => forged.control_version = 3,
                 "peer" => peer = std::process::id(),

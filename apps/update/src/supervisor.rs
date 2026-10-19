@@ -391,9 +391,24 @@ impl PreparedSupervisor {
     }
 }
 impl SupervisorHandle {
+    /// Readonly v6/worker-control-v2 identity. No implicit compatibility upgrade.
+    pub async fn runtime_identity(&self) -> Result<winbridge_protocol::LoadedWorkerIdentity> {
+        self.runtime_query(false).await?.into_runtime_identity()
+    }
+    /// V9/worker-control-v3: current schemas/config from the exact bound process.
+    pub async fn runtime_compatibility(
+        &self,
+    ) -> Result<winbridge_protocol::WorkerRuntimeCompatibility> {
+        let control = self.runtime_query(true).await?;
+        let binding = control.binding.clone();
+        let compatibility = control.into_runtime_compatibility()?;
+        compatibility.validate_binding(&binding)?;
+        Ok(compatibility)
+    }
     /// The supervisor authenticates its own process on worker control v2.
     /// This is a readonly observation, never a lease or installation receipt.
-    pub async fn runtime_identity(&self) -> Result<winbridge_protocol::LoadedWorkerIdentity> {
+    async fn runtime_query(&self, compatibility: bool) -> Result<WorkerUpdateControlResponse> {
+        let version = if compatibility { 9 } else { 6 };
         if self.record.phase != SupervisorPhase::Active
             || self.record.spec.worker.is_none()
             || !infrastructure::matches(&self.child.identity).map_err(error)?
@@ -403,10 +418,14 @@ impl SupervisorHandle {
             );
         }
         let request = SupervisorRequest {
-            contract_version: 6,
+            contract_version: version,
             launch_id: self.record.spec.launch_id.clone(),
             expected_revision: self.record.revision,
-            action: SupervisorAction::ObserveWorkerRuntime,
+            action: if compatibility {
+                SupervisorAction::ObserveWorkerCompatibility
+            } else {
+                SupervisorAction::ObserveWorkerRuntime
+            },
             token: self.token.clone(),
             worker_command: None,
         };
@@ -418,7 +437,7 @@ impl SupervisorHandle {
         )
         .await
         .map_err(error)?;
-        if response.contract_version != 6
+        if response.contract_version != version
             || response.launch_id != request.launch_id
             || response.record.is_some()
             || response.preparation.is_some()
@@ -437,7 +456,7 @@ impl SupervisorHandle {
         {
             return Err("Runtime observation belongs to another worker/install scope".into());
         }
-        control.into_runtime_identity()
+        Ok(control)
     }
     /// V7 keeps its legacy view; v8 adds saved preimages without new runtime authority.
     pub async fn runtime_baseline(&self, start: bool) -> Result<UpdatePreparationView> {
@@ -810,6 +829,7 @@ impl SupervisorHandle {
                 | SupervisorAction::AbortBeforeCutover
                 | SupervisorAction::VerifyCandidateArtifacts
                 | SupervisorAction::ObserveWorkerRuntime
+                | SupervisorAction::ObserveWorkerCompatibility
                 | SupervisorAction::CaptureRuntimeBaseline
                 | SupervisorAction::ObserveRuntimeBaseline
                 | SupervisorAction::ArchiveRuntimePreimages
@@ -869,10 +889,10 @@ pub(crate) async fn forward_worker(
         return Err("Bound worker process changed; no rebind".into());
     }
     let request = WorkerUpdateControlRequest {
-        control_version: if command == WorkerUpdateControlCommand::ObserveRuntime {
-            2
-        } else {
-            1
+        control_version: match command {
+            WorkerUpdateControlCommand::ObserveRuntime => 2,
+            WorkerUpdateControlCommand::ObserveCompatibility => 3,
+            _ => 1,
         },
         binding: binding.clone(),
         update_id: record.spec.update_id.clone(),
@@ -1239,11 +1259,29 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             }
             continue;
         }
-        if request.action == SupervisorAction::ObserveWorkerRuntime {
-            let version = if request.contract_version == 6 { 6 } else { 1 };
+        if matches!(
+            request.action,
+            SupervisorAction::ObserveWorkerRuntime | SupervisorAction::ObserveWorkerCompatibility
+        ) {
+            let required_version = if request.action == SupervisorAction::ObserveWorkerCompatibility
+            {
+                9
+            } else {
+                6
+            };
+            let command = if required_version == 9 {
+                WorkerUpdateControlCommand::ObserveCompatibility
+            } else {
+                WorkerUpdateControlCommand::ObserveRuntime
+            };
+            let version = if request.contract_version == required_version {
+                required_version
+            } else {
+                1
+            };
             let allowed = (|| -> Result<()> {
                 authorize(&r, &request.token, pid, request.action)?;
-                if request.contract_version != 6
+                if request.contract_version != required_version
                     || request.launch_id != r.spec.launch_id
                     || request.expected_revision != r.revision
                     || request.worker_command.is_some()
@@ -1251,8 +1289,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     || r.spec.worker.is_none()
                 {
                     return Err(
-                        "Runtime observation requires exact Active worker-bound v6 supervisor"
-                            .into(),
+                        format!("Runtime observation requires exact Active worker-bound v{required_version} supervisor"),
                     );
                 }
                 if !runtime_reads.is_empty() {
@@ -1273,15 +1310,12 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             } else {
                 let record = r.clone();
                 runtime_reads.spawn(async move {
-                    let (worker_control, error) =
-                        match forward_worker(&record, WorkerUpdateControlCommand::ObserveRuntime)
-                            .await
-                        {
-                            Ok(result) => (Some(result), None),
-                            Err(message) => (None, Some(message)),
-                        };
+                    let (worker_control, error) = match forward_worker(&record, command).await {
+                        Ok(result) => (Some(result), None),
+                        Err(message) => (None, Some(message)),
+                    };
                     let response = SupervisorResponse {
-                        contract_version: 6,
+                        contract_version: required_version,
                         launch_id: record.spec.launch_id,
                         record: None,
                         worker_control,
@@ -1693,8 +1727,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     return Ok(None);
                 }
                 let command = request.worker_command.clone().ok_or("Worker command missing")?;
-                if command == WorkerUpdateControlCommand::ObserveRuntime {
-                    return Err("Runtime observation requires supervisor v6, not v1 worker-control forwarding".into());
+                if matches!(command,WorkerUpdateControlCommand::ObserveRuntime | WorkerUpdateControlCommand::ObserveCompatibility) {
+                    return Err("Runtime observation requires supervisor v6/v9, not v1 worker-control forwarding".into());
                 }
                 forward_worker(&r, command).await.map(Some)
             }.await;
@@ -1753,7 +1787,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

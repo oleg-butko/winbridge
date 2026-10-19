@@ -268,6 +268,7 @@ def main():
         archive_has_finalization_wiring = 'winbridge/scripts/test-update-candidate-finalization.ps1' in archive.namelist()
         archive_has_installed_set = 'winbridge/apps/update/src/installed_set.rs' in archive.namelist()
         archive_has_runtime_startup = 'winbridge/scripts/test-update-runtime-startup.ps1' in archive.namelist()
+        archive_has_worker_compatibility = 'winbridge/apps/worker/src/compatibility.rs' in archive.namelist()
         archive_has_worker_rehearsal = 'winbridge/scripts/test-update-worker-rehearsal.ps1' in archive.namelist()
         if archive_has_worker_rehearsal:
             expected_worker_schema = worker_schema_from_source(archive.read('winbridge/apps/worker/src/store.rs'))
@@ -724,6 +725,23 @@ exit $nativeExit
                 expected_artifact = next(x for x in proof['artifactIdentities'] if x['name'] == a['name'])['query']
                 if a['image'] != expected_artifact['image'] or a['descriptor'] != expected_artifact['descriptor']:
                     raise RuntimeError('Candidate exact-file evidence differs from actual executable queries')
+            if archive_has_worker_compatibility:
+                config_proof = json.loads((report / 'worker-config-check-proof.json').read_text(encoding='utf-8-sig'))
+                inspection = config_proof['inspection']
+                checked = inspection['check']
+                actual_worker = next(a for a in proof['artifactIdentities'] if a['name'] == 'winbridge-worker.exe')['query']
+                if (config_proof.get('kind') != 'worker_config_compatibility_proof' or config_proof.get('platform') != 'windows'
+                        or not all(config_proof.get(k) is True for k in ['passed','malformedJournalUnopened','configUnchanged'])
+                        or any(config_proof.get(k) is not False for k in ['productionConfigCopied','runtimeApplied','candidateVerified','windowsOpened'])
+                        or inspection.get('kind') != 'worker_config_inspection'
+                        or not all(inspection.get(k) is True for k in ['readOnly','cleanupVerified'])
+                        or any(inspection.get(k) is not False for k in ['journalBound','candidateVerified','runtimeApplied'])
+                        or inspection['image'] != actual_worker['image'] or checked['descriptor'] != actual_worker['descriptor']
+                        or checked['kind'] != 'worker_config_check' or checked['schemaVersion'] != 1
+                        or checked['workerConfigSchema'] != 1 or not checked['instanceId']
+                        or checked['process']['processId'] <= 0 or not re.fullmatch(r'[0-9a-f]{64}',checked['config']['sha256'])
+                        or any(checked.get(k) is not False for k in ['workerJournalOpened','schedulerStarted','candidateVerified','runtimeApplied'])):
+                    raise RuntimeError('Candidate config check/read-only process proof incomplete')
             if archive_has_worker_rehearsal:
                 rehearsal = json.loads((report / 'worker-rehearsal-proof.json').read_text(encoding='utf-8-sig'))
                 r = rehearsal['rehearsal']
@@ -830,6 +848,16 @@ exit $nativeExit
                     raise RuntimeError('Runtime control regression missing: ' + name)
             if 'runtime_identity_roundtrip_from_pinned_process ... ok' not in (report / 'update-runtime-identity-control.log').read_text(encoding='utf-8-sig'):
                 raise RuntimeError('Actual copied-process runtime identity test missing')
+            if archive_has_worker_compatibility:
+                c = control['compatibility']
+                binding = control['baseline']['intent']['worker']
+                if (control.get('compatibilityAuthenticated') is not True or c.get('schemaVersion') != 1
+                        or c.get('kind') != 'worker_runtime_compatibility' or c['identity'] != control['identity']
+                        or c['context'] != binding['context'] or c['generation'] != binding['generation']
+                        or c['workerConfigSha256'] != binding['configSha256'] or c['workerConfigSchema'] != 1
+                        or c['workerJournalSchema'] != expected_worker_schema or c['updaterJournalSchema'] != expected_updater_schema
+                        or c['protocolVersion'] != 1 or c['observedAtMs'] <= 0):
+                    raise RuntimeError('Authenticated live-worker compatibility/binding evidence incomplete')
             if archive_has_runtime_baseline:
                 baseline = control['baseline']
                 intent, receipt = baseline['intent'], baseline['receipt']

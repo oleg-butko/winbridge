@@ -1,3 +1,41 @@
+## U1: compatibility v3/v9 + readonly candidate config implemented; guard fix — 2026-10-19
+
+[Compatibility block](plans/worker-self-update/worker-compatibility.md) is ready for native:
+new worker control v3 / supervisor v9 share the existing one-read actor slot;
+actual worker/updater schemas/context/config SHA come from authenticated peer.
+Candidate readonly config Main validates exact bounded bytes without Worker::open
+or copying config values. New marker/typed result; old v1/v2/v6 JSON unchanged.
+Two contract and three actual-process config tests passed. An individual worker
+--lib test initially used an old updater executable; full-workspace fresh-binary
+run passed that control test. Failure assertions now print actual error details.
+
+[Previous Windows gate failed](plans/worker-self-update/windows-worker-rehearsal-gate-2026-10-19.md):
+cd85cf9 / run `20261019-074259-5c52f602`, Task
+`87eac941-f37c-4fbe-aa9c-b84846cb84e0` terminal failed1, 196 tests passed including
+all four new rehearsal tests, but full candidate build not reached. 35 ready files
+verified, SHA `117e085550c5888298cf4dd96e9cfa7db37fea146c3d0f5e6fb5330dd729bf66`.
+Unchanged cancel callback failed with Access denied on its private updates.sqlite-wal,
+not outer process timeout. Installed worker fresh Info healthy/idle0, generation unchanged.
+
+Path fix preserves platform I/O kind; only exact optional WAL/SHM validation may
+retry PermissionDenied (3 attempts / 20ms max waits), no DB/file effect replay.
+Persistent denial, required DB/lock paths and unsafe replacement still fail closed.
+Seven Linux path tests passed; Windows actual DeleteFileW pending-delete test added.
+No schema change (9/15). Windows run directories not deleted.
+
+Full checks are being repeated sequentially after an overlapping --lib build
+changed shared target metadata during workspace doctests (E0463 transport).
+All 526 runtime tests in that workspace run passed, but doc failure means the run
+was not green. Avoid concurrent Cargo builds/tests even while build lock is free.
+Sequential rerun is green: 530 workspace tests (including doctests), Linux/Windows
+Clippy all-targets. Contract generator now declares the new DTOs, regenerated TS
+and --check passed; UI typecheck/build, scaffold 212 md, runner 4/cache 10 passed.
+Guard fix committed bf0573a; commit compatibility, export clean source and repeat combined native
+gate with original cache owner / schema-8 reference.
+Do not claim health/approval/public install enabled. Next durable health launch
+must persist intent/process/cleanup before ACK/resume, bind v3 metadata and current
+artifact/source authority, never adopt standalone diagnostic JSON or copied live DB.
+
 ## U1: candidate fresh-state rehearsal native gate running — 2026-10-19
 
 Clean source `cd85cf9b653356196c83879d0d3b141c162f4c49`, archive
