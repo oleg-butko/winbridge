@@ -1,3 +1,17 @@
+## U1: native baseline gate running — 2026-10-18
+
+Clean source 34f39ed, archive `winbridge-20261019T010715Z-34f39ed-4feb98b4.zip`,
+SHA `4ae27f1e9a175bf66ea8017b9eaaf03e33dbbeea8564d5a9089d7e82c96bd746`.
+Run `20261018-210729-e33e2cbd`, Task `4eb2c866-0759-42c8-87c7-2e888fe85ae0`
+confirmed running through the installed worker. Local runner session 7484,
+log `.winbridge/update-preparation/runtime-baseline-actor-native.log`.
+Schema-7 updater reference SHA/path описаны ниже; исходный cache owner
+20261017-061527-f4639971. Windows gate проверяет новые baseline receipt/actor cases,
+previous-version refusal, full build и actual Main/lifetime. Результата пока нет;
+дождаться terminal task и проверить ready files перед заявлением о прохождении.
+Installed worker оставить работать, desktop не нужен; окон не будет. Production
+runtime не устанавливается. После gate — review, затем preimages/health блок.
+
 ## U1: baseline supervisor v7 / typed status — 2026-10-18
 
 [Baseline](plans/worker-self-update/runtime-baseline.md): CaptureRuntimeBaseline
