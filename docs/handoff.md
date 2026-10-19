@@ -1,3 +1,23 @@
+## U1: native library run stopped in older abort poll; path guard retry — 2026-10-19
+
+Run `20261019-064446-fb0614ea`, source 823abd0, Task
+`e30bf515-e139-45be-8cbb-598d491e68bb` terminal failed/1. All 11 Windows
+preimages tests passed, including real read-pin/release semantics. Overall 176
+tests passed before artifact-actor success-case abort polling returned Storage
+NotFound; the failed message did not identify the path. Working worker is healthy.
+Code review reproduced a real optional WAL/SHM metadata→hardlink-open race. Guard
+now reruns the entire path validation once after NotFound and adds path context;
+unsafe replacements remain rejected, no DB/effect operation is retried. Four
+controlled real-filesystem removal/replacement tests passed, including hardlink/
+symlink refusal. This is a consistency fix, not proof of which missing file caused
+that original failure; native retry is required.
+31 ready files verified, report SHA
+`8da6466de63632823df1ef0aa7afd1f8e1f3c96aa40a5b84353b231674f926a5`.
+Windows free before/after 21,527,560,192 / 21,435,224,064 bytes. No candidate full
+build was reached. Installed generation unchanged, connected/idle0/error null.
+Automatic retry authorized. Supervisor v8/Arc authority/cancel and fixture-drop
+cleanup are WIP, excluded from the isolated library retry; do not mark them ready.
+
 ## U1: native preimages library gate running — 2026-10-19
 
 Clean source 823abd0, archive `winbridge-20261019T104419Z-823abd0-df43707a.zip`,
