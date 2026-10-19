@@ -1,3 +1,22 @@
+## U1: native baseline tests passed, runner schema check fixed — 2026-10-19
+
+Run `20261018-210729-e33e2cbd`, source 34f39ed, Task
+`4eb2c866-0759-42c8-87c7-2e888fe85ae0` terminal failed/1. All 175 native tests /
+19 groups passed, including positive baseline receipt, held query/status/source
+block, duplicate, and previous schema-7 updater refusal. The final PowerShell
+proof validator still required schema 7; actual schema is 8. Python final verifier
+had the same stale assumption. Both now compare the exact constant in verified
+source/archive, never a rolling minimum/local checkout version. Portable PS version
+regression and 3 preparation/10 cache runner tests passed; syntax passed.
+36 ready files verified, report SHA
+`3ea8e8891e939e69d400ff72f49d50f874d5611b32d4617975a41f60e247181e`.
+Windows free before/after 21,232,783,360 / 21,121,896,448 bytes. Full candidate build
+was not reached; baseline combined gate remains open. Fresh installed worker Info:
+same 1f3aa9f/build/generation, connected/idle0/error null; no production changes.
+Automatic retry is authorized, no bootstrap. Schema-9 preimages WIP stays excluded
+from the clean schema-8 retry. Continue from the task's actual state, do not restart
+an already running retry solely because observation times out.
+
 ## U1: native baseline gate running — 2026-10-18
 
 Clean source 34f39ed, archive `winbridge-20261019T010715Z-34f39ed-4feb98b4.zip`,

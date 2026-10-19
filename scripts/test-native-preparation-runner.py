@@ -15,6 +15,18 @@ class SubmissionBoundary(Exception):
     pass
 
 class PreparationAdmission(unittest.TestCase):
+    def test_updater_schema_follows_pinned_source_and_rejects_ambiguity(self):
+        spec = importlib.util.spec_from_file_location('native_schema', SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for version in (6, 7, 8, 9):
+            self.assertEqual(module.updater_schema_from_source(f'pub const UPDATE_SCHEMA_VERSION: u32 = {version};\r\n'.encode()), version)
+        for source in (b'', b'pub const UPDATE_SCHEMA_VERSION: u32 = 0;\n',
+                       b'pub const UPDATE_SCHEMA_VERSION: u32 = 4294967296;\n',
+                       b'pub const UPDATE_SCHEMA_VERSION: u32 = 7;\npub const UPDATE_SCHEMA_VERSION: u32 = 8;\n'):
+            with self.assertRaises(ValueError):
+                module.updater_schema_from_source(source)
+
     def run_to_submission(self, active):
         spec = importlib.util.spec_from_file_location('native_runner', SCRIPT)
         module = importlib.util.module_from_spec(spec)

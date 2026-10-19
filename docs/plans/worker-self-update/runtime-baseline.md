@@ -49,3 +49,10 @@ candidate health/rehearsal, approval, exact shutdown и installation transaction
 actor failure/no-replay и typed projection/legacy-shape checks.
 Migration fixtures старых версий удаляют новые таблицы перед downgrade; production
 migration не использует IF NOT EXISTS для обхода неожиданных таблиц.
+
+Native clean 34f39ed, run `20261018-210729-e33e2cbd`: all 175 tests / 19 groups
+passed, including the positive baseline/control case and previous updater refusal.
+The final script failed before the full candidate build because both PS/Python
+proof checks still assumed schema 7. They now require the exact constant from the
+verified source/archive. Portable version/mismatch regressions passed; combined
+native retry is still required. Installed worker stayed healthy and unchanged.

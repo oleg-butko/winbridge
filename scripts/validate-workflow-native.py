@@ -17,6 +17,14 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def updater_schema_from_source(source):
+    """Use the schema compiled from the pinned archive, not the runner checkout."""
+    definitions = re.findall(rb'(?m)^pub const UPDATE_SCHEMA_VERSION: u32 = ([1-9][0-9]*);\r?$', source)
+    if len(definitions) != 1 or not 0 < int(definitions[0]) <= 0xFFFFFFFF:
+        raise ValueError('Expected exactly one bounded updater schema constant in verified source')
+    return int(definitions[0])
+
+
 def prepare_resume_package(config, shared, run_id):
     """Fresh committed Debian fixture; Windows must import precisely these pinned bytes."""
     local = ROOT / '.winbridge' / 'resume-validation' / run_id
@@ -260,6 +268,7 @@ def main():
                                         and b'worker-runtime-lifetime-proof.json' in archive.read('winbridge/scripts/test-windows-workflow.ps1'))
         archive_has_abort_snapshot = b'readonly_abort_snapshot_never_combines_header_and_receipts' in archive.read('winbridge/apps/update/src/journal/abort.rs') if archive_has_compiler_actor else False
         archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
+        expected_updater_schema = updater_schema_from_source(archive.read('winbridge/apps/update/src/journal.rs')) if archive_has_compiler_report else None
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
         archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
         archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
@@ -670,7 +679,7 @@ exit $nativeExit
                     or binding['build']['sourceDirty'] is not False
                     or any(binding.get(k) is not False for k in ['runtimeApplied','candidateVerified','windowsOpened'])
                     or not all(binding.get(k) is True for k in ['intentBeforeDispatch','atomicCompletion','duplicateObserved'])
-                    or saved['journal']['schemaVersion'] != (7 if archive_has_candidate_artifacts else 6) or saved['build']['phase'] != 'completed'
+                    or type(saved['journal']['schemaVersion']) is not int or saved['journal']['schemaVersion'] != expected_updater_schema or saved['build']['phase'] != 'completed'
                     or saved['build']['outcome'] != 'succeeded' or saved['build']['cleanupVerified'] is not True
                     or saved['evidence'] != evidence or evidence['bytes'] <= 0
                     or not re.fullmatch(r'[0-9a-f]{64}', evidence['sha256'])
