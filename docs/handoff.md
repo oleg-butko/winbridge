@@ -1,3 +1,23 @@
+## U1: corrected-boundary combined native retry running — 2026-10-19
+
+Clean source `03272045432ca4e1ad05f2d4ea28c1545abb233b`, archive
+`winbridge-20261019T152825Z-0327204-6b6845c8.zip`, SHA
+`b9bef2746265312a77204c92a1a6070b8977fbcb0662e7dd78f831a7e3b0ace2`
+(4,874,708 bytes / 594 files). Run `20261019-112845-985c1652`, Task
+`10c55041-01fc-41b1-9426-30449c5d3d41` confirmed running.
+Runner session 25067; log `.winbridge/update-preparation/worker-compatibility-retry-native.log`.
+Poll this existing task, never restart because an observation timeout elapsed.
+Same original cache owner 20261017-061527-f4639971 and schema-8 reference 4b1eefef...
+from baseline gate. Expected 206 tests / 19 groups + full candidate/config/rehearsal/
+Main/pins proofs; derive actual counts and verify every ready file before pass.
+0327204 only corrects the Windows test boundary; production code remains bf0573a
+and 29b4401, local 530 tests / both Clippy targets / generated TS/UI checks passed.
+The preceding 29b4401 native run failed only the incorrect new test assertion;
+see the next handoff entry and failure report. No candidate approval is enabled.
+No windows/installed replacement. Leave installed worker running, desktop not needed.
+Next: review final native outcome, then durable one-use health launch/PID/cleanup
+receipt with current artifact/source/owner/epoch/v3 bindings. U1/U2/U3 still open.
+
 ## U1: native test boundary corrected; combined repeat next — 2026-10-19
 
 29b4401 gate `20261019-112352-a49287c3` / Task
