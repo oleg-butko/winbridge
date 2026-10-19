@@ -153,6 +153,8 @@ U0 не применяет source plan, не выключает процессы
   native gate и durable health/approval остаются, весь пункт открыт.
   Добавлены [live compatibility v3/v9 и readonly full-config check](worker-compatibility.md);
   [native repeat после WAL guard fix](windows-worker-rehearsal-gate-2026-10-19.md) впереди.
+  [Owned probe hooks](probe-lifecycle.md) добавлены для PID-before-resume и cleanup;
+  запись health journal/approval ещё не подключена.
   [Known installed-set reader](installed-set.md) и abort snapshot прошли тот же
   native gate. [Early startup guard](runtime-startup.md) подключён; три actual-main
   negative tests и положительный [native gate / lifetime follow-up](windows-runtime-startup-gate-2026-10-18.md)

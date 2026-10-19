@@ -1,3 +1,27 @@
+## U1: probe lifecycle hooks WIP; base native tests passed, helper import fixed — 2026-10-19
+
+7ed3900 / run `20261019-113708-5fe0af67` / Task
+`96f5965b-5a8e-49ba-ac90-3f9d3d84c01c` terminal failed1 after all 206 native tests /
+19 groups passed. Compatibility v3, kernel removal (NotFound OS2) and original
+abort all passed; then early schema assertion lacked a dot-source. Fixed in
+707cdec (import at script startup). 36 ready files verified, SHA
+`3a26c51feda0d16d8fc38989d24330a92bd5827350955b54c009f1cbff550fa8`.
+Actual candidate build/config/rehearsal/Main/pins have not run in this gate.
+Installed worker still healthy/idle0, generation unchanged. No windows.
+
+[Probe lifecycle hooks](plans/worker-self-update/probe-lifecycle.md) now support
+before-create, PID-before-resume, actual resume request, owner polling and terminal
+cleanup callbacks on every outcome. No journal/approval yet. Three copied-process
+local tests passed; Windows-only PID-rejection/no-resume/cleanup test added. Runtime
+query JSON/wire versions/schemas unchanged. 533 workspace tests/doctests, Linux/Windows Clippy all-targets, contracts/fmt
+passed sequentially; runner4/cache10 and scaffold213 md passed. Scripts require all four
+native probe tests. Commit/export combined hooks + helper fix after checks, then
+repeat same native gate with original cache owner and schema-8 reference.
+Next implement health journal+actor as a vertical scenario, not another standalone
+report: use hooks for durable intents/PIDs/cleanup, bind v3 and artifact/source
+receipts, prevent pending replay, coordinate abort before release and commit
+CandidateAccepted only with fresh proof. U1/U2/U3 public update still open.
+
 ## U1: portable removal + compatibility combined gate running — 2026-10-19
 
 Clean source `7ed3900028682816ef5d0b653300758ad48a06ed`, archive

@@ -282,6 +282,7 @@ def main():
         archive_has_abort_snapshot = b'readonly_abort_snapshot_never_combines_header_and_receipts' in archive.read('winbridge/apps/update/src/journal/abort.rs') if archive_has_compiler_actor else False
         archive_has_compiler_report = 'winbridge/apps/update/src/build_report.rs' in archive.namelist()
         expected_updater_schema = updater_schema_from_source(archive.read('winbridge/apps/update/src/journal.rs')) if archive_has_compiler_report else None
+        archive_has_probe_observer = 'winbridge/apps/update/src/probe_tests.rs' in archive.namelist()
         archive_has_artifact_probes = 'winbridge/apps/update/src/artifact.rs' in archive.namelist()
         archive_checks_artifact_queries = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist() and b'fixture_build_identity_query_never_runs_fixture_or_writes_into_cwd' in archive.read('winbridge/apps/worker/tests/update_coordination.rs')
         archive_has_atomic = 'winbridge/crates/platform/src/windows_atomic.rs' in archive.namelist()
@@ -922,6 +923,14 @@ exit $nativeExit
                 or archive_proof.get('source',{}).get('manifestSha256') != scope.get('manifestSha256')
                 or {a['name'] for a in proof['artifacts']} != {'winbridge-worker.exe','winbridge-fixture.exe','winbridge-desktop.exe','winbridge-update.exe'}):
             raise RuntimeError('Incomplete native update preparation proof')
+        if archive_has_probe_observer:
+            log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
+            for test in ['rejected_intent_does_not_create_or_resume_a_probe',
+                         'rejected_pid_receipt_never_resumes_windows_and_still_reports_cleanup',
+                         'changed_owner_poll_terminates_only_owned_probe_and_reports_no_success',
+                         'successful_probe_reports_exact_process_and_terminal_cleanup_after_hooks']:
+                if 'artifact::probe_tests::' + test + ' ... ok' not in log:
+                    raise RuntimeError('Owned probe lifecycle regression missing: ' + test)
         if archive_has_artifact_probes:
             identities = proof.get('artifactIdentities', [])
             roles = {'winbridge-worker.exe':'worker','winbridge-fixture.exe':'fixture','winbridge-desktop.exe':'desktop','winbridge-update.exe':'updater'}

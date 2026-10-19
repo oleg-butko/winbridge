@@ -243,10 +243,81 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
     })
 }
 
+/// Process evidence for a future journal-backed observer. It is not candidate
+/// acceptance. `no_process_created` is distinct from unknown creation.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ProbeCleanup {
+    pub job_name: String,
+    pub process: Option<winbridge_protocol::update::SupervisorProcess>,
+    pub creation_confirmed: bool,
+    pub no_process_created: bool,
+    pub resume_requested: bool,
+    pub tree_empty: bool,
+    pub capture_complete: bool,
+    pub output_exceeded: bool,
+    pub exit_code: Option<i32>,
+    pub failure: Option<String>,
+}
+/// Only the trusted driver implements this; callbacks never come from wire JSON.
+/// before_create must persist intent; before_resume must save exact PID/Job and
+/// resume authorization. A callback error never permits automatic process replay.
+pub(crate) trait ProbeObserver {
+    fn before_create(&mut self) -> Result<()>;
+    fn before_resume(
+        &mut self,
+        process: &winbridge_protocol::update::SupervisorProcess,
+        job: &str,
+    ) -> Result<()>;
+    fn resumed(&mut self) -> Result<()>;
+    fn poll(&mut self) -> Result<()>;
+    fn finished(&mut self, receipt: &ProbeCleanup) -> Result<()>;
+}
+struct UnjournaledProbe;
+impl ProbeObserver for UnjournaledProbe {
+    fn before_create(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn before_resume(
+        &mut self,
+        _: &winbridge_protocol::update::SupervisorProcess,
+        _: &str,
+    ) -> Result<()> {
+        Ok(())
+    }
+    fn resumed(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn poll(&mut self) -> Result<()> {
+        Ok(())
+    }
+    fn finished(&mut self, _: &ProbeCleanup) -> Result<()> {
+        Ok(())
+    }
+}
 pub(crate) fn run_probe(
     pinned: &Pinned,
     arguments: &[String],
     timeout_ms: u64,
+) -> Result<(
+    Vec<u8>,
+    Vec<u8>,
+    winbridge_protocol::update::SupervisorProcess,
+)> {
+    run_probe_observed(
+        pinned,
+        arguments,
+        timeout_ms,
+        &format!("Global\\WinBridge-OwnedProbe-{}", uuid::Uuid::new_v4()),
+        &mut UnjournaledProbe,
+    )
+}
+pub(crate) fn run_probe_observed(
+    pinned: &Pinned,
+    arguments: &[String],
+    timeout_ms: u64,
+    job: &str,
+    observer: &mut impl ProbeObserver,
 ) -> Result<(
     Vec<u8>,
     Vec<u8>,
@@ -264,36 +335,94 @@ pub(crate) fn run_probe(
             .into(),
         timeout_ms,
     };
-    let job = format!("Global\\WinBridge-OwnedProbe-{}", uuid::Uuid::new_v4());
+    let mut evidence = ProbeCleanup {
+        job_name: job.into(),
+        process: None,
+        creation_confirmed: false,
+        no_process_created: false,
+        resume_requested: false,
+        tree_empty: false,
+        capture_complete: false,
+        output_exceeded: false,
+        exit_code: None,
+        failure: None,
+    };
+    if let Err(error) = observer.before_create() {
+        evidence.no_process_created = true;
+        evidence.tree_empty = true;
+        evidence.capture_complete = true;
+        evidence.failure = Some(format!("Probe stopped before process creation: {error}"));
+        observer.finished(&evidence)?;
+        return Err(evidence.failure.unwrap());
+    }
     let (mut child, stdout, stderr) =
-        ManagedChild::prepare_atomic_executable(&command, Some(&job), None)
-            .map_err(|e| format!("Artifact query creation unconfirmed: {e}"))?;
+        match ManagedChild::prepare_atomic_executable(&command, Some(job), None) {
+            Ok(child) => child,
+            Err(error) => {
+                evidence.no_process_created = error.no_process_created;
+                evidence.tree_empty = error.no_process_created;
+                evidence.capture_complete = error.no_process_created;
+                evidence.failure = Some(format!("Artifact query creation unconfirmed: {error}"));
+                observer.finished(&evidence)?;
+                return Err(evidence.failure.unwrap());
+            }
+        };
+    evidence.creation_confirmed = true;
     let process = match winbridge_platform::infrastructure::stamp(child.id()) {
         Ok(p) => p,
-        Err(e) => {
+        Err(error) => {
             child.close_unconfirmed();
-            return Err(format!("Artifact query PID unavailable: {e}"));
+            evidence.failure = Some(format!("Artifact query PID unavailable: {error}"));
+            observer.finished(&evidence)?;
+            return Err(evidence.failure.unwrap());
         }
     };
+    evidence.process = Some(process.clone());
+    // The atomic Windows adapter has already assigned the suspended child to
+    // this exact Job. Never publish a different name as a durable PID receipt.
+    let assigned = !cfg!(windows)
+        || child.identity().is_some_and(|id| {
+            id.job_name == job
+                && id.process_id == process.process_id
+                && id.host_id == process.host_id
+                && id.session_id == process.session_id
+                && id.creation_time.to_string() == process.birth
+        });
     let excess = Arc::new(AtomicBool::new(false));
     let readers = (
         capture(stdout, excess.clone()),
         capture(stderr, excess.clone()),
     );
+    let mut failure = if assigned {
+        observer.before_resume(&process, job).err()
+    } else {
+        Some("Probe Job/PID receipt inconsistent; no resume".into())
+    };
     let start = Instant::now();
-    let mut failure = child.resume().err().map(error);
+    if failure.is_none() {
+        // Set before the OS call: a failed resume can have an unknown outcome.
+        evidence.resume_requested = true;
+        failure = child.resume().err().map(error);
+        if failure.is_none() {
+            failure = observer.resumed().err();
+        }
+    }
     let mut exit = None;
     while failure.is_none() {
         match child.try_wait() {
-            Ok(Some(s)) => {
-                exit = Some(s);
+            Ok(Some(status)) => {
+                exit = Some(status);
                 break;
             }
             Ok(None) => {}
-            Err(e) => {
-                failure = Some(error(e));
+            Err(error) => {
+                failure = Some(error.to_string());
                 break;
             }
+        }
+        if let Err(error) = observer.poll() {
+            failure = Some(error);
+            break;
         }
         if excess.load(Ordering::Acquire)
             || start.elapsed() > Duration::from_millis(command.timeout_ms)
@@ -326,29 +455,52 @@ pub(crate) fn run_probe(
     while !(readers.0.is_finished() && readers.1.is_finished()) && Instant::now() < deadline {
         thread::sleep(Duration::from_millis(10));
     }
+    evidence.tree_empty = empty;
+    evidence.exit_code = exit.and_then(|status| status.code());
+    evidence.output_exceeded = excess.load(Ordering::Acquire);
     if !empty || !readers.0.is_finished() || !readers.1.is_finished() {
-        return Err("Artifact query cleanup/capture unconfirmed; no candidate approval".into());
+        evidence.failure =
+            Some("Artifact query cleanup/capture unconfirmed; no candidate approval".into());
+        observer.finished(&evidence)?;
+        return Err(evidence.failure.unwrap());
     }
     let stdout = readers
         .0
         .join()
-        .map_err(|_| "Artifact stdout capture panicked")??;
+        .map_err(|_| "Artifact stdout capture panicked".to_string())
+        .and_then(|r| r);
     let stderr = readers
         .1
         .join()
-        .map_err(|_| "Artifact stderr capture panicked")??;
-    if let Some(e) = failure {
-        return Err(e);
+        .map_err(|_| "Artifact stderr capture panicked".to_string())
+        .and_then(|r| r);
+    evidence.capture_complete = stdout.is_ok() && stderr.is_ok();
+    let bytes = match (stdout, stderr) {
+        (Ok(stdout), Ok(stderr)) => {
+            if failure.is_none()
+                && (evidence.output_exceeded || !exit.is_some_and(|status| status.success()))
+            {
+                failure = Some(format!(
+                    "Artifact query failed; stderr={}",
+                    String::from_utf8_lossy(&stderr)
+                        .chars()
+                        .take(1000)
+                        .collect::<String>()
+                ));
+            }
+            Some((stdout, stderr))
+        }
+        (Err(error), _) | (_, Err(error)) => {
+            failure = Some(error);
+            None
+        }
+    };
+    evidence.failure = failure;
+    observer.finished(&evidence)?;
+    if let Some(error) = evidence.failure {
+        return Err(error);
     }
-    if excess.load(Ordering::Acquire) || !exit.is_some_and(|s| s.success()) {
-        return Err(format!(
-            "Artifact query failed; stderr={}",
-            String::from_utf8_lossy(&stderr)
-                .chars()
-                .take(1000)
-                .collect::<String>()
-        ));
-    }
+    let (stdout, stderr) = bytes.ok_or("Probe capture missing")?;
     Ok((stdout, stderr, process))
 }
 
@@ -379,3 +531,7 @@ mod tests {
         assert!(!same_image(&replaced.evidence, &edited.evidence));
     }
 }
+
+#[cfg(test)]
+#[path = "probe_tests.rs"]
+mod probe_tests;
