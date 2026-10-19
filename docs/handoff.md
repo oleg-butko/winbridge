@@ -1,3 +1,21 @@
+## U1: actor v8 native gate running — 2026-10-19
+
+Clean source 2cdc850, archive `winbridge-20261019T112211Z-2cdc850-0148b636.zip`,
+SHA `3d2e433ac2b345c969f0e7f0ec334dfe34347afe09a00d1f5b98095140a5ec7a`.
+Run `20261019-072235-273b010c`, Task `567fe768-5bf1-4005-9439-68a2eb1263e1`
+confirmed running; local session 83592, log
+`.winbridge/update-preparation/preimages-actor-native.log`. Reuse original cache
+20261017-061527-f4639971 and schema-8 reference 4b1eefef... from baseline run.
+Native fixture now archives five files, aborts, waits exact supervisor exit,
+launches a second request on same worker/new epoch, and cancels at held runtime
+observation: durable abort before cleanup, no late write. No GUI/production apply.
+Poll same task/handle to terminal; verify every ready file before declaring passed.
+Leave installed worker running; desktop not needed. If this gate passes, review
+and begin candidate health/rehearsal. Avoid starting recovery over a copied live
+worker journal: saved process identities must never attach to production jobs.
+Use explicit readonly compatibility inspection and an isolated fresh runtime for
+actual candidate serve. U1/public install and bootstrap remain ahead.
+
 ## U1: preimages actor v8 / cooperative abort ready for native — 2026-10-19
 
 [Actor](plans/worker-self-update/runtime-preimages-actor.md): fast durable admission
