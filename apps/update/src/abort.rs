@@ -341,17 +341,26 @@ impl AbortPermit {
             } else {
                 before
             };
+            let no_lease = released.is_none();
             let mut acknowledged = r.clone();
             acknowledged.phase = AbortPhase::Released;
             acknowledged.worker_released = released;
-            acknowledged.reason =
-                "Worker release подтверждён; final metadata ещё не сохранены".into();
+            acknowledged.reason = if no_lease {
+                "Worker подтвердил отсутствие lease; final metadata ещё не сохранены"
+            } else {
+                "Worker release подтверждён; final metadata ещё не сохранены"
+            }
+            .into();
             r = j.advance_abort(a, &r, acknowledged).map_err(err)?;
             j.finish_abort(
                 a,
                 &r,
                 true,
-                "Операция отменена до замены runtime; worker lease освобождена",
+                if no_lease {
+                    "Операция отменена до замены runtime; worker подтвердил отсутствие lease"
+                } else {
+                    "Операция отменена до замены runtime; worker lease освобождена"
+                },
             )
             .map_err(err)
         })();

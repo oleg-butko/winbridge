@@ -50,6 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         SupervisorResponse::decl(&config),
         UpdatePreparationView::decl(&config),
         RuntimeBaselineView::decl(&config),
+        RuntimePreimagesView::decl(&config),
         SupervisorWorkerBinding::decl(&config),
         WorkerUpdateControlCommand::decl(&config),
         WorkerUpdateControlRequest::decl(&config),

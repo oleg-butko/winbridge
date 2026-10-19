@@ -204,7 +204,7 @@ async fn runtime_identity_process_helper() {
         .preparation(true)
         .await
         .unwrap_err()
-        .contains("Runtime baseline"));
+        .contains("Old runtime preparation active"));
     assert_eq!(h.observe().await.unwrap().phase, SupervisorPhase::Active);
     release_tx.send(()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(40);
@@ -242,6 +242,173 @@ async fn runtime_identity_process_helper() {
         UpdateJournal::inspect_runtime_baseline(&reg.directory, &id).unwrap(),
         baseline
     );
+    let (preimages, first_abort, old_supervisor) = {
+        let h = f.supervisor.as_mut().unwrap();
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        *reg.runtime_verified_gate.lock().unwrap() = Some(Arc::new(ControlTestGate {
+            entered: std::sync::Mutex::new(Some(entered_tx)),
+            release: std::sync::Mutex::new(release_rx),
+        }));
+        let ack = h.runtime_preimages(true).await.unwrap();
+        assert!(ack.driver_active);
+        assert!(matches!(
+            ack.runtime_preimages,
+            Some(RuntimePreimagesView::Pending {
+                intent_revision: 3,
+                ..
+            })
+        ));
+        let saved = UpdateJournal::inspect_runtime_preimages(&reg.directory, &id).unwrap();
+        assert!(saved.intent.is_some() && saved.receipt.is_none());
+        tokio::time::timeout(Duration::from_secs(35), entered_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            tokio::time::timeout(Duration::from_secs(2), h.runtime_preimages(false))
+                .await
+                .unwrap()
+                .unwrap()
+                .driver_active
+        );
+        assert_eq!(h.runtime_preimages(true).await.unwrap().update.revision, 3);
+        assert!(h
+            .preparation(true)
+            .await
+            .unwrap_err()
+            .contains("Old runtime preparation active"));
+        assert!(h.command(SupervisorAction::Stop).await.is_err());
+        release_tx.send(()).unwrap();
+        let until = Instant::now() + Duration::from_secs(50);
+        loop {
+            let v = h.runtime_preimages(false).await.unwrap();
+            assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+            if !v.driver_active {
+                assert!(matches!(
+                    v.runtime_preimages,
+                    Some(RuntimePreimagesView::Verified { file_count: 5, .. })
+                ));
+                break;
+            }
+            assert!(Instant::now() < until);
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        let saved = UpdateJournal::inspect_runtime_preimages(&reg.directory, &id).unwrap();
+        let receipt = saved.receipt.as_ref().unwrap();
+        assert_eq!(receipt.parent_revision, 4);
+        for (copy, original) in receipt.files.iter().zip(
+            std::iter::once(&baseline.receipt.as_ref().unwrap().installed.manifest_file)
+                .chain(&baseline.receipt.as_ref().unwrap().installed.images),
+        ) {
+            assert_eq!(
+                winbridge_update::artifact::inspect_image(Path::new(&copy.path)).unwrap(),
+                *copy
+            );
+            assert_eq!(copy.sha256, original.sha256);
+            assert_eq!(copy.bytes, original.bytes);
+            assert_ne!(copy.file_identity, original.file_identity);
+        }
+        let config = fs::read(&f.updater_config).unwrap();
+        fs::write(&f.updater_config, [config.as_slice(), b" "].concat()).unwrap();
+        assert_eq!(h.runtime_preimages(true).await.unwrap().update.revision, 4);
+        fs::write(&f.updater_config, config).unwrap();
+        let aborted = h.abort_before_cutover().await.unwrap();
+        assert_eq!(
+            aborted.phase,
+            winbridge_update::abort::AbortPhase::Completed
+        );
+        assert!(aborted.worker_before.is_none() && aborted.worker_released.is_none());
+        assert!(aborted.reason.contains("отсутствие lease"));
+        (saved, aborted, h.record.process.clone().unwrap())
+    };
+    // Same installed test worker, new request/owner epoch; no reuse of another
+    // operation's preimages or supervisor. Wait for confirmed process exit.
+    let until = Instant::now() + Duration::from_secs(5);
+    loop {
+        match winbridge_platform::infrastructure::matches(&old_supervisor) {
+            Ok(false) => break,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound || e.raw_os_error() == Some(87) => {
+                break
+            }
+            Ok(true) => {}
+            Err(e) => panic!("Old supervisor exit unconfirmed: {e}"),
+        }
+        assert!(Instant::now() < until);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    f.supervisor.take();
+    f.request.idempotency_key = "second-preimages-cancellation".into();
+    f.launch().await;
+    let (cancelled_preimages, cancelled_abort) = {
+        let h = f.supervisor.as_mut().unwrap();
+        let new_id = h.record.spec.update_id.clone();
+        assert_ne!(new_id, id);
+        h.runtime_baseline(true).await.unwrap();
+        let until = Instant::now() + Duration::from_secs(45);
+        loop {
+            let v = h.runtime_baseline(false).await.unwrap();
+            assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+            if !v.driver_active {
+                assert!(matches!(
+                    v.runtime_baseline,
+                    Some(RuntimeBaselineView::Verified { .. })
+                ));
+                break;
+            }
+            assert!(Instant::now() < until);
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        *reg.runtime_verified_gate.lock().unwrap() = Some(Arc::new(ControlTestGate {
+            entered: std::sync::Mutex::new(Some(entered_tx)),
+            release: std::sync::Mutex::new(release_rx),
+        }));
+        h.runtime_preimages(true).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(35), entered_rx)
+            .await
+            .unwrap()
+            .unwrap();
+        let saved = UpdateJournal::inspect_runtime_preimages(&reg.directory, &new_id).unwrap();
+        assert!(
+            saved.intent.as_ref().unwrap().owner_epoch
+                > preimages.intent.as_ref().unwrap().owner_epoch
+        );
+        let cancel = h.abort_before_cutover();
+        tokio::pin!(cancel);
+        let until = Instant::now() + Duration::from_secs(3);
+        loop {
+            tokio::select! {
+                result=&mut cancel=>panic!("Abort completed before held copy callback returned: {result:?}"),
+                _=tokio::time::sleep(Duration::from_millis(20))=>{}
+            }
+            if let Ok(r) = UpdateJournal::inspect_abort(&reg.directory, &new_id) {
+                assert_eq!(r.phase, winbridge_update::abort::AbortPhase::Intent);
+                assert!(!r.cleanup_verified);
+                break;
+            }
+            assert!(
+                Instant::now() < until,
+                "Abort intent was not durable while copier held"
+            );
+        }
+        assert!(!Path::new(&saved.intent.as_ref().unwrap().directory).exists());
+        release_tx.send(()).unwrap();
+        let aborted = cancel.await.unwrap();
+        assert_eq!(
+            aborted.phase,
+            winbridge_update::abort::AbortPhase::Completed
+        );
+        let saved = UpdateJournal::inspect_runtime_preimages(&reg.directory, &new_id).unwrap();
+        assert!(saved.receipt.is_none());
+        assert!(!Path::new(&saved.intent.as_ref().unwrap().directory).exists());
+        assert!(aborted.worker_before.is_none() && aborted.worker_released.is_none());
+        assert!(aborted.reason.contains("отсутствие lease"));
+        (saved, aborted)
+    };
+    let cfg = winbridge_update::load_config(&f.updater_config).unwrap();
+    winbridge_update::verify_source(&cfg.source_directory, &f.baseline).unwrap();
     assert_eq!(f.slots(), 0);
     assert!(f
         .worker
@@ -255,11 +422,21 @@ async fn runtime_identity_process_helper() {
     let report = serde_json::json!({"schemaVersion":1,"kind":"runtime_identity_control_proof","passed":true,"platform":"windows","build":build_identity(),"identity":identity,"actualCopiedProcess":true,"workerEntryPointIsTestHarness":true,"syntheticOtherRoleDescriptors":true,"supervisorAuthenticated":true,"configChangesAfterHashRejected":true,"sourceGenerationIndependent":true,"journalMutexReleased":true,"noLeaseOrSlot":true,"runtimeApplied":false,"candidateVerified":false,"windowsOpened":false});
     let mut report = report;
     report["baseline"] = serde_json::to_value(baseline).unwrap();
+    report["preimages"] = serde_json::to_value(preimages).unwrap();
+    report["preimagesAbort"] = serde_json::to_value(first_abort).unwrap();
+    report["cancelledPreimages"] = serde_json::to_value(cancelled_preimages).unwrap();
+    report["cancelledAbort"] = serde_json::to_value(cancelled_abort).unwrap();
     for check in [
         "baselineIntentBeforeAck",
         "baselineMailboxResponsive",
         "baselineSourceBlocked",
         "baselineDuplicateObserved",
+        "preimagesIntentBeforeAck",
+        "preimagesMailboxResponsive",
+        "preimagesSourceBlocked",
+        "preimagesDuplicateObserved",
+        "preimagesFiveIndependentFiles",
+        "preimagesAbortAfterQuiescence",
     ] {
         report[check] = true.into();
     }

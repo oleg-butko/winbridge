@@ -4,10 +4,11 @@ use crate::installed_set::{InstalledArtifact, InstalledSetManifest, MANIFEST_NAM
 use winbridge_protocol::{update::*, ArtifactRole, RequestContext};
 
 struct Fixture {
-    root: tempfile::TempDir,
     journal: UpdateJournal,
     owner: UpdateAuthority,
     supervisor: SupervisorRecord,
+    // Windows cannot remove SQLite/owner files until their handles close.
+    root: tempfile::TempDir,
 }
 impl Fixture {
     fn new() -> Self {
@@ -207,6 +208,15 @@ fn begin(f: &mut Fixture) -> Result<UpdateRecord> {
         },
     )
 }
+#[test]
+fn fixture_closes_journal_and_owner_before_removing_its_directory() {
+    let f = Fixture::new();
+    let path = f.root.path().to_owned();
+    assert!(path.is_dir());
+    drop(f);
+    assert!(!path.exists());
+}
+
 #[test]
 fn baseline_intent_requires_the_exact_active_supervisor() {
     let mut f = Fixture::new();

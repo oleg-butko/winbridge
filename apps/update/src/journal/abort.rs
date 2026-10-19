@@ -300,7 +300,7 @@ impl UpdateJournal {
             idempotency_key: "abort-intent-v1".into(),
             expected_revision: update.revision,
             event: UpdateEvent::BeginAbort,
-            reason: "Отмена до замены runtime принята; worker lease ещё удерживается".into(),
+            reason: "Отмена до замены runtime принята; cleanup и освобождение ресурсов ещё не подтверждены".into(),
         };
         self.advance_with_driver(a, &spec.update_id, &command, Driver::Abort, |c, _| {
             if spec.owner_id != a.owner_id

@@ -1,6 +1,6 @@
 # U1: сохранённый предыдущий runtime
 
-2026-10-19. Trusted library реализована; supervisor mailbox, native gate, установка
+2026-10-19. Trusted library реализована; supervisor v8 добавлен следующим блоком. Установка
 и восстановление этого набора ещё не подключены.
 
 После verified baseline, до source/compiler attempts, сохранить пять файлов:
@@ -51,7 +51,8 @@ production execute дополнительно опрашивает настоя�
 Windows test-build-cache. Порог не ослаблен. Перед новой сборкой измерено
 32,498,028,544 bytes свободно в Debian. 510 workspace tests, Linux/Windows Clippy all-targets, fmt/generated contracts,
 typecheck/scaffold passed. Windows-only pin/release test скомпилирован; его реальное
-выполнение входит в следующий native gate. Supervisor v8 пока не подключён.
+выполнение подтверждено [189-test library gate](windows-runtime-preimages-gate-2026-10-19.md).
+[Supervisor v8](runtime-preimages-actor.md) реализован, новый native actor gate впереди.
 
 Review: original и copied pins удерживаются до commit; final worker observation
 не скрывает позднюю замену/добавление copy — перед receipt набор и SHA проверяются
@@ -62,3 +63,7 @@ Review: original и copied pins удерживаются до commit; final work
 Следом supervisor v8: fast durable admission/status и blocking copy driver,
 проверка mailbox во время held worker observation, real Windows files/cancel и
 previous schema-8 updater refusal. Только затем health/approval/exact shutdown.
+
+Library combined gate clean 835bc14 прошёл: 189 native tests / 19 groups, full
+candidate build, actual Main/pins; 43 ready files verified. Старый schema-8 updater
+отказался от schema 9. Этот gate не включает следующий actor v8/cancel scenario.

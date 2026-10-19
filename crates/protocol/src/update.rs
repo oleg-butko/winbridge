@@ -541,6 +541,9 @@ pub enum SupervisorAction {
     /// Internal v7: persist the old-runtime baseline before source effects.
     CaptureRuntimeBaseline,
     ObserveRuntimeBaseline,
+    /// Internal v8: create-only previous-runtime generation and its saved status.
+    ArchiveRuntimePreimages,
+    ObserveRuntimePreimages,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -584,9 +587,40 @@ pub struct UpdatePreparationView {
     /// Observation of this supervisor's blocking driver, separate from saved state.
     pub driver_active: bool,
     pub driver_error: Option<String>,
-    /// Only v7 replies include this projection; v1-v6 keep their JSON shape.
+    /// V7+ replies include this projection; v1-v6 keep their JSON shape.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_baseline: Option<RuntimeBaselineView>,
+    /// V8/view schema 3 only; older contracts omit the field entirely.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_preimages: Option<RuntimePreimagesView>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "phase", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RuntimePreimagesView {
+    NotAdmitted,
+    Pending {
+        #[serde(rename = "intentRevision")]
+        intent_revision: u64,
+        #[serde(rename = "admittedAtMs")]
+        admitted_at_ms: u64,
+        directory: String,
+    },
+    Verified {
+        #[serde(rename = "intentRevision")]
+        intent_revision: u64,
+        #[serde(rename = "receiptRevision")]
+        receipt_revision: u64,
+        #[serde(rename = "completedAtMs")]
+        completed_at_ms: u64,
+        directory: String,
+        #[serde(rename = "fileCount")]
+        file_count: u16,
+        #[serde(rename = "totalBytes")]
+        total_bytes: u64,
+    },
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

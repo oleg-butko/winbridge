@@ -29,6 +29,27 @@ fn runtime_baseline_states_are_typed_and_reject_mixed_authority_fields() {
 }
 
 #[test]
+fn runtime_preimages_view_requires_typed_details_without_install_authority() {
+    use winbridge_protocol::update::RuntimePreimagesView;
+    let pending = RuntimePreimagesView::Pending {
+        intent_revision: 3,
+        admitted_at_ms: 42,
+        directory: "previous-runtime".into(),
+    };
+    assert_eq!(
+        serde_json::to_string(&pending).unwrap(),
+        r#"{"phase":"pending","intentRevision":3,"admittedAtMs":42,"directory":"previous-runtime"}"#
+    );
+    let mut forged = serde_json::to_value(pending).unwrap();
+    forged["canInstall"] = true.into();
+    assert!(serde_json::from_value::<RuntimePreimagesView>(forged).is_err());
+    assert!(serde_json::from_str::<RuntimePreimagesView>(
+        r#"{"phase":"verified","directory":"previous-runtime"}"#
+    )
+    .is_err());
+}
+
+#[test]
 fn runtime_image_keeps_existing_bytes_and_rejects_grant_fields() {
     let hash = "a".repeat(64);
     let image = RuntimeImageEvidence {

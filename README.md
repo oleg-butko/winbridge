@@ -103,7 +103,9 @@ status и release только после source/Job/output proof. Добавл�
 прошёл 165 native tests/full build/Main/pins. [Durable baseline и supervisor v7](docs/plans/worker-self-update/runtime-baseline.md)
 прошли [175 native tests / полный build / actual Main](docs/plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.md).
 [Preimages library](docs/plans/worker-self-update/runtime-preimages.md), schema 9,
-добавляет проверенные копии прошлого runtime; actor/native ещё впереди.
+прошёл [189 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md).
+[Actor v8 / отмена копирования](docs/plans/worker-self-update/runtime-preimages-actor.md)
+реализован; его native gate ещё впереди.
 Проверка здоровья, exact shutdown и activation остаются впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 

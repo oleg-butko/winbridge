@@ -22,8 +22,11 @@ known-set reader и полный candidate build прошли
 или runtime replacement. Pending запрещает source admission. Schema-8 блок прошёл [175 native tests / full build](plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.md);
 старые операции не получают baseline задним числом. Schema-9
 [preimages library](plans/worker-self-update/runtime-preimages.md) сохраняет только
-create-only пять copies с отдельными intent/receipt до source; actor/native для неё
-ещё впереди. Установка/activation пока не включены.
+create-only пять copies с отдельными intent/receipt до source;
+[189 native tests / full build](plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md) passed.
+[Actor v8](plans/worker-self-update/runtime-preimages-actor.md) сохраняет быстрый ACK,
+consistent view schema 3 и durable abort с тем же authority/epoch после quiescence.
+Его native gate ещё впереди. Установка/activation пока не включены.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)

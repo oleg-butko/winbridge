@@ -559,6 +559,10 @@ try {
             if ($runtimeIdentity.$check -ne $true) { throw "Runtime baseline check missing: $check" }
         }
         if ($null -eq $runtimeIdentity.baseline.intent -or $null -eq $runtimeIdentity.baseline.receipt -or $runtimeIdentity.baseline.receipt.parentRevision -ne ($runtimeIdentity.baseline.intent.parentRevision + 1) -or $runtimeIdentity.baseline.receipt.loadedWorker.process.processId -ne $runtimeIdentity.identity.process.processId) { throw 'Runtime baseline receipt/binding incomplete' }
+        foreach ($check in @('preimagesIntentBeforeAck','preimagesMailboxResponsive','preimagesSourceBlocked','preimagesDuplicateObserved','preimagesFiveIndependentFiles','preimagesAbortAfterQuiescence')) {
+            if ($runtimeIdentity.$check -ne $true) { throw "Preimages actor check missing: $check" }
+        }
+        if ($runtimeIdentity.preimages.receipt.files.Count -ne 5 -or $runtimeIdentity.preimagesAbort.phase -ne 'completed' -or $runtimeIdentity.cancelledAbort.phase -ne 'completed' -or $null -ne $runtimeIdentity.cancelledPreimages.receipt) { throw 'Preimages/cancel receipt incomplete' }
         $atomic = Get-Content -LiteralPath (Join-Path $ReportDirectory 'atomic-launch-proof.json') -Raw | ConvertFrom-Json
         if ($atomic.kind -ne 'atomic_executable_proof' -or $atomic.platform -ne 'windows' -or $atomic.runtimeApplied -or $atomic.windowsOpened -or $atomic.build.sourceDirty -or $atomic.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Atomic executable proof identity incomplete' }
         foreach ($case in @('argvAndSuspended','noResume','domainAndPrivateJob','rejectedBeforeCreate','suspendCount','ownerCrashBeforePidReceipt','stdioOnly')) {

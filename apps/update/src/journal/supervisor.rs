@@ -112,7 +112,7 @@ impl UpdateJournal {
         driver_active: bool,
         driver_error: Option<String>,
     ) -> Result<UpdatePreparationView> {
-        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, false)
+        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, 1)
     }
     /// Internal v7 projection: baseline and parent use one SQLite read snapshot.
     pub fn runtime_preparation_snapshot(
@@ -121,14 +121,23 @@ impl UpdateJournal {
         driver_active: bool,
         driver_error: Option<String>,
     ) -> Result<UpdatePreparationView> {
-        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, true)
+        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, 2)
+    }
+    /// V8 projection: baseline, preimages and parent share one SQLite snapshot.
+    pub fn preimages_preparation_snapshot(
+        directory: &Path,
+        id: &str,
+        driver_active: bool,
+        driver_error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, 3)
     }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
         driver_active: bool,
         driver_error: Option<String>,
-        include_baseline: bool,
+        view_schema: u16,
     ) -> Result<UpdatePreparationView> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
@@ -165,7 +174,7 @@ impl UpdateJournal {
             Err(e) => return Err(e),
         };
         let view = UpdatePreparationView {
-            schema_version: if include_baseline { 2 } else { 1 },
+            schema_version: view_schema,
             observed_at_ms: now_ms()?,
             update,
             source,
@@ -173,8 +182,13 @@ impl UpdateJournal {
             build,
             driver_active,
             driver_error,
-            runtime_baseline: if include_baseline {
+            runtime_baseline: if view_schema >= 2 {
                 Some(super::runtime_baseline::read(&tx, id)?.view())
+            } else {
+                None
+            },
+            runtime_preimages: if view_schema >= 3 {
+                Some(super::runtime_preimages::read(&tx, id)?.view())
             } else {
                 None
             },

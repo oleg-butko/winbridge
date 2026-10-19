@@ -1344,6 +1344,67 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn preimages_actor_requires_verified_baseline_and_keeps_older_view_shapes() {
+        let mut f = Fixture::with_source_policy(None, true).await;
+        f.launch().await;
+        let reg = f.worker.control_registration().unwrap();
+        let h = f.supervisor.as_mut().unwrap();
+        let initial = h.runtime_preimages(false).await.unwrap();
+        assert_eq!(initial.schema_version, 3);
+        assert_eq!(
+            initial.runtime_baseline,
+            Some(RuntimeBaselineView::NotAdmitted)
+        );
+        assert_eq!(
+            initial.runtime_preimages,
+            Some(RuntimePreimagesView::NotAdmitted)
+        );
+        let v7 = h.runtime_baseline(false).await.unwrap();
+        assert_eq!(v7.schema_version, 2);
+        assert!(!serde_json::to_value(v7)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("runtimePreimages"));
+        let legacy = h.preparation(false).await.unwrap();
+        let legacy = serde_json::to_value(legacy).unwrap();
+        assert!(
+            legacy.get("runtimePreimages").is_none() && legacy.get("runtimeBaseline").is_none()
+        );
+        assert!(h
+            .command(SupervisorAction::ArchiveRuntimePreimages)
+            .await
+            .is_err());
+        assert!(h
+            .runtime_preimages(true)
+            .await
+            .unwrap_err()
+            .contains("baseline"));
+        let status = h.runtime_preimages(false).await.unwrap();
+        assert_eq!(status.update.revision, 0);
+        assert!(!status.driver_active);
+        assert!(status.source.is_none());
+        assert!(
+            UpdateJournal::inspect_runtime_preimages(&reg.directory, &status.update.update_id)
+                .unwrap()
+                .intent
+                .is_none()
+        );
+        let aborted = h.abort_before_cutover().await.unwrap();
+        assert!(aborted.worker_before.is_none() && aborted.worker_released.is_none());
+        assert!(aborted.reason.contains("отсутствие lease"));
+        assert_eq!(f.slots(), 0);
+        assert!(f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .is_none());
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn worker_owned_launch_and_authenticated_source_control_roundtrip() {
         let mut f =
             Fixture::new(std::env::var_os("WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE").map(PathBuf::from))

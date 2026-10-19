@@ -10,7 +10,9 @@ updater schema 8, atomic intent/receipt с parent transitions и запрето�
 Main и pins](plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.md).
 [Preimages library](plans/worker-self-update/runtime-preimages.md), schema 9,
 добавляет immutable intent/receipt и create-only пять copies до source effects;
-actor/native для preimages и health/shutdown/install остаются впереди. Installed runtime не обновлялся.
+[Library native gate](plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md)
+прошёл 189 tests/full build/Main/pins. [Actor v8](plans/worker-self-update/runtime-preimages-actor.md)
+добавлен, его native gate и health/shutdown/install остаются впереди. Installed runtime не обновлялся.
 [Schema-7 live control gate](plans/worker-self-update/windows-runtime-control-gate-2026-10-18.md)
 прошёл: 165 native tests / 19 groups, full build и actual Main/pin lifetime.
 

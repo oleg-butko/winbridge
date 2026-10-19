@@ -49,6 +49,26 @@ pub struct RuntimePreimagesSnapshot {
     pub intent: Option<RuntimePreimagesIntent>,
     pub receipt: Option<RuntimePreimagesReceipt>,
 }
+impl RuntimePreimagesSnapshot {
+    pub(crate) fn view(&self) -> RuntimePreimagesView {
+        match (&self.intent, &self.receipt) {
+            (Some(i), Some(r)) => RuntimePreimagesView::Verified {
+                intent_revision: i.parent_revision,
+                receipt_revision: r.parent_revision,
+                completed_at_ms: r.completed_at_ms,
+                directory: i.directory.clone(),
+                file_count: r.files.len() as u16,
+                total_bytes: r.files.iter().map(|f| f.bytes).sum(),
+            },
+            (Some(i), None) => RuntimePreimagesView::Pending {
+                intent_revision: i.parent_revision,
+                admitted_at_ms: i.admitted_at_ms,
+                directory: i.directory.clone(),
+            },
+            _ => RuntimePreimagesView::NotAdmitted,
+        }
+    }
+}
 /// One-use authority. It cannot be cloned/deserialized or recreated from a pending intent.
 pub struct RuntimePreimagesPermit {
     pub(crate) intent: RuntimePreimagesIntent,

@@ -1,3 +1,37 @@
+## U1: preimages actor v8 / cooperative abort ready for native — 2026-10-19
+
+[Actor](plans/worker-self-update/runtime-preimages-actor.md): fast durable admission
+before ACK, one blocking copy driver, consistent parent/baseline/preimages schema-3
+view. V1–V7 omit the new field. Pending/completed duplicates do not replay writes.
+The supervisor shares one physical authority via private Arc; preimages abort uses
+a second CAS-checked connection with the same owner/epoch, persists Aborting before
+ACK, then runs cleanup/release only after the copier callback actually returns.
+Source/compiler busy-abort behavior retained. No-lease abort now reports confirmed
+absence instead of a fictitious release. Fixture drop order closes SQLite/owner
+before TempDir; actual removal regression added.
+518 workspace tests passed, plus actual no-lease IPC abort repeat after message fix;
+Linux/Windows Clippy all-targets, fmt/generated contracts/typecheck/scaffold,
+exporter/runner/PowerShell syntax passed. Positive copied-process fixture compiled:
+successful archive, second request/new epoch, held worker reply with durable abort
+and no early cleanup/late write. It is not yet executed on Windows. Other-role
+images synthetic, no candidate health/activation claimed. Schema remains 9.
+Next: native actor gate using same schema-8 reference below, then health/rehearsal,
+exact shutdown and install. U1/public update still open, bootstrap not needed.
+
+## U1: preimages library combined native gate passed — 2026-10-19
+
+[Gate](plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md): clean
+835bc14, run `20261019-070223-c48d2a35`, Task
+`6b6c13ce-f7e4-4863-bd48-78ff8783d60b` succeeded/0. 189 tests / 19 groups,
+full build/queries/exact payload, actual Main and serve/pins passed. 43 ready files
+verified, report SHA `3d5d84ca7ed6757f5976a8e591559ea44c6c1fb3040b9ef33dd5f08736226498`.
+Windows free before/after 21,363,748,864 / 20,961,271,808 bytes; installed worker
+same generation, connected/idle0/error null. Desktop closed/no windows, leave worker.
+Schema-9 updater image retained for future schema>9 refusal: run above payload
+winbridge-update.exe, SHA `b3d1c13773ea1a0e11800a6c856890e0cad7122044ee475527da0781326d755d`.
+Actor v8 stays schema 9, so its reference remains the earlier schema-8 updater
+SHA `4b1eefef24a3b658a78bf75241aae08ac3d4ed57723f0fe06edd30251e8ccc26`.
+
 ## U1: native library run stopped in older abort poll; path guard retry — 2026-10-19
 
 Run `20261019-064446-fb0614ea`, source 823abd0, Task

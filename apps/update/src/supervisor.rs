@@ -10,6 +10,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use winbridge_platform::{
@@ -438,21 +439,41 @@ impl SupervisorHandle {
         }
         control.into_runtime_identity()
     }
-    /// Read status concurrently with a long readonly runtime observation.
-    /// V7 admission is durable before ACK. Status never retries file/IPC work.
+    /// V7 keeps its legacy view; v8 adds saved preimages without new runtime authority.
     pub async fn runtime_baseline(&self, start: bool) -> Result<UpdatePreparationView> {
+        self.runtime_preparation(start, false).await
+    }
+    pub async fn runtime_preimages(&self, start: bool) -> Result<UpdatePreparationView> {
+        self.runtime_preparation(start, true).await
+    }
+    async fn runtime_preparation(
+        &self,
+        start: bool,
+        preimages: bool,
+    ) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
             return Err("Supervisor exact process changed".into());
         }
+        let (version, view_schema, begin, observe) = if preimages {
+            (
+                8,
+                3,
+                SupervisorAction::ArchiveRuntimePreimages,
+                SupervisorAction::ObserveRuntimePreimages,
+            )
+        } else {
+            (
+                7,
+                2,
+                SupervisorAction::CaptureRuntimeBaseline,
+                SupervisorAction::ObserveRuntimeBaseline,
+            )
+        };
         let q = SupervisorRequest {
-            contract_version: 7,
+            contract_version: version,
             launch_id: self.record.spec.launch_id.clone(),
             expected_revision: self.record.revision,
-            action: if start {
-                SupervisorAction::CaptureRuntimeBaseline
-            } else {
-                SupervisorAction::ObserveRuntimeBaseline
-            },
+            action: if start { begin } else { observe },
             token: self.token.clone(),
             worker_command: None,
         };
@@ -463,24 +484,25 @@ impl SupervisorHandle {
         )
         .await
         .map_err(error)?;
-        if response.contract_version != 7
+        if response.contract_version != version
             || response.launch_id != q.launch_id
             || response.record.is_some()
             || response.worker_control.is_some()
         {
-            return Err("Runtime baseline reply scope/version changed".into());
+            return Err("Runtime preparation reply scope/version changed".into());
         }
         if let Some(e) = response.error {
             return Err(e);
         }
         let view = response
             .preparation
-            .ok_or("Runtime baseline view missing")?;
-        if view.schema_version != 2
+            .ok_or("Runtime preparation view missing")?;
+        if view.schema_version != view_schema
             || view.runtime_baseline.is_none()
+            || preimages != view.runtime_preimages.is_some()
             || view.update.update_id != self.record.spec.update_id
         {
-            return Err("Runtime baseline reply belongs to another contract/update".into());
+            return Err("Runtime preparation reply belongs to another contract/update".into());
         }
         Ok(view)
     }
@@ -790,6 +812,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveWorkerRuntime
                 | SupervisorAction::CaptureRuntimeBaseline
                 | SupervisorAction::ObserveRuntimeBaseline
+                | SupervisorAction::ArchiveRuntimePreimages
+                | SupervisorAction::ObserveRuntimePreimages
         ) {
             return Err("Use the typed preparation/compiler method for this action".into());
         }
@@ -941,10 +965,16 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             "Supervisor владеет отдельным журналом; ожидает handoff, effects запрещены",
         )
         .map_err(error)?;
-    let mut idle = Some((journal, owner));
-    type Work = tokio::task::JoinHandle<(UpdateJournal, UpdateAuthority, Result<()>)>;
+    // A single physical owner is shared only inside this supervisor process.
+    // A copy callback retains its Arc if the mailbox exits; cancellation uses a
+    // separate CAS-checked connection and never claims a new epoch or lock.
+    let control_authority = Arc::new(owner);
+    let mut idle = Some((journal, control_authority.clone()));
+    type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, Result<()>)>;
     let mut work: Option<Work> = None;
     let mut artifacts_active = false;
+    let mut preimages_active = false;
+    let mut pending_abort: Option<Box<crate::abort::AbortPermit>> = None;
     // One readonly query at a time; dropping the set aborts its IO task. The
     // mailbox and journal owner stay available while worker verifies file hashes.
     let mut runtime_reads = tokio::task::JoinSet::new();
@@ -961,11 +991,14 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         if work.as_ref().is_some_and(|w| w.is_finished()) {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
             artifacts_active = false;
+            preimages_active = false;
             driver_error = outcome
                 .err()
                 .map(|e| e.chars().take(1000).collect::<String>());
             if let Some(e) = &driver_error {
-                eprintln!("Update preparation stopped: {e}; preserve both journals and barrier, no automatic retry");
+                if pending_abort.is_none() {
+                    eprintln!("Update preparation stopped: {e}; preserve both journals and barrier, no automatic retry");
+                }
             }
             let saved = UpdateJournal::inspect_supervisor(&directory, id).map_err(error)?;
             if saved.phase == SupervisorPhase::Stopped {
@@ -975,6 +1008,19 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+        }
+        if work.is_none() && pending_abort.is_some() {
+            let permit = pending_abort.take().unwrap();
+            let (mut journal, owner) = idle
+                .take()
+                .ok_or("Abort owner missing after copy quiescence")?;
+            let spec = r.clone();
+            let io = tokio::runtime::Handle::current();
+            driver_error = None;
+            work = Some(tokio::task::spawn_blocking(move || {
+                let result = permit.execute(&mut journal, &owner, &spec, io).map(|_| ());
+                (journal, owner, result)
+            }));
         }
         if let Some((journal, owner)) = &idle {
             journal.check_source_authority(owner).map_err(error)?;
@@ -1018,6 +1064,93 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if matches!(
+            request.action,
+            SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages
+        ) {
+            let mut admitted = None;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 8
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err(
+                        "Runtime preimages require exact Active worker-bound v8 supervisor".into(),
+                    );
+                }
+                let saved = UpdateJournal::preimages_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)?;
+                if request.action == SupervisorAction::ObserveRuntimePreimages
+                    || matches!(
+                        saved.runtime_preimages,
+                        Some(RuntimePreimagesView::Verified { .. })
+                    )
+                {
+                    return Ok(saved);
+                }
+                if work.is_some() {
+                    if preimages_active {
+                        return Ok(saved);
+                    }
+                    return Err("Another preparation driver is active".into());
+                }
+                if driver_error.is_some() {
+                    return Err("Preimages failure must be inspected/aborted; no replay".into());
+                }
+                let (journal, owner) = idle.as_mut().ok_or("Preimages owner unavailable")?;
+                match crate::runtime_preimages::admit(journal, owner, &r)? {
+                    crate::runtime_preimages::RuntimePreimagesAdmission::Fresh(p) => {
+                        admitted = Some(p)
+                    }
+                    crate::runtime_preimages::RuntimePreimagesAdmission::Existing(_) => {}
+                }
+                UpdateJournal::preimages_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    admitted.is_some(),
+                    None,
+                )
+                .map_err(error)
+            })();
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 8,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = response.error.is_none();
+            let _ = ipc::write(&mut stream, &response).await;
+            if let Some(permit) = admitted.filter(|_| dispatch) {
+                let (mut journal, owner) = idle
+                    .take()
+                    .ok_or("Preimages owner missing after admission")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                preimages_active = true;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result =
+                        crate::runtime_preimages::execute(&mut journal, &owner, &spec, *permit, io)
+                            .map(|_| ());
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
         if matches!(
             request.action,
             SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline
@@ -1176,13 +1309,30 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 match UpdateJournal::inspect_abort(&directory, &r.spec.update_id) {
                     Ok(_) => {}
                     Err(e) if e.code == JournalErrorCode::NotFound => {
-                        if work.is_some() {
+                        if work.is_some() && !preimages_active {
                             return Err("Preparation driver active; wait for confirmed source/compiler cleanup".into());
                         }
-                        let (journal, owner) = idle.as_mut().ok_or("Abort owner unavailable")?;
-                        match crate::abort::admit(journal, owner, &r)? {
-                            crate::abort::AbortAdmission::New(permit) => admitted = Some(permit),
-                            crate::abort::AbortAdmission::Observed(_) => {}
+                        if preimages_active {
+                            // Same physical owner/epoch; Root Aborting fences the
+                            // copier. Cleanup waits for its blocking callback.
+                            let cfg = crate::preparation::configuration(&r)?;
+                            let mut control =
+                                UpdateJournal::open(&directory, &installation_scope(&cfg)?)
+                                    .map_err(error)?;
+                            if let crate::abort::AbortAdmission::New(permit) =
+                                crate::abort::admit(&mut control, &control_authority, &r)?
+                            {
+                                pending_abort = Some(permit);
+                            }
+                        } else {
+                            let (journal, owner) =
+                                idle.as_mut().ok_or("Abort owner unavailable")?;
+                            match crate::abort::admit(journal, owner, &r)? {
+                                crate::abort::AbortAdmission::New(permit) => {
+                                    admitted = Some(permit)
+                                }
+                                crate::abort::AbortAdmission::Observed(_) => {}
+                            }
                         }
                     }
                     Err(e) => return Err(error(e)),
@@ -1426,7 +1576,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     .map_err(error)?;
                     if snapshot.update.phase == UpdatePhase::Requested && work.is_some() {
                         return Err(
-                            "Runtime baseline driver active; source preparation deferred".into(),
+                            "Old runtime preparation active; source preparation deferred".into(),
                         );
                     }
                     if snapshot.update.phase == UpdatePhase::Requested {
@@ -1603,7 +1753,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

@@ -264,6 +264,8 @@ def main():
         archive_has_runtime_control = 'winbridge/apps/worker/src/update_control/tests/runtime_control_cases.rs' in archive.namelist()
         archive_has_runtime_baseline = (archive_has_runtime_control
                                         and b'baselineIntentBeforeAck' in archive.read('winbridge/apps/worker/src/update_control/tests/runtime_control_cases.rs'))
+        archive_has_preimages_actor = (archive_has_runtime_control
+                                       and b'preimagesIntentBeforeAck' in archive.read('winbridge/apps/worker/src/update_control/tests/runtime_control_cases.rs'))
         archive_has_runtime_lifetime = ('winbridge/scripts/test-update-runtime-lifetime.ps1' in archive.namelist()
                                         and b'worker-runtime-lifetime-proof.json' in archive.read('winbridge/scripts/test-windows-workflow.ps1'))
         archive_has_abort_snapshot = b'readonly_abort_snapshot_never_combines_header_and_receipts' in archive.read('winbridge/apps/update/src/journal/abort.rs') if archive_has_compiler_actor else False
@@ -812,6 +814,27 @@ exit $nativeExit
                     raise RuntimeError('Durable old-runtime baseline native proof incomplete')
                 if 'runtime_baseline_actor_retains_failed_intent_and_blocks_source_without_replay ... ok' not in log:
                     raise RuntimeError('Runtime baseline failure/replay regression missing')
+            if archive_has_preimages_actor:
+                previous = control['preimages']
+                intent, receipt = previous['intent'], previous['receipt']
+                original = [control['baseline']['receipt']['installed']['manifestFile'], *control['baseline']['receipt']['installed']['images']]
+                aborted, cancelled = control['preimagesAbort'], control['cancelledAbort']
+                pending = control['cancelledPreimages']
+                if (not all(control.get(k) is True for k in ['preimagesIntentBeforeAck','preimagesMailboxResponsive','preimagesSourceBlocked','preimagesDuplicateObserved','preimagesFiveIndependentFiles','preimagesAbortAfterQuiescence'])
+                        or intent['updateId'] != control['baseline']['intent']['updateId']
+                        or intent['ownerEpoch'] != control['baseline']['intent']['ownerEpoch']
+                        or receipt['parentRevision'] != intent['parentRevision'] + 1
+                        or len(receipt['files']) != 5 or len({f['fileIdentity'] for f in receipt['files']}) != 5
+                        or any(c['bytes'] != o['bytes'] or c['sha256'] != o['sha256'] or c['fileIdentity'] == o['fileIdentity'] for c,o in zip(receipt['files'], original))
+                        or aborted['phase'] != 'completed' or aborted['cleanupVerified'] is not True or aborted['spec']['updateId'] != intent['updateId']
+                        or cancelled['phase'] != 'completed' or cancelled['cleanupVerified'] is not True
+                        or cancelled['spec']['updateId'] != pending['intent']['updateId']
+                        or cancelled['spec']['ownerEpoch'] != pending['intent']['ownerEpoch']
+                        or pending['intent']['updateId'] == intent['updateId'] or pending['intent']['ownerEpoch'] <= intent['ownerEpoch']
+                        or pending['receipt'] is not None):
+                    raise RuntimeError('Preimages actor receipt/cancel/owner proof incomplete; runtime installation remains disabled')
+                if 'preimages_actor_requires_verified_baseline_and_keeps_older_view_shapes ... ok' not in log:
+                    raise RuntimeError('Preimages actor legacy-view/baseline rejection regression missing')
         if archive_has_runtime_lifetime:
             lifetime = json.loads((report / 'worker-runtime-lifetime-proof.json').read_text(encoding='utf-8-sig'))
             worker = next(x for x in proof['artifactIdentities'] if x['name'] == 'winbridge-worker.exe')['query']

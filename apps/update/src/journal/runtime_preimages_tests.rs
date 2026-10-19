@@ -357,6 +357,67 @@ fn preimages_ignored_required_writes_roll_back_parent_and_preserve_copies() {
     }
 }
 #[test]
+fn preimages_durable_abort_from_same_owner_fences_writer_before_release() {
+    let (mut f, identity) = ready();
+    let p = admit(&mut f, &identity);
+    let before = original(&f);
+    let scope = f.journal.info().unwrap().scope_sha256;
+    let mut control = UpdateJournal::open(&f.journal.directory, &scope).unwrap();
+    let authority = &f.owner;
+    let spec = crate::abort::AbortSpec {
+        update_id: f.supervisor.spec.update_id.clone(),
+        owner_id: authority.owner_id().into(),
+        owner_epoch: authority.epoch(),
+        original_phase: UpdatePhase::Requested,
+        runtime_directory: f.supervisor.spec.runtime_directory.clone(),
+        runtime_identity: winbridge_platform::source_files::directory_identity(Path::new(
+            &f.supervisor.spec.runtime_directory,
+        ))
+        .unwrap(),
+        source_digest: None,
+        build_digest: None,
+        candidate_digest: None,
+        accepted_at_ms: now_ms().unwrap(),
+    };
+    let mut checks = 0;
+    assert!(runtime_preimages::execute_fixture(
+        &mut f.journal,
+        authority,
+        &f.supervisor,
+        p,
+        || {
+            checks += 1;
+            if checks == 1 {
+                let (_, fresh) = control
+                    .admit_abort(authority, spec.clone())
+                    .map_err(|e| e.to_string())?;
+                assert!(fresh);
+            }
+            Ok(())
+        }
+    )
+    .is_err());
+    assert!(!destination(&f).exists());
+    assert!(f
+        .journal
+        .runtime_preimages(&f.supervisor.spec.update_id)
+        .unwrap()
+        .receipt
+        .is_none());
+    assert_eq!(
+        f.journal.get(&f.supervisor.spec.update_id).unwrap().phase,
+        UpdatePhase::Aborting
+    );
+    let abort =
+        UpdateJournal::inspect_abort(&f.journal.directory, &f.supervisor.spec.update_id).unwrap();
+    assert_eq!(abort.phase, crate::abort::AbortPhase::Intent);
+    assert!(!abort.cleanup_verified);
+    for (path, bytes) in before {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
 fn preimages_raw_events_and_late_source_attempt_never_authorize_copies() {
     let (mut f, identity) = ready();
     let id = f.supervisor.spec.update_id.clone();
@@ -434,7 +495,7 @@ fn schema_eight_migration_preserves_baseline_without_adopting_preimages() {
     drop(f.owner);
     drop(f.journal);
     let mut j = UpdateJournal::open(&dir, &old.scope_sha256).unwrap();
-    assert_eq!(j.info().unwrap().schema_version, 9);
+    assert_eq!(j.info().unwrap().schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(j.info().unwrap().owner_epoch, old.owner_epoch + 1);
     assert_eq!(
         UpdateJournal::inspect_runtime_baseline(&dir, &id).unwrap(),
