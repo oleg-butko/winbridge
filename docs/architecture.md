@@ -27,6 +27,9 @@ create-only пять copies с отдельными intent/receipt до source;
 [Actor v8](plans/worker-self-update/runtime-preimages-actor.md) сохраняет быстрый ACK,
 consistent view schema 3 и durable abort с тем же authority/epoch после quiescence.
 [193 native tests / full build](plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md) passed. Установка/activation пока не включены.
+[Candidate rehearsal](plans/worker-self-update/worker-rehearsal.md) использует отдельный
+contract marker и новый пустой journal/IPC; live journal/config не копируются.
+Standalone proof не даёт health receipt/approval; native gate pending.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)

@@ -1,4 +1,4 @@
-//! Readonly identity probes. This never approves a candidate or changes runtime.
+//! Bounded owned probes. This never approves a candidate or changes installed runtime.
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
@@ -24,7 +24,7 @@ fn error(e: impl std::fmt::Display) -> String {
 }
 pub use winbridge_protocol::RuntimeImageEvidence as ImageEvidence;
 pub(crate) struct Pinned {
-    file: File,
+    pub(crate) file: File,
     path: PathBuf,
     pub(crate) evidence: ImageEvidence,
 }
@@ -209,9 +209,52 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
             "UnsupportedArtifactQuery: capability marker absent; executable was not started".into(),
         );
     }
+    let (stdout, stderr, process) = run_probe(&pinned, &["--artifact-info".into()], 10000)?;
+    if !stderr.is_empty() {
+        return Err("Artifact descriptor wrote unexpected stderr".into());
+    }
+    let descriptor: ArtifactDescriptor =
+        serde_json::from_slice(&stdout).map_err(|_| "Invalid artifact descriptor/fields")?;
+    if descriptor.schema_version != 1
+        || descriptor.query_contract != 1
+        || descriptor.kind != "winbridge_artifact"
+        || descriptor.role != role
+        || descriptor.target_os != std::env::consts::OS
+        || descriptor.target_arch != std::env::consts::ARCH
+    {
+        return Err("Artifact descriptor role/contract/target mismatch".into());
+    }
+    let after = pin(&pinned.path)?;
+    if winbridge_platform::file_identity(&pinned.file).map_err(error)?
+        != pinned.evidence.file_identity
+        || !same_image(&pinned.evidence, &after.evidence)
+    {
+        return Err("Artifact changed during query".into());
+    }
+    Ok(QueryReport {
+        schema_version: 1,
+        kind: "artifact_query",
+        read_only: true,
+        candidate_verified: false,
+        image: pinned.evidence,
+        descriptor,
+        process,
+        cleanup_verified: true,
+    })
+}
+
+pub(crate) fn run_probe(
+    pinned: &Pinned,
+    arguments: &[String],
+    timeout_ms: u64,
+) -> Result<(
+    Vec<u8>,
+    Vec<u8>,
+    winbridge_protocol::update::SupervisorProcess,
+)> {
     let command = ResolvedCommand {
         executable: pinned.evidence.path.clone(),
-        arguments: vec!["--artifact-info".into()],
+        arguments: arguments.to_vec(),
         working_directory: pinned
             .path
             .parent()
@@ -219,9 +262,9 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
             .to_str()
             .ok_or("Artifact cwd must be UTF-8")?
             .into(),
-        timeout_ms: 10000,
+        timeout_ms,
     };
-    let job = format!("Global\\WinBridge-ArtifactQuery-{}", uuid::Uuid::new_v4());
+    let job = format!("Global\\WinBridge-OwnedProbe-{}", uuid::Uuid::new_v4());
     let (mut child, stdout, stderr) =
         ManagedChild::prepare_atomic_executable(&command, Some(&job), None)
             .map_err(|e| format!("Artifact query creation unconfirmed: {e}"))?;
@@ -297,7 +340,7 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
     if let Some(e) = failure {
         return Err(e);
     }
-    if excess.load(Ordering::Acquire) || !exit.is_some_and(|s| s.success()) || !stderr.is_empty() {
+    if excess.load(Ordering::Acquire) || !exit.is_some_and(|s| s.success()) {
         return Err(format!(
             "Artifact query failed; stderr={}",
             String::from_utf8_lossy(&stderr)
@@ -306,34 +349,7 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
                 .collect::<String>()
         ));
     }
-    let descriptor: ArtifactDescriptor =
-        serde_json::from_slice(&stdout).map_err(|_| "Invalid artifact descriptor/fields")?;
-    if descriptor.schema_version != 1
-        || descriptor.query_contract != 1
-        || descriptor.kind != "winbridge_artifact"
-        || descriptor.role != role
-        || descriptor.target_os != std::env::consts::OS
-        || descriptor.target_arch != std::env::consts::ARCH
-    {
-        return Err("Artifact descriptor role/contract/target mismatch".into());
-    }
-    let after = pin(&pinned.path)?;
-    if winbridge_platform::file_identity(&pinned.file).map_err(error)?
-        != pinned.evidence.file_identity
-        || !same_image(&pinned.evidence, &after.evidence)
-    {
-        return Err("Artifact changed during query".into());
-    }
-    Ok(QueryReport {
-        schema_version: 1,
-        kind: "artifact_query",
-        read_only: true,
-        candidate_verified: false,
-        image: pinned.evidence,
-        descriptor,
-        process,
-        cleanup_verified: true,
-    })
+    Ok((stdout, stderr, process))
 }
 
 #[cfg(all(test, unix))]

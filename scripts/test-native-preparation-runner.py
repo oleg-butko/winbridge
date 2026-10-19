@@ -27,6 +27,17 @@ class PreparationAdmission(unittest.TestCase):
             with self.assertRaises(ValueError):
                 module.updater_schema_from_source(source)
 
+    def test_worker_schema_requires_unique_bounded_pinned_definition(self):
+        spec = importlib.util.spec_from_file_location('worker_schema', SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.worker_schema_from_source(b'pub const JOURNAL_SCHEMA_VERSION: u32 = 15;\r\n'), 15)
+        for source in (b'', b'pub const JOURNAL_SCHEMA_VERSION: u32 = 0;\n',
+                       b'pub const JOURNAL_SCHEMA_VERSION: u32 = 4294967296;\n',
+                       b'pub const JOURNAL_SCHEMA_VERSION: u32 = 15;\npub const JOURNAL_SCHEMA_VERSION: u32 = 16;\n'):
+            with self.assertRaises(ValueError):
+                module.worker_schema_from_source(source)
+
     def run_to_submission(self, active):
         spec = importlib.util.spec_from_file_location('native_runner', SCRIPT)
         module = importlib.util.module_from_spec(spec)

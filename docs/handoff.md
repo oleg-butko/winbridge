@@ -1,3 +1,21 @@
+## U1: fresh-state worker rehearsal implemented — 2026-10-19
+
+[Standalone diagnostic](plans/worker-self-update/worker-rehearsal.md) adds a separate
+capability marker / typed report; ArtifactQuery v1 and legacy RPC unchanged.
+Candidate uses create-only fresh local state/unique IPC, no production config,
+controller, delivery, recipes or direct commands. Actual IPC readiness, normal
+fresh-instance server stop and outer owned-tree cleanup are separate from future
+production activation. Exact schemas are diagnostic expectations, not current-worker
+proof. No durable health receipt/approval/FSM transition yet. Schemas remain 9/15.
+522 workspace tests including four actual-process rehearsal tests passed;
+Linux/Windows Clippy all-targets, fmt/contracts, Node typecheck/scaffold (210 md),
+exporter 8 tests, runner 4/cache 10 tests and PowerShell syntax/schema checks passed.
+Windows test/build/rehearsal gate pending. Debian free 32.2 GB; disk measurement
+`.winbridge/update-preparation/worker-rehearsal-checks-disk.json`, no caches pruned.
+Next: finish checks/native gate, then owner/epoch/artifact-bound health intent and
+receipt with authenticated production compatibility observation. Never run recovery
+on a copied live journal. Installed worker unmodified/healthy; no bootstrap needed.
+
 ## U1: preimages actor native gate passed — 2026-10-19
 
 Clean 2cdc850, run `20261019-072235-273b010c`, Task

@@ -106,7 +106,9 @@ status и release только после source/Job/output proof. Добавл�
 прошёл [189 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md).
 [Actor v8 / отмена копирования](docs/plans/worker-self-update/runtime-preimages-actor.md)
 прошёл [193 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md).
-Проверка здоровья, exact shutdown и activation остаются впереди. Весь U1 ещё не завершён.
+[Fresh-state rehearsal](docs/plans/worker-self-update/worker-rehearsal.md) запускает worker
+с новым пустым журналом и проверяет IPC/остановку; local tests passed, Windows gate pending.
+Durable health approval, exact shutdown и activation остаются впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

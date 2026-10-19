@@ -15,6 +15,7 @@ pub mod runtime_baseline;
 pub mod runtime_preimages;
 pub mod source;
 pub mod supervisor;
+pub mod worker_rehearsal;
 pub mod worker_source;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

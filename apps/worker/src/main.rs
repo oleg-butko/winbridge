@@ -14,6 +14,19 @@ async fn main() -> ExitCode {
 }
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "--rehearsal") {
+        if let [_, directory] = args.as_slice() {
+            let report = winbridge_worker::rehearsal::run(Path::new(directory)).await?;
+            println!(
+                "{}",
+                serde_json::to_string(&report).map_err(|e| e.to_string())?
+            );
+            return Ok(());
+        }
+        return Err(
+            "Use --rehearsal NEW_ABSOLUTE_DIRECTORY; production config is never accepted".into(),
+        );
+    }
     if args.first().is_some_and(|arg| arg == "--artifact-info") {
         if args.len() != 1 {
             return Err(
@@ -30,7 +43,7 @@ async fn run() -> Result<(), String> {
         return Ok(());
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --describe\n  --config PATH validate\n  --config PATH verify-runtime (read-only; no journal/scheduler)\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH prepare-recovery NEW_DIRECTORY (archive/new pair; stays blocked)\n  --config PATH activate-recovery (prepared target config; physical check required)\n  --config PATH info | list\n  --config PATH operations REQUEST.json (readonly; pinned journal scope)\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --rehearsal NEW_ABSOLUTE_DIRECTORY (fresh isolated diagnostic, no production config)\n  --describe\n  --config PATH validate\n  --config PATH verify-runtime (read-only; no journal/scheduler)\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH prepare-recovery NEW_DIRECTORY (archive/new pair; stays blocked)\n  --config PATH activate-recovery (prepared target config; physical check required)\n  --config PATH info | list\n  --config PATH operations REQUEST.json (readonly; pinned journal scope)\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {

@@ -5,6 +5,24 @@ use std::{
 
 fn run() -> Result<bool, String> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if let [op, image, sha, directory, worker_schema, updater_schema] = args.as_slice() {
+        if op == "rehearse-worker" {
+            let proof = winbridge_update::worker_rehearsal::inspect(
+                Path::new(image),
+                sha,
+                Path::new(directory),
+                worker_schema.parse().map_err(|_| "Invalid worker schema")?,
+                updater_schema
+                    .parse()
+                    .map_err(|_| "Invalid updater schema")?,
+            )?;
+            println!(
+                "{}",
+                serde_json::to_string(&proof).map_err(|e| e.to_string())?
+            );
+            return Ok(true);
+        }
+    }
     if let [op, source, manifest, stage, report_sha256] = args.as_slice() {
         if op == "inspect-candidate-files" {
             let inspection = winbridge_update::candidate_artifacts::inspect_candidate_files(
@@ -61,7 +79,7 @@ fn run() -> Result<bool, String> {
         return Ok(true);
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge updater — preparation and update journal\n  --build-info (readonly identity; no configuration required)\n  inspect-candidate-files ABSOLUTE_SOURCE MANIFEST_SHA256 ABSOLUTE_STAGING REPORT_SHA256 (readonly files; no journal/install authority)\n  verify-source ABSOLUTE_DIRECTORY EXPECTED_MANIFEST_SHA256\n  verify-archive ABSOLUTE_ZIP ARCHIVE_SHA256 MANIFEST_SHA256\n  [--config PATH] plan ABSOLUTE_INCOMING_DIRECTORY EXPECTED_MANIFEST_SHA256\n  [--config PATH] journal init\n  [--config PATH] journal status [UPDATE_ID]\n  [--config PATH] journal build-status UPDATE_ID_OR_ATTEMPT_ID\n  [--config PATH] journal supervisor-status UPDATE_ID_OR_LAUNCH_ID\n  [--config PATH] journal source-status UPDATE_ID [OFFSET] [LIMIT]\n  [--config PATH] journal source-inspect UPDATE_ID [OFFSET] [LIMIT]\nDefault config: winbridge-update.local.json beside this executable.\nSupervisor internal entry is gated by a durable launch and is not a user update command. Only journal init is a public metadata writer. Source apply is library-only for the trusted driver. No source-write CLI, runtime replacement, shutdown or automatic update is implemented.");
+        println!("WinBridge updater — preparation and update journal\n  rehearse-worker IMAGE SHA256 NEW_ABSOLUTE_DIRECTORY WORKER_SCHEMA UPDATER_SCHEMA (isolated diagnostic; creates fresh state, no install authority)\n  --build-info (readonly identity; no configuration required)\n  inspect-candidate-files ABSOLUTE_SOURCE MANIFEST_SHA256 ABSOLUTE_STAGING REPORT_SHA256 (readonly files; no journal/install authority)\n  verify-source ABSOLUTE_DIRECTORY EXPECTED_MANIFEST_SHA256\n  verify-archive ABSOLUTE_ZIP ARCHIVE_SHA256 MANIFEST_SHA256\n  [--config PATH] plan ABSOLUTE_INCOMING_DIRECTORY EXPECTED_MANIFEST_SHA256\n  [--config PATH] journal init\n  [--config PATH] journal status [UPDATE_ID]\n  [--config PATH] journal build-status UPDATE_ID_OR_ATTEMPT_ID\n  [--config PATH] journal supervisor-status UPDATE_ID_OR_LAUNCH_ID\n  [--config PATH] journal source-status UPDATE_ID [OFFSET] [LIMIT]\n  [--config PATH] journal source-inspect UPDATE_ID [OFFSET] [LIMIT]\nDefault config: winbridge-update.local.json beside this executable.\nSupervisor internal entry is gated by a durable launch and is not a user update command. Only journal init is a public metadata writer. Source apply is library-only for the trusted driver. No source-write CLI, runtime replacement, shutdown or automatic update is implemented.");
         return Ok(true);
     }
     let config_path = if args.first().is_some_and(|a| a == "--config") {

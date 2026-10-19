@@ -12,7 +12,7 @@ Main и pins](plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.
 добавляет immutable intent/receipt и create-only пять copies до source effects;
 [Library native gate](plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md)
 прошёл 189 tests/full build/Main/pins. [Actor v8](plans/worker-self-update/runtime-preimages-actor.md)
-прошёл [193 native tests / full build](plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md); health/shutdown/install остаются впереди. Installed runtime не обновлялся.
+прошёл [193 native tests / full build](plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md); health/shutdown/install остаются впереди. Добавлен [fresh-state rehearsal](plans/worker-self-update/worker-rehearsal.md): четыре local tests passed, native gate pending; durable health approval ещё не готов. Installed runtime не обновлялся.
 [Schema-7 live control gate](plans/worker-self-update/windows-runtime-control-gate-2026-10-18.md)
 прошёл: 165 native tests / 19 groups, full build и actual Main/pin lifetime.
 

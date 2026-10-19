@@ -1,6 +1,8 @@
 //! Shared wire contracts and the local worker read model.
 mod artifact;
 pub use artifact::*;
+mod worker_rehearsal;
+pub use worker_rehearsal::*;
 mod runtime_identity;
 pub use runtime_identity::*;
 

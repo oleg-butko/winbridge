@@ -14,6 +14,7 @@ pub use recovery::RECOVERY_MARKER;
 pub use recovery_pair::{
     activate_recovery, prepare_recovery, PreparationStage, RecoveryActivation, RecoveryPreparation,
 };
+pub mod rehearsal;
 mod retention;
 pub mod runtime_guard;
 mod settings;

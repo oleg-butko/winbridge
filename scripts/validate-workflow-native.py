@@ -25,6 +25,13 @@ def updater_schema_from_source(source):
     return int(definitions[0])
 
 
+def worker_schema_from_source(source):
+    definitions = re.findall(rb'(?m)^pub const JOURNAL_SCHEMA_VERSION: u32 = ([1-9][0-9]*);\r?$', source)
+    if len(definitions) != 1 or not 0 < int(definitions[0]) <= 0xFFFFFFFF:
+        raise ValueError('Expected exactly one bounded worker schema constant in verified source')
+    return int(definitions[0])
+
+
 def prepare_resume_package(config, shared, run_id):
     """Fresh committed Debian fixture; Windows must import precisely these pinned bytes."""
     local = ROOT / '.winbridge' / 'resume-validation' / run_id
@@ -261,6 +268,9 @@ def main():
         archive_has_finalization_wiring = 'winbridge/scripts/test-update-candidate-finalization.ps1' in archive.namelist()
         archive_has_installed_set = 'winbridge/apps/update/src/installed_set.rs' in archive.namelist()
         archive_has_runtime_startup = 'winbridge/scripts/test-update-runtime-startup.ps1' in archive.namelist()
+        archive_has_worker_rehearsal = 'winbridge/scripts/test-update-worker-rehearsal.ps1' in archive.namelist()
+        if archive_has_worker_rehearsal:
+            expected_worker_schema = worker_schema_from_source(archive.read('winbridge/apps/worker/src/store.rs'))
         archive_has_runtime_control = 'winbridge/apps/worker/src/update_control/tests/runtime_control_cases.rs' in archive.namelist()
         archive_has_runtime_baseline = (archive_has_runtime_control
                                         and b'baselineIntentBeforeAck' in archive.read('winbridge/apps/worker/src/update_control/tests/runtime_control_cases.rs'))
@@ -714,6 +724,24 @@ exit $nativeExit
                 expected_artifact = next(x for x in proof['artifactIdentities'] if x['name'] == a['name'])['query']
                 if a['image'] != expected_artifact['image'] or a['descriptor'] != expected_artifact['descriptor']:
                     raise RuntimeError('Candidate exact-file evidence differs from actual executable queries')
+            if archive_has_worker_rehearsal:
+                rehearsal = json.loads((report / 'worker-rehearsal-proof.json').read_text(encoding='utf-8-sig'))
+                r = rehearsal['rehearsal']
+                actual_worker = next(a for a in proof['artifactIdentities'] if a['name'] == 'winbridge-worker.exe')['query']
+                if (rehearsal.get('kind') != 'worker_rehearsal_inspection'
+                        or not all(rehearsal.get(k) is True for k in ['sameSchema','cleanupVerified'])
+                        or any(rehearsal.get(k) is not False for k in ['journalBound','candidateVerified','runtimeApplied'])
+                        or rehearsal['image'] != actual_worker['image'] or r['descriptor'] != actual_worker['descriptor']
+                        or r['kind'] != 'worker_rehearsal' or r['schemaVersion'] != 1 or r['contractVersion'] != 1
+                        or not all(r.get(k) is True for k in ['freshJournal','ipcReady','serverStopped'])
+                        or any(r.get(k) is not False for k in ['controllerEnabled','directCommandsEnabled','productionStateOpened','candidateVerified','runtimeApplied'])
+                        or r['workerJournalSchema'] != expected_worker_schema
+                        or rehearsal['expectedWorkerJournalSchema'] != expected_worker_schema
+                        or r['updaterJournalSchema'] != expected_updater_schema
+                        or rehearsal['expectedUpdaterJournalSchema'] != expected_updater_schema
+                        or r['workerConfigSchema'] != 1 or r['protocolVersion'] != 1
+                        or not r['instanceId'].startswith('rehearsal-') or r['process']['processId'] <= 0):
+                    raise RuntimeError('Candidate fresh-state rehearsal/isolation/schema evidence incomplete')
             log = (report / 'update-native-preflight.log').read_text(encoding='utf-8-sig')
             for name in ['candidate_artifact_receipt_and_parent_phase_commit_together_without_install_permission', 'candidate_artifact_ignored_writes_roll_back_parent_and_allow_only_readonly_recheck', 'candidate_artifact_tamper_blocks_receipt_and_retains_building_and_source_barrier', 'candidate_artifact_corrupt_role_with_recomputed_fingerprint_is_rejected', 'schema_six_migration_preserves_report_history_and_does_not_rebind_candidate_authority']:
                 if 'compiler::report::' + name + ' ... ok' not in log:
