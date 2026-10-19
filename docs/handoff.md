@@ -1,3 +1,33 @@
+## U1: compatibility + sidecar correction native retry running — 2026-10-19
+
+Previous goal turn made progress: bf0573a guard fix and 29b4401 live/config
+compatibility committed. 530 workspace tests/doctests, both Clippy targets,
+generated TS/check, UI typecheck/build and runner/cache checks passed sequentially.
+
+Clean source `29b4401dce26546c4e1b4116e6a2b6efce1b0f46`, archive
+`winbridge-20261019T152259Z-29b4401-9e875483.zip`, SHA
+`cf2e1be8034690fa7f55a62a2eb1182ebdbd1348b78c2c34d5fe150726bd3fa1`
+(4,873,004 bytes, 594 files). Run `20261019-112352-a49287c3`, Task
+`75f1319b-556b-48c5-9b28-a92814d31c95` confirmed running.
+Runner session 53743; log `.winbridge/update-preparation/worker-compatibility-native.log`.
+Poll the same task, do not restart on observation timeout. Original cache owner
+20261017-061527-f4639971, schema-8 updater reference below unchanged. Expected
+206 native tests / 19 groups, full candidate build, actual config-check and
+fresh-state rehearsal proofs, actual product Main/pins. Derive actual final counts.
+The Windows-only DeleteFileW test must prove full validation handles delete-pending
+Access denied, not merely mock this OS behavior. Verify all ready bytes/hash and
+fresh installed Info. Full rehearsal/compatibility gate is not yet passed.
+
+Installed worker still source1f3aa9f/schema14, generation unchanged, healthy/idle
+at launch. No windows; leave it running, desktop not needed. No bootstrap now.
+Next after review/pass: durable one-use health launch intent/PID before resume,
+config/rehearsal reports + cleanup bound to owner/epoch/current artifact/source
+receipt and fresh v3 compatibility. Do not adopt standalone JSON or run recovery
+on a copied live DB. Health approval/exact shutdown/install and U2/U3 still open.
+Use sequential Cargo commands: different feature builds during workspace tests
+can overwrite metadata needed by later rustdoc. Root free ~32 GB; measurements
+and validation logs under .winbridge/update-preparation, no caches pruned.
+
 ## U1: compatibility v3/v9 + readonly candidate config implemented; guard fix — 2026-10-19
 
 [Compatibility block](plans/worker-self-update/worker-compatibility.md) is ready for native:
