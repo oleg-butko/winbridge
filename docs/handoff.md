@@ -1,3 +1,23 @@
+## U1: candidate fresh-state rehearsal native gate running — 2026-10-19
+
+Clean source `cd85cf9b653356196c83879d0d3b141c162f4c49`, archive
+`winbridge-20261019T114251Z-cd85cf9-0ef995cf.zip`, SHA
+`55c01a95938060c28033451dd8a32774e600d5949d228481741a12b4b7c6cfbc`
+(4,856,364 bytes, 586 files). Shared run `20261019-074259-5c52f602`, Task
+`87eac941-f37c-4fbe-aa9c-b84846cb84e0` accepted/running.
+Debian runner session 14707; log `.winbridge/update-preparation/worker-rehearsal-native.log`.
+Poll this existing task; no timeout replay. Reuse only original cache owner
+`20261017-061527-f4639971`; schema-8 updater reference/SHA from baseline gate below.
+Schema remains 9/15. Expected old gates plus four actual rehearsal tests and
+actual full candidate `worker-rehearsal-proof.json`; verify final ready files/hash,
+exact schemas/source/image/process and production Info before claiming success.
+No GUI/networked new process or installed replacement; worker remains, desktop unnecessary.
+Next: review native outcome, then durable owner/epoch/artifact-bound health launch,
+receipt/approval and responsive abort; actual launch needs saved intent before any
+process creation/resume, not adoption of this standalone diagnostic JSON. Current
+worker compatibility must come from authenticated control, not caller schema args.
+Do not schedule/recover a copied live journal. U1/U2/U3/bootstrap remain open.
+
 ## U1: fresh-state worker rehearsal implemented — 2026-10-19
 
 [Standalone diagnostic](plans/worker-self-update/worker-rehearsal.md) adds a separate
