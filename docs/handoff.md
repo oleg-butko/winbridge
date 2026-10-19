@@ -1,3 +1,33 @@
+## U1: portable removal + compatibility combined gate running — 2026-10-19
+
+Clean source `7ed3900028682816ef5d0b653300758ad48a06ed`, archive
+`winbridge-20261019T153407Z-7ed3900-b2957da6.zip`, SHA
+`9d8259b7c7b477b4261c045fe13f7d81fce730d020c264fd2a1cc8ce379e1a40`
+(4,876,028 bytes / 594 files). Run `20261019-113708-5fe0af67`, Task
+`96f5965b-5a8e-49ba-ac90-3f9d3d84c01c` confirmed running, PID3076 at last poll.
+Runner session 83190; log `.winbridge/update-preparation/worker-compatibility-portable-native.log`.
+Actual native deletion boundary test passed: NotFound / OS Some(2), full retry
+and final absence checked. Do not describe this as kernel AccessDenied reproduction;
+that class has separate controlled fault coverage. Previous 0327204/29b4401 runs
+are terminal failed test assertions, not production worker failures.
+
+Poll this existing task to terminal, no observation-timeout restart. Original
+cache owner 20261017-061527-f4639971 and schema-8 updater reference4b1eefef... remain.
+Expect 206 tests / 19 groups + full build/config/rehearsal/Main/pins, derive actual.
+Verify all ready bytes/SHA and fresh installed Info before pass; gate is not green yet.
+Production code bf0573a/29b4401, tests7ed3900. Local530 / both Clippy / TS/UI passed.
+No windows; worker remains, desktop unnecessary. No manual bootstrap now.
+
+Next after review/pass: complete durable health library + actor as one vertical
+scenario. Admission persists one-use intent bound to current artifact/source/
+owner/epoch/v3 metadata before ACK; every helper PID/Job receipt precedes resume.
+Config check and fresh-journal rehearsal run under owned jobs, never copied live DB.
+Refactor low-level probe lifecycle hooks; reuse artifact receipt descriptor to avoid
+extra query processes. Save terminal cleanup even on abort; abort/release must
+check health quiescence, not just compiler-empty. Pending intents never mint replay
+permits. Only fresh success can atomically advance CandidateAccepted. Public
+update/exact shutdown/install/U2/U3 remain open.
+
 ## U1: portable native removal assertion corrected; repeat next — 2026-10-19
 
 0327204 / run `20261019-112845-985c1652` / Task
