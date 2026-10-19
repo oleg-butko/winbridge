@@ -335,6 +335,7 @@ impl UpdateJournal {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage)?;
         source_owner(&tx, authority, r)?;
+        super::runtime_baseline::before_source(&tx, &r.update_id)?;
         if record(&tx, &r.update_id)?.phase != UpdatePhase::Preparing {
             return Err(fail(
                 JournalErrorCode::InvalidRequest,

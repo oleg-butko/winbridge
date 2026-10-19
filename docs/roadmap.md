@@ -4,6 +4,13 @@
 
 ## Самообновление U0–U4 — 2026-10-17
 
+В U1 добавлен [durable runtime baseline](plans/worker-self-update/runtime-baseline.md):
+updater schema 8, atomic intent/receipt с parent transitions и запретом source effects
+пока baseline pending. Это trusted library; supervisor v7/native schema-8 gate,
+preimages/health/shutdown/install остаются впереди. Installed runtime не обновлялся.
+Отдельный schema-7 Windows повтор проверяет исправление ложного Busy в live control.
+
+
 По просьбе пользователя продолжение A0–A9 временно отложено.
 [Анализ auto-update](analysis/worker-self-update/README.md) одобрен; уточнён
 [план U0–U4](plans/worker-self-update/README.md). U0 завершён:

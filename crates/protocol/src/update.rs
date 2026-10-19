@@ -115,6 +115,9 @@ pub enum UpdatePhase {
     deny_unknown_fields
 )]
 pub enum UpdateEvent {
+    /// Internal baseline driver only; no source/runtime file effects.
+    RuntimeBaselineAdmitted,
+    RuntimeBaselineVerified,
     BeginPreparation,
     BeginSourceApply,
     SourceVerified,

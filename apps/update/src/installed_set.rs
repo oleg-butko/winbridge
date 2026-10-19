@@ -54,7 +54,11 @@ pub struct PinnedInstalledSet {
     _manifest: Pinned,
     _images: Vec<Pinned>,
 }
-fn valid_manifest(m: &InstalledSetManifest, installation: &str, scope: &str) -> Result<()> {
+pub(crate) fn valid_manifest(
+    m: &InstalledSetManifest,
+    installation: &str,
+    scope: &str,
+) -> Result<()> {
     if m.schema_version != 1
         || m.kind != "winbridge_installed_set"
         || uuid::Uuid::parse_str(&m.set_id).is_err()

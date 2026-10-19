@@ -1,3 +1,23 @@
+## U1: durable old-runtime baseline library — 2026-10-18
+
+[Baseline](plans/worker-self-update/runtime-baseline.md), updater schema 8: immutable
+intent/receipt атомарны с двумя parent transitions до source effects. Pending
+блокирует BeginPreparation/source plan; raw lifecycle events и late adoption
+запрещены. Receipt связывает known manifest/четыре images, exact loaded worker,
+frozen supervisor root/owner/epoch/config/request. Pins удерживаются до commit.
+Повтор готового результата читает историю; epoch restart не перепривязывает pending.
+Migration 7 → 8 сохраняет consistent backup/history и не создаёт baseline автоматически.
+498 workspace tests passed, включая восемь новых DB fixtures. Старые migration
+fixtures обновлены для удаления schema-8 additions перед имитацией старой схемы;
+production migration остаётся строгой. fmt/generated contracts/typecheck/scaffold
+и exporter tests passed; Linux/Windows Clippy all-targets passed.
+Это trusted library без supervisor v7/public UI/update. Native schema-8 gate,
+preimages, health/shutdown/install остаются впереди. Independent native schema-7
+run `20261018-204941-965a8934`, Task `1276429a-ff9b-46c3-81ed-673de1a85395`
+проверяет clean 256b182 с исправлением query retirement; пока running.
+Debian free: 32,382,713,856 bytes, измерение сохранено локально. Installed worker
+прежний; ручной bootstrap не требуется. Далее supervisor baseline admission/status.
+
 ## U1: повтор native control — гонка завершения query — 2026-10-18
 
 Run `20261018-203256-077d1a67`, source db2e565, Task

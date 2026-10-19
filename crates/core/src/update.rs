@@ -383,6 +383,7 @@ pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePh
     use UpdateEvent as E;
     use UpdatePhase as P;
     let next = match (phase, event) {
+        (P::Requested, E::RuntimeBaselineAdmitted | E::RuntimeBaselineVerified) => P::Requested,
         (P::Requested, E::BeginPreparation) => P::Preparing,
         (P::Preparing, E::BeginSourceApply) => P::SourceApplying,
         (P::Preparing | P::SourceApplying, E::SourceVerified) => P::Building,

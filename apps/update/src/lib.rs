@@ -11,6 +11,7 @@ pub mod candidate_artifacts;
 pub mod installed_set;
 pub mod journal;
 mod preparation;
+pub mod runtime_baseline;
 pub mod source;
 pub mod supervisor;
 pub mod worker_source;
