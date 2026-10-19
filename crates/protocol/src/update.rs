@@ -531,6 +531,8 @@ pub enum SupervisorAction {
     AbortBeforeCutover,
     /// Internal v5, readonly file validation and atomic metadata receipt only.
     VerifyCandidateArtifacts,
+    /// Internal v6, readonly identity of the exact bound live worker.
+    ObserveWorkerRuntime,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -595,8 +597,12 @@ pub struct SupervisorWorkerBinding {
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum WorkerUpdateControlCommand {
     Observe,
+    /// Worker control v2 only; never a lease or mutation command.
+    ObserveRuntime,
     BeginSource,
-    Advance { command: WorkerUpdateCommand },
+    Advance {
+        command: WorkerUpdateCommand,
+    },
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -632,6 +638,9 @@ pub enum WorkerUpdateControlResult {
     Snapshot {
         lease: Option<Box<WorkerUpdateLease>>,
     },
+    RuntimeIdentity {
+        identity: Box<crate::LoadedWorkerIdentity>,
+    },
     /// An error does not prove absence of a committed effect. Observe the original ID.
     Error { message: String },
 }
@@ -642,9 +651,27 @@ impl WorkerUpdateControlResult {
 }
 impl WorkerUpdateControlResponse {
     pub fn into_lease(self) -> Result<Option<WorkerUpdateLease>, String> {
+        if self.control_version != 1 {
+            return Err("Lease receipt requires worker control v1; no effect fallback".into());
+        }
         match self.result {
             WorkerUpdateControlResult::Snapshot { lease } => Ok(lease.map(|l| *l)),
             WorkerUpdateControlResult::Error { message } => Err(message),
+            WorkerUpdateControlResult::RuntimeIdentity { .. } => {
+                Err("Runtime identity is not a lease receipt".into())
+            }
+        }
+    }
+    pub fn into_runtime_identity(self) -> Result<crate::LoadedWorkerIdentity, String> {
+        if self.control_version != 2 {
+            return Err("Runtime identity requires worker control v2; no fallback".into());
+        }
+        match self.result {
+            WorkerUpdateControlResult::RuntimeIdentity { identity } => Ok(*identity),
+            WorkerUpdateControlResult::Error { message } => Err(message),
+            WorkerUpdateControlResult::Snapshot { .. } => {
+                Err("Lease receipt is not a runtime identity".into())
+            }
         }
     }
 }

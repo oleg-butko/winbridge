@@ -35,8 +35,8 @@ constructor с удерживаемыми pins и authenticated peer может 
    `SupervisorSpec.worker` и его context/generation/process не перепривязываются
    к новому процессу. Историческое наблюдение не становится свежим file grant.
 
-Это план следующего блока; control v2, durable baseline и activation ещё не
-реализованы. Положительный actual Main/pins gate существующего constructor
+[Control v2 / supervisor v6](runtime-live-control.md) реализованы следующим блоком;
+durable baseline и activation ещё не реализованы. Положительный actual Main/pins gate существующего constructor
 сохранён в [native отчёте](windows-runtime-startup-gate-2026-10-18.md). Перенос DTO
 проверяется локальными контрактными/receipt tests и Windows cross-check; новый
 native gate будет включать следующий runtime control scenario.

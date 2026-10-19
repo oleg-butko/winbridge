@@ -12,6 +12,15 @@ use winbridge_worker::{
     activate_recovery, prepare_recovery, store::Store, PreparationStage, Worker,
 };
 
+// Independent in-process fixtures are not independent OS processes: a Unix
+// fork in the real-history case can temporarily inherit another case's flock
+// until exec. Do not overlap those fixture lifetimes. The production recovery
+// lock stays nonblocking and tests of live-owner/concurrent activation stay intact.
+fn recovery_case_scope() -> std::sync::MutexGuard<'static, ()> {
+    static CASES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    CASES.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn config(root: &Path) -> WorkerConfig {
     fs::create_dir_all(root.join("project")).unwrap();
     serde_json::from_value(serde_json::json!({"schemaVersion":1,"instanceId":format!("source-{}",uuid::Uuid::new_v4()),"nodeId":"worker","stateDirectory":root.join("source"),"maxOutputBytesPerTask":10000,"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"fixture","workspaceRoot":root.join("project"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]})).unwrap()
@@ -92,6 +101,7 @@ fn rows(path: &Path) -> Vec<Vec<Vec<rusqlite::types::Value>>> {
 
 #[test]
 fn archive_keeps_real_history_and_prepared_pair_requires_fenced_activation() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     let worker = Worker::open(cfg.clone()).unwrap();
@@ -197,6 +207,7 @@ fn archive_keeps_real_history_and_prepared_pair_requires_fenced_activation() {
 
 #[test]
 fn live_worker_or_inspector_cannot_be_archived_or_replaced() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     let worker = Worker::open(cfg.clone()).unwrap();
@@ -211,6 +222,7 @@ fn live_worker_or_inspector_cannot_be_archived_or_replaced() {
 
 #[test]
 fn partial_preparation_and_partial_receipt_never_activate_a_journal() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     fs::create_dir(&cfg.state_directory).unwrap();
@@ -234,6 +246,7 @@ fn partial_preparation_and_partial_receipt_never_activate_a_journal() {
 
 #[test]
 fn missing_witness_in_empty_restored_journal_does_not_invent_physical_proof() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     drop(Worker::open(cfg.clone()).unwrap());
@@ -250,6 +263,7 @@ fn missing_witness_in_empty_restored_journal_does_not_invent_physical_proof() {
 
 #[test]
 fn foreign_witness_is_refused_before_new_owner_epoch_and_archive_stays_readable() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     drop(Worker::open(cfg.clone()).unwrap());
@@ -277,6 +291,7 @@ fn foreign_witness_is_refused_before_new_owner_epoch_and_archive_stays_readable(
 
 #[test]
 fn archive_corruption_or_lost_preparation_gate_cannot_activate() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     drop(Worker::open(cfg.clone()).unwrap());
@@ -298,6 +313,7 @@ fn archive_corruption_or_lost_preparation_gate_cannot_activate() {
 
 #[test]
 fn partial_execution_domain_member_refuses_dispatch_before_epoch_changes() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     drop(Worker::open(cfg.clone()).unwrap());
@@ -321,6 +337,7 @@ fn partial_execution_domain_member_refuses_dispatch_before_epoch_changes() {
 
 #[test]
 fn old_activation_receipt_cannot_remove_a_retired_source_latch() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     drop(Worker::open(cfg.clone()).unwrap());
@@ -333,6 +350,7 @@ fn old_activation_receipt_cannot_remove_a_retired_source_latch() {
 #[cfg(unix)]
 #[test]
 fn linked_recovery_destination_is_refused_without_writing_outside() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     drop(Worker::open(cfg.clone()).unwrap());
@@ -348,6 +366,7 @@ fn linked_recovery_destination_is_refused_without_writing_outside() {
 #[cfg(windows)]
 #[test]
 fn canonical_drive_path_keeps_the_journal_and_network_prefixes_are_refused() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let mut cfg = config(temp.path());
     let worker = Worker::open(cfg.clone()).unwrap();
@@ -374,6 +393,7 @@ fn canonical_drive_path_keeps_the_journal_and_network_prefixes_are_refused() {
 #[cfg(windows)]
 #[test]
 fn an_unlisted_live_process_blocks_cutover_even_with_empty_history() {
+    let _case = recovery_case_scope();
     use winbridge_platform::{
         execution_domain::{observe_domain, DomainIdentity, ExecutionDomain},
         process_identity::ProcessObservation,
@@ -434,6 +454,7 @@ fn an_unlisted_live_process_blocks_cutover_even_with_empty_history() {
 #[cfg(windows)]
 #[test]
 fn a_second_recovery_retires_the_old_activation_receipt() {
+    let _case = recovery_case_scope();
     let temp = TempDir::new().unwrap();
     let cfg = config(temp.path());
     drop(Worker::open(cfg.clone()).unwrap());

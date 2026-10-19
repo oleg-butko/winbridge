@@ -21,6 +21,13 @@ impl RuntimeGuard {
     pub fn revalidate(&self) -> Result<()> {
         self.pin.revalidate()
     }
+    pub(crate) fn require_installation(&self, installation: &str, scope: &str) -> Result<()> {
+        let manifest = &self.pin.observation().manifest;
+        if manifest.installation_id != installation || manifest.scope_sha256 != scope {
+            return Err("Loaded runtime belongs to another updater installation/scope".into());
+        }
+        Ok(())
+    }
 }
 /// A known manifest is an explicit installed-runtime marker. Development/legacy
 /// binaries without this marker retain normal serve, with no update authority.

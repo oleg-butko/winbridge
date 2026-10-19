@@ -200,6 +200,7 @@ $oldCompilerOutputReport = $env:WINBRIDGE_COMPILER_OUTPUT_REPORT
 $oldCompilerReportProof = $env:WINBRIDGE_COMPILER_REPORT_PROOF
 $oldCandidateArtifactProof = $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF
 $oldArtifactActorReport = $env:WINBRIDGE_ARTIFACT_ACTOR_REPORT
+$oldRuntimeIdentityProof = $env:WINBRIDGE_RUNTIME_IDENTITY_PROOF
 $oldUpdateTestPwsh = $env:WINBRIDGE_UPDATE_TEST_PWSH
 $oldSupervisorSourceReport = $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT
 $oldSupervisorActualSource = $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE
@@ -509,6 +510,7 @@ try {
         $env:WINBRIDGE_COMPILER_REPORT_PROOF = Join-Path $ReportDirectory 'compiler-report-binding-proof.json'
         $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF = Join-Path $ReportDirectory 'candidate-artifact-set-proof.json'
         $env:WINBRIDGE_ARTIFACT_ACTOR_REPORT = Join-Path $ReportDirectory 'artifact-actor-proof.json'
+        $env:WINBRIDGE_RUNTIME_IDENTITY_PROOF = Join-Path $ReportDirectory 'runtime-identity-control-proof.json'
         & (Join-Path $source 'scripts/test-update-candidate-finalization.ps1') -ReportPath (Join-Path $ReportDirectory 'candidate-finalization-wiring-proof.json')
         if (-not $?) { throw 'Portable candidate finalization wiring test failed' }
         $env:WINBRIDGE_UPDATE_TEST_PWSH = (Get-Process -Id $PID).Path
@@ -532,7 +534,9 @@ try {
             @{name='update-platform-atomic-executable';arguments=@('test','-p','winbridge-platform','--lib','windows_atomic::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-compiler-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::compiler_actor_commits_before_dispatch_stays_responsive_and_aborts_cleanly','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')},
             @{name='update-artifact-actor';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::artifact_actor_','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')},
-            @{name='update-worker-runtime-startup';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_runtime_startup','--locked','--offline','--','--test-threads=1','--nocapture')}
+            @{name='update-worker-runtime-startup';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_runtime_startup','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-runtime-identity-contract';arguments=@('test','-p','winbridge-protocol','--test','runtime_identity','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-runtime-identity-control';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::runtime::runtime_identity_roundtrip_from_pinned_process','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')}
         )
     }
     foreach ($group in $groups) {
@@ -544,6 +548,11 @@ try {
         if ($code -ne 0) { throw "Native test group $($group.name) failed with exit $code; see $log" }
     }
     if ($UpdatePreparationOnly) {
+        $runtimeIdentity = Get-Content -LiteralPath (Join-Path $ReportDirectory 'runtime-identity-control-proof.json') -Raw | ConvertFrom-Json
+        if ($runtimeIdentity.kind -cne 'runtime_identity_control_proof' -or $runtimeIdentity.platform -cne 'windows' -or $runtimeIdentity.build.sourceDirty -or $runtimeIdentity.build.sourceCommit -cne $manifest.sourceCommit -or $runtimeIdentity.identity.descriptor.build.buildId -cne $runtimeIdentity.build.buildId -or $runtimeIdentity.runtimeApplied -or $runtimeIdentity.candidateVerified -or $runtimeIdentity.windowsOpened) { throw 'Runtime identity control proof incomplete' }
+        foreach ($check in @('passed','actualCopiedProcess','workerEntryPointIsTestHarness','syntheticOtherRoleDescriptors','supervisorAuthenticated','configChangesAfterHashRejected','sourceGenerationIndependent','journalMutexReleased','noLeaseOrSlot')) {
+            if ($runtimeIdentity.$check -ne $true) { throw "Runtime control check missing: $check" }
+        }
         $atomic = Get-Content -LiteralPath (Join-Path $ReportDirectory 'atomic-launch-proof.json') -Raw | ConvertFrom-Json
         if ($atomic.kind -ne 'atomic_executable_proof' -or $atomic.platform -ne 'windows' -or $atomic.runtimeApplied -or $atomic.windowsOpened -or $atomic.build.sourceDirty -or $atomic.build.sourceCommit -cne $manifest.sourceCommit) { throw 'Atomic executable proof identity incomplete' }
         foreach ($case in @('argvAndSuspended','noResume','domainAndPrivateJob','rejectedBeforeCreate','suspendCount','ownerCrashBeforePidReceipt','stdioOnly')) {
@@ -671,6 +680,7 @@ try {
     $env:WINBRIDGE_COMPILER_REPORT_PROOF = $oldCompilerReportProof
     $env:WINBRIDGE_CANDIDATE_ARTIFACT_PROOF = $oldCandidateArtifactProof
     $env:WINBRIDGE_ARTIFACT_ACTOR_REPORT = $oldArtifactActorReport
+    $env:WINBRIDGE_RUNTIME_IDENTITY_PROOF = $oldRuntimeIdentityProof
     $env:WINBRIDGE_UPDATE_TEST_PWSH = $oldUpdateTestPwsh
     $env:WINBRIDGE_SUPERVISOR_SOURCE_REPORT = $oldSupervisorSourceReport
     $env:WINBRIDGE_SUPERVISOR_ACTUAL_SOURCE = $oldSupervisorActualSource

@@ -71,3 +71,73 @@ fn loaded_worker_keeps_existing_bytes_without_becoming_an_authority_token() {
     // Deserializing an observation does not authenticate a peer or validate file
     // paths/hashes. Only a pinned, process-authenticated driver can do that.
 }
+
+#[test]
+fn lease_and_runtime_responses_cannot_be_interpreted_as_each_other_or_downgraded() {
+    use winbridge_protocol::{build_identity, update::*, RequestContext};
+    let descriptor = artifact_descriptor(ArtifactRole::Worker);
+    let process = SupervisorProcess {
+        process_id: 42,
+        birth: "birth".into(),
+        host_id: "host".into(),
+        session_id: 1,
+    };
+    let binding = SupervisorWorkerBinding {
+        context: RequestContext {
+            instance_id: "instance".into(),
+            journal_incarnation: "journal".into(),
+        },
+        generation: "generation".into(),
+        build: build_identity(),
+        process: process.clone(),
+        config_sha256: "a".repeat(64),
+        endpoint: "local".into(),
+    };
+    let snapshot = WorkerUpdateControlResponse {
+        control_version: 1,
+        binding: binding.clone(),
+        update_id: "update".into(),
+        launch_id: "launch".into(),
+        result: WorkerUpdateControlResult::Snapshot { lease: None },
+    };
+    assert_eq!(
+        serde_json::to_string(&snapshot.result).unwrap(),
+        r#"{"kind":"snapshot","lease":null}"#
+    );
+    assert!(snapshot.clone().into_lease().unwrap().is_none());
+    assert!(snapshot.clone().into_runtime_identity().is_err());
+    let mut forged = snapshot;
+    forged.control_version = 2;
+    assert!(forged.clone().into_lease().is_err());
+    assert!(forged.into_runtime_identity().is_err());
+    let identity = LoadedWorkerIdentity {
+        schema_version: 1,
+        kind: "loaded_worker_identity".into(),
+        process,
+        runtime_identity: "directory".into(),
+        set_id: "set".into(),
+        manifest_sha256: "b".repeat(64),
+        descriptor,
+        image: RuntimeImageEvidence {
+            path: "worker.exe".into(),
+            bytes: 1,
+            sha256: "c".repeat(64),
+            file_identity: "image".into(),
+            query_supported: true,
+        },
+    };
+    let mut response = WorkerUpdateControlResponse {
+        control_version: 2,
+        binding,
+        update_id: "update".into(),
+        launch_id: "launch".into(),
+        result: WorkerUpdateControlResult::RuntimeIdentity {
+            identity: Box::new(identity.clone()),
+        },
+    };
+    assert_eq!(response.clone().into_runtime_identity().unwrap(), identity);
+    assert!(response.clone().into_lease().is_err());
+    response.control_version = 1;
+    assert!(response.clone().into_runtime_identity().is_err());
+    assert!(response.into_lease().is_err());
+}

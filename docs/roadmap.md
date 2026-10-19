@@ -86,6 +86,10 @@ live identity/control и durable baseline до SourceApply; U1 остаётся 
 [Shared runtime identity DTO](plans/worker-self-update/runtime-identity-contract.md)
 перенесены в protocol с exact-byte tests и generated TS, без wire/schema changes.
 Control v2/live identity и durable baseline до source effects остаются следующими.
+[Live runtime control v2 / supervisor v6](plans/worker-self-update/runtime-live-control.md)
+реализованы как trusted readonly API, без public installation. 490 local tests и
+Linux/Windows Clippy passed; positive native fixture/combined gate впереди.
+Далее durable old-runtime baseline до SourceApply. U1 не завершён.
 [Использование и ограничения](guides/worker-update-preparation.md).
 A4.3 installed gate остаётся открытым. После самообновления вернуться к прежнему
 архитектурному плану.

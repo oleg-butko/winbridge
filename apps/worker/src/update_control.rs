@@ -29,6 +29,8 @@ pub(crate) struct Registration {
     in_flight: AtomicUsize,
     #[cfg(test)]
     test_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
+    #[cfg(test)]
+    runtime_verified_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
 }
 #[cfg(test)]
 struct ControlTestGate {
@@ -143,6 +145,8 @@ impl Worker {
             in_flight: AtomicUsize::new(0),
             #[cfg(test)]
             test_gate: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            runtime_verified_gate: std::sync::Mutex::new(None),
         }));
         Ok(binding)
     }
@@ -268,6 +272,13 @@ impl Worker {
         Ok(WorkerSupervisorLaunch::Started(Box::new(handle)))
     }
     fn require_control_current(&self, reg: &Registration) -> Result<()> {
+        self.require_control_config_current(reg)?;
+        if self.config.resource_scheduling.is_some() {
+            return Err("Named-resource update reservations are not implemented; source/build grant deferred".into());
+        }
+        Ok(())
+    }
+    fn require_control_config_current(&self, reg: &Registration) -> Result<()> {
         if self.inspection
             || self.stop.load(Ordering::Acquire)
             || self.journal_recovery_required()?.is_some()
@@ -281,9 +292,6 @@ impl Worker {
         {
             return Err("ConfigRestartPending: update bindings changed; no new grant".into());
         }
-        if self.config.resource_scheduling.is_some() {
-            return Err("Named-resource update reservations are not implemented; source/build grant deferred".into());
-        }
         Ok(())
     }
     fn control_authority(
@@ -292,7 +300,16 @@ impl Worker {
         request: &WorkerUpdateControlRequest,
         peer: u32,
     ) -> Result<UpdateRecord> {
-        if request.control_version != 1
+        let version_matches = matches!(
+            (request.control_version, &request.command),
+            (
+                1,
+                WorkerUpdateControlCommand::Observe
+                    | WorkerUpdateControlCommand::BeginSource
+                    | WorkerUpdateControlCommand::Advance { .. }
+            ) | (2, WorkerUpdateControlCommand::ObserveRuntime)
+        );
+        if !version_matches
             || request.binding != reg.binding
             || request.binding.generation != self.generation
         {
@@ -314,6 +331,8 @@ impl Worker {
             || current_owner != request.updater_owner_id
             || info.owner_epoch != request.updater_epoch
             || info.scope_sha256 != reg.scope
+            || info.installation_id != update.request.expected.installation_id
+            || info.scope_sha256 != update.request.expected.scope_sha256
             || update.request.expected.worker_build_id != reg.binding.build.build_id
             || update.request.expected.worker_config_sha256 != reg.binding.config_sha256
             || sup.spec.config_sha256 != reg.config_sha256
@@ -332,6 +351,60 @@ impl Worker {
             );
         }
         Ok(update)
+    }
+    fn control_result(
+        &self,
+        reg: &Registration,
+        request: &WorkerUpdateControlRequest,
+        peer: u32,
+    ) -> Result<WorkerUpdateControlResult> {
+        if request.command != WorkerUpdateControlCommand::ObserveRuntime {
+            return self.control(reg, request, peer).map(|lease| {
+                WorkerUpdateControlResult::Snapshot {
+                    lease: lease.map(Box::new),
+                }
+            });
+        }
+        if request.binding.context != self.request_context()? {
+            return Err("Worker journal context changed; no rebind".into());
+        }
+        let update = self.control_authority(reg, request, peer)?;
+        self.require_control_config_current(reg)?;
+        // Release the short guard mutex before file hashing. No Store mutex is held.
+        let guard = self
+            .runtime_guard
+            .lock()
+            .map_err(|_| "Runtime guard lock poisoned")?
+            .clone()
+            .ok_or("Bootstrap required: loaded runtime guard is not attached")?;
+        guard.require_installation(&update.request.expected.installation_id, &reg.scope)?;
+        let identity = guard.identity();
+        if identity.process != reg.binding.process || identity.descriptor.build != reg.binding.build
+        {
+            return Err(
+                "Loaded runtime process/build differs from immutable worker binding".into(),
+            );
+        }
+        guard.revalidate()?;
+        #[cfg(test)]
+        if let Some(gate) = reg.runtime_verified_gate.lock().unwrap().take() {
+            if let Some(entered) = gate.entered.lock().unwrap().take() {
+                let _ = entered.send(());
+            }
+            gate.release
+                .lock()
+                .unwrap()
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .map_err(|e| format!("Runtime fixture checkpoint stopped: {e}"))?;
+        }
+        self.control_authority(reg, request, peer)?;
+        self.require_control_config_current(reg)?;
+        if request.binding.context != self.request_context()? {
+            return Err("Worker journal context changed during runtime observation".into());
+        }
+        Ok(WorkerUpdateControlResult::RuntimeIdentity {
+            identity: Box::new(identity.clone()),
+        })
     }
     fn control(
         &self,
@@ -355,6 +428,9 @@ impl Worker {
         )?;
         match &request.command {
             WorkerUpdateControlCommand::Observe => self.store()?.existing_worker_update(&spec),
+            WorkerUpdateControlCommand::ObserveRuntime => {
+                Err("Runtime observation is not a lease request".into())
+            }
             WorkerUpdateControlCommand::BeginSource => {
                 if let Some(lease) = self.store()?.existing_worker_update(&spec)? {
                     return Ok(Some(lease));
@@ -520,6 +596,7 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 request.update_id.clone(),
             );
             let (w, r) = (worker.clone(), state.clone());
+            let control_version = if request.control_version == 2 { 2 } else { 1 };
             struct Callback(Arc<Registration>);
             impl Drop for Callback {
                 fn drop(&mut self) {
@@ -534,7 +611,11 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 let worker = w;
                 let registration = r;
                 #[cfg(test)]
-                if matches!(request.command, WorkerUpdateControlCommand::BeginSource) {
+                if matches!(
+                    request.command,
+                    WorkerUpdateControlCommand::BeginSource
+                        | WorkerUpdateControlCommand::ObserveRuntime
+                ) {
                     let gate = registration.test_gate.lock().unwrap().take();
                     if let Some(gate) = gate {
                         if let Some(entered) = gate.entered.lock().unwrap().take() {
@@ -547,30 +628,24 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                             .map_err(|e| format!("Fixture control gate stopped: {e}"))?;
                     }
                 }
-                worker.control(&registration, &request, peer)
+                worker.control_result(&registration, &request, peer)
             })
             .await;
-            let (lease, error) = match result {
-                Ok(Ok(lease)) => (lease, None),
-                Ok(Err(e)) => (None, Some(e)),
-                Err(e) => (
-                    None,
-                    Some(format!(
+            let result = match result {
+                Ok(Ok(result)) => result,
+                Ok(Err(message)) => WorkerUpdateControlResult::Error { message },
+                Err(e) => WorkerUpdateControlResult::Error {
+                    message: format!(
                         "Worker control outcome unconfirmed: {e}; observe original command"
-                    )),
-                ),
+                    ),
+                },
             };
             let response = WorkerUpdateControlResponse {
-                control_version: 1,
+                control_version,
                 binding,
                 launch_id,
                 update_id,
-                result: match error {
-                    Some(message) => WorkerUpdateControlResult::Error { message },
-                    None => WorkerUpdateControlResult::Snapshot {
-                        lease: lease.map(Box::new),
-                    },
-                },
+                result,
             };
             let _ = ipc::write(&mut stream, &response).await;
         }
@@ -581,6 +656,8 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[path = "runtime_control_cases.rs"]
+    mod runtime;
     use std::{
         fs,
         time::{Duration, Instant},
@@ -657,7 +734,7 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
         config: PathBuf,
         updater_config: PathBuf,
         baseline: String,
-        _root: tempfile::TempDir,
+        _root: Option<tempfile::TempDir>,
     }
     impl Fixture {
         async fn new(actual: Option<PathBuf>) -> Self {
@@ -679,25 +756,45 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
             powershell: Option<PathBuf>,
             build_script: &str,
         ) -> Self {
-            let root = if enabled {
-                // Keep the 6 GiB guard on local disk and Unix sockets below
-                // sockaddr_un's path limit; /tmp may be a small tmpfs.
-                #[cfg(windows)]
-                let parent = std::env::current_exe()
-                    .unwrap()
-                    .parent()
-                    .unwrap()
-                    .to_owned();
-                #[cfg(not(windows))]
-                let parent = PathBuf::from("/var/tmp");
-                tempfile::tempdir_in(parent).unwrap()
+            Self::with_build_script_at(actual, enabled, powershell, build_script, None).await
+        }
+        async fn with_build_script_at(
+            actual: Option<PathBuf>,
+            enabled: bool,
+            powershell: Option<PathBuf>,
+            build_script: &str,
+            pinned_location: Option<(PathBuf, PathBuf)>,
+        ) -> Self {
+            let owned_root = if pinned_location.is_some() {
+                None
             } else {
-                tempfile::tempdir().unwrap()
+                Some(if enabled {
+                    // Keep the 6 GiB guard on local disk and Unix sockets below
+                    // sockaddr_un's path limit; /tmp may be a small tmpfs.
+                    #[cfg(windows)]
+                    let parent = std::env::current_exe()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .to_owned();
+                    #[cfg(not(windows))]
+                    let parent = PathBuf::from("/var/tmp");
+                    tempfile::tempdir_in(parent).unwrap()
+                } else {
+                    tempfile::tempdir().unwrap()
+                })
             };
-            let source = actual.clone().unwrap_or_else(|| root.path().join("source"));
-            let runtime = root.path().join("runtime");
-            let other = root.path().join("other");
+            let root = pinned_location
+                .as_ref()
+                .map(|(p, _)| p.as_path())
+                .unwrap_or_else(|| owned_root.as_ref().unwrap().path());
+            let source = actual.clone().unwrap_or_else(|| root.join("source"));
+            let runtime = root.join("runtime");
+            let other = root.join("other");
             for p in [&runtime, &other] {
+                if p == &runtime && pinned_location.is_some() {
+                    continue;
+                }
                 fs::create_dir(p).unwrap();
             }
             if actual.is_none() {
@@ -729,12 +826,12 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
             let manifest: SourceManifest = serde_json::from_slice(&bytes).unwrap();
             let baseline = winbridge_update::sha256(&bytes);
             let config = runtime.join("winbridge-worker.local.json");
-            fs::write(&config,serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"instanceId":format!("control-{}",uuid::Uuid::new_v4()),"nodeId":"worker","stateDirectory":root.path().join("state"),"worker":{"keepRunningOnUiExit":true},"workScheduling":{"maxConcurrentWork":1},"projects":[{"id":"source","workspaceRoot":source,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]},{"id":"other","workspaceRoot":other,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]})).unwrap()).unwrap();
+            fs::write(&config,serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"instanceId":format!("control-{}",uuid::Uuid::new_v4()),"nodeId":"worker","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"workScheduling":{"maxConcurrentWork":1},"projects":[{"id":"source","workspaceRoot":source,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]},{"id":"other","workspaceRoot":other,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]})).unwrap()).unwrap();
             let updater_config = runtime.join("winbridge-update.local.json");
             let mut update_config = serde_json::json!({"schemaVersion":1,"sourceDirectory":source,"runtimeDirectory":runtime,"workerConfigPath":config});
             let source_pin = if enabled {
                 use std::io::Write;
-                let packages = root.path().join("packages");
+                let packages = root.join("packages");
                 fs::create_dir(&packages).unwrap();
                 update_config["schemaVersion"] = serde_json::json!(2);
                 update_config["sourcePackagesDirectory"] = serde_json::json!(packages);
@@ -794,21 +891,38 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
                 None
             };
             fs::write(&updater_config, serde_json::to_vec(&update_config).unwrap()).unwrap();
-            let binary = std::env::current_exe()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap()
-                .join(if cfg!(windows) {
-                    "winbridge-update.exe"
-                } else {
-                    "winbridge-update"
+            let binary_directory = pinned_location
+                .as_ref()
+                .map(|(_, p)| p.clone())
+                .unwrap_or_else(|| {
+                    std::env::current_exe()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .parent()
+                        .unwrap()
+                        .to_owned()
                 });
+            let binary = binary_directory.join(if cfg!(windows) {
+                "winbridge-update.exe"
+            } else {
+                "winbridge-update"
+            });
             let image = runtime.join(binary.file_name().unwrap());
             fs::copy(&binary, &image).unwrap();
             let image_sha = winbridge_update::sha256(&fs::read(image).unwrap());
+            if pinned_location.is_some() {
+                runtime::write_known_fixture(&runtime, &updater_config);
+            }
+            let guard = if pinned_location.is_some() {
+                crate::runtime_guard::prepare_runtime_guard(&config).unwrap()
+            } else {
+                None
+            };
             let worker = Worker::open_file(&config).unwrap();
+            if let Some(guard) = guard {
+                worker.attach_runtime_guard(guard).unwrap();
+            }
             let binding = worker
                 .enable_update_control(&updater_config, &image_sha)
                 .unwrap();
@@ -857,7 +971,7 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
                 config,
                 updater_config,
                 baseline,
-                _root: root,
+                _root: owned_root,
             }
         }
         async fn launch(&mut self) {
@@ -1000,6 +1114,145 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
     fn lease(r: WorkerUpdateControlResponse) -> WorkerUpdateLease {
         r.into_lease().unwrap().expect("Lease receipt")
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn runtime_control_rejects_lease_versions_stale_authority_and_unpinned_worker() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let reg = f.worker.control_registration().unwrap();
+        let active = f.supervisor.as_ref().unwrap().record.clone();
+        let q = WorkerUpdateControlRequest {
+            control_version: 2,
+            binding: reg.binding.clone(),
+            update_id: active.spec.update_id.clone(),
+            launch_id: active.spec.launch_id.clone(),
+            supervisor: active.process.clone().unwrap(),
+            updater_owner_id: active.owner_id.clone().unwrap(),
+            updater_epoch: active.owner_epoch.unwrap(),
+            command: WorkerUpdateControlCommand::ObserveRuntime,
+        };
+        let before = UpdateJournal::read_snapshot(&reg.directory, Some(&q.update_id)).unwrap();
+        assert!(f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .runtime_identity()
+            .await
+            .unwrap_err()
+            .contains("Bootstrap required"));
+        assert!(f
+            .supervisor
+            .as_mut()
+            .unwrap()
+            .worker_control(WorkerUpdateControlCommand::ObserveRuntime)
+            .await
+            .unwrap_err()
+            .contains("supervisor v6"));
+        for case in [
+            "v1-runtime",
+            "v2-lease",
+            "version",
+            "peer",
+            "epoch",
+            "process",
+            "context",
+            "build",
+        ] {
+            let mut forged = q.clone();
+            let mut peer = q.supervisor.process_id;
+            match case {
+                "v1-runtime" => forged.control_version = 1,
+                "v2-lease" => forged.command = WorkerUpdateControlCommand::BeginSource,
+                "version" => forged.control_version = 3,
+                "peer" => peer = std::process::id(),
+                "epoch" => forged.updater_epoch += 1,
+                "process" => forged.supervisor.birth.push('x'),
+                "context" => {
+                    forged.binding.context.journal_incarnation = uuid::Uuid::new_v4().to_string()
+                }
+                "build" => forged.binding.build.build_id.push('x'),
+                _ => unreachable!(),
+            }
+            let error = f.worker.control_result(&reg, &forged, peer).unwrap_err();
+            assert!(
+                !error.contains("Bootstrap required"),
+                "Authority must fail before reading identity: {case}: {error}"
+            );
+        }
+        for path in [&f.config, &f.updater_config] {
+            let bytes = fs::read(path).unwrap();
+            fs::write(path, [bytes.as_slice(), b" "].concat()).unwrap();
+            assert!(f
+                .worker
+                .control_result(&reg, &q, q.supervisor.process_id)
+                .unwrap_err()
+                .contains("ConfigRestartPending"));
+            fs::write(path, bytes).unwrap();
+        }
+        let forged: WorkerUpdateControlResponse =
+            ipc::call(&reg.binding.endpoint, std::process::id(), &q)
+                .await
+                .unwrap();
+        assert_eq!(forged.control_version, 2);
+        assert!(forged.result.is_error());
+        assert!(f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .is_none());
+        assert_eq!(f.slots(), 0);
+        assert_eq!(
+            UpdateJournal::read_snapshot(&reg.directory, Some(&q.update_id)).unwrap(),
+            before
+        );
+        f.stop().await;
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn runtime_observation_keeps_supervisor_mailbox_responsive_and_bounds_duplicates() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let reg = f.worker.control_registration().unwrap();
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        *reg.test_gate.lock().unwrap() = Some(Arc::new(ControlTestGate {
+            entered: std::sync::Mutex::new(Some(entered_tx)),
+            release: std::sync::Mutex::new(release_rx),
+        }));
+        {
+            let h = f.supervisor.as_ref().unwrap();
+            let observation = h.runtime_identity();
+            tokio::pin!(observation);
+            tokio::select! {
+                result = &mut observation => panic!("Observation did not reach the held worker: {result:?}"),
+                result = tokio::time::timeout(Duration::from_secs(5), entered_rx) => { result.unwrap().unwrap(); }
+            }
+            let status = tokio::time::timeout(Duration::from_secs(2), h.observe())
+                .await
+                .unwrap()
+                .unwrap();
+            assert_eq!(status.phase, SupervisorPhase::Active);
+            assert!(h
+                .runtime_identity()
+                .await
+                .unwrap_err()
+                .contains("Runtime observation active"));
+            release_tx.send(()).unwrap();
+            assert!(observation
+                .await
+                .unwrap_err()
+                .contains("Bootstrap required"));
+        }
+        assert_eq!(f.slots(), 0);
+        assert!(f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .is_none());
+        f.stop().await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]

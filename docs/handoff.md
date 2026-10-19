@@ -1,3 +1,19 @@
+## U1: live runtime control v2 / supervisor v6 — 2026-10-18
+
+[Реализация](plans/worker-self-update/runtime-live-control.md): readonly ObserveRuntime
+из живого guard, exact process/build/install/scope/owner/epoch и повтор config/context
+checks после hashing. V1 lease wire сохраняется, cross-version interpretation запрещён.
+Sup v6 обслуживает один async readonly query вне mailbox; observe status и duplicate
+Busy проверены. Normal Main/public RPC/MCP update control ещё не включают, schemas15/7.
+490 workspace tests, Linux/Windows Clippy all-targets, fmt/contracts/typecheck,
+scaffold/Python exporter/runner и PowerShell syntax passed. Recovery fixtures
+сериализованы после transient lock conflict; production recovery lock не менялся.
+Positive explicit Windows fixture с copied test harness/actual Worker actor +
+supervisor IPC/cfg-change-after-hash подготовлен; other-role metadata synthetic,
+health/install не заявляет. Combined native gate (план 165 tests / 19 groups) впереди,
+включая actual product Main/pin lifetime повтор. Installed worker прежний/healthy,
+bootstrap пока не нужен. Далее durable old-runtime baseline до SourceApply.
+
 ## U1: shared runtime identity DTO — 2026-10-18
 
 [Контракт](plans/worker-self-update/runtime-identity-contract.md): RuntimeImageEvidence
