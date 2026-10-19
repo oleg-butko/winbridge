@@ -105,7 +105,7 @@ status и release только после source/Job/output proof. Добавл�
 [Preimages library](docs/plans/worker-self-update/runtime-preimages.md), schema 9,
 прошёл [189 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md).
 [Actor v8 / отмена копирования](docs/plans/worker-self-update/runtime-preimages-actor.md)
-реализован; его native gate ещё впереди.
+прошёл [193 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md).
 Проверка здоровья, exact shutdown и activation остаются впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 

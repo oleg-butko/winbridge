@@ -148,7 +148,7 @@ U0 не применяет source plan, не выключает процессы
   actual Main и pins](windows-runtime-baseline-gate-2026-10-19.md).
   [Preimages library](runtime-preimages.md), schema 9, реализует create-only
   five-file generation и atomic receipt; [189 native tests / full build](windows-runtime-preimages-gate-2026-10-19.md)
-  passed. [Actor v8](runtime-preimages-actor.md) добавлен; его native и health ещё впереди,
+  passed. [Actor v8](runtime-preimages-actor.md) прошёл [193 native tests / full build](windows-runtime-preimages-actor-gate-2026-10-19.md); health ещё впереди,
   весь пункт остаётся открытым.
   [Known installed-set reader](installed-set.md) и abort snapshot прошли тот же
   native gate. [Early startup guard](runtime-startup.md) подключён; три actual-main

@@ -1,3 +1,18 @@
+## U1: preimages actor native gate passed — 2026-10-19
+
+Clean 2cdc850, run `20261019-072235-273b010c`, Task
+`567fe768-5bf1-4005-9439-68a2eb1263e1`: succeeded0,
+[193 native tests / 19 groups / full four-exe build](plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md).
+43 ready files verified; report SHA
+`8e9f8da9e3f5c1dcc2d87936ec06d800483efe70fe3691da902971094bb1dcbc`.
+Actual copied worker process confirms before-ACK intent, responsive status,
+create-only independent files, abort accepted while hashing and completed only
+after copier quiescence. Other role descriptors synthetic, no health claim.
+Actual product Main/pins also passed; forced fixture stop is not production shutdown.
+Installed worker healthy/idle0, generation unchanged; no windows, leave worker running.
+Next: fresh-state rehearsal (never serve over a copied live worker journal),
+durable health/approval, exact shutdown/install. U1/bootstrap remain ahead.
+
 ## U1: actor v8 native gate running — 2026-10-19
 
 Clean source 2cdc850, archive `winbridge-20261019T112211Z-2cdc850-0148b636.zip`,
