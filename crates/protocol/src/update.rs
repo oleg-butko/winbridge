@@ -118,6 +118,8 @@ pub enum UpdateEvent {
     /// Internal baseline driver only; no source/runtime file effects.
     RuntimeBaselineAdmitted,
     RuntimeBaselineVerified,
+    RuntimePreimagesAdmitted,
+    RuntimePreimagesVerified,
     BeginPreparation,
     BeginSourceApply,
     SourceVerified,

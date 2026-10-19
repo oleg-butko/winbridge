@@ -15,7 +15,7 @@ CREATE TRIGGER runtime_baseline_immutable BEFORE UPDATE ON runtime_baselines BEG
 CREATE TRIGGER runtime_baseline_retained BEFORE DELETE ON runtime_baselines BEGIN SELECT RAISE(ABORT,'Runtime baseline retained'); END;
 PRAGMA user_version=8;").map_err(storage)
 }
-fn transition(
+pub(super) fn transition(
     c: &Connection,
     id: &str,
     revision: u64,
@@ -185,7 +185,7 @@ pub(super) fn before_source(c: &Connection, id: &str) -> Result<()> {
     }
     Ok(())
 }
-fn early(c: &Connection, id: &str) -> Result<()> {
+pub(super) fn early(c: &Connection, id: &str) -> Result<()> {
     let source: bool = c
         .query_row(
             "SELECT EXISTS(SELECT 1 FROM source_transactions WHERE id=?1)",
@@ -208,7 +208,11 @@ fn early(c: &Connection, id: &str) -> Result<()> {
     }
     Ok(())
 }
-fn current_supervisor(c: &Connection, a: &UpdateAuthority, s: &SupervisorRecord) -> Result<()> {
+pub(super) fn current_supervisor(
+    c: &Connection,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+) -> Result<()> {
     let saved = supervisor::read(c, &s.spec.launch_id)?;
     if saved != *s
         || s.phase != SupervisorPhase::Active

@@ -1,3 +1,38 @@
+## U1: previous-runtime preimages library — 2026-10-19
+
+[Preimages](plans/worker-self-update/runtime-preimages.md), updater schema 9:
+fast metadata admission + one-use non-Clone permit, intent/receipt atomic with
+Requested parent transitions. Before source/compiler, copy only known manifest
+and four exe to fixed runtime/update/<id>/previous-runtime. Existing/partial sets
+are never overwritten/adopted, dropped permit never reauthorizes writes. Blocking
+execute pins originals, fresh bound-worker observations/config/epoch/parent checks,
+create_new + streaming hash/sync/new File IDs, copied pins held through commit.
+Pending blocks source. Final generation/SHA recheck closes a late-tamper gap found
+in review. Admission does not hash or call worker IPC before ACK. No runtime replace.
+510 workspace tests (10 new local copy/ledger/fault cases), Linux/Windows Clippy
+all-targets, fmt/contracts/typecheck/scaffold passed. Windows-specific pinned-copy
+release test compiled, not yet executed. Fixtures moved off small /tmp tmpfs onto
+local disk without lowering 6-GiB guard; Debian free 32,498,028,544 bytes recorded.
+Migration 8→9/retained history tested; schema-8 previous-updater reference below.
+Next: native library gate, supervisor v8 copy/status/abort integration and native
+positive mailbox/copy case, then health/rehearsal/exact shutdown. U1 and public
+install remain open; installed worker unchanged, bootstrap not needed.
+
+## U1: runtime baseline native combined gate passed — 2026-10-19
+
+[Gate](plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.md): clean
+b21aa28, run `20261019-062511-6aceb224`, Task
+`84ef11e1-650c-4aa3-89f2-9f2ad2027557` succeeded/0. All 175 tests / 19 groups,
+full four-exe build/queries/exact files, actual Main and serve/pins passed.
+43 ready files verified; report SHA
+`7245c974cc498b5781712744a690a656a81cdd86db304503297c0d2d7d7d9494`.
+Windows free before/after 21,924,835,328 / 21,591,035,904 bytes.
+Fresh installed Info: same generation, connected/idle0/error null; desktop not
+needed, leave worker. For schema-9 refusal use retained schema-8 updater:
+K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\20261019-062511-6aceb224\update-candidate\payload\winbridge-update.exe
+SHA `4b1eefef24a3b658a78bf75241aae08ac3d4ed57723f0fe06edd30251e8ccc26`.
+New schema-9 code was excluded from that clean schema-8 gate.
+
 ## U1: native baseline tests passed, runner schema check fixed — 2026-10-19
 
 Run `20261018-210729-e33e2cbd`, source 34f39ed, Task

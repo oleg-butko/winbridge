@@ -216,7 +216,7 @@ fn compiler_report_generic_and_schema_five_history_cannot_adopt_later_report() {
     let cmd = command(&f, "success");
     let done = run(&mut f, &cmd).unwrap();
     let directory = f.config.runtime_directory.join("update-state");
-    f.db().execute_batch("DROP TABLE runtime_baselines; DROP TABLE runtime_baseline_intents; DROP TABLE candidate_artifact_sets; DROP TABLE update_build_reports; DROP TABLE update_build_report_intents; PRAGMA user_version=5; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.db().execute_batch("DROP TABLE runtime_preimages; DROP TABLE runtime_preimage_intents; DROP TABLE runtime_baselines; DROP TABLE runtime_baseline_intents; DROP TABLE candidate_artifact_sets; DROP TABLE update_build_reports; DROP TABLE update_build_report_intents; PRAGMA user_version=5; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let old = UpdateJournal::inspect(&directory).unwrap();
     assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err());
     drop(f.owner);
@@ -399,7 +399,7 @@ fn schema_six_migration_preserves_report_history_and_does_not_rebind_candidate_a
     let (_tmp, mut f, _) = candidate_ready();
     let dir = f.config.runtime_directory.join("update-state");
     let before = snapshot(&f);
-    f.db().execute_batch("DROP TABLE runtime_baselines; DROP TABLE runtime_baseline_intents; DROP TABLE candidate_artifact_sets; PRAGMA user_version=6; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.db().execute_batch("DROP TABLE runtime_preimages; DROP TABLE runtime_preimage_intents; DROP TABLE runtime_baselines; DROP TABLE runtime_baseline_intents; DROP TABLE candidate_artifact_sets; PRAGMA user_version=6; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let old = UpdateJournal::inspect(&dir).unwrap();
     assert!(UpdateJournal::open(&dir, &old.scope_sha256).is_err());
     drop(f.owner);

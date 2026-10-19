@@ -144,7 +144,10 @@ U0 не применяет source plan, не выключает процессы
 - [ ] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
   [Durable baseline library](runtime-baseline.md), schema 8: immutable intent/receipt
   атомарны с parent transitions; pending блокирует source, late adoption запрещён.
-  Internal supervisor v7 admission/status добавлен; native schema-8 gate пока впереди,
+  Internal supervisor v7 admission/status прошёл [175 native tests / full build /
+  actual Main и pins](windows-runtime-baseline-gate-2026-10-19.md).
+  [Preimages library](runtime-preimages.md), schema 9, реализует create-only
+  five-file generation и atomic receipt; её actor/native и health ещё впереди,
   весь пункт остаётся открытым.
   [Known installed-set reader](installed-set.md) и abort snapshot прошли тот же
   native gate. [Early startup guard](runtime-startup.md) подключён; три actual-main

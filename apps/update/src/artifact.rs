@@ -3,7 +3,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, OpenOptions},
-    io::Read,
+    io::{Read, Write},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -27,6 +27,69 @@ pub(crate) struct Pinned {
     file: File,
     path: PathBuf,
     pub(crate) evidence: ImageEvidence,
+}
+impl Pinned {
+    /// Internal generation writer: create_new only, never copy metadata from a
+    /// caller-selected file. Both original and returned read pins stay live.
+    pub(crate) fn copy_new(&self, destination: &Path) -> Result<Self> {
+        winbridge_platform::require_safe_path(&self.path).map_err(error)?;
+        winbridge_platform::require_local_path_prefix(destination).map_err(error)?;
+        winbridge_platform::require_safe_path(destination).map_err(error)?;
+        winbridge_platform::require_local_disk(destination).map_err(error)?;
+        let mut source = open(&self.path)?;
+        if winbridge_platform::file_identity(&source).map_err(error)? != self.evidence.file_identity
+            || source.metadata().map_err(error)?.len() != self.evidence.bytes
+        {
+            return Err("Pinned preimage source identity/size changed".into());
+        }
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.share_mode(windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut output = options.open(destination).map_err(error)?;
+        let created = winbridge_platform::file_identity(&output).map_err(error)?;
+        let mut digest = Sha256::new();
+        let mut total = 0;
+        let mut buffer = [0; 65536];
+        loop {
+            let n = source.read(&mut buffer).map_err(error)?;
+            if n == 0 {
+                break;
+            }
+            total += n as u64;
+            if total > self.evidence.bytes {
+                return Err("Preimage source grew; partial copy preserved".into());
+            }
+            output.write_all(&buffer[..n]).map_err(error)?;
+            digest.update(&buffer[..n]);
+        }
+        output.sync_all().map_err(error)?;
+        drop(output);
+        winbridge_platform::source_files::sync_parent(destination).map_err(error)?;
+        if total != self.evidence.bytes
+            || format!("{:x}", digest.finalize()) != self.evidence.sha256
+        {
+            return Err("Preimage source bytes changed; partial copy preserved".into());
+        }
+        let copied = pin(destination)?;
+        if copied.evidence.file_identity != created
+            || copied.evidence.file_identity == self.evidence.file_identity
+            || copied.evidence.bytes != self.evidence.bytes
+            || copied.evidence.sha256 != self.evidence.sha256
+            || copied.evidence.query_supported != self.evidence.query_supported
+        {
+            return Err("Preimage copy changed before pinning; preserve for inspection".into());
+        }
+        Ok(copied)
+    }
 }
 fn open(path: &Path) -> Result<File> {
     let mut o = OpenOptions::new();

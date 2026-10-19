@@ -11,7 +11,13 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Self {
-        let root = tempfile::tempdir().unwrap();
+        // Archive tests enforce the real 6-GiB disk guard. /tmp can be a small
+        // tmpfs; use local disk, just like the production previous-runtime path.
+        #[cfg(not(windows))]
+        let root = tempfile::tempdir_in("/var/tmp").unwrap();
+        #[cfg(windows)]
+        let root =
+            tempfile::tempdir_in(std::env::current_exe().unwrap().parent().unwrap()).unwrap();
         let runtime = root.path().join("runtime");
         fs::create_dir(&runtime).unwrap();
         let runtime = runtime.canonicalize().unwrap();
@@ -454,14 +460,17 @@ fn schema_seven_migration_preserves_old_history_without_inventing_baseline() {
     let mut f = Fixture::new();
     let id = f.supervisor.spec.update_id.clone();
     let before = f.journal.get(&id).unwrap();
-    f.journal.connection.execute_batch("DROP TABLE runtime_baselines;DROP TABLE runtime_baseline_intents;PRAGMA user_version=7;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.journal.connection.execute_batch("DROP TABLE runtime_preimages; DROP TABLE runtime_preimage_intents; DROP TABLE runtime_baselines;DROP TABLE runtime_baseline_intents;PRAGMA user_version=7;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let directory = f.journal.directory.clone();
     let old = UpdateJournal::inspect(&directory).unwrap();
     assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err());
     drop(f.owner);
     drop(f.journal);
     let mut journal = UpdateJournal::open(&directory, &old.scope_sha256).unwrap();
-    assert_eq!(journal.info().unwrap().schema_version, 8);
+    assert_eq!(
+        journal.info().unwrap().schema_version,
+        UPDATE_SCHEMA_VERSION
+    );
     assert_eq!(journal.info().unwrap().owner_epoch, old.owner_epoch + 1);
     assert_eq!(journal.get(&id).unwrap(), before);
     let view = UpdateJournal::inspect_runtime_baseline(&directory, &id).unwrap();
@@ -488,3 +497,6 @@ fn schema_seven_migration_preserves_old_history_without_inventing_baseline() {
         "ok"
     );
 }
+
+#[path = "runtime_preimages_tests.rs"]
+mod preimages;

@@ -158,6 +158,24 @@ pub fn pin_installed_set(
     Ok(result)
 }
 impl PinnedInstalledSet {
+    pub(crate) fn copy_new_files(
+        &self,
+        destination: &Path,
+        mut check: impl FnMut() -> Result<()>,
+    ) -> Result<Vec<Pinned>> {
+        self.revalidate()?;
+        let mut copies = Vec::with_capacity(5);
+        for original in std::iter::once(&self._manifest).chain(&self._images) {
+            check()?;
+            let name = Path::new(&original.evidence.path)
+                .file_name()
+                .ok_or("Preimage name missing")?;
+            copies.push(original.copy_new(&destination.join(name))?);
+            check()?;
+        }
+        self.revalidate()?;
+        Ok(copies)
+    }
     pub fn observation(&self) -> &InstalledSetObservation {
         &self.observation
     }

@@ -101,8 +101,10 @@ status и release только после source/Job/output proof. Добавл�
 подключена до открытия worker journal; [159 native tests / actual Main и pins](docs/plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md) passed.
 [Authenticated live identity/control](docs/plans/worker-self-update/windows-runtime-control-gate-2026-10-18.md)
 прошёл 165 native tests/full build/Main/pins. [Durable baseline и supervisor v7](docs/plans/worker-self-update/runtime-baseline.md)
-реализованы как trusted internal API; native schema-8 gate ещё впереди.
-Preimages, health, exact shutdown и activation остаются впереди. Весь U1 ещё не завершён.
+прошли [175 native tests / полный build / actual Main](docs/plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.md).
+[Preimages library](docs/plans/worker-self-update/runtime-preimages.md), schema 9,
+добавляет проверенные копии прошлого runtime; actor/native ещё впереди.
+Проверка здоровья, exact shutdown и activation остаются впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

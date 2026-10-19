@@ -25,9 +25,10 @@ mod build;
 mod build_report;
 mod candidate;
 mod runtime_baseline;
+mod runtime_preimages;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 8;
+pub const UPDATE_SCHEMA_VERSION: u32 = 9;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -35,6 +36,7 @@ enum Driver {
     Abort,
     Candidate,
     Baseline,
+    Preimages,
 }
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
@@ -96,7 +98,7 @@ fn decode<T: serde::de::DeserializeOwned>(value: &str) -> Result<T> {
     serde_json::from_str(value)
         .map_err(|_| fail(JournalErrorCode::Corrupt, "Invalid typed journal record"))
 }
-fn now_ms() -> Result<u64> {
+pub(crate) fn now_ms() -> Result<u64> {
     let value = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(storage)?
@@ -456,6 +458,7 @@ impl UpdateJournal {
             build_report::migrate(&tx)?;
             candidate::migrate(&tx)?;
             runtime_baseline::migrate(&tx)?;
+            runtime_preimages::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -496,6 +499,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 7 {
                 runtime_baseline::migrate(&tx)?;
+            }
+            if schema(&tx)? == 8 {
+                runtime_preimages::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
@@ -870,6 +876,18 @@ impl UpdateJournal {
         }
         if command.event == winbridge_protocol::update::UpdateEvent::BeginPreparation {
             runtime_baseline::before_source(&tx, id)?;
+            runtime_preimages::before_source(&tx, id)?;
+        }
+        if matches!(
+            command.event,
+            winbridge_protocol::update::UpdateEvent::RuntimePreimagesAdmitted
+                | winbridge_protocol::update::UpdateEvent::RuntimePreimagesVerified
+        ) && driver != Driver::Preimages
+        {
+            return Err(fail(
+                JournalErrorCode::InvalidRequest,
+                "Runtime preimages require their trusted driver",
+            ));
         }
         if driver != Driver::Abort
             && !(driver == Driver::Candidate

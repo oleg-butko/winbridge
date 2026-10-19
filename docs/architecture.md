@@ -5,7 +5,7 @@
 ## Подготовка самообновления — 2026-10-17
 
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
-`apps/update` владеет отдельным updater journal schema 8 (WBUP), installation scope,
+`apps/update` владеет отдельным updater journal schema 9 (WBUP), installation scope,
 OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
 [Artifact actor v5 / atomic artifact receipt](plans/worker-self-update/artifact-actor.md),
 known-set reader и полный candidate build прошли
@@ -13,14 +13,17 @@ known-set reader и полный candidate build прошли
 [Ранняя проверка runtime](plans/worker-self-update/runtime-startup.md) подключена
 в normal worker Main: known manifest → четыре pins → собственный loaded descriptor
 до worker journal, без updater writer/migration. [Actual Main / lifetime gate](plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md)
-пройден: 159 native tests/full build и отдельный serve/pins proof. Public update/install, durable old-runtime acceptance и activation
+пройден: 159 native tests/full build и отдельный serve/pins proof. Public update/install и activation
 не включены; последующие описания отдельных blocks сохраняют их исторические gates.
 [Live runtime control v2 / supervisor v6](plans/worker-self-update/runtime-live-control.md)
 прошёл [165 native tests / full build / actual Main и pins](plans/worker-self-update/windows-runtime-control-gate-2026-10-18.md).
 [Durable baseline / supervisor v7](plans/worker-self-update/runtime-baseline.md)
 сохраняет intent/receipt с parent transitions до source effects, без worker lease
-или runtime replacement. Pending запрещает source admission. Этот schema-8 блок
-пока ожидает native gate; старые операции не получают baseline задним числом.
+или runtime replacement. Pending запрещает source admission. Schema-8 блок прошёл [175 native tests / full build](plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.md);
+старые операции не получают baseline задним числом. Schema-9
+[preimages library](plans/worker-self-update/runtime-preimages.md) сохраняет только
+create-only пять copies с отдельными intent/receipt до source; actor/native для неё
+ещё впереди. Установка/activation пока не включены.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)

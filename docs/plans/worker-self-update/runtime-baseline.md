@@ -56,3 +56,7 @@ The final script failed before the full candidate build because both PS/Python
 proof checks still assumed schema 7. They now require the exact constant from the
 verified source/archive. Portable version/mismatch regressions passed; combined
 native retry is still required. Installed worker stayed healthy and unchanged.
+
+Combined retry clean b21aa28 прошёл: [175 native tests / full build / actual Main
+и pin lifetime](windows-runtime-baseline-gate-2026-10-19.md). Все 43 ready files
+проверены. Baseline/control блок подтверждён; schema-9 preimages и весь U1 открыты.
