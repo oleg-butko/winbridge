@@ -158,8 +158,18 @@ async fn health_actor_process_helper() {
         fs::canonicalize(root.join("runtime/winbridge-worker.exe")).unwrap()
     );
     let adapter = build_adapter(&root, &input);
+    // Drain tests start with an already verified target source tree. Source
+    // delivery/apply has its own gates; each case still takes a real source
+    // lease, runs preparation, builds and checks the actual candidate.
+    let seeded_source = if input.drain_gate {
+        let stage = root.join("seed");
+        winbridge_update::archive::stage_archive(&input.archive, &input.target, &stage).unwrap();
+        Some(stage.join("source"))
+    } else {
+        None
+    };
     let mut f = Fixture::with_build_script_at(
-        None,
+        seeded_source,
         true,
         Some(adapter),
         BUILD_ACTOR_SCRIPT,
@@ -444,10 +454,16 @@ async fn health_actor_process_helper() {
             serde_json::json!({"case":case,"health":health,"abort":abort,"drain":drain_evidence}),
         );
         retired(&mut f).await;
+        // Retain each completed case even if a later fault fixture panics. This
+        // is explicitly incomplete data, never the final success report.
+        let progress = serde_json::json!({"schemaVersion":1,"kind":if input.drain_gate {"candidate_drain_actor_progress"} else {"candidate_health_actor_progress"},"passed":false,"completedCases":cases.len(),"build":build_identity(),"target":input.target,"cases":cases,"seededTargetSource":input.drain_gate,"runtimeApplied":false,"windowsOpened":false});
+        let path = PathBuf::from(std::env::var_os("WINBRIDGE_HEALTH_GATE_PROOF").unwrap())
+            .with_extension("progress.json");
+        fs::write(path, serde_json::to_vec_pretty(&progress).unwrap()).unwrap();
     }
     f.worker.stop();
     (&mut f.server).await.unwrap().unwrap();
-    let proof = serde_json::json!({"schemaVersion":1,"kind":if input.drain_gate {"candidate_drain_actor_proof"} else {"candidate_health_actor_proof"},"passed":true,"platform":"windows","build":build_identity(),"target":input.target,"cases":cases,"actualCandidateBuild":true,"actualCandidateHelpers":true,"workerEntryPointIsTestHarness":true,"syntheticOldOtherRoleDescriptors":true,"intentBeforeAck":true,"duplicateObserved":true,"pidBeforeResume":true,"abortWaitedForDriver":true,"newEmptyJournalOnly":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = serde_json::json!({"schemaVersion":1,"kind":if input.drain_gate {"candidate_drain_actor_proof"} else {"candidate_health_actor_proof"},"passed":true,"platform":"windows","build":build_identity(),"target":input.target,"cases":cases,"seededTargetSource":input.drain_gate,"actualCandidateBuild":true,"actualCandidateHelpers":true,"workerEntryPointIsTestHarness":true,"syntheticOldOtherRoleDescriptors":true,"intentBeforeAck":true,"duplicateObserved":true,"pidBeforeResume":true,"abortWaitedForDriver":true,"newEmptyJournalOnly":true,"runtimeApplied":false,"windowsOpened":false});
     fs::write(
         value("health-proof="),
         serde_json::to_vec_pretty(&proof).unwrap(),

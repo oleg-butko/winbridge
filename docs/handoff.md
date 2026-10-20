@@ -1,3 +1,24 @@
+## Drain fault fixture corrected; seeded repeat will be needed — 2026-10-20
+
+Current task e1b80adb/run20261020-221336-fd675b77 has completed verified, lost-ACK
+and cancel-drain cases (next operation admissions observed), now fourth fault case.
+Its frozen A627 has an overly broad deny_final_drain trigger: ordinal2/revision2
+also rejects Uncertain history. Production correctly retains Issued if diagnostic
+write fails; native fixture expects Uncertain and will fail. Do not mark green.
+Local fix restricts fault to delivery.state=confirmed, with SQL regression proving
+unknown history still writable while the fault remains installed. Never resend.
+
+Next repeat should use fresh clean A, existing C3b schema11 and original cache.
+DrainGate now seeds a verified target ZIP in a new isolated source root BEFORE
+opening worker: actual source grant/preparation/build/health still run, source plan
+has no changes. This avoids repeating the large already-gated source transaction
+in a drain-specific rerun. Proof explicitly seededTargetSource=true. Existing A627
+first case also applied616 source files before passing, but has no per-case JSON
+export; do not invent a formal complete report from it. New helper emits incomplete
+per-case progress (passed=false) alongside final proof, retaining earlier evidence.
+Installed d052 healthy; desktop unnecessary, no GUI. No manual worker update needed.
+Wait for current task terminal before using shared Windows compiler caches again.
+
 ## Drain native repeat ACTIVE; do not resubmit — 2026-10-20
 
 Task e1b80adb-f970-44a7-a476-d44ecdd230dc / run20261020-221336-fd675b77 is active.

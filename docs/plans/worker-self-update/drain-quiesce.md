@@ -223,3 +223,22 @@ C содержит ту же реализацию и отдельный document
 проверенный readonly reference для schema-refusal, не запускаемый Windows worker.
 Положительный native результат будет записан после завершения gate; эта секция
 описывает только состав сценария.
+
+## Ревью fault fixture и сокращение прогона
+
+В первом drain-сценарии raw history trigger, ограниченный только ordinal2/revision2,
+мешал также сохранить Uncertain после отката final Confirmed. Это не ошибка
+production persistence: при отказе всех записей сохранённый Issued остаётся unknown.
+Для проверки отказа именно successful receipt fault теперь дополнительно выбирает
+`delivery.state=confirmed`. SQL regression доказывает rollback parent/receipt и
+возможность сохранить Uncertain при всё ещё установленном fault trigger.
+
+При следующих DrainGate fixture исходная source tree заранее разворачивается из
+строго проверенного target ZIP в новом частном root, до открытия worker. Реальные
+source grant/preparation/build/health/drain остаются; source plan может иметь0 files.
+Цель — проверить drain при уже доставленных исходниках и старом runtime, без
+повторной unrelated bulk source transaction. Прежние source-apply gates сохраняют
+свою область; новый proof явно отмечает seededTargetSource. Это не новая оптимизация
+production SourceControl и не снятие source fence. Каждая завершённая case теперь
+сохраняется отдельно в progress JSON с passed=false, чтобы следующий fault не
+уничтожал все предыдущие structured results; окончательный proof остаётся отдельным.

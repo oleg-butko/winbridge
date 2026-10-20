@@ -117,7 +117,8 @@ def verify_drain_proof(proof, source, target):
             or proof.get('build', {}).get('sourceCommit') != source['sourceCommit']
             or proof['build'].get('sourceDirty') is not False
             or proof['build'].get('sourceManifestSha256') != source['manifestSha256']
-            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False):
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False
+            or proof.get('seededTargetSource') is not True):
         raise ValueError('Drain source/target/isolation proof differs')
     if [c.get('case') for c in proof.get('cases', [])] != ['verified', 'lost-drain-ack', 'cancel-drain', 'deny-drain-receipt']:
         raise ValueError('Missing full drain cases')

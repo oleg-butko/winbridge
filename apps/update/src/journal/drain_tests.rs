@@ -183,7 +183,7 @@ fn ignored_child_history_write_rolls_back_coupled_parent_and_command_receipt() {
         .unwrap();
     // This probe models the enclosing transaction's root row. The complete
     // lifecycle/health authority path is reserved for the real native gate.
-    c.execute_batch("CREATE TABLE parent_probe(phase TEXT);INSERT INTO parent_probe VALUES('draining');CREATE TRIGGER deny_receipt BEFORE INSERT ON drain_history WHEN NEW.ordinal=2 AND NEW.revision=2 BEGIN SELECT RAISE(IGNORE);END;").unwrap();
+    c.execute_batch("CREATE TABLE parent_probe(phase TEXT);INSERT INTO parent_probe VALUES('draining');CREATE TRIGGER deny_receipt BEFORE INSERT ON drain_history WHEN NEW.ordinal=2 AND NEW.revision=2 AND json_extract(NEW.record,'$.delivery.state')='confirmed' BEGIN SELECT RAISE(IGNORE);END;").unwrap();
     {
         let tx = c.transaction().unwrap();
         tx.execute("UPDATE parent_probe SET phase='quiesced'", [])
@@ -197,11 +197,21 @@ fn ignored_child_history_write_rolls_back_coupled_parent_and_command_receipt() {
         "draining"
     );
     assert_eq!(commands(&c, &intent).unwrap()[2], issued);
+    // The injected fault targets successful receipts, not the diagnostic
+    // Uncertain transition that must remain writable after rollback.
+    let unknown = issued
+        .uncertain(&intent, 105, "Final receipt write denied".into())
+        .unwrap();
+    write(&mut c, &intent, &issued, &unknown).unwrap();
+    assert_eq!(commands(&c, &intent).unwrap()[2], unknown);
     c.execute_batch("DROP TRIGGER deny_receipt;").unwrap();
+    let done = unknown
+        .confirm(&intent, 106, receipt(&intent, &lease, 2))
+        .unwrap();
     let tx = c.transaction().unwrap();
     tx.execute("UPDATE parent_probe SET phase='quiesced'", [])
         .unwrap();
-    persist(&tx, &intent, &issued, &done).unwrap();
+    persist(&tx, &intent, &unknown, &done).unwrap();
     tx.commit().unwrap();
     assert_eq!(commands(&c, &intent).unwrap()[2], done);
 }

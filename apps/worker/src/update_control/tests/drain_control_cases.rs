@@ -219,7 +219,7 @@ pub(super) async fn run(
     } else {
         if case == "deny-drain-receipt" {
             let c = rusqlite::Connection::open(directory.join("updates.sqlite")).unwrap();
-            c.execute_batch("CREATE TRIGGER deny_final_drain BEFORE INSERT ON drain_history WHEN NEW.ordinal=2 AND NEW.revision=2 BEGIN SELECT RAISE(IGNORE);END;").unwrap();
+            c.execute_batch("CREATE TRIGGER deny_final_drain BEFORE INSERT ON drain_history WHEN NEW.ordinal=2 AND NEW.revision=2 AND json_extract(NEW.record,'$.delivery.state')='confirmed' BEGIN SELECT RAISE(IGNORE);END;").unwrap();
         }
         let unpause = worker
             .store()

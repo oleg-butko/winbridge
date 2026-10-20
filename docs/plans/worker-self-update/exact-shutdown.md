@@ -59,3 +59,13 @@ locks, затем реализовать data FSM, два журнала и driv
 Native gate этого блока должен проверять завершение процесса; компиляции и чистой
 FSM для этого недостаточно. Полная установка, desktop save/exit и controller
 confirmation остаются следующими U2/U3.
+
+## Проверенные interfaces
+
+Instance lock — `stateDirectory/worker.lock`, открываемый в `Worker::open_inner`
+и удерживаемый полем `_instance_lock`. Текущий startup проверяет update guard
+до его acquisition и повторно под lock. Recovery startup здесь не подходит:
+`Worker::open_recovery_file` сохраняет persistent recovery marker, хотя journal
+открывается readonly. Для нового cold receipt verifier следует использовать
+отдельный bounded reader, опираясь на `Store::open_read_only`/existing admission
+header, без Worker construction и без изменения recovery metadata.
