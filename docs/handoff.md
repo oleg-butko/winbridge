@@ -1,4 +1,34 @@
-## U1: atomic health-hook and drain-capacity fixes ready for native retry — 2026-10-20
+## U1: combined atomic-health/receipt/capacity Windows gate RUNNING — 2026-10-20
+
+Accepted Task7b42694b-5c0b-4121-a7d4-716c3599b2fa / run20261020-164339-83d2a1d6,
+confirmed RUNNING. Runner session50710, log
+.winbridge/update-preparation/health-actor-native-atomic.log; readonly paging
+.winbridge/update-preparation/poll-health-atomic.py saves current task/output.
+No outputs at first poll (bootstrap/extraction). Do not restart on observation
+expiry; poll this EXACT task to authoritative terminal.
+
+Clean source A2feb40ff0c124a48b51015144ed64058fe08326a:
+winbridge-20261020T164324Z-2feb40f-609809ee.zip,
+SHA04fff62d50ef560d40225eebab3e76ef976fe04e112b7112ac543fd13e61d863,
+4,947,962 bytes/610 files. Genuine clean target C5a5834a below, both fixed.
+Original20261017-061527-f4639971 test/candidate caches reused under their locks.
+The script runs nine groups: actual rehearsal entry, FSM edge, full-image SHA,
+atomic hook/rollback, v4 protocol, supervisor build, real v11/v4 receipt IPC,
+drain capacity1 and all FOUR full actor cases. No GUI or installed replacement.
+Local549 tests/doctests and Linux/Windows Clippy passed. Native still unproven.
+
+On failure inspect candidate-health-actor-proof.failure.json FIRST; distinguish
+real driver error from fixture timing. Ordinary isolated corrections/repeats are
+authorized. On success verify all ready bytes/SHA, typed4-case proof/actual A/C
+identities, exact helper cleanup and atomic root acceptance, plus fresh installed
+Info. Then review and continue durable drain coordination/exact shutdown. The
+new v4 reader and corrected capacity are preparations, NOT a durable drain driver.
+Do not mark U1–U4 or goal complete. Future schema11 needs a matching fresh target.
+Installed d052 worker should stay running; desktop unnecessary. Stop dependent
+Windows work only for installed-worker faults/update requirement. No bootstrap now.
+Older receipt-reader-native-plan.json is superseded; do not submit its older run.
+
+## U1: atomic health-hook and drain-capacity fixes ready for native retry (historical) — 2026-10-20
 
 Corrected target C5a5834a6cd0eeab88f75ccd41d09d3b05d864d13 exported clean:
 winbridge-20261020T164245Z-5a5834a-b2677d6d.zip,
