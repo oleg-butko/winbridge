@@ -211,10 +211,24 @@ async fn health_actor_process_helper() {
             .unwrap();
         assert!(admitted.context.is_none());
         assert!(admitted.probes.is_empty());
-        tokio::time::timeout(Duration::from_secs(10), entered_rx)
-            .await
-            .unwrap()
-            .unwrap();
+        tokio::pin!(entered_rx);
+        let until = Instant::now() + Duration::from_secs(60);
+        loop {
+            tokio::select! {
+                entered=&mut entered_rx=>{entered.expect("Live compatibility callback did not arrive");break;},
+                _=tokio::time::sleep(Duration::from_millis(100))=>{}
+            }
+            let status = h.candidate_health(false).await.unwrap();
+            if !status.driver_active || status.driver_error.is_some() || Instant::now() >= until {
+                let saved = UpdateJournal::inspect_health(&reg.directory, &id).unwrap();
+                let diagnostic = serde_json::json!({"schemaVersion":1,"kind":"health_callback_failure","status":status,"health":saved,"callbackObserved":false,"runtimeApplied":false});
+                let report =
+                    PathBuf::from(std::env::var_os("WINBRIDGE_HEALTH_GATE_PROOF").unwrap())
+                        .with_extension("failure.json");
+                fs::write(report, serde_json::to_vec_pretty(&diagnostic).unwrap()).unwrap();
+                panic!("Health callback pending/stopped: {diagnostic}");
+            }
+        }
         let view = tokio::time::timeout(Duration::from_secs(2), h.candidate_health(false))
             .await
             .unwrap()

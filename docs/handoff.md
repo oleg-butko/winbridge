@@ -1,3 +1,24 @@
+## U1: full source/build reached health; callback observer corrected — 2026-10-20
+
+Run20261020-101253-22bdb154 / Task4363a807-dd5b-4759-89a6-e8856aeebb2f terminal
+failed1. Real source605/605, actual compiler and artifact verification completed;
+health intent ACK/read succeeded. The TEST's10s wait for its v3 callback expired
+(line216), before any health success was established. Parent child failed after
+617.09s and checked private tree empty. Four ready files verified; reportSHA
+a7542605738246a57b79a25d4d009b9e9fb1ada41c41a70a291b7887f0d84fec.
+Windows free19,504,570,368 ->19,431,018,496. Fresh installed worker idle0, recovery
+coverage complete, generation unchanged and no maintenance/recovery errors.
+No windows or installed replacement. Do not replay this terminal task.
+
+We must distinguish expensive pre-callback pin/hash work from an early health
+rejection: new fixture polls saved status while waiting up to60s for its callback.
+If driver stopped/failed or deadline expires, persist health/status diagnostic
+as candidate-health-actor-proof.failure.json in shared and include it in panic.
+This is NOT a product probe/control timeout change. Native Windows all-target
+Clippy passed; Python admission tests passed. Source-stage600s/helper1500s remain.
+Commit/export the correction and automatically retry with same clean C2aac553
+and original caches, fresh source A/new task/new isolated runtime. No bootstrap.
+
 ## U1: first full actor attempt terminal timeout; fixture retry prepared — 2026-10-20
 
 Source A925e978, target C2aac553. Run20261020-100244-41469852 /
