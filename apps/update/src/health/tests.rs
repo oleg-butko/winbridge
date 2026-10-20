@@ -285,6 +285,39 @@ fn verified() -> HealthRecord {
     h
 }
 #[test]
+fn historical_health_schema_is_saved_evidence_and_never_fresh_execution_authority() {
+    let h = verified();
+    validate_fresh_success(&h).unwrap();
+    let mut other_reader = h.clone();
+    // Simulate a receipt whose saved schema differs from this reader. Its
+    // format may be consistent; actual DB readers separately reject newer DBs.
+    let saved_schema = crate::journal::UPDATE_SCHEMA_VERSION + 1;
+    other_reader
+        .context
+        .as_mut()
+        .unwrap()
+        .compatibility
+        .updater_journal_schema = saved_schema;
+    let result = other_reader.result.as_mut().unwrap();
+    result.rehearsal.as_mut().unwrap().updater_journal_schema = saved_schema;
+    result
+        .final_compatibility
+        .as_mut()
+        .unwrap()
+        .updater_journal_schema = saved_schema;
+    validate_success(&other_reader).unwrap();
+    assert!(validate_fresh_success(&other_reader).is_err());
+    other_reader
+        .result
+        .as_mut()
+        .unwrap()
+        .rehearsal
+        .as_mut()
+        .unwrap()
+        .updater_journal_schema -= 1;
+    assert!(validate_success(&other_reader).is_err());
+}
+#[test]
 fn health_success_rejects_schema_process_isolation_staleness_and_incomplete_cleanup() {
     let h = verified();
     validate_success(&h).unwrap();

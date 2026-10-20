@@ -91,6 +91,7 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<HealthRecord>> {
             .ok_or_else(|| bad("Health baseline missing"))?;
         if context.compatibility.identity != baseline.loaded_worker
             || context.compatibility.observed_at_ms < intent.admitted_at_ms
+            || context.compatibility.updater_journal_schema > schema(c)?
         {
             return Err(bad(
                 "Health context differs from original loaded worker baseline",
@@ -376,6 +377,7 @@ impl UpdateJournal {
         require(&self.connection, a, s, old, false)?;
         let p = self.get(&old.intent.update_id)?;
         crate::health::validate_step(old, &next).map_err(|e| bad(&e))?;
+        crate::health::validate_fresh_success(&next).map_err(|e| bad(&e))?;
         let result = next
             .result
             .as_mut()

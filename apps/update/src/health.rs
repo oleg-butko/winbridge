@@ -225,8 +225,8 @@ pub(crate) fn validate_success(h: &HealthRecord) -> Result<(), String> {
         || uuid::Uuid::parse_str(&rehearsal.journal_incarnation).is_err()
         || rehearsal.journal_incarnation == ctx.compatibility.context.journal_incarnation
         || rehearsal.worker_journal_schema != ctx.compatibility.worker_journal_schema
-        || rehearsal.updater_journal_schema != crate::journal::UPDATE_SCHEMA_VERSION
-        || ctx.compatibility.updater_journal_schema != crate::journal::UPDATE_SCHEMA_VERSION
+        || ctx.compatibility.updater_journal_schema == 0
+        || rehearsal.updater_journal_schema != ctx.compatibility.updater_journal_schema
         || rehearsal.worker_config_schema != ctx.compatibility.worker_config_schema
         || rehearsal.protocol_version != ctx.compatibility.protocol_version
         || !rehearsal.fresh_journal
@@ -239,6 +239,19 @@ pub(crate) fn validate_success(h: &HealthRecord) -> Result<(), String> {
         || rehearsal.runtime_applied
     {
         return Err("Health config/rehearsal/process/schema/isolation evidence rejected".into());
+    }
+    Ok(())
+}
+/// Fresh approval stays exact-schema. Historical consistency above is checked
+/// against the saved context, so a later reader does not invalidate old receipts.
+pub(crate) fn validate_fresh_success(h: &HealthRecord) -> Result<(), String> {
+    validate_success(h)?;
+    if h.context
+        .as_ref()
+        .map(|c| c.compatibility.updater_journal_schema)
+        != Some(crate::journal::UPDATE_SCHEMA_VERSION)
+    {
+        return Err("Historical health schema is not fresh approval for this updater".into());
     }
     Ok(())
 }

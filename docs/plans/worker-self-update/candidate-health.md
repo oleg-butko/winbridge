@@ -60,6 +60,18 @@ maintenance/recovery errors нет. Установленный runtime не ме
 открытым: следующий блок — durable drain coordination и exact shutdown. Более
 новый v12/v5 logical observation ещё требует собственного native подтверждения.
 
+## История и fresh approval перед будущей schema11
+
+Post-gate review отделило consistency сохранённого отчёта от разрешения новой
+операции: `validate_success` связывает rehearsal с captured compatibility schema,
+а `validate_fresh_success` по-прежнему требует текущую updater schema в driver
+и atomic acceptance. DB reader дополнительно отклоняет context schema новее своей
+DB. Иначе повышение константы schema при будущей миграции ломало бы чтение старого
+успеха. Regression подтверждает: согласованный snapshot иной схемы читается как
+данные, но fresh approval из него запрещён; несогласованные schemas отвергаются.
+555 local tests/doctests и Linux/Windows Clippy passed. Journal всё ещё10; реальная
+миграция10→11 с сохранённым health10 ещё должна быть проверена при её реализации.
+
 ## Последовательность
 
 1. После verified source, compiler report, artifact receipt, baseline и пяти

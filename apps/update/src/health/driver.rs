@@ -305,7 +305,7 @@ pub fn execute(
             return Err("Candidate/config changed during health check".into());
         }
         let next=HealthRecord{result:Some(HealthResult{outcome:HealthOutcome::Verified,completed_at_ms:now()?,reason:"Конфигурация, IPC нового пустого worker и завершение процессов проверены; runtime не заменён".into(),config:config.clone(),rehearsal:rehearsal.clone(),final_compatibility:Some(final_compat),parent_revision:None}),..h.clone()};
-        validate_success(&next)?;
+        validate_fresh_success(&next)?;
         h = j.accept_health(a, s, &h, next).map_err(error)?;
         // Keep candidate/config pins through the atomic acceptance transaction.
         drop(config_pin);
