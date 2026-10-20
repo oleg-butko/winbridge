@@ -1,3 +1,42 @@
+## U1: drain delivery data contracts ready; SQL schema11 is NEXT — 2026-10-20
+
+Added apps/update/src/drain.rs + public module: PURE data contracts/FSM, no DB,
+RPC, process/file effects or execution permits. DrainIntent freezes update/launch/
+owner/epoch/pre-BeginDrain root revision, source/health digests, canonical domain-v1
+worker-spec fingerprint and 3 command IDs/actions/expected worker revisions.
+Reserve one extra worker revision for owned Release. Per-command Prepared→Issued→
+Confirmed or Issued→Uncertain→Confirmed; issued/uncertain cannot be issued again;
+duplicate exact receipt is a readonly no-op. Revisions define order, not clocks.
+Typed receipt rejects another spec/owner/epoch/generation/action-phase/reason/revision.
+Read deserialization never carries a delivery permit. Future SQL must enforce
+immutable identity/history/CAS and prior-command receipt; pure prepare() is not
+authority and can construct another in-memory object with the same key.
+
+Post-gate review fixed future history-read issue: health consistency now checks
+captured schema instead of the reader's current constant. Fresh approval remains
+exact-current-schema at BOTH driver and journal acceptance; DB history read rejects
+newer-than-DB context. No schema bump yet. Test covers consistent other-schema data
+vs forbidden fresh authority. Actual migration10→11 with retained health10 remains
+required; do not infer migration readiness from the pure regression.
+
+555 workspace tests/doctests, Linux/Windows all-target Clippy, fmt and scaffold217
+passed. Logs .winbridge/update-preparation/drain-ledger-{workspace,linux-final,
+windows-final}.log. Older551 checks include v12/v5 and UI/contracts. No active
+Cargo or Windows validation task. Installed d052 remains healthy idle (last fresh
+Info after green gate below); controller is running, desktop unnecessary.
+
+NEXT concrete work: implement apps/update/src/journal/drain.rs and schema11:
+immutable intent, per-command durable rows/history, atomic BeginDrain admission,
+Issued-before-RPC receipt, matching worker receipts and atomic root Quiesce. Extend
+private Driver guards so raw BeginDrain/Quiesce cannot bypass receipts. Then wire
+single-owner actor with v12/v5 wait observations, v11/v4 receipt lookup, cancellation
+retirement and owned source release; exact shutdown follows separately. In hooks
+of advance_with_driver validate the POST-transition edge, not pre-transition phase.
+Migration requires consistent backup/epoch fence, no invented drain state for old
+updates; positive new native gate needs BOTH matching schema11 archives. Source/
+health old-state fixtures and negatives must not masquerade as executable approval.
+U1–U4/goal remain open. No installed bootstrap/update needed at this point.
+
 ## U1: full candidate-health gate PASSED; next durable drain — 2026-10-20
 
 Task7b42694b-5c0b-4121-a7d4-716c3599b2fa / run20261020-164339-83d2a1d6 terminal

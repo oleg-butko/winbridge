@@ -52,6 +52,24 @@ Updater root FSM уже имеет CandidateVerified → Draining → Quiesced. 
 
 ## Последовательность реализации
 
+Начаты data contracts `apps/update/src/drain.rs`: immutable binding к health/source
+digests, worker spec fingerprint и трём заранее зафиксированным command IDs/revisions.
+Per-command FSM Prepared → Issued → Confirmed либо Issued → Uncertain → Confirmed.
+Ни Issued, ни Uncertain после чтения не дают повторный issue; точная повторная
+receipt observation не меняет revision. Hash worker spec использует существующий
+canonical JSON и отдельный domain tag v1, а порядок задают revisions, не часы.
+Эти функции пока чистые: не открывают DB, не отправляют RPC и не выдают execution
+permit. Persisted schema11, атомарный root transition, межкомандный порядок и driver
+ещё не реализованы. В будущем SQL PK/immutable history/CAS должны защищать историю
+даже при создании другого in-memory Prepared object с тем же ordinal.
+
+До schema11 разделено чтение health history и fresh approval: сохранённый same-schema
+отчёт проверяется относительно captured compatibility, fresh admission по-прежнему
+требует ровно текущую updater schema. DB reader отдельно отклоняет receipt из схемы
+новее читаемой DB. Это сохраняет историю schema10 после будущей миграции, не делает
+старые owner/epoch/health новым execution permission. Сама миграция ещё впереди;
+обязателен regression с сохранённым health10 в настоящей schema11 DB.
+
 1. Допустить операцию только для свежего health receipt той же installation,
    source/artifacts, supervisor launch и owner/epoch. Проверить текущий config,
    runtime identity и завершение compiler/health процессов. Исторический успех
