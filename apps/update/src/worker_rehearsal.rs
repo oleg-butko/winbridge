@@ -89,7 +89,7 @@ pub fn inspect(
     if identity.image != pin.evidence {
         return Err("Rehearsal image changed during descriptor query".into());
     }
-    let (stdout, _stderr, process) = artifact::run_probe(
+    let (stdout, stderr, process) = artifact::run_probe(
         &pin,
         &[
             "--rehearsal".into(),
@@ -100,6 +100,11 @@ pub fn inspect(
         ],
         30000,
     )?;
+    if !stderr.is_empty() {
+        return Err(
+            "Rehearsal helper wrote stderr; output is not a clean diagnostic receipt".into(),
+        );
+    }
     let rehearsal: WorkerRehearsalReport =
         serde_json::from_slice(&stdout).map_err(|_| "Invalid worker rehearsal report/fields")?;
     let actual = directory.canonicalize().map_err(|e| e.to_string())?;

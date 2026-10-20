@@ -334,6 +334,19 @@ async fn health_actor_process_helper() {
             health = UpdateJournal::inspect_health(&reg.directory, &id)
                 .unwrap()
                 .unwrap();
+            let expected = if case == "pid-receipt-rejected" {
+                HealthOutcome::Rejected
+            } else {
+                HealthOutcome::Verified
+            };
+            if health.result.as_ref().map(|r| &r.outcome) != Some(&expected) {
+                let status = h.candidate_health(false).await.unwrap();
+                let diagnostic = serde_json::json!({"schemaVersion":1,"kind":"health_outcome_failure","case":case,"expected":expected,"status":status,"health":health,"callbackObserved":true,"runtimeApplied":false});
+                let report =
+                    PathBuf::from(std::env::var_os("WINBRIDGE_HEALTH_GATE_PROOF").unwrap())
+                        .with_extension("failure.json");
+                fs::write(report, serde_json::to_vec_pretty(&diagnostic).unwrap()).unwrap();
+            }
             if case == "pid-receipt-rejected" {
                 assert_eq!(
                     health.result.as_ref().unwrap().outcome,

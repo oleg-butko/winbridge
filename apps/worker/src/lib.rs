@@ -1515,6 +1515,15 @@ fn ensure_local_state(path: &Path) -> Result<()> {
 }
 
 pub async fn serve(worker: Arc<Worker>) -> Result<()> {
+    serve_inner(worker, ReadinessOutput::Console).await
+}
+
+enum ReadinessOutput {
+    Console,
+    Report,
+}
+
+async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<()> {
     struct NetworkTask(tokio::task::JoinHandle<()>);
     impl Drop for NetworkTask {
         fn drop(&mut self) {
@@ -1559,10 +1568,12 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
     #[cfg(windows)]
     let mut listener =
         winbridge_transport::create_pipe(&address, true).map_err(|e| e.to_string())?;
-    eprintln!(
-        "WinBridge worker ready: {address}; generation {}",
-        worker.generation
-    );
+    if matches!(readiness, ReadinessOutput::Console) {
+        eprintln!(
+            "WinBridge worker ready: {address}; generation {}",
+            worker.generation
+        );
+    }
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
     let control = update_control::start(Arc::clone(&worker))?;
     let network = worker

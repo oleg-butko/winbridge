@@ -1,4 +1,35 @@
-## U1: callback-observer native retry RUNNING — 2026-10-20
+## U1: rehearsal stderr defect found; automatic retry being prepared — 2026-10-20
+
+Task1378af21-9a6c-4b98-9b54-cbd72c4e55f8 / run20261020-103249-4030e35e is
+terminal failed1, NOT running. The first three cases passed their assertions;
+the final case ran both helpers with exit0 and confirmed empty trees/capture,
+but health correctly rejected rehearsal stderr. Real rehearsal used normal serve,
+which always printed `WinBridge worker ready` to stderr. Earlier standalone
+inspection ignored stderr, so its green tests did not cover the strict actor
+contract. Four ready files verified; reportSHA
+f13a2b0c466fb1c1ad4d852b475669c996f811078b5968f990c9de8d150f711e.
+Windows free19,407,204,352 ->19,330,277,376. Do not replay the terminal task.
+
+Fix: normal serve keeps its console announcement; rehearsal readiness comes
+from IPC and the typed stdout report, with no console banner. Real errors remain
+on stderr and still invalidate health. Standalone inspection now also rejects
+stderr. Five local actual-process rehearsal tests passed, including new clean
+stdout/stderr regression. Artifact marker scanning stops after first match while
+SHA still hashes every byte; read-boundary/late-tail mutation regression passed.
+544 workspace tests/doctests, Linux/Windows all-target Clippy, fmt, three Python
+admission tests and scaffold217 Markdown checks passed before commit/export/retry.
+The fixture now saves structured failure JSON for final outcome mismatches too.
+
+Debian session was rebooted (uptime begins2026-10-20 15:41 UTC); controller has
+been restarted. Fresh installed Info: same clean d052 source/build, new generation
+78e9bbe1-8cb9-4ad3-93cf-371e981801ad, idle0, complete recovery coverage, no recovery
+or maintenance errors. No installed replacement, GUI or bootstrap. Next native
+run needs fresh genuine clean target C containing the rehearsal fix and distinct
+source A; old2aac target still has the defect. Original caches may be reused.
+[Drain/quiesce plan](plans/worker-self-update/drain-quiesce.md) is design only;
+implement after full health gate. U1–U4 and public update remain unfinished.
+
+## U1: callback-observer native retry (historical) — 2026-10-20
 
 Source A d5f04a7b6e4102ad5f70329aab7310061634c1f6 clean exported:
 winbridge-20261020T103233Z-d5f04a7-a171943e.zip,

@@ -359,3 +359,10 @@ one-use intent, managed config/rehearsal helpers, immutable PID/cleanup, atomic
 CandidateAccepted и abort после quiescence. Внутренняя реализация проверяется;
 сквозной native health gate и public update/exact shutdown/install ещё впереди.
 U1 не помечается завершённым.
+
+Сквозной actor run20261020-103249-4030e35e выявил несовместимость rehearsal
+с собственным строгим health-контрактом: обычный readiness banner попадал в
+stderr. Обе проверки завершались exit0, но approval был правильно отклонён.
+Исправляется вывод пробного worker, добавлена проверка actual exe; повтор gate
+впереди. [Drain/quiesce](plans/worker-self-update/drain-quiesce.md) — следующий
+запланированный блок после health gate, ещё не реализация.

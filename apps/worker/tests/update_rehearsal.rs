@@ -71,6 +71,22 @@ fn actual_candidate_initializes_only_new_state_serves_ipc_and_stops() {
     assert!(error.contains("Existing rehearsal directory"));
 }
 #[test]
+fn successful_entry_emits_one_typed_report_without_console_diagnostics() {
+    let root = root();
+    let output = Command::new(copied_worker(root.path()))
+        .arg("--rehearsal")
+        .arg(root.path().join("fresh"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(output.stderr.is_empty(), "{output:?}");
+    let report: winbridge_protocol::WorkerRehearsalReport =
+        serde_json::from_slice(&output.stdout).unwrap();
+    assert!(report.ipc_ready && report.server_stopped && report.fresh_journal);
+    assert_ne!(report.process.process_id, std::process::id());
+    assert!(!report.production_state_opened && !report.controller_enabled);
+}
+#[test]
 fn actual_entry_refuses_existing_directory_and_production_config_arguments() {
     let root = root();
     let worker = copied_worker(root.path());

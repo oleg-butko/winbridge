@@ -5,6 +5,14 @@ preparation view schema 4. Public update, drain/shutdown, замена exe и bo
 этим блоком не включаются. Полный сквозной native gate health-driver ещё требуется;
 отдельные DTO-тесты и standalone rehearsal не заменяют этот gate.
 
+Сквозной run20261020-103249-4030e35e выявил реальный дефект: rehearsal
+использовал обычный console readiness banner в stderr, поэтому strict health
+правильно отклонял даже exit0. Теперь пробный server сообщает readiness через
+IPC и typed stdout report, обычный server сохраняет banner. Ошибки не подавляются.
+Standalone inspection также отказывает при stderr, а regression запускает настоящий
+exe и проверяет чистый stdout/stderr. Native повтор с новым clean candidate
+ещё требуется; прежний green standalone test не доказывал strict actor approval.
+
 ## Последовательность
 
 1. После verified source, compiler report, artifact receipt, baseline и пяти

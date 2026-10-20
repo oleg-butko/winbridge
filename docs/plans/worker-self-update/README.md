@@ -172,6 +172,9 @@ U0 не применяет source plan, не выключает процессы
   accepted tasks не обрываются, app/unknown owner блокирует update, lost ACK и
   падение между handoff receipts не разрешают преждевременный replace.
 
+Следующий U1 блок после health gate: [drain/quiesce](drain-quiesce.md) с
+сохранением command intents/receipts, accepted work и user pause. Пока это план.
+
 ### U2 — same-schema apply и agent tracking
 
 - [ ] Binary manifest, same-volume replace и verified prior set, exact exit/lock.

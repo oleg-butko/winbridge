@@ -1,0 +1,78 @@
+# Следующий блок U1: drain и quiesce
+
+2026-10-20. План после сквозного health gate; блок ещё не реализован.
+Public update, shutdown и replacement пока отключены. Установленный worker
+для этой разработки менять не требуется: native проверки проходят на отдельной
+копии. Рабочий desktop для них не нужен.
+
+## Что уже есть
+
+Worker schema 15 хранит SourceHeld → Draining → Quiescing → Quiesced и отдельный
+Released. Trusted control v1 поддерживает BeginDrain/CloseDispatch/ConfirmQuiesced,
+проверяет process/owner/epoch/config и требует updater parent Draining. Worker
+сам вычисляет blockers и делает physical scan; число активных задач от агента
+не является доказательством quiescence. User pause хранится отдельно.
+
+Updater root FSM уже имеет CandidateVerified → Draining → Quiesced. Не хватает
+долговечных доказательств координации обеих БД и actor orchestration. Worker lease
+и updater root находятся в разных SQLite: общей транзакции между ними нет.
+
+## Последовательность реализации
+
+1. Допустить операцию только для свежего health receipt той же installation,
+   source/artifacts, supervisor launch и owner/epoch. Проверить текущий config,
+   runtime identity и завершение compiler/health процессов. Исторический успех
+   после смены владельца не создаёт новую authority.
+2. Сохранить immutable drain spec/первый worker command intent и root BeginDrain
+   в одной updater transaction до ACK. Вернуть быстрый consistent status;
+   один blocking driver продолжает работу под той же физической authority.
+3. Каждый command имеет стабильный ID, точный immutable WorkerUpdateSpec и
+   expected worker revision. Намерение сохраняется до RPC, typed receipt — до
+   следующего шага. Применить BeginDrain, дождаться завершения принятых roots и
+   workflow children, затем CloseDispatch и ConfirmQuiesced. Не отменять работу
+   ради прохождения gate и не снимать user pause.
+4. Получить подтверждение именно сохранённой команды, а не только похожей фазы.
+   Worker уже хранит immutable command receipts. Добавить отдельное версионированное
+   readonly чтение receipt через authenticated control; отсутствие receipt не
+   считать отсутствием эффекта. Legacy control v1–v3 не менять скрытно.
+5. Записать последний matching worker receipt и updater Quiesced атомарно в
+   updater DB. Root Quiesce получает значения из подтверждения worker после
+   закрытия dispatch/physical scan. Не принимать эти значения из CLI/MCP payload.
+6. Status читает spec/команды/receipts/root/source/health в одном SQLite snapshot.
+   Показывает ожидание принятых задач, закрытие dispatch, physical confirmation,
+   stale/unknown outcome и причину остановки. Медленный UI не блокирует driver.
+
+Нужны typed enum состояния driver, immutable history, CAS и одноразовый permit.
+Pending после краха остаётся observation/reconciliation, без нового execution
+permit. Readonly receipt lookup после потерянного ACK не повторяет внешнюю команду.
+Новый контракт запрещено подменять fallback-вызовом старой мутации.
+
+## Версии, отмена и границы
+
+Хранение spec/command intents/receipts требует новой updater schema с consistent
+backup и epoch fence. Не упаковывать evidence в человекочитаемое поле reason.
+Для native gate обе проверяемые версии должны поддерживать новую schema:
+старый target C2aac553 поддерживает только10 и годится для schema-refusal/negative
+проверки, но не для положительного same-schema health/drain gate после миграции.
+Worker journal не меняется без отдельной необходимости; updater его не мигрирует.
+
+При busy/тайм-ауте не делать force kill и не заменять exe. Отмена/отсрочка должна
+сначала доказать завершение своих callbacks/helpers и целостность source, затем
+освободить только собственную worker lease. Другие operation/process leases,
+config pending и user pause сохраняются. Неизвестное состояние остаётся blocked
+с конкретной диагностикой, без TTL или неявного удаления marker.
+
+Exact shutdown — следующий отдельный шаг: durable shutdown intent, flushed ACK,
+точный PID/birth exit, instance/file locks и работающий независимый supervisor.
+Quiesced и отсутствие named pipe сами по себе не разрешают replacement. Desktop
+save/exit, activation, journal migration и controller confirmation остаются U2/U3.
+
+## Доказательства готовности
+
+Native проверки: две-три project queues, выполняющаяся задача и workflow child
+завершаются без принудительной отмены; новые roots ждут; user pause не меняется.
+Lost ACK и повтор чтения receipt не создают вторую команду. Stale revision/epoch,
+чужой scope и неподтверждённые physical owners блокируют quiescence. Статус остаётся
+доступным при ожидании; abort не выпускает lease раньше callback retirement.
+Отдельно проверить config/cleanup/recovery gates и окончательное освобождение
+только своей блокировки. Ни один тест этого блока не устанавливает runtime.

@@ -39,7 +39,13 @@ pub async fn run(directory: &Path) -> Result<WorkerRehearsalReport> {
     .map_err(|e| e.to_string())?;
     let worker = Worker::open(cfg)?;
     let address = winbridge_transport::endpoint(&state, &instance).map_err(|e| e.to_string())?;
-    let mut server = tokio::spawn(crate::serve(Arc::clone(&worker)));
+    // Readiness is proved by IPC and the typed stdout report. A console banner
+    // on stderr would correctly invalidate the strict candidate-health receipt.
+    // Real scheduling/IPC errors remain visible on stderr and fail that check.
+    let mut server = tokio::spawn(crate::serve_inner(
+        Arc::clone(&worker),
+        crate::ReadinessOutput::Report,
+    ));
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
     let observed = loop {
         if server.is_finished() {
