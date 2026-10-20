@@ -24,6 +24,25 @@ pub(super) fn transition(
     owner: &str,
     epoch: u64,
 ) -> Result<u64> {
+    // The same retained-transition proof is used by early baseline/preimages
+    // and by candidate health. Bind both ends to the event's actual FSM edge.
+    let previous = match event {
+        UpdateEvent::RuntimeBaselineAdmitted
+        | UpdateEvent::RuntimeBaselineVerified
+        | UpdateEvent::RuntimePreimagesAdmitted
+        | UpdateEvent::RuntimePreimagesVerified => UpdatePhase::Requested,
+        UpdateEvent::CandidateHealthAdmitted | UpdateEvent::CandidateAccepted => {
+            UpdatePhase::ValidatingCandidate
+        }
+        _ => {
+            return Err(fail(
+                JournalErrorCode::Corrupt,
+                "Unsupported driver proof event",
+            ))
+        }
+    };
+    let phase = advance_update(previous, event)
+        .map_err(|_| fail(JournalErrorCode::Corrupt, "Invalid driver proof FSM edge"))?;
     let (sequence, raw, snapshot, raw_transition): (i64, String, String, String) = c
         .query_row(
             "SELECT sequence,payload,record,transition FROM transitions WHERE update_id=?1 AND revision=?2",
@@ -40,14 +59,14 @@ pub(super) fn transition(
         || command.expected_revision.checked_add(1) != Some(revision)
         || record.update_id != id
         || record.revision != revision
-        || record.phase != UpdatePhase::Requested
+        || record.phase != phase
         || record.request != current.request
         || record.accepted_at_ms != current.accepted_at_ms
         || t.update_id != id
         || t.sequence != counter(sequence)?
         || t.revision != revision
-        || t.previous_phase != Some(UpdatePhase::Requested)
-        || t.phase != UpdatePhase::Requested
+        || t.previous_phase != Some(previous)
+        || t.phase != phase
         || t.command.as_ref() != Some(&command)
         || t.owner_id != owner
         || t.owner_epoch != epoch
@@ -55,7 +74,7 @@ pub(super) fn transition(
     {
         return Err(fail(
             JournalErrorCode::Corrupt,
-            "Runtime baseline requires its atomic parent transition",
+            "Driver evidence requires its exact atomic parent transition",
         ));
     }
     Ok(record.updated_at_ms)

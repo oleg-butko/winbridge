@@ -510,3 +510,92 @@ fn schema_seven_migration_preserves_old_history_without_inventing_baseline() {
 
 #[path = "runtime_preimages_tests.rs"]
 mod preimages;
+
+#[test]
+fn driver_transition_proof_accepts_both_health_edges_and_rejects_cross_phase_key_owner_epoch() {
+    // Retained transition rows only: no artifact health or executable approval is claimed.
+    let mut f = Fixture::new();
+    let id = f.supervisor.spec.update_id.clone();
+    for (n, event) in [
+        UpdateEvent::BeginPreparation,
+        UpdateEvent::SourceVerified,
+        UpdateEvent::BuildSucceeded,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let r = f.journal.get(&id).unwrap();
+        f.journal
+            .advance(
+                &f.owner,
+                &id,
+                &UpdateCommand {
+                    idempotency_key: format!("metadata-{n}"),
+                    expected_revision: r.revision,
+                    event,
+                    reason: "Metadata-only transition fixture".into(),
+                },
+            )
+            .unwrap();
+    }
+    for (event, key) in [
+        (
+            UpdateEvent::CandidateHealthAdmitted,
+            "health-intent-fixture",
+        ),
+        (UpdateEvent::CandidateAccepted, "health-result-fixture"),
+    ] {
+        let before = f.journal.get(&id).unwrap();
+        let after = f
+            .journal
+            .advance_with_driver(
+                &f.owner,
+                &id,
+                &UpdateCommand {
+                    idempotency_key: key.into(),
+                    expected_revision: before.revision,
+                    event,
+                    reason: "Metadata-only health transition proof fixture".into(),
+                },
+                Driver::Health,
+                |_, _| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(
+            transition(
+                &f.journal.connection,
+                &id,
+                after.revision,
+                event,
+                key,
+                f.owner.owner_id(),
+                f.owner.epoch()
+            )
+            .unwrap(),
+            after.updated_at_ms
+        );
+        for (wrong_event, wrong_key, wrong_owner, wrong_epoch) in [
+            (
+                UpdateEvent::RuntimeBaselineAdmitted,
+                key,
+                f.owner.owner_id(),
+                f.owner.epoch(),
+            ),
+            (event, "different-key", f.owner.owner_id(), f.owner.epoch()),
+            (event, key, "different-owner", f.owner.epoch()),
+            (event, key, f.owner.owner_id(), f.owner.epoch() + 1),
+            (UpdateEvent::Fail, key, f.owner.owner_id(), f.owner.epoch()),
+        ] {
+            assert!(transition(
+                &f.journal.connection,
+                &id,
+                after.revision,
+                wrong_event,
+                wrong_key,
+                wrong_owner,
+                wrong_epoch
+            )
+            .is_err());
+        }
+    }
+}

@@ -1,3 +1,26 @@
+## U1: native schema10 base passed; health transition review fix — 2026-10-20
+
+Run20261020-053153-bde36139 / Taske3a474d6-48a2-4460-bd6d-4d43d377a44a
+terminal succeeded0. 217 native tests/19 groups, full build/entrypoints passed;
+47 ready files verified; reportSHA0975a1ff2ca28a8193048ef88ae45911b27cd3770d7238240b4d404a60d0d3e7.
+Fresh installed Info idle0, d052/generation unchanged, no maintenance/recovery error.
+No windows; worker remains, desktop not needed. Do not poll/restart terminal task.
+
+[Review](plans/worker-self-update/health-transition-review-2026-10-20.md) found
+runtime_baseline::transition hardcoded Requested, so health admission/acceptance
+could not pass its reader. Fixed by binding each supported event to its actual
+core FSM edge. New real transition-row regression + previous baseline/preimages:
+21 tests passed. This was an unexercised internal health route, not a working
+installed-worker failure. No manual update needed.
+
+New full health native fixture is WIP in worker update_control tests: optional
+full target package and private build adapter forwarding actual build script
+with original validation caches. Three cases currently implemented: failed PID
+receipt/no resume, blocked callback abort, verified actual helpers + atomic
+acceptance. Need finish/check the native runner and fixture, consider live
+rehearsal cancellation. Use no product test backdoors, keep actual source hashes.
+No claims yet of passing full health actor gate. Remaining U1/U2/U3/U4 unchanged.
+
 ## U1: schema-10 native base gate running — 2026-10-20
 
 Internal health block committed 3ca392ad7726faf2ff38a208999f8566222eaeaf.
