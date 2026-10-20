@@ -504,14 +504,17 @@ mod tests {
         }
     }
     fn other_task(store: &mut Store) -> winbridge_protocol::TaskRecord {
+        project_task(store, "other")
+    }
+    fn project_task(store: &mut Store, project: &str) -> winbridge_protocol::TaskRecord {
         use winbridge_protocol::*;
         store
             .accept(
                 TaskSubmission {
                     protocol_version: 1,
-                    request_id: "capacity".into(),
-                    idempotency_key: "capacity".into(),
-                    project_id: "other".into(),
+                    request_id: format!("capacity-{project}"),
+                    idempotency_key: format!("capacity-{project}"),
+                    project_id: project.into(),
                     timeout_ms: 5000,
                     snapshot_id: None,
                     command: CommandSource::Direct {
@@ -529,6 +532,87 @@ mod tests {
                 None,
             )
             .unwrap()
+    }
+    #[test]
+    fn drain_lets_accepted_other_projects_finish_with_one_slot_and_keeps_source_fenced() {
+        use super::super::CleanupProof;
+        use winbridge_protocol::{RequestContext, TaskStatus, WorkSchedulingPolicy};
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(&root.path().join("journal.sqlite")).unwrap();
+        store.begin_authority().unwrap();
+        store
+            .configure_work_scheduling(Some(WorkSchedulingPolicy {
+                max_concurrent_work: 1,
+            }))
+            .unwrap();
+        let first = project_task(&mut store, "other");
+        let second = project_task(&mut store, "third");
+        let spec = spec(&store);
+        store.begin_worker_update(spec.clone()).unwrap();
+        store
+            .advance_worker_update(
+                &spec,
+                &command("source", 0, WorkerUpdateAction::AcquireSource),
+                empty(),
+            )
+            .unwrap();
+        assert!(store.claim_task(&first.task_id).is_err());
+        let draining = store
+            .advance_worker_update(
+                &spec,
+                &command("drain", 1, WorkerUpdateAction::BeginDrain),
+                empty(),
+            )
+            .unwrap();
+        assert_eq!(draining.phase, WorkerUpdatePhase::Draining);
+        let context = RequestContext {
+            instance_id: "update-test".into(),
+            journal_incarnation: store.journal_authority().incarnation.clone(),
+        };
+        assert_eq!(
+            store
+                .work_scheduling_observation(context)
+                .unwrap()
+                .occupied_slots,
+            0
+        );
+        assert!(Store::require_update_admission(&store.connection, "other").is_err());
+        assert!(Store::require_update_project_dispatch(&store.connection, "source").is_err());
+        let close = command("close", 2, WorkerUpdateAction::CloseDispatch);
+        let (_, first_token) = store.claim_task(&first.task_id).unwrap();
+        assert!(store.claim_task(&second.task_id).is_err());
+        assert!(store.advance_worker_update(&spec, &close, empty()).is_err());
+        // Admission/capacity unit fixture: no OS process is created or claimed
+        // as executed; close each synthetic attempt with explicit cleanup.
+        store
+            .with_execution(&first_token, |s| {
+                s.finish_task_execution(
+                    &first_token,
+                    TaskStatus::Succeeded,
+                    Some(0),
+                    "synthetic capacity fixture",
+                    CleanupProof::NoProcessCreated,
+                )
+            })
+            .unwrap();
+        let (_, second_token) = store.claim_task(&second.task_id).unwrap();
+        assert!(store.advance_worker_update(&spec, &close, empty()).is_err());
+        store
+            .with_execution(&second_token, |s| {
+                s.finish_task_execution(
+                    &second_token,
+                    TaskStatus::Succeeded,
+                    Some(0),
+                    "synthetic capacity fixture",
+                    CleanupProof::NoProcessCreated,
+                )
+            })
+            .unwrap();
+        assert_eq!(store.active_worker_update().unwrap(), Some(draining));
+        let closed = store.advance_worker_update(&spec, &close, empty()).unwrap();
+        assert_eq!(closed.phase, WorkerUpdatePhase::Quiescing);
+        assert!(Store::require_update_project_dispatch(&store.connection, "other").is_err());
+        assert!(store.active_worker_update().unwrap().is_some());
     }
     #[test]
     fn update_grant_and_task_claim_share_one_atomic_work_slot() {

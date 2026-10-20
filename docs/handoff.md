@@ -1,4 +1,49 @@
-## U1: readonly command receipts prepared; health gate still RUNNING — 2026-10-20
+## U1: atomic health-hook and drain-capacity fixes ready for native retry — 2026-10-20
+
+Task46e7c30a-65a7-4870-9466-5aef6366c727 / run20261020-161358-d2e84c59 is
+terminal failed1, NOT running. First three actor cases passed. Final candidate C515
+ran config PID14632 and rehearsal PID14252, both exit0, empty trees, complete
+capture and typed reports. Strict stderr defect is fixed. Final acceptance failed:
+`PreconditionsChanged: Fresh pending health authority required; no replay`.
+Structured candidate-health-actor-proof.failure.json proves the actual failure.
+Six ready files verified; reportSHA
+25833a5e9d2746345a0a0d253f14853ff91077d69cfb6daec06b03ad0002557b.
+Windows free56,695,615,488 ->48,173,080,576. Installed d052 unchanged, generation
+78e9bbe1-8cb9-4ad3-93cf-371e981801ad, idle0, complete coverage, no recovery or
+maintenance errors. No GUI/replacement. Never replay this terminal task.
+
+Real bug: advance_with_driver writes root CandidateVerified and its transition
+BEFORE running the atomic child-row hook. accept_health incorrectly repeated
+the PRE-transition pending-phase guard inside that hook. It now requires the
+exact POST-transition root/revision/current owner/supervisor and retained event/key
+in that same transaction; pending probe guards remain unchanged. SQLite hook
+regression passed, with rollback on owner/epoch/launch/revision/key mismatch.
+This metadata fixture is NOT executable-health approval; full native gate remains.
+
+Review found another concrete issue before durable drain: source/compiler lease
+reserved the global work slot even during Draining. At capacity1, accepted other
+projects could never drain. New regression reproduced occupied1 vs expected0.
+Reservation now ends atomically with BeginDrain; source/admission lease remains,
+unknown phases still count conservatively. Test uses two accepted other projects,
+checks global capacity1, source fence/new-root rejection and refusal of CloseDispatch
+until both synthetic attempts clean up. No named-resource support added.
+
+549 workspace tests/doctests, Linux/Windows all-target Clippy, fmt, PowerShell
+syntax, scaffold217 and three Python admission tests passed. Logs
+.winbridge/update-preparation/health-atomic-capacity-*.log. Free Debian31,639,314,432.
+Commit/export corrected target C and then a distinct clean source A, both with
+the two fixes (schema10 unchanged), original cache and fresh isolated run. C515
+has clean worker rehearsal but its updater still has the old acceptance-hook bug;
+use the new fixed generation rather than a knowingly defective updater candidate.
+Health script
+now includes atomic-hook, v4 protocol/actual worker receipt and drain-capacity
+regressions before all4 actor cases. This combines native coverage; do NOT launch
+the older .winbridge/update-preparation/receipt-reader-native-plan.json, now marked
+superseded. Reader9be source archive exists but lacks these two fixes. No bootstrap.
+Once all4 pass and proof/ready/fresh Info verified, continue durable drain driver
+and exact shutdown. U1–U4 remain open; schema11 still needs matching future C.
+
+## U1: readonly command receipts prepared (historical) — 2026-10-20
 
 New internal supervisor v11 / worker control v4 observes immutable command
 receipts by exact payload. No journal schema change, mutation, marker cleanup,

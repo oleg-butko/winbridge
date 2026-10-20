@@ -223,6 +223,43 @@ fn require(
     }
     Ok(())
 }
+/// advance_with_driver has already written the new root/transition in its open
+/// transaction. The pending-phase guard belongs BEFORE that transition; inside
+/// the hook require the exact acceptance edge instead of the old parent phase.
+pub(super) fn require_acceptance(
+    c: &Connection,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    h: &HealthRecord,
+    parent: &UpdateRecord,
+) -> Result<()> {
+    check_authority(c, a)?;
+    runtime_baseline::current_supervisor(c, a, s)?;
+    if h.intent.owner_id != a.owner_id()
+        || h.intent.owner_epoch != a.epoch()
+        || h.intent.launch_id != s.spec.launch_id
+        || h.result.is_some()
+        || parent.update_id != h.intent.update_id
+        || parent.phase != UpdatePhase::CandidateVerified
+        || h.intent.parent_revision.checked_add(1) != Some(parent.revision)
+        || record(c, &h.intent.update_id)? != *parent
+    {
+        return Err(fail(
+            JournalErrorCode::PreconditionsChanged,
+            "Health acceptance requires its exact committed parent edge in this transaction",
+        ));
+    }
+    runtime_baseline::transition(
+        c,
+        &h.intent.update_id,
+        parent.revision,
+        UpdateEvent::CandidateAccepted,
+        "candidate-health-verified-v1",
+        a.owner_id(),
+        a.epoch(),
+    )?;
+    Ok(())
+}
 impl UpdateJournal {
     pub fn inspect_health(directory: &Path, id: &str) -> Result<Option<HealthRecord>> {
         check_files(directory)?;
@@ -346,8 +383,8 @@ impl UpdateJournal {
         result.parent_revision = Some(p.revision + 1);
         next.revision = old.revision + 1;
         let command=UpdateCommand{idempotency_key:"candidate-health-verified-v1".into(),expected_revision:p.revision,event:UpdateEvent::CandidateAccepted,reason:"Конфигурация и изолированный запуск кандидата проверены; процессы завершены, установка ожидает drain".into()};
-        self.advance_with_driver(a,&old.intent.update_id,&command,Driver::Health,|c,_| {
-            require(c,a,s,old,false)?;
+        self.advance_with_driver(a,&old.intent.update_id,&command,Driver::Health,|c,parent| {
+            require_acceptance(c,a,s,old,parent)?;
             if read(c,&old.intent.update_id)?.as_ref()!=Some(old) || next.intent!=old.intent {return Err(fail(JournalErrorCode::RevisionConflict,"Health acceptance changed"));}
             one(c.execute("UPDATE candidate_health SET revision=?1,record=?2 WHERE id=?3 AND revision=?4",params![next.revision as i64,encode(&next)?,old.intent.update_id,old.revision as i64]).map_err(storage)?)?;
             if read(c,&old.intent.update_id)?.as_ref()!=Some(&next){return Err(bad("Health acceptance write ignored"));}Ok(())

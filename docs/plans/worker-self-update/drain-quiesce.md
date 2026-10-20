@@ -75,6 +75,16 @@ source hold гарантирует отсутствие принятых вла�
 показывать этот blocker и ждать явного решения, не снимать pause и не останавливать
 приложение ради обновления.
 
+Ревью выявило capacity deadlock: прежний SQL учитывал update lease как занятый
+work slot во всех фазах. При maxConcurrentWork=1 принятые другие проекты не могли
+завершиться во время Draining. Исправление оставляет compiler reservation только
+на SourceHeld (и неизвестных фазах, консервативно), а BeginDrain освобождает слот
+атомарно со сменой фазы. Источники по-прежнему fenced; новые roots отклоняются,
+CloseDispatch ждёт принятые roots/owners, Quiescing закрывает весь dispatch.
+Regression воспроизводит прежнее occupied1 вместо0 и проверяет две принятые
+очереди других проектов с capacity1. Это unit DB proof, не proof физических
+Windows процессов; native проверка включена в следующий health-gate сценарий.
+
 До включения driver запретить raw lifecycle BeginDrain/Quiesce через общий apply:
 как для health, только специализированный journal driver с matching intents и
 worker receipts вправе двигать root. Значения `acceptedOperations=0` в payload

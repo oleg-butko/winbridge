@@ -512,6 +512,105 @@ fn schema_seven_migration_preserves_old_history_without_inventing_baseline() {
 mod preimages;
 
 #[test]
+fn health_acceptance_hook_checks_new_atomic_parent_and_rolls_back_wrong_authority() {
+    use crate::health::{HealthIntent, HealthRecord};
+    // Test the actual transaction/hook ordering and its fences, not executable
+    // health. Complete approval still requires the Windows full-pipeline gate.
+    let mut f = Fixture::new();
+    let id = f.supervisor.spec.update_id.clone();
+    for (n, event) in [
+        UpdateEvent::BeginPreparation,
+        UpdateEvent::SourceVerified,
+        UpdateEvent::BuildSucceeded,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let current = f.journal.get(&id).unwrap();
+        f.journal
+            .advance(
+                &f.owner,
+                &id,
+                &UpdateCommand {
+                    idempotency_key: format!("hook-fixture-{n}"),
+                    expected_revision: current.revision,
+                    event,
+                    reason: "Metadata-only hook fixture".into(),
+                },
+            )
+            .unwrap();
+    }
+    let before = f.journal.get(&id).unwrap();
+    let pending = HealthRecord {
+        schema_version: 1,
+        revision: 0,
+        context: None,
+        probes: vec![],
+        result: None,
+        intent: HealthIntent {
+            schema_version: 1,
+            update_id: id.clone(),
+            attempt_id: Uuid::new_v4().to_string(),
+            launch_id: f.supervisor.spec.launch_id.clone(),
+            owner_id: f.owner.owner_id().into(),
+            owner_epoch: f.owner.epoch(),
+            parent_revision: before.revision,
+            admitted_at_ms: now_ms().unwrap(),
+            artifacts_sha256: "a".repeat(64),
+            preimages_sha256: "b".repeat(64),
+            directory: "metadata-only".into(),
+            worker_config_path: "metadata-only.json".into(),
+        },
+    };
+    assert!(super::super::health::require_acceptance(
+        &f.journal.connection,
+        &f.owner,
+        &f.supervisor,
+        &pending,
+        &before
+    )
+    .is_err());
+    let command = UpdateCommand {
+        idempotency_key: "candidate-health-verified-v1".into(),
+        expected_revision: before.revision,
+        event: UpdateEvent::CandidateAccepted,
+        reason: "Metadata-only atomic parent edge".into(),
+    };
+    let sequence = f.journal.info().unwrap().last_sequence;
+    for fault in ["owner", "epoch", "parent", "launch", "key"] {
+        let mut h = pending.clone();
+        let mut cmd = command.clone();
+        match fault {
+            "owner" => h.intent.owner_id = Uuid::new_v4().to_string(),
+            "epoch" => h.intent.owner_epoch += 1,
+            "parent" => h.intent.parent_revision += 1,
+            "launch" => h.intent.launch_id = Uuid::new_v4().to_string(),
+            "key" => cmd.idempotency_key = "different-acceptance-key".into(),
+            _ => unreachable!(),
+        }
+        assert!(
+            f.journal
+                .advance_with_driver(&f.owner, &id, &cmd, Driver::Health, |c, parent| {
+                    super::super::health::require_acceptance(c, &f.owner, &f.supervisor, &h, parent)
+                })
+                .is_err(),
+            "{fault}"
+        );
+        assert_eq!(f.journal.get(&id).unwrap(), before);
+        assert_eq!(f.journal.info().unwrap().last_sequence, sequence);
+    }
+    let accepted = f
+        .journal
+        .advance_with_driver(&f.owner, &id, &command, Driver::Health, |c, parent| {
+            assert_eq!(parent.phase, UpdatePhase::CandidateVerified);
+            super::super::health::require_acceptance(c, &f.owner, &f.supervisor, &pending, parent)
+        })
+        .unwrap();
+    assert_eq!(accepted.phase, UpdatePhase::CandidateVerified);
+    assert_eq!(accepted.revision, before.revision + 1);
+    assert_eq!(f.journal.info().unwrap().last_sequence, sequence + 1);
+}
+#[test]
 fn driver_transition_proof_accepts_both_health_edges_and_rejects_cross_phase_key_owner_epoch() {
     // Retained transition rows only: no artifact health or executable approval is claimed.
     let mut f = Fixture::new();

@@ -9,7 +9,11 @@ fn counts(connection: &Connection) -> Result<(u32, u32, u32)> {
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .map_err(sql)?;
     let updates: i64 = if version >= 15 {
-        connection.query_row("SELECT count(*) FROM worker_update_leases WHERE active=1 AND phase!='\"source_pending\"'",[],|r|r.get(0)).map_err(sql)?
+        // SourceHeld reserves compiler capacity. After verified candidate work
+        // ends, Draining must let previously accepted other projects finish even
+        // at capacity=1. Admission/source fencing remain in the separate lease.
+        // Unknown phases still count; corruption cannot silently free capacity.
+        connection.query_row(r#"SELECT count(*) FROM worker_update_leases WHERE active=1 AND phase NOT IN ('"source_pending"','"draining"','"quiescing"','"quiesced"')"#,[],|r|r.get(0)).map_err(sql)?
     } else {
         0
     };

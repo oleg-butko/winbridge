@@ -13,6 +13,13 @@ Standalone inspection также отказывает при stderr, а regressi
 exe и проверяет чистый stdout/stderr. Native повтор с новым clean candidate
 ещё требуется; прежний green standalone test не доказывал strict actor approval.
 
+Повтор20261020-161358-d2e84c59 подтвердил исправленный stderr и все три отмены.
+Финальные config/rehearsal exit0 отклонены другим guard: atomic child-row hook
+проверял прежнюю фазу после уже записанного parent CandidateVerified. Hook теперь
+проверяет точный новый root/event/key/revision/owner внутри той же транзакции;
+SQLite regression проверяет успешный edge и rollback неверных bindings. Pending
+guards вне acceptance hook не ослаблены. Полный native повтор остаётся обязательным.
+
 ## Последовательность
 
 1. После verified source, compiler report, artifact receipt, baseline и пяти

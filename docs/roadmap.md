@@ -371,3 +371,10 @@ stderr. Обе проверки завершались exit0, но approval бы
 читает immutable command receipt без повторной мутации. Local547 tests/doctests,
 Linux/Windows Clippy и UI checks passed; native v11/v4 ещё требуется. Это не
 durable drain driver и не разрешение остановить установленный worker.
+
+Run20261020-161358-d2e84c59 прошёл три отмены, но выявил неверный pre-transition
+guard внутри уже post-transition atomic acceptance hook. Исправлен точный новый
+parent proof; SQLite regression проверяет rollback чужих bindings. Ревью также
+исправило compiler-slot deadlock при Draining/capacity1. Local549 tests/doctests
+и Linux/Windows Clippy passed; объединённый native повтор всех новых проверок
+и четырёх health actor cases ещё требуется. U1 остаётся открытым.
