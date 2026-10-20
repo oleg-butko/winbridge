@@ -156,7 +156,7 @@ U0 не применяет source plan, не выключает процессы
   другими old-role descriptors; candidate и helpers настоящие. Это не activation.
   Предыдущие [startup/Main/pins gates](windows-runtime-startup-gate-2026-10-18.md)
   и [217 base native tests](health-transition-review-2026-10-20.md) сохраняют свою область.
-- [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
+- [ ] Worker admission/drain/quiesce/[exact shutdown](exact-shutdown.md)/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.
 - [ ] Native fault gate: updater жив после worker exit; нет второго supervisor,
