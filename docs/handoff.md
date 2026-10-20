@@ -1,3 +1,32 @@
+## U1: readonly command receipts prepared; health gate still RUNNING — 2026-10-20
+
+New internal supervisor v11 / worker control v4 observes immutable command
+receipts by exact payload. No journal schema change, mutation, marker cleanup,
+source/project filesystem scan, public update or installation. Missing receipt
+does NOT prove absence of an in-flight effect and never triggers Advance retry.
+Legacy v1–v3 / supervisor v1 cannot smuggle the new query or v4 mutations.
+Client validates packet binding, command, phase, revision, reason and owner/epoch.
+Historical SourceHeld receipt remains readable after Release/source-directory move.
+
+13 worker-control tests passed (new roundtrip uses real supervisor/worker IPC,
+discards original ACK, checks payload conflict/absence/stale epoch/version/slot
+and command-row count, then reads historical receipt after release). Two protocol
+regressions passed; full workspace547 tests/doctests passed. Final reason-binding
+guard was separately re-tested after the full run. Linux/Windows all-target Clippy,
+UI typecheck/build and scaffold217 passed; generated TS and final contract
+comparison passed. Native validation for v11/v4 is still REQUIRED; current
+bed8/515 health task below does not contain this newer code. Added explicit native
+protocol group; existing worker-control group includes the new roundtrip.
+
+No new Windows task while46e7c30a-65a7-4870-9466-5aef6366c727 runs. It passed the
+first two actor cases; third operation9ddfa41b-db83-4554-91e7-8957ac5dd2d6 was
+Preparing at last poll. Poll SAME task to terminal; verify all4 proof cases and
+ready hashes plus fresh installed Info. Then export the committed reader and
+run the approved full update-preparation gate with original cache and retained
+schema9 updater/schema14 worker references. Inspect exact current state before
+submitting. Do not reinstall d052 or open UI. Durable drain intents/actor, raw
+phase guards and exact shutdown remain to implement; entire U1–U4 stays open.
+
 ## U1: corrected rehearsal native gate RUNNING — 2026-10-20
 
 Accepted task46e7c30a-65a7-4870-9466-5aef6366c727, run20261020-161358-d2e84c59,

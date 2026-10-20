@@ -173,7 +173,9 @@ U0 не применяет source plan, не выключает процессы
   падение между handoff receipts не разрешают преждевременный replace.
 
 Следующий U1 блок после health gate: [drain/quiesce](drain-quiesce.md) с
-сохранением command intents/receipts, accepted work и user pause. Пока это план.
+сохранением command intents/receipts, accepted work и user pause. Подготовлен
+readonly receipt lookup v11/v4; native проверка ещё требуется. Durable driver
+этим не реализуется.
 
 ### U2 — same-schema apply и agent tracking
 

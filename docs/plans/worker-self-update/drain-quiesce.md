@@ -5,6 +5,24 @@ Public update, shutdown и replacement пока отключены. Устано
 для этой разработки менять не требуется: native проверки проходят на отдельной
 копии. Рабочий desktop для них не нужен.
 
+Подготовительная реализация: внутренний supervisor v11 / worker control v4
+добавляет `ObserveWorkerReceipt` / `ObserveReceipt`. Это readonly lookup старой
+immutable command receipt; drain driver, его updater schema и публичный update
+этим не реализуются. Текущий Windows health gate использует предыдущий архив
+без v11/v4; native проверка нового контракта остаётся отдельной обязательной задачей.
+
+Ответ содержит точный исходный command, optional receipt и время наблюдения.
+Клиент проверяет contract, update/context/generation, command payload, resulting
+phase, revision и owner/epoch. Отсутствие receipt означает только результат чтения
+в данный момент: команда в другом callback ещё может завершиться. Автоматический
+повтор внешней команды из этого ответа не следует. Legacy v1–v3 и supervisor v1
+не получают скрытый fallback; v4 не принимает мутацию Advance.
+
+Lookup читает сохранённый spec и квитанцию, не сканирует нынешние project/source
+directories, не меняет lease, slots или startup guard. Поэтому receipt SourceHeld
+остаётся читаемой после Release и после переноса старой папки исходников. Это
+историческое доказательство; оно не даёт новое разрешение на запись в файлы.
+
 ## Что уже есть
 
 Worker schema 15 хранит SourceHeld → Draining → Quiescing → Quiesced и отдельный

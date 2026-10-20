@@ -524,6 +524,7 @@ try {
             @{name='update-source-policy-and-fsm';arguments=@('test','-p','winbridge-core','--test','update','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-native-preflight';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-legacy-contracts';arguments=@('test','-p','winbridge-protocol','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture')},
+            @{name='update-command-receipt-contract';arguments=@('test','-p','winbridge-protocol','--test','worker_update_receipt','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-verifier-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
             @{name='update-worker-durable-coordination';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::update::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
             @{name='update-worker-native-coordination';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_coordination','--locked','--offline','--','--test-threads=1','--nocapture')},

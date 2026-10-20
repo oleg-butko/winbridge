@@ -212,23 +212,27 @@ impl Store {
         &self,
         spec: &WorkerUpdateSpec,
     ) -> Result<Option<WorkerUpdateLease>> {
+        let lease = self.worker_update_observation(&spec.update_id)?;
+        if lease.as_ref().is_some_and(|l| l.spec != *spec) {
+            return Err("Worker update ID already belongs to another scope/payload".into());
+        }
+        Ok(lease)
+    }
+    /// Saved state only; no filesystem scan, lease acquisition or marker cleanup.
+    pub(crate) fn worker_update_observation(&self, id: &str) -> Result<Option<WorkerUpdateLease>> {
         self.guard_callback(None, None)?;
         let exists: bool = self
             .connection
             .query_row(
                 "SELECT EXISTS(SELECT 1 FROM worker_update_leases WHERE id=?1)",
-                [&spec.update_id],
+                [id],
                 |r| r.get(0),
             )
             .map_err(sql)?;
         if !exists {
             return Ok(None);
         }
-        let lease = read(&self.connection, &spec.update_id)?;
-        if lease.spec != *spec {
-            return Err("Worker update ID already belongs to another scope/payload".into());
-        }
-        Ok(Some(lease))
+        read(&self.connection, id).map(Some)
     }
     pub(crate) fn begin_worker_update(
         &mut self,

@@ -366,3 +366,8 @@ stderr. Обе проверки завершались exit0, но approval бы
 Исправляется вывод пробного worker, добавлена проверка actual exe; повтор gate
 впереди. [Drain/quiesce](plans/worker-self-update/drain-quiesce.md) — следующий
 запланированный блок после health gate, ещё не реализация.
+
+Подготовительный контракт следующего блока: supervisor v11 / worker control v4
+читает immutable command receipt без повторной мутации. Local547 tests/doctests,
+Linux/Windows Clippy и UI checks passed; native v11/v4 ещё требуется. Это не
+durable drain driver и не разрешение остановить установленный worker.

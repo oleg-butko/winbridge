@@ -551,6 +551,8 @@ pub enum SupervisorAction {
     /// Internal v10: journal-bound owned config/rehearsal checks, never installation.
     ValidateCandidateHealth,
     ObserveCandidateHealth,
+    /// Internal v11: read a saved worker-command receipt, never repeat a mutation.
+    ObserveWorkerReceipt,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -711,6 +713,10 @@ pub enum WorkerUpdateControlCommand {
     ObserveRuntime,
     /// Worker control v3 only; no caller-selected schema or config.
     ObserveCompatibility,
+    /// Worker control v4 only. Missing receipt does not authorize a retry.
+    ObserveReceipt {
+        command: WorkerUpdateCommand,
+    },
     BeginSource,
     Advance {
         command: WorkerUpdateCommand,
@@ -756,6 +762,12 @@ pub enum WorkerUpdateControlResult {
     RuntimeCompatibility {
         compatibility: Box<crate::WorkerRuntimeCompatibility>,
     },
+    CommandReceipt {
+        command: WorkerUpdateCommand,
+        receipt: Option<Box<WorkerUpdateLease>>,
+        #[serde(rename = "observedAtMs")]
+        observed_at_ms: u64,
+    },
     /// An error does not prove absence of a committed effect. Observe the original ID.
     Error { message: String },
 }
@@ -773,7 +785,8 @@ impl WorkerUpdateControlResponse {
             WorkerUpdateControlResult::Snapshot { lease } => Ok(lease.map(|l| *l)),
             WorkerUpdateControlResult::Error { message } => Err(message),
             WorkerUpdateControlResult::RuntimeIdentity { .. }
-            | WorkerUpdateControlResult::RuntimeCompatibility { .. } => {
+            | WorkerUpdateControlResult::RuntimeCompatibility { .. }
+            | WorkerUpdateControlResult::CommandReceipt { .. } => {
                 Err("Runtime identity is not a lease receipt".into())
             }
         }
@@ -786,7 +799,8 @@ impl WorkerUpdateControlResponse {
             WorkerUpdateControlResult::RuntimeIdentity { identity } => Ok(*identity),
             WorkerUpdateControlResult::Error { message } => Err(message),
             WorkerUpdateControlResult::Snapshot { .. }
-            | WorkerUpdateControlResult::RuntimeCompatibility { .. } => {
+            | WorkerUpdateControlResult::RuntimeCompatibility { .. }
+            | WorkerUpdateControlResult::CommandReceipt { .. } => {
                 Err("Lease receipt is not a runtime identity".into())
             }
         }
@@ -802,6 +816,45 @@ impl WorkerUpdateControlResponse {
             }
             WorkerUpdateControlResult::Error { message } => Err(message),
             _ => Err("Expected typed runtime compatibility; no fallback".into()),
+        }
+    }
+    /// Historical evidence only. None means this read found no matching receipt,
+    /// not that an in-flight command cannot commit after the observation.
+    pub fn into_command_receipt(
+        self,
+        expected: &WorkerUpdateCommand,
+    ) -> Result<Option<WorkerUpdateLease>, String> {
+        if self.control_version != 4 {
+            return Err("Command receipt requires worker control v4; no mutation fallback".into());
+        }
+        match self.result {
+            WorkerUpdateControlResult::CommandReceipt {
+                command,
+                receipt,
+                observed_at_ms,
+            } if command == *expected && observed_at_ms > 0 => {
+                let phase = match command.action {
+                    WorkerUpdateAction::AcquireSource => WorkerUpdatePhase::SourceHeld,
+                    WorkerUpdateAction::BeginDrain => WorkerUpdatePhase::Draining,
+                    WorkerUpdateAction::CloseDispatch => WorkerUpdatePhase::Quiescing,
+                    WorkerUpdateAction::ConfirmQuiesced => WorkerUpdatePhase::Quiesced,
+                    WorkerUpdateAction::Release => WorkerUpdatePhase::Released,
+                };
+                if receipt.as_ref().is_some_and(|r| {
+                    r.spec.update_id != self.update_id
+                        || r.spec.instance_id != self.binding.context.instance_id
+                        || r.spec.journal_incarnation != self.binding.context.journal_incarnation
+                        || r.spec.worker_generation != self.binding.generation
+                        || command.expected_revision.checked_add(1) != Some(r.revision)
+                        || r.phase != phase
+                        || r.reason != command.reason
+                }) {
+                    return Err("Command receipt scope/revision/phase differs".into());
+                }
+                Ok(receipt.map(|r| *r))
+            }
+            WorkerUpdateControlResult::Error { message } => Err(message),
+            _ => Err("Expected exact typed command receipt; no fallback".into()),
         }
     }
 }

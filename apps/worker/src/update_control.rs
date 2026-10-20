@@ -309,6 +309,7 @@ impl Worker {
                     | WorkerUpdateControlCommand::Advance { .. }
             ) | (2, WorkerUpdateControlCommand::ObserveRuntime)
                 | (3, WorkerUpdateControlCommand::ObserveCompatibility)
+                | (4, WorkerUpdateControlCommand::ObserveReceipt { .. })
         );
         if !version_matches
             || request.binding != reg.binding
@@ -359,6 +360,36 @@ impl Worker {
         request: &WorkerUpdateControlRequest,
         peer: u32,
     ) -> Result<WorkerUpdateControlResult> {
+        if let WorkerUpdateControlCommand::ObserveReceipt { command } = &request.command {
+            if request.binding.context != self.request_context()? {
+                return Err("Worker journal context changed; no receipt rebind".into());
+            }
+            let update = self.control_authority(reg, request, peer)?;
+            let store = self.store()?;
+            let receipt = if let Some(lease) = store.worker_update_observation(&update.update_id)? {
+                let spec = &lease.spec;
+                if spec.instance_id != reg.binding.context.instance_id
+                    || spec.journal_incarnation != reg.binding.context.journal_incarnation
+                    || spec.worker_generation != reg.binding.generation
+                    || spec.updater_owner_id != request.updater_owner_id
+                    || spec.updater_epoch != request.updater_epoch
+                    || std::path::Path::new(&spec.source_directory) != reg.source
+                    || spec.baseline_manifest_sha256
+                        != update.request.expected.baseline_manifest_sha256
+                    || spec.target_manifest_sha256 != update.request.source.manifest_sha256
+                {
+                    return Err("Saved worker command belongs to another source/scope/owner".into());
+                }
+                store.worker_update_receipt(spec, command)?
+            } else {
+                None
+            };
+            return Ok(WorkerUpdateControlResult::CommandReceipt {
+                command: command.clone(),
+                receipt: receipt.map(Box::new),
+                observed_at_ms: crate::store::now_ms(),
+            });
+        }
         if !matches!(
             request.command,
             WorkerUpdateControlCommand::ObserveRuntime
@@ -462,7 +493,8 @@ impl Worker {
         match &request.command {
             WorkerUpdateControlCommand::Observe => self.store()?.existing_worker_update(&spec),
             WorkerUpdateControlCommand::ObserveRuntime
-            | WorkerUpdateControlCommand::ObserveCompatibility => {
+            | WorkerUpdateControlCommand::ObserveCompatibility
+            | WorkerUpdateControlCommand::ObserveReceipt { .. } => {
                 Err("Runtime observation is not a lease request".into())
             }
             WorkerUpdateControlCommand::BeginSource => {
@@ -633,6 +665,7 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
             let control_version = match request.control_version {
                 2 => 2,
                 3 => 3,
+                4 => 4,
                 _ => 1,
             };
             struct Callback(Arc<Registration>);
@@ -1174,6 +1207,184 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
     fn lease(r: WorkerUpdateControlResponse) -> WorkerUpdateLease {
         r.into_lease().unwrap().expect("Lease receipt")
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn command_receipt_lookup_is_readonly_exact_and_never_falls_back() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let acquire = WorkerUpdateCommand {
+            command_id: "receipt-acquire".into(),
+            expected_revision: 0,
+            action: WorkerUpdateAction::AcquireSource,
+            source_manifest_sha256: None,
+            reason: "Fixture receipt-acquire".into(),
+        };
+        let before = f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_receipt(&acquire)
+            .await
+            .unwrap();
+        assert!(before.is_none());
+        assert!(f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .is_none());
+        assert!(!f
+            .worker
+            .config
+            .state_directory
+            .join(crate::UPDATE_STARTUP_GUARD)
+            .exists());
+        let pending = lease(f.control(WorkerUpdateControlCommand::BeginSource).await);
+        assert_eq!(pending.phase, WorkerUpdatePhase::SourcePending);
+        assert!(f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_receipt(&acquire)
+            .await
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            f.worker.store().unwrap().active_worker_update().unwrap(),
+            Some(pending)
+        );
+        // Discard the original reply: reconciliation uses only the read endpoint.
+        drop(
+            f.advance("receipt-acquire", 0, WorkerUpdateAction::AcquireSource)
+                .await,
+        );
+        let held = f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                f.supervisor
+                    .as_ref()
+                    .unwrap()
+                    .worker_receipt(&acquire)
+                    .await
+                    .unwrap(),
+                Some(held.clone())
+            );
+        }
+        let conflict = WorkerUpdateCommand {
+            reason: "different payload".into(),
+            ..acquire.clone()
+        };
+        assert!(f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_receipt(&conflict)
+            .await
+            .unwrap_err()
+            .contains("another payload"));
+        let missing = WorkerUpdateCommand {
+            command_id: "never-executed-release".into(),
+            expected_revision: 1,
+            action: WorkerUpdateAction::Release,
+            source_manifest_sha256: Some(f.baseline.clone()),
+            reason: "Observe only".into(),
+        };
+        assert!(f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_receipt(&missing)
+            .await
+            .unwrap()
+            .is_none());
+        assert!(f
+            .worker
+            .config
+            .state_directory
+            .join(crate::UPDATE_STARTUP_GUARD)
+            .exists());
+        let reg = f.worker.control_registration().unwrap();
+        let h = f.supervisor.as_mut().unwrap();
+        assert!(h
+            .worker_control(WorkerUpdateControlCommand::ObserveReceipt {
+                command: missing.clone()
+            })
+            .await
+            .is_err());
+        let mut q = WorkerUpdateControlRequest {
+            control_version: 4,
+            binding: reg.binding.clone(),
+            update_id: h.record.spec.update_id.clone(),
+            launch_id: h.record.spec.launch_id.clone(),
+            supervisor: h.record.process.clone().unwrap(),
+            updater_owner_id: h.record.owner_id.clone().unwrap(),
+            updater_epoch: h.record.owner_epoch.unwrap(),
+            command: WorkerUpdateControlCommand::ObserveReceipt {
+                command: acquire.clone(),
+            },
+        };
+        let peer = q.supervisor.process_id;
+        for version in [1, 2, 3] {
+            q.control_version = version;
+            assert!(f.worker.control_result(&reg, &q, peer).is_err());
+        }
+        q.control_version = 4;
+        q.command = WorkerUpdateControlCommand::Advance { command: missing };
+        assert!(f.worker.control_result(&reg, &q, peer).is_err());
+        q.command = WorkerUpdateControlCommand::ObserveReceipt {
+            command: acquire.clone(),
+        };
+        q.updater_epoch += 1;
+        assert!(f.worker.control_result(&reg, &q, peer).is_err());
+        assert_eq!(
+            f.worker.store().unwrap().active_worker_update().unwrap(),
+            Some(held.clone())
+        );
+        assert_eq!(f.slots(), 1);
+        assert_eq!(
+            f.worker
+                .store()
+                .unwrap()
+                .connection
+                .query_row("SELECT count(*) FROM worker_update_commands", [], |r| r
+                    .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        let released = lease(
+            f.advance("receipt-release", 1, WorkerUpdateAction::Release)
+                .await,
+        );
+        assert_eq!(released.phase, WorkerUpdatePhase::Released);
+        // Historical reads cannot depend on source/project paths still existing.
+        let moved_source = reg.source.with_file_name("historical-source");
+        fs::rename(&reg.source, &moved_source).unwrap();
+        // Return the original SourceHeld receipt even after the live lease moved.
+        assert_eq!(
+            f.supervisor
+                .as_ref()
+                .unwrap()
+                .worker_receipt(&acquire)
+                .await
+                .unwrap(),
+            Some(held)
+        );
+        fs::rename(&moved_source, &reg.source).unwrap();
+        assert_eq!(f.slots(), 0);
+        assert!(!f
+            .worker
+            .config
+            .state_directory
+            .join(crate::UPDATE_STARTUP_GUARD)
+            .exists());
+        f.stop().await;
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn runtime_control_rejects_lease_versions_stale_authority_and_unpinned_worker() {
