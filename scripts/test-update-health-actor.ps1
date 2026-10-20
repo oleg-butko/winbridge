@@ -59,6 +59,7 @@ try {
   $commands=@(
     @{name='health-rehearsal-entry';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_rehearsal','--locked','--offline','--','--test-threads=1','--nocapture')},
     @{name='health-transition-fsm';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','driver_transition_proof','--locked','--offline','--','--test-threads=1','--nocapture')},
+    @{name='health-image-hash';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','marker_detection_never_shortcuts','--locked','--offline','--','--test-threads=1','--nocapture')},
     @{name='health-atomic-parent';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','health_acceptance_hook','--locked','--offline','--','--test-threads=1','--nocapture')},
     @{name='health-receipt-contract';arguments=@('test','-p','winbridge-protocol','--test','worker_update_receipt','--locked','--offline','--','--test-threads=1','--nocapture')},
     @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},

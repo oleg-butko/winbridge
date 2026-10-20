@@ -1,5 +1,15 @@
 ## U1: atomic health-hook and drain-capacity fixes ready for native retry — 2026-10-20
 
+Corrected target C5a5834a6cd0eeab88f75ccd41d09d3b05d864d13 exported clean:
+winbridge-20261020T164245Z-5a5834a-b2677d6d.zip,
+SHAe5e5122a63142c50acddee2aa6ddba0c1ce834cbfaec085dbf68f24e15363d8e,
+4,947,690 bytes/610 files. Both control worker/supervisor A and actual candidate C
+will include atomic acceptance, receipt reader and drain-capacity fixes. Distinct
+source A also adds a native image-marker/full-SHA regression group; descriptor
+hashing must still cover the entire image after finding an early marker.
+Commit/export A then run the combined health runner with this target and original
+cache. No other Windows task is currently running; fresh Info was healthy idle0.
+
 Task46e7c30a-65a7-4870-9466-5aef6366c727 / run20261020-161358-d2e84c59 is
 terminal failed1, NOT running. First three actor cases passed. Final candidate C515
 ran config PID14632 and rehearsal PID14252, both exit0, empty trees, complete
