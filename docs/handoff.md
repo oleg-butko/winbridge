@@ -1,3 +1,39 @@
+## U1: callback-observer native retry RUNNING — 2026-10-20
+
+Source A d5f04a7b6e4102ad5f70329aab7310061634c1f6 clean exported:
+winbridge-20261020T103233Z-d5f04a7-a171943e.zip,
+SHA02b1c2584aa065752d97106135bed9e72ef3b1db75244b3f98ff4ba7e82589c8,
+4,931,534 bytes /608 files. Target C is the existing clean2aac553 archive below.
+
+Task1378af21-9a6c-4b98-9b54-cbd72c4e55f8 confirmed RUNNING/PID2528,
+run20261020-103249-4030e35e. Runner session60664;
+log .winbridge/update-preparation/health-actor-native-callback.log.
+Read-only poll helper .winbridge/update-preparation/poll-health-callback.py
+pages ALL output and saves latest task/output. Do NOT restart on observation
+expiry; poll this exact task until authoritative terminal. Native FSM edge
+regression passed; supervisor built; worker lib native helper compiling at last poll.
+
+This run still needs all FOUR actor cases and proof/ready verification; it is
+not green yet. Source full605 effects took about5min in the preceding run,
+compiler/artifact checks another few minutes. That preceding run reached saved
+health intent and then the TEST's10s callback wait expired. Do not assume that
+was only slowness: the new60s observer polls driver state and saves structured
+candidate-health-actor-proof.failure.json on early rejection/expiry. Inspect that
+artifact FIRST if this run fails; fix real driver errors instead of blindly
+increasing deadlines. Probe/control deadlines themselves were not changed.
+
+Native-only observer compiled under Windows Clippy; prior542 local tests remain
+applicable to unchanged product. Working installed d052 worker remains healthy,
+complete recovery coverage/idle0 before this new task, generation unchanged.
+No GUI windows, no installed binary replacement; desktop unnecessary, leave worker.
+Ordinary test fixes/repeats authorized; stop only for installed-worker update or
+unexpected installed-worker behavior. Do not mark U1/U2/U3/U4 or goal complete.
+If actor passes: verify cases/typed process/report/schema/source and ready hashes,
+fresh installed Info, review code, then continue U1 drain/quiesce/exact shutdown.
+BeginDrain/CloseDispatch/ConfirmQuiesced already exist in worker control v1 but
+require parent Draining; durable updater coordination/fresh health authority and
+shutdown handoff still need implementation. Public update remains disabled.
+
 ## U1: full source/build reached health; callback observer corrected — 2026-10-20
 
 Run20261020-101253-22bdb154 / Task4363a807-dd5b-4759-89a6-e8856aeebb2f terminal
