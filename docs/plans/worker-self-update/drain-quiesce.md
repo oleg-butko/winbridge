@@ -206,3 +206,20 @@ epoch, останавливает дальнейшие эффекты и ждё�
 после retirement разрешён существующий source/build/health cleanup и owned Release.
 Другие задачи и пользовательская pause сохраняются. Quiesced остаётся остановкой
 перед shutdown: сам worker продолжает работать, файлы runtime не заменяются.
+
+## Изолированный gate
+
+`validate-update-health-actor-native.py --drain-gate` и соответствующий switch
+PowerShell используют четыре полных candidate/health операции: обычное ожидание,
+потерянный BeginDrain ACK, отмена обновления при user pause и отказ финального
+history insert. Кандидат и оба helper собираются/запускаются реально. Потерю ACK
+создаёт только cfg(test) worker: квитанция уже сохранена, канал закрывается до
+ответа; отдельный счётчик проверяет ровно один BeginDrain request.
+
+Обе исходные версии A/C должны поддерживать updater schema11. Для первой пары
+C содержит ту же реализацию и отдельный documentation commit: отличие поколения
+проверяет source/build identity, а executable поведение доказывается реальными
+проверками, не предполагается из различия commit IDs. Старый updater10 — отдельный
+проверенный readonly reference для schema-refusal, не запускаемый Windows worker.
+Положительный native результат будет записан после завершения gate; эта секция
+описывает только состав сценария.
