@@ -1,5 +1,14 @@
 ## U1: rehearsal stderr defect found; automatic retry being prepared — 2026-10-20
 
+Corrected target C515b4127fed77acf10b596e3a2e0a7a980b4397c is clean exported as
+winbridge-20261020T161311Z-515b412-e1d791a8.zip,
+SHA3a203ffc9d7a8e2b20436955de7364cd5520d7d8a2e6417c9480a652859709da,
+4,937,787 bytes/609 files. Marker optimization is becbf21. Distinct source A
+will also run the five actual rehearsal entry regressions BEFORE the full actor
+case, via health-rehearsal-entry group. Commit/export A, then submit one new task
+using original20261017-061527-f4639971 cache and this corrected C. No installed
+runtime replacement. Poll accepted task to authoritative terminal.
+
 Task1378af21-9a6c-4b98-9b54-cbd72c4e55f8 / run20261020-103249-4030e35e is
 terminal failed1, NOT running. The first three cases passed their assertions;
 the final case ran both helpers with exit0 and confirmed empty trees/capture,
