@@ -1,3 +1,15 @@
+## Drain gate bootstrap order fixed; repeat required — 2026-10-20
+
+First native run20261020-221109-4e29c797/task e0864496-78ae-4ae2-9bca-38504cbc2044
+failed in v13 admission fixture before Ready: the test cache still contained schema10
+updater, while new library fixtures created schema11. Ten drain data/journal tests
+passed first. The script had placed supervisor build AFTER worker IPC groups.
+Move existing updater build group ahead of all fixtures in both gate modes; no
+product timeout/permission change. Repeat automatically with fresh clean A archive;
+existing C3b738c9 already supports11 and remains a valid positive target.
+Installed d052 is healthy; no runtime applied, no GUI. Report bytes/ready verified
+by runner before its expected nonzero result. Source/runtime caches preserved.
+
 ## U1: drain actor v13 implemented; combined native gate NEXT — 2026-10-20
 
 Consume the aaeb4e4/schema11 journal through one blocking driver; no public update.

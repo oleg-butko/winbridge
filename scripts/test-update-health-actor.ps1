@@ -84,6 +84,9 @@ try {
       @{name='drain-v12-worker-observation';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','drain_observation_preserves','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
+  # Worker IPC fixtures launch this executable. Reused caches may still hold an
+  # older updater that correctly refuses the freshly migrated journal.
+  $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build'})
   foreach($command in $commands){
     $log=$command.name+'.log';$arguments=$command.arguments
     Write-Output "Health native gate: $($command.name); installed runtime remains active"
