@@ -100,7 +100,7 @@ async fn prepare_candidate(f: &mut Fixture) -> UpdatePreparationView {
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
     h.preparation(true).await.unwrap();
-    wait_phase(h, UpdatePhase::Building, Duration::from_secs(120)).await;
+    wait_phase(h, UpdatePhase::Building, Duration::from_secs(600)).await;
     h.build_candidate().await.unwrap();
     wait_phase(h, UpdatePhase::Building, Duration::from_secs(330)).await;
     h.verify_candidate_artifacts().await.unwrap();
@@ -439,7 +439,7 @@ fn health_actor_full_candidate_roundtrip() {
             format!("health-proof={}", proof.display()),
         ],
         working_directory: runtime.to_string_lossy().into(),
-        timeout_ms: 1200000,
+        timeout_ms: 1500000,
     };
     let name = format!("WinBridge-health-validation-{}", uuid::Uuid::new_v4());
     let (mut child, stdout, stderr) =
@@ -463,16 +463,35 @@ fn health_actor_full_candidate_roundtrip() {
     };
     let out = (capture(stdout), capture(stderr));
     child.resume().unwrap();
-    let until = Instant::now() + Duration::from_secs(1200);
+    let until = Instant::now() + Duration::from_secs(1500);
     let mut progress = Instant::now();
     let status = loop {
         if progress.elapsed() >= Duration::from_secs(5) {
             let directory = root.path().join("runtime/update-state");
             if let Ok((_, Some(r))) = UpdateJournal::read_snapshot(&directory, None) {
-                println!(
-                    "Windows health validation: {:?}; operation {}",
-                    r.phase, r.update_id
-                );
+                if let Ok(v) =
+                    UpdateJournal::preparation_snapshot(&directory, &r.update_id, false, None)
+                {
+                    if let Some(source) = v.source {
+                        println!(
+                            "Windows health validation: {:?}; source files {}/{}; operation {}",
+                            r.phase, v.source_applied_files, source.total_files, r.update_id
+                        );
+                    } else {
+                        let prepared = root
+                            .path()
+                            .join("runtime/update")
+                            .join(&r.update_id)
+                            .join("source-transaction/prepared");
+                        let count = fs::read_dir(prepared)
+                            .map(|entries| entries.filter_map(std::result::Result::ok).count())
+                            .unwrap_or(0);
+                        println!(
+                            "Windows health validation: {:?}; prepared files {}; operation {}",
+                            r.phase, count, r.update_id
+                        );
+                    }
+                }
             }
             progress = Instant::now();
         }

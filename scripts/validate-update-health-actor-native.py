@@ -123,7 +123,8 @@ def main():
     cfg = json.loads(args.controller_config.read_text())
     endpoint = Path(cfg['stateDirectory']) / ('controller-'+cfg['instanceId']+'.sock')
     info = native.call(endpoint, {'method': 'info'})['info']
-    if info['activeTaskCount'] or info.get('maintenanceError') or info.get('journalRecoveryRequired'):
+    if (info['activeTaskCount'] or info.get('maintenanceError') or info.get('journalRecoveryRequired')
+            or info.get('recoveryCoverage', {}).get('complete') is not True):
         raise ValueError('Healthy idle installed worker required')
     project = next(p for p in info['projects'] if p['id'] == 'snapshot-fixture')
     run = time.strftime('%Y%m%d-%H%M%S', time.gmtime())+'-'+uuid.uuid4().hex[:8]
@@ -137,6 +138,7 @@ def main():
     cache = str(PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / args.cache_run)
     ps = native.ps_string
     script = f'''$ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
 $archive={ps(str(PureWindowsPath('K:/VMs/shared') / args.archive.relative_to('/mnt/hgfs/shared')))}
 $target={ps(str(PureWindowsPath('K:/VMs/shared') / args.target_archive.relative_to('/mnt/hgfs/shared')))}
 $local={ps(local)}

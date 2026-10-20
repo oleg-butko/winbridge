@@ -1,3 +1,26 @@
+## U1: first full actor attempt terminal timeout; fixture retry prepared — 2026-10-20
+
+Source A925e978, target C2aac553. Run20261020-100244-41469852 /
+Task2f797372-637c-48e2-b51d-63a0e4156c13 terminal failed1. The native FSM regression
+passed and supervisor A built; the copied helper reached SourceApplying, but
+its source-stage test deadline120s expired on the real604-file archive. Whole
+helper exited failed after176.49s; parent verified owned tree empty. It was NOT
+an installed-worker fault or an observation-timeout restart. No compiler/health
+success claimed. Four ready files verified; reportSHA
+9fb4d7e745987ddf971832a6dc9475b438376662310cf5fbbc5ae1ce26595b9e.
+Windows free19,573,338,112 ->19,574,427,648 bytes; installed d052/generation unchanged,
+Info idle0, no recovery/maintenance errors. No windows or runtime replacement.
+
+Fixture source preparation/apply deadline now600s; helper total1500s, outer task
+1800s. Every5s print prepared-file or applied/total counters from actual filesystem/
+SQLite alongside the root phase. No product guard was weakened. Suppress encoded
+PowerShell progress CLIXML and require complete installed execution coverage.
+Windows all-target Clippy passed after native-only change; three archive-admission
+Python tests passed; previous full542 tests still apply to unchanged production.
+Commit/export this ordinary fixture correction and repeat automatically with SAME
+clean target C2aac553 and original cache. New source A and fresh test instance/key;
+never resubmit the terminal old task or adopt its partial source. Prior logs kept.
+
 ## U1: full health actor gate prepared, local checks passed — 2026-10-20
 
 Transition fix committed2aac5534290b6d29cb8e401dc44e59a03068318b.
