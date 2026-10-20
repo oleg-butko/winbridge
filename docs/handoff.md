@@ -1,3 +1,50 @@
+## U1: schema-10 health driver/actor checked locally; d052 native gate passed — 2026-10-20
+
+User restarted/updated installed Windows worker from d052 archive. Fresh Info:
+source d052c6ce6a61c7fb6fa4c9ffa879363010fb6fd2, build1792486531570951100,
+manifest835fdbc174813a2401896d98b198891915641d894d7be07e5496b15ab37e5241,
+generation1a3f242c-7da5-4daf-82fd-eb65566dc7cd; connected, idle0, no recovery/maintenance
+errors. Controller PID3756 is running loaded from previous build (707cdec dirty),
+WS192.168.44.203:1143 / .winbridge/controller-session/controller-local-development.sock.
+Desktop unnecessary; all tests had no windows, no installed replacement.
+
+[d052 native gate](plans/worker-self-update/windows-probe-lifecycle-gate-2026-10-20.md)
+succeeded0: run20261020-051354-bd565b6c, taskc53e6a24-0c23-41d8-ae7e-957561a1208c,
+210 tests/19 groups, full four-exe build, actual config/fresh-state rehearsal/Main/pins.
+47 ready files verified; report SHA cf90231bd186487dcebc48ae32408ed3760f7b9913dc64ea2f1a32ecddb8c441.
+The missing previous updater reference was rebuilt, not an installed-worker fault.
+See report for exact schema14/8 reference paths, hashes, tasks and prior failed run.
+Original cache owner remains20261017-061527-f4639971; do not delete Windows dirs.
+For the next schema10 refusal gate use the NEW schema9 updater from d052 gate
+(candidate-files-proof.json contains its exact SHA), plus rebuilt schema14 worker.
+Do not use installed schema15 worker as an older reference.
+
+[New health code](plans/worker-self-update/candidate-health.md): updater schema10,
+supervisor v10/view4, one-use intent, artifact/preimages/source/current v3 binding,
+managed config/rehearsal helpers, PID before resume, immutable cleanup, atomic
+CandidateAccepted. Duplicate-first returns history, never recreates pending permit.
+Actor keeps status responsive, commits Aborting with same Arc authority and waits
+for health cleanup before release. Abort re-observes process births/Windows Jobs.
+Raw health admission/acceptance forbidden; old view1-3 omit new field. Source/build
+phase guard shared without weakening Building requirement for compiler.
+Schema9 migration consistent backup/epoch fence; no historical health adoption.
+
+541 workspace tests/doctests, Linux+Windows all-target Clippy, generated TS/check,
+fmt, UI typecheck/build and scaffold passed. Logs .winbridge/update-preparation/health-final-*.
+Disk check available31,766,577,152 bytes before final workspace; no caches pruned.
+Tests cover monotonicity, schema/process/isolation proof, pending/unknown cleanup,
+raw bypass, schema9 migration and old views. Typed synthetic tests are NOT an
+actual healthy process/journal approval proof. No native v10 integration gate yet.
+
+Next: commit this internal block after final review, then add full isolated v10
+actor gate using a clean actual candidate bundle. Persist/ACK/status/duplicates,
+PID-write rejection, owner/root fences and cancellation while helper lives need
+real end-to-end proof. Reuse already compiled bundle via explicit fixture compiler
+receipt, clearly distinguish it from production compiler/install proof. Do not
+claim U1/U2/U3 complete or enable public update/bootstrap/activation. Goal remains
+active; ordinary script fixes/retries are already authorized. All Cargo steps
+must remain sequential, including tests/doctests (no concurrent feature builds).
+
 ## U1: probe lifecycle hooks WIP; base native tests passed, helper import fixed — 2026-10-19
 
 7ed3900 / run `20261019-113708-5fe0af67` / Task

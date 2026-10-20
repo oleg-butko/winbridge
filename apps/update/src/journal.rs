@@ -24,11 +24,12 @@ mod abort;
 mod build;
 mod build_report;
 mod candidate;
+mod health;
 mod runtime_baseline;
 mod runtime_preimages;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 9;
+pub const UPDATE_SCHEMA_VERSION: u32 = 10;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -37,6 +38,7 @@ enum Driver {
     Candidate,
     Baseline,
     Preimages,
+    Health,
 }
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
@@ -482,6 +484,7 @@ impl UpdateJournal {
             candidate::migrate(&tx)?;
             runtime_baseline::migrate(&tx)?;
             runtime_preimages::migrate(&tx)?;
+            health::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -525,6 +528,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 8 {
                 runtime_preimages::migrate(&tx)?;
+            }
+            if schema(&tx)? == 9 {
+                health::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
@@ -912,9 +918,22 @@ impl UpdateJournal {
                 "Runtime preimages require their trusted driver",
             ));
         }
+        if matches!(
+            command.event,
+            winbridge_protocol::update::UpdateEvent::CandidateHealthAdmitted
+                | winbridge_protocol::update::UpdateEvent::CandidateAccepted
+        ) && driver != Driver::Health
+        {
+            return Err(fail(
+                JournalErrorCode::InvalidRequest,
+                "Candidate health requires its trusted driver and fresh receipts",
+            ));
+        }
         if driver != Driver::Abort
             && !(driver == Driver::Candidate
                 && command.event == winbridge_protocol::update::UpdateEvent::BuildSucceeded)
+            && !(driver == Driver::Health
+                && command.event == winbridge_protocol::update::UpdateEvent::CandidateAccepted)
         {
             build::require_driver(&tx, id, command.event)?;
         }

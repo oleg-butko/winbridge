@@ -107,8 +107,11 @@ status и release только после source/Job/output proof. Добавл�
 [Actor v8 / отмена копирования](docs/plans/worker-self-update/runtime-preimages-actor.md)
 прошёл [193 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md).
 [Fresh-state rehearsal](docs/plans/worker-self-update/worker-rehearsal.md) запускает worker
-с новым пустым журналом и проверяет IPC/остановку; local tests passed, Windows gate pending.
-Durable health approval, exact shutdown и activation остаются впереди. Весь U1 ещё не завершён.
+с новым пустым журналом и проверяет IPC/остановку;
+[210 native tests / полный build](docs/plans/worker-self-update/windows-probe-lifecycle-gate-2026-10-20.md) passed.
+[Health journal / supervisor v10](docs/plans/worker-self-update/candidate-health.md)
+добавляет durable helpers и atomic approval; 541 local tests и обе Clippy проверки
+прошли, сквозной native health gate ещё требуется. Exact shutdown и activation впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

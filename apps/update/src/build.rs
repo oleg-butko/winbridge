@@ -114,6 +114,15 @@ pub(crate) fn saved_source_guard(
     cfg: &UpdateConfig,
     id: &str,
 ) -> Result<SourceTransactionRecord> {
+    saved_source_guard_for(j, a, cfg, id, UpdatePhase::Building)
+}
+pub(crate) fn saved_source_guard_for(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    cfg: &UpdateConfig,
+    id: &str,
+    phase: UpdatePhase,
+) -> Result<SourceTransactionRecord> {
     j.check_source_authority(a).map_err(error)?;
     let u = j.get(id).map_err(error)?;
     let s = j.source_header(id).map_err(error)?;
@@ -123,7 +132,7 @@ pub(crate) fn saved_source_guard(
     {
         return Err("Compiler source directory identity changed".into());
     }
-    if u.phase != UpdatePhase::Building
+    if u.phase != phase
         || s.phase != SourceTransactionPhase::Verified
         || u.request.expected.scope_sha256 != crate::installation_scope(cfg)?
         || crate::sha256(&crate::read(&cfg.worker_config_path, 64 * 1024)?)

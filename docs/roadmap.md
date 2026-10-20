@@ -351,3 +351,11 @@ U1 native 06211fe: 133 tests / 15 groups и полный Rust/desktop compile pa
 финальная identity-проверка отказалась от Cargo hard link. Create-only payload
 copy перенесён перед probes; hard-link isolation portable test passed. File ID
 review и UTF-8 wrappers также добавлены. Полный gate и U1 ещё открыты.
+
+## U1: health journal и supervisor v10 — 2026-10-20
+
+[Health-driver](plans/worker-self-update/candidate-health.md): schema 10, fresh
+one-use intent, managed config/rehearsal helpers, immutable PID/cleanup, atomic
+CandidateAccepted и abort после quiescence. Внутренняя реализация проверяется;
+сквозной native health gate и public update/exact shutdown/install ещё впереди.
+U1 не помечается завершённым.

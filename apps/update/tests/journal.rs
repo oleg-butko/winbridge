@@ -379,17 +379,7 @@ fn manual_intervention_blocks_a_new_update_across_owner_restart() {
     let mut record = store.accept(&owner, &original, &original.expected).unwrap();
     for (i, event) in [
         UpdateEvent::BeginPreparation,
-        UpdateEvent::SourceVerified,
-        UpdateEvent::BuildSucceeded,
-        UpdateEvent::CandidateAccepted,
-        UpdateEvent::BeginDrain,
-        UpdateEvent::Quiesce {
-            dispatch_closed: true,
-            accepted_operations: 0,
-            physical_owners: 0,
-            uncertain_owners: 0,
-        },
-        UpdateEvent::BeginShutdown,
+        UpdateEvent::BeginSourceApply,
         UpdateEvent::Fail,
     ]
     .into_iter()

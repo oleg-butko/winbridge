@@ -54,6 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         UpdatePreparationView::decl(&config),
         RuntimeBaselineView::decl(&config),
         RuntimePreimagesView::decl(&config),
+        CandidateHealthPhase::decl(&config),
+        CandidateHealthView::decl(&config),
         SupervisorWorkerBinding::decl(&config),
         WorkerUpdateControlCommand::decl(&config),
         WorkerUpdateControlRequest::decl(&config),

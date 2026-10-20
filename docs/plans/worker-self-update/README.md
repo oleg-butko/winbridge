@@ -22,6 +22,11 @@ config 3, journal 5. Отмена до cutover проходит Aborting → Fai
 только после source/compiler/worker release proof; неизвестный исход остаётся
 ManualIntervention. Candidate verification и runtime replacement ещё впереди.
 
+[Health journal / supervisor v10](candidate-health.md) добавляет одноразовый
+intent, PID-before-resume, config/fresh-state проверки и atomic CandidateAccepted.
+Реализация проверяется; сквозной native health gate ещё обязателен. Public update
+и runtime replacement остаются отключены.
+
 ## Контракты и данные
 
 U0 вводит отдельные DTO source manifest/plan и UpdatePhase. Legacy RPC/AttentionTarget

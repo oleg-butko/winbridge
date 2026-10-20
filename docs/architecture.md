@@ -5,7 +5,7 @@
 ## Подготовка самообновления — 2026-10-17
 
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
-`apps/update` владеет отдельным updater journal schema 9 (WBUP), installation scope,
+`apps/update` владеет отдельным updater journal schema 10 (WBUP), installation scope,
 OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
 [Artifact actor v5 / atomic artifact receipt](plans/worker-self-update/artifact-actor.md),
 known-set reader и полный candidate build прошли
@@ -33,6 +33,9 @@ Standalone proof не даёт health receipt/approval; native gate pending.
 [Compatibility v3 / supervisor v9](plans/worker-self-update/worker-compatibility.md)
 читает реальные schemas/context/config SHA у bound worker. Candidate config check
 читает точные bytes без открытия production journal; durable health/approval впереди.
+[Health journal / supervisor v10](plans/worker-self-update/candidate-health.md)
+добавляет guarded helpers, atomic acceptance и coordinated abort; native
+сквозной gate этого нового блока ещё не пройден. Public update/install отключены.
 [Supervisor handoff](plans/worker-self-update/supervisor.md) добавляет отдельный
 процесс, exact process identity, epoch transfer и same-user IPC. Это trusted library;
 [76 native tests / полный candidate build](plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)

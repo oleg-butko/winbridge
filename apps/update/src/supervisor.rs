@@ -458,6 +458,51 @@ impl SupervisorHandle {
         }
         Ok(control)
     }
+    /// V10 admission is duplicate-first and never replays a saved pending health check.
+    pub async fn candidate_health(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let q = SupervisorRequest {
+            contract_version: 10,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::ValidateCandidateHealth
+            } else {
+                SupervisorAction::ObserveCandidateHealth
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &q,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 10
+            || response.launch_id != q.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Health reply scope/version changed".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Health view missing")?;
+        if view.schema_version != 4
+            || view.candidate_health.is_none()
+            || view.runtime_preimages.is_none()
+            || view.runtime_baseline.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Health reply belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     /// V7 keeps its legacy view; v8 adds saved preimages without new runtime authority.
     pub async fn runtime_baseline(&self, start: bool) -> Result<UpdatePreparationView> {
         self.runtime_preparation(start, false).await
@@ -830,6 +875,8 @@ impl SupervisorHandle {
                 | SupervisorAction::VerifyCandidateArtifacts
                 | SupervisorAction::ObserveWorkerRuntime
                 | SupervisorAction::ObserveWorkerCompatibility
+                | SupervisorAction::ValidateCandidateHealth
+                | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
                 | SupervisorAction::ObserveRuntimeBaseline
                 | SupervisorAction::ArchiveRuntimePreimages
@@ -994,6 +1041,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut work: Option<Work> = None;
     let mut artifacts_active = false;
     let mut preimages_active = false;
+    let mut health_active = false;
     let mut pending_abort: Option<Box<crate::abort::AbortPermit>> = None;
     // One readonly query at a time; dropping the set aborts its IO task. The
     // mailbox and journal owner stay available while worker verifies file hashes.
@@ -1012,6 +1060,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
             artifacts_active = false;
             preimages_active = false;
+            health_active = false;
             driver_error = outcome
                 .err()
                 .map(|e| e.chars().take(1000).collect::<String>());
@@ -1084,6 +1133,85 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if matches!(
+            request.action,
+            SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth
+        ) {
+            let mut admitted = None;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 10
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Health requires exact Active worker-bound v10 supervisor".into());
+                }
+                let saved = UpdateJournal::health_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)?;
+                if request.action == SupervisorAction::ObserveCandidateHealth
+                    || saved
+                        .candidate_health
+                        .as_ref()
+                        .is_some_and(|h| h.phase != CandidateHealthPhase::NotAdmitted)
+                {
+                    return Ok(saved);
+                }
+                if work.is_some() || driver_error.is_some() {
+                    return Err(
+                        "Another driver or unresolved failure prevents health admission".into(),
+                    );
+                }
+                let (journal, owner) = idle.as_mut().ok_or("Health owner unavailable")?;
+                if let crate::health::HealthAdmission::Fresh(permit) =
+                    crate::health::admit(journal, owner, &r)?
+                {
+                    admitted = Some(permit);
+                }
+                UpdateJournal::health_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    admitted.is_some(),
+                    None,
+                )
+                .map_err(error)
+            })();
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 10,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = response.error.is_none();
+            let _ = ipc::write(&mut stream, &response).await;
+            if let Some(permit) = admitted.filter(|_| dispatch) {
+                let (mut journal, owner) =
+                    idle.take().ok_or("Health owner missing after admission")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                driver_error = None;
+                health_active = true;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result =
+                        crate::preparation::health(&mut journal, &owner, &spec, *permit, io);
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
         if matches!(
             request.action,
             SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages
@@ -1343,10 +1471,10 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 match UpdateJournal::inspect_abort(&directory, &r.spec.update_id) {
                     Ok(_) => {}
                     Err(e) if e.code == JournalErrorCode::NotFound => {
-                        if work.is_some() && !preimages_active {
+                        if work.is_some() && !preimages_active && !health_active {
                             return Err("Preparation driver active; wait for confirmed source/compiler cleanup".into());
                         }
-                        if preimages_active {
+                        if preimages_active || health_active {
                             // Same physical owner/epoch; Root Aborting fences the
                             // copier. Cleanup waits for its blocking callback.
                             let cfg = crate::preparation::configuration(&r)?;
@@ -1787,7 +1915,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

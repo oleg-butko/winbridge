@@ -124,6 +124,8 @@ pub enum UpdateEvent {
     BeginSourceApply,
     SourceVerified,
     BuildSucceeded,
+    /// Trusted health driver only, before its owned probe effects.
+    CandidateHealthAdmitted,
     CandidateAccepted,
     BeginDrain,
     Quiesce {
@@ -546,6 +548,9 @@ pub enum SupervisorAction {
     ObserveRuntimePreimages,
     /// Internal v9: authenticated current-worker schemas/config; readonly.
     ObserveWorkerCompatibility,
+    /// Internal v10: journal-bound owned config/rehearsal checks, never installation.
+    ValidateCandidateHealth,
+    ObserveCandidateHealth,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -595,6 +600,36 @@ pub struct UpdatePreparationView {
     /// V8/view schema 3 only; older contracts omit the field entirely.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_preimages: Option<RuntimePreimagesView>,
+    /// V10/view schema 4; older contracts omit it entirely.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_health: Option<CandidateHealthView>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CandidateHealthPhase {
+    NotAdmitted,
+    Pending,
+    Verified,
+    Rejected,
+    Cancelled,
+    Indeterminate,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CandidateHealthView {
+    pub phase: CandidateHealthPhase,
+    pub revision: Option<u64>,
+    pub attempt_id: Option<String>,
+    pub config_process: Option<SupervisorProcess>,
+    pub rehearsal_process: Option<SupervisorProcess>,
+    pub cleanup_verified: bool,
+    pub reason: Option<String>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

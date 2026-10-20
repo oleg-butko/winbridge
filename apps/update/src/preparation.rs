@@ -276,3 +276,36 @@ mod tests {
         }
     }
 }
+
+impl crate::health::HealthControl for Control {
+    fn compatibility(&mut self) -> Result<winbridge_protocol::WorkerRuntimeCompatibility> {
+        configuration(&self.record)?;
+        let response = self
+            .worker
+            .io()
+            .block_on(crate::supervisor::forward_worker(
+                &self.record,
+                WorkerUpdateControlCommand::ObserveCompatibility,
+            ))?;
+        configuration(&self.record)?;
+        response.into_runtime_compatibility()
+    }
+}
+pub(crate) fn health(
+    journal: &mut UpdateJournal,
+    owner: &UpdateAuthority,
+    record: &SupervisorRecord,
+    permit: crate::health::HealthPermit,
+    io: Handle,
+) -> Result<()> {
+    let cfg = configuration(record)?;
+    let mut control = Control {
+        worker: WorkerSourceControl::new(
+            record.spec.worker.clone().ok_or("Worker binding missing")?,
+            &cfg.worker_config_path,
+            io,
+        )?,
+        record: record.clone(),
+    };
+    crate::health::execute(journal, owner, record, permit, &mut control).map(|_| ())
+}

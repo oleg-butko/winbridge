@@ -245,9 +245,9 @@ pub fn query_image(path: &Path, role: ArtifactRole) -> Result<QueryReport> {
 
 /// Process evidence for a future journal-backed observer. It is not candidate
 /// acceptance. `no_process_created` is distinct from unknown creation.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct ProbeCleanup {
+pub struct ProbeCleanup {
     pub job_name: String,
     pub process: Option<winbridge_protocol::update::SupervisorProcess>,
     pub creation_confirmed: bool,

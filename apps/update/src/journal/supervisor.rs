@@ -132,6 +132,15 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, 3)
     }
+    /// Health evidence and all preceding receipts share the same readonly snapshot.
+    pub fn health_preparation_snapshot(
+        directory: &Path,
+        id: &str,
+        driver_active: bool,
+        driver_error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, 4)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -189,6 +198,11 @@ impl UpdateJournal {
             },
             runtime_preimages: if view_schema >= 3 {
                 Some(super::runtime_preimages::read(&tx, id)?.view())
+            } else {
+                None
+            },
+            candidate_health: if view_schema >= 4 {
+                Some(crate::health::view(super::health::read(&tx, id)?.as_ref()))
             } else {
                 None
             },

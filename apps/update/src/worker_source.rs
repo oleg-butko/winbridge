@@ -19,6 +19,9 @@ pub struct WorkerSourceControl {
     io: Handle,
 }
 impl WorkerSourceControl {
+    pub(crate) fn io(&self) -> &Handle {
+        &self.io
+    }
     /// Binding comes from the immutable worker-owned supervisor spec. This is a
     /// readonly adapter; it cannot acquire or manufacture a source lease.
     pub fn new(binding: SupervisorWorkerBinding, config: &Path, io: Handle) -> Result<Self> {

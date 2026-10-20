@@ -8,6 +8,7 @@ pub mod build_output;
 pub mod build_report;
 pub mod candidate;
 pub mod candidate_artifacts;
+pub mod health;
 pub mod installed_set;
 pub mod journal;
 mod preparation;

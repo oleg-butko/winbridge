@@ -389,6 +389,7 @@ pub fn advance_update(phase: UpdatePhase, event: UpdateEvent) -> Result<UpdatePh
         (P::Preparing, E::BeginSourceApply) => P::SourceApplying,
         (P::Preparing | P::SourceApplying, E::SourceVerified) => P::Building,
         (P::Building, E::BuildSucceeded) => P::ValidatingCandidate,
+        (P::ValidatingCandidate, E::CandidateHealthAdmitted) => P::ValidatingCandidate,
         (P::ValidatingCandidate, E::CandidateAccepted) => P::CandidateVerified,
         (P::CandidateVerified, E::BeginDrain) => P::Draining,
         (
