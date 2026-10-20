@@ -1,4 +1,28 @@
-## U1: rehearsal stderr defect found; automatic retry being prepared — 2026-10-20
+## U1: corrected rehearsal native gate RUNNING — 2026-10-20
+
+Accepted task46e7c30a-65a7-4870-9466-5aef6366c727, run20261020-161358-d2e84c59,
+confirmed running. Runner session37405, log
+.winbridge/update-preparation/health-actor-native-stderr.log; readonly paging
+helper .winbridge/update-preparation/poll-health-stderr.py saves task/output.
+Source A cleanbed8d5e1db6c3c6fcfc5c8ecf487f3d3177bea1b,
+winbridge-20261020T161344Z-bed8d5e-22b00df8.zip,
+SHAcfd888a9d3ae617394cd3bd2e235c71f034265c5787491cb0a233ccdd3c7d9ea,
+4,938,055 bytes/609 files. Target C515b412 archive below. Original cache reused.
+
+Five real Windows rehearsal-entry tests passed, including strict stdout/stderr;
+FSM-edge regression passed; real supervisor A compiled. Full actor helper is
+running, first operation5c88f822-dd21-430f-9cc6-6ee7a9c3ad5f at Requested at last
+poll. All FOUR cases, final proof/ready hashes and fresh installed Info remain
+required. Do not re-submit or restart because observation expires. Inspect
+candidate-health-actor-proof.failure.json FIRST if terminal failure is reported.
+Product source/artifact/helper/control guards remain strict. Windows desktop
+not needed, no GUI, installed d052 worker remains running. No manual bootstrap.
+After green gate: review, then implement planned durable drain/quiesce and exact
+shutdown; schema11 will require a new matching candidate, not this schema10 C.
+Goal/U1–U4 remain open. Drain-plan review clarifies admission rejection vs accepted
+queue, user pause/app blockers and prohibition of raw phase changes without receipts.
+
+## U1: rehearsal stderr defect found and fixed — 2026-10-20
 
 Corrected target C515b4127fed77acf10b596e3a2e0a7a980b4397c is clean exported as
 winbridge-20261020T161311Z-515b412-e1d791a8.zip,

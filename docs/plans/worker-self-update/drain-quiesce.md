@@ -47,6 +47,23 @@ Pending после краха остаётся observation/reconciliation, бе�
 permit. Readonly receipt lookup после потерянного ACK не повторяет внешнюю команду.
 Новый контракт запрещено подменять fallback-вызовом старой мутации.
 
+Ревью существующих effect paths: source lease блокирует только связанные проекты,
+но BeginDrain блокирует admission новых roots во всём worker. Уже принятые задачи
+других проектов и их children продолжают dispatch до CloseDispatch; завершённый
+source hold гарантирует отсутствие принятых владельцев затрагиваемого проекта.
+Новые requests сейчас получают явный отказ admission, а не принятый queued task:
+не обещать пользователю новую серверную очередь без её отдельной реализации.
+Если user pause мешает завершиться принятой очереди или приложение остаётся ready,
+показывать этот blocker и ждать явного решения, не снимать pause и не останавливать
+приложение ради обновления.
+
+До включения driver запретить raw lifecycle BeginDrain/Quiesce через общий apply:
+как для health, только специализированный journal driver с matching intents и
+worker receipts вправе двигать root. Значения `acceptedOperations=0` в payload
+сами по себе не доказательство. Сохранённая lease receipt описывает конкретную
+команду/ревизию, а readonly live lease — более позднее наблюдение: это разные поля
+с разной свежестью, их нельзя выдавать за общую транзакцию двух SQLite.
+
 ## Версии, отмена и границы
 
 Хранение spec/command intents/receipts требует новой updater schema с consistent
