@@ -1,3 +1,27 @@
+## Drain corrected native run ACTIVE; do not resubmit — 2026-10-20
+
+Task e73c941f-42f4-47af-af7f-ba0615b027e0 / run20261020-223955-44db4bea.
+Runner session3520; log .winbridge/update-preparation/drain-native-final.log.
+Source clean A28e3a1cfcffe665f3ee84dec1af1ed5fe019bf97,
+winbridge-20261020T223706Z-28e3a1c-45be39eb.zip,
+archiveSHA 2dd107ab2620b3e9426ab6cb7fc8a4c81ed25580a854efc9f653d08fe63f80f7.
+Target C3b738c9 remains as below (both11). Exact manifest pins stored at
+.winbridge/update-preparation/drain-native-final-pins.json. Original cache and
+retained schema10 updater unchanged. Drain fixture uses verified target source
+seed and exports incomplete per-case progress, then separate final success proof.
+
+Prior task e1b80adb finished failed exactly at over-broad trigger/expected-Uncertain
+assertion. First3 cases passed, bulk first source apply616 files passed, but no
+formal full proof. All13 exported failure files verified. Installed d052 healthy
+idle0, no maintenance/recovery error; generation unchanged. No installed update.
+Fixed test trigger and seeded fixture: targeted SQL regression, Linux/Windows
+worker+updater all-target Clippy and fmt passed (drain-fault-scope-* logs).
+
+Wait for this current task and verify ready bytes/SHA + typed proof before marking
+drain gated. Desktop unnecessary/no test GUI; leave installed worker running.
+Exact shutdown plan/interfaces at plans/worker-self-update/exact-shutdown.md;
+implementation is still ahead. U1–U4 and active goal remain unfinished.
+
 ## Drain fault fixture corrected; seeded repeat will be needed — 2026-10-20
 
 Current task e1b80adb/run20261020-221336-fd675b77 has completed verified, lost-ACK
