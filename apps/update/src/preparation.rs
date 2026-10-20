@@ -20,6 +20,63 @@ struct Control {
     worker: WorkerSourceControl,
     record: SupervisorRecord,
 }
+impl crate::drain::Control for Control {
+    fn compatibility(&mut self) -> Result<winbridge_protocol::WorkerRuntimeCompatibility> {
+        <Self as crate::health::HealthControl>::compatibility(self)
+    }
+    fn advance(&mut self, command: WorkerUpdateCommand) -> Result<WorkerUpdateLease> {
+        self.worker
+            .io()
+            .block_on(crate::supervisor::forward_worker(
+                &self.record,
+                WorkerUpdateControlCommand::Advance { command },
+            ))?
+            .into_lease()?
+            .ok_or("Drain command returned no lease".into())
+    }
+    fn receipt(&mut self, command: &WorkerUpdateCommand) -> Result<Option<WorkerUpdateLease>> {
+        self.worker
+            .io()
+            .block_on(crate::supervisor::forward_worker(
+                &self.record,
+                WorkerUpdateControlCommand::ObserveReceipt {
+                    command: command.clone(),
+                },
+            ))?
+            .into_command_receipt(command)
+    }
+    fn observation(&mut self) -> Result<WorkerDrainObservation> {
+        self.worker
+            .io()
+            .block_on(crate::supervisor::forward_worker(
+                &self.record,
+                WorkerUpdateControlCommand::ObserveDrain,
+            ))?
+            .into_drain_observation()
+    }
+}
+pub(crate) fn drain(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    p: crate::drain::DrainPermit,
+    io: Handle,
+    telemetry: crate::drain::Telemetry,
+) -> Result<()> {
+    let cfg = configuration(s)?;
+    let mut control = Control {
+        worker: WorkerSourceControl::new(
+            s.spec
+                .worker
+                .clone()
+                .ok_or("Drain worker binding missing")?,
+            &cfg.worker_config_path,
+            io,
+        )?,
+        record: s.clone(),
+    };
+    crate::drain::execute(j, a, s, p, &mut control, telemetry)
+}
 impl SourceControl for Control {
     fn observe_worker(&mut self) -> Result<WorkerInfo> {
         configuration(&self.record)?;

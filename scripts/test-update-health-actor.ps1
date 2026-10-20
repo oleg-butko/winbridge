@@ -8,7 +8,10 @@ param(
   [Parameter(Mandatory)][string]$TargetArchivePath,
   [Parameter(Mandatory)][string]$TargetArchiveSha256,
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
-  [Parameter(Mandatory)][string]$ReportDirectory
+  [Parameter(Mandatory)][string]$ReportDirectory,
+  [switch]$DrainGate,
+  [string]$PreviousUpdaterExecutable,
+  [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -24,6 +27,7 @@ $manifest=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if($manifest.dirty -or -not $manifest.includesBuiltUi){throw 'Clean exported source with built UI required'}
 New-Item -ItemType Directory -Path $ReportDirectory -Force | Out-Null
 $report=[ordered]@{schemaVersion=1;kind='candidate_health_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();runtimeApplied=$false;windowsOpened=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+$oldPreviousUpdater=$env:WINBRIDGE_PREVIOUS_UPDATER10
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_HEALTH_GATE_INPUT;$oldProof=$env:WINBRIDGE_HEALTH_GATE_PROOF
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP;$oldLocation=Get-Location
@@ -45,7 +49,13 @@ try {
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
   $pwsh=(Get-Command pwsh.exe -ErrorAction Stop).Source
   $inputPath=Join-Path (Split-Path $source -Parent) 'health-input.json'
-  Write-NewJson $inputPath @{schemaVersion=1;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);powershell=$pwsh;validationCache=$cache}
+  if($DrainGate){
+    Assert-SessionFile $PreviousUpdaterExecutable
+    if($PreviousUpdaterSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $PreviousUpdaterExecutable -Algorithm SHA256).Hash.ToLowerInvariant() -cne $PreviousUpdaterSha256){throw 'Pinned schema10 updater reference required'}
+    $env:WINBRIDGE_PREVIOUS_UPDATER10=[IO.Path]::GetFullPath($PreviousUpdaterExecutable)
+    $report.kind='candidate_drain_native_gate'
+  }
+  Write-NewJson $inputPath @{schemaVersion=1;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);powershell=$pwsh;validationCache=$cache;drainGate=[bool]$DrainGate}
   $report.target=$pin
   $env:CARGO_TARGET_DIR=Join-Path $cache 'test-build-cache'
   Assert-WorkflowCachePath $env:CARGO_TARGET_DIR
@@ -67,6 +77,13 @@ try {
     @{name='health-drain-capacity';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','drain_lets_accepted','--locked','--offline','--','--test-threads=1','--nocapture')},
     @{name='health-full-pipeline';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','update_control::tests::health::health_actor_full_candidate_roundtrip','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')}
   )
+  if($DrainGate){
+    $commands=@(
+      @{name='drain-data-and-journal';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','drain','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='drain-v13-admission';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','candidate_drain_requires_health','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='drain-v12-worker-observation';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','drain_observation_preserves','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
   foreach($command in $commands){
     $log=$command.name+'.log';$arguments=$command.arguments
     Write-Output "Health native gate: $($command.name); installed runtime remains active"
@@ -75,12 +92,14 @@ try {
     if($code -ne 0){throw "Health native command failed: $($command.name); see $log"}
   }
   $proof=Get-Content -LiteralPath $env:WINBRIDGE_HEALTH_GATE_PROOF -Raw | ConvertFrom-Json
-  if($proof.kind -cne 'candidate_health_actor_proof' -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $false -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne 4){throw 'Actual health actor proof incomplete'}
+  $expectedKind=if($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
+  $expectedCases=4
+  if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $false -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
   $report.passed=$true
 } catch {$report.error=$_.Exception.Message;Write-Output ("Health gate failed: "+$report.error)} finally {
   $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
   if($lease){$lease.Dispose()}
-  $env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_HEALTH_GATE_INPUT=$oldInput;$env:WINBRIDGE_HEALTH_GATE_PROOF=$oldProof;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
+  $env:WINBRIDGE_PREVIOUS_UPDATER10=$oldPreviousUpdater;$env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_HEALTH_GATE_INPUT=$oldInput;$env:WINBRIDGE_HEALTH_GATE_PROOF=$oldProof;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
   [Console]::OutputEncoding=$oldConsoleEncoding;$OutputEncoding=$oldPipelineEncoding
   Set-Location -LiteralPath $oldLocation
   Write-NewJson (Join-Path $ReportDirectory 'report.json') $report

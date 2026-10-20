@@ -1,8 +1,10 @@
-//! Data contracts for the upcoming durable drain driver. These pure transitions
-//! grant no execution authority and perform no RPC, file or database effects.
+//! Drain delivery data and its trusted, separately admitted blocking driver.
+//! Pure transitions alone grant no RPC, process or file execution authority.
 use serde::{Deserialize, Serialize};
 use winbridge_core::update::{valid_hash, validate_update_key, MAX_UPDATE_COUNTER};
 use winbridge_protocol::update::*;
+mod driver;
+pub(crate) use driver::{execute, Control, Telemetry};
 
 type Result<T> = std::result::Result<T, String>;
 
@@ -79,6 +81,53 @@ impl DrainDeliveryPermit {
 pub enum DrainIssue {
     Fresh(Box<DrainDeliveryPermit>),
     Observed(Box<DrainCommandRecord>),
+}
+
+pub(crate) fn view(saved: &DrainSnapshot, root: UpdatePhase, active: bool) -> CandidateDrainView {
+    let confirmed = saved
+        .commands
+        .iter()
+        .filter(|r| matches!(r.delivery, DrainDeliveryState::Confirmed { .. }))
+        .count() as u8;
+    let phase = if saved.intent.is_none() {
+        CandidateDrainPhase::NotAdmitted
+    } else if matches!(
+        root,
+        UpdatePhase::Aborting | UpdatePhase::FailedBeforeCutover | UpdatePhase::Deferred
+    ) {
+        CandidateDrainPhase::Aborted
+    } else if saved.quiesced_revision.is_some() {
+        CandidateDrainPhase::Quiesced
+    } else if !active
+        || saved
+            .commands
+            .iter()
+            .any(|r| matches!(r.delivery, DrainDeliveryState::Uncertain { .. }))
+    {
+        CandidateDrainPhase::Indeterminate
+    } else if matches!(
+        saved.commands.get(2).map(|r| &r.delivery),
+        Some(DrainDeliveryState::Issued { .. })
+    ) {
+        CandidateDrainPhase::ConfirmingQuiescence
+    } else if matches!(
+        saved.commands.get(1).map(|r| &r.delivery),
+        Some(DrainDeliveryState::Issued { .. })
+    ) || confirmed >= 2
+    {
+        CandidateDrainPhase::ClosingDispatch
+    } else if confirmed == 1 {
+        CandidateDrainPhase::WaitingAccepted
+    } else {
+        CandidateDrainPhase::Starting
+    };
+    CandidateDrainView {
+        phase,
+        attempt_id: saved.intent.as_ref().map(|i| i.attempt_id.clone()),
+        confirmed_commands: confirmed,
+        quiesced_revision: saved.quiesced_revision,
+        worker_observation: None,
+    }
 }
 
 impl DrainIntent {
@@ -351,7 +400,7 @@ fn validate_receipt(intent: &DrainIntent, ordinal: u8, receipt: &WorkerUpdateLea
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn fixture() -> (DrainIntent, WorkerUpdateLease) {
+    pub(super) fn fixture() -> (DrainIntent, WorkerUpdateLease) {
         let binding = DrainBinding {
             update_id: uuid::Uuid::new_v4().to_string(),
             launch_id: uuid::Uuid::new_v4().to_string(),
@@ -386,7 +435,7 @@ mod tests {
             lease,
         )
     }
-    fn receipt(
+    pub(super) fn receipt(
         intent: &DrainIntent,
         before: &WorkerUpdateLease,
         ordinal: usize,

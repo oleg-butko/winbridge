@@ -55,7 +55,7 @@ export type SupervisorProcess = { processId: number, birth: string, hostId: stri
 export type SupervisorPhase = "intent" | "spawned" | "ready" | "active" | "stopped" | "indeterminate";
 export type SupervisorSpec = { launchId: string, updateId: string, parent: SupervisorProcess, parentOwnerId: string, parentEpoch: number, tokenSha256: string, configPath: string, configSha256: string, runtimeDirectory: string, imagePath: string, imageSha256: string, imageIdentity: string, excludedDomain: string | null, endpoint: string, acceptedAtMs: number, worker?: SupervisorWorkerBinding | null, };
 export type SupervisorRecord = { schemaVersion: number, spec: SupervisorSpec, phase: SupervisorPhase, revision: number, process: SupervisorProcess | null, ownerId: string | null, ownerEpoch: number | null, updatedAtMs: number, reason: string, };
-export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain";
+export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain" | "drain_candidate" | "observe_candidate_drain";
 export type SupervisorRequest = { contractVersion: number, launchId: string, expectedRevision: number, action: SupervisorAction, token: string, workerCommand?: WorkerUpdateControlCommand | null, };
 export type SupervisorResponse = { contractVersion: number, launchId: string, record: SupervisorRecord | null, error: string | null, workerControl?: WorkerUpdateControlResponse | null, preparation?: UpdatePreparationView | null, };
 export type UpdatePreparationView = { schemaVersion: number, observedAtMs: number, update: UpdateRecord, source: SourceTransactionRecord | null, sourceAppliedFiles: number, build: UpdateBuildRecord | null,
@@ -74,11 +74,22 @@ runtimePreimages?: RuntimePreimagesView | null,
 /**
  * V10/view schema 4; older contracts omit it entirely.
  */
-candidateHealth?: CandidateHealthView | null, };
+candidateHealth?: CandidateHealthView | null,
+/**
+ * V13/view schema 5 only; older replies omit this field.
+ */
+candidateDrain?: CandidateDrainView | null, };
 export type RuntimeBaselineView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, } | { "phase": "verified", intentRevision: number, receiptRevision: number, observedAtMs: number, setId: string, workerProcess: SupervisorProcess, workerImageSha256: string, };
 export type RuntimePreimagesView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, directory: string, } | { "phase": "verified", intentRevision: number, receiptRevision: number, completedAtMs: number, directory: string, fileCount: number, totalBytes: number, };
 export type CandidateHealthPhase = "not_admitted" | "pending" | "verified" | "rejected" | "cancelled" | "indeterminate";
 export type CandidateHealthView = { phase: CandidateHealthPhase, revision: number | null, attemptId: string | null, configProcess: SupervisorProcess | null, rehearsalProcess: SupervisorProcess | null, cleanupVerified: boolean, reason: string | null, };
+export type CandidateDrainPhase = "not_admitted" | "starting" | "waiting_accepted" | "closing_dispatch" | "confirming_quiescence" | "quiesced" | "indeterminate" | "aborted";
+export type CandidateDrainView = { phase: CandidateDrainPhase, attemptId: string | null, confirmedCommands: number, quiescedRevision: number | null,
+/**
+ * Optional live sample from a separate worker snapshot, never atomic with
+ * updater evidence. Absent after supervisor restart; not an approval.
+ */
+workerObservation: WorkerDrainObservation | null, };
 export type SupervisorWorkerBinding = { context: RequestContext, generation: string, build: BuildIdentity, process: SupervisorProcess, configSha256: string, endpoint: string, };
 export type WorkerUpdateControlCommand = { "action": "observe" } | { "action": "observe_runtime" } | { "action": "observe_compatibility" } | { "action": "observe_receipt", command: WorkerUpdateCommand, } | { "action": "observe_drain" } | { "action": "begin_source" } | { "action": "advance", command: WorkerUpdateCommand, };
 export type WorkerUpdateControlRequest = { controlVersion: number, binding: SupervisorWorkerBinding, updateId: string, launchId: string, supervisor: SupervisorProcess, updaterOwnerId: string, updaterEpoch: number, command: WorkerUpdateControlCommand, };

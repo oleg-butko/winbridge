@@ -574,6 +574,9 @@ pub enum SupervisorAction {
     ObserveWorkerReceipt,
     /// Internal v12: logical drain blockers and user queue mode; readonly.
     ObserveWorkerDrain,
+    /// Internal v13: durable drain coordination, stopping before worker shutdown.
+    DrainCandidate,
+    ObserveCandidateDrain,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -626,6 +629,38 @@ pub struct UpdatePreparationView {
     /// V10/view schema 4; older contracts omit it entirely.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_health: Option<CandidateHealthView>,
+    /// V13/view schema 5 only; older replies omit this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_drain: Option<CandidateDrainView>,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CandidateDrainPhase {
+    NotAdmitted,
+    Starting,
+    WaitingAccepted,
+    ClosingDispatch,
+    ConfirmingQuiescence,
+    Quiesced,
+    Indeterminate,
+    Aborted,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CandidateDrainView {
+    pub phase: CandidateDrainPhase,
+    pub attempt_id: Option<String>,
+    pub confirmed_commands: u8,
+    pub quiesced_revision: Option<u64>,
+    /// Optional live sample from a separate worker snapshot, never atomic with
+    /// updater evidence. Absent after supervisor restart; not an approval.
+    pub worker_observation: Option<WorkerDrainObservation>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

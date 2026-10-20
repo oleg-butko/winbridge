@@ -153,7 +153,8 @@ save/exit, activation, journal migration и controller confirmation остают
 ## Доказательства готовности
 
 Native проверки: две-три project queues, выполняющаяся задача и workflow child
-завершаются без принудительной отмены; новые roots ждут; user pause не меняется.
+завершаются без принудительной отмены; новые roots получают явный отказ admission;
+user pause не меняется.
 Lost ACK и повтор чтения receipt не создают вторую команду. Stale revision/epoch,
 чужой scope и неподтверждённые physical owners блокируют quiescence. Статус остаётся
 доступным при ожидании; abort не выпускает lease раньше callback retirement.
@@ -171,3 +172,37 @@ positive path с health/source/supervisor bindings остаётся обязат
 `K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\reference10-20261020-214354-6f259f52\winbridge-update.exe`,
 SHA256 `cf25892abe8810a78ed5c9a2b76261b49187126cfb0bac18fa2707f2b2ecdeda`.
 Копия проверена по successful health proof и artifact query; runtime не менялся.
+
+## Драйвер и наблюдение v13 — реализация, native gate впереди
+
+`DrainCandidate` / `ObserveCandidateDrain` возвращают preparation view schema5.
+Версии1–12 сохраняют прежнюю форму ответа без `candidateDrain`. Повтор admission
+возвращает сохранённую попытку. Статус не создаёт delivery permit и не повторяет
+Issued/Uncertain. Публичные CLI/MCP и автоматический install пока не подключены.
+
+Один blocking driver сохраняет Issued до отправки точной команды. При ошибке
+обмена он один раз запрашивает её immutable receipt по v11/v4; отсутствие или
+ошибка lookup оставляет Uncertain и останавливает дальнейшие команды. Worker
+control server последовательно завершает callback перед следующим lookup.
+Совпадающая квитанция подтверждается в journal до выдачи следующего intent.
+
+До эффектов проверяются current owner/root/config/source, physical compiler/health
+cleanup, schema compatibility и текущий кандидат. Четыре candidate image и worker
+config удерживаются read pins на всё ожидание. Перед CloseDispatch/ConfirmQuiesced
+исходники, compatibility и pinned identities сверяются повторно. Во время ожидания
+принятых задач не создаются новые helpers; пользовательская пауза не снимается.
+Нет общего timeout, автоматически отменяющего пользовательскую работу: доступна
+явная отмена обновления через существующий v4 coordinated abort.
+
+Состояния view: starting → waiting_accepted → closing_dispatch →
+confirming_quiescence → quiesced; отдельно not_admitted, indeterminate и aborted.
+Подтверждённые команды и root читаются одним SQLite snapshot. Последний
+`workerObservation` — отдельный live sample с собственным observedAtMs и queue
+revision; общей транзакции двух БД нет. Он отсутствует после перезапуска supervisor.
+При ошибке прежний sample сохраняется вместе с driverError, свежие нули не создаются.
+
+Abort фиксирует Aborting через отдельное подключение с тем же физическим owner/
+epoch, останавливает дальнейшие эффекты и ждёт возврата blocking driver. Только
+после retirement разрешён существующий source/build/health cleanup и owned Release.
+Другие задачи и пользовательская pause сохраняются. Quiesced остаётся остановкой
+перед shutdown: сам worker продолжает работать, файлы runtime не заменяются.

@@ -31,6 +31,10 @@ pub(crate) struct Registration {
     test_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
     #[cfg(test)]
     runtime_verified_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
+    #[cfg(test)]
+    drop_drain_ack: AtomicBool,
+    #[cfg(test)]
+    begin_drain_requests: AtomicUsize,
 }
 #[cfg(test)]
 struct ControlTestGate {
@@ -147,6 +151,10 @@ impl Worker {
             test_gate: std::sync::Mutex::new(None),
             #[cfg(test)]
             runtime_verified_gate: std::sync::Mutex::new(None),
+            #[cfg(test)]
+            drop_drain_ack: AtomicBool::new(false),
+            #[cfg(test)]
+            begin_drain_requests: AtomicUsize::new(0),
         }));
         Ok(binding)
     }
@@ -703,6 +711,14 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 request.update_id.clone(),
             );
             let (w, r) = (worker.clone(), state.clone());
+            #[cfg(test)]
+            let drop_ack = if matches!(&request.command, WorkerUpdateControlCommand::Advance {command} if command.action == WorkerUpdateAction::BeginDrain)
+            {
+                state.begin_drain_requests.fetch_add(1, Ordering::AcqRel);
+                state.drop_drain_ack.swap(false, Ordering::AcqRel)
+            } else {
+                false
+            };
             let control_version = match request.control_version {
                 2 => 2,
                 3 => 3,
@@ -761,6 +777,12 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 update_id,
                 result,
             };
+            // Native fault fixture: apply and retain receipt, then close the
+            // channel without its ACK. Production builds have no such hook.
+            #[cfg(test)]
+            if drop_ack {
+                continue;
+            }
             let _ = ipc::write(&mut stream, &response).await;
         }
     });
@@ -1249,6 +1271,59 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
     fn lease(r: WorkerUpdateControlResponse) -> WorkerUpdateLease {
         r.into_lease().unwrap().expect("Lease receipt")
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn candidate_drain_requires_health_and_preserves_all_legacy_views_without_effects() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let reg = f.worker.control_registration().unwrap();
+        let h = f.supervisor.as_mut().unwrap();
+        let id = h.record.spec.update_id.clone();
+        let before = UpdateJournal::read_snapshot(&reg.directory, Some(&id)).unwrap();
+        let view = h.candidate_drain(false).await.unwrap();
+        assert_eq!(view.schema_version, 5);
+        assert_eq!(
+            view.candidate_drain.as_ref().unwrap().phase,
+            CandidateDrainPhase::NotAdmitted
+        );
+        assert!(view
+            .candidate_drain
+            .as_ref()
+            .unwrap()
+            .worker_observation
+            .is_none());
+        assert!(!view.driver_active);
+        assert!(h.candidate_drain(true).await.is_err());
+        assert!(h.command(SupervisorAction::DrainCandidate).await.is_err());
+        for view in [
+            h.preparation(false).await.unwrap(),
+            h.runtime_baseline(false).await.unwrap(),
+            h.runtime_preimages(false).await.unwrap(),
+            h.candidate_health(false).await.unwrap(),
+        ] {
+            assert!(!serde_json::to_value(view)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .contains_key("candidateDrain"));
+        }
+        assert_eq!(
+            UpdateJournal::read_snapshot(&reg.directory, Some(&id)).unwrap(),
+            before
+        );
+        assert!(UpdateJournal::inspect_drain(&reg.directory, &id)
+            .unwrap()
+            .intent
+            .is_none());
+        assert!(f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .is_none());
+        assert_eq!(f.slots(), 0);
+        f.stop().await;
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn drain_observation_preserves_user_pause_and_reports_accepted_work_without_effects() {

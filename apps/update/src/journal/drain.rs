@@ -298,6 +298,26 @@ fn persist(
     Ok(())
 }
 impl UpdateJournal {
+    pub(crate) fn drain(&self, id: &str) -> Result<DrainSnapshot> {
+        read(&self.connection, id)
+    }
+    pub(crate) fn require_drain_current(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        p: &DrainPermit,
+    ) -> Result<()> {
+        self.check_directory(a)?;
+        require(&self.connection, a, s, &p.intent, false)?;
+        if read(&self.connection, &p.intent.binding.update_id)?
+            .intent
+            .as_ref()
+            != Some(&p.intent)
+        {
+            return Err(bad("Drain driver permit differs from saved intent"));
+        }
+        Ok(())
+    }
     pub fn inspect_drain(directory: &Path, id: &str) -> Result<DrainSnapshot> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;

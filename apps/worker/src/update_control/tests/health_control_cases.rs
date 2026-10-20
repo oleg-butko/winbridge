@@ -14,7 +14,12 @@ struct Input {
     archive: PathBuf,
     powershell: PathBuf,
     validation_cache: PathBuf,
+    #[serde(default)]
+    drain_gate: bool,
 }
+#[cfg(windows)]
+#[path = "drain_control_cases.rs"]
+mod drain;
 #[cfg(windows)]
 fn build_adapter(root: &Path, input: &Input) -> PathBuf {
     // Local fixture only. Forward the frozen command to the real build script;
@@ -168,12 +173,22 @@ async fn health_actor_process_helper() {
     let reg = f.worker.control_registration().unwrap();
     let old_manifest = fs::read(root.join("runtime/winbridge-installed-set.json")).unwrap();
     let mut cases = Vec::new();
-    for case in [
-        "pid-receipt-rejected",
-        "cancel-before-helper",
-        "cancel-running-rehearsal",
-        "verified",
-    ] {
+    let selected: &[&str] = if input.drain_gate {
+        &[
+            "verified",
+            "lost-drain-ack",
+            "cancel-drain",
+            "deny-drain-receipt",
+        ]
+    } else {
+        &[
+            "pid-receipt-rejected",
+            "cancel-before-helper",
+            "cancel-running-rehearsal",
+            "verified",
+        ]
+    };
+    for &case in selected {
         f.request.idempotency_key = format!("health-full-{case}");
         if !cases.is_empty() {
             f.baseline = input.target.manifest_sha256.clone();
@@ -241,6 +256,7 @@ async fn health_actor_process_helper() {
                 .unwrap(),
             admitted
         );
+        let mut drain_evidence = None;
         let health: HealthRecord;
         let abort;
         if case == "cancel-before-helper" {
@@ -401,7 +417,14 @@ async fn health_actor_process_helper() {
                     health
                 );
             }
-            abort = h.abort_before_cutover().await.unwrap();
+            if input.drain_gate {
+                let (receipt, proof) =
+                    drain::run(h, &f.worker, &reg.directory, case, &health).await;
+                abort = receipt;
+                drain_evidence = Some(proof);
+            } else {
+                abort = h.abort_before_cutover().await.unwrap();
+            }
         }
         assert_eq!(abort.phase, winbridge_update::abort::AbortPhase::Completed);
         assert!(abort.cleanup_verified);
@@ -417,12 +440,14 @@ async fn health_actor_process_helper() {
             fs::read(root.join("runtime/winbridge-installed-set.json")).unwrap(),
             old_manifest
         );
-        cases.push(serde_json::json!({"case":case,"health":health,"abort":abort}));
+        cases.push(
+            serde_json::json!({"case":case,"health":health,"abort":abort,"drain":drain_evidence}),
+        );
         retired(&mut f).await;
     }
     f.worker.stop();
     (&mut f.server).await.unwrap().unwrap();
-    let proof = serde_json::json!({"schemaVersion":1,"kind":"candidate_health_actor_proof","passed":true,"platform":"windows","build":build_identity(),"target":input.target,"cases":cases,"actualCandidateBuild":true,"actualCandidateHelpers":true,"workerEntryPointIsTestHarness":true,"syntheticOldOtherRoleDescriptors":true,"intentBeforeAck":true,"duplicateObserved":true,"pidBeforeResume":true,"abortWaitedForDriver":true,"newEmptyJournalOnly":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = serde_json::json!({"schemaVersion":1,"kind":if input.drain_gate {"candidate_drain_actor_proof"} else {"candidate_health_actor_proof"},"passed":true,"platform":"windows","build":build_identity(),"target":input.target,"cases":cases,"actualCandidateBuild":true,"actualCandidateHelpers":true,"workerEntryPointIsTestHarness":true,"syntheticOldOtherRoleDescriptors":true,"intentBeforeAck":true,"duplicateObserved":true,"pidBeforeResume":true,"abortWaitedForDriver":true,"newEmptyJournalOnly":true,"runtimeApplied":false,"windowsOpened":false});
     fs::write(
         value("health-proof="),
         serde_json::to_vec_pretty(&proof).unwrap(),

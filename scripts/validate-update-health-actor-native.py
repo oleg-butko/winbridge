@@ -110,14 +110,107 @@ def verify_proof(proof, source, target):
                     raise ValueError('Fresh-state schema/isolation proof differs')
 
 
+
+def verify_drain_proof(proof, source, target):
+    if (proof.get('kind') != 'candidate_drain_actor_proof' or proof.get('passed') is not True
+            or proof.get('platform') != 'windows' or proof.get('target') != target
+            or proof.get('build', {}).get('sourceCommit') != source['sourceCommit']
+            or proof['build'].get('sourceDirty') is not False
+            or proof['build'].get('sourceManifestSha256') != source['manifestSha256']
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False):
+        raise ValueError('Drain source/target/isolation proof differs')
+    if [c.get('case') for c in proof.get('cases', [])] != ['verified', 'lost-drain-ack', 'cancel-drain', 'deny-drain-receipt']:
+        raise ValueError('Missing full drain cases')
+    for case in proof['cases']:
+        health, abort, drain = case['health'], case['abort'], case['drain']
+        result, context = health['result'], health['context']
+        config, rehearsal = result['config'], result['rehearsal']
+        if (len(health['probes']) != 2 or config['descriptor']['build']['sourceManifestSha256'] != target['manifestSha256']
+                or config['descriptor'] != rehearsal['descriptor']
+                or result['parentRevision'] != health['intent']['parentRevision']+1
+                or config['config'] != context['workerConfig']
+                or rehearsal['updaterJournalSchema'] != context['compatibility']['updaterJournalSchema']
+                or rehearsal['updaterJournalSchema'] != 11
+                or rehearsal['productionStateOpened'] or rehearsal['controllerEnabled']
+                or not rehearsal['freshJournal'] or not rehearsal['serverStopped'] or not rehearsal['ipcReady']):
+            raise ValueError('Actual same-schema target health reports differ')
+        if (health['result']['outcome'] != 'verified' or abort['phase'] != 'completed'
+                or abort['cleanupVerified'] is not True or not abort.get('workerReleased')
+                or drain['userPausePreserved'] is not True or drain['newRootRejected'] is not True
+                or drain['runtimeApplied'] is not False or drain.get('previousSchemaRefused') is not True):
+            raise ValueError('Missing health, queue or owned release evidence')
+        for p in health['probes']:
+            cleanup = p.get('cleanup') or {}
+            if not (cleanup.get('treeEmpty') and cleanup.get('captureComplete')
+                    and cleanup.get('exitCode') == 0 and p.get('resumeAcknowledged')):
+                raise ValueError('Health helper cleanup incomplete')
+        waiting = drain['waiting']
+        observation = waiting['candidateDrain']['workerObservation']
+        if (waiting['schemaVersion'] != 5 or waiting['update']['phase'] != 'draining'
+                or waiting['candidateDrain']['phase'] != 'waiting_accepted'
+                or observation['acceptedOperations'] != 2 or observation['queueMode'] != 'dispatch_paused'
+                or waiting['candidateDrain']['confirmedCommands'] != 1):
+            raise ValueError('Live paused accepted-work observation missing')
+        final, ledger = drain['final'], drain['journal']
+        commands = ledger['commands']
+        if len(commands) != 3 or len(drain['tasks']) != 2:
+            raise ValueError('Missing command/task evidence')
+        states = [r['delivery']['state'] for r in commands]
+        intent = ledger['intent']
+        if (intent['binding']['updateId'] != waiting['update']['updateId']
+                or intent['binding']['ownerId'] != health['intent']['ownerId']
+                or intent['binding']['ownerEpoch'] != health['intent']['ownerEpoch']
+                or len({r['command']['commandId'] for r in commands}) != 3):
+            raise ValueError('Drain intent scope/owner/command identity differs')
+        for n, row in enumerate(commands):
+            command = intent['commands'][n]
+            if row['command'] != command or row['ordinal'] != n:
+                raise ValueError('Drain command intent differs')
+            if row['delivery']['state'] == 'confirmed':
+                receipt = row['delivery']['receipt']
+                if (receipt['revision'] != command['expectedRevision']+1
+                        or receipt['phase'] != ['draining', 'quiescing', 'quiesced'][n]
+                        or receipt['reason'] != command['reason']
+                        or receipt['spec'] != commands[0]['delivery']['receipt']['spec']):
+                    raise ValueError('Exact immutable worker receipt differs')
+        if case['case'] in {'verified', 'lost-drain-ack'}:
+            if (states != ['confirmed']*3 or final['update']['phase'] != 'quiesced'
+                    or ledger['quiescedRevision'] != final['update']['revision']
+                    or abort['spec']['originalPhase'] != 'quiesced'):
+                raise ValueError('Atomic complete quiescence missing')
+        elif case['case'] == 'deny-drain-receipt':
+            if (states != ['confirmed', 'confirmed', 'uncertain']
+                    or ledger['quiescedRevision'] is not None
+                    or final['update']['phase'] != 'draining' or not final['driverError']):
+                raise ValueError('Ignored receipt did not retain unknown outcome')
+        elif states != ['confirmed', 'prepared', 'prepared']:
+            raise ValueError('Cancellation unexpectedly dispatched further drain commands')
+        if case['case'] == 'lost-drain-ack' and (drain.get('lostAckReconciled') is not True or drain.get('beginDrainRequests') != 1):
+            raise ValueError('Lost ACK replayed mutation or was not reconciled')
+        expected = 'queued' if case['case'] == 'cancel-drain' else 'succeeded'
+        if any(t['status'] != expected or expected == 'succeeded' and t['exitCode'] != 0 for t in drain['tasks']):
+            raise ValueError('Updater cancelled or failed accepted tasks')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', required=True, type=Path)
     parser.add_argument('--target-archive', required=True, type=Path)
     parser.add_argument('--cache-run', required=True)
+    parser.add_argument('--drain-gate', action='store_true')
+    parser.add_argument('--previous-updater')
+    parser.add_argument('--previous-updater-sha256')
     parser.add_argument('--controller-config', default='.winbridge/controller-snapshot.local.json', type=Path)
     args = parser.parse_args()
     source, target = archive_pin(args.archive), archive_pin(args.target_archive)
+    drain_parameters = ''
+    if args.drain_gate:
+        if (not args.previous_updater or not re.fullmatch(r'[0-9a-f]{64}', args.previous_updater_sha256 or '')
+                or PureWindowsPath(args.previous_updater).drive.casefold() != 'k:'
+                or not PureWindowsPath(args.previous_updater).is_absolute()):
+            raise ValueError('Pinned absolute local schema10 updater reference required')
+        drain_parameters = (' -DrainGate -PreviousUpdaterExecutable '+native.ps_string(args.previous_updater)
+                            +' -PreviousUpdaterSha256 '+native.ps_string(args.previous_updater_sha256))
     if source['sourceCommit'] == target['sourceCommit'] or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run):
         raise ValueError('Distinct source generations and original cache run required')
     cfg = json.loads(args.controller_config.read_text())
@@ -152,7 +245,7 @@ $copiedArchive=Join-Path $local 'source.zip'
 [IO.File]::Copy($archive,$copiedArchive,$false)
 if((Get-FileHash -LiteralPath $copiedArchive -Algorithm SHA256).Hash.ToLowerInvariant() -cne {ps(source['archiveSha256'])}){{throw 'Copied source archive changed'}}
 Expand-Archive -LiteralPath $copiedArchive -DestinationPath $local
-& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $source 'scripts/test-update-health-actor.ps1') -SourceDirectory $source -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath $target -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(cache)} -ReportDirectory {ps(windows_report)}
+& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $source 'scripts/test-update-health-actor.ps1') -SourceDirectory $source -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath $target -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(cache)} -ReportDirectory {ps(windows_report)}{drain_parameters}
 exit $LASTEXITCODE
 '''
     request = {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': 'snapshot-fixture',
@@ -190,7 +283,8 @@ exit $LASTEXITCODE
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed']:
         raise RuntimeError({'taskId': task['taskId'], 'error': result['error'], 'reportDirectory': str(report)})
-    verify_proof(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)
+    verifier = verify_drain_proof if args.drain_gate else verify_proof
+    verifier(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report), 'filesVerified': len(ready['files'])}), flush=True)
 
 

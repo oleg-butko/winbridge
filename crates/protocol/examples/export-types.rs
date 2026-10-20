@@ -57,6 +57,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RuntimePreimagesView::decl(&config),
         CandidateHealthPhase::decl(&config),
         CandidateHealthView::decl(&config),
+        CandidateDrainPhase::decl(&config),
+        CandidateDrainView::decl(&config),
         SupervisorWorkerBinding::decl(&config),
         WorkerUpdateControlCommand::decl(&config),
         WorkerUpdateControlRequest::decl(&config),

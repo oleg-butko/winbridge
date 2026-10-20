@@ -1,3 +1,33 @@
+## U1: drain actor v13 implemented; combined native gate NEXT — 2026-10-20
+
+Consume the aaeb4e4/schema11 journal through one blocking driver; no public update.
+Supervisor v13 DrainCandidate/ObserveCandidateDrain, view5 candidateDrain; old views
+omit the field. Fresh intent precedes ACK; Issued precedes RPC; exact v4 receipt
+lookup after failed ACK, no resend. Wait via v5 logical observations; accepted roots
+continue after explicit user unpause, updater never changes pause or cancels work.
+Config/source/current owner, candidate pins, compatibility and physical helper/
+compiler cleanup are checked before effects. Root Quiesced still leaves worker live.
+Same-owner coordinated abort fences Draining, waits driver retirement, then uses
+existing verified source/health/compiler cleanup and owned Release.
+
+563 workspace tests/doctests, final15 worker control tests, both all-target Clippy,
+TS typecheck, generated contracts and UI build checked (logs drain-actor-*).
+Added native DrainGate mode to existing health scripts: four clean full-pipeline
+cases verified/lost-drain-ack/cancel-drain/deny-drain-receipt. Test-only worker drops
+one BeginDrain ACK AFTER application and counts requests to prove one mutation;
+last-receipt history insertion is faulted to prove no false root approval.
+Two accepted other-project tasks wait under user pause; updater cannot admit a new
+root. Completion/explicit updater abort must preserve original queue decisions.
+Schema10 reference also must refuse actual schema11 journal without changing it.
+Native case results are NOT yet available; do not describe this block as gated.
+
+Next: export clean A11/C11 with built UI, run existing Python runner --drain-gate
+with the retained schema10 reference documented below and original cache run
+20261017-061527-f4639971. Source+target must both be11; old C5a is negative only.
+No active Windows test yet. Installed d052 remains unchanged; worker needed,
+desktop unnecessary; no GUI windows. After green drain gate review and proceed
+with separately durable exact shutdown. U1–U4 remain open.
+
 ## U1: drain journal schema11 locally verified; actor next — 2026-10-20
 
 Added immutable drain intent, three frozen commands and append-only per-command

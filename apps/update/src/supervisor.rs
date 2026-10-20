@@ -506,6 +506,52 @@ impl SupervisorHandle {
         }
         Ok(control)
     }
+    /// V13 starts an owned drain once; reading status never dispatches work.
+    pub async fn candidate_drain(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 13,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::DrainCandidate
+            } else {
+                SupervisorAction::ObserveCandidateDrain
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 13
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Drain reply scope/version changed; no fallback".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Drain view missing")?;
+        if view.schema_version != 5
+            || view.candidate_drain.is_none()
+            || view.candidate_health.is_none()
+            || view.runtime_preimages.is_none()
+            || view.runtime_baseline.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Drain reply belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     /// V10 admission is duplicate-first and never replays a saved pending health check.
     pub async fn candidate_health(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -925,6 +971,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveWorkerCompatibility
                 | SupervisorAction::ObserveWorkerReceipt
                 | SupervisorAction::ObserveWorkerDrain
+                | SupervisorAction::DrainCandidate
+                | SupervisorAction::ObserveCandidateDrain
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1094,6 +1142,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut artifacts_active = false;
     let mut preimages_active = false;
     let mut health_active = false;
+    let mut drain_active = false;
+    let mut drain_telemetry = crate::drain::Telemetry::default();
     let mut pending_abort: Option<Box<crate::abort::AbortPermit>> = None;
     // One readonly query at a time; dropping the set aborts its IO task. The
     // mailbox and journal owner stay available while worker verifies file hashes.
@@ -1113,6 +1163,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             artifacts_active = false;
             preimages_active = false;
             health_active = false;
+            drain_active = false;
             driver_error = outcome
                 .err()
                 .map(|e| e.chars().take(1000).collect::<String>());
@@ -1185,6 +1236,100 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if matches!(
+            request.action,
+            SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain
+        ) {
+            let mut admitted = None;
+            let outcome = async {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 13
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Drain requires exact Active worker-bound v13 supervisor".into());
+                }
+                let mut view = UpdateJournal::drain_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                )
+                .map_err(error)?;
+                if request.action == SupervisorAction::ObserveCandidateDrain
+                    || view
+                        .candidate_drain
+                        .as_ref()
+                        .is_some_and(|v| v.phase != CandidateDrainPhase::NotAdmitted)
+                {
+                    view.candidate_drain.as_mut().unwrap().worker_observation =
+                        drain_telemetry.sample()?;
+                    return Ok(view);
+                }
+                if work.is_some() || driver_error.is_some() {
+                    return Err(
+                        "Active driver or unresolved failure prevents drain admission".into(),
+                    );
+                }
+                let lease = forward_worker(&r, WorkerUpdateControlCommand::Observe)
+                    .await?
+                    .into_lease()?
+                    .ok_or("Drain source lease missing")?;
+                let (journal, owner) = idle.as_mut().ok_or("Drain owner unavailable")?;
+                if let crate::drain::DrainAdmission::Fresh(permit) =
+                    journal.admit_drain(owner, &r, &lease).map_err(error)?
+                {
+                    admitted = Some(permit);
+                    drain_telemetry = crate::drain::Telemetry::default();
+                }
+                UpdateJournal::drain_preparation_snapshot(
+                    &directory,
+                    &r.spec.update_id,
+                    admitted.is_some(),
+                    None,
+                )
+                .map_err(error)
+            }
+            .await;
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 13,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                error,
+                worker_control: None,
+                preparation,
+            };
+            let dispatch = response.error.is_none();
+            let _ = ipc::write(&mut stream, &response).await;
+            if let Some(permit) = admitted.filter(|_| dispatch) {
+                let (mut journal, owner) =
+                    idle.take().ok_or("Drain owner missing after admission")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                let telemetry = drain_telemetry.clone();
+                driver_error = None;
+                drain_active = true;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result = crate::preparation::drain(
+                        &mut journal,
+                        &owner,
+                        &spec,
+                        *permit,
+                        io,
+                        telemetry,
+                    );
+                    (journal, owner, result)
+                }));
+            }
+            continue;
+        }
         if matches!(
             request.action,
             SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth
@@ -1532,10 +1677,10 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 match UpdateJournal::inspect_abort(&directory, &r.spec.update_id) {
                     Ok(_) => {}
                     Err(e) if e.code == JournalErrorCode::NotFound => {
-                        if work.is_some() && !preimages_active && !health_active {
+                        if work.is_some() && !preimages_active && !health_active && !drain_active {
                             return Err("Preparation driver active; wait for confirmed source/compiler cleanup".into());
                         }
-                        if preimages_active || health_active {
+                        if preimages_active || health_active || drain_active {
                             // Same physical owner/epoch; Root Aborting fences the
                             // copier. Cleanup waits for its blocking callback.
                             let cfg = crate::preparation::configuration(&r)?;
@@ -1976,7 +2121,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

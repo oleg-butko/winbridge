@@ -110,8 +110,10 @@ status и release только после source/Job/output proof. Добавл�
 с новым пустым журналом и проверяет IPC/остановку;
 [210 native tests / полный build](docs/plans/worker-self-update/windows-probe-lifecycle-gate-2026-10-20.md) passed.
 [Health journal / supervisor v10](docs/plans/worker-self-update/candidate-health.md)
-добавляет durable helpers и atomic approval; 541 local tests и обе Clippy проверки
-прошли, сквозной native health gate ещё требуется. Exact shutdown и activation впереди. Весь U1 ещё не завершён.
+добавляет durable helpers и atomic approval; сквозной Windows gate пройден.
+[Drain/quiesce](docs/plans/worker-self-update/drain-quiesce.md) добавляет updater schema11,
+сохранённые команды/квитанции и внутренний actor v13; сквозная native проверка нового
+блока ещё требуется. Exact shutdown и activation впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
