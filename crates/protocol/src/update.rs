@@ -309,6 +309,25 @@ pub struct WorkerUpdateBlockers {
     pub uncertain_owners: u64,
 }
 
+/// A readonly snapshot of logical blockers. It deliberately contains no
+/// physical-owner count: only ConfirmQuiesced may claim a physical scan.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerDrainObservation {
+    pub schema_version: u16,
+    pub context: crate::RequestContext,
+    pub worker_generation: String,
+    pub lease: Option<Box<WorkerUpdateLease>>,
+    pub accepted_operations: u64,
+    pub logical_owners: u64,
+    pub in_flight_effects: u64,
+    pub queue_revision: String,
+    pub queue_mode: crate::QueueMode,
+    pub observed_at_ms: u64,
+}
+
 /// Internal trusted compiler driver contract; not registered as an agent command.
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -553,6 +572,8 @@ pub enum SupervisorAction {
     ObserveCandidateHealth,
     /// Internal v11: read a saved worker-command receipt, never repeat a mutation.
     ObserveWorkerReceipt,
+    /// Internal v12: logical drain blockers and user queue mode; readonly.
+    ObserveWorkerDrain,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -717,6 +738,8 @@ pub enum WorkerUpdateControlCommand {
     ObserveReceipt {
         command: WorkerUpdateCommand,
     },
+    /// Worker control v5 only; logical observation, never a quiescence receipt.
+    ObserveDrain,
     BeginSource,
     Advance {
         command: WorkerUpdateCommand,
@@ -768,6 +791,9 @@ pub enum WorkerUpdateControlResult {
         #[serde(rename = "observedAtMs")]
         observed_at_ms: u64,
     },
+    DrainObservation {
+        observation: Box<WorkerDrainObservation>,
+    },
     /// An error does not prove absence of a committed effect. Observe the original ID.
     Error { message: String },
 }
@@ -786,7 +812,8 @@ impl WorkerUpdateControlResponse {
             WorkerUpdateControlResult::Error { message } => Err(message),
             WorkerUpdateControlResult::RuntimeIdentity { .. }
             | WorkerUpdateControlResult::RuntimeCompatibility { .. }
-            | WorkerUpdateControlResult::CommandReceipt { .. } => {
+            | WorkerUpdateControlResult::CommandReceipt { .. }
+            | WorkerUpdateControlResult::DrainObservation { .. } => {
                 Err("Runtime identity is not a lease receipt".into())
             }
         }
@@ -800,7 +827,8 @@ impl WorkerUpdateControlResponse {
             WorkerUpdateControlResult::Error { message } => Err(message),
             WorkerUpdateControlResult::Snapshot { .. }
             | WorkerUpdateControlResult::RuntimeCompatibility { .. }
-            | WorkerUpdateControlResult::CommandReceipt { .. } => {
+            | WorkerUpdateControlResult::CommandReceipt { .. }
+            | WorkerUpdateControlResult::DrainObservation { .. } => {
                 Err("Lease receipt is not a runtime identity".into())
             }
         }
@@ -855,6 +883,41 @@ impl WorkerUpdateControlResponse {
             }
             WorkerUpdateControlResult::Error { message } => Err(message),
             _ => Err("Expected exact typed command receipt; no fallback".into()),
+        }
+    }
+    pub fn into_drain_observation(self) -> Result<WorkerDrainObservation, String> {
+        if self.control_version != 5 {
+            return Err("Drain observation requires worker control v5; no fallback".into());
+        }
+        match self.result {
+            WorkerUpdateControlResult::DrainObservation { observation } => {
+                let v = *observation;
+                const MAX_COUNTER: u64 = 9_007_199_254_740_991;
+                if v.schema_version != 1
+                    || v.context != self.binding.context
+                    || v.worker_generation != self.binding.generation
+                    || v.observed_at_ms == 0
+                    || v.observed_at_ms > MAX_COUNTER
+                    || [v.accepted_operations, v.logical_owners, v.in_flight_effects]
+                        .into_iter()
+                        .any(|n| n > MAX_COUNTER)
+                    || v.queue_revision.parse::<u64>().map_or(true, |n| {
+                        n > MAX_COUNTER || n.to_string() != v.queue_revision
+                    })
+                    || v.lease.as_ref().is_some_and(|l| {
+                        l.spec.update_id != self.update_id
+                            || l.spec.instance_id != v.context.instance_id
+                            || l.spec.journal_incarnation != v.context.journal_incarnation
+                            || l.spec.worker_generation != v.worker_generation
+                            || l.revision > MAX_COUNTER
+                    })
+                {
+                    return Err("Drain observation context/counters/scope inconsistent".into());
+                }
+                Ok(v)
+            }
+            WorkerUpdateControlResult::Error { message } => Err(message),
+            _ => Err("Expected logical drain observation, never a quiescence receipt".into()),
         }
     }
 }

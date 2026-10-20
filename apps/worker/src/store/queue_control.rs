@@ -14,7 +14,7 @@ fn mode_text(value: QueueMode) -> Result<String> {
         .map(String::from)
         .ok_or("Invalid queue mode".into())
 }
-fn state(c: &Connection) -> Result<(i64, QueueMode, Option<String>, u64)> {
+pub(super) fn state(c: &Connection) -> Result<(i64, QueueMode, Option<String>, u64)> {
     let (revision, text, last, time): (i64, String, Option<String>, i64) = c
         .query_row(
             "SELECT revision,mode,last_command,changed FROM queue_control WHERE singleton=1",

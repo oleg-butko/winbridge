@@ -28,6 +28,58 @@ fn packet() -> Value {
 fn parse(value: Value) -> WorkerUpdateControlResponse {
     serde_json::from_value(value).unwrap()
 }
+fn drain_packet() -> Value {
+    let mut value = packet();
+    let lease = value["result"]["receipt"].clone();
+    value["controlVersion"] = 5.into();
+    value["result"] = json!({"kind":"drain_observation","observation":{
+        "schemaVersion":1,"context":value["binding"]["context"],"workerGeneration":"generation",
+        "lease":lease,"acceptedOperations":1,"logicalOwners":2,"inFlightEffects":3,
+        "queueRevision":"4","queueMode":"dispatch_paused","observedAtMs":5
+    }});
+    value
+}
+#[test]
+fn drain_observation_is_scoped_logical_state_and_never_a_command_receipt() {
+    let view = parse(drain_packet()).into_drain_observation().unwrap();
+    assert!(view.queue_mode.dispatch_paused());
+    assert_eq!(
+        (
+            view.accepted_operations,
+            view.logical_owners,
+            view.in_flight_effects
+        ),
+        (1, 2, 3)
+    );
+    assert!(parse(drain_packet())
+        .into_command_receipt(&command())
+        .is_err());
+    assert!(parse(drain_packet()).into_lease().is_err());
+    for version in [1, 2, 3, 4] {
+        let mut value = drain_packet();
+        value["controlVersion"] = version.into();
+        assert!(parse(value).into_drain_observation().is_err());
+    }
+    for (pointer, replacement) in [
+        ("/result/observation/schemaVersion", json!(2)),
+        (
+            "/result/observation/context/journalIncarnation",
+            json!("other"),
+        ),
+        ("/result/observation/workerGeneration", json!("other")),
+        ("/result/observation/lease/spec/updateId", json!("other")),
+        ("/result/observation/queueRevision", json!("04")),
+        ("/result/observation/observedAtMs", json!(0)),
+        ("/result/observation/acceptedOperations", json!(u64::MAX)),
+    ] {
+        let mut value = drain_packet();
+        *value.pointer_mut(pointer).unwrap() = replacement;
+        assert!(parse(value).into_drain_observation().is_err(), "{pointer}");
+    }
+    let mut value = drain_packet();
+    value["result"]["observation"]["quiescenceConfirmed"] = true.into();
+    assert!(serde_json::from_value::<WorkerUpdateControlResponse>(value).is_err());
+}
 #[test]
 fn exact_receipt_and_missing_receipt_have_explicit_v4_semantics() {
     let r = parse(packet())

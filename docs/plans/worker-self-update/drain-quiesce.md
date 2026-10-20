@@ -23,6 +23,21 @@ directories, не меняет lease, slots или startup guard. Поэтому
 остаётся читаемой после Release и после переноса старой папки исходников. Это
 историческое доказательство; оно не даёт новое разрешение на запись в файлы.
 
+Внутренний supervisor v12 / worker control v5 подготавливает наблюдение причин
+ожидания: matching lease, число принятых операций и logical owners, conservative
+in-flight counters, revision/mode пользовательской очереди. Lease/DB counters и
+queue mode читаются одним SQLite snapshot; counters registry — отдельное короткое
+наблюдение под process-registry lock. Чтение не меняет паузу или lease и не начинает
+drain. В DTO намеренно нет physical-owner counts или quiescence approval: нули
+не заменяют authenticated ConfirmQuiesced receipt после dispatch closure/OS scan.
+Legacy versions не получают эту форму через fallback. Journal schema остаётся10.
+Local real-IPC/paused-queue и protocol regressions прошли; native v12/v5 ещё
+требуется. Текущий combined health run2feb/5a не содержит этот более новый контракт.
+При ошибке чтения показывать unknown/stale с прежним timestamp, а не новые нули.
+Фоновая automatic output cleanup уже исключена активной lease под Store lock;
+эта гарантия нужна, чтобы после завершения принятой очереди не появлялись новые
+maintenance effects перед CloseDispatch.
+
 ## Что уже есть
 
 Worker schema 15 хранит SourceHeld → Draining → Quiescing → Quiesced и отдельный

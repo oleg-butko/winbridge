@@ -82,6 +82,20 @@ fn active(c: &Connection) -> Result<Option<WorkerUpdateLease>> {
         .map_err(sql)?;
     id.map(|id| read(c, &id)).transpose()
 }
+fn optional(c: &Connection, id: &str) -> Result<Option<WorkerUpdateLease>> {
+    let exists: bool = c
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM worker_update_leases WHERE id=?1)",
+            [id],
+            |r| r.get(0),
+        )
+        .map_err(sql)?;
+    if exists {
+        read(c, id).map(Some)
+    } else {
+        Ok(None)
+    }
+}
 fn frozen(phase: WorkerUpdatePhase) -> bool {
     matches!(
         phase,
@@ -221,18 +235,36 @@ impl Store {
     /// Saved state only; no filesystem scan, lease acquisition or marker cleanup.
     pub(crate) fn worker_update_observation(&self, id: &str) -> Result<Option<WorkerUpdateLease>> {
         self.guard_callback(None, None)?;
-        let exists: bool = self
-            .connection
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM worker_update_leases WHERE id=?1)",
-                [id],
-                |r| r.get(0),
-            )
-            .map_err(sql)?;
-        if !exists {
-            return Ok(None);
-        }
-        read(&self.connection, id).map(Some)
+        optional(&self.connection, id)
+    }
+    /// Logical state/queue mode/lease share one read snapshot. The caller's
+    /// registry counters are conservative observations, never physical proof.
+    pub(crate) fn worker_drain_observation(
+        &self,
+        id: &str,
+        context: winbridge_protocol::RequestContext,
+        generation: &str,
+        in_flight_effects: u64,
+    ) -> Result<WorkerDrainObservation> {
+        self.guard_callback(None, None)?;
+        let tx = self.connection.unchecked_transaction().map_err(sql)?;
+        let lease = optional(&tx, id)?;
+        let blockers = Self::update_blockers_on(&tx, None)?;
+        let (revision, mode, _, _) = super::queue_control::state(&tx)?;
+        let view = WorkerDrainObservation {
+            schema_version: 1,
+            context,
+            worker_generation: generation.into(),
+            lease: lease.map(Box::new),
+            accepted_operations: blockers.accepted_operations,
+            logical_owners: blockers.logical_owners,
+            in_flight_effects,
+            queue_revision: revision.to_string(),
+            queue_mode: mode,
+            observed_at_ms: now_ms(),
+        };
+        tx.commit().map_err(sql)?;
+        Ok(view)
     }
     pub(crate) fn begin_worker_update(
         &mut self,

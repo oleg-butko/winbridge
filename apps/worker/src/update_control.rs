@@ -310,6 +310,7 @@ impl Worker {
             ) | (2, WorkerUpdateControlCommand::ObserveRuntime)
                 | (3, WorkerUpdateControlCommand::ObserveCompatibility)
                 | (4, WorkerUpdateControlCommand::ObserveReceipt { .. })
+                | (5, WorkerUpdateControlCommand::ObserveDrain)
         );
         if !version_matches
             || request.binding != reg.binding
@@ -360,6 +361,37 @@ impl Worker {
         request: &WorkerUpdateControlRequest,
         peer: u32,
     ) -> Result<WorkerUpdateControlResult> {
+        if request.command == WorkerUpdateControlCommand::ObserveDrain {
+            if request.binding.context != self.request_context()? {
+                return Err("Worker journal context changed; no drain observation rebind".into());
+            }
+            let update = self.control_authority(reg, request, peer)?;
+            let active = self
+                .active_projects
+                .lock()
+                .map_err(|_| "Process registry lock poisoned")?;
+            let checks = self
+                .checks
+                .lock()
+                .map_err(|_| "Readiness check lock poisoned")?
+                .len() as u64;
+            let in_flight = self.active_jobs.load(Ordering::Acquire) as u64
+                + active.len() as u64
+                + checks
+                + u64::from(self.maintenance_running.load(Ordering::Acquire));
+            let view = self.store()?.worker_drain_observation(
+                &update.update_id,
+                reg.binding.context.clone(),
+                &self.generation,
+                in_flight,
+            )?;
+            if let Some(lease) = &view.lease {
+                require_saved_spec(reg, request, &update, &lease.spec)?;
+            }
+            return Ok(WorkerUpdateControlResult::DrainObservation {
+                observation: Box::new(view),
+            });
+        }
         if let WorkerUpdateControlCommand::ObserveReceipt { command } = &request.command {
             if request.binding.context != self.request_context()? {
                 return Err("Worker journal context changed; no receipt rebind".into());
@@ -368,18 +400,7 @@ impl Worker {
             let store = self.store()?;
             let receipt = if let Some(lease) = store.worker_update_observation(&update.update_id)? {
                 let spec = &lease.spec;
-                if spec.instance_id != reg.binding.context.instance_id
-                    || spec.journal_incarnation != reg.binding.context.journal_incarnation
-                    || spec.worker_generation != reg.binding.generation
-                    || spec.updater_owner_id != request.updater_owner_id
-                    || spec.updater_epoch != request.updater_epoch
-                    || std::path::Path::new(&spec.source_directory) != reg.source
-                    || spec.baseline_manifest_sha256
-                        != update.request.expected.baseline_manifest_sha256
-                    || spec.target_manifest_sha256 != update.request.source.manifest_sha256
-                {
-                    return Err("Saved worker command belongs to another source/scope/owner".into());
-                }
+                require_saved_spec(reg, request, &update, spec)?;
                 store.worker_update_receipt(spec, command)?
             } else {
                 None
@@ -494,7 +515,8 @@ impl Worker {
             WorkerUpdateControlCommand::Observe => self.store()?.existing_worker_update(&spec),
             WorkerUpdateControlCommand::ObserveRuntime
             | WorkerUpdateControlCommand::ObserveCompatibility
-            | WorkerUpdateControlCommand::ObserveReceipt { .. } => {
+            | WorkerUpdateControlCommand::ObserveReceipt { .. }
+            | WorkerUpdateControlCommand::ObserveDrain => {
                 Err("Runtime observation is not a lease request".into())
             }
             WorkerUpdateControlCommand::BeginSource => {
@@ -537,6 +559,25 @@ impl Worker {
     }
 }
 
+fn require_saved_spec(
+    reg: &Registration,
+    request: &WorkerUpdateControlRequest,
+    update: &UpdateRecord,
+    spec: &WorkerUpdateSpec,
+) -> Result<()> {
+    if spec.instance_id != reg.binding.context.instance_id
+        || spec.journal_incarnation != reg.binding.context.journal_incarnation
+        || spec.worker_generation != reg.binding.generation
+        || spec.updater_owner_id != request.updater_owner_id
+        || spec.updater_epoch != request.updater_epoch
+        || std::path::Path::new(&spec.source_directory) != reg.source
+        || spec.baseline_manifest_sha256 != update.request.expected.baseline_manifest_sha256
+        || spec.target_manifest_sha256 != update.request.source.manifest_sha256
+    {
+        return Err("Saved worker command belongs to another source/scope/owner".into());
+    }
+    Ok(())
+}
 fn require_abort_proof(
     reg: &Registration,
     request: &WorkerUpdateControlRequest,
@@ -666,6 +707,7 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 2 => 2,
                 3 => 3,
                 4 => 4,
+                5 => 5,
                 _ => 1,
             };
             struct Callback(Arc<Registration>);
@@ -1207,6 +1249,160 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
     fn lease(r: WorkerUpdateControlResponse) -> WorkerUpdateLease {
         r.into_lease().unwrap().expect("Lease receipt")
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn drain_observation_preserves_user_pause_and_reports_accepted_work_without_effects() {
+        let mut f = Fixture::new(None).await;
+        let context = f.worker.request_context().unwrap();
+        let paused = f
+            .worker
+            .store()
+            .unwrap()
+            .queue_control(
+                context.clone(),
+                QueueControlCommand::Set {
+                    command_id: "user-pause".into(),
+                    expected_revision: "0".into(),
+                    mode: QueueMode::DispatchPaused,
+                },
+            )
+            .unwrap();
+        assert!(matches!(paused, QueueControlResult::Applied { .. }));
+        let LocalResponse::Task { task } = f.worker.handle(LocalRequest::Submit {
+            request: TaskSubmission {
+                protocol_version: 1,
+                request_id: "paused-work".into(),
+                idempotency_key: "paused-work".into(),
+                project_id: "other".into(),
+                timeout_ms: 5000,
+                snapshot_id: None,
+                command: CommandSource::Direct {
+                    executable: "never-executed-paused-fixture".into(),
+                    arguments: vec![],
+                    working_directory: ".".into(),
+                },
+            },
+        }) else {
+            panic!("Accepted paused task expected")
+        };
+        assert_eq!(task.status, TaskStatus::Queued);
+        f.launch().await;
+        let reg = f.worker.control_registration().unwrap();
+        let id = f.supervisor.as_ref().unwrap().record.spec.update_id.clone();
+        let before = UpdateJournal::read_snapshot(&reg.directory, Some(&id)).unwrap();
+        let v = f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_drain_observation()
+            .await
+            .unwrap();
+        assert_eq!(v.context, context);
+        assert!(v.lease.is_none());
+        assert_eq!(
+            (v.accepted_operations, v.logical_owners, v.in_flight_effects),
+            (1, 0, 0)
+        );
+        assert_eq!(v.queue_mode, QueueMode::DispatchPaused);
+        assert_eq!(v.queue_revision, "1");
+        assert_eq!(
+            UpdateJournal::read_snapshot(&reg.directory, Some(&id)).unwrap(),
+            before
+        );
+        assert_eq!(f.slots(), 0);
+        assert!(!f
+            .worker
+            .config
+            .state_directory
+            .join(crate::UPDATE_STARTUP_GUARD)
+            .exists());
+        lease(f.control(WorkerUpdateControlCommand::BeginSource).await);
+        let held = lease(
+            f.advance("source", 0, WorkerUpdateAction::AcquireSource)
+                .await,
+        );
+        let v = f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_drain_observation()
+            .await
+            .unwrap();
+        assert_eq!(v.lease.as_deref(), Some(&held));
+        assert_eq!(v.accepted_operations, 1);
+        assert_eq!(v.queue_mode, QueueMode::DispatchPaused);
+        assert_eq!(f.slots(), 1);
+        let h = &f.supervisor.as_ref().unwrap().record;
+        let mut q = WorkerUpdateControlRequest {
+            control_version: 5,
+            binding: reg.binding.clone(),
+            update_id: id.clone(),
+            launch_id: h.spec.launch_id.clone(),
+            supervisor: h.process.clone().unwrap(),
+            updater_owner_id: h.owner_id.clone().unwrap(),
+            updater_epoch: h.owner_epoch.unwrap(),
+            command: WorkerUpdateControlCommand::ObserveDrain,
+        };
+        for version in [1, 2, 3, 4] {
+            q.control_version = version;
+            assert!(f
+                .worker
+                .control_result(&reg, &q, q.supervisor.process_id)
+                .is_err());
+        }
+        q.control_version = 5;
+        q.command = WorkerUpdateControlCommand::Advance {
+            command: WorkerUpdateCommand {
+                command_id: "forbidden-status-mutation".into(),
+                expected_revision: 1,
+                action: WorkerUpdateAction::Release,
+                source_manifest_sha256: Some(f.baseline.clone()),
+                reason: "Must not execute through a readonly contract".into(),
+            },
+        };
+        assert!(f
+            .worker
+            .control_result(&reg, &q, q.supervisor.process_id)
+            .is_err());
+        assert_eq!(
+            f.worker.store().unwrap().active_worker_update().unwrap(),
+            Some(held)
+        );
+        assert!(f
+            .supervisor
+            .as_mut()
+            .unwrap()
+            .worker_control(WorkerUpdateControlCommand::ObserveDrain)
+            .await
+            .is_err());
+        // An explicit user cancellation here is fixture cleanup, not updater policy.
+        f.worker.handle(LocalRequest::Cancel {
+            task_id: task.task_id.clone(),
+        });
+        let v = f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_drain_observation()
+            .await
+            .unwrap();
+        assert_eq!(v.accepted_operations, 0);
+        assert_eq!(v.queue_mode, QueueMode::DispatchPaused);
+        assert_eq!(v.queue_revision, "1");
+        assert_eq!(f.slots(), 1);
+        let released = lease(f.advance("release", 1, WorkerUpdateAction::Release).await);
+        let v = f
+            .supervisor
+            .as_ref()
+            .unwrap()
+            .worker_drain_observation()
+            .await
+            .unwrap();
+        assert_eq!(v.lease.as_deref(), Some(&released));
+        assert_eq!(v.queue_mode, QueueMode::DispatchPaused);
+        assert_eq!(v.queue_revision, "1");
+        assert_eq!(f.slots(), 0);
+        f.stop().await;
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn command_receipt_lookup_is_readonly_exact_and_never_falls_back() {

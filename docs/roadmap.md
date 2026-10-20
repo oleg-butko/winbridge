@@ -378,3 +378,8 @@ parent proof; SQLite regression проверяет rollback чужих bindings.
 исправило compiler-slot deadlock при Draining/capacity1. Local549 tests/doctests
 и Linux/Windows Clippy passed; объединённый native повтор всех новых проверок
 и четырёх health actor cases ещё требуется. U1 остаётся открытым.
+
+Supervisor v12 / worker control v5 подготавливает logical drain observation с
+queue pause/revision и coherent DB snapshot. Local551 tests/doctests, Clippy и UI
+checks passed; native v12/v5 ещё требуется. Нулевые счётчики не подтверждают
+physical quiescence. Durable drain driver и exact shutdown остаются впереди.

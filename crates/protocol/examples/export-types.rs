@@ -37,6 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         WorkerUpdateAction::decl(&config),
         WorkerUpdateCommand::decl(&config),
         WorkerUpdateBlockers::decl(&config),
+        WorkerDrainObservation::decl(&config),
         UpdateBuildSpec::decl(&config),
         UpdateBuildPhase::decl(&config),
         UpdateBuildOutcome::decl(&config),

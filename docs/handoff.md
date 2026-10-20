@@ -1,3 +1,34 @@
+## U1: logical drain observation prepared; combined health gate RUNNING — 2026-10-20
+
+New internal supervisor v12 / worker control v5 reads drain blockers/user queue
+mode without changing state. Lease/accepted/logical-owner/queue counters share one
+SQLite snapshot; conservative registry counts are a separate short observation.
+There are NO physical-owner counts or approval flags: even zeros cannot replace
+a matching ConfirmQuiesced receipt. Context/generation/owner/epoch/counter bindings
+are validated; legacy versions/forwarding and v5 mutation packets are rejected.
+No journal-schema change (still10), no public update or drain driver enabled.
+
+Local551 tests/doctests, Linux/Windows all-target Clippy, UI typecheck/build,
+generated contracts and scaffold217 passed. Real supervisor/worker IPC fixture
+keeps a task queued under user DispatchPaused, observes it before/after source
+lease/release, proves root/slots/guard and pause unchanged by reads. Added negative
+version/mutation assertions passed in a focused rerun and final Windows Clippy.
+Native v12/v5 is still REQUIRED and not covered
+by the frozen2feb/5a archive in the live task below. Include it in the upcoming
+drain coordination gate, not a new concurrent installed-worker task.
+
+Code review verified automatic_output_cleanup already checks active update lease
+under Store before setting its in-flight flag; no extra background cleanup starts
+while the source/drain lease is active. Keep that exclusion and user pause.
+Next: durable drain intent/command receipts/CAS + single owner driver, then exact
+shutdown. Do not confuse these readonly preparations with completed U1 or install.
+
+Live Task7b42694b-5c0b-4121-a7d4-716c3599b2fa passed first2 actor cases; third
+operation5316ca3b-153b-4693-9318-1013281ea2e1 was Building at last poll. Read
+.winbridge/update-preparation/poll-health-atomic.py, do not resubmit. Installed
+d052 stays; desktop not needed. Confirm all4/proof/ready and fresh Info before
+closing health gate. New schema11 will require new matching candidate exports.
+
 ## U1: combined atomic-health/receipt/capacity Windows gate RUNNING — 2026-10-20
 
 Accepted Task7b42694b-5c0b-4121-a7d4-716c3599b2fa / run20261020-164339-83d2a1d6,

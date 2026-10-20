@@ -440,6 +440,21 @@ impl SupervisorHandle {
         }
         Ok(receipt)
     }
+    /// Logical blockers/user pause only. Even all-zero counters are NOT an OS
+    /// quiescence proof and never replace the ConfirmQuiesced command receipt.
+    pub async fn worker_drain_observation(&self) -> Result<WorkerDrainObservation> {
+        let view = self
+            .worker_observation(12, SupervisorAction::ObserveWorkerDrain, None)
+            .await?
+            .into_drain_observation()?;
+        if view.lease.as_ref().is_some_and(|r| {
+            Some(&r.spec.updater_owner_id) != self.record.owner_id.as_ref()
+                || Some(r.spec.updater_epoch) != self.record.owner_epoch
+        }) {
+            return Err("Drain observation belongs to another owner/epoch".into());
+        }
+        Ok(view)
+    }
     async fn worker_observation(
         &self,
         version: u16,
@@ -909,6 +924,7 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveWorkerRuntime
                 | SupervisorAction::ObserveWorkerCompatibility
                 | SupervisorAction::ObserveWorkerReceipt
+                | SupervisorAction::ObserveWorkerDrain
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -974,6 +990,7 @@ pub(crate) async fn forward_worker(
             WorkerUpdateControlCommand::ObserveRuntime => 2,
             WorkerUpdateControlCommand::ObserveCompatibility => 3,
             WorkerUpdateControlCommand::ObserveReceipt { .. } => 4,
+            WorkerUpdateControlCommand::ObserveDrain => 5,
             _ => 1,
         },
         binding: binding.clone(),
@@ -1427,10 +1444,12 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             SupervisorAction::ObserveWorkerRuntime
                 | SupervisorAction::ObserveWorkerCompatibility
                 | SupervisorAction::ObserveWorkerReceipt
+                | SupervisorAction::ObserveWorkerDrain
         ) {
             let required_version = match request.action {
                 SupervisorAction::ObserveWorkerCompatibility => 9,
                 SupervisorAction::ObserveWorkerReceipt => 11,
+                SupervisorAction::ObserveWorkerDrain => 12,
                 _ => 6,
             };
             let command = match required_version {
@@ -1439,6 +1458,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     .clone()
                     .filter(|c| matches!(c, WorkerUpdateControlCommand::ObserveReceipt { .. })),
                 9 => Some(WorkerUpdateControlCommand::ObserveCompatibility),
+                12 => Some(WorkerUpdateControlCommand::ObserveDrain),
                 _ => Some(WorkerUpdateControlCommand::ObserveRuntime),
             };
             let version = if request.contract_version == required_version {
@@ -1896,8 +1916,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     return Ok(None);
                 }
                 let command = request.worker_command.clone().ok_or("Worker command missing")?;
-                if matches!(command,WorkerUpdateControlCommand::ObserveRuntime | WorkerUpdateControlCommand::ObserveCompatibility | WorkerUpdateControlCommand::ObserveReceipt { .. }) {
-                    return Err("Runtime/receipt observation requires supervisor v6/v9/v11, not v1 worker-control forwarding".into());
+                if matches!(command,WorkerUpdateControlCommand::ObserveRuntime | WorkerUpdateControlCommand::ObserveCompatibility | WorkerUpdateControlCommand::ObserveReceipt { .. } | WorkerUpdateControlCommand::ObserveDrain) {
+                    return Err("Readonly worker observation requires supervisor v6/v9/v11/v12, not v1 worker-control forwarding".into());
                 }
                 forward_worker(&r, command).await.map(Some)
             }.await;
@@ -1956,7 +1976,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
