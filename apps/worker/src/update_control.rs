@@ -1136,7 +1136,36 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
                 .worker
                 .launch_supervisor_inner(&self.request, true)
                 .await
-                .unwrap()
+                .unwrap_or_else(|message| {
+                    use std::io::Read;
+                    // TempDir teardown removes these files after a panic. Keep
+                    // the bounded startup error in the exported test log first.
+                    let diagnostic = self
+                        .worker
+                        .control_registration()
+                        .ok()
+                        .and_then(|r| UpdateJournal::read_snapshot(&r.directory, None).ok())
+                        .and_then(|(_, update)| update)
+                        .and_then(|r| {
+                            self.config.parent().map(|runtime| {
+                                runtime
+                                    .join("update")
+                                    .join(r.update_id)
+                                    .join("supervisor/stderr.log")
+                            })
+                        })
+                        .and_then(|p| {
+                            let mut bytes = Vec::new();
+                            fs::File::open(p)
+                                .ok()?
+                                .take(4096)
+                                .read_to_end(&mut bytes)
+                                .ok()?;
+                            Some(String::from_utf8_lossy(&bytes).into_owned())
+                        })
+                        .unwrap_or_else(|| "Supervisor stderr unavailable".into());
+                    panic!("{message}; supervisor startup stderr: {diagnostic}");
+                })
             else {
                 panic!("New fixture launch")
             };

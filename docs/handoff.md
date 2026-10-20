@@ -1,3 +1,29 @@
+## Drain native repeat ACTIVE; do not resubmit — 2026-10-20
+
+Task e1b80adb-f970-44a7-a476-d44ecdd230dc / run20261020-221336-fd675b77 is active.
+Runner session22666; log .winbridge/update-preparation/drain-native-retry.log.
+Source A627ccaed38eaec47cbedb0caa7f8e850f0d0bf19:
+winbridge-20261020T221320Z-627ccae-a192ab68.zip,
+archiveSHA ba1cc666e7c49e7190a886cccd78c4a6cf613d756406bf74830d4c9e86e1d036,
+manifestSHA 860f4f5b10fb5cda91e1ffd912e4d98d480360a5fe934d00ff47b40e6f5d24b1.
+Target C3b738c9f49c980b922b55b36f687a05bc8bbb3d3:
+winbridge-20261020T221051Z-3b738c9-e2020e80.zip,
+archiveSHA 78170c4a6f5dfb6c70dd37ee4da026504e8a528282a96d45100f8b68e8e151b9,
+manifestSHA 92a75d09439955fe2595c6198337bfe4f162ad68714311924d6007931b82c5a7.
+Both updater11; original cache20261017-061527-f4639971. Full source pin file:
+.winbridge/update-preparation/drain-native-pins.json.
+
+New build-first order works: ten journal tests, native v13 negative admission and
+v12 paused-queue observation passed. More groups/full four-case actor pipeline
+remain; do not mark the entire gate passed. Installed worker d052 unchanged; only
+it must stay running, desktop unnecessary, no GUI windows. First failure below
+is an isolated script-order problem, not unexpected installed-worker behavior.
+
+Review also preserves bounded supervisor startup stderr in fixture panic output,
+before TempDir removes the diagnostic file. This test-only diagnostic change is
+not in the running A archive; successful effect paths unchanged. Linux worker/test
+Clippy passed; no new runtime behavior or retry was added.
+
 ## Drain gate bootstrap order fixed; repeat required — 2026-10-20
 
 First native run20261020-221109-4e29c797/task e0864496-78ae-4ae2-9bca-38504cbc2044
