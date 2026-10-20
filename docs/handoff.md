@@ -1,3 +1,20 @@
+## Post-archive review: no optimistic aborted status — 2026-10-20
+
+Read-only drain projection now labels aborted ONLY for root FailedBeforeCutover
+plus same-snapshot validated Abort Completed/Released evidence. Aborting/Deferred
+or failed root without release stays indeterminate; retained Quiesced does not
+prove release. Wire v13/view5 shape/enums unchanged. 72 updater lib tests, pure
+valid-receipt regression and Linux/Windows all-target Clippy passed. This projection
+fix is NOT in running native A28; effects/driver unchanged, final completed-abort
+projection is compatible. Logs drain-abort-view-*.
+
+Native task e73c941f/run20261020-223955-44db4bea still active (runner3520).
+Structured progress has verified/lost-drain-ack/cancel-drain completed; fourth
+case now preparing. Do not resubmit or mark full gate done yet. Installed runtime
+unchanged; desktop unnecessary, worker stays running. Next after gate: retain
+proven schema15 worker AND schema11 updater before cache overwrite, then implement
+exact shutdown as planned. U1–U4 remain open.
+
 ## Drain corrected native run ACTIVE; do not resubmit — 2026-10-20
 
 Task e73c941f-42f4-47af-af7f-ba0615b027e0 / run20261020-223955-44db4bea.

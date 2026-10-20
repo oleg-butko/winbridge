@@ -242,3 +242,15 @@ source grant/preparation/build/health/drain остаются; source plan мож
 production SourceControl и не снятие source fence. Каждая завершённая case теперь
 сохраняется отдельно в progress JSON с passed=false, чтобы следующий fault не
 уничтожал все предыдущие structured results; окончательный proof остаётся отдельным.
+
+## Статус отмены: подтверждение освобождения
+
+Root Aborting, Deferred или FailedBeforeCutover сами по себе не подтверждают
+освобождение worker lease. CandidateDrainView показывает aborted только при
+FailedBeforeCutover и проверенной Abort Completed с matching Released receipt,
+прочитанной вместе с root одним SQLite snapshot. До этого исход indeterminate;
+верхний root сохраняет точную причину/фазу отмены. Старый Quiesced receipt тоже
+не превращается в доказательство release. Формат v13/view5 и набор enum не меняются.
+Регрессия использует согласованные typed command receipts и проверяет этот случай;
+72 updater tests и обе all-target Clippy проверки прошли. Это более поздняя pure
+projection правка, отсутствующая в native A28; effect paths этого gate не изменены.

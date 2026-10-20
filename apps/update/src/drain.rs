@@ -83,7 +83,12 @@ pub enum DrainIssue {
     Observed(Box<DrainCommandRecord>),
 }
 
-pub(crate) fn view(saved: &DrainSnapshot, root: UpdatePhase, active: bool) -> CandidateDrainView {
+pub(crate) fn view(
+    saved: &DrainSnapshot,
+    root: UpdatePhase,
+    active: bool,
+    released_after_abort: bool,
+) -> CandidateDrainView {
     let confirmed = saved
         .commands
         .iter()
@@ -95,7 +100,13 @@ pub(crate) fn view(saved: &DrainSnapshot, root: UpdatePhase, active: bool) -> Ca
         root,
         UpdatePhase::Aborting | UpdatePhase::FailedBeforeCutover | UpdatePhase::Deferred
     ) {
-        CandidateDrainPhase::Aborted
+        if root == UpdatePhase::FailedBeforeCutover && released_after_abort {
+            CandidateDrainPhase::Aborted
+        } else {
+            // Root Aborting/Deferred alone proves neither callback retirement
+            // nor owned lease release. Keep the unresolved outcome explicit.
+            CandidateDrainPhase::Indeterminate
+        }
     } else if saved.quiesced_revision.is_some() {
         CandidateDrainPhase::Quiesced
     } else if !active
@@ -400,6 +411,43 @@ fn validate_receipt(intent: &DrainIntent, ordinal: u8, receipt: &WorkerUpdateLea
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cancellation_intent_and_old_quiescence_never_imply_completed_release() {
+        let (intent, lease) = fixture();
+        let commands = (0..3)
+            .map(|n| {
+                DrainCommandRecord::prepare(&intent, n)
+                    .unwrap()
+                    .issue(&intent, 101)
+                    .unwrap()
+                    .confirm(&intent, 102, receipt(&intent, &lease, n as usize))
+                    .unwrap()
+            })
+            .collect();
+        let saved = DrainSnapshot {
+            intent: Some(intent),
+            commands,
+            quiesced_revision: Some(12),
+        };
+        for phase in [
+            UpdatePhase::Aborting,
+            UpdatePhase::Deferred,
+            UpdatePhase::FailedBeforeCutover,
+        ] {
+            assert_eq!(
+                view(&saved, phase, true, false).phase,
+                CandidateDrainPhase::Indeterminate
+            );
+        }
+        assert_eq!(
+            view(&saved, UpdatePhase::Aborting, true, true).phase,
+            CandidateDrainPhase::Indeterminate
+        );
+        assert_eq!(
+            view(&saved, UpdatePhase::FailedBeforeCutover, false, true).phase,
+            CandidateDrainPhase::Aborted
+        );
+    }
     pub(super) fn fixture() -> (DrainIntent, WorkerUpdateLease) {
         let binding = DrainBinding {
             update_id: uuid::Uuid::new_v4().to_string(),

@@ -142,6 +142,18 @@ fn proof_preserved(old: &AbortRecord, next: &AbortRecord) -> bool {
 fn read(c: &Connection, id: &str) -> Result<AbortRecord> {
     read_with_interleave(c, id, || {})
 }
+/// Projection evidence only, read inside the caller's parent/receipt snapshot.
+pub(super) fn released_after_abort(c: &Connection, id: &str) -> Result<bool> {
+    match read(c, id) {
+        Ok(r) => Ok(r.phase == AbortPhase::Completed
+            && r.cleanup_verified
+            && r.worker_released
+                .as_ref()
+                .is_some_and(|l| l.phase == WorkerUpdatePhase::Released)),
+        Err(e) if e.code == JournalErrorCode::NotFound => Ok(false),
+        Err(e) => Err(e),
+    }
+}
 fn read_with_interleave(
     c: &Connection,
     id: &str,

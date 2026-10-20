@@ -192,10 +192,19 @@ impl UpdateJournal {
             Err(e) => return Err(e),
         };
         let candidate_drain = if view_schema >= 5 {
+            let released = if matches!(
+                update.phase,
+                UpdatePhase::Aborting | UpdatePhase::Deferred | UpdatePhase::FailedBeforeCutover
+            ) {
+                super::abort::released_after_abort(&tx, id)?
+            } else {
+                false
+            };
             Some(crate::drain::view(
                 &super::drain::read(&tx, id)?,
                 update.phase,
                 driver_active,
+                released,
             ))
         } else {
             None
