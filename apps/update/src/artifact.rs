@@ -130,13 +130,17 @@ pub(crate) fn pin(path: &Path) -> Result<Pinned> {
             return Err("Artifact grew beyond the byte limit".into());
         }
         digest.update(&buffer[..n]);
-        tail.extend_from_slice(&buffer[..n]);
-        supported |= tail
-            .windows(ARTIFACT_QUERY_MARKER.len())
-            .any(|w| w == ARTIFACT_QUERY_MARKER);
-        let retain = ARTIFACT_QUERY_MARKER.len() - 1;
-        if tail.len() > retain {
-            tail.drain(..tail.len() - retain);
+        // The digest still covers every byte. Marker presence, once known,
+        // does not need another sliding-window scan of a large debug image.
+        if !supported {
+            tail.extend_from_slice(&buffer[..n]);
+            supported = tail
+                .windows(ARTIFACT_QUERY_MARKER.len())
+                .any(|w| w == ARTIFACT_QUERY_MARKER);
+            let retain = ARTIFACT_QUERY_MARKER.len() - 1;
+            if tail.len() > retain {
+                tail.drain(..tail.len() - retain);
+            }
         }
     }
     winbridge_platform::require_safe_path(&path).map_err(error)?;
@@ -504,9 +508,10 @@ pub(crate) fn run_probe_observed(
     Ok((stdout, stderr, process))
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     #[test]
     fn same_bytes_at_a_replaced_path_never_rebind_the_pinned_image() {
         let root = tempfile::tempdir().unwrap();
@@ -529,6 +534,31 @@ mod tests {
             edited.evidence.file_identity
         );
         assert!(!same_image(&replaced.evidence, &edited.evidence));
+    }
+    #[test]
+    fn marker_detection_never_shortcuts_suffix_hash_and_spans_read_boundaries() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("image");
+        for offset in [0, 65536 - ARTIFACT_QUERY_MARKER.len() / 2, 2 * 65536 + 17] {
+            let mut bytes = vec![0x5a; 512 * 1024];
+            bytes[offset..offset + ARTIFACT_QUERY_MARKER.len()]
+                .copy_from_slice(ARTIFACT_QUERY_MARKER);
+            std::fs::write(&path, &bytes).unwrap();
+            let before = inspect_image(&path).unwrap();
+            assert!(before.query_supported);
+            assert_eq!(before.bytes, bytes.len() as u64);
+            assert_eq!(before.sha256, crate::sha256(&bytes));
+            // The pin was released. A change after an early marker must still
+            // change the observed SHA; finding a capability never trusts a tail.
+            *bytes.last_mut().unwrap() ^= 1;
+            std::fs::write(&path, &bytes).unwrap();
+            let after = inspect_image(&path).unwrap();
+            assert!(after.query_supported);
+            assert_ne!(after.sha256, before.sha256);
+            assert_eq!(after.sha256, crate::sha256(&bytes));
+        }
+        std::fs::write(&path, vec![0x5a; 128 * 1024]).unwrap();
+        assert!(!inspect_image(&path).unwrap().query_supported);
     }
 }
 
