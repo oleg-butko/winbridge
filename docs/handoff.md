@@ -1,3 +1,39 @@
+## U1: full health actor gate prepared, local checks passed — 2026-10-20
+
+Transition fix committed2aac5534290b6d29cb8e401dc44e59a03068318b.
+New full native fixture has FOUR operations: denied PID receipt/no resume,
+blocked pre-helper callback cancellation, request while actual rehearsal process
+is observed alive, and verified real config/rehearsal + atomic acceptance.
+Every operation ends with coordinated abort before cutover and confirmed release.
+No test backdoors added to product Main; control worker is an explicit copied
+test harness, old other-role descriptors synthetic. Candidate is a genuine build
+from a separate clean target archive. Detailed scope in candidate-health.md.
+
+542 workspace tests/doctests, Linux and Windows all-target Clippy, fmt, PowerShell
+syntax, Python admission tests and scaffold216 md passed. No Cargo process active.
+New scripts: validate-update-health-actor-native.py, test-update-health-actor.ps1,
+test-update-health-native-runner.py. They reuse the approved installed worker and
+original local test/candidate caches. Source ZIP is verified/copied before remote
+extraction; report.ready files and detailed proof are checked before success.
+Actor test prints current persisted root phase every5 seconds and drains both
+outputs after its retained diagnostic quota. No GUI/windows/installed replacement.
+
+Target C exported from a temporary clean Git worktree at2aac553 (worktree removed;
+no source/user files removed). ZIP:
+/mnt/hgfs/shared/WinBridge/sources/winbridge-20261020T094903Z-2aac553-c6d6a9da.zip
+SHA761d42bbb645873f8630a162ab708567ea2775b5a4e6a9f5e1fe4dfd5221d25f,
+manifestSHA48f13c3059b1a6115fdbc38e1da81b09c7f6121182259c69d7067c667783cfd3,
+604 files /4,913,224 bytes, clean/built UI. It contains the transition fix.
+Commit/export the fixture as source A, then run:
+python3 scripts/validate-update-health-actor-native.py --archive <new-clean-A.zip>
+ --target-archive <above-C.zip> --cache-run 20261017-061527-f4639971
+The source A and target C identities must stay distinct; never relabel metadata.
+
+Native actor result is NOT passed yet. After submission retain/poll exact Task ID;
+stop on installed-worker problems, ordinary fixture fixes/retries authorized.
+Last fresh installed d052 worker connected/idle0/healthy. Desktop unnecessary;
+leave worker running. Full U1–U4/public update remain incomplete; no bootstrap now.
+
 ## U1: native schema10 base passed; health transition review fix — 2026-10-20
 
 Run20261020-053153-bde36139 / Taske3a474d6-48a2-4460-bd6d-4d43d377a44a

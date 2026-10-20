@@ -74,3 +74,35 @@ receipt; нельзя выдавать такой fixture за production instal
 Локальная проверка этого блока: 541 workspace test/doctest, Linux и Windows
 all-target Clippy, generated TypeScript/check, fmt, UI typecheck/build и scaffold
 прошли. Это не утверждение о прохождении сквозного native v10 health gate.
+
+## Сквозной native сценарий
+
+`scripts/validate-update-health-actor-native.py` запускает через уже одобренный
+worker `test-update-health-actor.ps1` из нового чистого source archive A. Target
+archive C передаётся отдельно; его commit/manifest отличаются от A. Подготовленный
+C от `2aac553` включает исправление retained-transition validator. Это реальные
+Git-снимки: binary metadata не переименовываются и source SHA не подменяются.
+
+Тестовая копия worker A обслуживает private IPC, supervisor A проходит
+baseline/preimages/source/настоящую сборку C/artifacts/health. Private build adapter
+добавляет существующий параметр `ValidationCacheDirectory` к реальному PowerShell
+build script. Cargo caches переиспользуются; product policy и Main не получают
+специальных тестовых переключателей. Старый worker в этом fixture — скопированный
+test harness с явно синтетическими дескрипторами остальных старых ролей. Candidate
+C и оба его helper entry points настоящие. Активация/установка не выполняется.
+
+Четыре отдельные операции проверяют: отказ записи PID без resume, отмену при
+заблокированном v3 callback до helper, запрос отмены при наблюдаемом живом rehearsal
+и успешный config/rehearsal с atomic CandidateAccepted. После каждой операции
+coordinated abort освобождает только свой source lease и завершает supervisor;
+записи/ключи сохраняются, следующий operation ID новый. Старый runtime manifest
+сравнивается по bytes. При гонке отмены helper может завершиться самостоятельно;
+cleanup сохраняет фактический исход, успех установки из этого не выводится.
+
+Runner проверяет source ZIP до remote extraction (manifest hashes, extra entries,
+traversal, case collisions, symlinks), копирует/pin-ит ZIP локально, ждёт именно
+принятый Task ID и проверяет ready bytes/SHA и структуру native proof. Тайм-аут
+наблюдения не означает остановку task и не разрешает повтор submit. GUI не нужен;
+достаточно оставить установленный worker. В output каждые пять секунд появляется
+текущая фаза из настоящего updater journal. Пока native результат не получен,
+этот сценарий считается подготовленным, а не пройденным.

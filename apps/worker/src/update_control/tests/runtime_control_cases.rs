@@ -74,9 +74,15 @@ async fn runtime_identity_process_helper() {
             .canonicalize()
             .unwrap()
     );
-    let mut f =
-        Fixture::with_build_script_at(None, true, None, BUILD_ACTOR_SCRIPT, Some((root, binaries)))
-            .await;
+    let mut f = Fixture::with_build_script_at(
+        None,
+        true,
+        None,
+        BUILD_ACTOR_SCRIPT,
+        Some((root, binaries)),
+        None,
+    )
+    .await;
     f.launch().await;
     let reg = f.worker.control_registration().unwrap();
     let before = UpdateJournal::read_snapshot(

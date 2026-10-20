@@ -695,6 +695,8 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[path = "health_control_cases.rs"]
+    mod health;
     #[path = "runtime_control_cases.rs"]
     mod runtime;
     use std::{
@@ -765,6 +767,10 @@ $report=@{schemaVersion=1;kind='winbridge-update-candidate';status='built';runti
 [IO.File]::WriteAllText((Join-Path $StagingDirectory 'candidate-report.json'),($report | ConvertTo-Json -Depth 24))
 Write-Output 'Four fixture executables built and queried; no WinBridge runtime health claimed'
 "##;
+    struct TargetPackage {
+        archive: PathBuf,
+        pin: UpdateSourcePin,
+    }
     struct Fixture {
         worker: Arc<Worker>,
         server: tokio::task::JoinHandle<Result<()>>,
@@ -795,7 +801,7 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
             powershell: Option<PathBuf>,
             build_script: &str,
         ) -> Self {
-            Self::with_build_script_at(actual, enabled, powershell, build_script, None).await
+            Self::with_build_script_at(actual, enabled, powershell, build_script, None, None).await
         }
         async fn with_build_script_at(
             actual: Option<PathBuf>,
@@ -803,6 +809,7 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
             powershell: Option<PathBuf>,
             build_script: &str,
             pinned_location: Option<(PathBuf, PathBuf)>,
+            target_package: Option<TargetPackage>,
         ) -> Self {
             let owned_root = if pinned_location.is_some() {
                 None
@@ -874,59 +881,73 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
                 fs::create_dir(&packages).unwrap();
                 update_config["schemaVersion"] = serde_json::json!(2);
                 update_config["sourcePackagesDirectory"] = serde_json::json!(packages);
-                let next = b"[package]\nname='control-fixture-updated'\nversion='0.2.0'\n";
-                let mut files = vec![SourceFile {
-                    path: "Cargo.toml".into(),
-                    bytes: next.len() as u64,
-                    sha256: winbridge_update::sha256(next),
-                }];
-                if let Some(exe) = powershell {
+                if let Some(package) = target_package {
+                    let executable = powershell.expect("Explicit private build adapter required");
                     update_config["schemaVersion"] = serde_json::json!(3);
-                    update_config["build"] = serde_json::json!({"powershellExecutable":exe,"timeoutMs":if build_script==BUILD_ACTOR_SCRIPT {20000} else {60000}});
-                    files.push(SourceFile {
-                        path: "scripts/build-windows-update.ps1".into(),
-                        bytes: build_script.len() as u64,
-                        sha256: winbridge_update::sha256(build_script.as_bytes()),
-                    });
+                    update_config["build"] =
+                        serde_json::json!({"powershellExecutable":executable,"timeoutMs":300000});
+                    assert_eq!(
+                        winbridge_update::sha256(&fs::read(&package.archive).unwrap()),
+                        package.pin.archive_sha256
+                    );
+                    fs::copy(&package.archive, packages.join(&package.pin.archive_name)).unwrap();
+                    Some(package.pin)
+                } else {
+                    let next = b"[package]\nname='control-fixture-updated'\nversion='0.2.0'\n";
+                    let mut files = vec![SourceFile {
+                        path: "Cargo.toml".into(),
+                        bytes: next.len() as u64,
+                        sha256: winbridge_update::sha256(next),
+                    }];
+                    if let Some(exe) = powershell {
+                        update_config["schemaVersion"] = serde_json::json!(3);
+                        update_config["build"] = serde_json::json!({"powershellExecutable":exe,"timeoutMs":if build_script==BUILD_ACTOR_SCRIPT {20000} else {60000}});
+                        files.push(SourceFile {
+                            path: "scripts/build-windows-update.ps1".into(),
+                            bytes: build_script.len() as u64,
+                            sha256: winbridge_update::sha256(build_script.as_bytes()),
+                        });
+                    }
+                    let manifest = SourceManifest {
+                        schema_version: 1,
+                        source_commit: "b".repeat(40),
+                        dirty: false,
+                        created_at: "2026-10-18T00:00:00Z".into(),
+                        includes_built_ui: false,
+                        files,
+                    };
+                    let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
+                    let path = packages.join("fixture.zip");
+                    let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+                    for (name, bytes) in [
+                        ("Cargo.toml", next.as_slice()),
+                        ("winbridge-source-manifest.json", manifest_bytes.as_slice()),
+                    ] {
+                        zip.start_file(
+                            format!("winbridge/{name}"),
+                            zip::write::SimpleFileOptions::default(),
+                        )
+                        .unwrap();
+                        zip.write_all(bytes).unwrap();
+                    }
+                    if update_config["schemaVersion"] == 3 {
+                        zip.start_file(
+                            "winbridge/scripts/build-windows-update.ps1",
+                            zip::write::SimpleFileOptions::default(),
+                        )
+                        .unwrap();
+                        zip.write_all(build_script.as_bytes()).unwrap();
+                    }
+                    zip.finish().unwrap();
+                    Some(UpdateSourcePin {
+                        archive_name: "fixture.zip".into(),
+                        archive_sha256: winbridge_update::sha256(&fs::read(path).unwrap()),
+                        manifest_sha256: winbridge_update::sha256(&manifest_bytes),
+                        source_commit: manifest.source_commit,
+                    })
                 }
-                let manifest = SourceManifest {
-                    schema_version: 1,
-                    source_commit: "b".repeat(40),
-                    dirty: false,
-                    created_at: "2026-10-18T00:00:00Z".into(),
-                    includes_built_ui: false,
-                    files,
-                };
-                let manifest_bytes = serde_json::to_vec(&manifest).unwrap();
-                let path = packages.join("fixture.zip");
-                let mut zip = zip::ZipWriter::new(fs::File::create(&path).unwrap());
-                for (name, bytes) in [
-                    ("Cargo.toml", next.as_slice()),
-                    ("winbridge-source-manifest.json", manifest_bytes.as_slice()),
-                ] {
-                    zip.start_file(
-                        format!("winbridge/{name}"),
-                        zip::write::SimpleFileOptions::default(),
-                    )
-                    .unwrap();
-                    zip.write_all(bytes).unwrap();
-                }
-                if update_config["schemaVersion"] == 3 {
-                    zip.start_file(
-                        "winbridge/scripts/build-windows-update.ps1",
-                        zip::write::SimpleFileOptions::default(),
-                    )
-                    .unwrap();
-                    zip.write_all(build_script.as_bytes()).unwrap();
-                }
-                zip.finish().unwrap();
-                Some(UpdateSourcePin {
-                    archive_name: "fixture.zip".into(),
-                    archive_sha256: winbridge_update::sha256(&fs::read(path).unwrap()),
-                    manifest_sha256: winbridge_update::sha256(&manifest_bytes),
-                    source_commit: manifest.source_commit,
-                })
             } else {
+                assert!(target_package.is_none());
                 None
             };
             fs::write(&updater_config, serde_json::to_vec(&update_config).unwrap()).unwrap();

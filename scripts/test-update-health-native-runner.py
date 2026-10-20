@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Archive admission must reject mutations before remote extraction/execution."""
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import tempfile
+import unittest
+import zipfile
+
+spec=importlib.util.spec_from_file_location('health',Path(__file__).with_name('validate-update-health-actor-native.py'))
+health=importlib.util.module_from_spec(spec);spec.loader.exec_module(health)
+
+class ArchiveTests(unittest.TestCase):
+    def package(self,root,mutation=''):
+        path=root/'source.zip';content=b'fn main(){}'
+        manifest={'schemaVersion':1,'dirty':False,'includesBuiltUi':True,'sourceCommit':'a'*40,'files':[{'path':'src/main.rs','bytes':len(content),'sha256':hashlib.sha256(content).hexdigest()}]}
+        if mutation=='dirty':manifest['dirty']=True
+        with zipfile.ZipFile(path,'w') as z:
+            z.writestr('winbridge/winbridge-source-manifest.json',json.dumps(manifest))
+            z.writestr('winbridge/src/main.rs',b'corrupt' if mutation=='hash' else content)
+            if mutation=='extra':z.writestr('winbridge/unlisted',b'unsafe')
+            if mutation=='traversal':z.writestr('winbridge/../escape.ps1',b'unsafe')
+            if mutation=='case':z.writestr('WINBRIDGE/src/main.rs',content)
+            if mutation=='symlink':
+                e=zipfile.ZipInfo('winbridge/link');e.create_system=3;e.external_attr=(0o120777<<16);z.writestr(e,b'../../outside')
+        return path
+    def test_clean_package_keeps_exact_source_archive_and_manifest_hashes(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=self.package(Path(d));pin=health.archive_pin(p)
+            self.assertEqual(pin['archiveSha256'],hashlib.sha256(p.read_bytes()).hexdigest());self.assertEqual(pin['sourceCommit'],'a'*40)
+    def test_mutated_or_unsafe_zip_never_reaches_remote_execution(self):
+        for kind in ['dirty','hash','extra','traversal','case','symlink']:
+            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as d:
+                with self.assertRaises((ValueError,KeyError)):
+                    health.archive_pin(self.package(Path(d),kind))
+    def test_symlink_source_is_not_admitted_as_immutable_publication(self):
+        with tempfile.TemporaryDirectory() as d:
+            p=self.package(Path(d));link=Path(d)/'linked.zip';link.symlink_to(p)
+            with self.assertRaises(ValueError):health.archive_pin(link)
+
+if __name__=='__main__':unittest.main()
