@@ -2,8 +2,9 @@
 
 2026-10-20. Внутренняя реализация U1: updater schema 10, supervisor v10,
 preparation view schema 4. Public update, drain/shutdown, замена exe и bootstrap
-этим блоком не включаются. Полный сквозной native gate health-driver ещё требуется;
-отдельные DTO-тесты и standalone rehearsal не заменяют этот gate.
+этим блоком не включаются. Сквозной native gate health-driver пройден2026-10-20;
+его область и ограничения приведены ниже. Отдельные DTO-тесты и standalone
+rehearsal этот gate не заменяют. Предыдущие неудачные попытки описаны для ревью.
 
 Сквозной run20261020-103249-4030e35e выявил реальный дефект: rehearsal
 использовал обычный console readiness banner в stderr, поэтому strict health
@@ -19,6 +20,45 @@ exe и проверяет чистый stdout/stderr. Native повтор с н�
 проверяет точный новый root/event/key/revision/owner внутри той же транзакции;
 SQLite regression проверяет успешный edge и rollback неверных bindings. Pending
 guards вне acceptance hook не ослаблены. Полный native повтор остаётся обязательным.
+
+## Сквозной Windows gate пройден — 2026-10-20
+
+Run `20261020-164339-83d2a1d6`, Task `7b42694b-5c0b-4121-a7d4-716c3599b2fa`
+завершён succeeded/0. Девять групп: 13 Rust native tests, actual supervisor build
+и четыре отдельные операции внутри actor fixture. Все 11 ready-файлов независимо
+проверены по bytes/SHA, затем проверен typed proof. Shared:
+`WinBridge/workflow-validation/20261020-164339-83d2a1d6`.
+Report SHA `8ce81ccc3050e70e2374a97a9e31e3703842f68e888a8a9c72eb4b63823abb69`;
+proof SHA `af7bd666f9a962b497d34dc2ecb35518efca776aa02cbc08974365ae36ff7fee`.
+
+Source A clean `2feb40ff0c124a48b51015144ed64058fe08326a`, manifest
+`a3d53d847394c07672ed8e9dca90d5cf8580053594224787a383bf46d5890737`;
+actual candidate C clean `5a5834a6cd0eeab88f75ccd41d09d3b05d864d13`, manifest
+`ea000feb355b45747b40d54b610d2054723ab1073fc81d9dc09df7f38a202957`.
+Архивы/полные SHA сохранены в handoff и report. Это настоящие разные builds;
+metadata binaries не переименовывались в другую source generation.
+
+| Сценарий | Наблюдаемый результат |
+| --- | --- |
+| Отказ записи PID/resume grant | PID7628 сохранён для cleanup; OS resume не выполнен; дерево пусто. |
+| Отмена до helper | Ноль probes; callback завершён до source release. |
+| Отмена живого rehearsal | PID11876 наблюдался живым; результат cancelled, оба дерева завершены; гонка естественного exit не подменялась обещанием kill. |
+| Успешная проверка | Config PID12612 и rehearsal PID11840, exit0/capture/tree cleanup, точные schemas/source/config, atomic CandidateAccepted. |
+
+Все четыре операции завершились coordinated abort **до cutover**, matching worker
+release и остановкой своего supervisor. Runtime manifest прежний; no installation
+или GUI. Gate также проверил v11/v4 readonly command receipts, capacity1 drain
+regression, полный SHA после marker и atomic-hook rollback. Старый worker actor
+в этом fixture — test harness, остальные старые role descriptors синтетические;
+candidate C и его config/rehearsal entry points настоящие. Actual Main/pin lifetime
+проверялся отдельными предыдущими gates. Этот тест не доказывает exact shutdown,
+activation, rollback installation или desktop handoff.
+
+Windows free47,388,196,864 →46,235,811,840 bytes. Fresh installed Info: clean d052,
+generation78e9bbe1-8cb9-4ad3-93cf-371e981801ad, idle0, recovery coverage complete,
+maintenance/recovery errors нет. Установленный runtime не менялся. U1 остаётся
+открытым: следующий блок — durable drain coordination и exact shutdown. Более
+новый v12/v5 logical observation ещё требует собственного native подтверждения.
 
 ## Последовательность
 

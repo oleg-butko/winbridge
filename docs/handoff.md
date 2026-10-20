@@ -1,4 +1,37 @@
-## U1: logical drain observation prepared; combined health gate RUNNING — 2026-10-20
+## U1: full candidate-health gate PASSED; next durable drain — 2026-10-20
+
+Task7b42694b-5c0b-4121-a7d4-716c3599b2fa / run20261020-164339-83d2a1d6 terminal
+succeeded0. Do NOT resubmit it. [Scope/evidence](plans/worker-self-update/candidate-health.md):
+9 groups /13 native Rust tests +4 actual full actor operations. All11 ready bytes/SHA
+independently verified, typed proof verified. ReportSHA
+8ce81ccc3050e70e2374a97a9e31e3703842f68e888a8a9c72eb4b63823abb69;
+proofSHA af7bd666f9a962b497d34dc2ecb35518efca776aa02cbc08974365ae36ff7fee.
+Real clean A2feb40f vs actual clean C5a5834a, full four-binary build/config/rehearsal.
+PID receipt denial never resumed7628; pre-helper cancellation created no process;
+live rehearsal11876 cancellation recorded exact cleanup; verified helpers12612/11840
+exit0 with typed reports and atomic CandidateAccepted. Every case then aborts before
+cutover with owned worker release and supervisor exit. No install or GUI.
+Native v11/v4 receipt read, capacity1 fix, full-image SHA and atomic-hook regression
+passed in this same gate. Older synthetic old-other-role descriptors/test-harness
+entry point remain explicitly scoped; actual Main/pins have separate base gates.
+
+Windows free47,388,196,864 ->46,235,811,840. Fresh installed Info idle0, unchanged
+clean d052/generation78e9bbe1-8cb9-4ad3-93cf-371e981801ad, complete recovery coverage,
+no maintenance/recovery errors. Leave installed worker; desktop not needed.
+No manual bootstrap or installed replacement yet. No Windows task is running now.
+
+Post-gate review: newly prepared readonly v12/v5 (commit505b006) is NOT in the
+frozen native archives. Local551 tests/doctests, Linux/Windows Clippy and UI checks
+passed. Include it in upcoming drain gate; do not claim native support yet.
+Proceed [drain/quiesce plan](plans/worker-self-update/drain-quiesce.md): durable
+intent/commands/receipts and atomic BeginDrain/Quiesce, single-owner cancellation
+and source release, then exact shutdown. No schema11 implementation exists yet;
+when introduced, export BOTH matching schema11 A/C (these positive archives are10).
+Callbacks of advance_with_driver run AFTER root/transition writes: new journal
+hooks must validate the POST-transition edge, with ignored-write/rollback tests.
+User pause and cleanup exclusion must remain. Entire U1–U4 and goal remain open.
+
+## U1: logical drain observation prepared (historical) — 2026-10-20
 
 New internal supervisor v12 / worker control v5 reads drain blockers/user queue
 mode without changing state. Lease/accepted/logical-owner/queue counters share one

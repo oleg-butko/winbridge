@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-20: сквозной [candidate health gate](plans/worker-self-update/candidate-health.md)
+пройден —13 native tests /4 actor cases /9 groups, actual candidate build и
+atomic acceptance. Следующий U1 блок: [durable drain/quiesce](plans/worker-self-update/drain-quiesce.md)
+и exact shutdown. Самообновление U1–U4 ещё не завершено; installed runtime не менялся.
+
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 
 ## Самообновление U0–U4 — 2026-10-17

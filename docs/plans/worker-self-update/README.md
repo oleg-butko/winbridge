@@ -24,7 +24,7 @@ ManualIntervention. Candidate verification и runtime replacement ещё впе�
 
 [Health journal / supervisor v10](candidate-health.md) добавляет одноразовый
 intent, PID-before-resume, config/fresh-state проверки и atomic CandidateAccepted.
-Реализация проверяется; сквозной native health gate ещё обязателен. Public update
+Сквозной native health gate пройден2026-10-20 (13 tests /4 actor cases /9 groups). Public update
 и runtime replacement остаются отключены.
 
 ## Контракты и данные
@@ -146,25 +146,16 @@ U0 не применяет source plan, не выключает процессы
   [mailbox v5](artifact-actor.md): updater schema 7;
   [156 native tests / full build/four queries/exact-file proof](windows-artifact-actor-gate-2026-10-18.md)
   passed. Artifact receipt не заменяет worker health/approval.
-- [ ] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
-  [Durable baseline library](runtime-baseline.md), schema 8: immutable intent/receipt
-  атомарны с parent transitions; pending блокирует source, late adoption запрещён.
-  Internal supervisor v7 admission/status прошёл [175 native tests / full build /
-  actual Main и pins](windows-runtime-baseline-gate-2026-10-19.md).
-  [Preimages library](runtime-preimages.md), schema 9, реализует create-only
-  five-file generation и atomic receipt; [189 native tests / full build](windows-runtime-preimages-gate-2026-10-19.md)
-  passed. [Actor v8](runtime-preimages-actor.md) прошёл [193 native tests / full build](windows-runtime-preimages-actor-gate-2026-10-19.md); health ещё впереди,
-  [Fresh-state rehearsal](worker-rehearsal.md) реализован как standalone diagnostic;
-  native gate и durable health/approval остаются, весь пункт открыт.
-  Добавлены [live compatibility v3/v9 и readonly full-config check](worker-compatibility.md);
-  [native repeat после WAL guard fix](windows-worker-rehearsal-gate-2026-10-19.md) впереди.
-  [Owned probe hooks](probe-lifecycle.md) добавлены для PID-before-resume и cleanup;
-  запись health journal/approval ещё не подключена.
-  [Known installed-set reader](installed-set.md) и abort snapshot прошли тот же
-  native gate. [Early startup guard](runtime-startup.md) подключён; три actual-main
-  negative tests и положительный [native gate / lifetime follow-up](windows-runtime-startup-gate-2026-10-18.md)
-  passed: 159 tests / full build и actual serve с пятью pins. Publication,
-  authenticated live identity и durable baseline acceptance остаются впереди.
+- [x] Old runtime baseline/preimages, candidate health/rehearsal и approval driver.
+  [Baseline v7](runtime-baseline.md), [preimages v8](runtime-preimages-actor.md),
+  [compatibility v9](worker-compatibility.md), [owned probe lifecycle](probe-lifecycle.md)
+  и [health v10 / native gate](candidate-health.md) проверены.
+  Последний сквозной gate20261020-164339-83d2a1d6: реальная сборка C, четыре
+  config/rehearsal/abort cases, atomic acceptance, 13 native tests /9 groups,
+  ready11 проверен. Fixture old worker — test harness с явно синтетическими
+  другими old-role descriptors; candidate и helpers настоящие. Это не activation.
+  Предыдущие [startup/Main/pins gates](windows-runtime-startup-gate-2026-10-18.md)
+  и [217 base native tests](health-transition-review-2026-10-20.md) сохраняют свою область.
 - [ ] Worker admission/drain/quiesce/shutdown/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.
