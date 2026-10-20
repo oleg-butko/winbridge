@@ -1,3 +1,37 @@
+## U1: drain journal schema11 locally verified; actor next — 2026-10-20
+
+Added immutable drain intent, three frozen commands and append-only per-command
+history. Admission commits CandidateVerified→Draining with Prepared rows; delivery
+commits Issued before returning a nonserializable permit. Only matching immutable
+worker receipts advance commands; final receipt and root Quiesced commit together.
+Duplicate admission/delivery observes history, never recreates a permit. Raw lifecycle
+BeginDrain/Quiesce is blocked, including agent-supplied zero counters. Cross-DB RPC
+is still absent; this library does not authorize shutdown or runtime replacement.
+
+Schema10→11 uses the existing consistent backup, owner lock and epoch fence. Five
+new ledger tests cover ordering/CAS, reopen/no resend, ignored history write rollback,
+migration retention and raw-event rejection. Migration retains typed health10 bytes
+and rejects incomplete provenance/fresh approval; it is NOT a positive full joined
+health10 migration test. Full positive drain authority and physical quiescence
+remain required in the combined actor/native gate. 560 workspace tests/doctests,
+Linux/Windows all-target Clippy and fmt passed. Logs:
+.winbridge/update-preparation/drain-journal-{workspace,linux-clippy,windows-clippy}.log.
+
+Retained proven schema10 Windows updater BEFORE candidate cache overwrite:
+K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\reference10-20261020-214354-6f259f52\winbridge-update.exe
+SHA256 cf25892abe8810a78ed5c9a2b76261b49187126cfb0bac18fa2707f2b2ecdeda,
+clean source5a5834a, build1792515211187843900; copy task8ae6ee72-62a1-4dc7-a49c-326780e47e2c
+succeeded0. Shared reference.json/ready and artifact query independently verified;
+schema10 is pinned by reviewed source, not an invented --describe command.
+Local evidence .winbridge/update-preparation/schema10-reference-verified.json.
+Use for old-updater refusal, NOT a positive schema11 health/drain gate.
+
+NEXT: consuming driver + separately versioned actor/status, logical wait observations,
+exact receipt lookup on lost ACK, cancellation retirement before owned Release;
+then combined native A11/C11 test. Installed d052 healthy/idle, generation78e9bbe1;
+controller running, desktop unnecessary. No installed update/bootstrap required.
+Exact shutdown, apply, activation, rollback and public update remain unfinished.
+
 ## U1: drain delivery data contracts ready; SQL schema11 is NEXT — 2026-10-20
 
 Added apps/update/src/drain.rs + public module: PURE data contracts/FSM, no DB,

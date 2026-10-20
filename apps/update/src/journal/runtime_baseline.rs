@@ -34,6 +34,8 @@ pub(super) fn transition(
         UpdateEvent::CandidateHealthAdmitted | UpdateEvent::CandidateAccepted => {
             UpdatePhase::ValidatingCandidate
         }
+        UpdateEvent::BeginDrain => UpdatePhase::CandidateVerified,
+        UpdateEvent::Quiesce { .. } => UpdatePhase::Draining,
         _ => {
             return Err(fail(
                 JournalErrorCode::Corrupt,

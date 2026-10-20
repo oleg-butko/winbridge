@@ -164,9 +164,10 @@ U0 не применяет source plan, не выключает процессы
   падение между handoff receipts не разрешают преждевременный replace.
 
 Следующий U1 блок после health gate: [drain/quiesce](drain-quiesce.md) с
-сохранением command intents/receipts, accepted work и user pause. Подготовлен
-readonly receipt lookup v11/v4; native проверка ещё требуется. Durable driver
-этим не реализуется.
+сохранением accepted work и user pause. Реализован schema11 journal с immutable
+command intents/receipts/history и атомарными root transitions; 560 local tests и
+две Clippy проверки passed. Readonly receipt lookup v11/v4 прошёл health gate;
+v12/v5 и consuming driver/actor ещё требуют combined native проверки.
 
 ### U2 — same-schema apply и agent tracking
 

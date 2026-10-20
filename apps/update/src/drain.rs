@@ -37,11 +37,48 @@ const ACTIONS: [WorkerUpdateAction; 3] = [
     WorkerUpdateAction::ConfirmQuiesced,
 ];
 
-fn spec_digest(value: &WorkerUpdateSpec) -> Result<String> {
+fn evidence_digest(domain: &[u8], value: &impl Serialize) -> Result<String> {
     let value = serde_json::to_value(value).map_err(|e| e.to_string())?;
-    let mut bytes = b"winbridge.drain.worker-spec.v1\n".to_vec();
+    let mut bytes = domain.to_vec();
     bytes.extend(winbridge_protocol::canonical_evidence_json(&value).map_err(|e| e.to_string())?);
     Ok(crate::sha256(&bytes))
+}
+pub(crate) fn spec_digest(value: &WorkerUpdateSpec) -> Result<String> {
+    evidence_digest(b"winbridge.drain.worker-spec.v1\n", value)
+}
+pub(crate) fn source_digest(value: &SourceTransactionRecord) -> Result<String> {
+    evidence_digest(b"winbridge.drain.source.v1\n", value)
+}
+pub(crate) fn health_digest(value: &crate::health::HealthRecord) -> Result<String> {
+    evidence_digest(b"winbridge.drain.health.v1\n", value)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DrainSnapshot {
+    pub intent: Option<DrainIntent>,
+    pub commands: Vec<DrainCommandRecord>,
+    pub quiesced_revision: Option<u64>,
+}
+/// Exists only after fresh durable admission; never reconstructed from JSON.
+pub struct DrainPermit {
+    pub(crate) intent: DrainIntent,
+}
+pub enum DrainAdmission {
+    Fresh(Box<DrainPermit>),
+    Observed(Box<DrainSnapshot>),
+}
+pub struct DrainDeliveryPermit {
+    pub(crate) record: DrainCommandRecord,
+}
+impl DrainDeliveryPermit {
+    pub fn into_record(self) -> DrainCommandRecord {
+        self.record
+    }
+}
+pub enum DrainIssue {
+    Fresh(Box<DrainDeliveryPermit>),
+    Observed(Box<DrainCommandRecord>),
 }
 
 impl DrainIntent {

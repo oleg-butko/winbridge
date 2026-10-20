@@ -470,7 +470,7 @@ fn schema_seven_migration_preserves_old_history_without_inventing_baseline() {
     let mut f = Fixture::new();
     let id = f.supervisor.spec.update_id.clone();
     let before = f.journal.get(&id).unwrap();
-    f.journal.connection.execute_batch("DROP TABLE candidate_health; DROP TABLE runtime_preimages; DROP TABLE runtime_preimage_intents; DROP TABLE runtime_baselines;DROP TABLE runtime_baseline_intents;PRAGMA user_version=7;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.journal.connection.execute_batch("DROP TABLE drain_history; DROP TABLE drain_commands; DROP TABLE drain_intents; DROP TABLE candidate_health; DROP TABLE runtime_preimages; DROP TABLE runtime_preimage_intents; DROP TABLE runtime_baselines;DROP TABLE runtime_baseline_intents;PRAGMA user_version=7;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let directory = f.journal.directory.clone();
     let old = UpdateJournal::inspect(&directory).unwrap();
     assert!(UpdateJournal::open(&directory, &old.scope_sha256).is_err());

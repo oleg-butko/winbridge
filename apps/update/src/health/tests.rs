@@ -130,7 +130,7 @@ fn health_config_rehearsal_jobs_are_distinct_and_attempt_bound() {
 }
 
 // Synthetic DTO evidence tests only. They do not prove executable health or mint a permit.
-fn verified() -> HealthRecord {
+pub(crate) fn verified() -> HealthRecord {
     use crate::candidate_artifacts::{CandidateArtifact, CandidateArtifactInspection};
     let mut h = record();
     let p = winbridge_platform::infrastructure::stamp(std::process::id()).unwrap();

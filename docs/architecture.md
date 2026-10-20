@@ -5,7 +5,7 @@
 ## Подготовка самообновления — 2026-10-17
 
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.
-`apps/update` владеет отдельным updater journal schema 10 (WBUP), installation scope,
+`apps/update` владеет отдельным updater journal schema 11 (WBUP), installation scope,
 OS owner lock/epoch, source ZIP/staging и [source transaction](plans/worker-self-update/source-transaction.md).
 [Artifact actor v5 / atomic artifact receipt](plans/worker-self-update/artifact-actor.md),
 known-set reader и полный candidate build прошли

@@ -428,4 +428,4 @@ pub(crate) fn view(h: Option<&HealthRecord>) -> CandidateHealthView {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

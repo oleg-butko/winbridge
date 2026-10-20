@@ -1,6 +1,6 @@
 # Следующий блок U1: drain и quiesce
 
-2026-10-20. План после сквозного health gate; блок ещё не реализован.
+2026-10-20. После сквозного health gate реализован журнал; driver/actor впереди.
 Public update, shutdown и replacement пока отключены. Установленный worker
 для этой разработки менять не требуется: native проверки проходят на отдельной
 копии. Рабочий desktop для них не нужен.
@@ -8,8 +8,8 @@ Public update, shutdown и replacement пока отключены. Устано
 Подготовительная реализация: внутренний supervisor v11 / worker control v4
 добавляет `ObserveWorkerReceipt` / `ObserveReceipt`. Это readonly lookup старой
 immutable command receipt; drain driver, его updater schema и публичный update
-этим не реализуются. Текущий Windows health gate использует предыдущий архив
-без v11/v4; native проверка нового контракта остаётся отдельной обязательной задачей.
+этим не реализуются. Сквозной Windows health gate 20261020-164339-83d2a1d6 включает v11/v4;
+более новый v12/v5 в том архиве отсутствует и ещё требует native проверки.
 
 Ответ содержит точный исходный command, optional receipt и время наблюдения.
 Клиент проверяет contract, update/context/generation, command payload, resulting
@@ -30,7 +30,7 @@ queue mode читаются одним SQLite snapshot; counters registry — о
 наблюдение под process-registry lock. Чтение не меняет паузу или lease и не начинает
 drain. В DTO намеренно нет physical-owner counts или quiescence approval: нули
 не заменяют authenticated ConfirmQuiesced receipt после dispatch closure/OS scan.
-Legacy versions не получают эту форму через fallback. Journal schema остаётся10.
+Legacy versions не получают эту форму через fallback. Этот readonly контракт сам не меняет schema; drain journal ниже использует11.
 Local real-IPC/paused-queue и protocol regressions прошли; native v12/v5 ещё
 требуется. Текущий combined health run2feb/5a не содержит этот более новый контракт.
 При ошибке чтения показывать unknown/stale с прежним timestamp, а не новые нули.
@@ -59,16 +59,21 @@ Per-command FSM Prepared → Issued → Confirmed либо Issued → Uncertain 
 receipt observation не меняет revision. Hash worker spec использует существующий
 canonical JSON и отдельный domain tag v1, а порядок задают revisions, не часы.
 Эти функции пока чистые: не открывают DB, не отправляют RPC и не выдают execution
-permit. Persisted schema11, атомарный root transition, межкомандный порядок и driver
-ещё не реализованы. В будущем SQL PK/immutable history/CAS должны защищать историю
-даже при создании другого in-memory Prepared object с тем же ordinal.
+permit. Schema11 реализует immutable intent, три command rows и append-only history.
+SQL PK, CAS, readback и проверка предыдущего receipt защищают порядок даже при
+создании нового in-memory Prepared с тем же ordinal. Admission и root BeginDrain
+атомарны; final matching ConfirmQuiesced receipt и root Quiesced также атомарны.
+Issued/Uncertain после чтения не дают новый delivery permit. Driver/actor ещё
+не подключён; исторические данные сами не разрешают RPC или остановку процессов.
 
 До schema11 разделено чтение health history и fresh approval: сохранённый same-schema
 отчёт проверяется относительно captured compatibility, fresh admission по-прежнему
 требует ровно текущую updater schema. DB reader отдельно отклоняет receipt из схемы
 новее читаемой DB. Это сохраняет историю schema10 после будущей миграции, не делает
-старые owner/epoch/health новым execution permission. Сама миграция ещё впереди;
-обязателен regression с сохранённым health10 в настоящей schema11 DB.
+старые owner/epoch/health новым execution permission. Миграция10→11 уже использует consistent backup/epoch fence и сохраняет typed
+health10 bytes в новой DB и backup. Тест намеренно содержит incomplete provenance
+и подтверждает отказ fresh approval; полный положительный joined health10 history
+и актуальный schema11 drain требуют сквозной проверки.
 
 1. Допустить операцию только для свежего health receipt той же installation,
    source/artifacts, supervisor launch и owner/epoch. Проверить текущий config,
@@ -154,3 +159,15 @@ Lost ACK и повтор чтения receipt не создают вторую �
 доступным при ожидании; abort не выпускает lease раньше callback retirement.
 Отдельно проверить config/cleanup/recovery gates и окончательное освобождение
 только своей блокировки. Ни один тест этого блока не устанавливает runtime.
+
+## Проверки журнала — 2026-10-20
+
+560 workspace tests/doctests и Linux/Windows all-target Clippy passed. Пять новых
+тестов проверяют порядок/CAS/immutable history, reopen без resend, rollback при
+игнорировании history insert, migration backup и запрет raw transitions. Тест
+rollback использует parent probe, а не полную executable authority: сквозной
+positive path с health/source/supervisor bindings остаётся обязательным.
+Для native schema11 проверки сохранён прежний updater10 по пути
+`K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\reference10-20261020-214354-6f259f52\winbridge-update.exe`,
+SHA256 `cf25892abe8810a78ed5c9a2b76261b49187126cfb0bac18fa2707f2b2ecdeda`.
+Копия проверена по successful health proof и artifact query; runtime не менялся.

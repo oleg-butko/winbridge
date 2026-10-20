@@ -5,10 +5,10 @@
 atomic acceptance. Следующий U1 блок: [durable drain/quiesce](plans/worker-self-update/drain-quiesce.md)
 и exact shutdown. Самообновление U1–U4 ещё не завершено; installed runtime не менялся.
 
-Следующий блок начат data contracts/FSM доставки drain-команд и разделением
-historical health/fresh authority; 555 local tests/doctests и Clippy passed.
-SQLite schema11/admission/receipts и actor ещё не реализованы. Нельзя считать
-чистые data transitions разрешением выполнить команду.
+В следующем блоке реализованы data FSM и updater schema11: immutable intents,
+Issued-before-delivery, append-only receipts/history и atomic root quiescence.
+560 local tests/doctests и Linux/Windows Clippy passed. Driver/actor и сквозной
+native gate ещё требуются; library evidence не разрешает shutdown/install.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 

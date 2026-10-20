@@ -24,12 +24,13 @@ mod abort;
 mod build;
 mod build_report;
 mod candidate;
+mod drain;
 mod health;
 mod runtime_baseline;
 mod runtime_preimages;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 10;
+pub const UPDATE_SCHEMA_VERSION: u32 = 11;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -39,6 +40,7 @@ enum Driver {
     Baseline,
     Preimages,
     Health,
+    Drain,
 }
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
@@ -485,6 +487,7 @@ impl UpdateJournal {
             runtime_baseline::migrate(&tx)?;
             runtime_preimages::migrate(&tx)?;
             health::migrate(&tx)?;
+            drain::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -531,6 +534,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 9 {
                 health::migrate(&tx)?;
+            }
+            if schema(&tx)? == 10 {
+                drain::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
@@ -892,6 +898,17 @@ impl UpdateJournal {
             ));
         }
         supervisor::require_driver(&tx, authority, id, command.event)?;
+        if matches!(
+            command.event,
+            winbridge_protocol::update::UpdateEvent::BeginDrain
+                | winbridge_protocol::update::UpdateEvent::Quiesce { .. }
+        ) && driver != Driver::Drain
+        {
+            return Err(fail(
+                JournalErrorCode::InvalidRequest,
+                "Drain/quiescence require their trusted driver and durable worker receipts",
+            ));
+        }
         if matches!(
             command.event,
             winbridge_protocol::update::UpdateEvent::RuntimeBaselineAdmitted
