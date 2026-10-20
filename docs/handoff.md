@@ -1,3 +1,45 @@
+## U1: schema-10 native base gate running — 2026-10-20
+
+Internal health block committed 3ca392ad7726faf2ff38a208999f8566222eaeaf.
+Clean exported source: winbridge-20261020T093134Z-3ca392a-69c0f0d8.zip,
+SHA f41913c6a133630815fe216f10d4bb8bc478aff6bfbbd7cd5edf7ab875e41295,
+4,909,328 bytes / 603 files; manifest clean, built UI included.
+
+Existing Windows task e3a474d6-48a2-4460-bd6d-4d43d377a44a confirmed RUNNING,
+run20261020-053153-bde36139. Runner session31042;
+log .winbridge/update-preparation/health-native.log. Poll this exact task to
+terminal; no observation-timeout replay. This is native unit/migration/build/
+entrypoint coverage of the new source, NOT full v10 health actor integration.
+Derive actual test counts, verify every ready byte/SHA, check installed Info.
+Original cache20261017-061527-f4639971; previous worker schema14 reference:
+workspaces/snapshot-fixture/workflow-validation/reference-20261020-ebb7c513/winbridge-worker.exe.
+Current-schema refusal uses schema9 updater from d052 successful gate:
+K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\20261020-051354-bd565b6c\update-candidate\payload\winbridge-update.exe,
+SHA511e020be01ffda16dc09225af45675d198921b25e9bde77e5afd8ba7e5816ff.
+No GUI/windows, worker remains d052 and healthy; desktop unnecessary. No bootstrap.
+
+Next vertical proof: actual v10 health actor with clean full candidate bundle,
+source/build/artifact/baseline/preimages chain, ACK/status/duplicates, PID-receipt
+write rejection, cancellation and terminal acceptance. Reuse worker_control
+Fixture/runtime copied-process helper (current Fixture always publishes minimal
+synthetic target source, so it needs an explicit full target archive option).
+Actual candidate build's source manifest must EXACTLY match the target ZIP;
+do not relabel an existing binary with a new synthetic source manifest/hash.
+A private native test tool can forward the frozen PowerShell build args and add
+-ValidationCacheDirectory to the real build script, reusing original local caches
+without copying target or changing production build policy. This permits a real
+compiler/report rather than fabricated health approval. Keep flags/test paths
+inside isolated test configuration, do not add test backdoors to product Main.
+Test A (clean test worker/supervisor build) and target C (clean candidate archive)
+may differ: that separation is intentional and must remain visible in proof.
+A v3 compatibility gate can hold the health driver to test status and abort;
+PID write failure should clean the suspended actual helper without resume.
+Native long-probe cancellation already passed separately; do not falsely call
+between-helper cancellation a proof of cancelling a running actual helper.
+
+Keep goal active. U1/U2/U3/public update/install remain incomplete. New manual
+installed-worker update is not needed for isolated testing and is not requested.
+
 ## U1: schema-10 health driver/actor checked locally; d052 native gate passed — 2026-10-20
 
 User restarted/updated installed Windows worker from d052 archive. Fresh Info:
