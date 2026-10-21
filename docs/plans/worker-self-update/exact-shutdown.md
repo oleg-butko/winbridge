@@ -1,8 +1,8 @@
 # Следующий блок U1: подтверждённая остановка worker
 
 2026-10-20. Реализация после пройденного combined drain gate. Добавлены типизированные
-данные и два журнала; доставка команды остановки, OS exit proof и native gate ещё
-впереди. Public update и replacement остаются отключёнными.
+данные и два журнала; доставка команды остановки и native gate ещё впереди. Добавлен trusted OS
+exit/lock adapter, который пока не проверен на настоящей Windows. Public update и replacement остаются отключёнными.
 
 ## Реализованный слой данных
 
@@ -14,9 +14,11 @@ Uncertain, Acknowledged и Exited. Прочитанный JSON не создаё
 
 Updater schema12 хранит intent, current record и append-only history. Admission
 атомарен с root Stopping; Issued сохраняется до выдачи одноразового delivery permit.
-Повтор возвращает сохранённые данные. ACK не переводит root в Replacing. Пока
-physical adapter не подключён, журнал отклоняет Exited и ShutdownVerified, включая
-попытку передать синтетические `true` flags через trusted metadata API.
+Повтор возвращает сохранённые данные. ACK не переводит root в Replacing. Публичный library API принимает Exited/ShutdownVerified только с несериализуемым
+`ShutdownExitGuard`: pinned process handle, полученным при жизни процесса, занятой
+исходной instance lock и проверенными runtime pins. JSON-флаги не создают этот
+guard. Receipt и root Replacing записываются в одной транзакции; runtime files
+при этом не меняются. Доставка stop и новый worker ещё не подключены.
 
 Worker schema16 хранит immutable acceptance receipt, связанную с оригинальной
 ConfirmQuiesced receipt. Fresh acceptance выдаётся только после commit; duplicate
@@ -101,3 +103,28 @@ Instance lock — `stateDirectory/worker.lock`, открываемый в `Worke
 открывается readonly. Для нового cold receipt verifier следует использовать
 отдельный bounded reader, опираясь на `Store::open_read_only`/existing admission
 header, без Worker construction и без изменения recovery metadata.
+
+## Подтверждение OS exit — реализация, native gate впереди
+
+`PinnedProcess` в platform удерживает Windows handle конкретного process object,
+проверяет birth/host/session и читает завершение через WaitForSingleObject. Ошибка
+доступа не становится положительным доказательством. Debian не имитирует эту
+capability: acquisition явно Unsupported. После падения updater утраченный handle
+не восстанавливается из отсутствующего PID; автоматическое продолжение этим не
+разрешается.
+
+`ShutdownStatePins` открывает существующие state directory, journal.sqlite и
+worker.lock без create, проверяет File IDs/links и удерживает Windows handles без
+share-delete. Получение exclusive instance lock — отдельный шаг; оно не доказывает
+exit само по себе. Guard проверяет прежний manifest, exe identities и process
+identity ещё раз перед commit. Эти handles удерживаются вызывающим кодом до
+завершения journal transaction. Сохранённые доказательства читаются как история,
+без восстановления physical permit. Schema12/16 при добавлении adapter не меняется.
+
+Промежуточный автоматический gate `test-update-shutdown-primitives.ps1` проверяет
+19 тестов в пяти группах: live process pin/exit, data/state/journal, worker receipt,
+отказ worker15 от16 и updater11 от12. Запуск из Debian —
+`validate-update-shutdown-primitives-native.py`: чистый ZIP с проверенными bytes,
+существующий отдельный Cargo cache, свежие fixtures и checksum report в shared.
+Он не собирает desktop/candidate, не останавливает installed worker и не заменяет
+будущий combined actual Main stop/ACK/cold-verifier gate.

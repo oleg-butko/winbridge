@@ -74,8 +74,8 @@ fn shutdown_cas_retains_immutable_intent_receipt_and_causal_history() {
             [id]
         )
         .is_err());
-    // This same-intent synthetic proof remains data; the journal must refuse
-    // its Exited transition until a physical driver can hold the real guard.
+    // This ledger-only write models data retention; it cannot acquire the
+    // private physical guard required by the public combined journal API.
     let physical = crate::shutdown::ShutdownExitEvidence {
         process: initial.intent.binding.worker.process.clone(),
         state: initial.intent.binding.worker_state.clone(),
@@ -90,8 +90,14 @@ fn shutdown_cas_retains_immutable_intent_receipt_and_causal_history() {
         observed_at_ms: 300,
     };
     let exited = ack.confirm_exit(301, physical).unwrap();
-    assert!(write(&mut c, &ack, &exited).is_err());
-    assert_eq!(delivery(&c, &initial.intent).unwrap(), ack);
+    write(&mut c, &ack, &exited).unwrap();
+    assert_eq!(delivery(&c, &initial.intent).unwrap(), exited);
+    assert!(c
+        .execute(
+            "UPDATE shutdown_records SET revision=revision+1,record=record",
+            []
+        )
+        .is_err());
 }
 #[test]
 fn shutdown_reopen_preserves_uncertainty_and_reconciles_exact_ack_without_resend() {
@@ -142,6 +148,52 @@ fn shutdown_ignored_history_write_rolls_back_ack_and_root_probe() {
     let unknown = issued.uncertain(202, "ACK storage denied".into()).unwrap();
     write(&mut c, &issued, &unknown).unwrap();
     assert_eq!(delivery(&c, &initial.intent).unwrap(), unknown);
+}
+#[test]
+fn shutdown_ignored_exit_write_keeps_ack_and_parent_until_atomic_retry() {
+    let mut c = Connection::open_in_memory().unwrap();
+    let (initial, receipt) = ledger(&c);
+    let issued = initial.issue(101).unwrap();
+    write(&mut c, &initial, &issued).unwrap();
+    let ack = issued.acknowledge(201, receipt).unwrap();
+    write(&mut c, &issued, &ack).unwrap();
+    let physical = crate::shutdown::ShutdownExitEvidence {
+        process: initial.intent.binding.worker.process.clone(),
+        state: initial.intent.binding.worker_state.clone(),
+        runtime_identity: initial
+            .intent
+            .binding
+            .loaded_worker
+            .runtime_identity
+            .clone(),
+        exact_process_exited: true,
+        instance_lock_acquired: true,
+        observed_at_ms: 300,
+    };
+    let exited = ack.confirm_exit(301, physical).unwrap();
+    // Data ledger probe only, not an OS proof. The consuming public API must
+    // additionally hold ShutdownExitGuard across the real root transaction.
+    c.execute_batch("CREATE TABLE parent_probe(phase TEXT);INSERT INTO parent_probe VALUES('stopping');CREATE TRIGGER deny_shutdown_exit BEFORE INSERT ON shutdown_history WHEN json_extract(NEW.record,'$.delivery.state')='exited' BEGIN SELECT RAISE(IGNORE);END;").unwrap();
+    {
+        let tx = c.transaction().unwrap();
+        tx.execute("UPDATE parent_probe SET phase='replacing'", [])
+            .unwrap();
+        assert!(persist(&tx, &ack, &exited).is_err());
+    }
+    assert_eq!(delivery(&c, &initial.intent).unwrap(), ack);
+    assert_eq!(
+        c.query_row("SELECT phase FROM parent_probe", [], |r| r
+            .get::<_, String>(0))
+            .unwrap(),
+        "stopping"
+    );
+    c.execute_batch("DROP TRIGGER deny_shutdown_exit;").unwrap();
+    let tx = c.transaction().unwrap();
+    tx.execute("UPDATE parent_probe SET phase='replacing'", [])
+        .unwrap();
+    persist(&tx, &ack, &exited).unwrap();
+    tx.commit().unwrap();
+    assert_eq!(delivery(&c, &initial.intent).unwrap(), exited);
 }
 #[test]
 fn shutdown_ignored_intent_history_does_not_commit_prepared_or_parent_probe() {
@@ -310,10 +362,5 @@ fn raw_lifecycle_cannot_stop_or_approve_exit_without_durable_driver_and_os_proof
     command.idempotency_key = "raw-exit".into();
     command.event = UpdateEvent::ShutdownVerified;
     assert!(j.advance(&a, &root.update_id, &command).is_err());
-    assert!(j
-        .advance_with_driver(&a, &root.update_id, &command, Driver::Shutdown, |_, _| Ok(
-            ()
-        ))
-        .is_err());
     assert_eq!(j.get(&root.update_id).unwrap(), root);
 }

@@ -1,0 +1,89 @@
+<#
+.SYNOPSIS
+Test exact process/state handles and old-reader refusal. No installed update or UI.
+#>
+param(
+  [Parameter(Mandatory)][string]$SourceDirectory,
+  [Parameter(Mandatory)][string]$SourceArchiveSha256,
+  [Parameter(Mandatory)][string]$ValidationCacheDirectory,
+  [Parameter(Mandatory)][string]$ReportDirectory,
+  [Parameter(Mandatory)][string]$ReferenceReceipt
+)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+$PSNativeCommandUseErrorActionPreference=$false
+. (Join-Path $PSScriptRoot 'session-runtime.ps1')
+. (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
+foreach($p in @($SourceDirectory,$ValidationCacheDirectory,$ReportDirectory)){Assert-SessionDirectory $p}
+Assert-SessionFile $ReferenceReceipt
+if($SourceArchiveSha256 -cnotmatch '^[0-9a-f]{64}$'){throw 'Pinned archive SHA required'}
+$source=[IO.Path]::GetFullPath($SourceDirectory)
+$cache=Join-Path ([IO.Path]::GetFullPath($ValidationCacheDirectory)) 'test-build-cache'
+Assert-WorkflowCachePath $cache
+if(-not (Test-Path -LiteralPath $cache -PathType Container)){throw 'Existing approved test cache required'}
+$manifest=Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
+if($manifest.dirty){throw 'Clean exported source required'}
+$report=[ordered]@{schemaVersion=1;kind='shutdown_primitives_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;windowsOpened=$false;commands=@();error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+$variables=@('CARGO_TARGET_DIR','CARGO_INCREMENTAL','TEMP','TMP','WINBRIDGE_SHUTDOWN_REFERENCE_WORKER','WINBRIDGE_UPDATE_REFERENCE_UPDATER')
+$old=@{};foreach($name in $variables){$old[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
+$oldLocation=Get-Location;$oldEncoding=[Console]::OutputEncoding;$oldOutputEncoding=$OutputEncoding;$lease=$null
+try {
+  if($env:OS -cne 'Windows_NT' -or $report.storage.availableBytesBefore -lt 6GB){throw 'Windows local disk with >=6 GiB required; no cleanup'}
+  [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$OutputEncoding=[Text.UTF8Encoding]::new($false)
+  foreach($f in $manifest.files){
+    $p=Join-Path $source $f.path;Assert-SessionFile $p
+    if((Get-Item -LiteralPath $p).Length -ne $f.bytes -or (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() -cne $f.sha256){throw "Source mismatch: $($f.path)"}
+  }
+  $refs=Get-Content -LiteralPath $ReferenceReceipt -Raw | ConvertFrom-Json
+  if($refs.kind -cne 'shutdown_base_reference' -or $refs.runtimeApplied -ne $false -or $refs.files.Count -ne 2){throw 'Retained schema15/11 receipt required'}
+  $env:WINBRIDGE_SHUTDOWN_REFERENCE_WORKER=$null;$env:WINBRIDGE_UPDATE_REFERENCE_UPDATER=$null
+  foreach($r in $refs.files){
+    Assert-SessionFile $r.path
+    if($r.sha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $r.path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $r.sha256){throw 'Reference bytes changed'}
+    $query=& $r.path --artifact-info
+    if($LASTEXITCODE -ne 0){throw 'Reference artifact query failed'}
+    $actual=$query | ConvertFrom-Json
+    foreach($field in @('role','targetOs','targetArch','queryContract','schemaVersion','kind')){if($actual.$field -cne $r.descriptor.$field){throw "Reference descriptor differs: $field"}}
+    foreach($field in @('sourceCommit','sourceManifestSha256','buildId','sourceDirty')){if($actual.build.$field -cne $r.descriptor.build.$field){throw "Reference build differs: $field"}}
+    if($actual.role -ceq 'worker' -and $r.schemaFromReviewedSource -eq 15){$env:WINBRIDGE_SHUTDOWN_REFERENCE_WORKER=$r.path}
+    elseif($actual.role -ceq 'updater' -and $r.schemaFromReviewedSource -eq 11){$env:WINBRIDGE_UPDATE_REFERENCE_UPDATER=$r.path}
+    else {throw 'Unexpected reference schema/role'}
+  }
+  if(-not $env:WINBRIDGE_SHUTDOWN_REFERENCE_WORKER -or -not $env:WINBRIDGE_UPDATE_REFERENCE_UPDATER){throw 'Both exact references required'}
+  $lock=Join-Path $cache '.winbridge-build-cache.lock';Assert-SessionFile $lock
+  $lease=[IO.File]::Open($lock,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+  $env:CARGO_TARGET_DIR=$cache;$env:CARGO_INCREMENTAL='0'
+  $env:TEMP=Join-Path (Split-Path $source -Parent) 'test-temp';$env:TMP=$env:TEMP
+  New-Item -ItemType Directory -Path $env:TEMP | Out-Null
+  Set-Location -LiteralPath $source
+  $groups=@(
+    @{name='shutdown-process-pin';minimum=1;args=@('test','-p','winbridge-platform','--lib','pinned_process_requires_exact_live_identity','--locked','--offline')},
+    @{name='shutdown-data-state-journal';minimum=12;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','shutdown','--locked','--offline')},
+    @{name='shutdown-worker-acceptance';minimum=4;args=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::shutdown::tests','--locked','--offline')},
+    @{name='shutdown-worker15-refuses16';minimum=1;args=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_coordination','previous_worker_fifteen_refuses_current_schema','--locked','--offline','--','--ignored')},
+    @{name='shutdown-updater11-refuses12';minimum=1;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','source_transaction','previous_updater_refuses_current_schema_without_writes','--locked','--offline','--','--ignored')}
+  )
+  foreach($g in $groups){
+    $log=Join-Path $ReportDirectory ($g.name+'.log')
+    $arguments=@($g.args)
+    if($arguments -notcontains '--'){$arguments+=@('--')}
+    $arguments+=@('--test-threads=1','--nocapture')
+    Write-Output "Isolated shutdown primitives: $($g.name); installed worker stays running"
+    & cargo.exe @arguments 2>&1 | Tee-Object -FilePath $log
+    $code=$LASTEXITCODE
+    $matches=[regex]::Matches((Get-Content -LiteralPath $log -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')
+    $passed=0;foreach($m in $matches){$passed+=[int]$m.Groups[1].Value}
+    $report.commands+=@{name=$g.name;exitCode=$code;passed=$passed;minimum=$g.minimum;log=[IO.Path]::GetFileName($log)}
+    if($code -ne 0 -or $passed -lt $g.minimum){throw "Native group failed or selected no expected tests: $($g.name)"}
+  }
+  $report.passed=$true
+} catch {$report.error=$_.Exception.Message;Write-Output ("Shutdown primitives failed: "+$report.error)} finally {
+  $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
+  if($lease){$lease.Dispose()}
+  foreach($name in $variables){[Environment]::SetEnvironmentVariable($name,$old[$name],'Process')}
+  Set-Location -LiteralPath $oldLocation;[Console]::OutputEncoding=$oldEncoding;$OutputEncoding=$oldOutputEncoding
+  Write-NewJson (Join-Path $ReportDirectory 'report.json') $report
+  $files=@(Get-ChildItem -LiteralPath $ReportDirectory -File | Where-Object {$_.Name -cne 'report.ready.json'} | Sort-Object Name | ForEach-Object {@{path=$_.Name;bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()}})
+  Write-NewJson (Join-Path $ReportDirectory 'report.ready.json') @{schemaVersion=1;files=$files}
+}
+if(-not $report.passed){exit 1}

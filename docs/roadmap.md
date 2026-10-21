@@ -17,7 +17,8 @@ readonly reconciliation потерянного ACK и coordinated abort. 563 wor
 Для exact shutdown добавлены [контракты и два журнала](plans/worker-self-update/exact-shutdown.md):
 updater schema12 и worker schema16, immutable receipt/history, однократная выдача
 разрешения после commit. Реальная доставка stop, exit/lock proof и native gate
-ещё не готовы; ShutdownVerified и runtime replacement блокируются.
+ещё не готовы. Trusted exit adapter требует held OS handles и instance lock;
+raw ShutdownVerified запрещён, runtime replacement пока отсутствует.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 

@@ -3,10 +3,12 @@
 use super::*;
 use crate::shutdown::{
     self as data, ShutdownAdmission, ShutdownBinding, ShutdownDeliveryPermit,
-    ShutdownDeliveryState, ShutdownIntent, ShutdownIssue, ShutdownPermit, ShutdownRecord,
+    ShutdownDeliveryState, ShutdownExitGuard, ShutdownIntent, ShutdownIssue, ShutdownPermit,
+    ShutdownRecord,
 };
 use winbridge_protocol::{update::*, LoadedWorkerIdentity};
 const ADMIT: &str = "shutdown-admit-v1";
+const EXIT: &str = "shutdown-exit-v1";
 fn bad(message: impl Into<String>) -> JournalError {
     fail(JournalErrorCode::Corrupt, message)
 }
@@ -33,8 +35,9 @@ fn valid_step(old: &ShutdownRecord, next: &ShutdownRecord) -> Result<()> {
         ShutdownDeliveryState::Acknowledged { at_ms, receipt } => {
             old.acknowledge(*at_ms, receipt.as_ref().clone())
         }
-        // This layer cannot substitute stored booleans for an actual OS guard.
-        // No exit write is accepted until that guard/atomic root edge is added.
+        ShutdownDeliveryState::Exited {
+            at_ms, physical, ..
+        } => old.confirm_exit(*at_ms, physical.as_ref().clone()),
         _ => return Err(bad("Unsupported shutdown delivery transition")),
     }
     .map_err(bad)?;
@@ -152,7 +155,35 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ShutdownRecord>> {
     if b.admitted_at_ms > at {
         return Err(bad("Shutdown intent timestamp exceeds transition"));
     }
-    Ok(Some(delivery(c, &intent)?))
+    let saved = delivery(c, &intent)?;
+    let exit_revision: Option<i64> = c
+        .query_row(
+            "SELECT revision FROM transitions WHERE update_id=?1 AND command_key=?2",
+            params![id, EXIT],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(storage)?;
+    match (&saved.delivery, exit_revision) {
+        (ShutdownDeliveryState::Exited { .. }, Some(revision))
+            if counter(revision)? == b.parent_revision + 2 =>
+        {
+            runtime_baseline::transition(
+                c,
+                id,
+                b.parent_revision + 2,
+                UpdateEvent::ShutdownVerified,
+                EXIT,
+                &b.owner_id,
+                b.owner_epoch,
+            )?;
+        }
+        (ShutdownDeliveryState::Exited { .. }, _) | (_, Some(_)) => {
+            return Err(bad("Shutdown exit receipt/root edge were not atomic"))
+        }
+        _ => {}
+    }
+    Ok(Some(saved))
 }
 fn require(
     c: &Connection,
@@ -378,6 +409,53 @@ impl UpdateJournal {
         }
         persist(&tx, &old, &next)?;
         tx.commit().map_err(storage)?;
+        Ok(next)
+    }
+    /// The guard retains the exact process handle, original state-file handles,
+    /// exclusive instance lock and original runtime pins through this commit.
+    /// It is not Serde data and cannot be reconstructed by replaying a receipt.
+    pub fn confirm_shutdown_exit(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        p: &ShutdownPermit,
+        guard: &ShutdownExitGuard,
+    ) -> Result<ShutdownRecord> {
+        self.check_directory(a)?;
+        check_authority(&self.connection, a)?;
+        runtime_baseline::current_supervisor(&self.connection, a, s)?;
+        guard.require(&p.intent).map_err(bad)?;
+        let id = &p.intent.binding.update_id;
+        let old = read(&self.connection, id)?.ok_or_else(|| bad("Shutdown intent absent"))?;
+        if old.intent != p.intent {
+            return Err(bad("Shutdown exit attempt changed"));
+        }
+        if matches!(old.delivery, ShutdownDeliveryState::Exited { .. }) {
+            return Ok(old);
+        }
+        require(&self.connection, a, s, &p.intent)?;
+        let physical = guard.evidence(&p.intent).map_err(bad)?;
+        let next = old.confirm_exit(now_ms()?, physical).map_err(bad)?;
+        let command=UpdateCommand {
+            idempotency_key:EXIT.into(),expected_revision:p.intent.binding.parent_revision+1,event:UpdateEvent::ShutdownVerified,
+            reason:"Завершение точного процесса worker подтверждено; updater удерживает прежнюю instance lock и проверенные runtime/state handles".into(),
+        };
+        self.advance_with_driver(a, id, &command, Driver::Shutdown, |c, root| {
+            runtime_baseline::current_supervisor(c, a, s)?;
+            guard.require(&p.intent).map_err(bad)?;
+            if root.phase != UpdatePhase::Replacing
+                || root.revision != p.intent.binding.parent_revision + 2
+            {
+                return Err(bad("Shutdown exit parent edge changed"));
+            }
+            // Root edge already stored: inspect the child ledger directly until
+            // its atomic Exited counterpart has been inserted.
+            persist(c, &old, &next)?;
+            if read(c, id)?.as_ref() != Some(&next) {
+                return Err(bad("Shutdown exit/root readback failed"));
+            }
+            Ok(())
+        })?;
         Ok(next)
     }
 }

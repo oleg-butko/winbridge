@@ -912,12 +912,12 @@ impl UpdateJournal {
                 "Shutdown requires its trusted driver and durable intent",
             ));
         }
-        // Until the OS exit/instance-lock adapter exists, even trusted metadata
-        // cannot approve the next physical phase. An ACK is not an exit proof.
-        if command.event == winbridge_protocol::update::UpdateEvent::ShutdownVerified {
+        if command.event == winbridge_protocol::update::UpdateEvent::ShutdownVerified
+            && driver != Driver::Shutdown
+        {
             return Err(fail(
                 JournalErrorCode::InvalidRequest,
-                "Exact process exit and instance-lock verification are not connected yet",
+                "Exact process exit requires the shutdown driver and its held OS guard",
             ));
         }
         if matches!(

@@ -8,6 +8,118 @@ use std::{
 };
 pub use winbridge_protocol::update::SupervisorProcess as ProcessStamp;
 
+/// A handle to the exact live Windows process, retained across shutdown. A PID
+/// lookup after exit cannot recreate this capability or prove the old exit.
+pub struct PinnedProcess {
+    #[cfg(windows)]
+    handle: std::os::windows::io::OwnedHandle,
+    identity: ProcessStamp,
+}
+impl PinnedProcess {
+    pub fn live(expected: &ProcessStamp) -> io::Result<Self> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+            use windows_sys::Win32::{
+                Foundation::FILETIME,
+                System::Threading::{
+                    GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+                    PROCESS_SYNCHRONIZE,
+                },
+            };
+            let raw = unsafe {
+                OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+                    0,
+                    expected.process_id,
+                )
+            };
+            if raw.is_null() {
+                return Err(io::Error::last_os_error());
+            }
+            let handle = unsafe { OwnedHandle::from_raw_handle(raw) };
+            let (mut born, mut exit, mut kernel, mut user): (
+                FILETIME,
+                FILETIME,
+                FILETIME,
+                FILETIME,
+            ) = unsafe { std::mem::zeroed() };
+            if unsafe {
+                GetProcessTimes(
+                    handle.as_raw_handle(),
+                    &mut born,
+                    &mut exit,
+                    &mut kernel,
+                    &mut user,
+                )
+            } == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            let (host_id, session_id) =
+                crate::windows::host_binding_for_process(expected.process_id)?;
+            let identity = ProcessStamp {
+                process_id: expected.process_id,
+                birth: (((born.dwHighDateTime as u64) << 32) | born.dwLowDateTime as u64)
+                    .to_string(),
+                host_id,
+                session_id,
+            };
+            if identity != *expected {
+                return Err(io::Error::other(
+                    "Exact process birth/host/session differs; no shutdown pin",
+                ));
+            }
+            let pin = Self { handle, identity };
+            pin.require_live()?;
+            Ok(pin)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = expected;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Exact shutdown process pin requires Windows",
+            ))
+        }
+    }
+    pub fn identity(&self) -> &ProcessStamp {
+        &self.identity
+    }
+    pub fn require_live(&self) -> io::Result<()> {
+        if self.exited()? {
+            Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Pinned process has exited",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+    /// Only the retained kernel object decides this result. Access denied and
+    /// an invalid wait never become positive evidence of exit.
+    pub fn exited(&self) -> io::Result<bool> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            use windows_sys::Win32::{
+                Foundation::{WAIT_OBJECT_0, WAIT_TIMEOUT},
+                System::Threading::WaitForSingleObject,
+            };
+            match unsafe { WaitForSingleObject(self.handle.as_raw_handle(), 0) } {
+                WAIT_OBJECT_0 => Ok(true),
+                WAIT_TIMEOUT => Ok(false),
+                _ => Err(io::Error::last_os_error()),
+            }
+        }
+        #[cfg(not(windows))]
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Exact shutdown process wait requires Windows",
+        ))
+    }
+}
+
 pub fn stamp(pid: u32) -> io::Result<ProcessStamp> {
     #[cfg(windows)]
     {
@@ -263,6 +375,55 @@ mod tests {
         let mut wrong = current.clone();
         wrong.birth.push('0');
         assert!(!matches(&wrong).unwrap());
+    }
+    #[cfg(not(windows))]
+    #[test]
+    fn windows_process_pin_never_claims_exit_on_an_unsupported_platform() {
+        assert!(PinnedProcess::live(&stamp(std::process::id()).unwrap()).is_err());
+    }
+    #[cfg(windows)]
+    #[test]
+    fn pinned_process_requires_exact_live_identity_and_observes_owned_exit() {
+        use std::time::{Duration, Instant};
+        let root = tempfile::tempdir().unwrap();
+        let command = winbridge_protocol::ResolvedCommand {
+            executable: std::env::current_exe().unwrap().to_str().unwrap().into(),
+            arguments: vec![
+                "--exact".into(),
+                "infrastructure::tests::unconfirmed_lifetime_helper".into(),
+                "--ignored".into(),
+            ],
+            working_directory: root.path().to_str().unwrap().into(),
+            timeout_ms: 10000,
+        };
+        let (mut child, _out, _err) = crate::ManagedChild::prepare(&command, None).unwrap();
+        let identity = stamp(child.id()).unwrap();
+        for field in ["birth", "host", "session"] {
+            let mut wrong = identity.clone();
+            match field {
+                "birth" => wrong.birth.push('0'),
+                "host" => wrong.host_id = "0".repeat(64),
+                _ => wrong.session_id = wrong.session_id.wrapping_add(1),
+            }
+            assert!(PinnedProcess::live(&wrong).is_err(), "{field}");
+        }
+        let pin = PinnedProcess::live(&identity).unwrap();
+        assert_eq!(pin.identity(), &identity);
+        assert!(!pin.exited().unwrap());
+        child.resume().unwrap();
+        pin.require_live().unwrap();
+        child.terminate_tree().unwrap();
+        let until = Instant::now() + Duration::from_secs(5);
+        while !pin.exited().unwrap() {
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(pin.require_live().is_err());
+        assert!(PinnedProcess::live(&identity).is_err());
+        while child.try_wait().unwrap().is_none() {
+            assert!(Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
     #[test]
     fn unconfirmed_owned_cleanup_does_not_wait_for_process_lifetime() {

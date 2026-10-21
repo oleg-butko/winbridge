@@ -3,6 +3,10 @@
 use serde::{Deserialize, Serialize};
 use winbridge_core::update::{valid_hash, validate_update_key, MAX_UPDATE_COUNTER};
 use winbridge_protocol::{update::*, ArtifactRole, LoadedWorkerIdentity};
+mod state;
+pub use state::{LockedShutdownState, ShutdownStatePins};
+mod physical;
+pub use physical::ShutdownExitGuard;
 type Result<T> = std::result::Result<T, String>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

@@ -1,3 +1,36 @@
+## Exact shutdown: physical handles/atomic exit adapter; wire NEXT — 2026-10-20
+
+Commit a0e61dd contains the durable data/journals below. Further implementation
+adds platform PinnedProcess (Windows live exact birth/host/session handle,
+WaitForSingleObject; Unsupported on Debian) and ShutdownStatePins (existing files
+only, identities, Windows no-share-delete). Exclusive lock acquisition consumes
+pins; no missing lock file is created. ShutdownExitGuard retains exact exited
+process, held original instance lock and original runtime pins through commit.
+Only this non-Serde guard can call public confirm_shutdown_exit; Exited history
+and root Replacing are atomic. Raw lifecycle ShutdownVerified remains forbidden.
+No binaries are replaced, new worker is not started, no shutdown RPC exists yet.
+
+Twelve updater shutdown tests and three platform infrastructure tests passed;
+exit-write rollback included. Logs shutdown-physical-final-tests.log and
+shutdown-process-tests.log. Linux and Windows all-target Clippy passed (shutdown-physical-*-clippy.log);
+fmt/diff checked. New fixed native primitive runner prepares five groups/19 tests,
+no candidate build or UI: scripts/validate-update-shutdown-primitives-native.py
+and test-update-shutdown-primitives.ps1. Syntax/CLI checked; native run NEXT after
+clean archive export. Reuse original test-build-cache and proven schema15/11 refs;
+no installed runtime change. UI build refreshed for the standard verified exporter.
+State/ledger tests use synthetic data and are NOT physical Windows proof. Native
+process-pin/rename/stop tests pending. Storage:shutdown-physical-storage.txt ~31GB.
+
+Next consuming layer: control v6 (freeze old v1–v5), worker-created state observation,
+immutable receipt before ACK, stop guard released after reply attempt/callback
+retirement through existing serve loop. Cold bounded readonly verifier must use
+Store readonly directly, never Worker recovery startup. Pin process while still
+alive before first stop; lost updater handle cannot be rebuilt from missing PID.
+Then combined actual Main/supervisor native gate on matching updater12/worker16 A/C;
+keep proven schema15/11 binaries below for old-reader refusal. Installed d052 healthy,
+unchanged, desktop unnecessary, worker remains running. No Windows validation active.
+U1–U4 goal remains active; public update/activation/rollback still unfinished.
+
 ## Exact shutdown: two durable journals; physical driver NEXT — 2026-10-20
 
 Implemented data FSM and shutdown scope digest in apps/update/src/shutdown.rs;
