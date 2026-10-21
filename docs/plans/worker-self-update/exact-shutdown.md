@@ -133,3 +133,24 @@ identity ещё раз перед commit. Эти handles удерживаютс�
 [Primitive gate 2026-10-20 пройден](windows-shutdown-primitives-gate-2026-10-20.md):
 19 native tests, пять групп, девять checksum artifacts. Это не подтверждение полной
 самоостановки actual Main; новый wire contract/driver и cold verifier ещё впереди.
+
+## Worker control v6 — реализация 2026-10-21, combined gate впереди
+
+Внутренний control v6 разделяет ObserveShutdownState, RequestShutdown и
+ObserveShutdownReceipt. Worker сам вычисляет file identities и сверяет instance
+lock с удерживаемым handle. Request требует точного сохранённого Issued/Uncertain
+intent в updater, root Stopping, owner/epoch, loaded runtime/config, Quiesced lease
+и отсутствия логических/физических исполнителей. Duplicate возвращает историю;
+сохранённый updater ACK при отсутствующей worker receipt не разрешает новую остановку.
+
+Fresh Store permit переходит в StopAfterReply: он принадлежит результату blocking
+callback, затем попытке ответа. После её завершения или отказа доставки guard
+устанавливает existing stop flag. Serve loop закрывает network/control и ждёт
+callbacks/jobs. Callback не вызывает control.close изнутри себя. Никакая
+десериализованная response DTO не создаёт этот guard. Положительный путь должен
+пройти combined native Main gate; одних отрицательных проверок недостаточно.
+
+Версия каждой команды задаётся одним required_version(), общим для routing и
+worker admission. Старые команды остались в1–5; generic supervisor v1 forwarding
+отклоняет новые наблюдения/stop. Нужны новый consuming supervisor contract/driver
+и bounded cold verifier. Public auto-update по-прежнему выключен.

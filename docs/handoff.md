@@ -1,3 +1,48 @@
+## Shutdown control v6 locally verified; cold verifier NEXT — 2026-10-21
+
+Implementation after96c8a2b: protocol adds ObserveShutdownState,
+RequestShutdown and ObserveShutdownReceipt under strict worker control6. Central
+required_version() drives worker admission and supervisor routing; v1 generic
+forwarding rejects every non-v1 action, including new stop. Legacy actions remain
+at versions1–5. DTO state/receipt decoders added with context/lease/process checks.
+
+apps/worker/src/update_control/shutdown.rs: worker-derived state IDs bound to its
+held instance lock; exact durable updater Issued/Uncertain intent, owner/epoch,
+loaded runtime/config/state/Quiesced lease/logical+physical emptiness required.
+Existing receipt returns only observation. Updater ACK with missing worker receipt
+cannot authorize a fresh acceptance. Fresh Store permit owns StopAfterReply; it
+stays in blocking callback return value then reply attempt, stops via existing
+serve loop after callback retirement even if delivery is abandoned. No new shutdown
+loop, callback never invokes control.close. Direct data handler cannot signal stop.
+ObserveShutdownReceipt allowed as readonly history after terminal root too.
+
+Local check workspace passed; current updater executable built first (needed by
+control fixtures). One real supervisor/worker v6 observation + negative admission
+unit passed: old versions/context/unadmitted stop/v1 forwarding cause no effects.
+Protocol tests, generated TS and typecheck passed (shutdown-control-protocol-tests.log,
+shutdown-control-types.log, shutdown-control-typecheck.log). Full workspace rerun
+PASSED:584 tests,0 failures,16 ignored (shutdown-control-workspace.log). Linux
+and Windows all-target Clippy/fmt/diff passed (shutdown-control-*-clippy.log). First run found only a
+legacy error-text assertion: restored the supervisor v6/v9/v11/v12 version hint;
+old and new control unit cases now passed in the rerun. Earlier package-only
+protocol command without jsonschema
+hit a preexisting un-gated projection test; corrected command uses --features
+jsonschema as workspace does. No Cargo or Windows/native task active. New control source is NOT covered by C704's 19 native
+primitive tests below. All local checks completed. Positive stop/ACK/callback retirement remains
+unproven until the actual Main combined native gate.
+
+NEXT: bounded cold receipt verifier CLI before normal worker startup (Store readonly,
+no Worker construction/recovery marker), independent consuming supervisor driver,
+then combined actual Main native stop/ACK/lost ACK/callback retirement gate. New
+positive helper archives BOTH worker16/updater12; keep reference15/11. Current public
+update capability still off; no supervisor action starts new stop driver yet.
+Potential native actual Main strategy: trusted test harness prepares independent
+supervisor bound to real running worker Main via library, outside candidate's own
+execution domain; enclosing test Job may remain. Do not weaken production refusal
+of unverified external Jobs or add breakaway just to pass tests.
+Installed d052 healthy unchanged/idle after previous gate; worker stays on, desktop
+unnecessary. U1–U4 goal active; no manual bootstrap/update needed at this point.
+
 ## Shutdown primitives native gate PASSED; control v6 NEXT — 2026-10-20
 
 Task3970a744-a5ef-4ecc-97a3-3b8a56ce9075 / run20261021-034430-116fd4ff succeeded0.

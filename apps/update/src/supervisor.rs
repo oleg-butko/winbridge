@@ -1034,13 +1034,7 @@ pub(crate) async fn forward_worker(
         return Err("Bound worker process changed; no rebind".into());
     }
     let request = WorkerUpdateControlRequest {
-        control_version: match command {
-            WorkerUpdateControlCommand::ObserveRuntime => 2,
-            WorkerUpdateControlCommand::ObserveCompatibility => 3,
-            WorkerUpdateControlCommand::ObserveReceipt { .. } => 4,
-            WorkerUpdateControlCommand::ObserveDrain => 5,
-            _ => 1,
-        },
+        control_version: command.required_version(),
         binding: binding.clone(),
         update_id: record.spec.update_id.clone(),
         launch_id: record.spec.launch_id.clone(),
@@ -2061,8 +2055,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     return Ok(None);
                 }
                 let command = request.worker_command.clone().ok_or("Worker command missing")?;
-                if matches!(command,WorkerUpdateControlCommand::ObserveRuntime | WorkerUpdateControlCommand::ObserveCompatibility | WorkerUpdateControlCommand::ObserveReceipt { .. } | WorkerUpdateControlCommand::ObserveDrain) {
-                    return Err("Readonly worker observation requires supervisor v6/v9/v11/v12, not v1 worker-control forwarding".into());
+                if command.required_version()!=1 {
+                    return Err("Versioned worker command requires supervisor v6/v9/v11/v12 for observations or an explicit shutdown contract; v1 forwarding is forbidden".into());
                 }
                 forward_worker(&r, command).await.map(Some)
             }.await;

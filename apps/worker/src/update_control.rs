@@ -1,6 +1,7 @@
 //! Trusted worker launcher and a separate supervisor-only local channel.
 //! No network/CLI/MCP route enables this module. Runtime replacement is absent.
 use crate::{Result, Worker};
+mod shutdown;
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -308,18 +309,7 @@ impl Worker {
         request: &WorkerUpdateControlRequest,
         peer: u32,
     ) -> Result<UpdateRecord> {
-        let version_matches = matches!(
-            (request.control_version, &request.command),
-            (
-                1,
-                WorkerUpdateControlCommand::Observe
-                    | WorkerUpdateControlCommand::BeginSource
-                    | WorkerUpdateControlCommand::Advance { .. }
-            ) | (2, WorkerUpdateControlCommand::ObserveRuntime)
-                | (3, WorkerUpdateControlCommand::ObserveCompatibility)
-                | (4, WorkerUpdateControlCommand::ObserveReceipt { .. })
-                | (5, WorkerUpdateControlCommand::ObserveDrain)
-        );
+        let version_matches = request.control_version == request.command.required_version();
         if !version_matches
             || request.binding != reg.binding
             || request.binding.generation != self.generation
@@ -347,14 +337,17 @@ impl Worker {
             || update.request.expected.worker_build_id != reg.binding.build.build_id
             || update.request.expected.worker_config_sha256 != reg.binding.config_sha256
             || sup.spec.config_sha256 != reg.config_sha256
-            || !matches!(request.command, WorkerUpdateControlCommand::Observe)
-                && matches!(
-                    update.phase,
-                    UpdatePhase::Committed
-                        | UpdatePhase::Deferred
-                        | UpdatePhase::FailedBeforeCutover
-                        | UpdatePhase::ManualIntervention
-                )
+            || !matches!(
+                request.command,
+                WorkerUpdateControlCommand::Observe
+                    | WorkerUpdateControlCommand::ObserveShutdownReceipt { .. }
+            ) && matches!(
+                update.phase,
+                UpdatePhase::Committed
+                    | UpdatePhase::Deferred
+                    | UpdatePhase::FailedBeforeCutover
+                    | UpdatePhase::ManualIntervention
+            )
         {
             return Err(
                 "Only the exact active supervisor/current updater epoch can control this worker"
@@ -369,6 +362,9 @@ impl Worker {
         request: &WorkerUpdateControlRequest,
         peer: u32,
     ) -> Result<WorkerUpdateControlResult> {
+        if request.command.required_version() == 6 {
+            return shutdown::observation(self, reg, request, peer);
+        }
         if request.command == WorkerUpdateControlCommand::ObserveDrain {
             if request.binding.context != self.request_context()? {
                 return Err("Worker journal context changed; no drain observation rebind".into());
@@ -524,7 +520,10 @@ impl Worker {
             WorkerUpdateControlCommand::ObserveRuntime
             | WorkerUpdateControlCommand::ObserveCompatibility
             | WorkerUpdateControlCommand::ObserveReceipt { .. }
-            | WorkerUpdateControlCommand::ObserveDrain => {
+            | WorkerUpdateControlCommand::ObserveDrain
+            | WorkerUpdateControlCommand::ObserveShutdownState
+            | WorkerUpdateControlCommand::RequestShutdown { .. }
+            | WorkerUpdateControlCommand::ObserveShutdownReceipt { .. } => {
                 Err("Runtime observation is not a lease request".into())
             }
             WorkerUpdateControlCommand::BeginSource => {
@@ -719,12 +718,10 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
             } else {
                 false
             };
-            let control_version = match request.control_version {
-                2 => 2,
-                3 => 3,
-                4 => 4,
-                5 => 5,
-                _ => 1,
+            let control_version = if (1..=6).contains(&request.control_version) {
+                request.control_version
+            } else {
+                1
             };
             struct Callback(Arc<Registration>);
             impl Drop for Callback {
@@ -758,18 +755,20 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                             .map_err(|e| format!("Fixture control gate stopped: {e}"))?;
                     }
                 }
-                worker.control_result(&registration, &request, peer)
+                shutdown::prepare_reply(worker, &registration, &request, peer)
             })
             .await;
             let result = match result {
-                Ok(Ok(result)) => result,
-                Ok(Err(message)) => WorkerUpdateControlResult::Error { message },
-                Err(e) => WorkerUpdateControlResult::Error {
-                    message: format!(
-                        "Worker control outcome unconfirmed: {e}; observe original command"
-                    ),
-                },
+                Ok(Ok(reply)) => reply,
+                Ok(Err(message)) => shutdown::ControlReply::error(message),
+                Err(e) => shutdown::ControlReply::error(format!(
+                    "Worker control outcome unconfirmed: {e}; observe original command"
+                )),
             };
+            let shutdown::ControlReply {
+                result,
+                stop_after_reply,
+            } = result;
             let response = WorkerUpdateControlResponse {
                 control_version,
                 binding,
@@ -784,6 +783,8 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 continue;
             }
             let _ = ipc::write(&mut stream, &response).await;
+            // Also runs when the reply is abandoned: acceptance already committed.
+            drop(stop_after_reply);
         }
     });
     Ok(Some(ControlServer { task, reg }))
@@ -1506,6 +1507,85 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
         assert_eq!(v.queue_mode, QueueMode::DispatchPaused);
         assert_eq!(v.queue_revision, "1");
         assert_eq!(f.slots(), 0);
+        f.stop().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn shutdown_v6_observes_own_state_and_rejects_legacy_or_unadmitted_stop_without_effects()
+    {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let reg = f.worker.control_registration().unwrap();
+        let h = &f.supervisor.as_ref().unwrap().record;
+        let mut q = WorkerUpdateControlRequest {
+            control_version: 6,
+            binding: reg.binding.clone(),
+            update_id: h.spec.update_id.clone(),
+            launch_id: h.spec.launch_id.clone(),
+            supervisor: h.process.clone().unwrap(),
+            updater_owner_id: h.owner_id.clone().unwrap(),
+            updater_epoch: h.owner_epoch.unwrap(),
+            command: WorkerUpdateControlCommand::ObserveShutdownState,
+        };
+        let before = UpdateJournal::read_snapshot(&reg.directory, Some(&q.update_id)).unwrap();
+        let peer = q.supervisor.process_id;
+        for version in 1..=5 {
+            q.control_version = version;
+            assert!(f.worker.control_result(&reg, &q, peer).is_err());
+        }
+        q.control_version = 6;
+        let WorkerUpdateControlResult::ShutdownState { state } =
+            f.worker.control_result(&reg, &q, peer).unwrap()
+        else {
+            panic!("Own state observation expected")
+        };
+        assert_eq!(
+            state.lock_identity,
+            winbridge_platform::file_identity(&f.worker._instance_lock).unwrap()
+        );
+        let original = q.binding.clone();
+        q.binding.generation = uuid::Uuid::new_v4().to_string();
+        assert!(f.worker.control_result(&reg, &q, peer).is_err());
+        q.binding = original;
+        let command = WorkerShutdownCommand {
+            command_id: "shutdown-negative".into(),
+            expected_lease_revision: 4,
+            intent_sha256: "a".repeat(64),
+            reason: "No committed intent; must remain live".into(),
+        };
+        q.command = WorkerUpdateControlCommand::ObserveShutdownReceipt {
+            command: command.clone(),
+        };
+        assert!(matches!(
+            f.worker.control_result(&reg, &q, peer).unwrap(),
+            WorkerUpdateControlResult::ShutdownReceipt { receipt: None, .. }
+        ));
+        q.command = WorkerUpdateControlCommand::RequestShutdown {
+            command: command.clone(),
+        };
+        // Both direct data handling and the real reply-owner path reject a stop
+        // without the committed quiesced/issued updater intent.
+        assert!(f.worker.control_result(&reg, &q, peer).is_err());
+        assert!(shutdown::prepare_reply(f.worker.clone(), &reg, &q, peer).is_err());
+        assert!(f
+            .supervisor
+            .as_mut()
+            .unwrap()
+            .worker_control(WorkerUpdateControlCommand::RequestShutdown { command })
+            .await
+            .is_err());
+        assert!(!f.worker.stop.load(Ordering::Acquire));
+        assert!(f
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(&reg.directory, Some(&q.update_id)).unwrap(),
+            before
+        );
         f.stop().await;
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]

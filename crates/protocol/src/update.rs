@@ -775,6 +775,16 @@ pub enum WorkerUpdateControlCommand {
     },
     /// Worker control v5 only; logical observation, never a quiescence receipt.
     ObserveDrain,
+    /// Worker control v6 only. Paths/identities come from the running worker.
+    ObserveShutdownState,
+    /// Worker control v6 only; immutable intent must already be Issued.
+    RequestShutdown {
+        command: WorkerShutdownCommand,
+    },
+    /// Worker control v6 only; missing history never authorizes another request.
+    ObserveShutdownReceipt {
+        command: WorkerShutdownCommand,
+    },
     BeginSource,
     Advance {
         command: WorkerUpdateCommand,
@@ -829,8 +839,19 @@ pub enum WorkerUpdateControlResult {
     DrainObservation {
         observation: Box<WorkerDrainObservation>,
     },
+    ShutdownState {
+        state: WorkerShutdownState,
+    },
+    ShutdownReceipt {
+        command: WorkerShutdownCommand,
+        receipt: Option<Box<WorkerShutdownReceipt>>,
+        #[serde(rename = "observedAtMs")]
+        observed_at_ms: u64,
+    },
     /// An error does not prove absence of a committed effect. Observe the original ID.
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 impl WorkerUpdateControlResult {
     pub fn is_error(&self) -> bool {
@@ -848,7 +869,9 @@ impl WorkerUpdateControlResponse {
             WorkerUpdateControlResult::RuntimeIdentity { .. }
             | WorkerUpdateControlResult::RuntimeCompatibility { .. }
             | WorkerUpdateControlResult::CommandReceipt { .. }
-            | WorkerUpdateControlResult::DrainObservation { .. } => {
+            | WorkerUpdateControlResult::DrainObservation { .. }
+            | WorkerUpdateControlResult::ShutdownState { .. }
+            | WorkerUpdateControlResult::ShutdownReceipt { .. } => {
                 Err("Runtime identity is not a lease receipt".into())
             }
         }
@@ -863,7 +886,9 @@ impl WorkerUpdateControlResponse {
             WorkerUpdateControlResult::Snapshot { .. }
             | WorkerUpdateControlResult::RuntimeCompatibility { .. }
             | WorkerUpdateControlResult::CommandReceipt { .. }
-            | WorkerUpdateControlResult::DrainObservation { .. } => {
+            | WorkerUpdateControlResult::DrainObservation { .. }
+            | WorkerUpdateControlResult::ShutdownState { .. }
+            | WorkerUpdateControlResult::ShutdownReceipt { .. } => {
                 Err("Lease receipt is not a runtime identity".into())
             }
         }
