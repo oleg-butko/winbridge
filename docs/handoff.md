@@ -1,3 +1,24 @@
+## U2.1 final-backup report contract locally verified — 2026-10-21
+
+Added protocol/update/state_backup.rs: StateBackupAuthority fingerprint/epoch,
+StateBackupFileEvidence and WorkerStateBackupReport v1. Envelope checks preservation
+of authority, acceptance/lease/state linkage, actual helper host/session shape,
+distinct backup File ID, SQLite pages/bytes, read-only/no-worker/no-scheduler/no-
+recovery/runtime effects. Data only, cannot authorize backup or replace.
+23 negative mutations +unknown processExited rejected. Full protocol tests all
+features passed45/0; both protocol all-target all-feature Clippy, generated TS and
+UI typecheck passed. Logs .winbridge/update-preparation/state-backup-*. Existing
+capability advertising, worker CLI/control/legacy RPC and updater12 unchanged.
+
+NEXT pure StateBackupIntent/Record FSM in apps/update (no effects/permits from JSON),
+then reviewed schema13 ledger, old-helper readonly SQLite export and driver/native
+gate. Ensure helper supports mode before stopping worker; input/destination are
+policy-derived, join one saved attempt+actual PID-before-resume/current owner epoch.
+Retain OS guard across preparation/backup/receipt; history cannot restore custody.
+U1 complete as below; public update/U2–U4 still unfinished, goal active.
+Installed d052 healthy/idle0, controller3902; no native/Cargo active, desktop not
+needed and no manual update yet. No user config changes/backups needed.
+
 ## Internal U1 COMPLETE; U2.1 final backup NEXT — 2026-10-21
 
 All internal U1 source/build/health/drain/exact-stop checklist items are complete.

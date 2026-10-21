@@ -59,3 +59,15 @@ file identity/schema/receipt отклонены, PID-before-resume и crash/clea
 claim нового owner или новых effects. Restore/rollback потребует отдельного контракта.
 Сначала native gate этого блока, затем U2.2 file replacement и activation;
 installed runtime не использовать как fixture. Ручной bootstrap остаётся в U4.
+
+
+## Начатый слой контракта
+
+В `crates/protocol/src/update/state_backup.rs` добавлены authority fingerprint,
+backup file evidence и typed report v1. `validate_envelope` проверяет сохранение
+incarnation/epoch/fingerprint, связь acceptance/lease/state, helper host/session,
+отдельную file identity, число страниц/размер и отсутствие source/runtime effects.
+Синтетический contract test отклоняет 23 искажения и неизвестное поле processExited.
+Это проверка данных; filesystem scope, сохранённая попытка, kernel process/cleanup
+и физический guard проверяются будущим consuming driver. Текущие worker capability,
+CLI, updater schema12 и legacy RPC не расширены; executable backup пока отсутствует.

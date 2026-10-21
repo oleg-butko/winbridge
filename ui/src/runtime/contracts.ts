@@ -105,6 +105,13 @@ export type CandidateShutdownView = { phase: CandidateShutdownPhase, attemptId: 
  * cannot restore it; this boolean is not execution authority.
  */
 physicalCustodyHeld: boolean, };
+export type StateBackupAuthority = { incarnation: string, epoch: number,
+/**
+ * Fingerprint of the complete private authority header; no execution token.
+ */
+fingerprintSha256: string, };
+export type StateBackupFileEvidence = { path: string, bytes: number, sha256: string, fileIdentity: string, };
+export type WorkerStateBackupReport = { schemaVersion: number, kind: string, inputSha256: string, updateId: string, attemptId: string, helperDescriptor: ArtifactDescriptor, helperProcess: SupervisorProcess, helperImage: RuntimeImageEvidence, workerConfig: RuntimeImageEvidence, state: WorkerShutdownState, workerJournalSchema: number, sourceAuthority: StateBackupAuthority, backupAuthority: StateBackupAuthority, shutdownReceipt: WorkerShutdownReceipt, backup: StateBackupFileEvidence, pageSize: number, pageCount: number, completedAtMs: number, integrityVerified: boolean, backupCreatedNew: boolean, journalOpenedReadOnly: boolean, workerConstructed: boolean, schedulerStarted: boolean, recoveryMarkerChanged: boolean, runtimeApplied: boolean, };
 export type SupervisorWorkerBinding = { context: RequestContext, generation: string, build: BuildIdentity, process: SupervisorProcess, configSha256: string, endpoint: string, };
 export type WorkerUpdateControlCommand = { "action": "observe" } | { "action": "observe_runtime" } | { "action": "observe_compatibility" } | { "action": "observe_receipt", command: WorkerUpdateCommand, } | { "action": "observe_drain" } | { "action": "observe_shutdown_state" } | { "action": "request_shutdown", command: WorkerShutdownCommand, } | { "action": "observe_shutdown_receipt", command: WorkerShutdownCommand, } | { "action": "begin_source" } | { "action": "advance", command: WorkerUpdateCommand, };
 export type WorkerUpdateControlRequest = { controlVersion: number, binding: SupervisorWorkerBinding, updateId: string, launchId: string, supervisor: SupervisorProcess, updaterOwnerId: string, updaterEpoch: number, command: WorkerUpdateControlCommand, };
