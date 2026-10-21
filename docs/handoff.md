@@ -1,3 +1,44 @@
+## Drain/quiesce native gate PASSED; next exact shutdown — 2026-10-20
+
+Task e73c941f-42f4-47af-af7f-ba0615b027e0 / run20261020-223955-44db4bea
+succeeded0. Do NOT repeat. 26 native tests /12 groups, four actual full candidate/
+health/drain operations, 15 ready files independently verified; typed proof checked.
+ReportSHA c9bad3d4fbef464cba96fe278c0ef9e5dd4baeadaf1d08f48bdcf266a1848384;
+proofSHA 92c53d63f14ce432038bb4225234da022fb3489564990072ec1d3c8574d0a51e.
+A28e3a1c/C3b738c9 pins below; .winbridge/update-preparation/drain-native-verified.json.
+
+Verified + lost ACK: all3 matching receipts/root Quiesced atomic; accepted tasks
+succeeded0. Exactly ONE BeginDrain request, readonly receipt reconciliation.
+Cancel waiting: only first command confirmed; other2 Prepared; accepted tasks stay
+Queued/user pause preserved until explicit FIXTURE cleanup. Denied final history:
+worker Quiesced but root Draining, last command Uncertain, no false approval.
+Every case ends via owned Abort Completed/Release, unchanged old runtime manifest,
+retired supervisor. All helpers are actual C executables; old worker is explicitly
+test harness with synthetic other-role descriptors. Seeded target source, source
+plan0files: this gate is drain/build/health, not a new bulk source-apply gate.
+Windows free44661833728→44577452032 bytes. No GUI, no installed replacement.
+Later readonly aborted-status fix 8a7d165 is outside A28:72 updater tests + both
+Clippy passed; effect paths unchanged. Full joined old health10 migration still
+requires separate positive coverage; current migration test only retention/denial.
+
+Retained proven binaries BEFORE upcoming schema/cache changes:
+K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\shutdown-base-20261021-024424-6223bb21
+worker15 SHA ab3776ab34eb8bb9a2966c2ef15943e1c4ec038b66775bd60f0c0b2dd7ea264a;
+updater11 SHA 5ec5bfff6b7fbdc5703a87c54dd1ad0fdcdd71ea55b98f7a7e396cd9f57ec49f.
+Both clean C3b/sourceManifest92a75d.../build1792536258192180300, exact query checked.
+Copy task46f13b1a-5b9d-4677-a297-7e02344cd87c succeeded0; shared reference.json/ready
+verified. .winbridge/update-preparation/shutdown-base-reference-verified.json.
+Schemas pinned from reviewed source, not an invented --describe query. Source UTC
+reference date21 vs session NY20 is expected. Keep old reference10/worker14 too.
+
+NEXT concrete implementation: plans/worker-self-update/exact-shutdown.md.
+Add durable shutdown intent/receipt, separately versioned control, existing worker
+stop path, exact process/lock exit proof; raw lifecycle must not bypass proofs.
+Do not use recovery startup for readonly inspection: it latches a recovery marker.
+No Cargo/native task active. Installed d052 generation78e9bbe1 remains healthy idle,
+controller running. Worker required; desktop unnecessary. U1–U4 goal remains open;
+shutdown/replacement/activation/desktop/rollback/public update still unfinished.
+
 ## Post-archive review: no optimistic aborted status — 2026-10-20
 
 Read-only drain projection now labels aborted ONLY for root FailedBeforeCutover

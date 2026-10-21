@@ -254,3 +254,43 @@ FailedBeforeCutover и проверенной Abort Completed с matching Releas
 Регрессия использует согласованные typed command receipts и проверяет этот случай;
 72 updater tests и обе all-target Clippy проверки прошли. Это более поздняя pure
 projection правка, отсутствующая в native A28; effect paths этого gate не изменены.
+
+## Сквозной Windows gate пройден — 2026-10-20
+
+Run `20261020-223955-44db4bea`, task `e73c941f-42f4-47af-af7f-ba0615b027e0`,
+succeeded/exit0. 26 native Rust tests,12 groups, четыре полных build/health/drain
+операции. Все15 ready files проверены по bytes/SHA, typed proof проверен отдельно.
+A `28e3a1cfcffe665f3ee84dec1af1ed5fe019bf97`, archiveSHA
+`2dd107ab2620b3e9426ab6cb7fc8a4c81ed25580a854efc9f653d08fe63f80f7`, manifestSHA
+`6eb38dcba635e9ac2bcdda7c161f1b91620c7f3c2139ec7d1ea1bd997eee553a`.
+C `3b738c9f49c980b922b55b36f687a05bc8bbb3d3`, archiveSHA
+`78170c4a6f5dfb6c70dd37ee4da026504e8a528282a96d45100f8b68e8e151b9`, manifestSHA
+`92a75d09439955fe2595c6198337bfe4f162ad68714311924d6007931b82c5a7`.
+
+| Сценарий | Результат |
+| --- | --- |
+| Обычный drain | Две задачи succeeded0; три matching receipts; root Quiesced. |
+| Потерянный BeginDrain ACK | Ровно один request; readonly lookup; те же успешные задачи и atomic Quiesced. |
+| Отмена при user pause | Только BeginDrain confirmed; остальные Prepared; задачи Queued до отдельной fixture cleanup; pause сохранена. |
+| Отказ final Confirmed history | Worker Quiesced, root Draining, Uncertain; ложного успеха нет; затем owned abort/release. |
+
+Каждая операция закончилась Abort Completed, matching Release и выходом своего
+supervisor. Старый runtime manifest не изменился. Candidate/helpers реальные;
+old-worker entry point — test harness, остальные old-role descriptors синтетические.
+Source seed проверен из ZIP; план0files. Этот gate не заменяет прежние source-apply
+и actual worker Main/pins проверки. Поздняя чистая проекция статуса отмены 8a7d165
+проверена локально и обеими Clippy, но отсутствует в архиве A28.
+
+Отчёты: `K:\VMs\shared\WinBridge\workflow-validation\20261020-223955-44db4bea`.
+ReportSHA `c9bad3d4fbef464cba96fe278c0ef9e5dd4baeadaf1d08f48bdcf266a1848384`,
+proofSHA `92c53d63f14ce432038bb4225234da022fb3489564990072ec1d3c8574d0a51e`.
+Свободно Windows44661833728→44577452032 bytes. Installed d052 не заменён/не
+перезапущен, healthy/idle; GUI не открывался. Закрывать тестовые окна не требуется,
+desktop можно оставить закрытым, установленный worker оставить работать.
+
+Перед следующим schema bump сохранены worker15/updater11 из доказанного C3b:
+`K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\shutdown-base-20261021-024424-6223bb21`.
+SHA worker `ab3776ab34eb8bb9a2966c2ef15943e1c4ec038b66775bd60f0c0b2dd7ea264a`,
+updater `5ec5bfff6b7fbdc5703a87c54dd1ad0fdcdd71ea55b98f7a7e396cd9f57ec49f`.
+Обе копии и artifact queries проверены. Это тестовые references; установка не
+выполнялась. [Exact shutdown](exact-shutdown.md) — следующий блок; U1–U4 не завершены.

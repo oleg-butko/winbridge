@@ -2,15 +2,17 @@
 
 2026-10-20: сквозной [candidate health gate](plans/worker-self-update/candidate-health.md)
 пройден —13 native tests /4 actor cases /9 groups, actual candidate build и
-atomic acceptance. Следующий U1 блок: [durable drain/quiesce](plans/worker-self-update/drain-quiesce.md)
-и exact shutdown. Самообновление U1–U4 ещё не завершено; installed runtime не менялся.
+atomic acceptance. [Durable drain/quiesce](plans/worker-self-update/drain-quiesce.md) прошёл26 native tests,
+12 groups и четыре full actor cases. Следующий U1 блок —
+[exact shutdown](plans/worker-self-update/exact-shutdown.md). Самообновление U1–U4 ещё не завершено; installed runtime не менялся.
 
 В следующем блоке реализованы data FSM и updater schema11: immutable intents,
 Issued-before-delivery, append-only receipts/history и atomic root quiescence.
 Добавлены consuming driver/supervisor v13 и view5: ожидание принятой очереди,
 readonly reconciliation потерянного ACK и coordinated abort. 563 workspace tests,
 15 завершающих worker tests, обе Clippy проверки, TS и UI build проходят;
-объединённый native gate готовится. Shutdown/install этим не разрешаются.
+объединённый native gate пройден (A28/C3b, отдельно от более позднего readonly
+исправления статуса отмены). Shutdown/install этим не разрешаются.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 

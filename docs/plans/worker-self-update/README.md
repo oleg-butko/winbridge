@@ -156,7 +156,10 @@ U0 не применяет source plan, не выключает процессы
   другими old-role descriptors; candidate и helpers настоящие. Это не activation.
   Предыдущие [startup/Main/pins gates](windows-runtime-startup-gate-2026-10-18.md)
   и [217 base native tests](health-transition-review-2026-10-20.md) сохраняют свою область.
-- [ ] Worker admission/drain/quiesce/[exact shutdown](exact-shutdown.md)/startup guard во всех effect paths;
+- [x] [Durable drain/quiesce actor](drain-quiesce.md):26 native tests /12 groups,
+  four complete build/health/drain/abort cases, exact lost-ACK reconciliation,
+  accepted queue/user pause and atomic final receipt fault. No replacement.
+- [ ] Worker [exact shutdown](exact-shutdown.md)/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
 - [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.
 - [ ] Native fault gate: updater жив после worker exit; нет второго supervisor,
@@ -166,8 +169,8 @@ U0 не применяет source plan, не выключает процессы
 Следующий U1 блок после health gate: [drain/quiesce](drain-quiesce.md) с
 сохранением accepted work и user pause. Реализован schema11 journal с immutable
 command intents/receipts/history и атомарными root transitions; 560 local tests и
-две Clippy проверки passed. Readonly receipt lookup v11/v4 прошёл health gate;
-v12/v5 и consuming driver/actor ещё требуют combined native проверки.
+две Clippy проверки passed. Combined native v13/view5/v5/v4 gate пройден;
+точная остановка worker остаётся следующим шагом.
 
 ### U2 — same-schema apply и agent tracking
 
