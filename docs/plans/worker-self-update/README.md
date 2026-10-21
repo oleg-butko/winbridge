@@ -59,7 +59,7 @@ Update store: `updates`, `transitions`, `file_intents`, `file_receipts`,
 | Building | Управляемая сборка и staging; старый worker обслуживает другие проекты. | Build exit 0, source readback, artifact hashes. |
 | CandidateVerified | Isolated native smoke/contract/migration test без production effects. | Candidate proof привязан к actual source/binaries. |
 | Draining | Запрет новых roots, children принятого workflow разрешены. | Нет незавершённых roots/apps; user pause не отменяется. |
-| Quiesced | В одной authority transaction закрыть dispatch; затем physical scan. | Нет OS owners/in-flight effects; final consistent DB backup и preflight. |
+| Quiesced | В одной authority transaction закрыть dispatch; затем physical scan. | Нет OS owners/in-flight effects; shutdown preflight. Final backup — после exact exit перед replacement (U2). |
 | Stopping | Save ACK desktop, exact-process exit; worker shutdown ACK/exit. | Instance lock и заменяемые файлы освобождены. |
 | Replacing | Per-file intent → replace → hash/receipt; запуск заблокирован. | Весь binary set соответствует manifest. |
 | VerifyingLocal | New worker запускается с guard до миграции/scheduler. | Version/config/schema/incarnation/IPC/reconciliation корректны. |
@@ -159,21 +159,26 @@ U0 не применяет source plan, не выключает процессы
 - [x] [Durable drain/quiesce actor](drain-quiesce.md):26 native tests /12 groups,
   four complete build/health/drain/abort cases, exact lost-ACK reconciliation,
   accepted queue/user pause and atomic final receipt fault. No replacement.
-- [ ] Worker [exact shutdown](exact-shutdown.md)/startup guard во всех effect paths;
+- [x] Worker [exact shutdown](exact-shutdown.md)/startup guard во всех effect paths;
   local config edits/cleanup/recovery тоже согласуются с maintenance.
-- [ ] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.
-- [ ] Native fault gate: updater жив после worker exit; нет второго supervisor,
+- [x] Отдельный IPC с user SID/DACL; old/new journals не меняют update authority.
+- [x] Native fault gate: updater жив после worker exit; нет второго supervisor,
   accepted tasks не обрываются, app/unknown owner блокирует update, lost ACK и
   падение между handoff receipts не разрешают преждевременный replace.
 
-Следующий U1 блок после health gate: [drain/quiesce](drain-quiesce.md) с
-сохранением accepted work и user pause. Реализован schema11 journal с immutable
-command intents/receipts/history и атомарными root transitions; 560 local tests и
-две Clippy проверки passed. Combined native v13/view5/v5/v4 gate пройден;
-точная остановка worker остаётся следующим шагом.
+Внутренний U1 цикл source/build/health/drain/shutdown завершён 2026-10-21.
+[Четыре actual Main cases](windows-shutdown-main-gate-2026-10-21.md) и два
+[supplemental cases](windows-shutdown-supplemental-gate-2026-10-21.md)
+проверили ACK/cold recovery, callback/instance lock, живой supervisor и crash до
+подтверждения exit. Вместе с прежними drain/source/compiler gates это закрывает
+подготовку к замене. Public Main policy/CLI/MCP, replacement и activation принадлежат
+U2–U4 и ещё не включены. Final consistent backup делается после exact exit, до
+первого replacement: он должен включать acceptance и последние callback writes.
 
 ### U2 — same-schema apply и agent tracking
 
+- [ ] [Final consistent worker state backup](final-state-backup.md) под живым exit
+  guard, отдельный durable helper attempt и проверенная receipt до replacement.
 - [ ] Binary manifest, same-volume replace и verified prior set, exact exit/lock.
 - [ ] New worker verification mode и controller-pinned confirmation.
 - [ ] Installation-level management contract/CLI/MCP/status с opt-in local policy;

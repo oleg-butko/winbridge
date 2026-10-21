@@ -19,7 +19,8 @@ updater schema12 и worker schema16, immutable receipt/history, однократ
 разрешения после commit. Trusted exit adapter требует held OS handles и instance lock;
 raw ShutdownVerified запрещён, runtime replacement пока отсутствует.
 [19 native primitive tests](plans/worker-self-update/windows-shutdown-primitives-gate-2026-10-20.md)
-пройдены; полный actual Main stop/ACK/cold-verifier gate ещё впереди.
+пройдены; их область — отдельные process/state/ledger примитивы.
+Результаты полного actual Main сценария приведены ниже.
 Worker control v6 реализован: receipt-before-ACK и stop через existing loop;
 584 workspace tests прошли для control v6. Cold readonly receipt verifier добавлен
 и прошёл 11 проверок точек входа и [4 native reader tests](plans/worker-self-update/windows-shutdown-reader-gate-2026-10-21.md);
@@ -27,11 +28,12 @@ consuming supervisor v14/view6 реализован: 588 workspace tests и об
 Clippy проверки прошли. Он сохраняет OS guard после driver retirement; combined
 [actual Main stop/ACK/exit gate](plans/worker-self-update/windows-shutdown-main-gate-2026-10-21.md)
 пройден: один integration test /4 полных случая /17 checksum artifacts.
-Supplemental delayed-lock/pre-exit-crash fixtures реализованы и проходят обе
-Clippy проверки; их native gate ещё впереди. Public replacement/activation
-остаются отключены. Подготовлен feature-gated actual Main gate: четыре случая
-ACK/lost ACK/delayed callback/receipt write denial, cold CLI, restart refusal и
-owned supervisor crash проверены на Windows; дополнительные faults выше остаются.
+[Supplemental delayed-lock/pre-exit-crash cases](plans/worker-self-update/windows-shutdown-supplemental-gate-2026-10-21.md)
+также пройдены: два случая /13 checksum artifacts. Внутренний U1 цикл завершён.
+Следующий блок — [U2.1 final consistent backup](plans/worker-self-update/final-state-backup.md)
+после exact exit перед replacement. Public installation/activation и U2–U4 ещё
+открыты. Raw FilesVerified/local health/controller confirmation закрыты до
+появления соответствующих trusted drivers; 166 updater tests и обе Clippy проходят.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 

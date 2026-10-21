@@ -9,8 +9,11 @@
 supervisor crash. Updater schema12/worker16, control v6, supervisor v14/view6.
 Durable receipt отделена от живого OS guard: после driver retirement его держит
 supervisor, после crash исторический Exited не восстанавливает custody.
-Supplemental delayed-lock/pre-exit-crash tests, final consistent backup, replacement,
-activation/desktop/rollback и публичный update остаются следующими blocks U1–U4.
+[Supplemental lock/crash tests](plans/worker-self-update/windows-shutdown-supplemental-gate-2026-10-21.md)
+также пройдены; внутренний U1 цикл завершён. [Final consistent backup](plans/worker-self-update/final-state-backup.md),
+replacement, activation/desktop/rollback и публичный update остаются U2–U4.
+Raw lifecycle не может объявить файлы/local health/controller проверенными:
+для следующих переходов необходимы trusted drivers и собственные receipts.
 
 ## Подготовка самообновления — 2026-10-17
 

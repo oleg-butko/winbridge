@@ -1,3 +1,62 @@
+## Internal U1 COMPLETE; U2.1 final backup NEXT — 2026-10-21
+
+All internal U1 source/build/health/drain/exact-stop checklist items are complete.
+Public installation remains off. Main four-case gate2df5f44 and supplemental
+source9ca5039 passed. Latest task99937c64-7cb7-42f7-9ef0-81e3fb19bdec,
+run20261021-094402-73c4f112:1 integration test/2 cases/3 commands,13 ready files
+verified independently twice,9 further proof mutations rejected. ReportSHA
+8f5cc63f8fdb600c07216440342c4599ac85579774df218715967f06bb97f03c;
+proofSHA575df2a192b42f45046bcc2997ac79561e6cf22071a34e03334b8b050f990d7c.
+Details plans/worker-self-update/windows-shutdown-supplemental-gate-2026-10-21.md.
+Helper PID2440 held original lock after Main5600 exited; driver stayed Stopping/ACK
+until release, then Exited/ Replacing. Crash before Main16424 exit retained exact
+Stopping/Acknowledged, same cold receipt and no custody. Native refs remain intact.
+
+Review fixes AFTER producer9ca: f4737e4 bounds helper lock acquisition because
+Weak None can precede destructor completion (fixture-only; Windows Clippy passed).
+b637fb0 rejects fresh FilesVerified/LocalHealthVerified/ControllerConfirmed through
+raw lifecycle until trusted U2 drivers exist; historical duplicate lookup preserved.
+166 updater tests,0 failures,6 ignored plus both all-target Clippy/fmt/diff passed.
+No need repeat six native cases for these changes. Settings/retention/recovery
+update barriers were reviewed; startup and lease guards remain intact.
+
+NEXT implement reviewed plans/worker-self-update/final-state-backup.md (U2.1).
+Start typed helper contract/FSM, then updater schema13 durable attempt/receipt,
+readonly old-worker SQLite export, supervisor custody/owned probe integration and
+native gate. Existing Store::archive_read_only uses SQLite backup API. Require
+new old-helper capability BEFORE shutdown admission; after exact exit backup must
+include acceptance/final callbacks, before first runtime file effect. Capture/keep
+live guard, never recreate from saved Exited/backup. Migration13 must fence old
+owner and preserve full schema12 histories without adopting custody; existing
+actual gate DBs/old12 binaries can provide consistent-copy/native references.
+Public replacement/activation/desktop/rollback/U2–U4 and goal remain unfinished.
+
+ControllerPID3902/session69990 running; installed d052 generationee48ba22 healthy,
+idle0, coverage complete/no errors after gate. All native/Cargo sessions terminal.
+Leave installed worker running; desktop can open/close, no test UI/no manual update.
+Windows47171813376→46212440064 bytes; no cleanup. Debian~26GiB, earlier unused
+incremental cleanup227MiB only. No user config edits or backups needed.
+
+## Supplemental lock/crash native gate ACTIVE — 2026-10-21
+
+Task99937c64-7cb7-42f7-9ef0-81e3fb19bdec/run20261021-094402-73c4f112.
+Session66672, log shutdown-supplemental-native-run.log. Do not submit another.
+Source9ca503964e99c5c2991d8bc2133cc6d3049bbcee; ZIP
+winbridge-20261021T094333Z-9ca5039-8e3e52d5.zip SHA
+96c1962cdb92ee841ad986b6a34822ea915ec1bb4d5e26bc4905c0f403d67a3b.
+Source pin shutdown-supplemental-source.json; same verified A294 target/archive
+and original cache. Mode --shutdown-main-supplemental selects only two new cases.
+Both feature Clippy checks/Python archive tests/fmt/scaffold passed. Source clean.
+
+Required Windows: installed worker only; desktop unnecessary, no GUI expected.
+Owned external lock helper and owned pre-exit crash are deliberate fixture actions.
+No manual installed update needed. U1–U4 stays active; native result pending.
+Debian available28387192832 bytes before run; Windows script records fresh storage.
+Four-case gate source2df5f44 is already passed; report/metrics immediately below.
+After supplemental completion verify ready+typed proof independently, fresh installed
+health, notify user test processes closed/worker should stay running. Then review
+U1 readiness and implement U2 final consistent backup before any replacement.
+
 ## Supplemental Main lock/crash fixtures prepared — 2026-10-21
 
 Default four-case gate remains passed at source2df5f44. Added private feature-only
