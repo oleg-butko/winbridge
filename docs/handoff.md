@@ -1,3 +1,37 @@
+## First actual Main gate terminal fixture assertion; retry next — 2026-10-21
+
+Task2da628ca-8936-4808-a8d9-81cf7bcb1753/run20261021-084556-c0c3f50c failed101
+only at restart_refused: expected English "unfinished", real Main returned the
+correct Russian startup-guard error and update ID. Prior assertions reached actual
+Main exit, atomic Exited+Replacing, surviving supervisor/held lock and cold receipt.
+No whole-gate pass; lost/delayed/denied cases did not run. Owned test Job retired;
+installed worker unchanged/healthy. Shared logs include None stderr/supervisor stderr.
+Storage51181858816→48968302592 bytes; Debian26GiB, no cleanup.
+
+Fix assertion to verify exact update ID/non-ready/error exit, plus independent DB
+lease check, without relying on display language. Sequential cases now share one
+verified target source path for Cargo reuse; runtime/state/installation/guards
+stay separate and previous owned Job must be empty before the next case starts.
+Source/state/runtime data never copied from installed worker. Rebuild clean source
+and repeat automatically, as authorized; do not ask user for a worker update.
+
+## Actual Main shutdown Windows gate ACTIVE — 2026-10-21
+
+Task2da628ca-8936-4808-a8d9-81cf7bcb1753, run20261021-084556-c0c3f50c.
+Runner session44358; do not launch a duplicate. Log shutdown-main-native-run.log.
+Shared workflow-validation/<run>; local .winbridge/workflow-validation/<run>.
+Source e2eff02a36cd19b2e8f654a32d20dac325b97d78, archive
+winbridge-20261021T084539Z-e2eff02-79ad8c1a.zip SHA
+15840aa9ed97a5185535a3e107245a9cfdb5f65fcab1074f3874c7c919edbcd2.
+Target a294e03100712ecf5a3e5ed836ef008bf084b3c4, archive pinned below.
+Both same worker16/updater12; target is intentionally older for isolated validation.
+Current progress: supervisor build passed39s, old real workspace passed39s, native
+desktop compile in progress. Four Main cases have not run yet. No success claim.
+Windows report records >=6GiB before builds; Debian before run26.22GiB, no cleanup.
+Installed d052 worker only executes the outer task. Desktop not needed/no GUI.
+After completion verify all ready files and typed proof through runner, then fresh
+installed health and report windows can close, worker should stay running.
+
 ## Actual Main shutdown gate prepared — 2026-10-21
 
 Feature update-validation adds explicitly isolated startup wiring to normal Main:

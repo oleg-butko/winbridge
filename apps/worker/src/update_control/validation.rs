@@ -101,7 +101,10 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
             .source_directory
             .canonicalize()
             .map_err(|e| e.to_string())?
-            != root.join("source")
+            != root
+                .parent()
+                .ok_or("Validation root has no gate parent")?
+                .join("source")
         || actual_config.canonicalize().map_err(|e| e.to_string())?
             != runtime.join("winbridge-worker.local.json")
         || worker

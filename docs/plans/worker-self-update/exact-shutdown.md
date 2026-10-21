@@ -230,7 +230,9 @@ activation/rollback и финальный consistent worker DB backup перед
 Feature `winbridge-worker/update-validation` включает только изолированный fixture
 startup. Обычные build/install scripts эту feature не используют. Без неё Main
 не читает validation env и не включает update control. С ней нужны SHA-проверенный
-input рядом с отдельным runtime, свой source/state и отключённый controller.
+input рядом с отдельным runtime, собственный state и отключённый controller.
+Последовательные cases используют один verified source внутри test group для
+переиспользования Cargo; перед следующим case предыдущий owned Job должен быть пуст.
 Main по-прежнему проходит обычные runtime guard → Worker::open_file → serve.
 Fixture task запускает независимый supervisor, выполняет source/build/health/drain,
 передаёт shutdown и завершается до выхода Main. Он не держит Arc<Worker> при

@@ -65,9 +65,6 @@ fn setup(
 ) -> (PathBuf, PathBuf, InstalledSetManifest) {
     let root = input.root.join(format!("{fault:?}"));
     fs::create_dir(&root).unwrap();
-    let stage = root.join("seed");
-    winbridge_update::archive::stage_archive(&input.archive, &input.target, &stage).unwrap();
-    fs::rename(stage.join("source"), root.join("source")).unwrap();
     let runtime = root.join("runtime");
     fs::create_dir(&runtime).unwrap();
     fs::create_dir(root.join("state")).unwrap();
@@ -80,12 +77,12 @@ fn setup(
     let worker_config = runtime.join("winbridge-worker.local.json");
     write(
         &worker_config,
-        &json!({"schemaVersion":1,"instanceId":format!("shutdown-{}",uuid::Uuid::new_v4()),"nodeId":"shutdown-main-test","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"source","workspaceRoot":root.join("source"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]}),
+        &json!({"schemaVersion":1,"instanceId":format!("shutdown-{}",uuid::Uuid::new_v4()),"nodeId":"shutdown-main-test","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"source","workspaceRoot":input.root.join("source"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]}),
     );
     let config = runtime.join("winbridge-update.local.json");
     write(
         &config,
-        &json!({"schemaVersion":3,"sourceDirectory":root.join("source"),"runtimeDirectory":runtime,"workerConfigPath":worker_config,"sourcePackagesDirectory":root.join("packages"),"build":{"powershellExecutable":adapter,"timeoutMs":300000}}),
+        &json!({"schemaVersion":3,"sourceDirectory":input.root.join("source"),"runtimeDirectory":runtime,"workerConfigPath":worker_config,"sourcePackagesDirectory":root.join("packages"),"build":{"powershellExecutable":adapter,"timeoutMs":300000}}),
     );
     let cfg = winbridge_update::load_config(&config).unwrap();
     let scope = winbridge_update::installation_scope(&cfg).unwrap();
@@ -165,7 +162,7 @@ fn capture(mut reader: winbridge_platform::OutputReader) -> std::thread::JoinHan
         result
     })
 }
-fn restart_refused(worker: &Path, config: &Path, root: &Path) {
+fn restart_refused(worker: &Path, config: &Path, root: &Path, update_id: &str) {
     let command = ResolvedCommand {
         executable: worker.to_string_lossy().into(),
         arguments: vec![
@@ -205,7 +202,8 @@ fn restart_refused(worker: &Path, config: &Path, root: &Path) {
         .success());
     assert!(stdout.is_empty());
     assert!(
-        String::from_utf8_lossy(&stderr).contains("unfinished"),
+        String::from_utf8_lossy(&stderr).contains(update_id)
+            && !String::from_utf8_lossy(&stderr).contains("WinBridge worker ready:"),
         "{}",
         String::from_utf8_lossy(&stderr)
     );
@@ -383,12 +381,12 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
         if let ShutdownDeliveryState::Exited { receipt, .. } = &shutdown.delivery {
             assert_eq!(cold.receipt.as_deref(), Some(receipt.as_ref()));
         }
-        restart_refused(&worker, &config, &root);
+        restart_refused(&worker, &config, &root, id);
         assert!(winbridge_worker::store::Store::reject_pending_update_start(
             &root.join("state/journal.sqlite")
         )
         .unwrap_err()
-        .contains("unfinished"));
+        .contains(id));
         assert_eq!(
             serde_json::from_slice::<InstalledSetManifest>(
                 &fs::read(root.join("runtime").join(MANIFEST_NAME)).unwrap()
@@ -417,7 +415,10 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
     assert!(child.tree_is_empty().unwrap());
     fs::write(root.join("stdout.log"), capture.0.join().unwrap()).unwrap();
     fs::write(root.join("stderr.log"), capture.1.join().unwrap()).unwrap();
-    let mut proof = result.unwrap();
+    let mut proof = match result {
+        Ok(proof) => proof,
+        Err(panic) => std::panic::resume_unwind(panic),
+    };
     let id = proof["root"]["updateId"].as_str().unwrap();
     let view = UpdateJournal::shutdown_preparation_snapshot(&directory, id, false, None).unwrap();
     let phase = view.candidate_shutdown.unwrap();
@@ -451,6 +452,12 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
         winbridge_protocol::build_identity().source_commit.as_ref(),
         Some(&input.target.source_commit)
     );
+    // Sequential cases share one verified source directory and compiler cache.
+    // Each worker/runtime/state/installation remains separate. The previous
+    // owned Job must be empty before the next case can lease these inputs.
+    let stage = input.root.join("seed");
+    winbridge_update::archive::stage_archive(&input.archive, &input.target, &stage).unwrap();
+    fs::rename(stage.join("source"), input.root.join("source")).unwrap();
     let adapter = adapter(&input);
     let mut cases = Vec::new();
     for fault in [
