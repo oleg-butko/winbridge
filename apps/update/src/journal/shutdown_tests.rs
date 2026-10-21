@@ -363,4 +363,41 @@ fn raw_lifecycle_cannot_stop_or_approve_exit_without_durable_driver_and_os_proof
     command.event = UpdateEvent::ShutdownVerified;
     assert!(j.advance(&a, &root.update_id, &command).is_err());
     assert_eq!(j.get(&root.update_id).unwrap(), root);
+    // Private metadata-only fixture, not OS exit evidence. Even a caller that
+    // reaches Replacing cannot declare files/activation/controller verified.
+    root = j
+        .advance_with_driver(&a, &root.update_id, &command, Driver::Shutdown, |_, _| {
+            Ok(())
+        })
+        .unwrap();
+    let transitions: i64 = j
+        .connection
+        .query_row("SELECT COUNT(*) FROM transitions", [], |r| r.get(0))
+        .unwrap();
+    for (n, event) in [
+        UpdateEvent::FilesVerified,
+        UpdateEvent::LocalHealthVerified,
+        UpdateEvent::ControllerConfirmed,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let command = UpdateCommand {
+            idempotency_key: format!("raw-post-cutover-{n}"),
+            expected_revision: root.revision,
+            event,
+            reason: "No physical runtime proof".into(),
+        };
+        let error = j.advance(&a, &root.update_id, &command).unwrap_err();
+        assert_eq!(error.code, JournalErrorCode::InvalidRequest);
+        assert!(error.message.contains("trusted drivers"));
+        assert_eq!(j.get(&root.update_id).unwrap(), root);
+        assert_eq!(
+            j.connection
+                .query_row("SELECT COUNT(*) FROM transitions", [], |r| r
+                    .get::<_, i64>(0))
+                .unwrap(),
+            transitions
+        );
+    }
 }

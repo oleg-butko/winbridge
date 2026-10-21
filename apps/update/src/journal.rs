@@ -922,6 +922,15 @@ impl UpdateJournal {
         }
         if matches!(
             command.event,
+            winbridge_protocol::update::UpdateEvent::FilesVerified
+                | winbridge_protocol::update::UpdateEvent::LocalHealthVerified
+                | winbridge_protocol::update::UpdateEvent::ControllerConfirmed
+        ) {
+            return Err(fail(JournalErrorCode::InvalidRequest,
+                "Runtime replacement/activation require their trusted drivers and receipts; post-cutover drivers are not implemented"));
+        }
+        if matches!(
+            command.event,
             winbridge_protocol::update::UpdateEvent::BeginDrain
                 | winbridge_protocol::update::UpdateEvent::Quiesce { .. }
         ) && driver != Driver::Drain
