@@ -1,7 +1,14 @@
 # U2.1: финальный consistent backup worker
 
 2026-10-21. Следующий блок после [U1 exact shutdown](windows-shutdown-supplemental-gate-2026-10-21.md).
-План реализации; backup driver ещё отсутствует. Public update остаётся отключённым.
+**Текущий статус:** helper/ledger/consuming driver и supervisor v15/view7 реализованы.
+[Native happy gate22 tests и migration12→13](windows-state-backup-gate-2026-10-21.md)
+пройдены. Four-case fault gate ещё не подключён/не выполнен; U2.1 остаётся открытым.
+Пользователь приостановил реализацию после завершения текущих проверок.
+[Подробный handoff и следующий шаг](resume-2026-10-21.md). Public update отключён.
+
+Ниже план и исторические записи реализации в порядке добавления. Их «пока
+отсутствует/впереди» относятся к моменту записи; актуальная готовность — выше.
 
 Backup должен выполняться после exact exit и acquisition исходной instance lock,
 до первого изменения runtime. Тогда копия содержит shutdown acceptance и последние

@@ -113,9 +113,11 @@ status и release только после source/Job/output proof. Добавл�
 добавляет durable helpers и atomic approval; сквозной Windows gate пройден.
 [Drain/quiesce](docs/plans/worker-self-update/drain-quiesce.md) добавляет updater schema11,
 сохранённые команды/квитанции и внутренний actor v13; сквозной native gate пройден.
-[Exact shutdown](docs/plans/worker-self-update/exact-shutdown.md) получил data FSM и
-два durable журнала (updater12/worker16); доставка stop и OS proof ещё впереди. Весь U1 ещё не завершён.
-Install и public update отключены.
+[Exact shutdown](docs/plans/worker-self-update/exact-shutdown.md) прошёл actual Main
+и supplemental gates; внутренний U1 завершён. [Final backup и migration12→13](docs/plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
+также прошли Windows gate (updater13/worker16, supervisor v15/view7), но backup fault
+проверки ещё не завершены. Install/public update отключены. Реализация на паузе по
+запросу пользователя; [подробный handoff](docs/plans/worker-self-update/resume-2026-10-21.md).
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

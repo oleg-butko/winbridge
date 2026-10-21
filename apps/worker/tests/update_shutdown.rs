@@ -16,7 +16,7 @@ use winbridge_update::{
     journal::UpdateJournal,
     shutdown::{ShutdownDeliveryState, ShutdownInspectionRequest},
 };
-use winbridge_worker::update_validation::{Fault, Input};
+use winbridge_worker::update_validation::{BackupFault, Fault, Input};
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GateInput {
@@ -30,6 +30,8 @@ struct GateInput {
     supplemental: bool,
     #[serde(default)]
     final_backup: bool,
+    #[serde(default)]
+    backup_faults: bool,
 }
 fn write(path: &Path, value: &impl serde::Serialize) {
     use std::io::Write;
@@ -66,8 +68,14 @@ fn setup(
     input: &GateInput,
     fault: Fault,
     adapter: &Path,
+    backup_fault: BackupFault,
 ) -> (PathBuf, PathBuf, InstalledSetManifest) {
-    let root = input.root.join(format!("{fault:?}"));
+    let label = if backup_fault == BackupFault::None {
+        format!("{fault:?}")
+    } else {
+        format!("{fault:?}-{backup_fault:?}")
+    };
+    let root = input.root.join(label);
     fs::create_dir(&root).unwrap();
     let runtime = root.join("runtime");
     fs::create_dir(&runtime).unwrap();
@@ -151,6 +159,7 @@ fn setup(
             request,
             fault,
             final_backup: input.final_backup,
+            backup_fault,
         },
     );
     (root, worker_config, manifest)
@@ -531,7 +540,11 @@ fn journal_fingerprint_allows_only_empty_wal_creation_and_detects_data_changes()
     fs::write(&main, b"changed main").unwrap();
     assert_ne!(journal_bytes(root.path()), before);
 }
-fn final_backup(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
+fn final_backup(
+    root: &Path,
+    sup: &SupervisorRecord,
+    expected_fault: BackupFault,
+) -> serde_json::Value {
     let mut request: SupervisorRequest =
         serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
             .unwrap();
@@ -576,13 +589,90 @@ fn final_backup(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
     let until = Instant::now() + Duration::from_secs(150);
     let done = loop {
         let v = call(&request);
-        assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+        if expected_fault == BackupFault::HoldBeforeCopy
+            && root.join("backup-helper-held.json").is_file()
+        {
+            let saved = UpdateJournal::inspect_state_backup(
+                &root.join("runtime/update-state"),
+                &sup.spec.update_id,
+            )
+            .unwrap()
+            .unwrap();
+            if saved.phase == winbridge_update::state_backup::StateBackupPhase::Running {
+                let marker: serde_json::Value = serde_json::from_slice(
+                    &fs::read(root.join("backup-helper-held.json")).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(
+                    marker["process"],
+                    serde_json::to_value(&saved.process).unwrap()
+                );
+                assert_eq!(marker["attemptId"], saved.intent.attempt_id);
+                assert!(v.candidate_shutdown.as_ref().unwrap().physical_custody_held);
+                assert!(!saved.intent.backup_path().exists());
+                assert_eq!(journal_bytes(root), bytes);
+                return json!({"expectedFault":expected_fault,"record":saved,"view":v,"sourceRowsSha256":rows.0,"sourceBytesUnchanged":true,"helperHeldBeforeCopy":true});
+            }
+        }
         if !v.driver_active {
             break v;
         }
         assert!(Instant::now() < until, "Final backup did not settle");
         std::thread::sleep(Duration::from_millis(50));
     };
+    if expected_fault != BackupFault::None {
+        assert!(done.driver_error.is_some());
+        assert_eq!(
+            done.candidate_state_backup.as_ref().unwrap().phase,
+            CandidateStateBackupPhase::Indeterminate
+        );
+        assert!(
+            done.candidate_shutdown
+                .as_ref()
+                .unwrap()
+                .physical_custody_held
+        );
+        let record = UpdateJournal::inspect_state_backup(
+            &root.join("runtime/update-state"),
+            &sup.spec.update_id,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            record.phase,
+            winbridge_update::state_backup::StateBackupPhase::Indeterminate
+        );
+        assert!(record.report.is_none());
+        assert!(record.cleanup.as_ref().unwrap().tree_empty);
+        let preserved = if expected_fault == BackupFault::ExistingDestination {
+            assert_eq!(
+                fs::read(record.intent.backup_path()).unwrap(),
+                winbridge_worker::update_validation::BACKUP_COLLISION
+            );
+            true
+        } else {
+            assert_eq!(journal_rows(&record.intent.backup_path()), rows);
+            true
+        };
+        request.action = SupervisorAction::BackupWorkerState;
+        let duplicate = call(&request);
+        assert_eq!(
+            duplicate.candidate_state_backup,
+            done.candidate_state_backup
+        );
+        assert_eq!(
+            UpdateJournal::inspect_state_backup(
+                &root.join("runtime/update-state"),
+                &sup.spec.update_id
+            )
+            .unwrap()
+            .unwrap(),
+            record
+        );
+        assert_eq!(journal_bytes(root), bytes);
+        return json!({"expectedFault":expected_fault,"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"sourceBytesUnchanged":true,"destinationPreserved":preserved,"duplicateNoNewAttempt":true});
+    }
+    assert!(done.driver_error.is_none());
     assert_eq!(
         done.candidate_state_backup.as_ref().unwrap().phase,
         CandidateStateBackupPhase::Verified
@@ -622,8 +712,13 @@ fn final_backup(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
     assert_eq!(journal_bytes(root), bytes);
     json!({"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"backupRowsSha256":rows.0,"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"allLogicalRowsPreserved":true,"duplicateNoNewAttempt":true,"privateAuthorityNotExported":true})
 }
-fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
-    let (root, config, manifest) = setup(input, fault, adapter);
+fn case(
+    input: &GateInput,
+    fault: Fault,
+    adapter: &Path,
+    backup_fault: BackupFault,
+) -> serde_json::Value {
+    let (root, config, manifest) = setup(input, fault, adapter, backup_fault);
     let worker = root.join("runtime/winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -820,7 +915,9 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
                 assert!(root.join("09-delayed-reply.json").is_file());
             }
         }
-        let final_state_backup = input.final_backup.then(|| final_backup(&root, &sup));
+        let final_state_backup = input
+            .final_backup
+            .then(|| final_backup(&root, &sup, backup_fault));
         let input = ShutdownInspectionRequest {
             schema_version: 1,
             intent: shutdown.intent.clone(),
@@ -881,7 +978,8 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
         Ok(proof) => proof,
         Err(panic) => std::panic::resume_unwind(panic),
     };
-    let id = proof["root"]["updateId"].as_str().unwrap();
+    let update_id = proof["root"]["updateId"].as_str().unwrap().to_owned();
+    let id = update_id.as_str();
     let view = UpdateJournal::shutdown_preparation_snapshot(&directory, id, false, None).unwrap();
     let phase = view.candidate_shutdown.unwrap();
     assert!(!phase.physical_custody_held);
@@ -947,6 +1045,34 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
             serde_json::from_slice(&fs::read(root.join("instance-lock-holder.json")).unwrap())
                 .unwrap();
     }
+    if input.final_backup {
+        let saved = UpdateJournal::inspect_state_backup(&directory, id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(&saved).unwrap(),
+            proof["finalStateBackup"]["record"]
+        );
+        let after =
+            UpdateJournal::backup_preparation_snapshot(&directory, id, false, None).unwrap();
+        assert!(
+            !after
+                .candidate_shutdown
+                .as_ref()
+                .unwrap()
+                .physical_custody_held
+        );
+        assert_eq!(
+            after.candidate_state_backup.as_ref().unwrap().phase,
+            if backup_fault == BackupFault::None {
+                CandidateStateBackupPhase::Verified
+            } else {
+                CandidateStateBackupPhase::Indeterminate
+            }
+        );
+        proof["finalStateBackup"]["afterOwnedCrash"] = serde_json::to_value(after).unwrap();
+        proof["finalStateBackup"]["sameHistoryWithoutCustody"] = json!(true);
+    }
     proof["delayedOriginalLockVerified"] = json!(fault == Fault::DelayedInstanceLock);
     proof["ownedSupervisorCrashRetainsHistoryWithoutCustody"] = json!(true);
     proof
@@ -971,25 +1097,42 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
     fs::rename(stage.join("source"), input.root.join("source")).unwrap();
     let adapter = adapter(&input);
     let mut cases = Vec::new();
-    let selected: &[Fault] = if input.final_backup {
-        &[Fault::None]
-    } else if input.supplemental {
-        &[Fault::DelayedInstanceLock, Fault::SupervisorCrashBeforeExit]
-    } else {
-        &[
-            Fault::None,
-            Fault::LostAck,
-            Fault::DelayedReply,
-            Fault::ReceiptWriteDenied,
+    let selected: Vec<(Fault, BackupFault)> = if input.backup_faults {
+        [
+            BackupFault::ExistingDestination,
+            BackupFault::ExitAfterCopy,
+            BackupFault::WrongInputReport,
+            BackupFault::HoldBeforeCopy,
         ]
+        .into_iter()
+        .map(|b| (Fault::None, b))
+        .collect()
+    } else {
+        let faults: &[Fault] = if input.final_backup {
+            &[Fault::None]
+        } else if input.supplemental {
+            &[Fault::DelayedInstanceLock, Fault::SupervisorCrashBeforeExit]
+        } else {
+            &[
+                Fault::None,
+                Fault::LostAck,
+                Fault::DelayedReply,
+                Fault::ReceiptWriteDenied,
+            ]
+        };
+        faults
+            .iter()
+            .copied()
+            .map(|f| (f, BackupFault::None))
+            .collect()
     };
-    for &fault in selected {
-        cases.push(case(&input, fault, &adapter));
+    for (fault, backup_fault) in selected {
+        cases.push(case(&input, fault, &adapter, backup_fault));
         write(
             &input.root.join(format!("case-{}.json", cases.len())),
             cases.last().unwrap(),
         );
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

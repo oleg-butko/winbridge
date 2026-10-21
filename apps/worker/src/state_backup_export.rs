@@ -48,6 +48,8 @@ pub fn export(input_path: &Path, expected_sha256: &str) -> Result<WorkerStateBac
     let source_header = source.archive_sqlite_metadata()?;
     guard.revalidate()?;
     let path = intent.backup_path();
+    #[cfg(feature = "update-validation")]
+    let fault = crate::update_validation::export_before_copy(&guard, &path)?;
     source.archive_read_only(&path)?;
     let file_pin = pin_backup_file(&path)?;
     let backup = file_pin.evidence().clone();
@@ -66,6 +68,8 @@ pub fn export(input_path: &Path, expected_sha256: &str) -> Result<WorkerStateBac
     }
     file_pin.revalidate()?;
     guard.revalidate()?;
+    #[cfg(feature = "update-validation")]
+    crate::update_validation::export_after_copy(fault);
     let report = WorkerStateBackupReport {
         schema_version: 1,
         kind: "worker_state_backup".into(),
@@ -102,6 +106,8 @@ pub fn export(input_path: &Path, expected_sha256: &str) -> Result<WorkerStateBac
         recovery_marker_changed: false,
         runtime_applied: false,
     };
+    #[cfg(feature = "update-validation")]
+    let report = crate::update_validation::export_report(fault, report);
     report.validate_envelope()?;
     Ok(report)
 }

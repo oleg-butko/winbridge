@@ -1,34 +1,44 @@
-## U2.1 copy reached Verified; empty-WAL fixture fix and migration gate ready — 2026-10-21
+# Передача контекста — 2026-10-21, проверки завершены
 
-No Windows run active. Second task4bfb2b62-8eb5-49c5-961b-f2f4a7a48b89,
-run20261021-152039-f65802ae/sourcefb5fc8a finished failed101.20 native checks pass;
-actual Main stop/backup reached Verified, live custody and all source/copy rows/
-backup SHA checks passed. Test then rejected absent→EMPTY WAL coordination file.
-Main DB SHA remained e5812b5dc7563140bec133813b46a72bc26ca0ee3d550338a28627ab58b6c148.
-This is fixture comparison, not source-data mutation/installed worker failure.
+**Основная цель updater на паузе по запросу пользователя.** Новые Windows runs и
+feature work не запускать до команды продолжить. Нет активных Cargo/native runners.
 
-Normalized ONLY absent/zero-byte WAL; nonempty WAL and main DB remain exact SHA.
-Added negative fingerprint test for nonempty/changed WAL and changed main DB; native
-PS gate runs it before full case. Current Windows all-target Clippy passes. Preserve
-both failed runs; no directories/data removed. Original source verifier still strict.
-Installed d052 freshly healthy, active0/no errors, controller3902 unchanged. User
-notified all test processes ended, desktop may open/close, leave worker running.
+Начинать следующую сессию с [подробной инструкции продолжения updater](plans/worker-self-update/resume-2026-10-21.md).
+В ней: карта кода, контракты/инварианты, verified и unfinished части, exact archives,
+порядок завершения fault gate, U2.2–U4 и восстановление controller после reboot.
+[Итоги Windows gates](plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
+содержат Task IDs, SHA, retained reference и выполненные команды.
 
-Prepared apps/update/tests/state_backup_migration.rs + --backup-migration-only in
-existing primitives runner/PS. It consistent-clones proven12 DB, migrates13, compares
-all retained rows and Exited history, verifies v12 backup/epoch/no invented backup/
-no custody, and actual old12 init/status refusal without data changes. No installed
-state used. Reference pin state-backup-schema12-reference-pin.json derived from
-old verified proof e7d567...; normal K path, manifestc9d1a667..., updaterSHA d4b271f6....
-This new test is cross-checked/Clippy only; native migration NOT executed yet.
+| Часть | Состояние |
+| --- | --- |
+| U0 / internal U1 | Завершены; source/build/health/drain/exact shutdown gates сохранены. |
+| U2.1 success | Пройден: 22 native tests / 7 groups, run 20261021-155003-a33e1e12, task b6c13fd7-14ee-4b5f-9158-ee9fba87b347. |
+| U2.1 migration12→13 | Пройдена: 1 native test, run 20261021-154240-4bdadc21, task 9efab2b5-0357-4e80-9b42-4ab2fb540a55. |
+| U2.1 faults | Feature-only scaffold компилируется/Clippy; PS/Python mode/verifier и actual execution отсутствуют. U2.1 ещё открыт. |
+| U2 replacement/activation, U3 desktop/migration/rollback, U4 bootstrap | Не готовы; public install отключён. |
 
-NEXT export clean current C source with built UI; run lightweight migration first
-via validate-update-shutdown-primitives-native.py --backup-migration-only with the
-pin receipt and cache20261017-061527-f4639971. Then full corrected Main backup gate
-against unchanged targetC31fa ZIP winbridge-20261021T150720Z-31fa634-9a28b4a2.zip,
-SHA b4d03a1c8f4dbf81f36c3196f60a3b6f118dcebf6c96f0d71dc4274ab208349b.
-Whole backup success/duplicate/faults still unproven; U2.1/public update/goal active.
-Windows35,598,168,064 bytes (~33.15GiB); Debian~26GiB. No cleanup/manual update.
+Current contracts: updater13/worker16, supervisor v15/view7. Native producer обоих
+последних gates — clean 8bd7629; финальный fault scaffold в них ещё не выполнялся.
+12 happy ready files и 6 migration files проверены дважды, verifier отклонил 15+7
+искажений actual proofs. Обе final all-target Clippy и fmt/diff прошли; ранее
+production v15 прошёл 610 workspace tests. Ошибка borrow в fault parent исправлена.
+
+Installed d052 healthy/active 0, generation ee48ba22-7a9e-4ce3-8ed1-5080a90806a3,
+без maintenance/recovery errors. Controller 3902 оставлен работать. Тестовых окон/
+процессов нет; desktop можно открывать/закрывать, installed worker оставить.
+Ручное обновление сейчас не требуется. Debian ~26GiB, Windows 34,747,117,568 bytes;
+измерять заново перед build. Windows dirs/refs/reports не удалять.
+
+**После разрешения продолжить:** закончить отдельный four-case backup fault mode,
+проверить owned crash/replay/partial file/report mismatch, экспортировать новый
+clean ZIP (старый 8bd не содержит hooks), выполнить isolated native gate через
+installed worker с прежним cache 20261017-061527-f4639971. Затем review/реализация
+U2.2 replacement и activation. Подробные шаги и ограничения — в resume документе.
+
+## Исторические записи предыдущих шагов
+
+Ниже сохранена история разработки. Формулировки «NEXT», «ещё не выполнено»,
+«goal active» отражают момент записи и не отменяют текущий статус выше.
 
 ## U2.1 actual Main backup gate prepared, NOT run yet — 2026-10-21
 

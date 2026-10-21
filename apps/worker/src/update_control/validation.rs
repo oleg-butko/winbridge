@@ -21,6 +21,17 @@ pub enum Fault {
     DelayedInstanceLock,
     SupervisorCrashBeforeExit,
 }
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BackupFault {
+    #[default]
+    None,
+    ExistingDestination,
+    ExitAfterCopy,
+    WrongInputReport,
+    HoldBeforeCopy,
+}
+pub const BACKUP_COLLISION: &[u8] = b"preserve existing validation backup destination";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Input {
@@ -32,6 +43,8 @@ pub struct Input {
     pub fault: Fault,
     #[serde(default)]
     pub final_backup: bool,
+    #[serde(default)]
+    pub backup_fault: BackupFault,
 }
 fn publish(root: &Path, name: &str, value: &impl Serialize) -> Result<()> {
     let mut file = fs::OpenOptions::new()
@@ -396,4 +409,98 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
         std::future::pending::<()>().await;
     }
     Ok(())
+}
+
+/// Validation-only fault input, authenticated by the same local case path/SHA
+/// and checked export scope. Default builds have no hook or environment reader.
+pub(crate) fn export_before_copy(
+    guard: &winbridge_update::state_backup::StateBackupExportGuard,
+    destination: &Path,
+) -> Result<BackupFault> {
+    let path = std::env::var_os("WINBRIDGE_SHUTDOWN_MAIN_INPUT");
+    let expected = std::env::var("WINBRIDGE_SHUTDOWN_MAIN_INPUT_SHA256").ok();
+    let (path, expected) = match (path, expected) {
+        (None, None) => return Ok(BackupFault::None),
+        (Some(p), Some(s)) => (PathBuf::from(p), s),
+        _ => return Err("Both validation input and SHA required".into()),
+    };
+    let raw = winbridge_workspace_sync::read_bounded(&path, 65536)?;
+    if winbridge_update::sha256(&raw) != expected {
+        return Err("Export validation input changed".into());
+    }
+    let input: Input =
+        serde_json::from_slice(&raw).map_err(|_| "Invalid export validation fields")?;
+    let root = input.root.canonicalize().map_err(|e| e.to_string())?;
+    let state = guard
+        .worker_configuration()
+        .state_directory
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let runtime = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    if !input.final_backup
+        || input.kind != "winbridge_shutdown_main_validation"
+        || input.schema_version != 1
+        || path.canonicalize().map_err(|e| e.to_string())? != root.join("input.json")
+        || state != root.join("state")
+        || runtime.parent() != Some(root.join("runtime").as_path())
+        || input.worker_config_sha256 != guard.intent().binding.worker_config.sha256
+        || input.request.expected.worker_build_id
+            != guard
+                .intent()
+                .binding
+                .shutdown
+                .intent
+                .binding
+                .loaded_worker
+                .descriptor
+                .build
+                .build_id
+    {
+        return Err("Export validation scope rejected".into());
+    }
+    match input.backup_fault {
+        BackupFault::ExistingDestination => {
+            let mut f = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(destination)
+                .map_err(|e| e.to_string())?;
+            f.write_all(BACKUP_COLLISION)
+                .and_then(|_| f.sync_all())
+                .map_err(|e| e.to_string())?;
+        }
+        BackupFault::HoldBeforeCopy => {
+            publish(
+                &root,
+                "backup-helper-held.json",
+                &serde_json::json!({"attemptId":guard.intent().attempt_id,"process":guard.process()}),
+            )?;
+            let until = Instant::now() + Duration::from_secs(90);
+            while !root.join("release-backup-helper.json").is_file() {
+                if Instant::now() >= until {
+                    return Err("Validation backup hold expired".into());
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+        _ => {}
+    }
+    Ok(input.backup_fault)
+}
+pub(crate) fn export_after_copy(fault: BackupFault) {
+    if fault == BackupFault::ExitAfterCopy {
+        std::process::exit(79);
+    }
+}
+pub(crate) fn export_report(
+    fault: BackupFault,
+    mut report: WorkerStateBackupReport,
+) -> WorkerStateBackupReport {
+    if fault == BackupFault::WrongInputReport {
+        report.input_sha256 = "0".repeat(64);
+    }
+    report
 }

@@ -1,11 +1,12 @@
 # Постепенная реализация и расширение
 
-2026-10-21: внутренний U1 завершён, начат [U2.1 final backup](plans/worker-self-update/final-state-backup.md).
-Updater schema13/outbox с CAS/history/migration, old-helper export CLI, consuming
-library и supervisor v15/view7 реализованы. Review исправил удержание SQLite
-destination handle. Полный локальный прогон:610 workspace tests, обе Clippy и
-TS/typecheck прошли; сквозной native backup gate ещё впереди. Public update не
-включён, ручное обновление installed worker пока не нужно.
+2026-10-21: internal U1 завершён, U2.1 final backup реализован до supervisor
+v15/view7 (updater13/worker16). [Native success22 tests и migration12→13](plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
+пройдены. Fault scaffold прошёл обе Clippy; отдельные runner/verifier и native
+fault gate ещё впереди, U2.1 остаётся открытым. Replacement/activation/U3/U4 и
+public update не готовы. Пользователь поставил цель на паузу и попросил handoff:
+[точная инструкция следующей сессии](plans/worker-self-update/resume-2026-10-21.md).
+Установленный worker не менялся, ручное обновление сейчас не требуется.
 
 2026-10-20: сквозной [candidate health gate](plans/worker-self-update/candidate-health.md)
 пройден —13 native tests /4 actor cases /9 groups, actual candidate build и
