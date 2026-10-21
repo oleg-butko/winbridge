@@ -3022,4 +3022,39 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
         );
         f.stop().await;
     }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn shutdown_v14_mailbox_rejects_unquiesced_start_and_keeps_older_views_frozen() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        let directory = Path::new(&h.record.spec.runtime_directory).join("update-state");
+        let before =
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap();
+        let view = h.candidate_shutdown(false).await.unwrap();
+        assert_eq!(view.schema_version, 6);
+        let phase = view.candidate_shutdown.unwrap();
+        assert_eq!(phase.phase, CandidateShutdownPhase::NotAdmitted);
+        assert!(!phase.physical_custody_held);
+        assert!(h
+            .candidate_shutdown(true)
+            .await
+            .unwrap_err()
+            .contains("Quiesced"));
+        assert!(h
+            .command(SupervisorAction::ShutdownCandidate)
+            .await
+            .is_err());
+        let old = h.candidate_drain(false).await.unwrap();
+        assert!(old.candidate_shutdown.is_none());
+        assert!(serde_json::to_value(old)
+            .unwrap()
+            .get("candidateShutdown")
+            .is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap(),
+            before
+        );
+        assert!(!f.worker.stop.load(Ordering::Acquire));
+        f.stop().await;
+    }
 }

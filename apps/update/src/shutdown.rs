@@ -8,7 +8,51 @@ pub use state::{LockedShutdownState, ShutdownStateObservation, ShutdownStatePins
 mod inspection;
 pub use inspection::{inspect_saved_receipt, ShutdownInspectionRequest};
 mod physical;
+pub(crate) use physical::Custody;
 pub use physical::ShutdownExitGuard;
+mod driver;
+pub(crate) use driver::{execute, prepare, Prepared};
+pub(crate) fn view(
+    saved: Option<&ShutdownRecord>,
+    active: bool,
+    failed: bool,
+    custody: bool,
+) -> CandidateShutdownView {
+    let phase = match saved {
+        None if failed => CandidateShutdownPhase::Blocked,
+        None => CandidateShutdownPhase::NotAdmitted,
+        Some(r) if matches!(r.delivery, ShutdownDeliveryState::Exited { .. }) => {
+            CandidateShutdownPhase::Exited
+        }
+        Some(_) if failed || !active => CandidateShutdownPhase::Indeterminate,
+        Some(r) => match r.delivery {
+            ShutdownDeliveryState::Prepared => CandidateShutdownPhase::Prepared,
+            ShutdownDeliveryState::Issued { .. } => CandidateShutdownPhase::AwaitingAcceptance,
+            ShutdownDeliveryState::Acknowledged { .. } => {
+                CandidateShutdownPhase::AwaitingExitAndLock
+            }
+            _ => CandidateShutdownPhase::Indeterminate,
+        },
+    };
+    let (accepted_at_ms, exited_at_ms) = match saved.map(|r| &r.delivery) {
+        Some(ShutdownDeliveryState::Acknowledged { receipt, .. }) => {
+            (Some(receipt.accepted_at_ms), None)
+        }
+        Some(ShutdownDeliveryState::Exited {
+            receipt, physical, ..
+        }) => (Some(receipt.accepted_at_ms), Some(physical.observed_at_ms)),
+        _ => (None, None),
+    };
+    CandidateShutdownView {
+        phase,
+        attempt_id: saved.map(|r| r.intent.attempt_id.clone()),
+        command_id: saved.map(|r| r.intent.command.command_id.clone()),
+        delivery_revision: saved.map(|r| r.revision),
+        accepted_at_ms,
+        exited_at_ms,
+        physical_custody_held: custody && phase == CandidateShutdownPhase::Exited,
+    }
+}
 type Result<T> = std::result::Result<T, String>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -540,6 +584,32 @@ pub(crate) mod tests {
         let mut raw = serde_json::to_value(receipt).unwrap();
         raw["processExited"] = true.into();
         assert!(serde_json::from_value::<WorkerShutdownReceipt>(raw).is_err());
+    }
+    #[test]
+    fn projection_separates_unrelated_work_acceptance_historical_exit_and_live_custody() {
+        let empty = view(None, true, false, true);
+        assert_eq!(empty.phase, CandidateShutdownPhase::NotAdmitted);
+        assert!(!empty.physical_custody_held);
+        let (intent, receipt, physical) = fixture();
+        let prepared = ShutdownRecord::prepare(intent).unwrap();
+        assert_eq!(
+            view(Some(&prepared), false, false, false).phase,
+            CandidateShutdownPhase::Indeterminate
+        );
+        let ack = prepared
+            .issue(101)
+            .unwrap()
+            .acknowledge(201, receipt)
+            .unwrap();
+        let waiting = view(Some(&ack), true, false, true);
+        assert_eq!(waiting.phase, CandidateShutdownPhase::AwaitingExitAndLock);
+        assert!(waiting.accepted_at_ms.is_some() && waiting.exited_at_ms.is_none());
+        assert!(!waiting.physical_custody_held);
+        let exited = ack.confirm_exit(301, physical).unwrap();
+        let history = view(Some(&exited), false, false, false);
+        assert_eq!(history.phase, CandidateShutdownPhase::Exited);
+        assert!(history.exited_at_ms.is_some() && !history.physical_custody_held);
+        assert!(view(Some(&exited), false, false, true).physical_custody_held);
     }
     #[test]
     fn frozen_binding_hash_and_quiesced_prerequisite_reject_retargeting_or_counter_overflow() {

@@ -55,7 +55,7 @@ export type SupervisorProcess = { processId: number, birth: string, hostId: stri
 export type SupervisorPhase = "intent" | "spawned" | "ready" | "active" | "stopped" | "indeterminate";
 export type SupervisorSpec = { launchId: string, updateId: string, parent: SupervisorProcess, parentOwnerId: string, parentEpoch: number, tokenSha256: string, configPath: string, configSha256: string, runtimeDirectory: string, imagePath: string, imageSha256: string, imageIdentity: string, excludedDomain: string | null, endpoint: string, acceptedAtMs: number, worker?: SupervisorWorkerBinding | null, };
 export type SupervisorRecord = { schemaVersion: number, spec: SupervisorSpec, phase: SupervisorPhase, revision: number, process: SupervisorProcess | null, ownerId: string | null, ownerEpoch: number | null, updatedAtMs: number, reason: string, };
-export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain" | "drain_candidate" | "observe_candidate_drain";
+export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain" | "drain_candidate" | "observe_candidate_drain" | "shutdown_candidate" | "observe_candidate_shutdown";
 export type SupervisorRequest = { contractVersion: number, launchId: string, expectedRevision: number, action: SupervisorAction, token: string, workerCommand?: WorkerUpdateControlCommand | null, };
 export type SupervisorResponse = { contractVersion: number, launchId: string, record: SupervisorRecord | null, error: string | null, workerControl?: WorkerUpdateControlResponse | null, preparation?: UpdatePreparationView | null, };
 export type UpdatePreparationView = { schemaVersion: number, observedAtMs: number, update: UpdateRecord, source: SourceTransactionRecord | null, sourceAppliedFiles: number, build: UpdateBuildRecord | null,
@@ -78,7 +78,11 @@ candidateHealth?: CandidateHealthView | null,
 /**
  * V13/view schema 5 only; older replies omit this field.
  */
-candidateDrain?: CandidateDrainView | null, };
+candidateDrain?: CandidateDrainView | null,
+/**
+ * V14/view schema6; older contracts omit it entirely.
+ */
+candidateShutdown?: CandidateShutdownView | null, };
 export type RuntimeBaselineView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, } | { "phase": "verified", intentRevision: number, receiptRevision: number, observedAtMs: number, setId: string, workerProcess: SupervisorProcess, workerImageSha256: string, };
 export type RuntimePreimagesView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, directory: string, } | { "phase": "verified", intentRevision: number, receiptRevision: number, completedAtMs: number, directory: string, fileCount: number, totalBytes: number, };
 export type CandidateHealthPhase = "not_admitted" | "pending" | "verified" | "rejected" | "cancelled" | "indeterminate";
@@ -94,6 +98,13 @@ export type WorkerShutdownCommand = { commandId: string, expectedLeaseRevision: 
 export type WorkerShutdownState = { stateDirectory: string, directoryIdentity: string, journalIdentity: string, lockIdentity: string, };
 export type WorkerShutdownReceipt = { schemaVersion: number, updateId: string, launchId: string, updaterOwnerId: string, updaterEpoch: number, command: WorkerShutdownCommand, lease: WorkerUpdateLease, process: SupervisorProcess, state: WorkerShutdownState, acceptedAtMs: number, };
 export type WorkerShutdownInspectionReport = { schemaVersion: number, kind: string, requestSha256: string, descriptor: ArtifactDescriptor, helperProcess: SupervisorProcess, helperImage: RuntimeImageEvidence, workerConfig: RuntimeImageEvidence, state: WorkerShutdownState, receipt: WorkerShutdownReceipt | null, workerJournalSchema: number, journalOpenedReadOnly: boolean, workerConstructed: boolean, schedulerStarted: boolean, recoveryMarkerChanged: boolean, runtimeApplied: boolean, };
+export type CandidateShutdownPhase = "not_admitted" | "preparing" | "prepared" | "awaiting_acceptance" | "awaiting_exit_and_lock" | "exited" | "indeterminate" | "blocked";
+export type CandidateShutdownView = { phase: CandidateShutdownPhase, attemptId: string | null, commandId: string | null, deliveryRevision: number | null, acceptedAtMs: number | null, exitedAtMs: number | null,
+/**
+ * A live supervisor retains the opaque guard. Historical exit data alone
+ * cannot restore it; this boolean is not execution authority.
+ */
+physicalCustodyHeld: boolean, };
 export type SupervisorWorkerBinding = { context: RequestContext, generation: string, build: BuildIdentity, process: SupervisorProcess, configSha256: string, endpoint: string, };
 export type WorkerUpdateControlCommand = { "action": "observe" } | { "action": "observe_runtime" } | { "action": "observe_compatibility" } | { "action": "observe_receipt", command: WorkerUpdateCommand, } | { "action": "observe_drain" } | { "action": "observe_shutdown_state" } | { "action": "request_shutdown", command: WorkerShutdownCommand, } | { "action": "observe_shutdown_receipt", command: WorkerShutdownCommand, } | { "action": "begin_source" } | { "action": "advance", command: WorkerUpdateCommand, };
 export type WorkerUpdateControlRequest = { controlVersion: number, binding: SupervisorWorkerBinding, updateId: string, launchId: string, supervisor: SupervisorProcess, updaterOwnerId: string, updaterEpoch: number, command: WorkerUpdateControlCommand, };

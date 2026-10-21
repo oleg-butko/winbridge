@@ -10,6 +10,36 @@ pub const WORKER_SHUTDOWN_INSPECTION_MARKER: &[u8] =
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CandidateShutdownPhase {
+    NotAdmitted,
+    Preparing,
+    Prepared,
+    AwaitingAcceptance,
+    AwaitingExitAndLock,
+    Exited,
+    Indeterminate,
+    Blocked,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CandidateShutdownView {
+    pub phase: CandidateShutdownPhase,
+    pub attempt_id: Option<String>,
+    pub command_id: Option<String>,
+    pub delivery_revision: Option<u64>,
+    pub accepted_at_ms: Option<u64>,
+    pub exited_at_ms: Option<u64>,
+    /// A live supervisor retains the opaque guard. Historical exit data alone
+    /// cannot restore it; this boolean is not execution authority.
+    pub physical_custody_held: bool,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WorkerShutdownCommand {

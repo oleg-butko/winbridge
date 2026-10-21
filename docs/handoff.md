@@ -1,3 +1,37 @@
+## Shutdown supervisor v14 locally verified; combined native gate NEXT — 2026-10-21
+
+Consuming driver implemented in apps/update/src/shutdown/driver.rs; details
+plans/worker-self-update/exact-shutdown.md. Readonly blocking preflight pins exact
+live process/state/runtime/config/candidate and checks old cold-reader support
+before durable admission. Mailbox stays responsive; original ACK waits for commit.
+Issued precedes one RequestShutdown; missing ACK reconciles exact live/cold receipt,
+never resends. Wait retained process object and original instance lock <=60 seconds;
+atomic Exited+Replacing requires ShutdownExitGuard. Supervisor retains non-Serde
+Custody beyond driver retirement. Historical Exited cannot recreate authority.
+V14/view6 has separate phase/timestamps/current custody; older views omit field.
+No replacement/startup/activation/rollback/public update yet. Final consistent worker
+DB backup is still required before first U2 replacement.
+
+588 workspace tests passed,0 failures,16 ignored; targeted projection and v14
+negative mailbox tests passed. Both all-target Clippy checks passed (Linux and
+Windows target); generated TS/typecheck/fmt/diff passed. Logs
+.winbridge/update-preparation/shutdown-driver-*. No native
+claim for driver: actual Main + independent supervisor exit/fault gate is NEXT.
+Production Main currently enables neither update control nor supervisor launch;
+validation must not silently substitute a synthetic Worker for Main. Use explicit
+validation-only startup wiring, retain normal serve/close behavior, no production
+external-Job override or breakaway. New positive gate must cover ACK/lost ACK,
+stale authority, delayed callback/lock, receipt write failure and owned supervisor
+crash. Prior primitive/reader gates stay valid, need not repeat them.
+
+Controller restarted normally after session loss, session69990/PID3902. Fresh
+installed worker d052c6ce6a61c7fb6fa4c9ffa879363010fb6fd2 generation
+ee48ba22-7a9e-4ce3-8ed1-5080a90806a3 healthy/idle0/no maintenance or recovery error.
+Desktop unnecessary; leave installed worker running. No native task active and
+no manual installed update needed yet. Debian available~29GiB; retained Windows
+measurement~39GB. No caches cleaned or user configs changed; no backups needed.
+Goal U1–U4 stays active, A4 remains paused.
+
 ## Cold reader native gate PASSED; shutdown driver NEXT — 2026-10-21
 
 Task9f70a474-5fdd-48e8-8aae-50a313e97172/run20261021-043442-51698f37 succeeded0.

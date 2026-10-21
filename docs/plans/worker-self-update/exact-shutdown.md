@@ -190,3 +190,36 @@ mailbox, затем durable admission предшествует ACK. После �
 удерживать в ephemeral custody supervisor до U2; stored Exited не восстанавливает
 физическое владение после сбоя. View отделяет подтверждённую историю от текущего
 владения, неизвестный исход не разрешает resend/startup или удаление guard.
+
+
+## Supervisor v14: consuming driver — 2026-10-21
+
+Новый внутренний mailbox `ShutdownCandidate` / `ObserveCandidateShutdown`
+возвращает view schema6. В нём отдельно видны readonly preflight, durable Prepared,
+ожидание acceptance, ожидание process exit/instance lock, исторический Exited
+и наличие удерживаемого OS guard в живом supervisor. Старые v1–v13 не получают
+поле `candidateShutdown`. JSON `physicalCustodyHeld` сообщает наблюдение и сам
+не даёт разрешения на замену файлов.
+
+Preflight выполняется на blocking executor: повторная проверка source/config,
+health, candidate pins, прежнего runtime, live compatibility, process handle,
+worker-derived state identities и свежего Quiesced. Readonly inspector старого
+worker должен поддерживаться **до** admission. Mailbox остаётся доступен для
+наблюдений и coordinated abort. ACK исходного запроса выдаётся после атомарного
+admission; потеря этого ACK не отменяет уже сохранённую попытку.
+
+Затем Issued сохраняется до единственного RequestShutdown. Потеря ответа вызывает
+только точное readonly наблюдение receipt, при необходимости через pinned cold
+inspector. Ни повторного stop, ни force kill нет. После acceptance driver ждёт
+выхода удерживаемого process object и acquisition исходной instance lock в пределах
+60 секунд. Atomic Exited + root Replacing требует несериализуемого guard.
+Supervisor сохраняет этот guard после завершения blocking driver; U2 должен
+использовать именно его. После падения supervisor исторический Exited остаётся
+фактом, но утраченные handles не восстанавливаются из JSON.
+
+Это внутренняя реализация. Положительный сквозной native gate с завершением
+нормального worker-процесса ещё требуется. Обычный Main пока не включает update
+control и запуск supervisor; validation harness не должен выдавать отдельный
+синтетический Worker за полную проверку Main. Public update, replacement,
+activation/rollback и финальный consistent worker DB backup перед replacement
+ещё не реализованы.

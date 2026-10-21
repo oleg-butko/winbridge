@@ -2,7 +2,32 @@
 //! It neither replaces binaries nor starts a new worker.
 use super::{LockedShutdownState, ShutdownExitEvidence, ShutdownIntent};
 use crate::installed_set::PinnedInstalledSet;
+use std::sync::{Arc, Mutex};
 use winbridge_platform::infrastructure::PinnedProcess;
+/// Supervisor-resident custody survives retirement of the blocking driver.
+/// It is never reconstructed from saved rows or exposed in a wire DTO.
+#[derive(Clone, Default)]
+pub(crate) struct Custody(Arc<Mutex<Option<ShutdownExitGuard>>>);
+impl Custody {
+    pub(crate) fn hold(&self, guard: ShutdownExitGuard) -> Result<(), String> {
+        let mut slot = self
+            .0
+            .lock()
+            .map_err(|_| "Shutdown custody lock poisoned")?;
+        if slot.is_some() {
+            return Err("Shutdown physical custody is already held".into());
+        }
+        *slot = Some(guard);
+        Ok(())
+    }
+    pub(crate) fn present(&self) -> Result<bool, String> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| "Shutdown custody lock poisoned")?
+            .is_some())
+    }
+}
 pub struct ShutdownExitGuard {
     intent: ShutdownIntent,
     process: PinnedProcess,

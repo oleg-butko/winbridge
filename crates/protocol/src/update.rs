@@ -577,6 +577,8 @@ pub enum SupervisorAction {
     /// Internal v13: durable drain coordination, stopping before worker shutdown.
     DrainCandidate,
     ObserveCandidateDrain,
+    ShutdownCandidate,
+    ObserveCandidateShutdown,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -632,6 +634,9 @@ pub struct UpdatePreparationView {
     /// V13/view schema 5 only; older replies omit this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_drain: Option<CandidateDrainView>,
+    /// V14/view schema6; older contracts omit it entirely.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_shutdown: Option<CandidateShutdownView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

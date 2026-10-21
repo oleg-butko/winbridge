@@ -23,6 +23,25 @@ type Result<T> = std::result::Result<T, String>;
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
+fn shutdown_view(
+    directory: &Path,
+    id: &str,
+    active: bool,
+    failure: Option<String>,
+    custody: &crate::shutdown::Custody,
+    preparing: bool,
+) -> Result<UpdatePreparationView> {
+    let mut view = UpdateJournal::shutdown_preparation_snapshot(directory, id, active, failure)
+        .map_err(error)?;
+    if let Some(shutdown) = &mut view.candidate_shutdown {
+        if preparing && shutdown.attempt_id.is_none() {
+            shutdown.phase = CandidateShutdownPhase::Preparing;
+        }
+        shutdown.physical_custody_held =
+            shutdown.phase == CandidateShutdownPhase::Exited && custody.present()?;
+    }
+    Ok(view)
+}
 fn now() -> Result<u64> {
     u64::try_from(
         SystemTime::now()
@@ -507,6 +526,50 @@ impl SupervisorHandle {
         Ok(control)
     }
     /// V13 starts an owned drain once; reading status never dispatches work.
+    pub async fn candidate_shutdown(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 14,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::ShutdownCandidate
+            } else {
+                SupervisorAction::ObserveCandidateShutdown
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 14
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Shutdown reply scope/version changed; no fallback".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Shutdown view missing")?;
+        if view.schema_version != 6
+            || view.candidate_shutdown.is_none()
+            || view.candidate_drain.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Shutdown reply belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     pub async fn candidate_drain(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
             return Err("Supervisor exact process changed".into());
@@ -973,6 +1036,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveWorkerDrain
                 | SupervisorAction::DrainCandidate
                 | SupervisorAction::ObserveCandidateDrain
+                | SupervisorAction::ShutdownCandidate
+                | SupervisorAction::ObserveCandidateShutdown
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1131,12 +1196,19 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     // separate CAS-checked connection and never claims a new epoch or lock.
     let control_authority = Arc::new(owner);
     let mut idle = Some((journal, control_authority.clone()));
-    type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, Result<()>)>;
+    enum DriverCompletion {
+        Complete(Result<()>),
+        ShutdownPrepared(Result<Box<crate::shutdown::Prepared>>),
+    }
+    type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
     let mut artifacts_active = false;
     let mut preimages_active = false;
     let mut health_active = false;
     let mut drain_active = false;
+    let mut shutdown_preparing = false;
+    let shutdown_custody = crate::shutdown::Custody::default();
+    let mut shutdown_reply: Option<ipc::Stream> = None;
     let mut drain_telemetry = crate::drain::Telemetry::default();
     let mut pending_abort: Option<Box<crate::abort::AbortPermit>> = None;
     // One readonly query at a time; dropping the set aborts its IO task. The
@@ -1154,6 +1226,16 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         }
         if work.as_ref().is_some_and(|w| w.is_finished()) {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
+            let mut prepared = None;
+            let outcome = match outcome {
+                DriverCompletion::Complete(outcome) => outcome,
+                DriverCompletion::ShutdownPrepared(Ok(value)) => {
+                    prepared = Some(value);
+                    Ok(())
+                }
+                DriverCompletion::ShutdownPrepared(Err(e)) => Err(e),
+            };
+            shutdown_preparing = false;
             artifacts_active = false;
             preimages_active = false;
             health_active = false;
@@ -1174,6 +1256,54 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some(mut stream) = shutdown_reply.take() {
+                let outcome = shutdown_view(
+                    &directory,
+                    &r.spec.update_id,
+                    prepared.is_some(),
+                    driver_error.clone(),
+                    &shutdown_custody,
+                    false,
+                );
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), driver_error.clone()),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 14,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    error,
+                    worker_control: None,
+                    preparation,
+                };
+                let dispatch = response.error.is_none();
+                if response.error.is_some() {
+                    driver_error = response.error.clone();
+                }
+                let _ = ipc::write(&mut stream, &response).await;
+                // Admission committed before ACK. Losing the response does not
+                // revoke the original one-use permission or spawn another request.
+                if let Some(permit) = prepared.filter(|_| dispatch) {
+                    let (mut journal, owner) = idle
+                        .take()
+                        .ok_or("Shutdown owner missing after admission")?;
+                    let spec = r.clone();
+                    let io = tokio::runtime::Handle::current();
+                    let custody = shutdown_custody.clone();
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = crate::shutdown::execute(
+                            &mut journal,
+                            &owner,
+                            &spec,
+                            *permit,
+                            io,
+                            custody,
+                        );
+                        (journal, owner, DriverCompletion::Complete(result))
+                    }));
+                }
+            }
         }
         if work.is_none() && pending_abort.is_some() {
             let permit = pending_abort.take().unwrap();
@@ -1185,7 +1315,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             driver_error = None;
             work = Some(tokio::task::spawn_blocking(move || {
                 let result = permit.execute(&mut journal, &owner, &spec, io).map(|_| ());
-                (journal, owner, result)
+                (journal, owner, DriverCompletion::Complete(result))
             }));
         }
         if let Some((journal, owner)) = &idle {
@@ -1230,6 +1360,79 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(q) => q,
             Err(_) => continue,
         };
+        if matches!(
+            request.action,
+            SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 14
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Shutdown requires exact Active worker-bound v14 supervisor".into());
+                }
+                let view = shutdown_view(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                    &shutdown_custody,
+                    shutdown_preparing,
+                )?;
+                if request.action == SupervisorAction::ObserveCandidateShutdown
+                    || view
+                        .candidate_shutdown
+                        .as_ref()
+                        .is_some_and(|v| v.attempt_id.is_some())
+                    || shutdown_preparing
+                {
+                    return Ok(view);
+                }
+                if work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::Quiesced
+                {
+                    return Err("Shutdown requires fresh Quiesced, idle owner and no unresolved driver failure".into());
+                }
+                start = true;
+                Ok(view)
+            })();
+            if start && outcome.is_ok() {
+                let (mut journal, owner) = idle.take().ok_or("Shutdown preflight owner missing")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                shutdown_preparing = true;
+                shutdown_reply = Some(stream);
+                driver_error = None;
+                // The original reply waits for durable admission. Status and
+                // coordinated abort stay responsive during readonly preflight.
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result =
+                        crate::shutdown::prepare(&mut journal, &owner, &spec, io).map(Box::new);
+                    (journal, owner, DriverCompletion::ShutdownPrepared(result))
+                }));
+            } else {
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 14,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    error,
+                    worker_control: None,
+                    preparation,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
+            continue;
+        }
         if matches!(
             request.action,
             SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain
@@ -1319,7 +1522,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         io,
                         telemetry,
                     );
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -1398,7 +1601,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 work = Some(tokio::task::spawn_blocking(move || {
                     let result =
                         crate::preparation::health(&mut journal, &owner, &spec, *permit, io);
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -1485,7 +1688,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     let result =
                         crate::runtime_preimages::execute(&mut journal, &owner, &spec, *permit, io)
                             .map(|_| ());
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -1573,7 +1776,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 work = Some(tokio::task::spawn_blocking(move || {
                     let result = crate::runtime_baseline::capture(&mut journal, &owner, &spec, io)
                         .map(|_| ());
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -1671,10 +1874,15 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 match UpdateJournal::inspect_abort(&directory, &r.spec.update_id) {
                     Ok(_) => {}
                     Err(e) if e.code == JournalErrorCode::NotFound => {
-                        if work.is_some() && !preimages_active && !health_active && !drain_active {
+                        if work.is_some()
+                            && !preimages_active
+                            && !health_active
+                            && !drain_active
+                            && !shutdown_preparing
+                        {
                             return Err("Preparation driver active; wait for confirmed source/compiler cleanup".into());
                         }
-                        if preimages_active || health_active || drain_active {
+                        if preimages_active || health_active || drain_active || shutdown_preparing {
                             // Same physical owner/epoch; Root Aborting fences the
                             // copier. Cleanup waits for its blocking callback.
                             let cfg = crate::preparation::configuration(&r)?;
@@ -1728,7 +1936,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 let io = tokio::runtime::Handle::current();
                 work = Some(tokio::task::spawn_blocking(move || {
                     let result = permit.execute(&mut journal, &owner, &spec, io).map(|_| ());
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -1812,7 +2020,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 work = Some(tokio::task::spawn_blocking(move || {
                     let result =
                         crate::preparation::candidate_artifacts(&mut journal, &owner, &spec, io);
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -1902,7 +2110,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 work = Some(tokio::task::spawn_blocking(move || {
                     let result =
                         crate::preparation::compiler(&mut journal, &owner, &spec, *permit, io);
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -1994,7 +2202,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 let io = tokio::runtime::Handle::current();
                 work = Some(tokio::task::spawn_blocking(move || {
                     let result = crate::preparation::source(&mut journal, &owner, &spec, io);
-                    (journal, owner, result)
+                    (journal, owner, DriverCompletion::Complete(result))
                 }));
             }
             continue;
@@ -2115,7 +2323,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

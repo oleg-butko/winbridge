@@ -236,6 +236,26 @@ fn persist(c: &Connection, old: &ShutdownRecord, next: &ShutdownRecord) -> Resul
     Ok(())
 }
 impl UpdateJournal {
+    pub(crate) fn shutdown(&self, id: &str) -> Result<Option<ShutdownRecord>> {
+        read(&self.connection, id)
+    }
+    pub(crate) fn require_shutdown_current(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        p: &ShutdownPermit,
+    ) -> Result<()> {
+        self.check_directory(a)?;
+        require(&self.connection, a, s, &p.intent)?;
+        if read(&self.connection, &p.intent.binding.update_id)?
+            .as_ref()
+            .map(|r| &r.intent)
+            != Some(&p.intent)
+        {
+            return Err(bad("Shutdown permit differs from retained intent"));
+        }
+        Ok(())
+    }
     pub fn inspect_shutdown(directory: &Path, id: &str) -> Result<Option<ShutdownRecord>> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;

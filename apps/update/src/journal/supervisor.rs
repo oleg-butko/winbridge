@@ -150,6 +150,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, 5)
     }
+    pub fn shutdown_preparation_snapshot(
+        directory: &Path,
+        id: &str,
+        driver_active: bool,
+        driver_error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, driver_active, driver_error, 6)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -209,6 +217,16 @@ impl UpdateJournal {
         } else {
             None
         };
+        let candidate_shutdown = if view_schema >= 6 {
+            Some(crate::shutdown::view(
+                super::shutdown::read(&tx, id)?.as_ref(),
+                driver_active,
+                driver_error.is_some(),
+                false,
+            ))
+        } else {
+            None
+        };
         let view = UpdatePreparationView {
             schema_version: view_schema,
             observed_at_ms: now_ms()?,
@@ -219,6 +237,7 @@ impl UpdateJournal {
             driver_active,
             driver_error,
             candidate_drain,
+            candidate_shutdown,
             runtime_baseline: if view_schema >= 2 {
                 Some(super::runtime_baseline::read(&tx, id)?.view())
             } else {
