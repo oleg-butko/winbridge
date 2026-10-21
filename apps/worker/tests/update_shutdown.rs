@@ -263,7 +263,30 @@ fn instance_lock_holder_process() {
         winbridge_platform::file_identity(&file).unwrap(),
         saved.intent.binding.worker_state.lock_identity
     );
-    fs2::FileExt::try_lock_exclusive(&file).unwrap();
+    // Weak::upgrade stops succeeding before the final Arc destructor has
+    // necessarily closed every field. Wait for the actual byte lock, retaining
+    // the same already-opened original file; never create/rebind a lock.
+    let until = Instant::now() + Duration::from_secs(10);
+    loop {
+        match fs2::FileExt::try_lock_exclusive(&file) {
+            Ok(()) => break,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.raw_os_error() == fs2::lock_contended_error().raw_os_error() =>
+            {
+                assert!(
+                    Instant::now() < until,
+                    "Original instance lock did not retire: {e}"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(e) => panic!("Original lock acquisition failed: {e}"),
+        }
+    }
+    assert_eq!(
+        winbridge_platform::file_identity(&file).unwrap(),
+        saved.intent.binding.worker_state.lock_identity
+    );
     write(
         &root.join("instance-lock-holder.json"),
         &json!({"process":winbridge_platform::infrastructure::stamp(std::process::id()).unwrap(),"state":saved.intent.binding.worker_state,"attemptId":saved.intent.attempt_id}),
