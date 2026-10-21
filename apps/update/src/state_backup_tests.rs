@@ -1,6 +1,6 @@
 //! Synthetic records only; no SQLite export, OS guard or launch permission.
 use super::*;
-fn fixture() -> StateBackupRecord {
+pub(crate) fn fixture() -> StateBackupRecord {
     let (original, mut receipt, physical) = crate::shutdown::tests::fixture();
     let mut binding = original.binding;
     binding.loaded_worker.descriptor.target_os = "windows".into();
@@ -35,7 +35,7 @@ fn fixture() -> StateBackupRecord {
     )
     .unwrap()
 }
-fn input(r: &StateBackupRecord) -> StateBackupFileEvidence {
+pub(crate) fn input(r: &StateBackupRecord) -> StateBackupFileEvidence {
     StateBackupFileEvidence {
         path: r.intent.input_path().to_str().unwrap().into(),
         bytes: 100,
@@ -43,7 +43,7 @@ fn input(r: &StateBackupRecord) -> StateBackupFileEvidence {
         file_identity: "input-file".into(),
     }
 }
-fn process(r: &StateBackupRecord) -> SupervisorProcess {
+pub(crate) fn process(r: &StateBackupRecord) -> SupervisorProcess {
     let mut p = r
         .intent
         .binding
@@ -67,7 +67,7 @@ fn running() -> StateBackupRecord {
         .resumed(403)
         .unwrap()
 }
-fn cleanup(r: &StateBackupRecord) -> ProbeCleanup {
+pub(crate) fn cleanup(r: &StateBackupRecord) -> ProbeCleanup {
     ProbeCleanup {
         job_name: r.intent.job_name(),
         process: r.process.clone(),
@@ -81,7 +81,7 @@ fn cleanup(r: &StateBackupRecord) -> ProbeCleanup {
         failure: None,
     }
 }
-fn report(r: &StateBackupRecord) -> WorkerStateBackupReport {
+pub(crate) fn report(r: &StateBackupRecord) -> WorkerStateBackupReport {
     let b = &r.intent.binding;
     let s = &b.shutdown.intent.binding;
     let a = StateBackupAuthority {

@@ -69,12 +69,49 @@ incarnation/epoch/fingerprint, связь acceptance/lease/state, helper host/se
 отдельную file identity, число страниц/размер и отсутствие source/runtime effects.
 Синтетический contract test отклоняет 23 искажения и неизвестное поле processExited.
 Это проверка данных; filesystem scope, сохранённая попытка, kernel process/cleanup
-и физический guard проверяются будущим consuming driver. Текущие worker capability,
-CLI, updater schema12 и legacy RPC не расширены; executable backup пока отсутствует.
+и физический guard проверяются будущим consuming driver. На этапе contract-only
+worker capability, CLI и legacy RPC не расширялись;
+executable backup пока отсутствует. Состояние schema13 описано ниже.
 
 
 `apps/update/src/state_backup.rs` добавляет data FSM и immutable canonical binding
 к полной Exited-записи. Подготовлены пять synthetic tests: порядок PID/resume,
 reopen без повторного issue, terminal uncertainty, cleanup до запуска/без resume,
-подмена отчёта и alias input/backup/source. Обе Clippy проверки прошли. Таблицы13,
-экспорт SQLite и consuming driver ещё не реализованы; JSON не создаёт разрешений.
+подмена отчёта и alias input/backup/source. Обе Clippy проверки прошли.
+JSON не создаёт разрешений; export CLI и consuming driver ещё не реализованы.
+
+
+## Durable outbox schema13
+
+Добавлены immutable intent, current record с CAS и полная append-only history.
+Каждое чтение сверяет все последовательные переходы FSM, исходный shutdown,
+health/config/schema, supervisor/owner/epoch и policy directory. Fresh admission
+требует живой `ShutdownExitGuard`; повтор возвращает сохранённую запись без нового
+permit. Запись очередного перехода также требует original custody, неизменный
+Replacing root и File ID каталога. Это API хранения данных: оно не запускает helper
+и не даёт разрешения менять runtime по одному JSON report.
+
+Migration12→13 использует существующие consistent backup, owner lock и epoch fence.
+История не наделяется custody; старые databases не получают выдуманную попытку
+backup. Synthetic downgrade fixtures удаляют новые дочерние таблицы до старых.
+Шесть новых SQLite tests покрывают CAS/history, reopen/uncertainty, skipped/changed
+transitions, ignored writes/atomic rollback и owner-locked migration. Полный native
+migration/refusal с actual schema12 shutdown history остаётся частью U2.1 gate.
+
+
+Review существующего `Store::archive_read_only` выявил отпускание create-new handle
+до открытия SQLite. Исправлено: handle удерживается до integrity/authority check,
+Windows delete sharing запрещён, path File ID сверяется, SQLite открывается без
+CREATE. Три actual SQLite tests проверяют WAL rows и неизменность source bytes,
+existing/partial destination, stale authority и подмену пути. Это локальная
+проверка; Windows no-delete sharing ещё требует native gate.
+
+Проверки 2026-10-21: все группы workspace покрыты — 603 passed в сумме, 16 ignored
+native/helper tests. Общий `--no-fail-fast` выявил только гонку короткого Unix probe;
+после fixture-синхронизации повтор всей updater lib прошёл97/0. Ранее исправлена
+гонка copied rehearsal image; повтор группы в общем прогоне прошёл5/0. Production
+launch/identity checks не ослаблены. Clippy update+worker all-targets: Debian со
+всеми features и Windows с `update-validation` прошли. Bundled SQLite Windows
+cross-build требует отсутствующий `lib.exe`; его C build проверяется на Windows,
+не объявляется подтверждённым cross-check. Fmt/diff прошли. Logs находятся в
+`.winbridge/update-preparation/state-backup-ledger-*` и не включаются в Git.

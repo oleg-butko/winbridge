@@ -255,15 +255,15 @@ fn schema_eleven_migration_retains_history_backs_up_fences_owner_and_invents_no_
     let before = j.accept(&a, &req, &req.expected).unwrap();
     let epoch = a.epoch();
     let installation = j.info().unwrap().installation_id;
-    assert_eq!(j.info().unwrap().schema_version, 12);
+    assert_eq!(j.info().unwrap().schema_version, UPDATE_SCHEMA_VERSION);
     // Migration cannot race the real owner lock.
-    j.connection.execute_batch("DROP TABLE shutdown_history;DROP TABLE shutdown_records;DROP TABLE shutdown_intents;PRAGMA user_version=11;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    j.connection.execute_batch("DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; DROP TABLE shutdown_history;DROP TABLE shutdown_records;DROP TABLE shutdown_intents;PRAGMA user_version=11;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     assert!(UpdateJournal::open(root.path(), &scope).is_err());
     assert_eq!(j.info().unwrap().owner_epoch, epoch);
     drop(a);
     drop(j);
     let mut j = UpdateJournal::open(root.path(), &scope).unwrap();
-    assert_eq!(j.info().unwrap().schema_version, 12);
+    assert_eq!(j.info().unwrap().schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(j.info().unwrap().installation_id, installation);
     assert!(j.info().unwrap().owner_epoch > epoch);
     assert_eq!(j.get(&before.update_id).unwrap(), before);

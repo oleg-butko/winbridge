@@ -1,3 +1,38 @@
+## U2.1 durable backup outbox locally verified — 2026-10-21
+
+Updater schema13 now persists immutable StateBackupIntent, CAS current record and
+full causal append-only history. Reads join exact shutdown/health/supervisor/policy
+scope. Fresh admission and every append require actual original ShutdownExitGuard,
+current owner/epoch, unchanged Replacing root and parent directory File ID; readonly
+Existing never returns a fresh permit. No helper launch or runtime effect enabled.
+Migration12→13 keeps consistent backup/owner lock/epoch fencing; no invented backup
+or reconstructed custody. All downgrade fixtures drop the new child tables first.
+Six new ledger tests pass; synthetic fixtures do not claim native OS/complete
+schema12 shutdown-graph migration coverage.
+
+Review fixed Store::archive_read_only releasing create-new handle too early:
+retained handle, Windows no-delete sharing, identity rechecks, no SQLite CREATE,
+parent sync. Three real SQLite tests pass: uncheckpointed WAL/source bytes,
+existing/partial destination/stale authority, destination rebinding. Native Windows
+sharing still needs gate. Test-only fixes: copied rehearsal fixture lifetimes
+serialized for inherited writer FD/ETXTBSY; short Unix owned probe waits for parent
+PID/resumed callback. No production identity/launch checks weakened.
+
+Validation: workspace no-fail-fast covered602 passed/1 failed/16 ignored; only
+failure was short probe PID race. After fixture fix updater lib97/0 passed, so603
+workspace tests pass across the final group results. Rehearsal5/0 and archive3/0
+included. Clippy update+worker all-targets: Linux all-features and Windows with
+update-validation pass; bundled C SQLite Windows cross-build unavailable (lib.exe
+missing), not a Rust failure/native claim. Fmt/diff clean. Logs state-backup-ledger-*.
+
+NEXT readonly old-helper export CLI + saved attempt/current-owner/input/self PID
+validation in a single snapshot; consuming supervisor/custody integration/native
+gate per final-state-backup.md. Check support before stopping worker. U2.1–U4 remain
+unfinished, public update disabled. Preserve actual old12/native refs. Installed
+d052 still healthy/idle0; no manual update needed yet. Desktop not needed, no test
+windows were opened. Controller3902; no Cargo/native active at this checkpoint.
+Debian~26GiB; configs/journals/shared reports not modified, no backups required.
+
 ## U2.1 pure backup attempt FSM locally verified — 2026-10-21
 
 apps/update/src/state_backup.rs adds immutable canonical digest binding the full

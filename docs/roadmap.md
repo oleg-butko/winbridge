@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-21: внутренний U1 завершён, начат [U2.1 final backup](plans/worker-self-update/final-state-backup.md).
+Updater schema13/outbox с CAS/history/migration реализован и локально проверен;
+review исправил удержание SQLite destination handle. 603 workspace tests прошли
+по итогам общего прогона и повтора одной исправленной fixture-группы. Debian и
+Windows Rust Clippy прошли; export CLI/consuming driver/native backup gate ещё
+впереди. Public update не включён, ручное обновление installed worker пока не нужно.
+
 2026-10-20: сквозной [candidate health gate](plans/worker-self-update/candidate-health.md)
 пройден —13 native tests /4 actor cases /9 groups, actual candidate build и
 atomic acceptance. [Durable drain/quiesce](plans/worker-self-update/drain-quiesce.md) прошёл26 native tests,

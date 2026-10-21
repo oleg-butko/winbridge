@@ -28,6 +28,20 @@ pub struct StateBackupIntent {
     pub binding: StateBackupBinding,
     pub binding_sha256: String,
 }
+/// Fresh, non-Serde database admission. Driver must also retain its OS guard.
+pub struct StateBackupPermit {
+    pub(crate) intent: StateBackupIntent,
+}
+impl StateBackupPermit {
+    pub fn intent(&self) -> &StateBackupIntent {
+        &self.intent
+    }
+}
+pub enum StateBackupAdmission {
+    Fresh(Box<StateBackupPermit>),
+    Existing(Box<StateBackupRecord>),
+}
+
 fn text(s: &str, max: usize) -> bool {
     !s.is_empty() && s.len() <= max && !s.chars().any(char::is_control)
 }
@@ -454,4 +468,4 @@ impl StateBackupRecord {
 
 #[cfg(test)]
 #[path = "state_backup_tests.rs"]
-mod tests;
+pub(crate) mod tests;
