@@ -995,3 +995,5 @@ pub struct UpdateCompilerOutputPage {
     pub quota_truncated: Option<bool>,
     pub output_error: Option<String>,
 }
+mod shutdown;
+pub use shutdown::*;

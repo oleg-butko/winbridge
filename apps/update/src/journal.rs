@@ -28,9 +28,10 @@ mod drain;
 mod health;
 mod runtime_baseline;
 mod runtime_preimages;
+mod shutdown;
 mod source;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 11;
+pub const UPDATE_SCHEMA_VERSION: u32 = 12;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -41,6 +42,7 @@ enum Driver {
     Preimages,
     Health,
     Drain,
+    Shutdown,
 }
 const APPLICATION_ID: u32 = 0x5742_5550; // WBUP; never accept a worker DB as an update DB.
 const MAX_RECORD_BYTES: usize = 32 * 1024;
@@ -488,6 +490,7 @@ impl UpdateJournal {
             runtime_preimages::migrate(&tx)?;
             health::migrate(&tx)?;
             drain::migrate(&tx)?;
+            shutdown::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -537,6 +540,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 10 {
                 drain::migrate(&tx)?;
+            }
+            if schema(&tx)? == 11 {
+                shutdown::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(
@@ -898,6 +904,22 @@ impl UpdateJournal {
             ));
         }
         supervisor::require_driver(&tx, authority, id, command.event)?;
+        if command.event == winbridge_protocol::update::UpdateEvent::BeginShutdown
+            && driver != Driver::Shutdown
+        {
+            return Err(fail(
+                JournalErrorCode::InvalidRequest,
+                "Shutdown requires its trusted driver and durable intent",
+            ));
+        }
+        // Until the OS exit/instance-lock adapter exists, even trusted metadata
+        // cannot approve the next physical phase. An ACK is not an exit proof.
+        if command.event == winbridge_protocol::update::UpdateEvent::ShutdownVerified {
+            return Err(fail(
+                JournalErrorCode::InvalidRequest,
+                "Exact process exit and instance-lock verification are not connected yet",
+            ));
+        }
         if matches!(
             command.event,
             winbridge_protocol::update::UpdateEvent::BeginDrain

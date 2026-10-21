@@ -112,8 +112,9 @@ status и release только после source/Job/output proof. Добавл�
 [Health journal / supervisor v10](docs/plans/worker-self-update/candidate-health.md)
 добавляет durable helpers и atomic approval; сквозной Windows gate пройден.
 [Drain/quiesce](docs/plans/worker-self-update/drain-quiesce.md) добавляет updater schema11,
-сохранённые команды/квитанции и внутренний actor v13; сквозная native проверка нового
-блока ещё требуется. Exact shutdown и activation впереди. Весь U1 ещё не завершён.
+сохранённые команды/квитанции и внутренний actor v13; сквозной native gate пройден.
+[Exact shutdown](docs/plans/worker-self-update/exact-shutdown.md) получил data FSM и
+два durable журнала (updater12/worker16); доставка stop и OS proof ещё впереди. Весь U1 ещё не завершён.
 Install и public update отключены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

@@ -391,7 +391,7 @@ fn startup_guard_blocks_migration_and_lost_guard_does_not_release_database_lease
     let path = cfg.state_directory.join("journal.sqlite");
     drop(winbridge_worker::store::Store::open(&path).unwrap());
     let c = rusqlite::Connection::open(&path).unwrap();
-    c.execute_batch("DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; PRAGMA user_version=14;").unwrap();
+    c.execute_batch("DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; PRAGMA user_version=14;").unwrap();
     drop(c);
     let before = fs::read(&path).unwrap();
     let guard = cfg.state_directory.join(UPDATE_STARTUP_GUARD);
@@ -443,8 +443,20 @@ fn startup_guard_blocks_migration_and_lost_guard_does_not_release_database_lease
 #[test]
 #[ignore = "native gate provides a copied schema-14 reference binary"]
 fn previous_worker_refuses_schema_fifteen_without_mutating_journal() {
-    let executable = std::env::var_os("WINBRIDGE_UPDATE_REFERENCE_WORKER")
-        .expect("Explicit schema-14 reference worker required");
+    reference_worker_refuses_schema("WINBRIDGE_UPDATE_REFERENCE_WORKER", 15);
+}
+
+#[test]
+#[ignore = "native shutdown gate provides a proven schema-15 worker reference"]
+fn previous_worker_fifteen_refuses_current_schema_without_mutating_journal() {
+    reference_worker_refuses_schema(
+        "WINBRIDGE_SHUTDOWN_REFERENCE_WORKER",
+        winbridge_worker::store::JOURNAL_SCHEMA_VERSION,
+    );
+}
+
+fn reference_worker_refuses_schema(variable: &str, schema: u32) {
+    let executable = std::env::var_os(variable).expect("Explicit proven worker reference required");
     let dir = tempfile::tempdir().unwrap();
     let (cfg, _) = config(dir.path());
     fs::create_dir(&cfg.state_directory).unwrap();
@@ -455,6 +467,11 @@ fn previous_worker_refuses_schema_fifteen_without_mutating_journal() {
     }
     let path = cfg.state_directory.join("journal.sqlite");
     drop(winbridge_worker::store::Store::open(&path).unwrap());
+    if schema == 15 {
+        // Retain the frozen predecessor-14→15 test's exact original scope.
+        let c = rusqlite::Connection::open(&path).unwrap();
+        c.execute_batch("DROP TABLE worker_shutdown_receipts;PRAGMA user_version=15;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    }
     let before = fs::read(&path).unwrap();
     let config_path = dir.path().join("worker.local.json");
     fs::write(&config_path, serde_json::to_vec(&cfg).unwrap()).unwrap();
@@ -473,13 +490,14 @@ fn previous_worker_refuses_schema_fifteen_without_mutating_journal() {
         if Instant::now() > deadline {
             child.kill().unwrap();
             child.wait().unwrap();
-            panic!("Owned reference worker failed to refuse schema 15");
+            panic!("Owned reference worker failed to refuse schema {schema}");
         }
         std::thread::sleep(Duration::from_millis(10));
     }
     let out = child.wait_with_output().unwrap();
     assert!(!out.status.success());
-    assert!(String::from_utf8_lossy(&out.stderr).contains("journal schema 15 is unsupported"));
+    assert!(String::from_utf8_lossy(&out.stderr)
+        .contains(&format!("journal schema {schema} is unsupported")));
     assert_eq!(fs::read(path).unwrap(), before);
 }
 

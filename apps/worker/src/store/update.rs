@@ -14,7 +14,7 @@ fn one(n: usize) -> Result<()> {
     }
     Ok(())
 }
-fn validate(spec: &WorkerUpdateSpec) -> Result<()> {
+pub(super) fn validate(spec: &WorkerUpdateSpec) -> Result<()> {
     for id in [
         &spec.update_id,
         &spec.journal_incarnation,
@@ -41,7 +41,7 @@ fn validate(spec: &WorkerUpdateSpec) -> Result<()> {
     }
     Ok(())
 }
-fn read(c: &Connection, id: &str) -> Result<WorkerUpdateLease> {
+pub(super) fn read(c: &Connection, id: &str) -> Result<WorkerUpdateLease> {
     let row: Option<(String, String, i64, String, bool)> = c
         .query_row(
             "SELECT record,spec,revision,phase,active FROM worker_update_leases WHERE id=?1",
@@ -212,6 +212,11 @@ impl Store {
     }
 
     fn update_transaction(&mut self) -> Result<Transaction<'_>> {
+        let tx = self.coordinated_update_transaction()?;
+        super::shutdown::require_no_accepted_shutdown(&tx)?;
+        Ok(tx)
+    }
+    pub(super) fn coordinated_update_transaction(&mut self) -> Result<Transaction<'_>> {
         self.guard_callback(None, None)?;
         let authority = self.authority.clone();
         let tx = self
@@ -396,6 +401,11 @@ impl Store {
         command: &WorkerUpdateCommand,
         mut blockers: WorkerUpdateBlockers,
     ) -> Result<WorkerUpdateLease> {
+        // A saved receipt is readonly, including after shutdown acceptance.
+        // Only a genuinely new lease mutation is blocked by that acceptance.
+        if let Some(saved) = self.worker_update_receipt(spec, command)? {
+            return Ok(saved);
+        }
         let capacity = self.work_scheduling.clone();
         let tx = self.update_transaction()?;
         let current = read(&tx, &spec.update_id)?;

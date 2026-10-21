@@ -1,7 +1,39 @@
 # Следующий блок U1: подтверждённая остановка worker
 
-2026-10-20. План реализации после combined drain gate. Код остановки обновлением
-пока отсутствует; public update и replacement остаются отключёнными.
+2026-10-20. Реализация после пройденного combined drain gate. Добавлены типизированные
+данные и два журнала; доставка команды остановки, OS exit proof и native gate ещё
+впереди. Public update и replacement остаются отключёнными.
+
+## Реализованный слой данных
+
+`apps/update/src/shutdown.rs` хранит immutable binding: update/launch/owner/epoch,
+Quiesced root revision, SHA полного drain snapshot, worker generation/config/build,
+точную loaded identity и file identities state directory/journal/instance lock.
+Команда связана с binding каноническим SHA. Pure FSM разделяет Prepared, Issued,
+Uncertain, Acknowledged и Exited. Прочитанный JSON не создаёт разрешения на действие.
+
+Updater schema12 хранит intent, current record и append-only history. Admission
+атомарен с root Stopping; Issued сохраняется до выдачи одноразового delivery permit.
+Повтор возвращает сохранённые данные. ACK не переводит root в Replacing. Пока
+physical adapter не подключён, журнал отклоняет Exited и ShutdownVerified, включая
+попытку передать синтетические `true` flags через trusted metadata API.
+
+Worker schema16 хранит immutable acceptance receipt, связанную с оригинальной
+ConfirmQuiesced receipt. Fresh acceptance выдаётся только после commit; duplicate
+читается как история и не выдаёт новое разрешение. Последующее изменение lease не
+переписывает историю. Новые обычные lease changes/release блокируются после
+acceptance; отдельного activation/recovery contract пока нет. Cold inspection
+использует Store readonly API без Worker construction и recovery marker.
+
+Миграции создают consistent SQLite backup. Updater migration fences старого owner,
+не создавая остановку для прежней операции; worker15 с active update lease
+отклоняется до migration writes. Schema15/11 reference binaries сохранены на
+Windows для будущей проверки отказа старых executables. Legacy control v1–v5 и
+supervisor v1–v13 не получили скрытой команды остановки.
+
+Проверки ledger покрывают CAS, immutable history, reopen/lost ACK, rollback при
+ignored write и отсутствие fabricated exit authority. Эти проверки не подтверждают
+реальную остановку процесса: она будет проверена отдельным native gate ниже.
 
 ## Что требуется доказать
 

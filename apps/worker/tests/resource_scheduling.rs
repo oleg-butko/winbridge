@@ -257,7 +257,7 @@ fn previous_worker_refuses_schema_fourteen_without_mutating_journal() {
     // Keep this historical schema-13 -> schema-14 refusal fixture independent
     // of later migrations. No source-update record exists in this owned DB.
     let c = rusqlite::Connection::open(&path).unwrap();
-    c.execute_batch("DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; PRAGMA user_version=14;").unwrap();
+    c.execute_batch("DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; PRAGMA user_version=14;").unwrap();
     drop(c);
     let before = fs::read(&path).unwrap();
     let cfg_path = dir.path().join("worker.local.json");

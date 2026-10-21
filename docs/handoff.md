@@ -1,3 +1,35 @@
+## Exact shutdown: two durable journals; physical driver NEXT — 2026-10-20
+
+Implemented data FSM and shutdown scope digest in apps/update/src/shutdown.rs;
+strict protocol DTOs generated to TS, no new wire action/capability yet. Worker
+journal16 retains immutable acceptance linked to original ConfirmQuiesced receipt.
+Duplicate history grants no fresh stop; new ordinary lease mutation/release is
+blocked after acceptance. History remains readable after future explicit handoff.
+Worker15 active update is refused before migration writes. Migration backup is
+verified (schema/quick_check/authority) and synced before changing schema.
+
+Updater journal12: immutable intent + current delivery + append-only history,
+atomic root Stopping/admission, Issued-before-one-use permit; ACK/unknown history
+never reissues. Scope joins retained drain/final receipt, baseline/loaded worker,
+root transition, active supervisor and owner/epoch. Raw BeginShutdown is guarded;
+ShutdownVerified/Exited writes are blocked until actual OS guard is implemented.
+No shutdown RPC, stop flag, cold verifier executable, replacement or activation
+is enabled. Database/FSM tests are not a native process-stop proof.
+
+Full workspace regression passed:577 tests,0 failures; four worker store tests
+and nine updater shutdown tests included. TS typecheck passed. Log
+shutdown-ledgers-workspace.log. Linux and Windows all-target Clippy, fmt and diff checks passed. Storage measurement:
+.winbridge/update-preparation/shutdown-ledgers-storage.txt (>6GiB).
+
+Next: separately versioned internal control, receipt-before-ACK and stop only after
+reply attempt/callback retirement via existing serve loop; bounded readonly cold
+receipt verifier (not Worker recovery startup); exact PID/birth/host/session exit
+and held instance lock before atomic root approval. See exact-shutdown.md.
+New positive native A/C must BOTH use updater12/worker16. Keep schema15/11 references
+below: C3b is now a negative/reference artifact, not a new positive helper pair.
+Installed d052 remains healthy and unchanged, generation78e9bbe1. Desktop unnecessary;
+leave installed worker running. No Windows validation active. U1–U4 goal remains open.
+
 ## Drain/quiesce native gate PASSED; next exact shutdown — 2026-10-20
 
 Task e73c941f-42f4-47af-af7f-ba0615b027e0 / run20261020-223955-44db4bea

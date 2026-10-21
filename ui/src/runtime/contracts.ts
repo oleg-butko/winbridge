@@ -90,6 +90,9 @@ export type CandidateDrainView = { phase: CandidateDrainPhase, attemptId: string
  * updater evidence. Absent after supervisor restart; not an approval.
  */
 workerObservation: WorkerDrainObservation | null, };
+export type WorkerShutdownCommand = { commandId: string, expectedLeaseRevision: number, intentSha256: string, reason: string, };
+export type WorkerShutdownState = { stateDirectory: string, directoryIdentity: string, journalIdentity: string, lockIdentity: string, };
+export type WorkerShutdownReceipt = { schemaVersion: number, updateId: string, launchId: string, updaterOwnerId: string, updaterEpoch: number, command: WorkerShutdownCommand, lease: WorkerUpdateLease, process: SupervisorProcess, state: WorkerShutdownState, acceptedAtMs: number, };
 export type SupervisorWorkerBinding = { context: RequestContext, generation: string, build: BuildIdentity, process: SupervisorProcess, configSha256: string, endpoint: string, };
 export type WorkerUpdateControlCommand = { "action": "observe" } | { "action": "observe_runtime" } | { "action": "observe_compatibility" } | { "action": "observe_receipt", command: WorkerUpdateCommand, } | { "action": "observe_drain" } | { "action": "begin_source" } | { "action": "advance", command: WorkerUpdateCommand, };
 export type WorkerUpdateControlRequest = { controlVersion: number, binding: SupervisorWorkerBinding, updateId: string, launchId: string, supervisor: SupervisorProcess, updaterOwnerId: string, updaterEpoch: number, command: WorkerUpdateControlCommand, };

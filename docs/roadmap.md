@@ -14,6 +14,11 @@ readonly reconciliation потерянного ACK и coordinated abort. 563 wor
 объединённый native gate пройден (A28/C3b, отдельно от более позднего readonly
 исправления статуса отмены). Shutdown/install этим не разрешаются.
 
+Для exact shutdown добавлены [контракты и два журнала](plans/worker-self-update/exact-shutdown.md):
+updater schema12 и worker schema16, immutable receipt/history, однократная выдача
+разрешения после commit. Реальная доставка stop, exit/lock proof и native gate
+ещё не готовы; ShutdownVerified и runtime replacement блокируются.
+
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 
 ## Самообновление U0–U4 — 2026-10-17

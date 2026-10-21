@@ -24,11 +24,13 @@ pub use domain_records::JournalSnapshot;
 mod operation_pages;
 mod queue_control;
 mod resource_scheduling;
+mod shutdown;
+pub use shutdown::{ShutdownAcceptance, ShutdownAcceptancePermit};
 mod task_records;
 mod update;
 mod work_scheduling;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 15;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 16;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -60,6 +62,11 @@ impl Store {
             .map_err(sql)?;
         if version > JOURNAL_SCHEMA_VERSION {
             return Err(format!("journal schema {version} is unsupported; expected {JOURNAL_SCHEMA_VERSION}; keep the database and use a compatible worker"));
+        }
+        if version == 15 {
+            // An accepted update is owned by the old worker/updater pair. A
+            // generic open must not migrate underneath that handoff.
+            Self::reject_pending_update_start(path)?;
         }
         if version == 0 {
             let tables: u32 = connection.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0)).map_err(sql)?;
@@ -359,6 +366,53 @@ impl Store {
                 .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
                 .map_err(sql)?;
             Self::migrate_update_coordination(&migration)?;
+            migration.commit().map_err(sql)?;
+        }
+        if version <= 15 {
+            if version == 15 {
+                let original_authority = Self::read_authority(&connection)?;
+                let backup = path.with_file_name(format!(
+                    "journal-v15-{}-{}.sqlite",
+                    now_ms(),
+                    Uuid::new_v4()
+                ));
+                connection
+                    .execute("VACUUM INTO ?1", [backup.to_string_lossy().as_ref()])
+                    .map_err(sql)?;
+                let snapshot = Connection::open_with_flags(
+                    &backup,
+                    rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+                )
+                .map_err(sql)?;
+                let backup_schema: u32 = snapshot
+                    .query_row("PRAGMA user_version", [], |r| r.get(0))
+                    .map_err(sql)?;
+                let integrity: String = snapshot
+                    .query_row("PRAGMA quick_check", [], |r| r.get(0))
+                    .map_err(sql)?;
+                if backup_schema != 15
+                    || integrity != "ok"
+                    || Self::read_authority(&snapshot)? != original_authority
+                {
+                    return Err(
+                        "Shutdown migration backup verification failed; journal preserved".into(),
+                    );
+                }
+                drop(snapshot);
+                std::fs::OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .open(&backup)
+                    .and_then(|file| file.sync_all())
+                    .map_err(|e| e.to_string())?;
+                winbridge_platform::source_files::sync_parent(&backup)
+                    .map_err(|e| e.to_string())?;
+                eprintln!("Journal migration consistent backup: {}", backup.display());
+            }
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            Self::migrate_shutdown(&migration)?;
             migration.commit().map_err(sql)?;
         }
         let authority = Self::read_authority(&connection)?;

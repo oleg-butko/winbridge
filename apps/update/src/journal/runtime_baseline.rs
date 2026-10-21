@@ -36,6 +36,7 @@ pub(super) fn transition(
         }
         UpdateEvent::BeginDrain => UpdatePhase::CandidateVerified,
         UpdateEvent::Quiesce { .. } => UpdatePhase::Draining,
+        UpdateEvent::BeginShutdown => UpdatePhase::Quiesced,
         _ => {
             return Err(fail(
                 JournalErrorCode::Corrupt,
