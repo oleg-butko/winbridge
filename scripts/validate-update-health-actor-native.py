@@ -206,43 +206,91 @@ def verify_shutdown_main_proof(proof, source, target):
     if [c.get('fault') for c in cases] != ['none', 'lost_ack', 'delayed_reply', 'receipt_write_denied']:
         raise ValueError('Missing ordered Main shutdown cases')
     for case in cases:
-        before, shutdown, root, cold = (case[k] for k in ('beforeMainExit', 'shutdown', 'root', 'coldAfterMain'))
-        intent, delivery = shutdown['intent'], shutdown['delivery']
-        binding = intent['binding']
-        denied = case['fault'] == 'receipt_write_denied'
-        if (before.get('requestShutdownCount') != 1 or before.get('normalMain') is not True
-                or before.get('normalServe') is not True or before.get('passed') is not True
-                or before.get('build') != build or before.get('worker') != binding['worker']
-                or before.get('runtimeApplied') is not False or before.get('windowsOpened') is not False
-                or root['updateId'] != binding['updateId'] or root['request']['source'] != target
-                or root['phase'] != ('stopping' if denied else 'replacing')
-                or delivery['state'] != ('uncertain' if denied else 'exited')
-                or case.get('physicalCustodyAfterExit') is not (not denied)
-                or any(case.get(k) is not True for k in ('supervisorOutlivedMain', 'startupStillBlocked', 'oldRuntimeUnchanged', 'ownedSupervisorCrashRetainsHistoryWithoutCustody'))):
-            raise ValueError('Shutdown effect count, scope, exit or retained barrier differs')
-        if (cold.get('kind') != 'worker_shutdown_inspection' or cold.get('journalOpenedReadOnly') is not True
-                or any(cold.get(k) is not False for k in ('workerConstructed', 'schedulerStarted', 'recoveryMarkerChanged', 'runtimeApplied'))
-                or cold['state'] != binding['workerState'] or cold['helperImage'] != binding['loadedWorker']['image']
-                or cold['descriptor'] != binding['loadedWorker']['descriptor']
-                or cold['workerConfig']['sha256'] != binding['worker']['configSha256']
-                or cold['workerJournalSchema'] != 16):
-            raise ValueError('Actual Main cold reader changed state or belongs to another scope')
-        if denied:
-            if cold['receipt'] is not None or before.get('receiptDeniedFixtureStop') is not True:
-                raise ValueError('Receipt write failure unexpectedly accepted a stop')
-        else:
-            receipt, physical = delivery['receipt'], delivery['physical']
-            if (cold['receipt'] != receipt or receipt['command'] != intent['command']
-                    or receipt['process'] != binding['worker']['process'] or receipt['state'] != binding['workerState']
-                    or physical['process'] != receipt['process'] or physical['state'] != receipt['state']
-                    or physical['exactProcessExited'] is not True or physical['instanceLockAcquired'] is not True
-                    or receipt['lease'] != binding['lease']):
-                raise ValueError('Accepted receipt and exact process/lock evidence differ')
-            if case['fault'] == 'lost_ack' and shutdown['revision'] != 4:
-                raise ValueError('Lost ACK did not retain uncertainty before reconciliation')
-        duplicate = before['duplicate']['candidateShutdown']
-        if duplicate['attemptId'] != intent['attemptId'] or duplicate['exitedAtMs'] is not None or duplicate['physicalCustodyHeld'] is not False:
-            raise ValueError('Live Main duplicate fabricated exit/custody')
+        _verify_shutdown_main_case(case, build, target)
+
+
+def _verify_shutdown_main_case(case, build, target):
+    before, shutdown, root, cold = (case[k] for k in ('beforeMainExit', 'shutdown', 'root', 'coldAfterMain'))
+    intent, delivery = shutdown['intent'], shutdown['delivery']
+    binding = intent['binding']
+    denied = case['fault'] == 'receipt_write_denied'
+    if (before.get('requestShutdownCount') != 1 or before.get('normalMain') is not True
+            or before.get('normalServe') is not True or before.get('passed') is not True
+            or before.get('build') != build or before.get('worker') != binding['worker']
+            or before.get('runtimeApplied') is not False or before.get('windowsOpened') is not False
+            or root['updateId'] != binding['updateId'] or root['request']['source'] != target
+            or root['phase'] != ('stopping' if denied else 'replacing')
+            or delivery['state'] != ('uncertain' if denied else 'exited')
+            or case.get('physicalCustodyAfterExit') is not (not denied)
+            or any(case.get(k) is not True for k in ('supervisorOutlivedMain', 'startupStillBlocked', 'oldRuntimeUnchanged', 'ownedSupervisorCrashRetainsHistoryWithoutCustody'))):
+        raise ValueError('Shutdown effect count, scope, exit or retained barrier differs')
+    if (cold.get('kind') != 'worker_shutdown_inspection' or cold.get('journalOpenedReadOnly') is not True
+            or any(cold.get(k) is not False for k in ('workerConstructed', 'schedulerStarted', 'recoveryMarkerChanged', 'runtimeApplied'))
+            or cold['state'] != binding['workerState'] or cold['helperImage'] != binding['loadedWorker']['image']
+            or cold['descriptor'] != binding['loadedWorker']['descriptor']
+            or cold['workerConfig']['sha256'] != binding['worker']['configSha256']
+            or cold['workerJournalSchema'] != 16):
+        raise ValueError('Actual Main cold reader changed state or belongs to another scope')
+    if denied:
+        if cold['receipt'] is not None or before.get('receiptDeniedFixtureStop') is not True:
+            raise ValueError('Receipt write failure unexpectedly accepted a stop')
+    else:
+        receipt, physical = delivery['receipt'], delivery['physical']
+        if (cold['receipt'] != receipt or receipt['command'] != intent['command']
+                or receipt['process'] != binding['worker']['process'] or receipt['state'] != binding['workerState']
+                or physical['process'] != receipt['process'] or physical['state'] != receipt['state']
+                or physical['exactProcessExited'] is not True or physical['instanceLockAcquired'] is not True
+                or receipt['lease'] != binding['lease']):
+            raise ValueError('Accepted receipt and exact process/lock evidence differ')
+        if case['fault'] == 'lost_ack' and shutdown['revision'] != 4:
+            raise ValueError('Lost ACK did not retain uncertainty before reconciliation')
+    duplicate = before['duplicate']['candidateShutdown']
+    if duplicate['attemptId'] != intent['attemptId'] or duplicate['exitedAtMs'] is not None or duplicate['physicalCustodyHeld'] is not False:
+        raise ValueError('Live Main duplicate fabricated exit/custody')
+
+
+def verify_shutdown_supplemental_proof(proof, source, target):
+    build = proof.get('build', {})
+    if (proof.get('kind') != 'shutdown_main_supplemental_proof' or proof.get('passed') is not True
+            or proof.get('platform') != 'windows' or proof.get('target') != target
+            or build.get('sourceCommit') != source['sourceCommit'] or build.get('sourceDirty') is not False
+            or build.get('sourceManifestSha256') != source['manifestSha256']
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False
+            or any(proof.get(k) is not True for k in ('normalMain', 'actualOldRoles', 'actualCandidateBuild', 'validationFeature'))):
+        raise ValueError('Supplemental Main source/target/isolation differs')
+    cases = proof.get('cases', [])
+    if [c.get('fault') for c in cases] != ['delayed_instance_lock', 'supervisor_crash_before_exit']:
+        raise ValueError('Both ordered supplemental cases required')
+    delayed, crash = cases
+    _verify_shutdown_main_case(delayed, build, target)
+    held = delayed.get('delayedLockHolder', {})
+    if (delayed.get('delayedOriginalLockVerified') is not True
+            or held.get('state') != delayed['shutdown']['intent']['binding']['workerState']
+            or held.get('attemptId') != delayed['shutdown']['intent']['attemptId']):
+        raise ValueError('Original instance lock was not held after Main exit')
+    before, saved, root, cold = (crash[k] for k in ('beforeMainExit', 'shutdown', 'root', 'coldAfterMain'))
+    binding, delivery = saved['intent']['binding'], saved['delivery']
+    if (before.get('requestShutdownCount') != 1 or before.get('normalMain') is not True
+            or before.get('normalServe') is not True or before.get('build') != build
+            or before.get('worker') != binding['worker']
+            or before.get('runtimeApplied') is not False or before.get('windowsOpened') is not False
+            or root['request']['source'] != target or root['updateId'] != binding['updateId']
+            or root['phase'] != 'stopping' or delivery['state'] != 'acknowledged'
+            or saved['revision'] != 2 or crash.get('physicalCustodyAfterExit') is not False
+            or any(crash.get(k) is not True for k in ('mainAndSupervisorAliveBeforeCrash', 'startupStillBlocked', 'oldRuntimeUnchanged', 'ownedSupervisorCrashRetainsHistoryWithoutCustody'))):
+        raise ValueError('Pre-exit crash fabricated exit/authority or lost its barrier')
+    receipt = delivery['receipt']
+    if (cold['receipt'] != receipt or receipt['command'] != saved['intent']['command']
+            or receipt['lease'] != binding['lease'] or receipt['state'] != binding['workerState']
+            or receipt['process'] != binding['worker']['process'] or cold['state'] != receipt['state']
+            or cold['descriptor'] != binding['loadedWorker']['descriptor']
+            or cold['helperImage'] != binding['loadedWorker']['image']
+            or cold['journalOpenedReadOnly'] is not True or cold['workerJournalSchema'] != 16
+            or any(cold[k] is not False for k in ('workerConstructed', 'schedulerStarted', 'recoveryMarkerChanged', 'runtimeApplied'))):
+        raise ValueError('Cold receipt after owned pre-exit crash differs')
+    duplicate = before['duplicate']['candidateShutdown']
+    if duplicate['exitedAtMs'] is not None or duplicate['physicalCustodyHeld'] is not False or duplicate['attemptId'] != saved['intent']['attemptId']:
+        raise ValueError('Live Main before crash fabricated exit/custody')
 
 
 def main():
@@ -253,12 +301,13 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--drain-gate', action='store_true')
     modes.add_argument('--shutdown-main-gate', action='store_true')
+    modes.add_argument('--shutdown-main-supplemental', action='store_true')
     parser.add_argument('--previous-updater')
     parser.add_argument('--previous-updater-sha256')
     parser.add_argument('--controller-config', default='.winbridge/controller-snapshot.local.json', type=Path)
     args = parser.parse_args()
     source, target = archive_pin(args.archive), archive_pin(args.target_archive)
-    drain_parameters = ' -ShutdownMainGate' if args.shutdown_main_gate else ''
+    drain_parameters = ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
     if args.drain_gate:
         if (not args.previous_updater or not re.fullmatch(r'[0-9a-f]{64}', args.previous_updater_sha256 or '')
                 or PureWindowsPath(args.previous_updater).drive.casefold() != 'k:'
@@ -344,10 +393,10 @@ exit $LASTEXITCODE
         raise RuntimeError({'taskId': task['taskId'], 'error': result['error'], 'reportDirectory': str(report)})
     if 'candidate-health-actor-proof.json' not in verified_names:
         raise ValueError('Ready manifest must cover the actual process proof')
-    expected_kind = 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
+    expected_kind = 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
     if result.get('kind') != expected_kind or result.get('sourceCommit') != source['sourceCommit'] or result.get('sourceArchiveSha256') != source['archiveSha256'] or result.get('target') != target:
         raise ValueError('Report kind or exact source/target binding differs')
-    verifier = verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
+    verifier = verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
     verifier(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report), 'filesVerified': len(ready['files'])}), flush=True)
 

@@ -252,3 +252,20 @@ execution; shared report и process proof должны входить в checksu
 Выбранный target может быть более ранним проверенным commit с теми же schemas:
 это проверка shutdown и same-schema health, а не обещание upgrade/migration.
 Пока native результат этого сценария не получен, block остаётся открытым.
+
+
+## Supplemental lock/crash fixtures — native проверка впереди
+
+`--shutdown-main-supplemental` выбирает только два дополнительных case.
+`DelayedInstanceLock`: отдельный принадлежащий harness процесс получает исходную
+lock после завершения serve, пока Main ещё жив. Main затем выходит; parent две
+секунды проверяет Stopping/Acknowledged при удерживаемой lock, освобождает helper
+и лишь затем ожидает Exited. Metadata helper записываются и синхронизируются до
+ready marker; PID/birth/host/session и File IDs сверяются.
+
+`SupervisorCrashBeforeExit`: feature driver удерживает Main после durable ACK,
+публикует proof и ready marker. Parent подтверждает живые Main/supervisor и root
+Stopping, завершает только свой validation Job. История должна остаться
+Acknowledged, cold reader — вернуть ту же receipt, normal startup — остаться
+заблокированным. Падение не создаёт Exited/custody. Это fixture-only управление;
+нового production stop/recovery пути и ослабления Job boundary нет.

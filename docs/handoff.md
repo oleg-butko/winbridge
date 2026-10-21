@@ -1,3 +1,26 @@
+## Supplemental Main lock/crash fixtures prepared — 2026-10-21
+
+Default four-case gate remains passed at source2df5f44. Added private feature-only
+DelayedInstanceLock and SupervisorCrashBeforeExit. Independent owned integration-test
+helper locks original worker.lock after normal serve drops all Worker Arcs and
+before Main exits; native parent must see Main exit while Stopping/Acknowledged
+persists for2s, then release helper and await Exited/custody. Helper metadata is
+synced before ready marker. Crash case keeps Main alive after ACK/proof, parent
+kills only its owned validation Job, then verifies unchanged Stopping/Acknowledged,
+cold receipt, blocked startup and absent custody. Ready marker follows synced proof
+so parent cannot read a partial file. Both helpers' records/guards retained.
+
+Mode: validate-update-health-actor-native.py --shutdown-main-supplemental with
+same verified A294 target and original cache. Runs only two new cases; do not
+repeat the prior four unnecessarily. Both feature all-target Clippy checks and
+three Python archive tests passed; prior real native proof still passes extracted
+per-case verifier. No new native result yet. Production driver/protocol/schema
+unchanged, installed d052 healthy and does not require manual update.
+
+NEXT commit clean source/export with built UI, then automated supplemental gate.
+Before run announce worker required/desktop unnecessary/no GUI. Disk >=6GiB
+report; Debian26GiB, Windows last47274409984. No local Cargo/native active.
+
 ## Actual Main shutdown gate PASSED; supplemental faults NEXT — 2026-10-21
 
 Task1615bebb-015e-4155-b263-082aac5a1631/run20261021-090004-a229a8de succeeded0.

@@ -18,6 +18,8 @@ pub enum Fault {
     LostAck,
     DelayedReply,
     ReceiptWriteDenied,
+    DelayedInstanceLock,
+    SupervisorCrashBeforeExit,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -327,6 +329,33 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+    if input.fault == Fault::DelayedInstanceLock {
+        // The helper is owned by the external test parent, outside this Main
+        // process. Wait until serve has dropped all Worker Arcs/instance lock.
+        let until = Instant::now() + Duration::from_secs(10);
+        while weak.upgrade().is_some() {
+            if Instant::now() >= until {
+                return Err("Normal serve retained Worker beyond stop".into());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        publish(
+            &input.root,
+            "request-instance-lock.json",
+            &serde_json::json!({"updateId":h.record.spec.update_id}),
+        )?;
+        while !input
+            .root
+            .join("instance-lock-held.json")
+            .try_exists()
+            .map_err(|e| e.to_string())?
+        {
+            if Instant::now() >= until {
+                return Err("Owned external lock holder did not become ready".into());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
     let duplicate = h.candidate_shutdown(true).await?;
     let count = reg.shutdown_requests.load(Ordering::Acquire);
     if count != 1 {
@@ -337,5 +366,15 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
         "worker-proof.json",
         &serde_json::json!({"schemaVersion":1,"kind":"shutdown_main_before_exit","passed":true,"fault":input.fault,"build":build_identity(),"worker":reg.binding,"supervisor":h.record,"requestShutdownCount":count,"duplicate":duplicate,"normalMain":true,"normalServe":true,"validationFeature":true,"receiptDeniedFixtureStop":input.fault==Fault::ReceiptWriteDenied,"runtimeApplied":false,"windowsOpened":false}),
     )?;
+    if input.fault == Fault::SupervisorCrashBeforeExit {
+        // Keep Main alive after acceptance until the parent crashes only its
+        // owned validation Job. This is never a production shutdown path.
+        publish(
+            &input.root,
+            "awaiting-owned-crash.json",
+            &serde_json::json!({"proofPublished":true}),
+        )?;
+        std::future::pending::<()>().await;
+    }
     Ok(())
 }

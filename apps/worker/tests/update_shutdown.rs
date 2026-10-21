@@ -26,6 +26,8 @@ struct GateInput {
     old_images: PathBuf,
     powershell: PathBuf,
     validation_cache: PathBuf,
+    #[serde(default)]
+    supplemental: bool,
 }
 fn write(path: &Path, value: &impl serde::Serialize) {
     use std::io::Write;
@@ -162,6 +164,144 @@ fn capture(mut reader: winbridge_platform::OutputReader) -> std::thread::JoinHan
         result
     })
 }
+struct LockHolder {
+    child: winbridge_platform::ManagedChild,
+    output: (
+        std::thread::JoinHandle<Vec<u8>>,
+        std::thread::JoinHandle<Vec<u8>>,
+    ),
+}
+impl LockHolder {
+    fn start(root: &Path) -> Self {
+        let command = ResolvedCommand {
+            executable: std::env::current_exe().unwrap().to_string_lossy().into(),
+            arguments: vec![
+                "--exact".into(),
+                "instance_lock_holder_process".into(),
+                "--ignored".into(),
+                "--nocapture".into(),
+                "--skip".into(),
+                format!("lock-root={}", root.display()),
+            ],
+            working_directory: root.to_string_lossy().into(),
+            timeout_ms: 900000,
+        };
+        let (mut child, out, err) = winbridge_platform::ManagedChild::prepare_atomic_executable(
+            &command,
+            Some(&format!(
+                "WinBridge-shutdown-lock-holder-{}",
+                uuid::Uuid::new_v4()
+            )),
+            None,
+        )
+        .unwrap();
+        let output = (capture(out), capture(err));
+        child.resume().unwrap();
+        Self { child, output }
+    }
+    fn released(&mut self) {
+        let until = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let Some(s) = self.child.try_wait().unwrap() {
+                assert!(s.success());
+                break;
+            }
+            assert!(Instant::now() < until, "Owned lock helper did not release");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(self.child.tree_is_empty().unwrap());
+    }
+    fn finish(mut self, root: &Path) {
+        self.child.terminate_tree().unwrap();
+        fs::write(
+            root.join("lock-helper-stdout.log"),
+            self.output.0.join().unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            root.join("lock-helper-stderr.log"),
+            self.output.1.join().unwrap(),
+        )
+        .unwrap();
+    }
+}
+#[test]
+#[ignore = "Owned lock helper; invoked only by the supplemental native parent"]
+fn instance_lock_holder_process() {
+    let root = PathBuf::from(
+        std::env::args()
+            .find_map(|s| s.strip_prefix("lock-root=").map(str::to_owned))
+            .expect("Explicit owned lock root"),
+    );
+    let input: Input = serde_json::from_slice(&fs::read(root.join("input.json")).unwrap()).unwrap();
+    assert_eq!(
+        input.root.canonicalize().unwrap(),
+        root.canonicalize().unwrap()
+    );
+    assert_eq!(input.fault, Fault::DelayedInstanceLock);
+    let until = Instant::now() + Duration::from_secs(900);
+    while !root.join("request-instance-lock.json").is_file() {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let sup: SupervisorRecord =
+        serde_json::from_slice(&fs::read(root.join("supervisor.json")).unwrap()).unwrap();
+    let saved =
+        UpdateJournal::inspect_shutdown(&root.join("runtime/update-state"), &sup.spec.update_id)
+            .unwrap()
+            .unwrap();
+    assert!(matches!(
+        saved.delivery,
+        ShutdownDeliveryState::Acknowledged { .. }
+    ));
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(root.join("state/worker.lock"))
+        .unwrap();
+    assert_eq!(
+        winbridge_platform::file_identity(&file).unwrap(),
+        saved.intent.binding.worker_state.lock_identity
+    );
+    fs2::FileExt::try_lock_exclusive(&file).unwrap();
+    write(
+        &root.join("instance-lock-holder.json"),
+        &json!({"process":winbridge_platform::infrastructure::stamp(std::process::id()).unwrap(),"state":saved.intent.binding.worker_state,"attemptId":saved.intent.attempt_id}),
+    );
+    write(
+        &root.join("instance-lock-held.json"),
+        &json!({"proofPublished":true}),
+    );
+    let until = Instant::now() + Duration::from_secs(60);
+    while !root.join("release-instance-lock.json").is_file() {
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    drop(file);
+}
+fn before_exit_crash(root: &Path, directory: &Path) -> serde_json::Value {
+    let before: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("worker-proof.json")).unwrap()).unwrap();
+    assert_eq!(before["requestShutdownCount"], 1);
+    let sup: SupervisorRecord = serde_json::from_value(before["supervisor"].clone()).unwrap();
+    let shutdown = UpdateJournal::inspect_shutdown(directory, &sup.spec.update_id)
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        shutdown.delivery,
+        ShutdownDeliveryState::Acknowledged { .. }
+    ));
+    assert!(
+        winbridge_platform::infrastructure::matches(&shutdown.intent.binding.worker.process)
+            .unwrap()
+    );
+    assert!(winbridge_platform::infrastructure::matches(sup.process.as_ref().unwrap()).unwrap());
+    let (_, state) = UpdateJournal::read_snapshot(directory, Some(&sup.spec.update_id)).unwrap();
+    let state = state.unwrap();
+    assert_eq!(state.phase, UpdatePhase::Stopping);
+    json!({"fault":Fault::SupervisorCrashBeforeExit,"beforeMainExit":before,"shutdown":shutdown,"root":state,"mainAndSupervisorAliveBeforeCrash":true,"physicalCustodyAfterExit":false})
+}
+
 fn restart_refused(worker: &Path, config: &Path, root: &Path, update_id: &str) {
     let command = ResolvedCommand {
         executable: worker.to_string_lossy().into(),
@@ -259,10 +399,16 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
     }
     let (mut child, stdout, stderr) = prepared.unwrap();
     let capture = (capture(stdout), capture(stderr));
+    let mut holder = (fault == Fault::DelayedInstanceLock).then(|| LockHolder::start(&root));
     child.resume().unwrap();
     let until = Instant::now() + Duration::from_secs(900);
     let mut progress = Instant::now();
     let status = loop {
+        if fault == Fault::SupervisorCrashBeforeExit
+            && root.join("awaiting-owned-crash.json").is_file()
+        {
+            break None;
+        }
         if let Some(status) = child.try_wait().unwrap() {
             break Some(status);
         }
@@ -288,6 +434,10 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
     // Keep cleanup unconditional on assertions below; killing this validation
     // Job owns only the copied worker/supervisor descendants, never installed ones.
     let proof = || {
+        if fault == Fault::SupervisorCrashBeforeExit {
+            assert!(status.is_none());
+            return before_exit_crash(&root, &directory);
+        }
         let status = status.expect("Owned Main validation deadline exceeded");
         assert!(
             status.success(),
@@ -300,6 +450,41 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
         let sup: SupervisorRecord = serde_json::from_value(before["supervisor"].clone()).unwrap();
         let id = &sup.spec.update_id;
         let process = sup.process.as_ref().unwrap();
+        if let Some(holder) = &mut holder {
+            let held: serde_json::Value =
+                serde_json::from_slice(&fs::read(root.join("instance-lock-holder.json")).unwrap())
+                    .unwrap();
+            let stamp: SupervisorProcess = serde_json::from_value(held["process"].clone()).unwrap();
+            let expected = holder.child.identity().unwrap();
+            assert_eq!(stamp.process_id, expected.process_id);
+            assert_eq!(stamp.birth, expected.creation_time.to_string());
+            assert_eq!(stamp.host_id, expected.host_id);
+            assert_eq!(stamp.session_id, expected.session_id);
+            let until = Instant::now() + Duration::from_secs(2);
+            while Instant::now() < until {
+                let saved = UpdateJournal::inspect_shutdown(&directory, id)
+                    .unwrap()
+                    .unwrap();
+                assert!(matches!(
+                    saved.delivery,
+                    ShutdownDeliveryState::Acknowledged { .. }
+                ));
+                assert_eq!(
+                    serde_json::to_value(&saved.intent.binding.worker_state).unwrap(),
+                    held["state"]
+                );
+                assert_eq!(saved.intent.attempt_id, held["attemptId"].as_str().unwrap());
+                let (_, state) = UpdateJournal::read_snapshot(&directory, Some(id)).unwrap();
+                assert_eq!(state.unwrap().phase, UpdatePhase::Stopping);
+                assert!(winbridge_platform::infrastructure::matches(&stamp).unwrap());
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            write(
+                &root.join("release-instance-lock.json"),
+                &json!({"updateId":id}),
+            );
+            holder.released();
+        }
         let until = Instant::now() + Duration::from_secs(65);
         let shutdown = loop {
             let s = UpdateJournal::inspect_shutdown(&directory, id)
@@ -408,6 +593,9 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
     // explicitly verify its complete termination and the post-crash history.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(proof));
     child.terminate_tree().unwrap();
+    if let Some(holder) = holder {
+        holder.finish(&root);
+    }
     let until = Instant::now() + Duration::from_secs(10);
     while !child.tree_is_empty().unwrap() && Instant::now() < until {
         std::thread::sleep(Duration::from_millis(20));
@@ -425,7 +613,10 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
     assert!(!phase.physical_custody_held);
     assert_eq!(
         phase.phase,
-        if fault == Fault::ReceiptWriteDenied {
+        if matches!(
+            fault,
+            Fault::ReceiptWriteDenied | Fault::SupervisorCrashBeforeExit
+        ) {
             CandidateShutdownPhase::Indeterminate
         } else {
             CandidateShutdownPhase::Exited
@@ -437,6 +628,52 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
         .open(root.join("state/worker.lock"))
         .unwrap();
     fs2::FileExt::try_lock_exclusive(&lock).unwrap();
+    if fault == Fault::SupervisorCrashBeforeExit {
+        let after = UpdateJournal::inspect_shutdown(&directory, id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(serde_json::to_value(&after).unwrap(), proof["shutdown"]);
+        let (_, state) = UpdateJournal::read_snapshot(&directory, Some(id)).unwrap();
+        assert_eq!(serde_json::to_value(state.unwrap()).unwrap(), proof["root"]);
+        let input = ShutdownInspectionRequest {
+            schema_version: 1,
+            intent: after.intent.clone(),
+            worker_config: inspect_image(&config).unwrap(),
+            helper_image: after.intent.binding.loaded_worker.image.clone(),
+            worker_journal_schema: winbridge_worker::store::JOURNAL_SCHEMA_VERSION,
+        };
+        let path = root.join("cold-after-owned-crash.json");
+        write(&path, &input);
+        let cold = winbridge_update::shutdown::inspect_saved_receipt(
+            &path,
+            &winbridge_update::sha256(&fs::read(&path).unwrap()),
+            &input,
+        )
+        .unwrap();
+        let ShutdownDeliveryState::Acknowledged { receipt, .. } = &after.delivery else {
+            panic!("Crash fabricated an exit");
+        };
+        assert_eq!(cold.receipt.as_deref(), Some(receipt.as_ref()));
+        fs2::FileExt::unlock(&lock).unwrap();
+        restart_refused(&worker, &config, &root, id);
+        proof["coldAfterMain"] = serde_json::to_value(cold).unwrap();
+        proof["startupStillBlocked"] = json!(true);
+        for image in &manifest.artifacts {
+            assert_eq!(
+                winbridge_update::sha256(
+                    &fs::read(root.join("runtime").join(&image.name)).unwrap()
+                ),
+                image.sha256
+            );
+        }
+        proof["oldRuntimeUnchanged"] = json!(true);
+    }
+    if fault == Fault::DelayedInstanceLock {
+        proof["delayedLockHolder"] =
+            serde_json::from_slice(&fs::read(root.join("instance-lock-holder.json")).unwrap())
+                .unwrap();
+    }
+    proof["delayedOriginalLockVerified"] = json!(fault == Fault::DelayedInstanceLock);
     proof["ownedSupervisorCrashRetainsHistoryWithoutCustody"] = json!(true);
     proof
 }
@@ -460,18 +697,23 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
     fs::rename(stage.join("source"), input.root.join("source")).unwrap();
     let adapter = adapter(&input);
     let mut cases = Vec::new();
-    for fault in [
-        Fault::None,
-        Fault::LostAck,
-        Fault::DelayedReply,
-        Fault::ReceiptWriteDenied,
-    ] {
+    let selected: &[Fault] = if input.supplemental {
+        &[Fault::DelayedInstanceLock, Fault::SupervisorCrashBeforeExit]
+    } else {
+        &[
+            Fault::None,
+            Fault::LostAck,
+            Fault::DelayedReply,
+            Fault::ReceiptWriteDenied,
+        ]
+    };
+    for &fault in selected {
         cases.push(case(&input, fault, &adapter));
         write(
             &input.root.join(format!("case-{}.json", cases.len())),
             cases.last().unwrap(),
         );
     }
-    let proof = json!({"schemaVersion":1,"kind":"shutdown_main_native_proof","passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }
