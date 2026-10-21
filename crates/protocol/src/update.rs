@@ -577,8 +577,13 @@ pub enum SupervisorAction {
     /// Internal v13: durable drain coordination, stopping before worker shutdown.
     DrainCandidate,
     ObserveCandidateDrain,
+    /// Internal v14: exact shutdown; no final-backup/install promise.
     ShutdownCandidate,
     ObserveCandidateShutdown,
+    /// Internal v15: require export support before stop; final readonly backup.
+    ShutdownCandidateForBackup,
+    BackupWorkerState,
+    ObserveStateBackup,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -637,6 +642,9 @@ pub struct UpdatePreparationView {
     /// V14/view schema6; older contracts omit it entirely.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_shutdown: Option<CandidateShutdownView>,
+    /// V15/view7 only; old views omit this field. Historical data is not custody.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_state_backup: Option<CandidateStateBackupView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

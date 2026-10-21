@@ -3085,6 +3085,11 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
             UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap();
         let view = h.candidate_shutdown(false).await.unwrap();
         assert_eq!(view.schema_version, 6);
+        assert!(view.candidate_state_backup.is_none());
+        assert!(serde_json::to_value(&view)
+            .unwrap()
+            .get("candidateStateBackup")
+            .is_none());
         let phase = view.candidate_shutdown.unwrap();
         assert_eq!(phase.phase, CandidateShutdownPhase::NotAdmitted);
         assert!(!phase.physical_custody_held);
@@ -3106,6 +3111,56 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
         assert_eq!(
             UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap(),
             before
+        );
+        assert!(!f.worker.stop.load(Ordering::Acquire));
+        f.stop().await;
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn backup_v15_mailbox_observes_without_custody_and_rejects_unadmitted_effects() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_mut().unwrap();
+        let directory = Path::new(&h.record.spec.runtime_directory).join("update-state");
+        let before =
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap();
+        let view = h.final_state_backup(false).await.unwrap();
+        assert_eq!(view.schema_version, 7);
+        assert_eq!(
+            view.candidate_state_backup.unwrap().phase,
+            CandidateStateBackupPhase::NotAdmitted
+        );
+        assert!(!view.candidate_shutdown.unwrap().physical_custody_held);
+        assert!(h
+            .final_state_backup(true)
+            .await
+            .unwrap_err()
+            .contains("custody"));
+        assert!(h
+            .shutdown_for_state_backup()
+            .await
+            .unwrap_err()
+            .contains("Quiesced"));
+        for action in [
+            SupervisorAction::BackupWorkerState,
+            SupervisorAction::ObserveStateBackup,
+            SupervisorAction::ShutdownCandidateForBackup,
+        ] {
+            assert!(h.command(action).await.is_err());
+        }
+        let legacy = h.candidate_shutdown(false).await.unwrap();
+        assert_eq!(legacy.schema_version, 6);
+        assert!(serde_json::to_value(legacy)
+            .unwrap()
+            .get("candidateStateBackup")
+            .is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap(),
+            before
+        );
+        assert!(
+            UpdateJournal::inspect_state_backup(&directory, &h.record.spec.update_id)
+                .unwrap()
+                .is_none()
         );
         assert!(!f.worker.stop.load(Ordering::Acquire));
         f.stop().await;

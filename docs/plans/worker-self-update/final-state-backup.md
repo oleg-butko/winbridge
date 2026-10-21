@@ -166,3 +166,23 @@ input creation и исходный File ID при writer→read-pin handoff. Tar
 CLI2/0 и обе update+worker all-target Clippy прошли. Consuming library ещё не
 вызывается supervisor и не выполнила положительный native export. Следующий шаг —
 v15/view7 actor, затем полный Windows gate; старые v1–14 ответы остаются прежними.
+
+
+## Supervisor v15/view7 подключён, native gate ожидается
+
+v15 вводит отдельную остановку с обязательной проверкой export marker до admission,
+запуск final backup и readonly observation. v1–14 сохраняют прежние действия и JSON.
+Fresh admission выполняется blocking и коммитится до ACK; затем диспетчеризуется
+один driver. Повтор читает прежнюю attempt и не создаёт helper. Mailbox продолжает
+отвечать во время копирования.
+
+Для custody используется immutable Arc того же original guard: supervisor хранит
+основную ссылку, driver удерживает loan до cleanup, mutex не блокирует IO/status.
+Это эквивалентно возврату guard после retirement по правам/сроку удержания; новый
+kernel guard из rows/JSON не создаётся. View7 отдельно показывает сохранённый backup
+и physical shutdown custody; исторический Verified не выдаёт разрешения на effects.
+
+610 workspace tests, обе update+worker all-target Clippy, generated TS/typecheck и
+fmt прошли. Actual mailbox проверяет отказ без custody/Quiesced и отсутствие effects,
+v14 JSON остаётся прежним. Native success/backup faults/migration12→13 и old12 refusal
+ещё не выполнены. Public installation не включена.

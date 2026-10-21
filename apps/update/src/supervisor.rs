@@ -42,6 +42,31 @@ fn shutdown_view(
     }
     Ok(view)
 }
+fn backup_view(
+    directory: &Path,
+    id: &str,
+    active: bool,
+    failure: Option<String>,
+    custody: &crate::shutdown::Custody,
+    shutdown_preparing: bool,
+    backup_preparing: bool,
+) -> Result<UpdatePreparationView> {
+    let mut view = UpdateJournal::backup_preparation_snapshot(directory, id, active, failure)
+        .map_err(error)?;
+    if let Some(shutdown) = &mut view.candidate_shutdown {
+        if shutdown_preparing && shutdown.attempt_id.is_none() {
+            shutdown.phase = CandidateShutdownPhase::Preparing;
+        }
+        shutdown.physical_custody_held =
+            shutdown.phase == CandidateShutdownPhase::Exited && custody.present()?;
+    }
+    if let Some(backup) = &mut view.candidate_state_backup {
+        if backup_preparing && backup.attempt_id.is_none() {
+            backup.phase = CandidateStateBackupPhase::Preparing;
+        }
+    }
+    Ok(view)
+}
 fn now() -> Result<u64> {
     u64::try_from(
         SystemTime::now()
@@ -525,7 +550,7 @@ impl SupervisorHandle {
         }
         Ok(control)
     }
-    /// V13 starts an owned drain once; reading status never dispatches work.
+    /// V14 starts exact shutdown once; reading status never dispatches work.
     pub async fn candidate_shutdown(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
             return Err("Supervisor exact process changed".into());
@@ -567,6 +592,59 @@ impl SupervisorHandle {
             || view.update.update_id != self.record.spec.update_id
         {
             return Err("Shutdown reply belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
+    /// V15 only: final export support is required before admitting a stop.
+    pub async fn shutdown_for_state_backup(&self) -> Result<UpdatePreparationView> {
+        self.backup_request(SupervisorAction::ShutdownCandidateForBackup)
+            .await
+    }
+    pub async fn final_state_backup(&self, start: bool) -> Result<UpdatePreparationView> {
+        self.backup_request(if start {
+            SupervisorAction::BackupWorkerState
+        } else {
+            SupervisorAction::ObserveStateBackup
+        })
+        .await
+    }
+    async fn backup_request(&self, action: SupervisorAction) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 15,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action,
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 15
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Final backup response scope/version changed; no fallback".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Final backup view missing")?;
+        if view.schema_version != 7
+            || view.candidate_state_backup.is_none()
+            || view.candidate_shutdown.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Final backup response belongs to another contract/update".into());
         }
         Ok(view)
     }
@@ -1038,6 +1116,9 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveCandidateDrain
                 | SupervisorAction::ShutdownCandidate
                 | SupervisorAction::ObserveCandidateShutdown
+                | SupervisorAction::ShutdownCandidateForBackup
+                | SupervisorAction::BackupWorkerState
+                | SupervisorAction::ObserveStateBackup
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1137,7 +1218,7 @@ fn authorize(r: &SupervisorRecord, token: &str, pid: u32, action: SupervisorActi
     Ok(())
 }
 /// Gated internal entry; source preparation requires a v2 action and frozen policy.
-/// Runtime replacement/shutdown are not registered.
+/// Public installation stays disabled; effects use their versioned internal drivers.
 pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     if token.len() != 64 {
         return Err("Invalid supervisor startup token".into());
@@ -1199,6 +1280,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     enum DriverCompletion {
         Complete(Result<()>),
         ShutdownPrepared(Result<Box<crate::shutdown::Prepared>>),
+        BackupAdmitted(Result<crate::state_backup::StateBackupAdmission>),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -1208,7 +1290,9 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut drain_active = false;
     let mut shutdown_preparing = false;
     let shutdown_custody = crate::shutdown::Custody::default();
-    let mut shutdown_reply: Option<ipc::Stream> = None;
+    let mut shutdown_reply: Option<(ipc::Stream, bool)> = None;
+    let mut backup_reply: Option<ipc::Stream> = None;
+    let mut backup_preparing = false;
     let mut drain_telemetry = crate::drain::Telemetry::default();
     let mut pending_abort: Option<Box<crate::abort::AbortPermit>> = None;
     // One readonly query at a time; dropping the set aborts its IO task. The
@@ -1227,6 +1311,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         if work.as_ref().is_some_and(|w| w.is_finished()) {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
             let mut prepared = None;
+            let mut backup_permit = None;
             let outcome = match outcome {
                 DriverCompletion::Complete(outcome) => outcome,
                 DriverCompletion::ShutdownPrepared(Ok(value)) => {
@@ -1234,8 +1319,19 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     Ok(())
                 }
                 DriverCompletion::ShutdownPrepared(Err(e)) => Err(e),
+                DriverCompletion::BackupAdmitted(Ok(
+                    crate::state_backup::StateBackupAdmission::Fresh(p),
+                )) => {
+                    backup_permit = Some(p);
+                    Ok(())
+                }
+                DriverCompletion::BackupAdmitted(Ok(
+                    crate::state_backup::StateBackupAdmission::Existing(_),
+                )) => Ok(()),
+                DriverCompletion::BackupAdmitted(Err(e)) => Err(e),
             };
             shutdown_preparing = false;
+            backup_preparing = false;
             artifacts_active = false;
             preimages_active = false;
             health_active = false;
@@ -1256,21 +1352,33 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
-            if let Some(mut stream) = shutdown_reply.take() {
-                let outcome = shutdown_view(
-                    &directory,
-                    &r.spec.update_id,
-                    prepared.is_some(),
-                    driver_error.clone(),
-                    &shutdown_custody,
-                    false,
-                );
+            if let Some((mut stream, backup_required)) = shutdown_reply.take() {
+                let outcome = if backup_required {
+                    backup_view(
+                        &directory,
+                        &r.spec.update_id,
+                        prepared.is_some(),
+                        driver_error.clone(),
+                        &shutdown_custody,
+                        false,
+                        false,
+                    )
+                } else {
+                    shutdown_view(
+                        &directory,
+                        &r.spec.update_id,
+                        prepared.is_some(),
+                        driver_error.clone(),
+                        &shutdown_custody,
+                        false,
+                    )
+                };
                 let (preparation, error) = match outcome {
                     Ok(v) => (Some(v), driver_error.clone()),
                     Err(e) => (None, Some(e)),
                 };
                 let response = SupervisorResponse {
-                    contract_version: 14,
+                    contract_version: if backup_required { 15 } else { 14 },
                     launch_id: r.spec.launch_id.clone(),
                     record: None,
                     error,
@@ -1300,6 +1408,52 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                             io,
                             custody,
                         );
+                        (journal, owner, DriverCompletion::Complete(result))
+                    }));
+                }
+            }
+            if let Some(mut stream) = backup_reply.take() {
+                let outcome = backup_view(
+                    &directory,
+                    &r.spec.update_id,
+                    backup_permit.is_some(),
+                    driver_error.clone(),
+                    &shutdown_custody,
+                    false,
+                    false,
+                );
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), driver_error.clone()),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 15,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    error,
+                    worker_control: None,
+                    preparation,
+                };
+                let dispatch = response.error.is_none();
+                if response.error.is_some() {
+                    driver_error = response.error.clone();
+                }
+                let _ = ipc::write(&mut stream, &response).await;
+                if let Some(permit) = backup_permit.filter(|_| dispatch) {
+                    let guard = shutdown_custody
+                        .loan()?
+                        .ok_or("Backup original custody missing after admission")?;
+                    let (mut journal, owner) = idle.take().ok_or("Backup driver owner missing")?;
+                    let spec = r.clone();
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = crate::state_backup::capture_final_state(
+                            &mut journal,
+                            &owner,
+                            &spec,
+                            *permit,
+                            &guard,
+                        )
+                        .map(|_| ());
                         (journal, owner, DriverCompletion::Complete(result))
                     }));
                 }
@@ -1362,28 +1516,46 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         };
         if matches!(
             request.action,
-            SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown
+            SupervisorAction::ShutdownCandidate
+                | SupervisorAction::ObserveCandidateShutdown
+                | SupervisorAction::ShutdownCandidateForBackup
         ) {
             let mut start = false;
+            let backup_required = request.action == SupervisorAction::ShutdownCandidateForBackup;
             let outcome = (|| -> Result<UpdatePreparationView> {
                 authorize(&r, &request.token, pid, request.action)?;
-                if request.contract_version != 14
+                if request.contract_version != if backup_required { 15 } else { 14 }
                     || request.launch_id != r.spec.launch_id
                     || request.expected_revision != r.revision
                     || request.worker_command.is_some()
                     || r.phase != SupervisorPhase::Active
                     || r.spec.worker.is_none()
                 {
-                    return Err("Shutdown requires exact Active worker-bound v14 supervisor".into());
+                    return Err(format!(
+                        "Shutdown requires exact Active worker-bound v{} supervisor",
+                        if backup_required { 15 } else { 14 }
+                    ));
                 }
-                let view = shutdown_view(
-                    &directory,
-                    &r.spec.update_id,
-                    work.is_some(),
-                    driver_error.clone(),
-                    &shutdown_custody,
-                    shutdown_preparing,
-                )?;
+                let view = if backup_required {
+                    backup_view(
+                        &directory,
+                        &r.spec.update_id,
+                        work.is_some(),
+                        driver_error.clone(),
+                        &shutdown_custody,
+                        shutdown_preparing,
+                        backup_preparing,
+                    )
+                } else {
+                    shutdown_view(
+                        &directory,
+                        &r.spec.update_id,
+                        work.is_some(),
+                        driver_error.clone(),
+                        &shutdown_custody,
+                        shutdown_preparing,
+                    )
+                }?;
                 if request.action == SupervisorAction::ObserveCandidateShutdown
                     || view
                         .candidate_shutdown
@@ -1407,13 +1579,17 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 let spec = r.clone();
                 let io = tokio::runtime::Handle::current();
                 shutdown_preparing = true;
-                shutdown_reply = Some(stream);
+                shutdown_reply = Some((stream, backup_required));
                 driver_error = None;
                 // The original reply waits for durable admission. Status and
                 // coordinated abort stay responsive during readonly preflight.
                 work = Some(tokio::task::spawn_blocking(move || {
-                    let result =
-                        crate::shutdown::prepare(&mut journal, &owner, &spec, io).map(Box::new);
+                    let result = if backup_required {
+                        crate::shutdown::prepare_for_backup(&mut journal, &owner, &spec, io)
+                    } else {
+                        crate::shutdown::prepare(&mut journal, &owner, &spec, io)
+                    }
+                    .map(Box::new);
                     (journal, owner, DriverCompletion::ShutdownPrepared(result))
                 }));
             } else {
@@ -1422,7 +1598,84 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     Err(e) => (None, Some(e)),
                 };
                 let response = SupervisorResponse {
-                    contract_version: 14,
+                    contract_version: if backup_required { 15 } else { 14 },
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    error,
+                    worker_control: None,
+                    preparation,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::BackupWorkerState | SupervisorAction::ObserveStateBackup
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 15
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Final backup requires exact Active bound v15 supervisor".into());
+                }
+                let view = backup_view(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                    &shutdown_custody,
+                    shutdown_preparing,
+                    backup_preparing,
+                )?;
+                if request.action == SupervisorAction::ObserveStateBackup
+                    || view
+                        .candidate_state_backup
+                        .as_ref()
+                        .is_some_and(|v| v.attempt_id.is_some())
+                    || backup_preparing
+                {
+                    return Ok(view);
+                }
+                if work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::Replacing
+                    || !shutdown_custody.present()?
+                {
+                    return Err("Final backup requires original live exit custody, idle owner and unchanged Replacing root".into());
+                }
+                start = true;
+                Ok(view)
+            })();
+            if start && outcome.is_ok() {
+                let guard = shutdown_custody
+                    .loan()?
+                    .ok_or("Final backup original custody missing")?;
+                let (mut journal, owner) =
+                    idle.take().ok_or("Final backup admission owner missing")?;
+                let spec = r.clone();
+                backup_preparing = true;
+                backup_reply = Some(stream);
+                driver_error = None;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result = journal
+                        .admit_state_backup(&owner, &spec, Some(&guard))
+                        .map_err(error);
+                    (journal, owner, DriverCompletion::BackupAdmitted(result))
+                }));
+            } else {
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 15,
                     launch_id: r.spec.launch_id.clone(),
                     record: None,
                     error,
@@ -2323,7 +2576,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown | SupervisorAction::ShutdownCandidateForBackup | SupervisorAction::BackupWorkerState | SupervisorAction::ObserveStateBackup => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

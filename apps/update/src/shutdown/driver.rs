@@ -63,6 +63,23 @@ pub(crate) fn prepare(
     s: &SupervisorRecord,
     io: Handle,
 ) -> Result<Prepared> {
+    prepare_inner(j, a, s, io, false)
+}
+pub(crate) fn prepare_for_backup(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    io: Handle,
+) -> Result<Prepared> {
+    prepare_inner(j, a, s, io, true)
+}
+fn prepare_inner(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    io: Handle,
+    backup_required: bool,
+) -> Result<Prepared> {
     j.check_source_authority(a).map_err(error)?;
     let id = &s.spec.update_id;
     if j.shutdown(id).map_err(error)?.is_some() {
@@ -137,6 +154,11 @@ pub(crate) fn prepare(
             "Old worker lacks the exact readonly shutdown receipt inspector; no stop admitted"
                 .into(),
         );
+    }
+    if backup_required
+        && !crate::worker_rehearsal::supports(&old_image, WORKER_STATE_BACKUP_MARKER)?
+    {
+        return Err("Old worker lacks final state export support; no shutdown admitted".into());
     }
     let observed =
         call(&io, s, WorkerUpdateControlCommand::ObserveShutdownState)?.into_shutdown_state()?;

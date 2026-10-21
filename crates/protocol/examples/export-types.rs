@@ -65,6 +65,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         WorkerShutdownInspectionReport::decl(&config),
         CandidateShutdownPhase::decl(&config),
         CandidateShutdownView::decl(&config),
+        CandidateStateBackupPhase::decl(&config),
+        CandidateStateBackupView::decl(&config),
         StateBackupAuthority::decl(&config),
         StateBackupFileEvidence::decl(&config),
         WorkerStateBackupReport::decl(&config),

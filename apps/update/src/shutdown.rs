@@ -11,7 +11,7 @@ mod physical;
 pub(crate) use physical::Custody;
 pub use physical::ShutdownExitGuard;
 mod driver;
-pub(crate) use driver::{execute, prepare, Prepared};
+pub(crate) use driver::{execute, prepare, prepare_for_backup, Prepared};
 pub(crate) fn view(
     saved: Option<&ShutdownRecord>,
     active: bool,

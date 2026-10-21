@@ -290,3 +290,43 @@ fn export_process_check_accepts_only_saved_pid_input_and_unfinished_grant() {
         assert!(grant.require_export_process(&p, &f).is_err());
     }
 }
+
+#[test]
+fn backup_view_keeps_historical_verified_separate_from_active_or_unconfirmed_attempt() {
+    assert_eq!(
+        view(None, false, false).phase,
+        CandidateStateBackupPhase::NotAdmitted
+    );
+    assert_eq!(
+        view(None, false, true).phase,
+        CandidateStateBackupPhase::Blocked
+    );
+    let run = running();
+    assert_eq!(
+        view(Some(&run), true, false).phase,
+        CandidateStateBackupPhase::CopyingState
+    );
+    assert_eq!(
+        view(Some(&run), false, false).phase,
+        CandidateStateBackupPhase::Indeterminate
+    );
+    let clean = run.finished(cleanup(&run), 406).unwrap();
+    assert_eq!(
+        view(Some(&clean), true, false).phase,
+        CandidateStateBackupPhase::VerifyingBackup
+    );
+    assert_eq!(
+        view(Some(&clean), true, true).phase,
+        CandidateStateBackupPhase::Indeterminate
+    );
+    let verified = clean.verify(report(&clean), 410).unwrap();
+    let historical = view(Some(&verified), false, true);
+    assert_eq!(historical.phase, CandidateStateBackupPhase::Verified);
+    assert_eq!(historical.backup_bytes, Some(8192));
+    assert_eq!(historical.attempt_id, Some(verified.intent.attempt_id));
+    // No custody or effect-authority field is part of this data projection.
+    assert!(serde_json::to_value(historical)
+        .unwrap()
+        .get("physicalCustodyHeld")
+        .is_none());
+}

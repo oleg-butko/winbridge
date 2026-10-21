@@ -7,7 +7,7 @@ use winbridge_platform::infrastructure::PinnedProcess;
 /// Supervisor-resident custody survives retirement of the blocking driver.
 /// It is never reconstructed from saved rows or exposed in a wire DTO.
 #[derive(Clone, Default)]
-pub(crate) struct Custody(Arc<Mutex<Option<ShutdownExitGuard>>>);
+pub(crate) struct Custody(Arc<Mutex<Option<Arc<ShutdownExitGuard>>>>);
 impl Custody {
     pub(crate) fn hold(&self, guard: ShutdownExitGuard) -> Result<(), String> {
         let mut slot = self
@@ -17,8 +17,17 @@ impl Custody {
         if slot.is_some() {
             return Err("Shutdown physical custody is already held".into());
         }
-        *slot = Some(guard);
+        *slot = Some(Arc::new(guard));
         Ok(())
+    }
+    /// Loan the same immutable guard to an owned blocking driver. The mailbox
+    /// keeps custody; losing the mailbox cannot drop a still-running loan.
+    pub(crate) fn loan(&self) -> Result<Option<Arc<ShutdownExitGuard>>, String> {
+        Ok(self
+            .0
+            .lock()
+            .map_err(|_| "Shutdown custody lock poisoned")?
+            .clone())
     }
     pub(crate) fn present(&self) -> Result<bool, String> {
         Ok(self

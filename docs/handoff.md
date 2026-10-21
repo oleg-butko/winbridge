@@ -1,3 +1,42 @@
+## U2.1 supervisor v15/view7 locally verified; native backup gate NEXT — 2026-10-21
+
+Added ShutdownCandidateForBackup / BackupWorkerState / ObserveStateBackup and typed
+candidateStateBackup projection. New typed clients validate v15/view7 explicitly;
+no fallback. v14 shutdown still has its old meaning/shape. v15 stop preflight checks
+exact old helper export marker BEFORE durable shutdown admission. Backup admission
+runs blocking while mailbox remains available, ACK follows durable fresh intent,
+then one owned driver dispatches. Lost ACK does not revoke committed ownership;
+duplicates read saved attempt. One work slot forbids a second physical driver.
+
+Custody keeps the same guard in Arc; a private immutable loan survives blocking
+execution, with no mutex held during IO. Supervisor retains the original Arc,
+so status remains responsive and physical custody stays visible. If mailbox dies,
+driver keeps its loan through owned cleanup; no new guard is synthesized. This
+changes representation of the planned return-to-custody, not authority/guard scope.
+
+View7 shows Prepared/StartingHelper/CopyingState/VerifyingBackup/Verified or terminal
+uncertainty and saved output digest/size/reason. Historical Verified survives loss
+of active driver but grants no physical authority; shutdown custody is separate.
+All prior view JSON omits candidateStateBackup. Actual mailbox test verifies no-
+custody/unquiesced rejection, no root/worker/backup effects and frozen v14 shape.
+Pure view test verifies history/current separation. TS declarations regenerated.
+
+Validation: full workspace610 passed/0 failed/16 ignored; both all-target Clippy
+update+worker pass (Linux all-features; Windows update-validation/no bundled C).
+Generate/typecheck/fmt/diff pass after registering2 new types in explicit exporter.
+Logs state-backup-actor-*. No positive full native export proven, U2.1 NOT complete.
+
+NEXT native success gate: extend existing feature-only actual Main case with v15
+stop and after-Main backup request from owned external parent; source/copy rows,
+WAL/DB bytes, authority, receipt, durable history and duplicate/no second helper.
+Need private test-only handoff of generated fixture supervisor authority to its
+parent; keep it ONLY local, never in shared reports/proof/logs, no production API.
+Then fault cases and actual12→13/refusal using retained old12 references. Target C
+must be schema13 (31fa634 or later), not A294/updater12. Production update still off,
+bootstrap U4 only when complete. Installed d052 healthy idle0; controller3902 alive.
+No Cargo/native active. Desktop unnecessary; keep installed worker, no manual update.
+Debian~26GiB; no user runtime/config/journal or backup changes.
+
 ## U2.1 consuming backup library compiled; actor/native pending — 2026-10-21
 
 capture_final_state consumes a fresh non-Serde StateBackupPermit and borrows original

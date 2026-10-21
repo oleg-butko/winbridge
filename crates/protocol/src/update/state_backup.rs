@@ -191,3 +191,33 @@ impl WorkerStateBackupReport {
         Ok(())
     }
 }
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CandidateStateBackupPhase {
+    NotAdmitted,
+    Preparing,
+    Prepared,
+    StartingHelper,
+    CopyingState,
+    VerifyingBackup,
+    Verified,
+    Indeterminate,
+    Blocked,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CandidateStateBackupView {
+    pub phase: CandidateStateBackupPhase,
+    pub attempt_id: Option<String>,
+    pub revision: Option<u64>,
+    pub helper_process: Option<SupervisorProcess>,
+    pub completed_at_ms: Option<u64>,
+    pub backup_bytes: Option<u64>,
+    pub backup_sha256: Option<String>,
+    pub reason: Option<String>,
+}

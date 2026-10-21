@@ -495,3 +495,38 @@ impl StateBackupRecord {
 #[cfg(test)]
 #[path = "state_backup_tests.rs"]
 pub(crate) mod tests;
+
+pub(crate) fn view(
+    saved: Option<&StateBackupRecord>,
+    active: bool,
+    failed: bool,
+) -> CandidateStateBackupView {
+    let phase = match saved {
+        None if failed => CandidateStateBackupPhase::Blocked,
+        None => CandidateStateBackupPhase::NotAdmitted,
+        Some(r) if r.phase == StateBackupPhase::Verified => CandidateStateBackupPhase::Verified,
+        Some(r) if r.phase == StateBackupPhase::Indeterminate || !active || failed => {
+            CandidateStateBackupPhase::Indeterminate
+        }
+        Some(r) => match r.phase {
+            StateBackupPhase::Prepared => CandidateStateBackupPhase::Prepared,
+            StateBackupPhase::Issued | StateBackupPhase::ResumeGranted => {
+                CandidateStateBackupPhase::StartingHelper
+            }
+            StateBackupPhase::Running => CandidateStateBackupPhase::CopyingState,
+            StateBackupPhase::Cleaned => CandidateStateBackupPhase::VerifyingBackup,
+            _ => CandidateStateBackupPhase::Indeterminate,
+        },
+    };
+    let report = saved.and_then(|r| r.report.as_deref());
+    CandidateStateBackupView {
+        phase,
+        attempt_id: saved.map(|r| r.intent.attempt_id.clone()),
+        revision: saved.map(|r| r.revision),
+        helper_process: saved.and_then(|r| r.process.clone()),
+        completed_at_ms: report.map(|r| r.completed_at_ms),
+        backup_bytes: report.map(|r| r.backup.bytes),
+        backup_sha256: report.map(|r| r.backup.sha256.clone()),
+        reason: saved.and_then(|r| r.reason.clone()),
+    }
+}

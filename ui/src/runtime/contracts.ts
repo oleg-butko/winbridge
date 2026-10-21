@@ -55,7 +55,7 @@ export type SupervisorProcess = { processId: number, birth: string, hostId: stri
 export type SupervisorPhase = "intent" | "spawned" | "ready" | "active" | "stopped" | "indeterminate";
 export type SupervisorSpec = { launchId: string, updateId: string, parent: SupervisorProcess, parentOwnerId: string, parentEpoch: number, tokenSha256: string, configPath: string, configSha256: string, runtimeDirectory: string, imagePath: string, imageSha256: string, imageIdentity: string, excludedDomain: string | null, endpoint: string, acceptedAtMs: number, worker?: SupervisorWorkerBinding | null, };
 export type SupervisorRecord = { schemaVersion: number, spec: SupervisorSpec, phase: SupervisorPhase, revision: number, process: SupervisorProcess | null, ownerId: string | null, ownerEpoch: number | null, updatedAtMs: number, reason: string, };
-export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain" | "drain_candidate" | "observe_candidate_drain" | "shutdown_candidate" | "observe_candidate_shutdown";
+export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain" | "drain_candidate" | "observe_candidate_drain" | "shutdown_candidate" | "observe_candidate_shutdown" | "shutdown_candidate_for_backup" | "backup_worker_state" | "observe_state_backup";
 export type SupervisorRequest = { contractVersion: number, launchId: string, expectedRevision: number, action: SupervisorAction, token: string, workerCommand?: WorkerUpdateControlCommand | null, };
 export type SupervisorResponse = { contractVersion: number, launchId: string, record: SupervisorRecord | null, error: string | null, workerControl?: WorkerUpdateControlResponse | null, preparation?: UpdatePreparationView | null, };
 export type UpdatePreparationView = { schemaVersion: number, observedAtMs: number, update: UpdateRecord, source: SourceTransactionRecord | null, sourceAppliedFiles: number, build: UpdateBuildRecord | null,
@@ -82,7 +82,11 @@ candidateDrain?: CandidateDrainView | null,
 /**
  * V14/view schema6; older contracts omit it entirely.
  */
-candidateShutdown?: CandidateShutdownView | null, };
+candidateShutdown?: CandidateShutdownView | null,
+/**
+ * V15/view7 only; old views omit this field. Historical data is not custody.
+ */
+candidateStateBackup?: CandidateStateBackupView | null, };
 export type RuntimeBaselineView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, } | { "phase": "verified", intentRevision: number, receiptRevision: number, observedAtMs: number, setId: string, workerProcess: SupervisorProcess, workerImageSha256: string, };
 export type RuntimePreimagesView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, directory: string, } | { "phase": "verified", intentRevision: number, receiptRevision: number, completedAtMs: number, directory: string, fileCount: number, totalBytes: number, };
 export type CandidateHealthPhase = "not_admitted" | "pending" | "verified" | "rejected" | "cancelled" | "indeterminate";
@@ -105,6 +109,8 @@ export type CandidateShutdownView = { phase: CandidateShutdownPhase, attemptId: 
  * cannot restore it; this boolean is not execution authority.
  */
 physicalCustodyHeld: boolean, };
+export type CandidateStateBackupPhase = "not_admitted" | "preparing" | "prepared" | "starting_helper" | "copying_state" | "verifying_backup" | "verified" | "indeterminate" | "blocked";
+export type CandidateStateBackupView = { phase: CandidateStateBackupPhase, attemptId: string | null, revision: number | null, helperProcess: SupervisorProcess | null, completedAtMs: number | null, backupBytes: number | null, backupSha256: string | null, reason: string | null, };
 export type StateBackupAuthority = { incarnation: string, epoch: number,
 /**
  * Fingerprint of the complete private authority header; no execution token.
