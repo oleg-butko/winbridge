@@ -1,3 +1,28 @@
+## U2.1 Windows backup gate ACTIVE — 2026-10-21
+
+DO NOT DISPATCH ANOTHER RUN. Task2cce27d5-0d1b-43e4-b069-8830061928c1,
+run20261021-150949-b0d8a5f1, unified session42616. Log
+.winbridge/update-preparation/state-backup-main-native-run.log. Shared reports
+/mnt/hgfs/shared/WinBridge/workflow-validation/20261021-150949-b0d8a5f1.
+SourceA d419e1c98d877f555e228665d7eafad74f53a1b8, ZIP
+winbridge-20261021T150723Z-d419e1c-679ae390.zip, SHA
+f8d911a104d384c4704186c6f68d72dfd5356f840fadeec21ee381b16c9b20d5.
+TargetC31fa6348d1c7ea3d2604d70401be9a1f8193c755, ZIP
+winbridge-20261021T150720Z-31fa634-9a28b4a2.zip, SHA
+b4d03a1c8f4dbf81f36c3196f60a3b6f118dcebf6c96f0d71dc4274ab208349b.
+Both13/16; source pins in state-backup-{main,target}-source-export.json. Temporary
+Node-reusing C worktree removed after clean export; no caches/user files touched.
+
+First20 Windows tests PASSED:15 state_backup,3 SQLite WAL/pins,2 negative CLI.
+Old real worker/fixture/desktop/updater build running; then one actual Main case.
+Read ready hashes and proof only after terminal, verify twice and mutate actual
+proof for negative checks. Native whole success still pending. User notified:
+installed worker only, no desktop/no test windows. Leave installed d052 running.
+SourceZip is immutable; subsequent metadata-only commits are not native producers.
+Controller3902 unchanged. No local Cargo active. Debian~26GiB, no Windows cleanup.
+Schema12 full-graph migration/refusal + backup fault scenarios still follow before
+U2.1 can close. Goal/public update/U2–U4 remain unfinished.
+
 ## U2.1 actual Main backup gate prepared, NOT run yet — 2026-10-21
 
 Extends existing update_shutdown.rs gate with optional finalBackup flag: one None
