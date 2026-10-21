@@ -498,13 +498,38 @@ fn journal_bytes(root: &Path) -> serde_json::Value {
     let mut files = Vec::new();
     for name in ["journal.sqlite", "journal.sqlite-wal"] {
         let p = root.join("state").join(name);
-        files.push((
-            name,
-            p.is_file()
-                .then(|| winbridge_update::sha256(&fs::read(p).unwrap())),
-        ));
+        // A readonly SQLite connection can create an empty WAL coordination
+        // file. Only that absent/empty distinction is ignored; every frame and
+        // every byte of the main journal remains covered by its exact digest.
+        let digest = p.is_file().then(|| fs::read(&p).unwrap()).and_then(|b| {
+            if name.ends_with("-wal") && b.is_empty() {
+                None
+            } else {
+                Some(winbridge_update::sha256(&b))
+            }
+        });
+        files.push((name, digest));
     }
     serde_json::to_value(files).unwrap()
+}
+#[test]
+fn journal_fingerprint_allows_only_empty_wal_creation_and_detects_data_changes() {
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir(root.path().join("state")).unwrap();
+    let main = root.path().join("state/journal.sqlite");
+    let wal = root.path().join("state/journal.sqlite-wal");
+    fs::write(&main, b"main bytes").unwrap();
+    let before = journal_bytes(root.path());
+    fs::write(&wal, []).unwrap();
+    assert_eq!(journal_bytes(root.path()), before);
+    fs::write(&wal, b"committed frame").unwrap();
+    let framed = journal_bytes(root.path());
+    assert_ne!(framed, before);
+    fs::write(&wal, b"changed frame").unwrap();
+    assert_ne!(journal_bytes(root.path()), framed);
+    fs::write(&wal, []).unwrap();
+    fs::write(&main, b"changed main").unwrap();
+    assert_ne!(journal_bytes(root.path()), before);
 }
 fn final_backup(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
     let mut request: SupervisorRequest =

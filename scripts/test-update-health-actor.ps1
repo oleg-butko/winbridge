@@ -107,6 +107,7 @@ try {
   }
   if($FinalStateBackupGate){
     $commands=@(
+      @{name='backup-empty-wal-fingerprint';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','journal_fingerprint_allows_only_empty_wal_creation_and_detects_data_changes','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
       @{name='backup-data-and-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','state_backup','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='backup-sqlite-wal-and-pins';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::archive','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='backup-exact-entry';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','state_backup_export','--locked','--offline','--','--test-threads=1','--nocapture')}

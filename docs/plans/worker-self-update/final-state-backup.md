@@ -195,3 +195,17 @@ Private capability fixture остаётся только в локальном `
 в whitelist shared reports. Она доступна лишь в validation feature; normal build
 не получает этого API. Обе Clippy, cross-check fixture, UI build и ZIP tests прошли;
 сам native gate пока не запускался. Target C для него должен быть schema13.
+
+
+Native attempts 2026-10-21: first stopped because fixture wrote runs.log in source
+(correct guard refusal); seed moved into target/history-seed cache. Second passed
+20 native tests and reached actual copy Verified/row/hash/custody checks, but fixture
+rejected SQLite's absent→empty WAL sidecar creation. Normalization now permits only
+that zero-data distinction; main DB/nonempty WAL and all logical rows remain exact.
+A negative fingerprint test detects changed frames/main data. Both attempts retained.
+
+Separate lightweight --backup-migration-only fixture is prepared for consistent
+clone of actual proven12 shutdown DB, full retained history migration13 and old12
+CLI refusal. Cross-check/Clippy pass; native migration and final corrected Main
+success/duplicate are pending. Source original DB/config/runtime never used as a
+migration destination. No production behavior/security boundary changed by fixes.

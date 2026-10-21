@@ -1,28 +1,34 @@
-## U2.1 first native attempt finished; fixture cwd fixed, retry NEXT — 2026-10-21
+## U2.1 copy reached Verified; empty-WAL fixture fix and migration gate ready — 2026-10-21
 
-Task2cce27d5-0d1b-43e4-b069-8830061928c1/run20261021-150949-b0d8a5f1
-completed failed101; no active native session. First20 native tests PASSED (15 FSM/
-ledger/data,3 SQLite WAL/pins,2 CLI); all four real old roles built/identity checked.
-Main stopped BEFORE shutdown: seeded fixture success wrote runs.log in source cwd,
-and source verification correctly refused an unmanaged file. Preserved run/source/
-report/diagnostics; no suppression or Windows cleanup. Original task/schema/source
-state remains inspectable. This is test fixture side effect, not installed failure.
+No Windows run active. Second task4bfb2b62-8eb5-49c5-961b-f2f4a7a48b89,
+run20261021-152039-f65802ae/sourcefb5fc8a finished failed101.20 native checks pass;
+actual Main stop/backup reached Verified, live custody and all source/copy rows/
+backup SHA checks passed. Test then rejected absent→EMPTY WAL coordination file.
+Main DB SHA remained e5812b5dc7563140bec133813b46a72bc26ca0ee3d550338a28627ab58b6c148.
+This is fixture comparison, not source-data mutation/installed worker failure.
 
-Fixed seed cwd to source/target/history-seed, an existing explicitly preserved build
-cache namespace. mkdir only this generated folder; no source verification weakening.
-Windows all-target Clippy passes after fix (state-backup-seed-fix-clippy.log).
-Installed d052 still generationee48ba22, active0/no errors on fresh Info. Controller
-3902 alive. Test processes ended/no UI; user told desktop may open/close, keep worker.
+Normalized ONLY absent/zero-byte WAL; nonempty WAL and main DB remain exact SHA.
+Added negative fingerprint test for nonempty/changed WAL and changed main DB; native
+PS gate runs it before full case. Current Windows all-target Clippy passes. Preserve
+both failed runs; no directories/data removed. Original source verifier still strict.
+Installed d052 freshly healthy, active0/no errors, controller3902 unchanged. User
+notified all test processes ended, desktop may open/close, leave worker running.
 
-NEXT commit/export clean retry source B with built UI and run approved
---final-state-backup-gate against unchanged targetC31fa ZIP
-winbridge-20261021T150720Z-31fa634-9a28b4a2.zip (SHA
-b4d03a1c8f4dbf81f36c3196f60a3b6f118dcebf6c96f0d71dc4274ab208349b),
---cache-run20261017-061527-f4639971. SourceA was d419e1c ZIP
-winbridge-20261021T150723Z-d419e1c-679ae390.zip. Use same retained caches, preserve
-failed directories. Windows37,783,703,552→36,344,750,080 bytes (~33.85GiB); no cleanup.
-Debian~26GiB, incremental0. Whole native backup, faults, actual12→13/refusal still
-pending; U2.1/public update/goal not complete. No manual installed update needed.
+Prepared apps/update/tests/state_backup_migration.rs + --backup-migration-only in
+existing primitives runner/PS. It consistent-clones proven12 DB, migrates13, compares
+all retained rows and Exited history, verifies v12 backup/epoch/no invented backup/
+no custody, and actual old12 init/status refusal without data changes. No installed
+state used. Reference pin state-backup-schema12-reference-pin.json derived from
+old verified proof e7d567...; normal K path, manifestc9d1a667..., updaterSHA d4b271f6....
+This new test is cross-checked/Clippy only; native migration NOT executed yet.
+
+NEXT export clean current C source with built UI; run lightweight migration first
+via validate-update-shutdown-primitives-native.py --backup-migration-only with the
+pin receipt and cache20261017-061527-f4639971. Then full corrected Main backup gate
+against unchanged targetC31fa ZIP winbridge-20261021T150720Z-31fa634-9a28b4a2.zip,
+SHA b4d03a1c8f4dbf81f36c3196f60a3b6f118dcebf6c96f0d71dc4274ab208349b.
+Whole backup success/duplicate/faults still unproven; U2.1/public update/goal active.
+Windows35,598,168,064 bytes (~33.15GiB); Debian~26GiB. No cleanup/manual update.
 
 ## U2.1 actual Main backup gate prepared, NOT run yet — 2026-10-21
 
