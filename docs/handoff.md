@@ -1,3 +1,70 @@
+## Cold reader native gate PASSED; shutdown driver NEXT — 2026-10-21
+
+Task9f70a474-5fdd-48e8-8aae-50a313e97172/run20261021-043442-51698f37 succeeded0.
+4 tests/3groups,7 ready files independently checked twice. ReportSHA
+84bd67e52d0fe5f1c3674fd33af4674a42227409c9af3a91c8b2ea7df1817aad.
+SourceA294 and archive pins below; .winbridge/update-preparation/shutdown-reader-native-verified.json.
+Details plans/worker-self-update/windows-shutdown-reader-gate-2026-10-21.md.
+Actual CLI/client on Windows preserved DB/authority/guard with busy and dropped
+fixture owner; report forgery/v6 contracts passed. Synthetic intent metadata, not
+actual Main stop. No need to repeat this gate or prior19 primitive tests.
+Windows free40189407232→39856279552, no cleanup. Installed d052 generation78e9bbe1
+healthy idle0/complete recovery/no errors. Session50830 terminal0. No Cargo/native
+active, only docs dirty. Worker should stay running; desktop unnecessary/no windows.
+
+NEXT implement consuming shutdown supervisor driver + versioned mailbox/view.
+Preflight may be readonly async work before admission: probe v6 support/state and
+cold marker/pins on blocking thread, keep main mailbox responsive, then commit
+rootStopping+intent before ACK and dispatch effects. Do not expand legacy v1.
+After Issued call exactly once; reconcile through live receipt or the gated cold
+reader. ACK != exit; retain exact process handle from BEFORE stop and acquire
+original instance lock only after exit. Root Replacing+Exited are already atomic.
+IMPORTANT retain ShutdownExitGuard in ephemeral supervisor custody after driver
+retirement for U2; serialized Exited cannot restore physical authority after crash.
+View should distinguish historical verified exit from current custody. Unknown
+outcome never resends stop, restarts worker or removes startup guard.
+
+Then combined actual Main + independent supervisor gate: ACK/lost ACK, stale
+scope/epoch, delayed callback/lock, receipt write denial, owned supervisor crash.
+Trusted test harness may prepare supervisor bound to real worker outside candidate's
+OWN execution domain while parent test Job remains; do not weaken production
+external-Job refusal or add breakaway. Owned crash simulation after exit may leave
+startup guard/active update intact to prove recovery; never release via a dead
+worker or invent a prod escape hatch solely to clean fixtures. No installed update
+needed yet; public replacement/activation/rollback/U1–U4 remain open/goal active.
+
+## Cold reader native gate ACTIVE; do not duplicate — 2026-10-21
+
+Task9f70a474-5fdd-48e8-8aae-50a313e97172 / run20261021-043442-51698f37,
+runner session50830. Source clean a294e03100712ecf5a3e5ed836ef008bf084b3c4,
+WinBridge/sources/winbridge-20261021T043231Z-a294e03-6d95065c.zip,
+archiveSHAd0f79b40da71e624087d4ac2531ed56d30e018de24839ef70c4f210ca00d3607.
+Pin .winbridge/update-preparation/shutdown-reader-source.json. Run via existing
+validate-update-shutdown-primitives-native.py --cold-reader-only, cache original
+20261017-061527-f4639971 and saved schema15/11 refs. Three groups/min4 tests.
+First Windows actual readonly CLI/client test PASSED (14s), report/protocol groups
+still running. No final receipt yet. No GUI; installed worker stays running.
+
+Cold reader/client committed a294e03, after actual Debian CLI/client + report scope
+unit,11 entry regressions, TS generation/typecheck, both all-target Clippy/fmt/diff.
+No Cargo active. Public auto-update/replacement/activation/rollback remain absent.
+Wait for terminal, verify ready files/bytes/SHA/result and fresh installed health.
+This reader gate is still synthetic intent metadata, not actual Main self-shutdown.
+
+NEXT consuming shutdown supervisor driver/mailbox/view, then combined actual Main
+native gate. Important physical custody: successful exit commit must not drop the
+non-Serde ShutdownExitGuard before U2. Retain it in supervisor-owned ephemeral
+custody across driver retirement; stored Exited alone cannot restore it after
+crash. New U2 needs that custody or explicit manual recovery, never missing PID
+inference/guard deletion. A test may simulate OWNED supervisor crash after proof
+while preserving startup guard; never force-kill unrelated processes or relax
+production refusal of unverified external Jobs. Avoid adding prod escape hatches
+just for fixture cleanup. Actual Main can use a trusted test harness to prepare
+independent supervisor bound to real worker, outside candidate's OWN execution
+domain even if parent test Job remains (see control section below).
+Installed d052 was healthy/idle before this task; update/bootstrap not needed yet.
+Goal U1–U4 active, desktop unnecessary. No user configuration changed/backups needed.
+
 ## Cold shutdown receipt reader/client locally verified — 2026-10-21
 
 Control v6 committed f45b300 after584 workspace tests, TS and both Clippy. New

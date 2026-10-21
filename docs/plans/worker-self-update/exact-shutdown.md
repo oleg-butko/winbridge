@@ -182,3 +182,11 @@ bounded atomic probe/Job и сверяет точный helper PID и весь r
 Проверены actual CLI/client на Debian и подмена report identities/readonly flags.
 Новый `--cold-reader-only` режим Windows runner проверяет CLI/client и v6 contracts
 в трёх группах (4 теста), без повторения 19 уже пройденных primitive tests.
+
+[Cold reader Windows gate пройден](windows-shutdown-reader-gate-2026-10-21.md):
+4 теста/3 группы,7 проверенных artifacts. Дальше — consuming supervisor driver и
+combined actual Main stop. Readonly preflight должен сохранять responsiveness
+mailbox, затем durable admission предшествует ACK. После выхода ExitGuard нужно
+удерживать в ephemeral custody supervisor до U2; stored Exited не восстанавливает
+физическое владение после сбоя. View отделяет подтверждённую историю от текущего
+владения, неизвестный исход не разрешает resend/startup или удаление guard.
