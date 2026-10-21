@@ -1,27 +1,28 @@
-## U2.1 Windows backup gate ACTIVE — 2026-10-21
+## U2.1 first native attempt finished; fixture cwd fixed, retry NEXT — 2026-10-21
 
-DO NOT DISPATCH ANOTHER RUN. Task2cce27d5-0d1b-43e4-b069-8830061928c1,
-run20261021-150949-b0d8a5f1, unified session42616. Log
-.winbridge/update-preparation/state-backup-main-native-run.log. Shared reports
-/mnt/hgfs/shared/WinBridge/workflow-validation/20261021-150949-b0d8a5f1.
-SourceA d419e1c98d877f555e228665d7eafad74f53a1b8, ZIP
-winbridge-20261021T150723Z-d419e1c-679ae390.zip, SHA
-f8d911a104d384c4704186c6f68d72dfd5356f840fadeec21ee381b16c9b20d5.
-TargetC31fa6348d1c7ea3d2604d70401be9a1f8193c755, ZIP
-winbridge-20261021T150720Z-31fa634-9a28b4a2.zip, SHA
-b4d03a1c8f4dbf81f36c3196f60a3b6f118dcebf6c96f0d71dc4274ab208349b.
-Both13/16; source pins in state-backup-{main,target}-source-export.json. Temporary
-Node-reusing C worktree removed after clean export; no caches/user files touched.
+Task2cce27d5-0d1b-43e4-b069-8830061928c1/run20261021-150949-b0d8a5f1
+completed failed101; no active native session. First20 native tests PASSED (15 FSM/
+ledger/data,3 SQLite WAL/pins,2 CLI); all four real old roles built/identity checked.
+Main stopped BEFORE shutdown: seeded fixture success wrote runs.log in source cwd,
+and source verification correctly refused an unmanaged file. Preserved run/source/
+report/diagnostics; no suppression or Windows cleanup. Original task/schema/source
+state remains inspectable. This is test fixture side effect, not installed failure.
 
-First20 Windows tests PASSED:15 state_backup,3 SQLite WAL/pins,2 negative CLI.
-Old real worker/fixture/desktop/updater build running; then one actual Main case.
-Read ready hashes and proof only after terminal, verify twice and mutate actual
-proof for negative checks. Native whole success still pending. User notified:
-installed worker only, no desktop/no test windows. Leave installed d052 running.
-SourceZip is immutable; subsequent metadata-only commits are not native producers.
-Controller3902 unchanged. No local Cargo active. Debian~26GiB, no Windows cleanup.
-Schema12 full-graph migration/refusal + backup fault scenarios still follow before
-U2.1 can close. Goal/public update/U2–U4 remain unfinished.
+Fixed seed cwd to source/target/history-seed, an existing explicitly preserved build
+cache namespace. mkdir only this generated folder; no source verification weakening.
+Windows all-target Clippy passes after fix (state-backup-seed-fix-clippy.log).
+Installed d052 still generationee48ba22, active0/no errors on fresh Info. Controller
+3902 alive. Test processes ended/no UI; user told desktop may open/close, keep worker.
+
+NEXT commit/export clean retry source B with built UI and run approved
+--final-state-backup-gate against unchanged targetC31fa ZIP
+winbridge-20261021T150720Z-31fa634-9a28b4a2.zip (SHA
+b4d03a1c8f4dbf81f36c3196f60a3b6f118dcebf6c96f0d71dc4274ab208349b),
+--cache-run20261017-061527-f4639971. SourceA was d419e1c ZIP
+winbridge-20261021T150723Z-d419e1c-679ae390.zip. Use same retained caches, preserve
+failed directories. Windows37,783,703,552→36,344,750,080 bytes (~33.85GiB); no cleanup.
+Debian~26GiB, incremental0. Whole native backup, faults, actual12→13/refusal still
+pending; U2.1/public update/goal not complete. No manual installed update needed.
 
 ## U2.1 actual Main backup gate prepared, NOT run yet — 2026-10-21
 

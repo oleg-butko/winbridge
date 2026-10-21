@@ -383,6 +383,9 @@ fn seed_history(config: &Path, runtime: &Path, root: &Path) {
         CommandSource, LocalRequest, LocalResponse, TaskStatus, TaskSubmission,
     };
     let worker = winbridge_worker::Worker::open_file(config).unwrap();
+    // fixture writes runs.log in cwd. Keep that generated side effect in the
+    // explicitly preserved build cache, outside verified source inputs.
+    fs::create_dir_all(root.parent().unwrap().join("source/target/history-seed")).unwrap();
     let submission = TaskSubmission {
         protocol_version: 1,
         request_id: "backup-history".into(),
@@ -396,7 +399,7 @@ fn seed_history(config: &Path, runtime: &Path, root: &Path) {
                 .to_string_lossy()
                 .into(),
             arguments: vec!["success".into()],
-            working_directory: ".".into(),
+            working_directory: "target/history-seed".into(),
         },
     };
     let LocalResponse::Task { task } = worker.handle(LocalRequest::Submit {
