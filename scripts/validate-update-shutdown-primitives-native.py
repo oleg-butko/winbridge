@@ -23,29 +23,53 @@ GROUPS = {'shutdown-process-pin': 1, 'shutdown-data-state-journal': 12,
 COLD_GROUPS = {'shutdown-reader-cli': 1, 'shutdown-reader-report': 1, 'shutdown-reader-v6-contract': 2}
 
 
+def verify_migration_proof(proof, pin, reference):
+    build=proof.get('build', {})
+    if (proof.get('kind') != 'state_backup_schema_migration_proof' or proof.get('passed') is not True
+            or proof.get('platform') != 'windows' or build.get('sourceCommit') != pin['sourceCommit']
+            or build.get('sourceManifestSha256') != pin['manifestSha256'] or build.get('sourceDirty') is not False
+            or proof.get('sourceProofSha256') != reference['sourceProofSha256']
+            or proof.get('referenceManifestSha256') != reference['manifestSha256']
+            or proof.get('referenceUpdaterSha256') != reference['updaterSha256']
+            or proof.get('updateId') != reference['updateId']
+            or proof.get('fromSchema') != 12 or proof.get('toSchema') != 13
+            or not isinstance(proof.get('epochBefore'), int) or not isinstance(proof.get('epochAfter'), int)
+            or proof['epochAfter'] <= proof['epochBefore']
+            or not re.fullmatch(r'[0-9a-f]{64}',proof.get('retainedRowsSha256',''))
+            or any(proof.get(k) is not True for k in ('backupRowsPreserved','shutdownHistoryPreserved','migrationBackupVerified','noBackupAttemptInvented','noCustodyAdopted','oldTwelveInitRefused','oldTwelveStatusRefused','sourceBytesUnchanged'))
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False):
+        raise ValueError('Actual schema12 history/migration/refusal/source preservation differs')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--cache-run', required=True)
-    parser.add_argument('--cold-reader-only', action='store_true')
+    modes=parser.add_mutually_exclusive_group()
+    modes.add_argument('--cold-reader-only', action='store_true')
+    modes.add_argument('--backup-migration-only', action='store_true')
     parser.add_argument('--reference-receipt', type=Path, required=True)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
-    groups = COLD_GROUPS if args.cold_reader_only else GROUPS
-    kind = 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
-    mode_switch = ' -ColdReaderOnly' if args.cold_reader_only else ''
+    groups = {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
+    kind = 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
+    mode_switch = ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
     pin = health.archive_pin(args.archive)
     with zipfile.ZipFile(args.archive) as source:
         if (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
-                or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 12):
-            raise ValueError('This gate requires the reviewed worker16/updater12 source')
+                or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != (13 if args.backup_migration_only else 12)):
+            raise ValueError('This gate requires reviewed worker16 and matching updater schema source')
     if not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run):
         raise ValueError('Exact retained cache run required')
     reference = json.loads(args.reference_receipt.read_text())
-    if (reference.get('kind') != 'shutdown_base_reference' or reference.get('runtimeApplied') is not False
-            or len(reference['files']) != 2
-            or {(f['descriptor']['role'], f['schemaFromReviewedSource']) for f in reference['files']} != {('worker', 15), ('updater', 11)}):
-        raise ValueError('Proven schema15/11 references required')
+    if args.backup_migration_only:
+        if reference.get('kind') != 'state_backup_schema12_reference' or any(not re.fullmatch(r'[0-9a-f]{64}', reference.get(k, '')) for k in ('sourceProofSha256', 'manifestSha256', 'updaterSha256', 'sourceManifestSha256')):
+            raise ValueError('Proven schema12 archive/manifest/updater pins required')
+    else:
+        if (reference.get('kind') != 'shutdown_base_reference' or reference.get('runtimeApplied') is not False
+                or len(reference['files']) != 2
+                or {(f['descriptor']['role'], f['schemaFromReviewedSource']) for f in reference['files']} != {('worker', 15), ('updater', 11)}):
+            raise ValueError('Proven schema15/11 references required')
     cfg = json.loads(args.controller_config.read_text())
     endpoint = Path(cfg['stateDirectory']) / ('controller-' + cfg['instanceId'] + '.sock')
     info = native.call(endpoint, {'method': 'info'})['info']
@@ -54,11 +78,16 @@ def main():
         raise ValueError('Healthy idle installed worker required')
     project = next(p for p in info['projects'] if p['id'] == 'snapshot-fixture')
     project_path = PureWindowsPath(project['workspaceRoot'])
-    for item in reference['files']:
-        path = PureWindowsPath(item['path'])
-        if (not path.is_relative_to(project_path / 'workflow-validation') or '..' in path.parts
-                or not re.fullmatch(r'[0-9a-f]{64}', item['sha256'])):
-            raise ValueError('Reference must be retained in the registered local validation project')
+    if args.backup_migration_only:
+        path=PureWindowsPath(reference['runtimeDirectory'])
+        if not path.is_relative_to(project_path/'workflow-validation') or '..' in path.parts:
+            raise ValueError('Schema12 reference must be a retained local validation runtime')
+    else:
+        for item in reference['files']:
+            path = PureWindowsPath(item['path'])
+            if (not path.is_relative_to(project_path / 'workflow-validation') or '..' in path.parts
+                    or not re.fullmatch(r'[0-9a-f]{64}', item['sha256'])):
+                raise ValueError('Reference must be retained in the registered local validation project')
     run = time.strftime('%Y%m%d-%H%M%S', time.gmtime()) + '-' + uuid.uuid4().hex[:8]
     report = Path('/mnt/hgfs/shared/WinBridge/workflow-validation') / run
     report.mkdir()
@@ -142,6 +171,10 @@ exit $LASTEXITCODE
             or {g['name'] for g in result['commands']} != set(groups)
             or any(g['exitCode'] != 0 or g['passed'] < groups[g['name']] for g in result['commands'])):
         raise RuntimeError({'taskId': task['taskId'], 'result': result})
+    if args.backup_migration_only:
+        if 'state-backup-migration-proof.json' not in names:
+            raise ValueError('Migration report missing actual proof')
+        verify_migration_proof(json.loads((report/'state-backup-migration-proof.json').read_text(encoding='utf-8-sig')), pin, reference)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report),
                       'filesVerified': len(names), 'testsPassed': sum(g['passed'] for g in result['commands'])}), flush=True)
 
