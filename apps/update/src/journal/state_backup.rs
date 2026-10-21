@@ -223,6 +223,33 @@ fn persist(c: &Connection, old: &StateBackupRecord, next: &StateBackupRecord) ->
     Ok(())
 }
 impl UpdateJournal {
+    pub fn state_backup(&self, id: &str) -> Result<Option<StateBackupRecord>> {
+        read(&self.connection, id)
+    }
+    /// Metadata checks for the already-running trusted driver; no launch permit.
+    pub(crate) fn require_state_backup_current(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        r: &StateBackupRecord,
+    ) -> Result<()> {
+        self.check_directory(a)?;
+        require(&self.connection, a, s, &r.intent)?;
+        if read(&self.connection, r.intent.update_id())?.as_ref() != Some(r)
+            || winbridge_platform::source_files::directory_identity(Path::new(
+                &r.intent.binding.parent_directory,
+            ))
+            .map_err(storage)?
+                != r.intent.binding.parent_identity
+        {
+            return Err(fail(
+                JournalErrorCode::PreconditionsChanged,
+                "Backup record/directory changed",
+            ));
+        }
+        Ok(())
+    }
+
     pub fn inspect_state_backup(directory: &Path, id: &str) -> Result<Option<StateBackupRecord>> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;

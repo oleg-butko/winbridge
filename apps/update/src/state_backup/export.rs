@@ -33,7 +33,7 @@ pub struct StateBackupExportGuard {
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
-fn parent_pin(path: &Path) -> Result<File> {
+pub(super) fn parent_pin(path: &Path) -> Result<File> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
     winbridge_platform::require_local_disk(path).map_err(error)?;
     let mut options = OpenOptions::new();

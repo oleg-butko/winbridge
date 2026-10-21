@@ -1,13 +1,8 @@
 //! Exact old-worker SQLite exporter, never normal startup or journal recovery.
 use crate::{store::Store, Result};
-use sha2::{Digest, Sha256};
-use std::{
-    fs::{File, OpenOptions},
-    io::Read,
-    path::Path,
-};
+use std::path::Path;
 use winbridge_protocol::update::*;
-use winbridge_update::state_backup::prepare_export;
+use winbridge_update::state_backup::{pin_backup_file, prepare_export};
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -21,51 +16,6 @@ fn authority(store: &Store) -> Result<StateBackupAuthority> {
         epoch: a.epoch,
         fingerprint_sha256: winbridge_update::sha256(&raw),
     })
-}
-fn backup_file(path: &Path) -> Result<(File, StateBackupFileEvidence)> {
-    winbridge_platform::require_safe_path(path).map_err(error)?;
-    let mut options = OpenOptions::new();
-    options.read(true);
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-        options.share_mode(0x1); // FILE_SHARE_READ; deny writes/deletion while hashing.
-    }
-    let mut file = options.open(path).map_err(error)?;
-    let meta = file.metadata().map_err(error)?;
-    if !meta.is_file() || meta.len() == 0 || meta.len() > 9_007_199_254_740_991 {
-        return Err("Invalid backup file size/type".into());
-    }
-    let identity = winbridge_platform::file_identity(&file).map_err(error)?;
-    let mut hash = Sha256::new();
-    let mut bytes = 0;
-    let mut buffer = [0; 65536];
-    loop {
-        let n = file.read(&mut buffer).map_err(error)?;
-        if n == 0 {
-            break;
-        }
-        bytes += n as u64;
-        if bytes > meta.len() {
-            return Err("Backup grew while hashing".into());
-        }
-        hash.update(&buffer[..n]);
-    }
-    winbridge_platform::require_safe_path(path).map_err(error)?;
-    if bytes != meta.len()
-        || file.metadata().map_err(error)?.len() != bytes
-        || winbridge_platform::file_identity(&File::open(path).map_err(error)?).map_err(error)?
-            != identity
-    {
-        return Err("Backup changed while hashing".into());
-    }
-    let evidence = StateBackupFileEvidence {
-        path: path.to_str().ok_or("Backup path UTF-8")?.into(),
-        bytes,
-        sha256: format!("{:x}", hash.finalize()),
-        file_identity: identity,
-    };
-    Ok((file, evidence))
 }
 pub fn export(input_path: &Path, expected_sha256: &str) -> Result<WorkerStateBackupReport> {
     std::hint::black_box(WORKER_STATE_BACKUP_MARKER);
@@ -99,7 +49,8 @@ pub fn export(input_path: &Path, expected_sha256: &str) -> Result<WorkerStateBac
     guard.revalidate()?;
     let path = intent.backup_path();
     source.archive_read_only(&path)?;
-    let (_file_pin, backup) = backup_file(&path)?;
+    let file_pin = pin_backup_file(&path)?;
+    let backup = file_pin.evidence().clone();
     let copied = Store::open_read_only(&path)?;
     let copied_header = copied.archive_sqlite_metadata()?;
     let backup_authority = authority(&copied)?;
@@ -113,6 +64,7 @@ pub fn export(input_path: &Path, expected_sha256: &str) -> Result<WorkerStateBac
     {
         return Err("Final backup SQLite header/authority/receipt differs".into());
     }
+    file_pin.revalidate()?;
     guard.revalidate()?;
     let report = WorkerStateBackupReport {
         schema_version: 1,

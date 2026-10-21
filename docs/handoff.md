@@ -1,3 +1,37 @@
+## U2.1 consuming backup library compiled; actor/native pending — 2026-10-21
+
+capture_final_state consumes a fresh non-Serde StateBackupPermit and borrows original
+ShutdownExitGuard; caller must retain custody afterwards. It validates exact image/
+config/support, pins parent, create-news/syncs one input, records Issued before
+create and PID/grant before resume via existing owned ProbeObserver. Cleanup is
+saved before parsing report; actual backup file/SHA and guard/config/input are
+rechecked before durable Verified. Failure observes saved revision and records
+terminal Indeterminate where still authorized; no rerun, overwrite, install or
+restore. Parent File ID is checked before first input effect and created input
+File ID survives the writer→reader pin handoff. These are implementation checks,
+not an executed positive native scenario yet.
+
+Shared StateBackupFilePin replaces helper-specific hashing, keeps streaming memory
+bounded and avoids executable256MiB limits for SQLite data. Windows read-only pin
+denies write/delete; revalidation checks full stream+identity. One new real file
+test passes (full tail hash, empty reject, changed content detection / Windows
+sharing branch pending native). Targeted state-backup tests14/0; actual negative
+CLI2/0; both update+worker all-target Clippy pass. Logs state-backup-driver-*.
+Native driver dispatch and complete12→13/old12 refusal remain pending. CLI guard
+from31fa634 exists, schema13/worker16 unchanged, public update disabled.
+
+NEXT supervisor v15/view7: keep all v1–14 JSON/actions frozen, add typed backup
+status/start and marker-required shutdown preflight before admission. Retain exact
+OS custody throughout blocking library call; mailbox remains responsive and one
+physical driver active. Ordinary routine choice can use immutable Arc loan of the
+same guard (supervisor keeps original, driver keeps Arc until owned cleanup), no
+new guard/authority from JSON. Then combined native full gate with same-schema13
+old/candidate builds; retained old12 binaries/DBs are references for migration only.
+Do not reuse old candidateA294/updater12 for schema13 health success. Preserve
+cache/report/reference directories. Controller3902, installed d052 still healthy,
+idle0/no errors; desktop unnecessary/no test windows/manual update yet.
+No Cargo/native active; Debian~26GiB. No user config/backups/runtime changes.
+
 ## U2.1 old-helper exporter implemented; native success pending — 2026-10-21
 
 Added actual early Main --export-update-state INPUT SHA mode and embedded contract1

@@ -9,7 +9,11 @@ use std::path::PathBuf;
 use winbridge_core::update::{valid_hash, MAX_UPDATE_COUNTER};
 use winbridge_protocol::{update::*, RuntimeImageEvidence};
 type Result<T> = std::result::Result<T, String>;
+mod data_file;
 mod export;
+pub use data_file::{pin_backup_file, StateBackupFilePin};
+mod driver;
+pub use driver::capture_final_state;
 pub use export::{prepare_export, StateBackupExportGuard};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -149,3 +149,20 @@ update+worker прошли. CLI success и native file sharing пока не п�
 нужен consuming supervisor driver с durable PID-before-resume и OS custody. Legacy
 v14 shutdown не превращается в backup-capable install; новый driver обязан проверять
 marker до shutdown admission. Public update пока закрыт.
+
+
+## Consuming library подготовлена
+
+`capture_final_state` принимает fresh permit и ссылку на original OS exit guard.
+Input создаётся create-only; Issued сохраняется до process create, actual PID/grant
+до resume, cleanup до приёма report. Проверяются actual backup bytes/hash/File ID,
+original guard и pinned config/input; Verified сохраняется лишь после них. Ошибка
+не повторяет процесс; сохраняет terminal uncertainty, если original owner ещё
+вправе писать. Runtime replacement/restore функция не выполняет.
+
+Driver и helper используют общий streaming `StateBackupFilePin`; данные SQLite не
+ограничены лимитом executable image. Дополнительно проверены parent File ID до
+input creation и исходный File ID при writer→read-pin handoff. Targeted suite14/0,
+CLI2/0 и обе update+worker all-target Clippy прошли. Consuming library ещё не
+вызывается supervisor и не выполнила положительный native export. Следующий шаг —
+v15/view7 actor, затем полный Windows gate; старые v1–14 ответы остаются прежними.
