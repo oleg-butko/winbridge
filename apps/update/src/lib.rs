@@ -17,6 +17,7 @@ pub mod runtime_baseline;
 pub mod runtime_preimages;
 pub mod shutdown;
 pub mod source;
+pub mod state_backup;
 pub mod supervisor;
 pub mod worker_compatibility;
 pub mod worker_rehearsal;

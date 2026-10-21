@@ -71,3 +71,10 @@ incarnation/epoch/fingerprint, связь acceptance/lease/state, helper host/se
 Это проверка данных; filesystem scope, сохранённая попытка, kernel process/cleanup
 и физический guard проверяются будущим consuming driver. Текущие worker capability,
 CLI, updater schema12 и legacy RPC не расширены; executable backup пока отсутствует.
+
+
+`apps/update/src/state_backup.rs` добавляет data FSM и immutable canonical binding
+к полной Exited-записи. Подготовлены пять synthetic tests: порядок PID/resume,
+reopen без повторного issue, terminal uncertainty, cleanup до запуска/без resume,
+подмена отчёта и alias input/backup/source. Обе Clippy проверки прошли. Таблицы13,
+экспорт SQLite и consuming driver ещё не реализованы; JSON не создаёт разрешений.

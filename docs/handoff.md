@@ -1,3 +1,28 @@
+## U2.1 pure backup attempt FSM locally verified — 2026-10-21
+
+apps/update/src/state_backup.rs adds immutable canonical digest binding the full
+Exited shutdown record, old config/schema and policy directory identity. Input and
+output filenames derive from one attempt ID. FSM Prepared→Issued→ResumeGranted→
+Running→Cleaned→Verified; cleanup before launch/unresumed paths cannot verify;
+Indeterminate terminal/no replay. PID/input/cleanup/report scope and source/output
+aliases checked. Data-only methods never mint kernel custody or launch authority.
+Five synthetic metadata tests passed (no native/SQLite export claim), both update
+all-target Clippy checks passed; logs state-backup-fsm-*. Protocol layer already
+passed45 tests, generated TS/typecheck. Current updater schema remains12, CLI and
+capability advertising unchanged. U2.1 is not complete.
+
+NEXT schema13 ledger with full immutable history/CAS and explicit migration; root
+stays Replacing, raw post-cutover claims remain blocked. Fresh admission must take
+actual ShutdownExitGuard, current supervisor/owner/epoch/root joins and locally-
+derived existing runtime/update/<id> directory. Readonly duplicate/reopen never
+returns a fresh permit. Saved process/grant must precede OS resume; final receipt
+requires exact report + owned cleanup + actual file pins while custody held.
+Update all synthetic downgrade fixtures to drop new tables before older schema.
+Keep old12/native reference directories intact. Then old-helper CLI export and
+consuming supervisor driver/native gate per final-state-backup.md. No installed
+manual update needed yet; Windows worker d052 only needed for future native tasks.
+No Cargo/native active; controller3902. Goal U2–U4 active.
+
 ## U2.1 final-backup report contract locally verified — 2026-10-21
 
 Added protocol/update/state_backup.rs: StateBackupAuthority fingerprint/epoch,
