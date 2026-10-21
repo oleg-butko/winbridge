@@ -6,6 +6,8 @@ edition.workspace = true
 publish.workspace = true
 
 [features]
+# Isolated native Main validation only; never used by installation/build scripts.
+update-validation = []
 bundled-sqlite = ["rusqlite/bundled"]
 
 [dependencies]

@@ -174,7 +174,14 @@ async fn run() -> Result<(), String> {
             if let Some(guard) = guard {
                 worker.attach_runtime_guard(guard)?;
             }
-            winbridge_worker::serve(worker).await
+            #[cfg(feature = "update-validation")]
+            let validation = winbridge_worker::update_validation::attach(&worker)?;
+            let outcome = winbridge_worker::serve(worker).await;
+            #[cfg(feature = "update-validation")]
+            if let Some(validation) = validation {
+                validation.await.map_err(|e| e.to_string())??;
+            }
+            outcome
         }
         [name] if name == "verify-runtime" => {
             let guard =

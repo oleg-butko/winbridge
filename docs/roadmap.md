@@ -26,7 +26,9 @@ Worker control v6 реализован: receipt-before-ACK и stop через ex
 consuming supervisor v14/view6 реализован: 588 workspace tests и обе all-target
 Clippy проверки прошли. Он сохраняет OS guard после driver retirement; combined
 actual Main stop/ACK/exit/fault gate ещё впереди. Public replacement/activation
-остаются отключены.
+остаются отключены. Подготовлен feature-gated actual Main gate: четыре случая
+ACK/lost ACK/delayed callback/receipt write denial, cold CLI, restart refusal и
+owned supervisor crash; native результат пока не получен.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 

@@ -10,10 +10,12 @@ param(
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
   [Parameter(Mandatory)][string]$ReportDirectory,
   [switch]$DrainGate,
+  [switch]$ShutdownMainGate,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($DrainGate -and $ShutdownMainGate){throw 'Select one native gate mode'}
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
@@ -27,6 +29,7 @@ $manifest=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if($manifest.dirty -or -not $manifest.includesBuiltUi){throw 'Clean exported source with built UI required'}
 New-Item -ItemType Directory -Path $ReportDirectory -Force | Out-Null
 $report=[ordered]@{schemaVersion=1;kind='candidate_health_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();runtimeApplied=$false;windowsOpened=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+$oldShutdownInput=$env:WINBRIDGE_SHUTDOWN_GATE_INPUT
 $oldPreviousUpdater=$env:WINBRIDGE_PREVIOUS_UPDATER10
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_HEALTH_GATE_INPUT;$oldProof=$env:WINBRIDGE_HEALTH_GATE_PROOF
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
@@ -84,24 +87,60 @@ try {
       @{name='drain-v12-worker-observation';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','drain_observation_preserves','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($ShutdownMainGate){
+    $report.kind='shutdown_main_native_gate'
+    $caseRoot=Join-Path (Split-Path $source -Parent) 'shutdown-main-cases'
+    New-Item -ItemType Directory -Path $caseRoot | Out-Null
+    $oldStage=Join-Path (Split-Path $source -Parent) 'shutdown-old-set'
+    $shutdownInput=Join-Path (Split-Path $source -Parent) 'shutdown-main-input.json'
+    Write-NewJson $shutdownInput @{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache}
+    $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
+    $commands=@(
+      @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
+      @{name='shutdown-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
+      @{name='shutdown-main-pipeline';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement','--ignored','--test-threads=1','--nocapture')}
+    )
+  }
   # Worker IPC fixtures launch this executable. Reused caches may still hold an
   # older updater that correctly refuses the freshly migrated journal.
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build'})
   foreach($command in $commands){
     $log=$command.name+'.log';$arguments=$command.arguments
     Write-Output "Health native gate: $($command.name); installed runtime remains active"
-    & cargo.exe @arguments 2>&1 | Tee-Object -FilePath (Join-Path $ReportDirectory $log)
+    $executable=if($command.ContainsKey('executable')){$command.executable}else{'cargo.exe'}
+    & $executable @arguments 2>&1 | Tee-Object -FilePath (Join-Path $ReportDirectory $log)
     $code=$LASTEXITCODE;$report.commands+=@{name=$command.name;arguments=$arguments;exitCode=$code;log=$log}
     if($code -ne 0){throw "Health native command failed: $($command.name); see $log"}
   }
+  if($ShutdownMainGate){[IO.File]::Copy((Join-Path $caseRoot 'proof.json'),$env:WINBRIDGE_HEALTH_GATE_PROOF,$false)}
   $proof=Get-Content -LiteralPath $env:WINBRIDGE_HEALTH_GATE_PROOF -Raw | ConvertFrom-Json
-  $expectedKind=if($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
+  $expectedKind=if($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
   $expectedCases=4
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $false -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
   $report.passed=$true
 } catch {$report.error=$_.Exception.Message;Write-Output ("Health gate failed: "+$report.error)} finally {
+  try { if($ShutdownMainGate -and (Get-Variable caseRoot -ErrorAction SilentlyContinue)){
+    foreach($caseName in @('None','LostAck','DelayedReply','ReceiptWriteDenied')){
+      $caseDirectory=Join-Path $caseRoot $caseName
+      foreach($logName in @('stdout.log','stderr.log','validation-error.json')){
+        $path=Join-Path $caseDirectory $logName
+        if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-'+$logName)),$false)}
+      }
+      $saved=Join-Path $caseDirectory 'supervisor.json'
+      if(Test-Path -LiteralPath $saved -PathType Leaf){
+        $sup=Get-Content -LiteralPath $saved -Raw | ConvertFrom-Json
+        $updateId=$sup.spec.updateId
+        if($updateId -cmatch '^[0-9a-f-]{36}$'){
+          $path=Join-Path $caseDirectory ('runtime/update/'+$updateId+'/supervisor/stderr.log')
+          if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-supervisor-stderr.log')),$false)}
+        }
+      }
+    }
+  }
+  } catch {Write-Output ('Optional case diagnostic export failed: '+$_.Exception.Message)}
   $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
   if($lease){$lease.Dispose()}
+  $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$oldShutdownInput
   $env:WINBRIDGE_PREVIOUS_UPDATER10=$oldPreviousUpdater;$env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_HEALTH_GATE_INPUT=$oldInput;$env:WINBRIDGE_HEALTH_GATE_PROOF=$oldProof;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
   [Console]::OutputEncoding=$oldConsoleEncoding;$OutputEncoding=$oldPipelineEncoding
   Set-Location -LiteralPath $oldLocation

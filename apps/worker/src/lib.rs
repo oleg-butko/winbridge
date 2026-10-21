@@ -23,6 +23,8 @@ pub mod shutdown_inspection;
 pub mod store;
 mod update;
 mod update_control;
+#[cfg(feature = "update-validation")]
+pub use update_control::validation as update_validation;
 pub use update_control::WorkerSupervisorLaunch;
 mod workflows;
 use fs2::FileExt;

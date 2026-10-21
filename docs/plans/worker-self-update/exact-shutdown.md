@@ -223,3 +223,30 @@ control и запуск supervisor; validation harness не должен выд�
 синтетический Worker за полную проверку Main. Public update, replacement,
 activation/rollback и финальный consistent worker DB backup перед replacement
 ещё не реализованы.
+
+
+## Подготовка actual Main gate
+
+Feature `winbridge-worker/update-validation` включает только изолированный fixture
+startup. Обычные build/install scripts эту feature не используют. Без неё Main
+не читает validation env и не включает update control. С ней нужны SHA-проверенный
+input рядом с отдельным runtime, свой source/state и отключённый controller.
+Main по-прежнему проходит обычные runtime guard → Worker::open_file → serve.
+Fixture task запускает независимый supervisor, выполняет source/build/health/drain,
+передаёт shutdown и завершается до выхода Main. Он не держит Arc<Worker> при
+ожидании stop и не подменяет факт выхода сигналом stop flag.
+
+`update_shutdown` integration запускает четыре случая: обычный ACK, потерянный ACK,
+задержанный callback после durable receipt и отказ записи receipt. После выхода
+Main parent ждёт atomic Exited, проверяет живой supervisor и занятый instance lock,
+читает receipt настоящим cold CLI, проверяет неизменность четырёх прежних exe и
+отказ обычного Main restart из-за активной lease. Затем завершает только свой
+validation Job: история остаётся, текущий OS guard уже отсутствует. Каталоги
+с журналами/guards сохраняются; release через мёртвый worker не выполняется.
+
+Запуск: существующий `validate-update-health-actor-native.py --shutdown-main-gate`
+с чистыми source/target ZIP и прежним cache run. Оба ZIP проверяются до remote
+execution; shared report и process proof должны входить в checksum ready manifest.
+Выбранный target может быть более ранним проверенным commit с теми же schemas:
+это проверка shutdown и same-schema health, а не обещание upgrade/migration.
+Пока native результат этого сценария не получен, block остаётся открытым.

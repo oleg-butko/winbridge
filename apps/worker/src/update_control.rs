@@ -2,6 +2,8 @@
 //! No network/CLI/MCP route enables this module. Runtime replacement is absent.
 use crate::{Result, Worker};
 mod shutdown;
+#[cfg(feature = "update-validation")]
+pub mod validation;
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -34,10 +36,16 @@ pub(crate) struct Registration {
     runtime_verified_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
     #[cfg(test)]
     drop_drain_ack: AtomicBool,
+    #[cfg(any(test, feature = "update-validation"))]
+    drop_shutdown_ack: AtomicBool,
+    #[cfg(any(test, feature = "update-validation"))]
+    shutdown_requests: AtomicUsize,
+    #[cfg(any(test, feature = "update-validation"))]
+    shutdown_test_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
     #[cfg(test)]
     begin_drain_requests: AtomicUsize,
 }
-#[cfg(test)]
+#[cfg(any(test, feature = "update-validation"))]
 struct ControlTestGate {
     entered: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
@@ -154,6 +162,12 @@ impl Worker {
             runtime_verified_gate: std::sync::Mutex::new(None),
             #[cfg(test)]
             drop_drain_ack: AtomicBool::new(false),
+            #[cfg(any(test, feature = "update-validation"))]
+            drop_shutdown_ack: AtomicBool::new(false),
+            #[cfg(any(test, feature = "update-validation"))]
+            shutdown_requests: AtomicUsize::new(0),
+            #[cfg(any(test, feature = "update-validation"))]
+            shutdown_test_gate: std::sync::Mutex::new(None),
             #[cfg(test)]
             begin_drain_requests: AtomicUsize::new(0),
         }));
@@ -214,7 +228,7 @@ impl Worker {
         let cfg = winbridge_update::load_config(&reg.config_path)?;
         // A test-only caller in this module may remain in its enclosing validation
         // Job. Production never permits an unverified external Job/environment.
-        #[cfg(not(test))]
+        #[cfg(not(any(test, feature = "update-validation")))]
         if fixture {
             return Err("Test environment override unavailable".into());
         }
@@ -710,13 +724,18 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                 request.update_id.clone(),
             );
             let (w, r) = (worker.clone(), state.clone());
-            #[cfg(test)]
-            let drop_ack = if matches!(&request.command, WorkerUpdateControlCommand::Advance {command} if command.action == WorkerUpdateAction::BeginDrain)
-            {
-                state.begin_drain_requests.fetch_add(1, Ordering::AcqRel);
-                state.drop_drain_ack.swap(false, Ordering::AcqRel)
-            } else {
-                false
+            #[cfg(any(test, feature = "update-validation"))]
+            let drop_ack = {
+                #[cfg(test)]
+                if matches!(&request.command, WorkerUpdateControlCommand::Advance {command} if command.action == WorkerUpdateAction::BeginDrain)
+                {
+                    state.begin_drain_requests.fetch_add(1, Ordering::AcqRel);
+                    state.drop_drain_ack.swap(false, Ordering::AcqRel)
+                } else {
+                    shutdown_validation_delivery(&state, &request.command)
+                }
+                #[cfg(not(test))]
+                shutdown_validation_delivery(&state, &request.command)
             };
             let control_version = if (1..=6).contains(&request.control_version) {
                 request.control_version
@@ -755,7 +774,25 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
                             .map_err(|e| format!("Fixture control gate stopped: {e}"))?;
                     }
                 }
-                shutdown::prepare_reply(worker, &registration, &request, peer)
+                let reply = shutdown::prepare_reply(worker, &registration, &request, peer)?;
+                #[cfg(any(test, feature = "update-validation"))]
+                if matches!(
+                    request.command,
+                    WorkerUpdateControlCommand::RequestShutdown { .. }
+                ) {
+                    let gate = registration.shutdown_test_gate.lock().unwrap().take();
+                    if let Some(gate) = gate {
+                        if let Some(entered) = gate.entered.lock().unwrap().take() {
+                            let _ = entered.send(());
+                        }
+                        gate.release
+                            .lock()
+                            .unwrap()
+                            .recv_timeout(std::time::Duration::from_secs(10))
+                            .map_err(|e| format!("Shutdown validation checkpoint stopped: {e}"))?;
+                    }
+                }
+                Ok::<_, String>(reply)
             })
             .await;
             let result = match result {
@@ -778,8 +815,14 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
             };
             // Native fault fixture: apply and retain receipt, then close the
             // channel without its ACK. Production builds have no such hook.
-            #[cfg(test)]
+            #[cfg(any(test, feature = "update-validation"))]
             if drop_ack {
+                if stop_after_reply.is_some() {
+                    // Make the lost-shutdown-ACK case exercise the cold path:
+                    // retire this listener before any live receipt lookup.
+                    drop(stop_after_reply);
+                    break;
+                }
                 continue;
             }
             let _ = ipc::write(&mut stream, &response).await;
@@ -788,6 +831,16 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
         }
     });
     Ok(Some(ControlServer { task, reg }))
+}
+
+#[cfg(any(test, feature = "update-validation"))]
+fn shutdown_validation_delivery(reg: &Registration, command: &WorkerUpdateControlCommand) -> bool {
+    if matches!(command, WorkerUpdateControlCommand::RequestShutdown { .. }) {
+        reg.shutdown_requests.fetch_add(1, Ordering::AcqRel);
+        reg.drop_shutdown_ack.swap(false, Ordering::AcqRel)
+    } else {
+        false
+    }
 }
 
 #[cfg(test)]

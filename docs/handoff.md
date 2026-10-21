@@ -1,3 +1,23 @@
+## Actual Main shutdown gate prepared — 2026-10-21
+
+Feature update-validation adds explicitly isolated startup wiring to normal Main:
+normal runtime guard/open/serve/retirement remain. Default build/install scripts
+never enable this feature; public update remains off. Private driver releases its
+Worker Arc before shutdown, returns after acceptance and lets Main actually exit.
+Native integration update_shutdown covers ACK, lost ACK, delayed receipt callback,
+receipt write denial, actual cold CLI after exit, ordinary Main restart refusal,
+supervisor survival/custody and owned supervisor crash. It retains all case DBs,
+guards and logs. It builds four real old roles and an actual same-schema candidate.
+
+Run existing scripts/validate-update-health-actor-native.py --shutdown-main-gate
+with distinct clean source/target archives and original cache run20261017-061527-f4639971.
+Target a294e03 exported ZIP already exists, worker16/updater12; using this older
+source deliberately tests same-schema shutdown, not migration or upgrade direction.
+Both feature-enabled all-target Clippy checks passed. Python archive admission
+checks and17 control regressions passed; built UI refreshed. Lost-ACK fixture
+closes its listener to force integrated cold reconciliation. Combined native result
+is still pending; do not claim U1 finished.
+
 ## Shutdown supervisor v14 locally verified; combined native gate NEXT — 2026-10-21
 
 Consuming driver implemented in apps/update/src/shutdown/driver.rs; details

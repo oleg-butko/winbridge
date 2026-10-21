@@ -1,0 +1,470 @@
+//! Actual feature-gated product Main and an independent updater supervisor.
+//! All four old roles and candidate helpers are real executables. No installed update.
+#![cfg(all(windows, feature = "update-validation"))]
+use serde::Deserialize;
+use serde_json::json;
+use std::{
+    fs,
+    io::Read,
+    path::{Path, PathBuf},
+    time::{Duration, Instant},
+};
+use winbridge_protocol::{update::*, ArtifactRole, ResolvedCommand};
+use winbridge_update::{
+    artifact::{inspect_image, query_image},
+    installed_set::{InstalledArtifact, InstalledSetManifest, MANIFEST_NAME},
+    journal::UpdateJournal,
+    shutdown::{ShutdownDeliveryState, ShutdownInspectionRequest},
+};
+use winbridge_worker::update_validation::{Fault, Input};
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GateInput {
+    root: PathBuf,
+    target: UpdateSourcePin,
+    archive: PathBuf,
+    old_images: PathBuf,
+    powershell: PathBuf,
+    validation_cache: PathBuf,
+}
+fn write(path: &Path, value: &impl serde::Serialize) {
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .unwrap();
+    file.write_all(&serde_json::to_vec_pretty(value).unwrap())
+        .unwrap();
+    file.sync_all().unwrap();
+}
+fn adapter(input: &GateInput) -> PathBuf {
+    use std::os::windows::process::CommandExt;
+    let source = input.root.join("build-adapter.rs");
+    let image = input.root.join("build-adapter.exe");
+    fs::write(&source, format!(r#"fn main(){{use std::os::windows::process::CommandExt;let s=std::process::Command::new({:?}).creation_flags(0x08000000).args(std::env::args_os().skip(1)).arg("-ValidationCacheDirectory").arg({:?}).status().expect("private build adapter");std::process::exit(s.code().unwrap_or(1));}}"#, input.powershell, input.validation_cache)).unwrap();
+    let output = std::process::Command::new("rustc.exe")
+        .creation_flags(0x08000000)
+        .args(["--edition=2021"])
+        .arg(source)
+        .arg("-o")
+        .arg(&image)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    image
+}
+fn setup(
+    input: &GateInput,
+    fault: Fault,
+    adapter: &Path,
+) -> (PathBuf, PathBuf, InstalledSetManifest) {
+    let root = input.root.join(format!("{fault:?}"));
+    fs::create_dir(&root).unwrap();
+    let stage = root.join("seed");
+    winbridge_update::archive::stage_archive(&input.archive, &input.target, &stage).unwrap();
+    fs::rename(stage.join("source"), root.join("source")).unwrap();
+    let runtime = root.join("runtime");
+    fs::create_dir(&runtime).unwrap();
+    fs::create_dir(root.join("state")).unwrap();
+    fs::create_dir(root.join("packages")).unwrap();
+    fs::copy(
+        &input.archive,
+        root.join("packages").join(&input.target.archive_name),
+    )
+    .unwrap();
+    let worker_config = runtime.join("winbridge-worker.local.json");
+    write(
+        &worker_config,
+        &json!({"schemaVersion":1,"instanceId":format!("shutdown-{}",uuid::Uuid::new_v4()),"nodeId":"shutdown-main-test","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"source","workspaceRoot":root.join("source"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]}),
+    );
+    let config = runtime.join("winbridge-update.local.json");
+    write(
+        &config,
+        &json!({"schemaVersion":3,"sourceDirectory":root.join("source"),"runtimeDirectory":runtime,"workerConfigPath":worker_config,"sourcePackagesDirectory":root.join("packages"),"build":{"powershellExecutable":adapter,"timeoutMs":300000}}),
+    );
+    let cfg = winbridge_update::load_config(&config).unwrap();
+    let scope = winbridge_update::installation_scope(&cfg).unwrap();
+    let info = UpdateJournal::open(&runtime.join("update-state"), &scope)
+        .unwrap()
+        .info()
+        .unwrap();
+    let mut artifacts = Vec::new();
+    for (name, role) in [
+        ("winbridge-worker.exe", ArtifactRole::Worker),
+        ("winbridge-fixture.exe", ArtifactRole::Fixture),
+        ("winbridge-desktop.exe", ArtifactRole::Desktop),
+        ("winbridge-update.exe", ArtifactRole::Updater),
+    ] {
+        let original = if role == ArtifactRole::Worker {
+            PathBuf::from(env!("CARGO_BIN_EXE_winbridge-worker"))
+        } else {
+            input.old_images.join(name)
+        };
+        let path = runtime.join(name);
+        fs::copy(original, &path).unwrap();
+        let query = query_image(&path, role).unwrap();
+        artifacts.push(InstalledArtifact {
+            name: name.into(),
+            bytes: query.image.bytes,
+            sha256: query.image.sha256,
+            descriptor: query.descriptor,
+        });
+    }
+    let manifest = InstalledSetManifest {
+        schema_version: 1,
+        kind: "winbridge_installed_set".into(),
+        set_id: uuid::Uuid::new_v4().to_string(),
+        installation_id: info.installation_id.clone(),
+        scope_sha256: scope.clone(),
+        artifacts,
+    };
+    write(&runtime.join(MANIFEST_NAME), &manifest);
+    let config_sha = winbridge_update::sha256(&fs::read(&worker_config).unwrap());
+    let request = UpdateRequest {
+        contract_version: 1,
+        idempotency_key: format!("main-shutdown-{fault:?}"),
+        source: input.target.clone(),
+        expected: UpdateInstallationPin {
+            installation_id: info.installation_id,
+            scope_sha256: scope,
+            worker_build_id: manifest.artifacts[0].descriptor.build.build_id.clone(),
+            worker_config_sha256: config_sha.clone(),
+            baseline_manifest_sha256: input.target.manifest_sha256.clone(),
+        },
+    };
+    write(
+        &root.join("input.json"),
+        &Input {
+            schema_version: 1,
+            kind: "winbridge_shutdown_main_validation".into(),
+            root: root.clone(),
+            worker_config_sha256: config_sha,
+            request,
+            fault,
+        },
+    );
+    (root, worker_config, manifest)
+}
+fn capture(mut reader: winbridge_platform::OutputReader) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut result = Vec::new();
+        let mut buffer = [0u8; 16384];
+        loop {
+            let n = reader.read(&mut buffer).unwrap();
+            if n == 0 {
+                break;
+            }
+            let keep = n.min((2 * 1024 * 1024usize).saturating_sub(result.len()));
+            result.extend_from_slice(&buffer[..keep]);
+        }
+        result
+    })
+}
+fn restart_refused(worker: &Path, config: &Path, root: &Path) {
+    let command = ResolvedCommand {
+        executable: worker.to_string_lossy().into(),
+        arguments: vec![
+            "--config".into(),
+            config.to_string_lossy().into(),
+            "serve".into(),
+        ],
+        working_directory: root.to_string_lossy().into(),
+        timeout_ms: 30000,
+    };
+    let (mut child, stdout, stderr) = winbridge_platform::ManagedChild::prepare_atomic_executable(
+        &command,
+        Some(&format!(
+            "WinBridge-shutdown-restart-denied-{}",
+            uuid::Uuid::new_v4()
+        )),
+        None,
+    )
+    .unwrap();
+    let capture = (capture(stdout), capture(stderr));
+    child.resume().unwrap();
+    let until = Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        if let Some(s) = child.try_wait().unwrap() {
+            break Some(s);
+        }
+        if Instant::now() >= until {
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    child.terminate_tree().unwrap();
+    let stdout = capture.0.join().unwrap();
+    let stderr = capture.1.join().unwrap();
+    assert!(!status
+        .expect("Ordinary Main restart did not refuse pending update")
+        .success());
+    assert!(stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&stderr).contains("unfinished"),
+        "{}",
+        String::from_utf8_lossy(&stderr)
+    );
+}
+
+fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
+    let (root, config, manifest) = setup(input, fault, adapter);
+    let worker = root.join("runtime/winbridge-worker.exe");
+    let input_path = root.join("input.json");
+    // Only the suspended creation inherits these two variables. Restore before
+    // running any helper; cold inspection never initializes this fixture driver.
+    let vars = [
+        (
+            "WINBRIDGE_SHUTDOWN_MAIN_INPUT",
+            input_path.as_os_str().to_owned(),
+        ),
+        (
+            "WINBRIDGE_SHUTDOWN_MAIN_INPUT_SHA256",
+            winbridge_update::sha256(&fs::read(&input_path).unwrap()).into(),
+        ),
+    ];
+    let previous: Vec<_> = vars
+        .iter()
+        .map(|(k, _)| (*k, std::env::var_os(k)))
+        .collect();
+    for (k, v) in &vars {
+        std::env::set_var(k, v);
+    }
+    let command = ResolvedCommand {
+        executable: worker.to_string_lossy().into(),
+        arguments: vec![
+            "--config".into(),
+            config.to_string_lossy().into(),
+            "serve".into(),
+        ],
+        working_directory: root.to_string_lossy().into(),
+        timeout_ms: 900000,
+    };
+    let prepared = winbridge_platform::ManagedChild::prepare_atomic_executable(
+        &command,
+        Some(&format!(
+            "WinBridge-shutdown-main-validation-{}",
+            uuid::Uuid::new_v4()
+        )),
+        None,
+    );
+    for (k, v) in previous {
+        if let Some(v) = v {
+            std::env::set_var(k, v)
+        } else {
+            std::env::remove_var(k)
+        }
+    }
+    let (mut child, stdout, stderr) = prepared.unwrap();
+    let capture = (capture(stdout), capture(stderr));
+    child.resume().unwrap();
+    let until = Instant::now() + Duration::from_secs(900);
+    let mut progress = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break Some(status);
+        }
+        if Instant::now() >= until {
+            break None;
+        }
+        if progress.elapsed() >= Duration::from_secs(5) {
+            let last = fs::read_dir(&root)
+                .unwrap()
+                .flatten()
+                .filter_map(|e| e.file_name().to_str().map(str::to_owned))
+                .filter(|n| n.starts_with(|c: char| c.is_ascii_digit()))
+                .max();
+            println!(
+                "Actual Main shutdown validation {fault:?}: {}",
+                last.unwrap_or_else(|| "startup".into())
+            );
+            progress = Instant::now();
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    };
+    let directory = root.join("runtime/update-state");
+    // Keep cleanup unconditional on assertions below; killing this validation
+    // Job owns only the copied worker/supervisor descendants, never installed ones.
+    let proof = || {
+        let status = status.expect("Owned Main validation deadline exceeded");
+        assert!(
+            status.success(),
+            "Main failed; inspect retained case stdout/stderr/validation-error files"
+        );
+        let before: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join("worker-proof.json")).unwrap()).unwrap();
+        assert_eq!(before["requestShutdownCount"], 1);
+        assert_eq!(before["normalMain"], true);
+        let sup: SupervisorRecord = serde_json::from_value(before["supervisor"].clone()).unwrap();
+        let id = &sup.spec.update_id;
+        let process = sup.process.as_ref().unwrap();
+        let until = Instant::now() + Duration::from_secs(65);
+        let shutdown = loop {
+            let s = UpdateJournal::inspect_shutdown(&directory, id)
+                .unwrap()
+                .unwrap();
+            if fault == Fault::ReceiptWriteDenied
+                || matches!(s.delivery, ShutdownDeliveryState::Exited { .. })
+            {
+                break s;
+            }
+            assert!(
+                Instant::now() < until,
+                "Supervisor did not confirm exact exit; inspect retained supervisor stderr"
+            );
+            std::thread::sleep(Duration::from_millis(25));
+        };
+        assert!(
+            winbridge_platform::infrastructure::matches(process).unwrap(),
+            "Supervisor did not outlive Main"
+        );
+        let (_, root_state) = UpdateJournal::read_snapshot(&directory, Some(id)).unwrap();
+        let root_state = root_state.unwrap();
+        let lock = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(root.join("state/worker.lock"))
+            .unwrap();
+        if fault == Fault::ReceiptWriteDenied {
+            assert_eq!(root_state.phase, UpdatePhase::Stopping);
+            assert!(matches!(
+                shutdown.delivery,
+                ShutdownDeliveryState::Uncertain { .. }
+            ));
+            fs2::FileExt::try_lock_exclusive(&lock).unwrap();
+            fs2::FileExt::unlock(&lock).unwrap();
+        } else {
+            assert_eq!(root_state.phase, UpdatePhase::Replacing);
+            let error = fs2::FileExt::try_lock_exclusive(&lock).unwrap_err();
+            assert!(
+                error.kind() == std::io::ErrorKind::WouldBlock
+                    || error.raw_os_error() == fs2::lock_contended_error().raw_os_error()
+            );
+            if fault == Fault::LostAck {
+                assert_eq!(
+                    shutdown.revision, 4,
+                    "Lost ACK must retain Uncertain edge before readonly reconciliation"
+                );
+                assert!(
+                    root.join("runtime/update")
+                        .join(id)
+                        .join(format!(
+                            "shutdown-receipt-{}.json",
+                            shutdown.intent.attempt_id
+                        ))
+                        .is_file(),
+                    "Closed control channel must exercise integrated cold reconciliation"
+                );
+            }
+            if fault == Fault::DelayedReply {
+                assert!(root.join("09-delayed-reply.json").is_file());
+            }
+        }
+        let input = ShutdownInspectionRequest {
+            schema_version: 1,
+            intent: shutdown.intent.clone(),
+            worker_config: inspect_image(&config).unwrap(),
+            helper_image: shutdown.intent.binding.loaded_worker.image.clone(),
+            worker_journal_schema: winbridge_worker::store::JOURNAL_SCHEMA_VERSION,
+        };
+        let path = root.join("cold-after-main.json");
+        write(&path, &input);
+        let cold = winbridge_update::shutdown::inspect_saved_receipt(
+            &path,
+            &winbridge_update::sha256(&fs::read(&path).unwrap()),
+            &input,
+        )
+        .unwrap();
+        assert_eq!(cold.receipt.is_none(), fault == Fault::ReceiptWriteDenied);
+        if let ShutdownDeliveryState::Exited { receipt, .. } = &shutdown.delivery {
+            assert_eq!(cold.receipt.as_deref(), Some(receipt.as_ref()));
+        }
+        restart_refused(&worker, &config, &root);
+        assert!(winbridge_worker::store::Store::reject_pending_update_start(
+            &root.join("state/journal.sqlite")
+        )
+        .unwrap_err()
+        .contains("unfinished"));
+        assert_eq!(
+            serde_json::from_slice::<InstalledSetManifest>(
+                &fs::read(root.join("runtime").join(MANIFEST_NAME)).unwrap()
+            )
+            .unwrap(),
+            manifest
+        );
+        for image in &manifest.artifacts {
+            assert_eq!(
+                winbridge_update::sha256(
+                    &fs::read(root.join("runtime").join(&image.name)).unwrap()
+                ),
+                image.sha256
+            );
+        }
+        json!({"fault":fault,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true})
+    };
+    // The closure may panic; an RAII owner still closes the test Job. On success
+    // explicitly verify its complete termination and the post-crash history.
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(proof));
+    child.terminate_tree().unwrap();
+    let until = Instant::now() + Duration::from_secs(10);
+    while !child.tree_is_empty().unwrap() && Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(child.tree_is_empty().unwrap());
+    fs::write(root.join("stdout.log"), capture.0.join().unwrap()).unwrap();
+    fs::write(root.join("stderr.log"), capture.1.join().unwrap()).unwrap();
+    let mut proof = result.unwrap();
+    let id = proof["root"]["updateId"].as_str().unwrap();
+    let view = UpdateJournal::shutdown_preparation_snapshot(&directory, id, false, None).unwrap();
+    let phase = view.candidate_shutdown.unwrap();
+    assert!(!phase.physical_custody_held);
+    assert_eq!(
+        phase.phase,
+        if fault == Fault::ReceiptWriteDenied {
+            CandidateShutdownPhase::Indeterminate
+        } else {
+            CandidateShutdownPhase::Exited
+        }
+    );
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(root.join("state/worker.lock"))
+        .unwrap();
+    fs2::FileExt::try_lock_exclusive(&lock).unwrap();
+    proof["ownedSupervisorCrashRetainsHistoryWithoutCustody"] = json!(true);
+    proof
+}
+#[test]
+#[ignore = "Explicit clean native Main shutdown gate; builds a real candidate and retains case directories"]
+fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement() {
+    let path = PathBuf::from(
+        std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
+    );
+    let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    assert!(input.root.is_dir());
+    assert_ne!(
+        winbridge_protocol::build_identity().source_commit.as_ref(),
+        Some(&input.target.source_commit)
+    );
+    let adapter = adapter(&input);
+    let mut cases = Vec::new();
+    for fault in [
+        Fault::None,
+        Fault::LostAck,
+        Fault::DelayedReply,
+        Fault::ReceiptWriteDenied,
+    ] {
+        cases.push(case(&input, fault, &adapter));
+        write(
+            &input.root.join(format!("case-{}.json", cases.len())),
+            cases.last().unwrap(),
+        );
+    }
+    let proof = json!({"schemaVersion":1,"kind":"shutdown_main_native_proof","passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
+    write(&input.root.join("proof.json"), &proof);
+}
