@@ -25,10 +25,12 @@ Worker control v6 реализован: receipt-before-ACK и stop через ex
 и прошёл 11 проверок точек входа и [4 native reader tests](plans/worker-self-update/windows-shutdown-reader-gate-2026-10-21.md);
 consuming supervisor v14/view6 реализован: 588 workspace tests и обе all-target
 Clippy проверки прошли. Он сохраняет OS guard после driver retirement; combined
-actual Main stop/ACK/exit/fault gate ещё впереди. Public replacement/activation
+[actual Main stop/ACK/exit gate](plans/worker-self-update/windows-shutdown-main-gate-2026-10-21.md)
+пройден: один integration test /4 полных случая /17 checksum artifacts.
+Supplemental delayed-lock/pre-exit-crash faults ещё впереди. Public replacement/activation
 остаются отключены. Подготовлен feature-gated actual Main gate: четыре случая
 ACK/lost ACK/delayed callback/receipt write denial, cold CLI, restart refusal и
-owned supervisor crash; native результат пока не получен.
+owned supervisor crash проверены на Windows; дополнительные faults выше остаются.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 

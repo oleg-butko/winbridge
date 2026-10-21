@@ -2,6 +2,16 @@
 
 Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
+## Точная остановка updater — 2026-10-21
+
+[Основной actual Main gate](plans/worker-self-update/windows-shutdown-main-gate-2026-10-21.md)
+проверил четыре случая stop/ACK/exit/cold-reader и сохранение истории после owned
+supervisor crash. Updater schema12/worker16, control v6, supervisor v14/view6.
+Durable receipt отделена от живого OS guard: после driver retirement его держит
+supervisor, после crash исторический Exited не восстанавливает custody.
+Supplemental delayed-lock/pre-exit-crash tests, final consistent backup, replacement,
+activation/desktop/rollback и публичный update остаются следующими blocks U1–U4.
+
 ## Подготовка самообновления — 2026-10-17
 
 [План U0–U4](plans/worker-self-update/README.md) временно предшествует продолжению A4.

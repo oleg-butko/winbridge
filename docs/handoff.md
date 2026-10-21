@@ -1,3 +1,54 @@
+## Actual Main shutdown gate PASSED; supplemental faults NEXT — 2026-10-21
+
+Task1615bebb-015e-4155-b263-082aac5a1631/run20261021-090004-a229a8de succeeded0.
+1 native integration test /4 complete cases /3 commands, 17 ready files checked
+independently twice;9 tamper mutations rejected. ReportSHA
+f6af84ba71dd743a6dc54c18604232d73390ff8363e1ad0d054ea9c2d2fa0730;
+proofSHA e7d567289fc3b02b6c6f83347ff23cfeed1c774fcd3c6f3dde9b3ad37d780e28.
+Details plans/worker-self-update/windows-shutdown-main-gate-2026-10-21.md.
+Source2df5f44/targetA294, worker16/updater12, true Main+feature-only fixture driver,
+real four old roles and candidate/helpers. ACK, forced cold lost-ACK recovery,
+delayed callback and receipt-write denial passed. One stop per case; actual exit,
+live supervisor custody, cold receipt, normal restart refusal and post-exit owned
+supervisor crash/history without custody verified. Denial remains Stopping/Uncertain;
+fixture stop explicitly separate. No binary replacement/activation/public update.
+
+NEXT add two supplemental cases without repeating these four unnecessarily:
+1) independent instance-lock holder after Main retires, prove driver waits after
+exact OS exit before acquiring original lock;2) hold Main after acceptance and kill
+only its owned validation Job before exit is journaled; retain Stopping/Acknowledged,
+never synthesize Exited or restore custody. Explicit feature-only wiring allowed,
+normal production Job boundary unchanged. Then finish U1 audit and proceed U2 final
+consistent backup before replacement, consuming live guard only. U1–U4 stays active.
+
+Old verified worker16/updater12 binaries remain under this run's
+shutdown-old-set/payload and None/runtime. Future references can authenticate the
+None/runtime manifest against shutdown.intent.binding.loadedWorker.manifestSha256
+in the verified proof before reading expected image hashes; no need to rebuild old
+references or overwrite caches. Default worker is in old-set/payload, Main feature
+worker in None/runtime. Do not delete either reference directories.
+
+Fresh installed d052 generationee48ba22 healthy/idle0/no errors; no manual update.
+ControllerPID3902/session69990 remains. Native sessions44358/46199 terminal; no
+native/Cargo active. Windows free48891133952→47274409984. Debian26.44GiB; unused
+incremental cache cleanup freed227MiB, log shutdown-main-debian-cache-cleanup.json.
+No user configuration changed/backups needed. Desktop unnecessary, no GUI windows.
+
+## Actual Main shutdown native retry ACTIVE — 2026-10-21
+
+Task1615bebb-015e-4155-b263-082aac5a1631/run20261021-090004-a229a8de.
+Unified session46199, log shutdown-main-native-retry.log. Do not duplicate.
+Clean source2df5f44819e1189bc7748f4661b66075c865df16, ZIP
+winbridge-20261021T085927Z-2df5f44-a4856110.zip SHA
+9654a6009cf6dd16649e930d1f1f69c97c12f6c0229ae746ae2a19b25783fc0f.
+Source pin shutdown-main-retry-source.json; target a294e03 as below. Same
+approved cache run20261017-061527-f4639971. Supervisor build passed30.64s;
+old real set build in progress. Final native result pending, no success claim.
+Installed worker generationee48ba22 healthy/idle before submit, no manual update.
+Required Windows: installed worker running, desktop unnecessary, no GUI windows.
+Prior failure was fixture language assertion only; first run did confirm actual
+exit/custody/cold receipt before failing its restart check. Owned fixtures retired.
+
 ## First actual Main gate terminal fixture assertion; retry next — 2026-10-21
 
 Task2da628ca-8936-4808-a8d9-81cf7bcb1753/run20261021-084556-c0c3f50c failed101
