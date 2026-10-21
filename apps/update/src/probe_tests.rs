@@ -32,11 +32,22 @@ impl Fixture {
             "--nocapture".into(),
             "--skip".into(),
             format!("probe-canary={}", self.canary.display()),
+            "--skip".into(),
+            format!(
+                "probe-release={}",
+                self.root.path().join("release").display()
+            ),
         ];
         if long {
             args.extend(["--skip".into(), "probe-long=true".into()]);
         }
         args
+    }
+    fn observer(&self) -> Observer {
+        Observer {
+            resume_release: Some(self.root.path().join("release")),
+            ..Default::default()
+        }
     }
     fn job(&self) -> String {
         format!(
@@ -53,6 +64,21 @@ fn owned_probe_child() {
         .iter()
         .find_map(|a| a.strip_prefix("probe-canary="))
         .expect("Canary path required");
+    // Unix prepare is not suspended. Keep the helper alive until the parent
+    // has captured its identity and run the resumed callback. A quick exit
+    // before PID capture is legitimately unconfirmed by the product adapter.
+    let release = args
+        .iter()
+        .find_map(|a| a.strip_prefix("probe-release="))
+        .expect("Release path required");
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    while !std::path::Path::new(release).exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Parent did not confirm resume"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
     std::fs::write(canary, b"actual child ran").unwrap();
     if args.iter().any(|a| a == "probe-long=true") {
         std::thread::sleep(Duration::from_secs(20));
@@ -61,6 +87,7 @@ fn owned_probe_child() {
 #[derive(Default)]
 struct Observer {
     fail: Option<&'static str>,
+    resume_release: Option<std::path::PathBuf>,
     events: Vec<&'static str>,
     cleanup: Option<ProbeCleanup>,
 }
@@ -90,6 +117,9 @@ impl ProbeObserver for Observer {
     }
     fn resumed(&mut self) -> Result<()> {
         self.events.push("resumed");
+        if let Some(path) = &self.resume_release {
+            std::fs::write(path, b"parent captured PID and resumed").map_err(error)?;
+        }
         Ok(())
     }
     fn poll(&mut self) -> Result<()> {
@@ -111,7 +141,7 @@ fn rejected_intent_does_not_create_or_resume_a_probe() {
     let p = pin(&f.image).unwrap();
     let mut o = Observer {
         fail: Some("create"),
-        ..Default::default()
+        ..f.observer()
     };
     assert!(
         run_probe_observed(&p, &f.args(false), 5000, &f.job(), &mut o)
@@ -132,7 +162,7 @@ fn rejected_pid_receipt_never_resumes_windows_and_still_reports_cleanup() {
     let p = pin(&f.image).unwrap();
     let mut o = Observer {
         fail: Some("pid"),
-        ..Default::default()
+        ..f.observer()
     };
     assert!(
         run_probe_observed(&p, &f.args(false), 5000, &f.job(), &mut o)
@@ -152,7 +182,7 @@ fn changed_owner_poll_terminates_only_owned_probe_and_reports_no_success() {
     let p = pin(&f.image).unwrap();
     let mut o = Observer {
         fail: Some("poll"),
-        ..Default::default()
+        ..f.observer()
     };
     assert!(
         run_probe_observed(&p, &f.args(true), 5000, &f.job(), &mut o)
@@ -168,7 +198,7 @@ fn changed_owner_poll_terminates_only_owned_probe_and_reports_no_success() {
 fn successful_probe_reports_exact_process_and_terminal_cleanup_after_hooks() {
     let f = Fixture::new();
     let p = pin(&f.image).unwrap();
-    let mut o = Observer::default();
+    let mut o = f.observer();
     let (_, _, process) = run_probe_observed(&p, &f.args(false), 5000, &f.job(), &mut o).unwrap();
     assert_eq!(o.events, ["intent", "pid", "resumed", "cleanup"]);
     let r = o.cleanup.unwrap();

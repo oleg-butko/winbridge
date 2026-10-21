@@ -1,6 +1,13 @@
 //! Actual candidate process in a private managed domain, never a production journal.
 use std::{fs, path::Path, process::Command};
 use winbridge_update::worker_rehearsal::inspect;
+// Unix fork/exec in a parallel case can briefly inherit a write descriptor
+// used by fs::copy in another case, making that copied image ETXTBSY. Serialize
+// these fixture lifetimes; do not retry product launch or weaken image pins.
+fn case_scope() -> std::sync::MutexGuard<'static, ()> {
+    static CASES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    CASES.lock().unwrap_or_else(|e| e.into_inner())
+}
 fn root() -> tempfile::TempDir {
     tempfile::Builder::new()
         .prefix("wb-rehearsal-")
@@ -23,6 +30,7 @@ fn sha(worker: &Path) -> String {
 }
 #[test]
 fn actual_candidate_initializes_only_new_state_serves_ipc_and_stops() {
+    let _case = case_scope();
     let root = root();
     let worker = copied_worker(root.path());
     let directory = root.path().join("fresh");
@@ -72,6 +80,7 @@ fn actual_candidate_initializes_only_new_state_serves_ipc_and_stops() {
 }
 #[test]
 fn successful_entry_emits_one_typed_report_without_console_diagnostics() {
+    let _case = case_scope();
     let root = root();
     let output = Command::new(copied_worker(root.path()))
         .arg("--rehearsal")
@@ -88,6 +97,7 @@ fn successful_entry_emits_one_typed_report_without_console_diagnostics() {
 }
 #[test]
 fn actual_entry_refuses_existing_directory_and_production_config_arguments() {
+    let _case = case_scope();
     let root = root();
     let worker = copied_worker(root.path());
     let existing = root.path().join("existing");
@@ -117,6 +127,7 @@ fn actual_entry_refuses_existing_directory_and_production_config_arguments() {
 }
 #[test]
 fn unsupported_or_wrong_sha_images_are_not_executed() {
+    let _case = case_scope();
     let root = root();
     let worker = copied_worker(root.path());
     let image = root.path().join("unsupported.exe");
@@ -136,6 +147,7 @@ fn unsupported_or_wrong_sha_images_are_not_executed() {
 }
 #[test]
 fn schema_mismatch_does_not_become_candidate_approval() {
+    let _case = case_scope();
     let root = root();
     let worker = copied_worker(root.path());
     let directory = root.path().join("mismatch");
