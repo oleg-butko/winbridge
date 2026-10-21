@@ -1,3 +1,52 @@
+## Shutdown primitives native gate PASSED; control v6 NEXT — 2026-10-20
+
+Task3970a744-a5ef-4ecc-97a3-3b8a56ce9075 / run20261021-034430-116fd4ff succeeded0.
+19 native tests /five groups, nine ready files independently verified twice.
+ReportSHA e176d5d90b61dc24cfdfc50e475e04fd8d3a15dce1ff7c8c79a00adfcc19e92f.
+Source c704a88; ZIP/pins in launch section below. Details:
+plans/worker-self-update/windows-shutdown-primitives-gate-2026-10-20.md.
+.winbridge/update-preparation/shutdown-primitives-native-verified.json.
+
+Exact process handle/birth/host/session and owned exit passed; Windows no-delete
+file pins/instance lock passed; data/outbox/immutable receipts/ignored-write/CAS/
+migration backups passed. Proven worker15 and updater11 refuse actual new16/12
+journals without mutation. NOT a complete actual Main/supervisor shutdown gate:
+no live stop command, ACK retirement or cold verifier is wired yet. Public update,
+replacement/activation/rollback remain absent. U1–U4 goal still active.
+Windows free43198169088→42924994560; no cleanup, candidate build or UI. Test cache
+reused; installed worker d052 generation78e9bbe1 remains healthy idle0, complete
+recovery/no maintenance errors. Runner52754 terminal0. No Cargo/native run active.
+Leave installed worker running; desktop unnecessary/no windows to close.
+
+Next implement separately versioned internal worker control v6, worker-computed
+state observation, exact saved intent validation, receipt-before-ACK and stop only
+after reply attempt/callback retirement. Add readonly cold verifier via pinned old
+worker executable (Store readonly, no Worker recovery marker), then consuming
+supervisor driver and combined actual Main native gate with BOTH A/C schemas12/16.
+Keep saved proven schema15/11 refs below; no installed update/bootstrap needed yet.
+
+## Shutdown primitive native gate ACTIVE; do not duplicate — 2026-10-20
+
+Task3970a744-a5ef-4ecc-97a3-3b8a56ce9075 / run20261021-034430-116fd4ff,
+runner session52754. Clean source c704a881ed163c0856bd1a2683ec1156731b8e2d,
+WinBridge/sources/winbridge-20261021T034421Z-c704a88-9f51aba2.zip,
+archiveSHA8178f7f124ee5e8824216a8f1d206d9d12453de0426c8739111096a544916160.
+Pin .winbridge/update-preparation/shutdown-primitives-source.json. Fixed runner:
+scripts/validate-update-shutdown-primitives-native.py. Five groups/min19 native
+tests, reuse original test-build-cache 20261017-061527-f4639971. Uses saved proven
+worker15/updater11 (reference receipt below), no installed runtime changes, no GUI.
+Current first group compiling; no final result yet. Report shared/workflow-validation/
+20261021-034430-116fd4ff; task/request saved under .winbridge/workflow-validation/.
+
+c704a88 committed physical adapters and atomic journal exit method. 12 updater
+shutdown tests +3 platform tests, both all-target Clippy/fmt/diff, UI build and
+Python syntax/CLI passed. These local checks do not prove Windows process/lock
+semantics. Wait for native task terminal, verify report.ready bytes/SHA and result.
+New gate checks primitives/old-reader refusal, NOT complete Main/supervisor stop.
+After review proceed control v6/receipt-before-ACK/stop after reply retirement,
+cold readonly verifier and combined actual Main native gate. U1–U4 active/uncompleted.
+Installed d052 unchanged; desktop unnecessary/no windows, keep worker running.
+
 ## Exact shutdown: physical handles/atomic exit adapter; wire NEXT — 2026-10-20
 
 Commit a0e61dd contains the durable data/journals below. Further implementation

@@ -2,7 +2,8 @@
 
 2026-10-20. Реализация после пройденного combined drain gate. Добавлены типизированные
 данные и два журнала; доставка команды остановки и native gate ещё впереди. Добавлен trusted OS
-exit/lock adapter, который пока не проверен на настоящей Windows. Public update и replacement остаются отключёнными.
+exit/lock adapter; его process/file примитивы прошли Windows gate ниже, полный
+stop/ACK/exit сценарий ещё не проверен. Public update и replacement остаются отключёнными.
 
 ## Реализованный слой данных
 
@@ -128,3 +129,7 @@ identity ещё раз перед commit. Эти handles удерживаютс�
 существующий отдельный Cargo cache, свежие fixtures и checksum report в shared.
 Он не собирает desktop/candidate, не останавливает installed worker и не заменяет
 будущий combined actual Main stop/ACK/cold-verifier gate.
+
+[Primitive gate 2026-10-20 пройден](windows-shutdown-primitives-gate-2026-10-20.md):
+19 native tests, пять групп, девять checksum artifacts. Это не подтверждение полной
+самоостановки actual Main; новый wire contract/driver и cold verifier ещё впереди.

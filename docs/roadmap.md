@@ -19,6 +19,8 @@ updater schema12 и worker schema16, immutable receipt/history, однократ
 разрешения после commit. Реальная доставка stop, exit/lock proof и native gate
 ещё не готовы. Trusted exit adapter требует held OS handles и instance lock;
 raw ShutdownVerified запрещён, runtime replacement пока отсутствует.
+[19 native primitive tests](plans/worker-self-update/windows-shutdown-primitives-gate-2026-10-20.md)
+пройдены; полный actual Main stop/ACK/cold-verifier gate ещё впереди.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 
