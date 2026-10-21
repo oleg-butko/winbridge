@@ -1,3 +1,41 @@
+## Cold shutdown receipt reader/client locally verified — 2026-10-21
+
+Control v6 committed f45b300 after584 workspace tests, TS and both Clippy. New
+readonly entry --inspect-update-shutdown INPUT_JSON SHA256 runs BEFORE
+normal startup, using no Worker construction/recovery marker. Request DTO in
+apps/update/src/shutdown/inspection.rs ties intent, config and old helper image;
+report DTO in protocol includes exact helper/config/state/receipt with readonly
+flags. ShutdownStateObservation opens only readonly handles and cannot try_lock.
+Worker inspector checks bounded input SHA, actual image/build, config SHA/FileID,
+state IDs and incarnation, then Store.open_read_only + exact original receipt.
+No owner acquisition/migration/IPC/controller/scheduler or physical-exit claim.
+
+Real exe integration test passed before and after dropping fixture owner, including
+busy instance lock, missing receipt vs foreign state, pending guard/main DB bytes/
+authority preserved, no recovery marker, wrong SHA and different attempt rejected.
+This is a synthetic intent metadata fixture with actual CLI, NOT actual Main stop.
+11 entry regressions passed:1 new reader +5 coordination +5 rehearsal;2 native
+reference cases ignored. Logs shutdown-inspection-{cli-tests,entry-regressions}.
+
+Added inspect_saved_receipt client: pins exact input/config/helper, checks capability
+marker BEFORE launch, runs one bounded owned atomic probe/Job and validates helper
+PID + full report scope/readonly flags. Input records explicit original journal schema.
+Actual CLI/client integration passed; pure report tampering regression passed.
+Generation, TS typecheck, both all-target Clippy and fmt/diff passed; final client
+Clippy logs shutdown-inspection-client-{linux,windows}-clippy. No Cargo active. .winbridge/update-preparation/shutdown-inspection-storage.txt
+has pre-build disk measurement. Installed d052 unchanged/healthy; no native run.
+
+NEXT clean export and --cold-reader-only native gate (3groups/4 tests) in existing
+primitive runner, then independent consuming supervisor driver/mailbox/view and
+combined actual Main native gate. Client already validates exact request/helper
+PID/config/state/intent; missing result means unknown/no resend. Reader is a no-effect query like artifact
+queries; can reuse existing bounded atomic probe/Job machinery without inventing a
+new worker or restoring old process ownership. Then independent supervisor driver,
+versioned mailbox/view and combined actual Main native stop/ACK/lost-ACK/callback
+retirement gate. No public auto-update/replacement/activation/rollback yet.
+Keep installed worker running, desktop unnecessary. U1–U4 goal active. Previous
+native primitive gate remains C704-only and does not cover f45/new cold entry.
+
 ## Shutdown control v6 locally verified; cold verifier NEXT — 2026-10-21
 
 Implementation after96c8a2b: protocol adds ObserveShutdownState,

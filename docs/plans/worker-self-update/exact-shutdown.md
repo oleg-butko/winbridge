@@ -154,3 +154,31 @@ callbacks/jobs. Callback не вызывает control.close изнутри се
 worker admission. Старые команды остались в1–5; generic supervisor v1 forwarding
 отклоняет новые наблюдения/stop. Нужны новый consuming supervisor contract/driver
 и bounded cold verifier. Public auto-update по-прежнему выключен.
+
+## Cold receipt verifier — реализация 2026-10-21
+
+Internal CLI `--inspect-update-shutdown INPUT_JSON SHA256` обрабатывается до
+обычного startup. Input связан с immutable intent, worker config evidence и
+проверенным старым helper image. Reader сверяет SHA/identities, открывает только
+current-schema SQLite readonly и читает оригинальную receipt. Не конструирует
+Worker, не приобретает execution owner/instance lock, не мигрирует и не меняет
+startup/recovery markers. Отдельный ShutdownStateObservation не может превратиться
+в LockedShutdownState. Report содержит helper process/image, config/state evidence
+и optional receipt; он не утверждает exit worker.
+
+Actual CLI на Debian проверен с synthetic intent metadata: чтение при занятой
+instance lock и после освобождения fixture owner, сохранение main DB/authority и
+pending guard, отсутствие recovery marker, rejected foreign state/different attempt/
+bad input SHA. Вместе с coordination/rehearsal прошли 11 entry tests. Это не
+Windows stop proof: reader client/consuming supervisor driver и combined gate ещё
+нужны. Для reader используется no-effect query через pinned image и bounded owned
+probe, по аналогии с artifact-info; прочитанная история не восстанавливает owner
+или process handle, не отправляет повторную команду и не запускает worker заново.
+
+Updater client `inspect_saved_receipt` удерживает pinned input/config/old image,
+проверяет отдельный capability marker до запуска, получает stdout через существующий
+bounded atomic probe/Job и сверяет точный helper PID и весь report. Input содержит
+исходную journal schema; неизвестный результат не создаёт stop/exit permission.
+Проверены actual CLI/client на Debian и подмена report identities/readonly flags.
+Новый `--cold-reader-only` режим Windows runner проверяет CLI/client и v6 contracts
+в трёх группах (4 теста), без повторения 19 уже пройденных primitive tests.

@@ -21,7 +21,8 @@ raw ShutdownVerified запрещён, runtime replacement пока отсутс
 [19 native primitive tests](plans/worker-self-update/windows-shutdown-primitives-gate-2026-10-20.md)
 пройдены; полный actual Main stop/ACK/cold-verifier gate ещё впереди.
 Worker control v6 реализован: receipt-before-ACK и stop через existing loop;
-584 workspace tests проходят, consuming supervisor driver/cold verifier впереди.
+584 workspace tests прошли для control v6. Cold readonly receipt verifier добавлен
+и прошёл 11 проверок точек входа; consuming supervisor driver и combined gate впереди.
 
 Правило каждого этапа: маленький рабочий сценарий → реальные события → понятный UI → проверка сбоев → обновление handoff. Подготовка архитектуры не считается выполнением runtime функции. Сетевую или файловую часть можно развивать независимо от UI, но этап закрывается только с видимым результатом для пользователя.
 

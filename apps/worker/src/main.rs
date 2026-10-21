@@ -16,6 +16,23 @@ async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args
         .first()
+        .is_some_and(|arg| arg == "--inspect-update-shutdown")
+    {
+        if let [_, path, sha] = args.as_slice() {
+            let report = winbridge_worker::shutdown_inspection::inspect(Path::new(path), sha)?;
+            println!(
+                "{}",
+                serde_json::to_string(&report).map_err(|e| e.to_string())?
+            );
+            return Ok(());
+        }
+        return Err(
+            "Use --inspect-update-shutdown ABSOLUTE_INPUT_JSON SHA256; readonly, no worker startup"
+                .into(),
+        );
+    }
+    if args
+        .first()
         .is_some_and(|arg| arg == "--check-update-config")
     {
         if let [_, path, sha] = args.as_slice() {

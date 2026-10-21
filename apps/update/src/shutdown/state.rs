@@ -16,6 +16,10 @@ pub struct ShutdownStatePins {
 pub struct LockedShutdownState {
     pins: ShutdownStatePins,
 }
+/// Readonly inspection cannot acquire the instance lock or turn into a writer.
+pub struct ShutdownStateObservation {
+    pins: ShutdownStatePins,
+}
 fn open(path: &Path, directory: bool, write: bool) -> io::Result<File> {
     winbridge_platform::require_safe_path(path)?;
     winbridge_platform::require_local_disk(path)?;
@@ -44,6 +48,9 @@ fn open(path: &Path, directory: bool, write: bool) -> io::Result<File> {
 }
 impl ShutdownStatePins {
     pub fn capture(path: &Path) -> io::Result<Self> {
+        Self::capture_with(path, true)
+    }
+    fn capture_with(path: &Path, lock_write: bool) -> io::Result<Self> {
         winbridge_platform::require_local_path_prefix(path)?;
         winbridge_platform::require_safe_path(path)?;
         winbridge_platform::require_local_disk(path)?;
@@ -51,7 +58,7 @@ impl ShutdownStatePins {
         let directory = open(&path, true, false)?;
         let journal = open(&path.join("journal.sqlite"), false, false)?;
         // Missing worker.lock is an error, never a reason to create a new lock.
-        let instance = open(&path.join("worker.lock"), false, true)?;
+        let instance = open(&path.join("worker.lock"), false, lock_write)?;
         let observation = WorkerShutdownState {
             state_directory: path
                 .to_str()
@@ -124,6 +131,19 @@ impl ShutdownStatePins {
     }
 }
 impl LockedShutdownState {
+    pub fn observation(&self) -> &WorkerShutdownState {
+        self.pins.observation()
+    }
+    pub fn revalidate(&self) -> io::Result<()> {
+        self.pins.revalidate()
+    }
+}
+impl ShutdownStateObservation {
+    pub fn capture(path: &Path) -> io::Result<Self> {
+        Ok(Self {
+            pins: ShutdownStatePins::capture_with(path, false)?,
+        })
+    }
     pub fn observation(&self) -> &WorkerShutdownState {
         self.pins.observation()
     }

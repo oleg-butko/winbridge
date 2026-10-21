@@ -7,7 +7,8 @@ param(
   [Parameter(Mandatory)][string]$SourceArchiveSha256,
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
   [Parameter(Mandatory)][string]$ReportDirectory,
-  [Parameter(Mandatory)][string]$ReferenceReceipt
+  [Parameter(Mandatory)][string]$ReferenceReceipt,
+  [switch]$ColdReaderOnly
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -23,7 +24,8 @@ Assert-WorkflowCachePath $cache
 if(-not (Test-Path -LiteralPath $cache -PathType Container)){throw 'Existing approved test cache required'}
 $manifest=Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 if($manifest.dirty){throw 'Clean exported source required'}
-$report=[ordered]@{schemaVersion=1;kind='shutdown_primitives_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;windowsOpened=$false;commands=@();error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+$kind=if($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
+$report=[ordered]@{schemaVersion=1;kind=$kind;platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;windowsOpened=$false;commands=@();error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 $variables=@('CARGO_TARGET_DIR','CARGO_INCREMENTAL','TEMP','TMP','WINBRIDGE_SHUTDOWN_REFERENCE_WORKER','WINBRIDGE_UPDATE_REFERENCE_UPDATER')
 $old=@{};foreach($name in $variables){$old[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 $oldLocation=Get-Location;$oldEncoding=[Console]::OutputEncoding;$oldOutputEncoding=$OutputEncoding;$lease=$null
@@ -63,12 +65,19 @@ try {
     @{name='shutdown-worker15-refuses16';minimum=1;args=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','update_coordination','previous_worker_fifteen_refuses_current_schema','--locked','--offline','--','--ignored')},
     @{name='shutdown-updater11-refuses12';minimum=1;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','source_transaction','previous_updater_refuses_current_schema_without_writes','--locked','--offline','--','--ignored')}
   )
+  if($ColdReaderOnly){
+    $groups=@(
+      @{name='shutdown-reader-cli';minimum=1;args=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','shutdown_inspection','--locked','--offline')},
+      @{name='shutdown-reader-report';minimum=1;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','cold_report_is_exact_readonly_history','--locked','--offline')},
+      @{name='shutdown-reader-v6-contract';minimum=2;args=@('test','-p','winbridge-protocol','--features','jsonschema','--test','worker_shutdown_receipt','--locked','--offline')}
+    )
+  }
   foreach($g in $groups){
     $log=Join-Path $ReportDirectory ($g.name+'.log')
     $arguments=@($g.args)
     if($arguments -notcontains '--'){$arguments+=@('--')}
     $arguments+=@('--test-threads=1','--nocapture')
-    Write-Output "Isolated shutdown primitives: $($g.name); installed worker stays running"
+    Write-Output "Isolated shutdown check: $($g.name); installed worker stays running"
     & cargo.exe @arguments 2>&1 | Tee-Object -FilePath $log
     $code=$LASTEXITCODE
     $matches=[regex]::Matches((Get-Content -LiteralPath $log -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')

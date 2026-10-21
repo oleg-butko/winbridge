@@ -20,14 +20,20 @@ GROUPS = {'shutdown-process-pin': 1, 'shutdown-data-state-journal': 12,
           'shutdown-worker-acceptance': 4, 'shutdown-worker15-refuses16': 1,
           'shutdown-updater11-refuses12': 1}
 
+COLD_GROUPS = {'shutdown-reader-cli': 1, 'shutdown-reader-report': 1, 'shutdown-reader-v6-contract': 2}
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--cache-run', required=True)
+    parser.add_argument('--cold-reader-only', action='store_true')
     parser.add_argument('--reference-receipt', type=Path, required=True)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
+    groups = COLD_GROUPS if args.cold_reader_only else GROUPS
+    kind = 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
+    mode_switch = ' -ColdReaderOnly' if args.cold_reader_only else ''
     pin = health.archive_pin(args.archive)
     with zipfile.ZipFile(args.archive) as source:
         if (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
@@ -80,7 +86,7 @@ Expand-Archive -LiteralPath $copy -DestinationPath $local
 $ref=Join-Path $local 'reference.json'
 [IO.File]::Copy({ps(str(PureWindowsPath(windows_report) / 'reference.json'))},$ref,$false)
 if((Get-FileHash -LiteralPath $ref -Algorithm SHA256).Hash.ToLowerInvariant() -cne {ps(hashlib.sha256((report/'reference.json').read_bytes()).hexdigest())}){{throw 'Reference receipt SHA mismatch'}}
-& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $local 'winbridge/scripts/test-update-shutdown-primitives.ps1') -SourceDirectory (Join-Path $local 'winbridge') -SourceArchiveSha256 {ps(pin['archiveSha256'])} -ValidationCacheDirectory {ps(cache)} -ReportDirectory {ps(windows_report)} -ReferenceReceipt $ref
+& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $local 'winbridge/scripts/test-update-shutdown-primitives.ps1') -SourceDirectory (Join-Path $local 'winbridge') -SourceArchiveSha256 {ps(pin['archiveSha256'])} -ValidationCacheDirectory {ps(cache)} -ReportDirectory {ps(windows_report)} -ReferenceReceipt $ref{mode_switch}
 exit $LASTEXITCODE
 '''
     (report / 'bootstrap.ps1').write_text(script)
@@ -121,16 +127,20 @@ exit $LASTEXITCODE
         data = (report / name).read_bytes()
         if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
             raise ValueError('Report bytes differ: ' + name)
-    if not {'report.json', 'reference.json', 'source-pin.json', 'bootstrap.ps1', *(g + '.log' for g in GROUPS)} <= names:
-        raise ValueError('Incomplete report bundle')
+    if not {'report.json', 'reference.json', 'source-pin.json', 'bootstrap.ps1'} <= names:
+        raise ValueError('Incomplete report header bundle')
     result = json.loads((report / 'report.json').read_text(encoding='utf-8-sig'))
+    if task['status'] != 'succeeded' or task['exitCode'] != 0 or result.get('passed') is not True:
+        raise RuntimeError({'taskId': task['taskId'], 'error': result.get('error'), 'reportDirectory': str(report), 'filesVerified': len(names)})
+    if not {g + '.log' for g in groups} <= names:
+        raise ValueError('Successful report is missing test logs')
     if (task['status'] != 'succeeded' or task['exitCode'] != 0 or result.get('passed') is not True
             or result.get('runtimeApplied') is not False or result.get('windowsOpened') is not False
-            or result.get('kind') != 'shutdown_primitives_native_gate'
+            or result.get('kind') != kind
             or result['sourceCommit'] != pin['sourceCommit'] or result['sourceArchiveSha256'] != pin['archiveSha256']
-            or len(result['commands']) != len(GROUPS)
-            or {g['name'] for g in result['commands']} != set(GROUPS)
-            or any(g['exitCode'] != 0 or g['passed'] < GROUPS[g['name']] for g in result['commands'])):
+            or len(result['commands']) != len(groups)
+            or {g['name'] for g in result['commands']} != set(groups)
+            or any(g['exitCode'] != 0 or g['passed'] < groups[g['name']] for g in result['commands'])):
         raise RuntimeError({'taskId': task['taskId'], 'result': result})
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report),
                       'filesVerified': len(names), 'testsPassed': sum(g['passed'] for g in result['commands'])}), flush=True)

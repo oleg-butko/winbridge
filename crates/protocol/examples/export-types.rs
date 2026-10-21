@@ -62,6 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         WorkerShutdownCommand::decl(&config),
         WorkerShutdownState::decl(&config),
         WorkerShutdownReceipt::decl(&config),
+        WorkerShutdownInspectionReport::decl(&config),
         SupervisorWorkerBinding::decl(&config),
         WorkerUpdateControlCommand::decl(&config),
         WorkerUpdateControlRequest::decl(&config),

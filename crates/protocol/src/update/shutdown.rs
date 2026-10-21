@@ -5,6 +5,8 @@ use super::{
     WorkerUpdateControlResult, WorkerUpdateLease, WorkerUpdatePhase,
 };
 use serde::{Deserialize, Serialize};
+pub const WORKER_SHUTDOWN_INSPECTION_MARKER: &[u8] =
+    b"\0WinBridge.WorkerShutdownInspection.contract-1\0";
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -47,6 +49,28 @@ pub struct WorkerShutdownReceipt {
     pub process: SupervisorProcess,
     pub state: WorkerShutdownState,
     pub accepted_at_ms: u64,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WorkerShutdownInspectionReport {
+    pub schema_version: u16,
+    pub kind: String,
+    pub request_sha256: String,
+    pub descriptor: crate::ArtifactDescriptor,
+    pub helper_process: SupervisorProcess,
+    pub helper_image: crate::RuntimeImageEvidence,
+    pub worker_config: crate::RuntimeImageEvidence,
+    pub state: WorkerShutdownState,
+    pub receipt: Option<Box<WorkerShutdownReceipt>>,
+    pub worker_journal_schema: u32,
+    pub journal_opened_read_only: bool,
+    pub worker_constructed: bool,
+    pub scheduler_started: bool,
+    pub recovery_marker_changed: bool,
+    pub runtime_applied: bool,
 }
 
 impl WorkerUpdateControlCommand {

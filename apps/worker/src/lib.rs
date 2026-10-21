@@ -19,6 +19,7 @@ pub mod rehearsal;
 mod retention;
 pub mod runtime_guard;
 mod settings;
+pub mod shutdown_inspection;
 pub mod store;
 mod update;
 mod update_control;
