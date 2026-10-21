@@ -126,3 +126,26 @@ Readonly helper inspection добавлена отдельным API: один S
 live owner обязан проверить будущий exporter. Новые две проверки прошли, targeted
 state-backup suite13/0 и обе updater all-target Clippy прошли. Положительный полный
 joined export и native file-sharing ещё не проверены; CLI пока отсутствует.
+
+
+## Old-helper exporter реализован, положительный native gate впереди
+
+`--export-update-state INPUT SHA` — отдельный ранний Main branch. Marker contract1
+включён в worker; normal Worker startup не вызывается. `prepare_export` определяет
+runtime по текущему executable, сверяет self image/build/PID, saved input/grant,
+единственный readonly updater snapshot и текущий live supervisor. Удерживаются
+pins source state, runtime, обоих configs, input и существующего policy parent.
+Выходной путь получается из проверенной policy и attempt; CLI не принимает его.
+
+Store открывается readonly собственной schema16. Проверяются source acceptance и
+authority; SQLite backup API сохраняет final WAL data. Копия повторно читается,
+сверяются page size/count/application ID, incarnation/epoch/fingerprint и receipt;
+SHA/size/File ID считаются streaming с удержанием файла. Worker schema16 использует
+application ID0; exporter сохраняет его, не вводит новую marker/migration. Отчёт
+не разрешает replacement/restore. Ошибка сохраняет partial destination.
+
+Две actual CLI negative проверки и три archive tests прошли, обе all-target Clippy
+update+worker прошли. CLI success и native file sharing пока не проверены: для них
+нужен consuming supervisor driver с durable PID-before-resume и OS custody. Legacy
+v14 shutdown не превращается в backup-capable install; новый driver обязан проверять
+marker до shutdown admission. Public update пока закрыт.

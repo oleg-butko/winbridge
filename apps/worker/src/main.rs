@@ -16,6 +16,20 @@ async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args
         .first()
+        .is_some_and(|arg| arg == "--export-update-state")
+    {
+        if let [_, path, sha] = args.as_slice() {
+            let report = winbridge_worker::state_backup_export::export(Path::new(path), sha)?;
+            println!(
+                "{}",
+                serde_json::to_string(&report).map_err(|e| e.to_string())?
+            );
+            return Ok(());
+        }
+        return Err("Use --export-update-state ABSOLUTE_INPUT_JSON SHA256; exact saved attempt required, no normal worker startup".into());
+    }
+    if args
+        .first()
         .is_some_and(|arg| arg == "--inspect-update-shutdown")
     {
         if let [_, path, sha] = args.as_slice() {

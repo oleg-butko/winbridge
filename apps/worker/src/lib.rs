@@ -20,6 +20,7 @@ mod retention;
 pub mod runtime_guard;
 mod settings;
 pub mod shutdown_inspection;
+pub mod state_backup_export;
 pub mod store;
 mod update;
 mod update_control;

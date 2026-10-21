@@ -21,6 +21,28 @@ fn require_destination(path: &Path, held: &File, identity: &str) -> Result<()> {
     Ok(())
 }
 impl Store {
+    /// Only metadata reads; the application ID is preserved, not assigned by
+    /// export. Existing worker schema16 uses zero and is not migrated here.
+    pub(crate) fn archive_sqlite_metadata(&self) -> Result<(u32, u64, u32)> {
+        if !self.read_only {
+            return Err("Archive metadata requires read-only source".into());
+        }
+        self.check_authority()?;
+        Ok((
+            self.connection
+                .query_row("PRAGMA page_size", [], |r| r.get(0))
+                .map_err(sql)?,
+            u64::try_from(
+                self.connection
+                    .query_row("PRAGMA page_count", [], |r| r.get::<_, i64>(0))
+                    .map_err(sql)?,
+            )
+            .map_err(|_| "Negative archive page count")?,
+            self.connection
+                .query_row("PRAGMA application_id", [], |r| r.get(0))
+                .map_err(sql)?,
+        ))
+    }
     pub fn archive_read_only(&self, destination: &Path) -> Result<()> {
         self.archive_read_only_created(destination, || Ok(()))
     }

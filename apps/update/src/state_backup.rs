@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use winbridge_core::update::{valid_hash, MAX_UPDATE_COUNTER};
 use winbridge_protocol::{update::*, RuntimeImageEvidence};
 type Result<T> = std::result::Result<T, String>;
+mod export;
+pub use export::{prepare_export, StateBackupExportGuard};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StateBackupBinding {

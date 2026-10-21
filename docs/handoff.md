@@ -1,3 +1,36 @@
+## U2.1 old-helper exporter implemented; native success pending — 2026-10-21
+
+Added actual early Main --export-update-state INPUT SHA mode and embedded contract1
+marker. It never constructs Worker, starts scheduler/IPC/controller, claims owner,
+migrates or changes recovery marker. Input is StateBackupIntent; no destination
+argument. prepare_export pins input/config/updater policy/runtime set/source state/
+backup parent and exact live owning supervisor. Runtime comes from current exe;
+readonly schema13 snapshot must match self OS PID/input/grant/current owner/root.
+Source and destination derive from checked policy/one saved attempt only.
+
+Old worker opens Store readonly, checks exact schema16/authority/acceptance, uses
+SQLite backup API, hashes/holds the created backup and checks copied header/pages/
+application ID/authority/receipt plus source authority and physical pins. Existing
+worker application ID0 is preserved, never assigned/migrated. Report binds actual
+self/image/input, SHA/bytes/File ID, pages, source/copy authority fingerprint and
+original shutdown receipt. This gives no replace or restore authority.
+
+Validation: two actual CLI negative tests pass (bad args/digest/untyped destination
+rejected without creating state); three real archive tests pass; both update+worker
+all-target Clippy checks pass (Windows update-validation, no bundled C cross-build).
+Logs state-backup-exporter-*. Source-only implementation: full positive joined
+export/native Windows sharing/owned cleanup not yet proven. Do not mark U2.1 done.
+
+NEXT consuming supervisor backup driver: fresh guard custody and admission, input/
+Issued before create, saved PID/grant before resume, exact owned cleanup and report/
+actual backup verification before durable Verified. Preserve/return original
+ShutdownExitGuard to supervisor, never reconstruct from history. Require helper
+marker before any new backup-capable shutdown admission; keep legacy views/actions
+explicitly frozen. Then native full gate including actual12→13/old12 refusal from
+retained references. U2–U4 public installation disabled/goal active.
+Controller3902 and installed d052 remain unchanged; desktop unnecessary/no test UI.
+No Cargo/native active. Debian~26GiB. No user config/runtime/journal/shared changes.
+
 ## U2.1 readonly export attempt snapshot locally verified — 2026-10-21
 
 StateBackupRecord::require_export_process only accepts original saved helper PID,
