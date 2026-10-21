@@ -12,11 +12,13 @@ param(
   [switch]$DrainGate,
   [switch]$ShutdownMainGate,
   [switch]$ShutdownMainSupplemental,
+  [switch]$FinalStateBackupGate,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
 if($ShutdownMainSupplemental){$ShutdownMainGate=$true}
+if($FinalStateBackupGate){if($DrainGate -or $ShutdownMainSupplemental){throw 'Select one native gate mode'};$ShutdownMainGate=$true}
 if($DrainGate -and $ShutdownMainGate){throw 'Select one native gate mode'}
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
@@ -90,18 +92,25 @@ try {
     )+$commands
   }
   if($ShutdownMainGate){
-    $report.kind=if($ShutdownMainSupplemental){'shutdown_main_supplemental_native_gate'}else{'shutdown_main_native_gate'}
+    $report.kind=if($FinalStateBackupGate){'state_backup_main_native_gate'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_native_gate'}else{'shutdown_main_native_gate'}
     $caseRoot=Join-Path (Split-Path $source -Parent) 'shutdown-main-cases'
     New-Item -ItemType Directory -Path $caseRoot | Out-Null
     $oldStage=Join-Path (Split-Path $source -Parent) 'shutdown-old-set'
     $shutdownInput=Join-Path (Split-Path $source -Parent) 'shutdown-main-input.json'
-    Write-NewJson $shutdownInput @{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache;supplemental=[bool]$ShutdownMainSupplemental}
+    Write-NewJson $shutdownInput @{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache;supplemental=[bool]$ShutdownMainSupplemental;finalBackup=[bool]$FinalStateBackupGate}
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $commands=@(
       @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
       @{name='shutdown-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
       @{name='shutdown-main-pipeline';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement','--ignored','--test-threads=1','--nocapture')}
     )
+  }
+  if($FinalStateBackupGate){
+    $commands=@(
+      @{name='backup-data-and-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','state_backup','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='backup-sqlite-wal-and-pins';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::archive','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='backup-exact-entry';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','state_backup_export','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
   }
   # Worker IPC fixtures launch this executable. Reused caches may still hold an
   # older updater that correctly refuses the freshly migrated journal.
@@ -116,8 +125,8 @@ try {
   }
   if($ShutdownMainGate){[IO.File]::Copy((Join-Path $caseRoot 'proof.json'),$env:WINBRIDGE_HEALTH_GATE_PROOF,$false)}
   $proof=Get-Content -LiteralPath $env:WINBRIDGE_HEALTH_GATE_PROOF -Raw | ConvertFrom-Json
-  $expectedKind=if($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
-  $expectedCases=if($ShutdownMainSupplemental){2}else{4}
+  $expectedKind=if($FinalStateBackupGate){'state_backup_main_native_proof'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
+  $expectedCases=if($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $false -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
   $report.passed=$true
 } catch {$report.error=$_.Exception.Message;Write-Output ("Health gate failed: "+$report.error)} finally {

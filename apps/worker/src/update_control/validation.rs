@@ -30,6 +30,8 @@ pub struct Input {
     pub worker_config_sha256: String,
     pub request: UpdateRequest,
     pub fault: Fault,
+    #[serde(default)]
+    pub final_backup: bool,
 }
 fn publish(root: &Path, name: &str, value: &impl Serialize) -> Result<()> {
     let mut file = fs::OpenOptions::new()
@@ -201,6 +203,15 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
     // the supervisor waits for Main to exit. Main joins us only until admission.
     drop(worker);
     publish(&input.root, "supervisor.json", &h.record)?;
+    if input.final_backup {
+        // Local fixture-only capability, deliberately excluded from shared
+        // report whitelists. It is useless after this owned supervisor exits.
+        publish(
+            &input.root,
+            "supervisor-control.private",
+            &h.validation_private_client()?,
+        )?;
+    }
     h.runtime_baseline(true).await?;
     publish(&input.root, "01-baseline.json", &idle(&h, None, 60).await?)?;
     h.runtime_preimages(true).await?;
@@ -248,7 +259,11 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
     } else {
         None
     };
-    let start = h.candidate_shutdown(true).await?;
+    let start = if input.final_backup {
+        h.shutdown_for_state_backup().await?
+    } else {
+        h.candidate_shutdown(true).await?
+    };
     publish(&input.root, "08-shutdown-admitted.json", &start)?;
     if let Some((entered, release)) = gate {
         tokio::time::timeout(Duration::from_secs(5), entered)
@@ -356,7 +371,11 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
     }
-    let duplicate = h.candidate_shutdown(true).await?;
+    let duplicate = if input.final_backup {
+        h.shutdown_for_state_backup().await?
+    } else {
+        h.candidate_shutdown(true).await?
+    };
     let count = reg.shutdown_requests.load(Ordering::Acquire);
     if count != 1 {
         return Err(format!("Expected one RequestShutdown, observed {count}"));

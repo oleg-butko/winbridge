@@ -1,3 +1,37 @@
+## U2.1 actual Main backup gate prepared, NOT run yet — 2026-10-21
+
+Extends existing update_shutdown.rs gate with optional finalBackup flag: one None
+case uses v15 marker-required stop, then owned external parent requests backup
+AFTER Main exits. Real seed task succeeds with stdout/stderr and duplicate same
+Task ID before Main startup. Parent checks all source/copy SQLite rows, DB/WAL byte
+hashes unchanged, full Verified record, custody held and duplicate same attempt.
+No runtime replacement, desktop or installed worker mutation. Owned Job cleanup
+still proves historical shutdown without reconstructed custody.
+
+Feature-only updater update-validation exposes an in-memory fixture client request;
+worker update-validation forwards the feature. Private generated capability goes
+ONLY to local supervisor-control.private; it is excluded from shared whitelist,
+proof/logs and Git. Default installation/build does not enable this feature. Parent
+validates its hash against saved supervisor before use. No installed token copied.
+
+PowerShell -FinalStateBackupGate (sets Main mode) runs state-backup FSM/data/ledger,
+SQLite WAL/pins, exact negative CLI and one full Main backup case; expects1 case.
+Python --final-state-backup-gate verifies exact source/target, canonical intent,
+helper/PID/cleanup/header/authority, readonly flags, full-row preservation/custody/
+duplicate. Three existing ZIP runner tests pass. Both full-target Clippy and UI
+build pass; Windows fixture cross-check passed. Actual PS/native execution pending.
+Logs state-backup-fixture-* and state-backup-native-fixture-check.log. Production
+actor already passed610 workspace tests; this chunk is validation-only.
+
+NEXT export clean current source A with built UI and distinct target C31fa634
+(schema13/worker16, UI built from detached temporary worktree with reused Node deps),
+then approved runner --final-state-backup-gate --cache-run20261017-061527-f4639971.
+Installed d052 healthy/idle0, controller3902 alive. Worker only, no desktop/test UI;
+announce native run before launch. Recheck ready hashes/proof twice after run and
+mutate actual proof for negative verifier checks. Schema12 migration/refusal and
+backup fault gate still follow; preserve previous12 reference dirs/DBs. No U2.1/
+public update completion yet. No Cargo/native currently active; Debian~26GiB.
+
 ## U2.1 supervisor v15/view7 locally verified; native backup gate NEXT — 2026-10-21
 
 Added ShutdownCandidateForBackup / BackupWorkerState / ObserveStateBackup and typed

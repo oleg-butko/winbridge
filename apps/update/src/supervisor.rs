@@ -595,6 +595,22 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// Generated fixture authority for an owned external validation parent.
+    /// Never include this request/token in reports, logs or shared delivery.
+    #[cfg(feature = "update-validation")]
+    pub fn validation_private_client(&self) -> Result<SupervisorRequest> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Validation supervisor process changed".into());
+        }
+        Ok(SupervisorRequest {
+            contract_version: 15,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: SupervisorAction::ObserveStateBackup,
+            token: self.token.clone(),
+            worker_command: None,
+        })
+    }
     /// V15 only: final export support is required before admitting a stop.
     pub async fn shutdown_for_state_backup(&self) -> Result<UpdatePreparationView> {
         self.backup_request(SupervisorAction::ShutdownCandidateForBackup)

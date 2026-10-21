@@ -7,7 +7,7 @@ publish.workspace = true
 
 [features]
 # Isolated native Main validation only; never used by installation/build scripts.
-update-validation = []
+update-validation = ["winbridge-update/update-validation"]
 bundled-sqlite = ["rusqlite/bundled"]
 
 [dependencies]

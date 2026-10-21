@@ -249,6 +249,77 @@ def _verify_shutdown_main_case(case, build, target):
         raise ValueError('Live Main duplicate fabricated exit/custody')
 
 
+def verify_state_backup_proof(proof, source, target):
+    build = proof.get('build', {})
+    if (proof.get('kind') != 'state_backup_main_native_proof' or proof.get('passed') is not True
+            or proof.get('platform') != 'windows' or proof.get('target') != target
+            or build.get('sourceCommit') != source['sourceCommit'] or build.get('sourceDirty') is not False
+            or build.get('sourceManifestSha256') != source['manifestSha256']
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False
+            or any(proof.get(k) is not True for k in ('normalMain', 'actualOldRoles', 'actualCandidateBuild', 'validationFeature'))
+            or len(proof.get('cases', [])) != 1 or proof['cases'][0].get('fault') != 'none'):
+        raise ValueError('Final backup Main/source/target/isolation proof differs')
+    case = proof['cases'][0]
+    _verify_shutdown_main_case(case, build, target)
+    backup = case['finalStateBackup']
+    r = backup['record']
+    intent, report, cleanup = r['intent'], r['report'], r['cleanup']
+    binding = intent['binding']
+    old = case['shutdown']['intent']['binding']
+    canonical = json.dumps([binding, intent['attemptId']], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+    if (intent.get('schemaVersion') != 1
+            or hashlib.sha256(b'winbridge.final-state-backup.intent.v1\n'+canonical).hexdigest() != intent['bindingSha256']
+            or binding['shutdown'] != case['shutdown'] or binding['workerJournalSchema'] != 16
+            or PureWindowsPath(binding['parentDirectory']) != PureWindowsPath(old['loadedWorker']['image']['path']).parent/'update'/old['updateId']
+            or case['root']['revision'] != old['parentRevision']+2
+            or r.get('phase') != 'verified' or r.get('revision') != 5
+            or r.get('resumeGranted') is not True or r.get('resumeAcknowledged') is not True
+            or r.get('reason') is not None or report.get('kind') != 'worker_state_backup'
+            or report.get('schemaVersion') != 1 or report.get('attemptId') != intent['attemptId']
+            or report.get('updateId') != old['updateId'] or report.get('helperProcess') != r['process']
+            or report.get('helperDescriptor') != old['loadedWorker']['descriptor']
+            or report.get('helperImage') != old['loadedWorker']['image']
+            or report.get('workerConfig') != binding['workerConfig']
+            or report.get('state') != old['workerState'] or report.get('workerJournalSchema') != 16
+            or report.get('shutdownReceipt') != case['shutdown']['delivery']['receipt']
+            or report.get('inputSha256') != r['inputFile']['sha256']
+            or report['sourceAuthority'] != report['backupAuthority']
+            or report['sourceAuthority']['incarnation'] != old['worker']['context']['journalIncarnation']
+            or report['sourceAuthority']['epoch'] <= 0
+            or not re.fullmatch(r'[0-9a-f]{64}', report['sourceAuthority']['fingerprintSha256'])
+            or report['backup']['bytes'] != report['pageSize']*report['pageCount']
+            or report['pageCount'] <= 0 or not re.fullmatch(r'[0-9a-f]{64}', report['backup']['sha256'])
+            or PureWindowsPath(report['backup']['path']) != PureWindowsPath(binding['parentDirectory'])/('state-backup-'+intent['attemptId']+'.sqlite')
+            or PureWindowsPath(r['inputFile']['path']) != PureWindowsPath(binding['parentDirectory'])/('state-backup-'+intent['attemptId']+'.json')
+            or report['backup']['fileIdentity'] in (old['workerState']['journalIdentity'], r['inputFile']['fileIdentity'], binding['parentIdentity'])
+            or report['helperProcess'] == old['worker']['process']
+            or any(report.get(k) is not True for k in ('integrityVerified', 'backupCreatedNew', 'journalOpenedReadOnly'))
+            or any(report.get(k) is not False for k in ('workerConstructed', 'schedulerStarted', 'recoveryMarkerChanged', 'runtimeApplied'))
+            or report['completedAtMs'] < binding['admittedAtMs'] or report['completedAtMs'] > r['updatedAtMs']):
+        raise ValueError('Final backup intent/helper/authority/file/header differs')
+    if (cleanup.get('process') != r['process'] or cleanup.get('exitCode') != 0
+            or cleanup.get('failure') is not None or cleanup.get('noProcessCreated') is not False
+            or cleanup.get('outputExceeded') is not False
+            or any(cleanup.get(k) is not True for k in ('creationConfirmed', 'resumeRequested', 'treeEmpty', 'captureComplete'))
+            or cleanup.get('jobName') != 'Global\\WinBridge-StateBackup-'+intent['bindingSha256']):
+        raise ValueError('Final backup owned cleanup/PID differs')
+    view = backup['view']
+    v = view['candidateStateBackup']
+    if (view.get('schemaVersion') != 7 or view.get('driverActive') is not False
+            or view.get('driverError') is not None or view['update'] != case['root']
+            or view['candidateShutdown'].get('physicalCustodyHeld') is not True
+            or v.get('phase') != 'verified' or v.get('attemptId') != intent['attemptId']
+            or v.get('revision') != r['revision'] or v.get('helperProcess') != r['process']
+            or v.get('backupBytes') != report['backup']['bytes'] or v.get('backupSha256') != report['backup']['sha256']
+            or v.get('completedAtMs') != report['completedAtMs'] or v.get('reason') is not None
+            or backup['duplicate']['candidateStateBackup'] != v
+            or backup.get('sourceRowsSha256') != backup.get('backupRowsSha256')
+            or not re.fullmatch(r'[0-9a-f]{64}', backup.get('sourceRowsSha256', ''))
+            or backup.get('sourceTaskCount', 0) < 1 or backup.get('sourceOutputCount', 0) < 2
+            or any(backup.get(k) is not True for k in ('sourceBytesUnchanged', 'allLogicalRowsPreserved', 'duplicateNoNewAttempt', 'privateAuthorityNotExported'))):
+        raise ValueError('Final backup scope/history/source preservation or duplicate differs')
+
+
 def verify_shutdown_supplemental_proof(proof, source, target):
     build = proof.get('build', {})
     if (proof.get('kind') != 'shutdown_main_supplemental_proof' or proof.get('passed') is not True
@@ -302,12 +373,13 @@ def main():
     modes.add_argument('--drain-gate', action='store_true')
     modes.add_argument('--shutdown-main-gate', action='store_true')
     modes.add_argument('--shutdown-main-supplemental', action='store_true')
+    modes.add_argument('--final-state-backup-gate', action='store_true')
     parser.add_argument('--previous-updater')
     parser.add_argument('--previous-updater-sha256')
     parser.add_argument('--controller-config', default='.winbridge/controller-snapshot.local.json', type=Path)
     args = parser.parse_args()
     source, target = archive_pin(args.archive), archive_pin(args.target_archive)
-    drain_parameters = ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
+    drain_parameters = ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
     if args.drain_gate:
         if (not args.previous_updater or not re.fullmatch(r'[0-9a-f]{64}', args.previous_updater_sha256 or '')
                 or PureWindowsPath(args.previous_updater).drive.casefold() != 'k:'
@@ -393,10 +465,10 @@ exit $LASTEXITCODE
         raise RuntimeError({'taskId': task['taskId'], 'error': result['error'], 'reportDirectory': str(report)})
     if 'candidate-health-actor-proof.json' not in verified_names:
         raise ValueError('Ready manifest must cover the actual process proof')
-    expected_kind = 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
+    expected_kind = 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
     if result.get('kind') != expected_kind or result.get('sourceCommit') != source['sourceCommit'] or result.get('sourceArchiveSha256') != source['archiveSha256'] or result.get('target') != target:
         raise ValueError('Report kind or exact source/target binding differs')
-    verifier = verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
+    verifier = verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
     verifier(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report), 'filesVerified': len(ready['files'])}), flush=True)
 

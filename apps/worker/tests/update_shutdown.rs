@@ -28,6 +28,8 @@ struct GateInput {
     validation_cache: PathBuf,
     #[serde(default)]
     supplemental: bool,
+    #[serde(default)]
+    final_backup: bool,
 }
 fn write(path: &Path, value: &impl serde::Serialize) {
     use std::io::Write;
@@ -123,6 +125,9 @@ fn setup(
         artifacts,
     };
     write(&runtime.join(MANIFEST_NAME), &manifest);
+    if input.final_backup {
+        seed_history(&worker_config, &runtime, &root);
+    }
     let config_sha = winbridge_update::sha256(&fs::read(&worker_config).unwrap());
     let request = UpdateRequest {
         contract_version: 1,
@@ -145,6 +150,7 @@ fn setup(
             worker_config_sha256: config_sha,
             request,
             fault,
+            final_backup: input.final_backup,
         },
     );
     (root, worker_config, manifest)
@@ -372,6 +378,222 @@ fn restart_refused(worker: &Path, config: &Path, root: &Path, update_id: &str) {
     );
 }
 
+fn seed_history(config: &Path, runtime: &Path, root: &Path) {
+    use winbridge_protocol::{
+        CommandSource, LocalRequest, LocalResponse, TaskStatus, TaskSubmission,
+    };
+    let worker = winbridge_worker::Worker::open_file(config).unwrap();
+    let submission = TaskSubmission {
+        protocol_version: 1,
+        request_id: "backup-history".into(),
+        project_id: "source".into(),
+        idempotency_key: "backup-history".into(),
+        timeout_ms: 10000,
+        snapshot_id: None,
+        command: CommandSource::Direct {
+            executable: runtime
+                .join("winbridge-fixture.exe")
+                .to_string_lossy()
+                .into(),
+            arguments: vec!["success".into()],
+            working_directory: ".".into(),
+        },
+    };
+    let LocalResponse::Task { task } = worker.handle(LocalRequest::Submit {
+        request: submission.clone(),
+    }) else {
+        panic!("History task rejected")
+    };
+    let id = task.task_id.clone();
+    let until = Instant::now() + Duration::from_secs(15);
+    loop {
+        worker.schedule().unwrap();
+        let LocalResponse::Task { task } = worker.handle(LocalRequest::GetTask {
+            task_id: id.clone(),
+        }) else {
+            panic!("History task missing")
+        };
+        if task.status.is_terminal() && worker.is_idle() {
+            assert_eq!(task.status, TaskStatus::Succeeded);
+            break;
+        }
+        assert!(Instant::now() < until, "History seed task did not finish");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let LocalResponse::Task { task } = worker.handle(LocalRequest::Submit {
+        request: submission,
+    }) else {
+        panic!("History duplicate rejected")
+    };
+    assert_eq!(task.task_id, id);
+    worker.stop();
+    drop(worker);
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(root.join("state/worker.lock"))
+        .unwrap();
+    let until = Instant::now() + Duration::from_secs(5);
+    loop {
+        match fs2::FileExt::try_lock_exclusive(&lock) {
+            Ok(()) => {
+                fs2::FileExt::unlock(&lock).unwrap();
+                break;
+            }
+            Err(_) => {
+                assert!(
+                    Instant::now() < until,
+                    "History seed retained instance lock"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+}
+fn journal_rows(path: &Path) -> (String, usize, usize) {
+    let c = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .unwrap();
+    let mut q = c
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        .unwrap();
+    let names: Vec<String> = q
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    let mut data = Vec::new();
+    for name in names {
+        assert!(name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'));
+        let mut q = c
+            .prepare(&format!("SELECT * FROM {name} ORDER BY rowid"))
+            .unwrap();
+        let count = q.column_count();
+        let rows = q
+            .query_map([], |r| {
+                (0..count)
+                    .map(|i| r.get::<_, rusqlite::types::Value>(i))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        data.push((name, format!("{rows:?}")));
+    }
+    let tasks: i64 = c
+        .query_row("SELECT count(*) FROM tasks", [], |r| r.get(0))
+        .unwrap();
+    let output: i64 = c
+        .query_row("SELECT count(*) FROM output", [], |r| r.get(0))
+        .unwrap();
+    (
+        winbridge_update::sha256(&serde_json::to_vec(&data).unwrap()),
+        usize::try_from(tasks).unwrap(),
+        usize::try_from(output).unwrap(),
+    )
+}
+fn journal_bytes(root: &Path) -> serde_json::Value {
+    let mut files = Vec::new();
+    for name in ["journal.sqlite", "journal.sqlite-wal"] {
+        let p = root.join("state").join(name);
+        files.push((
+            name,
+            p.is_file()
+                .then(|| winbridge_update::sha256(&fs::read(p).unwrap())),
+        ));
+    }
+    serde_json::to_value(files).unwrap()
+}
+fn final_backup(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
+    let mut request: SupervisorRequest =
+        serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
+            .unwrap();
+    assert_eq!(request.contract_version, 15);
+    assert_eq!(
+        winbridge_update::sha256(request.token.as_bytes()),
+        sup.spec.token_sha256
+    );
+    assert_eq!(request.launch_id, sup.spec.launch_id);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let call = |q: &SupervisorRequest| -> UpdatePreparationView {
+        let response: SupervisorResponse = rt
+            .block_on(winbridge_transport::supervisor::call_with_timeout(
+                &sup.spec.endpoint,
+                sup.process.as_ref().unwrap().process_id,
+                q,
+                winbridge_transport::supervisor::CONTROL_TIMEOUT,
+            ))
+            .unwrap();
+        assert_eq!(response.contract_version, 15);
+        assert!(response.error.is_none(), "{:?}", response.error);
+        let view = response.preparation.unwrap();
+        assert_eq!(view.schema_version, 7);
+        view
+    };
+    let source_path = root.join("state/journal.sqlite");
+    let bytes = journal_bytes(root);
+    let rows = journal_rows(&source_path);
+    assert!(
+        rows.1 >= 1 && rows.2 >= 2,
+        "Real task/output history missing"
+    );
+    request.action = SupervisorAction::BackupWorkerState;
+    let admitted = call(&request);
+    assert!(admitted
+        .candidate_state_backup
+        .as_ref()
+        .unwrap()
+        .attempt_id
+        .is_some());
+    request.action = SupervisorAction::ObserveStateBackup;
+    let until = Instant::now() + Duration::from_secs(150);
+    let done = loop {
+        let v = call(&request);
+        assert!(v.driver_error.is_none(), "{:?}", v.driver_error);
+        if !v.driver_active {
+            break v;
+        }
+        assert!(Instant::now() < until, "Final backup did not settle");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(
+        done.candidate_state_backup.as_ref().unwrap().phase,
+        CandidateStateBackupPhase::Verified
+    );
+    assert!(
+        done.candidate_shutdown
+            .as_ref()
+            .unwrap()
+            .physical_custody_held
+    );
+    let directory = root.join("runtime/update-state");
+    let record = UpdateJournal::inspect_state_backup(&directory, &sup.spec.update_id)
+        .unwrap()
+        .unwrap();
+    let report = record.report.as_ref().unwrap();
+    report.validate_envelope().unwrap();
+    assert_eq!(
+        winbridge_update::state_backup::pin_backup_file(Path::new(&report.backup.path))
+            .unwrap()
+            .evidence(),
+        &report.backup
+    );
+    assert_eq!(journal_rows(Path::new(&report.backup.path)), rows);
+    assert_eq!(journal_bytes(root), bytes);
+    request.action = SupervisorAction::BackupWorkerState;
+    let duplicate = call(&request);
+    assert_eq!(
+        duplicate.candidate_state_backup,
+        done.candidate_state_backup
+    );
+    assert_eq!(
+        UpdateJournal::inspect_state_backup(&directory, &sup.spec.update_id)
+            .unwrap()
+            .unwrap(),
+        record
+    );
+    assert_eq!(journal_bytes(root), bytes);
+    json!({"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"backupRowsSha256":rows.0,"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"allLogicalRowsPreserved":true,"duplicateNoNewAttempt":true,"privateAuthorityNotExported":true})
+}
 fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
     let (root, config, manifest) = setup(input, fault, adapter);
     let worker = root.join("runtime/winbridge-worker.exe");
@@ -570,6 +792,7 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
                 assert!(root.join("09-delayed-reply.json").is_file());
             }
         }
+        let final_state_backup = input.final_backup.then(|| final_backup(&root, &sup));
         let input = ShutdownInspectionRequest {
             schema_version: 1,
             intent: shutdown.intent.clone(),
@@ -610,7 +833,7 @@ fn case(input: &GateInput, fault: Fault, adapter: &Path) -> serde_json::Value {
                 image.sha256
             );
         }
-        json!({"fault":fault,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true})
+        json!({"fault":fault,"finalStateBackup":final_state_backup,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true})
     };
     // The closure may panic; an RAII owner still closes the test Job. On success
     // explicitly verify its complete termination and the post-crash history.
@@ -720,7 +943,9 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
     fs::rename(stage.join("source"), input.root.join("source")).unwrap();
     let adapter = adapter(&input);
     let mut cases = Vec::new();
-    let selected: &[Fault] = if input.supplemental {
+    let selected: &[Fault] = if input.final_backup {
+        &[Fault::None]
+    } else if input.supplemental {
         &[Fault::DelayedInstanceLock, Fault::SupervisorCrashBeforeExit]
     } else {
         &[
@@ -737,6 +962,6 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
             cases.last().unwrap(),
         );
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

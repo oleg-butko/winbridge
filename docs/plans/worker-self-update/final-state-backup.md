@@ -186,3 +186,12 @@ kernel guard из rows/JSON не создаётся. View7 отдельно по
 fmt прошли. Actual mailbox проверяет отказ без custody/Quiesced и отсутствие effects,
 v14 JSON остаётся прежним. Native success/backup faults/migration12→13 и old12 refusal
 ещё не выполнены. Public installation не включена.
+
+
+Подготовлен `-FinalStateBackupGate` / `--final-state-backup-gate`: один actual Main
+v15 stop → retained custody → external owned parent → export/Verified, с настоящей
+завершённой task/output/dedup history и сравнением всех SQLite rows/DB/WAL bytes.
+Private capability fixture остаётся только в локальном `.private` файле и не входит
+в whitelist shared reports. Она доступна лишь в validation feature; normal build
+не получает этого API. Обе Clippy, cross-check fixture, UI build и ZIP tests прошли;
+сам native gate пока не запускался. Target C для него должен быть schema13.
