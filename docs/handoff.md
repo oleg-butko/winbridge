@@ -1,3 +1,21 @@
+## U2.1 readonly export attempt snapshot locally verified — 2026-10-21
+
+StateBackupRecord::require_export_process only accepts original saved helper PID,
+input path/bytes/SHA/File ID and unfinished ResumeGranted/Running state. Prepared,
+Issued, cleanup/Verified/Indeterminate cannot authorize export. This is data-only;
+calling it with JSON does not grant OS custody or a launch permission.
+UpdateJournal::inspect_state_backup_export reads backup history + current owner,
+epoch, active update/Replacing revision and Active supervisor in one readonly
+transaction. It refuses schema!=13 without migration. An actual helper must still
+supply its own OS identity and pinned input, validate policy/image/current live
+supervisor and preserve source files. CLI/export/consuming driver remain absent.
+13 targeted state-backup tests pass, including8 changed PID/input cases and readonly
+missing-attempt/schema12 preservation. Both updater all-target Clippy checks pass;
+no new native run and no installed update. Logs state-backup-export-*.
+NEXT old-helper exporter with physical pins and SQLite evidence, then consuming
+supervisor/custody/native gate. U2.1–U4/goal remain active. Controller3902 and installed
+d052 unchanged; desktop not required, leave worker running. No Cargo/native active.
+
 ## U2.1 durable backup outbox locally verified — 2026-10-21
 
 Updater schema13 now persists immutable StateBackupIntent, CAS current record and

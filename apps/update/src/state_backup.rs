@@ -176,6 +176,26 @@ pub struct StateBackupRecord {
     pub reason: Option<String>,
 }
 impl StateBackupRecord {
+    /// Causal data check only, not launch/custody authority. The export helper
+    /// must supply its own OS identity and freshly pinned input; the journal
+    /// additionally checks the current owner/root/supervisor in one snapshot.
+    pub fn require_export_process(
+        &self,
+        process: &SupervisorProcess,
+        input: &StateBackupFileEvidence,
+    ) -> Result<()> {
+        self.validate()?;
+        if !matches!(
+            self.phase,
+            StateBackupPhase::ResumeGranted | StateBackupPhase::Running
+        ) || self.process.as_ref() != Some(process)
+            || self.input_file.as_ref() != Some(input)
+            || !self.resume_granted
+        {
+            return Err("Export requires the exact saved live attempt PID/input and resume grant; no replay".into());
+        }
+        Ok(())
+    }
     pub fn prepare(intent: StateBackupIntent) -> Result<Self> {
         intent.validate()?;
         Ok(Self {

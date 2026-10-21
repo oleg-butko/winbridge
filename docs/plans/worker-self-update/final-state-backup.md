@@ -115,3 +115,14 @@ launch/identity checks не ослаблены. Clippy update+worker all-targets
 cross-build требует отсутствующий `lib.exe`; его C build проверяется на Windows,
 не объявляется подтверждённым cross-check. Fmt/diff прошли. Logs находятся в
 `.winbridge/update-preparation/state-backup-ledger-*` и не включаются в Git.
+
+
+Readonly helper inspection добавлена отдельным API: один SQLite snapshot связывает
+сохранённую attempt/PID/input, текущие owner/epoch/active update/Replacing revision
+и Active supervisor. Доступны только ResumeGranted/Running; ранее завершённая или
+неопределённая попытка не получает нового разрешения. Текущий same-schema U2 reader
+требует updater13 без migration; поддержку future migration нельзя предполагать
+по наличию этого reader. JSON остаётся данными; физические pins/current self PID и
+live owner обязан проверить будущий exporter. Новые две проверки прошли, targeted
+state-backup suite13/0 и обе updater all-target Clippy прошли. Положительный полный
+joined export и native file-sharing ещё не проверены; CLI пока отсутствует.

@@ -233,3 +233,43 @@ fn schema_twelve_migration_backs_up_fences_owner_and_does_not_invent_backup() {
     );
     assert!(c.prepare("SELECT * FROM state_backup_intents").is_err());
 }
+
+#[test]
+fn export_inspection_without_saved_attempt_is_readonly_and_never_migrates_old_schema() {
+    let root = tempfile::tempdir().unwrap();
+    let scope = "a".repeat(64);
+    let mut j = UpdateJournal::open(root.path(), &scope).unwrap();
+    let a = j.acquire_owner().unwrap();
+    let r = fixture();
+    let input = input(&r);
+    let process = process(&r);
+    let original = j.info().unwrap();
+    j.connection
+        .execute_batch("PRAGMA wal_checkpoint(TRUNCATE)")
+        .unwrap();
+    let path = root.path().join("updates.sqlite");
+    let bytes = fs::read(&path).unwrap();
+    let denied = UpdateJournal::inspect_state_backup_export(
+        root.path(),
+        r.intent.update_id(),
+        &process,
+        &input,
+    )
+    .unwrap_err();
+    assert_eq!(denied.code, JournalErrorCode::NotFound);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(j.info().unwrap(), original);
+    j.connection.execute_batch("DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; PRAGMA user_version=12; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    let before = fs::read(&path).unwrap();
+    let denied = UpdateJournal::inspect_state_backup_export(
+        root.path(),
+        r.intent.update_id(),
+        &process,
+        &input,
+    )
+    .unwrap_err();
+    assert_eq!(denied.code, JournalErrorCode::UnsupportedSchema);
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert_eq!(schema(&j.connection).unwrap(), 12);
+    assert_eq!(j.info().unwrap().owner_epoch, a.epoch());
+}

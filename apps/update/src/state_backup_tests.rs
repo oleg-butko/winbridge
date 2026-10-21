@@ -254,3 +254,39 @@ fn backup_binding_digest_and_input_or_report_aliases_are_rejected() {
     let report = verified.report.as_deref().unwrap().clone();
     assert!(verified.verify(report, 411).is_err());
 }
+
+#[test]
+fn export_process_check_accepts_only_saved_pid_input_and_unfinished_grant() {
+    let initial = fixture();
+    let issued = initial.issue(input(&initial), 401).unwrap();
+    let grant = issued.grant_resume(process(&initial), 402).unwrap();
+    let run = grant.resumed(403).unwrap();
+    let pid = process(&initial);
+    let input = input(&initial);
+    for allowed in [&grant, &run] {
+        allowed.require_export_process(&pid, &input).unwrap();
+    }
+    let clean = run.finished(cleanup(&run), 406).unwrap();
+    let verified = clean.verify(report(&clean), 410).unwrap();
+    let unknown = grant
+        .indeterminate("Resume unconfirmed".into(), 410)
+        .unwrap();
+    for rejected in [&initial, &issued, &clean, &verified, &unknown] {
+        assert!(rejected.require_export_process(&pid, &input).is_err());
+    }
+    for change in 0..8 {
+        let mut p = pid.clone();
+        let mut f = input.clone();
+        match change {
+            0 => p.process_id += 1,
+            1 => p.birth.push('1'),
+            2 => p.host_id.push('1'),
+            3 => p.session_id += 1,
+            4 => f.path.push('x'),
+            5 => f.file_identity.push('x'),
+            6 => f.sha256 = "0".repeat(64),
+            _ => f.bytes += 1,
+        }
+        assert!(grant.require_export_process(&p, &f).is_err());
+    }
+}

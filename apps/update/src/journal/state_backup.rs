@@ -231,6 +231,60 @@ impl UpdateJournal {
         tx.commit().map_err(storage)?;
         Ok(r)
     }
+    /// Readonly metadata for the old helper. This never constructs a launch
+    /// permit or physical exit guard. The helper must independently pin/check
+    /// its own image, process, policy paths and the live owning supervisor.
+    pub fn inspect_state_backup_export(
+        directory: &Path,
+        id: &str,
+        process: &winbridge_protocol::update::SupervisorProcess,
+        input: &winbridge_protocol::update::StateBackupFileEvidence,
+    ) -> Result<(UpdateJournalInfo, SupervisorRecord, StateBackupRecord)> {
+        check_files(directory)?;
+        let mut c = connection(&directory.join("updates.sqlite"), true)?;
+        let tx = c.transaction().map_err(storage)?;
+        if schema(&tx)? != 13 {
+            return Err(fail(
+                JournalErrorCode::UnsupportedSchema,
+                "Final state export requires updater schema13; no migration",
+            ));
+        }
+        let saved = read(&tx, id)?.ok_or_else(|| {
+            fail(
+                JournalErrorCode::NotFound,
+                "No saved final backup attempt; export denied",
+            )
+        })?;
+        saved
+            .require_export_process(process, input)
+            .map_err(|e| fail(JournalErrorCode::PreconditionsChanged, e))?;
+        let old = &saved.intent.binding.shutdown.intent.binding;
+        let info = info(&tx)?;
+        let sup = supervisor::read(&tx, &old.launch_id)?;
+        let owner: String = tx
+            .query_row(
+                "SELECT owner FROM installation WHERE singleton=1",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(storage)?;
+        let root = record(&tx, id)?;
+        if info.active_update_id.as_deref() != Some(id)
+            || owner != old.owner_id
+            || info.owner_epoch != old.owner_epoch
+            || sup.phase != winbridge_protocol::update::SupervisorPhase::Active
+            || sup.process.is_none()
+            || sup.process.as_ref() == Some(process)
+            || sup.owner_id.as_deref() != Some(owner.as_str())
+            || sup.owner_epoch != Some(info.owner_epoch)
+            || root.phase != UpdatePhase::Replacing
+            || root.revision != saved.intent.parent_revision().map_err(bad)?
+        {
+            return Err(fail(JournalErrorCode::PreconditionsChanged, "Export owner/supervisor/root changed; saved Exited cannot authorize another helper"));
+        }
+        tx.commit().map_err(storage)?;
+        Ok((info, sup, saved))
+    }
     /// Existing rows are observations. Only live kernel custody can admit a
     /// fresh intent; neither saved Exited nor arbitrary caller paths suffice.
     pub fn admit_state_backup(
