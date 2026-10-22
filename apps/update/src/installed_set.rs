@@ -106,6 +106,68 @@ pub(crate) fn valid_manifest(
     }
     Ok(())
 }
+/// Pure manifest plan from a candidate observation. No file is published and no
+/// approval/custody is created. Admission must join its saved candidate/health.
+pub fn plan_replacement_manifest(
+    old: &InstalledSetManifest,
+    target: &winbridge_protocol::update::UpdateSourcePin,
+    candidate: &crate::candidate_artifacts::CandidateArtifactInspection,
+    set_id: &str,
+) -> Result<InstalledSetManifest> {
+    valid_manifest(old, &old.installation_id, &old.scope_sha256)?;
+    if uuid::Uuid::parse_str(set_id).ok() == uuid::Uuid::parse_str(&old.set_id).ok()
+        || uuid::Uuid::parse_str(set_id)
+            .ok()
+            .map(|id| id.to_string())
+            .as_deref()
+            != Some(set_id)
+        || candidate.schema_version != 1
+        || candidate.kind != "candidate_artifact_inspection"
+        || !candidate.read_only
+        || candidate.runtime_applied
+        || candidate.candidate_verified
+        || candidate.artifacts.len() != FILES.len()
+        || crate::candidate_artifacts::fingerprint(candidate)? != candidate.set_sha256
+    {
+        return Err(
+            "Replacement manifest requires a distinct set and exact candidate observation".into(),
+        );
+    }
+    let mut identities = std::collections::HashSet::new();
+    let mut artifacts = Vec::new();
+    for (a, (name, role)) in candidate.artifacts.iter().zip(FILES) {
+        if a.name != name
+            || a.descriptor.role != role
+            || !a.image.query_supported
+            || a.image.file_identity.is_empty()
+            || a.image.file_identity.len() > 128
+            || !identities.insert(a.image.file_identity.as_str())
+            || a.descriptor.build.source_commit.as_deref() != Some(target.source_commit.as_str())
+            || a.descriptor.build.source_manifest_sha256.as_deref()
+                != Some(target.manifest_sha256.as_str())
+        {
+            return Err(
+                "Replacement manifest candidate role/source/independent image differs".into(),
+            );
+        }
+        artifacts.push(InstalledArtifact {
+            name: name.into(),
+            bytes: a.image.bytes,
+            sha256: a.image.sha256.clone(),
+            descriptor: a.descriptor.clone(),
+        });
+    }
+    let manifest = InstalledSetManifest {
+        schema_version: 1,
+        kind: "winbridge_installed_set".into(),
+        set_id: set_id.into(),
+        installation_id: old.installation_id.clone(),
+        scope_sha256: old.scope_sha256.clone(),
+        artifacts,
+    };
+    valid_manifest(&manifest, &old.installation_id, &old.scope_sha256)?;
+    Ok(manifest)
+}
 pub fn pin_installed_set(
     runtime: &Path,
     installation: &str,

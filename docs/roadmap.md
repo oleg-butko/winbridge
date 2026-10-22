@@ -1,5 +1,9 @@
 # Постепенная реализация и расширение
 
+2026-10-22: [runtime moves/FSM gate](plans/worker-self-update/windows-runtime-file-moves-gate-2026-10-22.md)
+пройден9 native tests. Immutable full backup fault run203814-bc4258b9 выполняется;
+U2.1 ещё открыт. Manifest plan — data-only; ledger/custody/driver/activation впереди.
+
 2026-10-22: цель возобновлена. [U2.2 data FSM и review-план](plans/worker-self-update/runtime-replacement.md)
 начаты без IO/installation authority (6 pure tests и обе Clippy passed).
 Первый U2.1 fault gate выявил race fixture до admission; readonly ожидание

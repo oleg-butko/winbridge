@@ -182,3 +182,24 @@ Collision test теперь требует ERROR_FILE_EXISTS80/ALREADY_EXISTS183
 Positive test использует кириллицу/non-BMP filename и проверяет write denial
 после move. Combined SDK mode также проверит6 data FSM/batch tests (всего9).
 Cross-check/Clippy проходят, исправленный native результат ещё не получен.
+
+### Native primitive/model gate завершён
+
+[SDK и FSM gate 2026-10-22](windows-runtime-file-moves-gate-2026-10-22.md) пройден9/0,
+source6f060f0, run20261022-203417-4db1d2dc. Это закрывает primitive/model native
+проверку, но не whole replacement. Новая plan_replacement_manifest пока отдельно
+проверяется локально: fixed four roles/target/source, inherited installation/scope,
+новый canonical UUID без alias прежнего, без публикации/authority. Она не включена
+в перечисленный native producer. Далее bind к saved proofs и durable preparation
+до consuming OS custody; actual installation не включена.
+
+### Manifest plan локально проверен
+
+`installed_set::plan_replacement_manifest` формирует только данные: сохраняет
+installation/scope прежнего known set, создаёт новый canonical Set ID, сверяет
+candidate fingerprint, fixed role order, независимые image IDs и exact target
+source commit/manifest SHA. UUID-alias прежнего Set ID не считается новым поколением.
+Manifest не публикуется, approval/OS custody не создаются. Два pure tests и обе
+all-target Clippy прошли. Эта функция отсутствует в native producer6f060f0;
+следующий consuming driver должен связать её вход с saved candidate/health/backup
+в одной admission transaction и сохранить intent до создания файлов.

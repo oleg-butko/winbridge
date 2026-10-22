@@ -34,6 +34,110 @@ fn fixture() -> (tempfile::TempDir, InstalledSetManifest) {
     .unwrap();
     (root, manifest)
 }
+
+fn candidate(
+    old: &InstalledSetManifest,
+) -> (
+    winbridge_protocol::update::UpdateSourcePin,
+    crate::candidate_artifacts::CandidateArtifactInspection,
+) {
+    let target = winbridge_protocol::update::UpdateSourcePin {
+        archive_name: "target.zip".into(),
+        archive_sha256: "e".repeat(64),
+        manifest_sha256: "f".repeat(64),
+        source_commit: "c".repeat(40),
+    };
+    let artifacts = old
+        .artifacts
+        .iter()
+        .map(|a| {
+            let mut descriptor = a.descriptor.clone();
+            descriptor.build.source_commit = Some(target.source_commit.clone());
+            descriptor.build.source_manifest_sha256 = Some(target.manifest_sha256.clone());
+            crate::candidate_artifacts::CandidateArtifact {
+                name: a.name.clone(),
+                descriptor,
+                image: ImageEvidence {
+                    path: format!("candidate/{}", a.name),
+                    bytes: a.bytes,
+                    sha256: "d".repeat(64),
+                    file_identity: format!("candidate-{}", a.name),
+                    query_supported: true,
+                },
+                query_process: winbridge_platform::infrastructure::stamp(std::process::id())
+                    .unwrap(),
+            }
+        })
+        .collect();
+    let mut candidate = crate::candidate_artifacts::CandidateArtifactInspection {
+        schema_version: 1,
+        kind: "candidate_artifact_inspection".into(),
+        read_only: true,
+        runtime_applied: false,
+        candidate_verified: false,
+        report: crate::build_report::ReportEvidence {
+            schema_version: 1,
+            update_id: uuid::Uuid::new_v4().to_string(),
+            attempt_id: uuid::Uuid::new_v4().to_string(),
+            build_spec_sha256: "a".repeat(64),
+            candidate_directory_identity: "candidate-dir".into(),
+            file_identity: "report-file".into(),
+            bytes: 100,
+            sha256: "b".repeat(64),
+        },
+        payload_directory_identity: "payload-dir".into(),
+        artifacts,
+        set_sha256: String::new(),
+    };
+    candidate.set_sha256 = crate::candidate_artifacts::fingerprint(&candidate).unwrap();
+    (target, candidate)
+}
+#[test]
+fn replacement_manifest_plan_preserves_installation_scope_and_exact_target_without_publication() {
+    let (root, old) = fixture();
+    let before = fs::read(root.path().join(MANIFEST_NAME)).unwrap();
+    let (target, candidate) = candidate(&old);
+    let id = uuid::Uuid::new_v4().to_string();
+    let new = plan_replacement_manifest(&old, &target, &candidate, &id).unwrap();
+    assert_eq!(new.installation_id, old.installation_id);
+    assert_eq!(new.scope_sha256, old.scope_sha256);
+    assert_eq!(new.set_id, id);
+    for (a, expected) in new.artifacts.iter().zip(&candidate.artifacts) {
+        assert_eq!(a.sha256, expected.image.sha256);
+        assert_eq!(a.descriptor, expected.descriptor);
+    }
+    assert_eq!(fs::read(root.path().join(MANIFEST_NAME)).unwrap(), before);
+    assert!(plan_replacement_manifest(&old, &target, &candidate, &old.set_id).is_err());
+    let mut aliased = old.clone();
+    aliased.set_id = uuid::Uuid::parse_str(&old.set_id)
+        .unwrap()
+        .urn()
+        .to_string();
+    assert!(plan_replacement_manifest(&aliased, &target, &candidate, &old.set_id).is_err());
+}
+#[test]
+fn replacement_manifest_plan_rejects_mixed_roles_generations_aliases_and_forged_observations() {
+    let (_root, old) = fixture();
+    let (target, candidate) = candidate(&old);
+    let id = uuid::Uuid::new_v4().to_string();
+    for kind in 0..7 {
+        let mut c = candidate.clone();
+        match kind {
+            0 => c.artifacts.swap(0, 1),
+            1 => c.artifacts[1].descriptor.build.source_commit = Some("a".repeat(40)),
+            2 => c.artifacts[2].descriptor.build.source_dirty = true,
+            3 => c.artifacts[3].image.file_identity = c.artifacts[0].image.file_identity.clone(),
+            4 => c.artifacts[0].image.query_supported = false,
+            5 => c.runtime_applied = true,
+            _ => c.read_only = false,
+        }
+        c.set_sha256 = crate::candidate_artifacts::fingerprint(&c).unwrap();
+        assert!(plan_replacement_manifest(&old, &target, &c, &id).is_err());
+    }
+    let mut c = candidate;
+    c.set_sha256 = "0".repeat(64);
+    assert!(plan_replacement_manifest(&old, &target, &c, &id).is_err());
+}
 #[test]
 fn known_installed_set_pins_exact_files_without_execution_or_adoption() {
     let (root, m) = fixture();

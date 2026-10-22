@@ -1,3 +1,33 @@
+## Active full backup gate; nine native file/model tests passed — 2026-10-22
+
+**Не отправлять заново:** taskb3fd7ab5-c875-49e7-b961-2303a265ebc1,
+run20261022-203814-bc4258b9, runner PTY8766. Log .winbridge/update-preparation/
+state-backup-faults-observation-native.log. Producer clean6f060f0,
+ZIP winbridge-20261022T203358Z-6f060f0-c3c330a0.zip,
+SHAbfb2c1addbc14764a1a03ecf454b3e54450a486b86c3cb169ac9859d5ee16f9c.
+Same target31fa/cache20261017-061527-f4639971. At latest observation22 base tests,
+old-role build and candidate build passed; first full case shutdown/backup pending.
+Goal active; installed d052 healthy, controller3413. No UI windows, worker only.
+Observe same Task ID to terminal; timeout of observation never authorizes resubmit.
+
+SDK task07e45433/run20261022-203417-4db1d2dc succeeded9/0,6 ready files verified twice.
+[Evidence](plans/worker-self-update/windows-runtime-file-moves-gate-2026-10-22.md).
+SDK primitive/data FSM native verified; whole replacement still NOT implemented.
+Next data layer: installed_set::plan_replacement_manifest + two pure tests,
+no IO/publication/approval. Final2/0 and both Clippy passed, including UUID-alias
+rejection on review. Log runtime-manifest-plan-*. First full fault case now passed
+including post-crash history; second actual Main case started. Do not assume remaining
+cases passed until the full proof is verified.
+These new manifest functions are NOT in immutable native producer6f060f0.
+
+Next after full gate: inspect same task/proof, verify all ready files twice and
+negative actual-proof mutations, update U2.1 readiness only if all4 cases prove it.
+Then replacement immutable proof binding/ledger, fresh permit + consuming original
+OS custody, file driver and activation. Public update and U3/U4 remain disabled.
+Old target31fa is for backup validation; later schema/capability gates require
+explicit matching old/new release archives. Do not reinterpret compiled schema13
+helper as future-schema compatible. Prior Active/No-run entries are historical.
+
 ## No native run active; two fixes ready for clean repeat — 2026-10-22
 
 Goal ACTIVE, installed d052 unchanged/healthy. Both preceding tasks TERMINAL:
