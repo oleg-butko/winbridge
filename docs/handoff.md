@@ -1,3 +1,47 @@
+## U2.1 fixture retirement race corrected; retry next — 2026-10-22
+
+Task83efbf45-c5df-4616-8929-086a7eeeb5df/run20261022-194847-ec2f7702 terminal failed1.
+21 base tests passed, old roles and candidate built, first full case failed BEFORE
+backup admission: Exited DB commit can precede shutdown driver retirement/custody.
+No helper attempt executed. All11 ready files/hash checked; failed report retained,
+SHA8b70cd131622a33e61cb400cddf274f230973f87a93c4f02af892065fa5ac2fe.
+Windows62,294,671,360→58,604,429,312 bytes. Installed d052 healthy active0, no errors.
+Test processes ended; desktop may open/close, leave installed worker running.
+
+Fixture now performs bounded readonly ObserveStateBackup until idle+physical
+custody+Replacing/no error BEFORE the first BackupWorkerState request. Fault proof
+includes beforeAdmission, Python verifier requires it. Held marker reads tolerate
+partial publication until the same deadline. No production precondition weakened,
+no automatic replay of unknown effects. Windows all-target Clippy passed after fix.
+NEXT clean export and repeat four-case isolated gate with same target31fa/cache.
+
+U2.2 data-only per-file FSM + batch implemented, six pure tests and both all-target
+Clippy passed. Explicit intent/receipt ordering, exact rename IDs, terminal uncertainty,
+strict empty struct variants, fixed scope/independent roles/manifest-last. No IO,
+ledger, guard handoff, supervisor apply or activation. See runtime-replacement.md.
+No local Cargo/native currently active; previous Active entry below is historical.
+
+## Active Windows fault gate — 2026-10-22
+
+Goal active. **Не отправлять повторно:** task83efbf45-c5df-4616-8929-086a7eeeb5df,
+run20261022-194847-ec2f7702, runner PTY80093. Наблюдать тот же Task ID через IPC;
+PTY handle может исчезнуть после restart, timeout наблюдения не является terminal.
+Log .winbridge/update-preparation/state-backup-faults-native.log. Producer clean5e456d4,
+ZIP winbridge-20261022T194834Z-5e456d4-6bca4599.zip,
+SHA7d78762c0dc19ed23ed05b102f036abf302b84fa33c5863f9b59a068e3687658.
+Target31fa/cache20261017-061527-f4639971 прежние. Базовые21 tests пройдены,
+old roles собраны, начался первый actual Main case; общий результат ещё не известен.
+Installed d052 healthy, UI окон нет; desktop не нужен, worker оставить работать.
+
+Параллельно начат U2.2 data-only per-file FSM в apps/update/src/runtime_exchange.rs
+и review-план [runtime replacement](plans/worker-self-update/runtime-replacement.md).
+Нет IO/ledger/authority/driver/activation. Первый pure test выявил unit-enum Serde
+unknown-field gap, заменён на empty struct variants. Добавлена five-file batch
+validation: manifest-last, independent IDs и immutable one-step advance. Pure suite6/0;
+final Linux/Windows Clippy выполняются. Controller текущей сессии PID3413.
+Эти новые файлы НЕ входят в immutable Windows producer5e456d4. Не объявлять U2.1
+или U2 завершёнными до actual fault proof и нужных следующих native gates.
+
 # Возобновление updater — 2026-10-22
 
 Пользователь возобновил цель. Controller запущен заново, installed d052 healthy/

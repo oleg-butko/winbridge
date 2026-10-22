@@ -1,6 +1,9 @@
 # Постепенная реализация и расширение
 
-2026-10-22: цель возобновлена. Отдельный four-case final backup fault runner/verifier
+2026-10-22: цель возобновлена. [U2.2 data FSM и review-план](plans/worker-self-update/runtime-replacement.md)
+начаты без IO/installation authority (6 pure tests и обе Clippy passed).
+Первый U2.1 fault gate выявил race fixture до admission; readonly ожидание
+retirement исправлено, новый native repeat впереди. Отдельный four-case final backup fault runner/verifier
 реализован; native execution ещё впереди. U2.1 остаётся открытым; затем U2.2
 replacement/activation. Installed worker обновлять сейчас не требуется.
 

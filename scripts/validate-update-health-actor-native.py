@@ -372,6 +372,13 @@ def verify_state_backup_faults_proof(proof, source, target):
                 or b.get('sourceBytesUnchanged') is not True
                 or b.get('sameHistoryWithoutCustody') is not True):
             raise ValueError('Backup fault intent/record/marker/history differs')
+        before = b['beforeAdmission']
+        if (before.get('schemaVersion') != 7 or before['update'] != case['root']
+                or before.get('driverActive') is not False or before.get('driverError') is not None
+                or before['candidateShutdown'].get('physicalCustodyHeld') is not True
+                or before['candidateStateBackup'].get('phase') != 'not_admitted'
+                or before['candidateStateBackup'].get('attemptId') is not None):
+            raise ValueError('Backup was requested before original shutdown driver retired')
         v = view['candidateStateBackup']
         if (view.get('schemaVersion') != 7 or view['update'] != case['root']
                 or view.get('driverActive') is not held

@@ -570,6 +570,35 @@ fn final_backup(
         assert_eq!(view.schema_version, 7);
         view
     };
+    // Exited commits before the blocking shutdown driver retires into the
+    // mailbox. Observe idle custody before the first mutation request.
+    request.action = SupervisorAction::ObserveStateBackup;
+    let ready_until = Instant::now() + Duration::from_secs(65);
+    let before_admission = loop {
+        let view = call(&request);
+        assert!(view.driver_error.is_none(), "{:?}", view.driver_error);
+        assert_eq!(view.update.phase, UpdatePhase::Replacing);
+        if !view.driver_active
+            && view
+                .candidate_shutdown
+                .as_ref()
+                .unwrap()
+                .physical_custody_held
+        {
+            break view;
+        }
+        assert!(
+            Instant::now() < ready_until,
+            "Shutdown driver did not retire with original custody"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    };
+    assert!(before_admission
+        .candidate_state_backup
+        .as_ref()
+        .unwrap()
+        .attempt_id
+        .is_none());
     let source_path = root.join("state/journal.sqlite");
     let bytes = journal_bytes(root);
     let rows = journal_rows(&source_path);
@@ -603,10 +632,17 @@ fn final_backup(
                 && v.candidate_state_backup.as_ref().unwrap().phase
                     == CandidateStateBackupPhase::CopyingState
             {
-                let marker: serde_json::Value = serde_json::from_slice(
-                    &fs::read(root.join("backup-helper-held.json")).unwrap(),
-                )
-                .unwrap();
+                let marker: serde_json::Value = match fs::read(root.join("backup-helper-held.json"))
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                {
+                    Some(marker) => marker,
+                    None => {
+                        assert!(Instant::now() < until, "Held helper marker did not settle");
+                        std::thread::sleep(Duration::from_millis(20));
+                        continue;
+                    }
+                };
                 assert_eq!(
                     marker["process"],
                     serde_json::to_value(&saved.process).unwrap()
@@ -622,7 +658,7 @@ fn final_backup(
                 assert!(v.candidate_shutdown.as_ref().unwrap().physical_custody_held);
                 assert!(!saved.intent.backup_path().exists());
                 assert_eq!(journal_bytes(root), bytes);
-                return json!({"expectedFault":expected_fault,"faultMarker":fault_marker,"record":saved,"view":v,"sourceRowsSha256":rows.0,"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"helperHeldBeforeCopy":true,"destinationAbsent":true});
+                return json!({"expectedFault":expected_fault,"beforeAdmission":before_admission,"faultMarker":fault_marker,"record":saved,"view":v,"sourceRowsSha256":rows.0,"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"helperHeldBeforeCopy":true,"destinationAbsent":true});
             }
         }
         if !v.driver_active {
@@ -702,7 +738,7 @@ fn final_backup(
             record
         );
         assert_eq!(journal_bytes(root), bytes);
-        return json!({"expectedFault":expected_fault,"faultMarker":fault_marker,"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"backupRowsSha256":if expected_fault == BackupFault::ExistingDestination {None} else {Some(&rows.0)},"destinationEvidence":destination.evidence(),"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"destinationPreserved":preserved,"duplicateNoNewAttempt":true});
+        return json!({"expectedFault":expected_fault,"beforeAdmission":before_admission,"faultMarker":fault_marker,"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"backupRowsSha256":if expected_fault == BackupFault::ExistingDestination {None} else {Some(&rows.0)},"destinationEvidence":destination.evidence(),"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"destinationPreserved":preserved,"duplicateNoNewAttempt":true});
     }
     assert!(done.driver_error.is_none());
     assert_eq!(
