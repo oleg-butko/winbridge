@@ -95,7 +95,10 @@ try {
     $groups=@(@{name='backup-schema12-history-migration';minimum=1;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','state_backup_migration','archived_schema_twelve_shutdown_migrates_without_adopting_custody_and_old_twelve_refuses','--locked','--offline','--','--exact','--ignored')})
   }
   if($RuntimeFileMovesOnly){
-    $groups=@(@{name='runtime-owned-file-moves';minimum=3;args=@('test','-p','winbridge-platform','--lib','runtime_files::tests','--locked','--offline')})
+    $groups=@(
+      @{name='runtime-owned-file-moves';minimum=3;args=@('test','-p','winbridge-platform','--lib','runtime_files::tests','--locked','--offline')},
+      @{name='runtime-file-exchange-data';minimum=6;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_exchange','--locked','--offline')}
+    )
   }
   foreach($g in $groups){
     $log=Join-Path $ReportDirectory ($g.name+'.log')

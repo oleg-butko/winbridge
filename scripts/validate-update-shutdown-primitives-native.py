@@ -52,7 +52,7 @@ def main():
     parser.add_argument('--reference-receipt', type=Path)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
-    groups = {'runtime-owned-file-moves': 3} if args.runtime_file_moves_only else {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
+    groups = {'runtime-owned-file-moves': 3, 'runtime-file-exchange-data': 6} if args.runtime_file_moves_only else {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
     kind = 'runtime_file_moves_native_gate' if args.runtime_file_moves_only else 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
     mode_switch = ' -RuntimeFileMovesOnly' if args.runtime_file_moves_only else ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
     pin = health.archive_pin(args.archive)

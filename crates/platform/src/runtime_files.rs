@@ -110,8 +110,8 @@ impl OwnedRuntimeFile {
         }
         Ok(())
     }
-    /// Rename the owned file, relative to the retained destination directory
-    /// handle. Existing destination fails atomically, including a racing creation.
+    /// Rename the owned file to an absolute path with all destination ancestors
+    /// pinned against rename/reparse. Existing destination fails atomically.
     /// An error AFTER the OS call is indeterminate; caller must never retry it.
     pub fn move_new(
         &mut self,
@@ -131,8 +131,18 @@ impl OwnedRuntimeFile {
             .parent()
             .ok_or_else(|| error("Runtime destination parent missing"))?;
         let parent = parent.canonicalize()?;
-        let parent_file = directory(&parent)?;
-        let parent_id = crate::file_identity(&parent_file)?;
+        // Relative RootDirectory failed native validation on this host. Use the
+        // documented NULL form and freeze the absolute destination path.
+        let ancestors: Vec<_> = parent.ancestors().collect();
+        let parents: Vec<File> = ancestors
+            .iter()
+            .rev()
+            .map(|p| directory(p))
+            .collect::<io::Result<_>>()?;
+        let parent_file = parents
+            .last()
+            .ok_or_else(|| error("Runtime parent chain missing"))?;
+        let parent_id = crate::file_identity(parent_file)?;
         if parent_id != expected_parent_identity
             || parent_id.split(':').next() != self.identity.split(':').next()
         {
@@ -141,11 +151,17 @@ impl OwnedRuntimeFile {
         let name = destination
             .file_name()
             .ok_or_else(|| error("Runtime destination name missing"))?;
-        let wide: Vec<u16> = name.encode_wide().collect();
+        let destination = parent.join(name);
+        // Each component is now held by a no-delete directory handle, so the
+        // absolute spelling cannot be redirected to another parent before use.
+        crate::require_safe_path(&destination)?;
+        if crate::source_files::directory_identity(&parent)? != parent_id {
+            return Err(error("Runtime destination changed during parent pinning"));
+        }
+        let wide: Vec<u16> = destination.as_os_str().encode_wide().collect();
         if wide.is_empty() || wide.len() > 32767 || wide.contains(&0) {
             return Err(error("Runtime destination filename rejected"));
         }
-        let destination = parent.join(name);
         let offset = std::mem::offset_of!(FILE_RENAME_INFO, FileName);
         let length = offset + (wide.len() + 1) * 2;
         // usize storage gives the SDK structure's native pointer alignment.
@@ -156,7 +172,7 @@ impl OwnedRuntimeFile {
         self.attempted = true;
         let ok = unsafe {
             (*info).Anonymous.ReplaceIfExists = false;
-            (*info).RootDirectory = parent_file.as_raw_handle();
+            (*info).RootDirectory = std::ptr::null_mut();
             (*info).FileNameLength = (wide.len() * 2) as u32;
             std::ptr::copy_nonoverlapping(wide.as_ptr(), (*info).FileName.as_mut_ptr(), wide.len());
             SetFileInformationByHandle(
@@ -173,7 +189,7 @@ impl OwnedRuntimeFile {
         // already moved old name. Durable caller records uncertainty on failure.
         self.path = destination;
         self.revalidate()?;
-        if crate::file_identity(&parent_file)? != parent_id {
+        if crate::file_identity(parent_file)? != parent_id {
             return Err(error("Runtime destination parent changed after move"));
         }
         Ok(())
@@ -196,7 +212,7 @@ mod tests {
     fn owned_move_preserves_same_file_and_cannot_replay() {
         let root = tempfile::tempdir().unwrap();
         let from = root.path().join("old.exe");
-        let to = root.path().join("retained.exe");
+        let to = root.path().join("сохранённый-🧪.exe");
         std::fs::write(&from, b"owned original").unwrap();
         let (id, size, sha) = evidence(&from);
         let parent = crate::source_files::directory_identity(root.path()).unwrap();
@@ -206,6 +222,7 @@ mod tests {
         assert!(!from.exists());
         assert_eq!(evidence(&to), (id, size, sha));
         owned.revalidate().unwrap();
+        assert!(OpenOptions::new().write(true).open(&to).is_err());
         assert!(owned
             .move_new(&root.path().join("second.exe"), &parent)
             .is_err());
@@ -220,7 +237,11 @@ mod tests {
         let (id, size, sha) = evidence(&from);
         let parent = crate::source_files::directory_identity(root.path()).unwrap();
         let mut owned = OwnedRuntimeFile::acquire(&from, &id, size, &sha).unwrap();
-        assert!(owned.move_new(&to, &parent).is_err());
+        let collision = owned.move_new(&to, &parent).unwrap_err();
+        assert!(
+            matches!(collision.raw_os_error(), Some(80 | 183)),
+            "{collision}"
+        );
         assert_eq!(std::fs::read(&to).unwrap(), b"preserve other file");
         assert_eq!(std::fs::read(&from).unwrap(), b"source");
         assert!(owned

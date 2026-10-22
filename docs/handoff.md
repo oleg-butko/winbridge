@@ -1,3 +1,30 @@
+## No native run active; two fixes ready for clean repeat — 2026-10-22
+
+Goal ACTIVE, installed d052 unchanged/healthy. Both preceding tasks TERMINAL:
+- backup retry5a34314e/run20261022-200607-a60a7daf failed AFTER expected collision/
+  same attempt/preserved destination assertions, during first post-Job readonly
+  shutdown snapshot: SQLite disk I/O error. All retained report hashes verified.
+  Diagnostic13146cba readonly journal status succeeds later, DB+WAL SHA unchanged;
+  only SQLite SHM coordination changed. No backup replay or journal writer used.
+- SDK3fc7949a/run20261022-202619-3d8f4020 failed2/3 with positive rename error87;
+  old collision test accepted any error, so its pass was not proof of collision.
+
+Changes ready: test-only 5s/25ms retry of SAME readonly snapshot only for Storage/
+'disk I/O error'; Corrupt returns immediately. Preserve public pre-crash-proof.json
+before owned Job stop and whitelist it. New native unit test validates retry selector.
+No production restrictions changed. Backup gate now22 base tests +1 full four-case.
+SDK move uses NULL RootDirectory/full path, all ancestor no-delete pins, fresh parent
+ID check; no runtime fallback, one attempt. Collision requires80/183; Unicode/surrogate
+pair filename and post-move sharing checked. SDK lightweight mode now9 tests (3 OS+6
+FSM), without candidate/desktop rebuild. Combined Windows all-target Clippy passed.
+
+NEXT commit/export current fixes, run SDK --runtime-file-moves-only first; after9/0
+and ready verification run full --final-state-backup-faults with same31fa/cache.
+Worker only, desktop unnecessary/no windows. Announce each Windows run and its end.
+Do not delete retained failed dirs/reports. Never mark U2.1 done until four-case proof.
+Following work: replacement binding/ledger/custody handoff → file driver → activation.
+Previous Active entries below are HISTORICAL and must not cause task resubmission.
+
 ## Active retry + U2.2 handle adapter WIP — 2026-10-22
 
 Goal ACTIVE. **Do not resubmit running task**5a34314e-e2e5-4302-80c5-3803df8b4646,

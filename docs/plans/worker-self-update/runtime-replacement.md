@@ -145,8 +145,9 @@ uncertainty/reopen, scope/format, manifest-last и mixed/aliased sets. Допо�
 
 Windows-only `crates/platform/src/runtime_files.rs` держит read+DELETE handle,
 запрещает другие write/delete opens и сверяет source ID/bytes/SHA. Переименование
-использует тот же handle и fixed leaf относительно удерживаемого destination dir
-handle, `ReplaceIfExists=false`; volume и parent File ID проверяются до вызова.
+использует тот же file handle и абсолютный путь, все ancestor directories удерживаются
+no-delete handles от root до parent. `RootDirectory=NULL`, `ReplaceIfExists=false`;
+volume и parent File ID проверяются до вызова.
 Один объект допускает один OS attempt, включая отказ при collision; повторный
 вызов не выполняет эффект. После ошибки readback исход неопределён, не retry.
 Platform primitive не является installation permission; updater пока его не вызывает.
@@ -168,3 +169,16 @@ python3 scripts/validate-update-shutdown-primitives-native.py \
 Это шаблон, не выполненный прогон. SDK adapter требует native проверки, прежде
 чем его можно включить в consuming replacement driver. Durable binding/ledger и
 передача original custody всё ещё не реализованы.
+
+### Native findings 2026-10-22, исправления ожидают повтор
+
+Первый SDK run20261022-202619-3d8f4020/task3fc7949a завершился2/3, overall failed:
+relative RootDirectory/leaf вызвал ERROR_INVALID_PARAMETER87 в positive rename.
+Реализация заменена на NULL RootDirectory + absolute UTF-16 path; удерживаются
+все его ancestor handles, final parent ID перепроверяется после их acquisition.
+Это отдельный новый вызов новой тестовой операции, не fallback/retry прежнего.
+Collision test теперь требует ERROR_FILE_EXISTS80/ALREADY_EXISTS183, чтобы любой
+отказ неправильных параметров не выдавался за доказательство no-overwrite.
+Positive test использует кириллицу/non-BMP filename и проверяет write denial
+после move. Combined SDK mode также проверит6 data FSM/batch tests (всего9).
+Cross-check/Clippy проходят, исправленный native результат ещё не получен.

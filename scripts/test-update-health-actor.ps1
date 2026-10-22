@@ -110,6 +110,7 @@ try {
   if($FinalStateBackupGate){
     $commands=@(
       @{name='backup-empty-wal-fingerprint';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','journal_fingerprint_allows_only_empty_wal_creation_and_detects_data_changes','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
+      @{name='backup-crash-observation';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','post_crash_observation_retries_only_transient_read_io','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
       @{name='backup-data-and-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','state_backup','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='backup-sqlite-wal-and-pins';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::archive','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='backup-exact-entry';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','state_backup_export','--locked','--offline','--','--test-threads=1','--nocapture')}
@@ -136,7 +137,7 @@ try {
   try { if($ShutdownMainGate -and (Get-Variable caseRoot -ErrorAction SilentlyContinue)){
     foreach($caseName in @('None','LostAck','DelayedReply','ReceiptWriteDenied','DelayedInstanceLock','SupervisorCrashBeforeExit','None-ExistingDestination','None-ExitAfterCopy','None-WrongInputReport','None-HoldBeforeCopy')){
       $caseDirectory=Join-Path $caseRoot $caseName
-      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json')){
+      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json')){
         $path=Join-Path $caseDirectory $logName
         if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-'+$logName)),$false)}
       }

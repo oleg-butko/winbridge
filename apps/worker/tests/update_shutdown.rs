@@ -44,6 +44,54 @@ fn write(path: &Path, value: &impl serde::Serialize) {
         .unwrap();
     file.sync_all().unwrap();
 }
+fn observe_after_owned_exit<T>(
+    mut read: impl FnMut() -> Result<T, winbridge_update::journal::JournalError>,
+) -> Result<(T, u32), winbridge_update::journal::JournalError> {
+    let until = Instant::now() + Duration::from_secs(5);
+    let mut retries = 0;
+    loop {
+        match read() {
+            Ok(value) => return Ok((value, retries)),
+            Err(error)
+                if error.code == winbridge_update::journal::JournalErrorCode::Storage
+                    && error.message.contains("disk I/O error")
+                    && Instant::now() < until =>
+            {
+                retries += 1;
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+#[test]
+fn post_crash_observation_retries_only_transient_read_io() {
+    use winbridge_update::journal::{JournalError, JournalErrorCode};
+    let mut calls = 0;
+    let (value, retries) = observe_after_owned_exit(|| {
+        calls += 1;
+        if calls < 3 {
+            Err(JournalError {
+                code: JournalErrorCode::Storage,
+                message: "disk I/O error".into(),
+            })
+        } else {
+            Ok("same readonly observation")
+        }
+    })
+    .unwrap();
+    assert_eq!((value, retries, calls), ("same readonly observation", 2, 3));
+    let mut calls = 0;
+    let result: Result<((), u32), _> = observe_after_owned_exit(|| {
+        calls += 1;
+        Err(JournalError {
+            code: JournalErrorCode::Corrupt,
+            message: "disk I/O error in rejected typed data".into(),
+        })
+    });
+    assert_eq!(result.unwrap_err().code, JournalErrorCode::Corrupt);
+    assert_eq!(calls, 1);
+}
 fn adapter(input: &GateInput) -> PathBuf {
     use std::os::windows::process::CommandExt;
     let source = input.root.join("build-adapter.rs");
@@ -1031,6 +1079,9 @@ fn case(
     // The closure may panic; an RAII owner still closes the test Job. On success
     // explicitly verify its complete termination and the post-crash history.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(proof));
+    if let Ok(proof) = &result {
+        write(&root.join("pre-crash-proof.json"), proof);
+    }
     child.terminate_tree().unwrap();
     if let Some(holder) = holder {
         holder.finish(&root);
@@ -1048,7 +1099,10 @@ fn case(
     };
     let update_id = proof["root"]["updateId"].as_str().unwrap().to_owned();
     let id = update_id.as_str();
-    let view = UpdateJournal::shutdown_preparation_snapshot(&directory, id, false, None).unwrap();
+    let (view, mut observation_retries) = observe_after_owned_exit(|| {
+        UpdateJournal::shutdown_preparation_snapshot(&directory, id, false, None)
+    })
+    .unwrap();
     let phase = view.candidate_shutdown.unwrap();
     assert!(!phase.physical_custody_held);
     assert_eq!(
@@ -1114,15 +1168,20 @@ fn case(
                 .unwrap();
     }
     if input.final_backup {
-        let saved = UpdateJournal::inspect_state_backup(&directory, id)
-            .unwrap()
-            .unwrap();
+        let (saved, retries) =
+            observe_after_owned_exit(|| UpdateJournal::inspect_state_backup(&directory, id))
+                .unwrap();
+        observation_retries += retries;
+        let saved = saved.unwrap();
         assert_eq!(
             serde_json::to_value(&saved).unwrap(),
             proof["finalStateBackup"]["record"]
         );
-        let after =
-            UpdateJournal::backup_preparation_snapshot(&directory, id, false, None).unwrap();
+        let (after, retries) = observe_after_owned_exit(|| {
+            UpdateJournal::backup_preparation_snapshot(&directory, id, false, None)
+        })
+        .unwrap();
+        observation_retries += retries;
         assert!(
             !after
                 .candidate_shutdown
@@ -1142,6 +1201,7 @@ fn case(
         proof["finalStateBackup"]["sameHistoryWithoutCustody"] = json!(true);
     }
     proof["delayedOriginalLockVerified"] = json!(fault == Fault::DelayedInstanceLock);
+    proof["readOnlyObservationRetries"] = json!(observation_retries);
     proof["ownedSupervisorCrashRetainsHistoryWithoutCustody"] = json!(true);
     proof
 }
