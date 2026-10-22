@@ -1,5 +1,16 @@
 # Постепенная реализация и расширение
 
+## Точка продолжения после проверок 2026-10-22
+
+[Подробный handoff](plans/worker-self-update/resume-2026-10-22.md) — актуальная
+инструкция следующему агенту. U0/internal U1 и U2.1 закрыты; U2.2 имеет file/FSM
+primitives и manifest planner. **Первый незавершённый блок:** immutable proof
+binding и durable preparation/replacement ledger, затем consuming custody и file
+driver, activation, U3 и U4. Public update отключён. Windows-прогоны завершены;
+старые записи «gate выполняется» ниже — исторические. Повторно отправлять их не надо.
+
+## История контрольных точек
+
 2026-10-22: [U2.1 final backup](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
 завершён: happy/migration/refusal +23-test four-case fault gate,31 ready files,
 18 negative proof mutations. [SDK/model gate9/0](plans/worker-self-update/windows-runtime-file-moves-gate-2026-10-22.md)

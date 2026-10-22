@@ -2,7 +2,9 @@
 
 2026-10-22. План следующего блока после [U2.1](final-state-backup.md).
 Это проектирование; file replacement, activation и public install не реализованы.
-Native backup fault gate сейчас выполняется отдельно, его успешность не предполагается.
+U2.1 final backup fault gate завершён успешно; file/FSM primitives также прошли
+native gate. [Handoff 2026-10-22](resume-2026-10-22.md) отделяет эти результаты от
+ещё не реализованных binding/ledger/custody handoff/driver/activation.
 
 ## Что уже можно переиспользовать
 
@@ -152,13 +154,13 @@ volume и parent File ID проверяются до вызова.
 вызов не выполняет эффект. После ошибки readback исход неопределён, не retry.
 Platform primitive не является installation permission; updater пока его не вызывает.
 
-Три Windows tests подготовлены: реальный rename/same ID и отсутствие повторного
+Три Windows tests пройдены: реальный rename/same ID и отсутствие повторного
 move, occupied destination/no overwrite, wrong ID/hash/parent и held no-delete
-read pin. Cross-check/all-target Clippy проходят, native execution ещё впереди.
+read pin. Cross-check/all-target Clippy и native execution проходят.
 В существующие primitives PS/Python runners добавлен отдельный режим
 `--runtime-file-moves-only` / `-RuntimeFileMovesOnly`, без old binary reference и
 без full desktop/candidate build. Используются generated fixtures и прежний approved
-native test cache. Команда после clean export и окончания текущего fault gate:
+native test cache. Шаблон команды для будущего обоснованного повтора после новых изменений:
 
 ```bash
 python3 scripts/validate-update-shutdown-primitives-native.py \
@@ -166,11 +168,11 @@ python3 scripts/validate-update-shutdown-primitives-native.py \
   --cache-run 20261017-061527-f4639971 --runtime-file-moves-only
 ```
 
-Это шаблон, не выполненный прогон. SDK adapter требует native проверки, прежде
-чем его можно включить в consuming replacement driver. Durable binding/ledger и
-передача original custody всё ещё не реализованы.
+Сам шаблон не является новым прогоном. Native gate adapter уже пройден и описан
+ниже; повтор без изменений не нужен. Durable binding/ledger и передача original
+custody всё ещё не реализованы.
 
-### Native findings 2026-10-22, исправления ожидают повтор
+### История native findings 2026-10-22
 
 Первый SDK run20261022-202619-3d8f4020/task3fc7949a завершился2/3, overall failed:
 relative RootDirectory/leaf вызвал ERROR_INVALID_PARAMETER87 в positive rename.
@@ -181,14 +183,14 @@ Collision test теперь требует ERROR_FILE_EXISTS80/ALREADY_EXISTS183
 отказ неправильных параметров не выдавался за доказательство no-overwrite.
 Positive test использует кириллицу/non-BMP filename и проверяет write denial
 после move. Combined SDK mode также проверит6 data FSM/batch tests (всего9).
-Cross-check/Clippy проходят, исправленный native результат ещё не получен.
+Cross-check/Clippy и исправленный native gate прошли; точные результаты ниже.
 
 ### Native primitive/model gate завершён
 
 [SDK и FSM gate 2026-10-22](windows-runtime-file-moves-gate-2026-10-22.md) пройден9/0,
 source6f060f0, run20261022-203417-4db1d2dc. Это закрывает primitive/model native
-проверку, но не whole replacement. Новая plan_replacement_manifest пока отдельно
-проверяется локально: fixed four roles/target/source, inherited installation/scope,
+проверку, но не whole replacement. Новая plan_replacement_manifest отдельно
+проверена локально: fixed four roles/target/source, inherited installation/scope,
 новый canonical UUID без alias прежнего, без публикации/authority. Она не включена
 в перечисленный native producer. Далее bind к saved proofs и durable preparation
 до consuming OS custody; actual installation не включена.

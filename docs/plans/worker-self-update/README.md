@@ -11,14 +11,17 @@ U0/internal U1 и [U2.1 final backup](windows-state-backup-faults-gate-2026-10-2
 завершены. Native SDK/model gate9/0 и pure manifest plan подготовлены для U2.2;
 actual replacement/activation/public update ещё отсутствуют. Цель active.
 Следующий шаг — binding/ledger подготовки файлов и consuming original custody.
+Проверки завершены по просьбе пользователя; [подробный handoff 2026-10-22](resume-2026-10-22.md)
+содержит результаты, точные pins, карту кода и инструкцию продолжения без контекста.
 
-## Статус после проверок 2026-10-21
+## Исторический статус после проверок 2026-10-21
 
 U0/internal U1 завершены. U2.1 backup success и updater migration12→13 прошли
 [Windows gates](windows-state-backup-gate-2026-10-21.md); fault gate ещё не закончен,
 поэтому чекбокс U2.1 ниже остаётся открытым. U2 replacement/activation, U3/U4 не
 готовы. Цель возобновлена 2026-10-22; отдельный fault runner/verifier подготовлен, native gate впереди.
-[Инструкция следующей сессии](resume-2026-10-21.md) — точка продолжения без контекста чата.
+[Предыдущая инструкция](resume-2026-10-21.md) сохранена как история;
+текущая точка продолжения — handoff 2026-10-22 выше.
 
 ## Постоянные пути и границы
 

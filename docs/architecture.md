@@ -2,7 +2,7 @@
 
 Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
-## Текущее состояние updater — завершение сессии 2026-10-21
+## Текущее состояние updater — завершение проверок 2026-10-22
 
 U0/internal U1 завершены. U2.1 использует updater13/worker16, supervisor v15/view7:
 original exit guard удерживается supervisor через Arc и immutable driver loan;
@@ -10,7 +10,9 @@ readonly old-worker helper сохраняет SQLite через backup API. Да
 не создают kernel custody. [Native success и migration12→13](plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
 пройдены; [four-case fault gate](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
 завершил U2.1. U2.2 имеет native-проверенные file/model primitives, но пока не driver. Replacement/activation/desktop/public update
-не реализованы. Цель возобновлена 2026-10-22; [предыдущий handoff](plans/worker-self-update/resume-2026-10-21.md).
+не реализованы. Следом immutable proof binding/preparation ledger и consuming OS
+custody; [актуальный handoff](plans/worker-self-update/resume-2026-10-22.md)
+содержит проверки, карту кода и последовательность продолжения.
 Ниже исторические описания блоков; номера schemas там относятся к их native gates.
 
 ## Точная остановка updater — 2026-10-21

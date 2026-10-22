@@ -1,37 +1,35 @@
-## U2.1 complete, U2.2 preparation next — 2026-10-22
+# Передача контекста updater — завершение проверок 2026-10-22
 
-Goal ACTIVE. No native/Cargo running. Current checkpoint includes pure manifest plan;
-reason normalizer/progress labels fixed and regression-checked. Installed d052 healthy/idle0,
-controller3413 alive; no installed runtime changes. No UI windows, desktop may open/
-close, leave worker running. **Do not rerun completed tasks below.**
+**Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-22.md).**
+В ней сохранены фактическая готовность, карта кода, отчёты/Task IDs/SHA, исправления,
+локальная регрессия, восстановление окружения и последовательность следующих шагов.
+Пользователь попросил закончить проверки и сделать коммит; новая реализация в этой
+завершающей задаче не начиналась. Updater целиком не готов, public install отключён.
 
-[Full backup fault gate](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
-taskb3fd7ab5/run20261022-203814-bc4258b9 succeeded/exit0:23 tests/8 groups/4 full cases,
-31 ready files verified twice,18 negative mutations rejected. Native producer6f060f0;
-local verifier fixed raw LF vs sanitized900-char reason without another Windows run.
-Source/target/cache exact pins and full proof: state-backup-faults-native-verified.json
-under .winbridge/update-preparation. Source runtimeApplied/windowsOpened false.
-SDK/model gate07e45433/run203417-4db1d2dc also9/0; all previous failed dirs retained.
-With previous happy+actual12→13/refusal gates U2.1 is COMPLETE. U2.2 remains open.
+U0/internal U1 и **U2.1 завершены**. Последний fault gate: 23 native tests,
+4 полных actual Main cases, 31 ready file; file/FSM gate: 9 native tests, 6 ready
+files. Оба terminal succeeded/exit0. В завершающей задаче повторно сверены все
+37 ready files и backup proof, без новых Windows задач. Номера контрактов:
+updater journal13 / worker16 / supervisor v15 / view7.
+Финальная локальная регрессия: **618 passed / 0 failed / 16 ignored**;
+Rust fmt и 5 Python tests проходят. Причины ignored и логи указаны в handoff.
 
-Ready foundation: per-file/batch data FSM, owned Windows rename/no-overwrite adapter,
-manifest plan preserving installation/scope/exact candidate. Six model +three SDK
-native tests, two manifest pure tests and both Clippy pass. Manifest code after6f
-not in native producer; no ledger/file driver/activation/public install exists.
-Read [runtime replacement plan](plans/worker-self-update/runtime-replacement.md).
+Основа U2.2 — data-only FSM, native file adapter и pure manifest planner.
+**Следом:** immutable proof binding + durable preparation/replacement ledger →
+consuming original OS custody → owned file driver/manifest-last → activation.
+U3 desktop/migration/rollback и U4 bootstrap остаются обязательными.
+Нельзя восстанавливать kernel custody из журнала или повторять неизвестный эффект.
 
-NEXT implement immutable replacement/preparation binding to saved baseline,
-preimages, candidate/artifacts/health, shutdown and VERIFIED final backup, current
-owner/epoch/launch/root revision/config/parent IDs. Persist create/copy intents and
-receipts before preparing five independent files; fresh non-Serde permit only.
-Then consuming original custody handoff (do not drop state/process/instance lock),
-owned file driver and manifest-last trusted FilesVerified; raw lifecycle remains
-blocked. New schema needs matching helper/candidate fixtures and old-reader refusal;
-compiled13 helper cannot be assumed future-schema compatible. Actual activation,
-controller confirmation, desktop/save/tray/migration/rollback and U4 bootstrap follow.
-Installed worker update is not required yet; stop dependent actions if it becomes
-necessary or installed worker behaves unexpectedly. Normal isolated fixture fixes/
-automatic retries already authorized. Prior entries below are historical.
+Рабочий Windows worker d052 не изменялся: connected, active0, без maintenance/
+recovery errors. Для будущих tests оставить worker; desktop можно открывать/закрывать.
+Controller этой сессии PID3413; после restart проверить IPC и при необходимости
+запустить заново по инструкции. Ручное обновление worker сейчас не требуется.
+
+## Исторические контрольные точки
+
+Ниже сохранена хронология разработки. Записи «Active», «pending», «повторить»
+и прежние статусы относятся к моменту их создания. Они **не означают**, что сейчас
+надо продолжать или заново отправлять перечисленные задачи. Актуален handoff выше.
 
 ## Active full backup gate; nine native file/model tests passed — 2026-10-22
 
