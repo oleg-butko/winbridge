@@ -7,6 +7,12 @@
 Пользователь приостановил реализацию после завершения текущих проверок.
 [Подробный handoff и следующий шаг](resume-2026-10-21.md). Public update отключён.
 
+2026-10-22: реализация возобновлена. Добавлен отдельный four-case fault runner
+`--final-state-backup-faults` / `-FinalStateBackupFaults`, строгий verifier,
+helper fault marker и проверка specific exit/reason/destination/duplicate/crash.
+Обе all-target Clippy и synthetic verifier precheck проходят; native fault gate
+ещё впереди. До его результата U2.1 не закрывается.
+
 Ниже план и исторические записи реализации в порядке добавления. Их «пока
 отсутствует/впереди» относятся к моменту записи; актуальная готовность — выше.
 

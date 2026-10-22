@@ -1,5 +1,9 @@
 # Постепенная реализация и расширение
 
+2026-10-22: цель возобновлена. Отдельный four-case final backup fault runner/verifier
+реализован; native execution ещё впереди. U2.1 остаётся открытым; затем U2.2
+replacement/activation. Installed worker обновлять сейчас не требуется.
+
 2026-10-21: internal U1 завершён, U2.1 final backup реализован до supervisor
 v15/view7 (updater13/worker16). [Native success22 tests и migration12→13](plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
 пройдены. Fault scaffold прошёл обе Clippy; отдельные runner/verifier и native

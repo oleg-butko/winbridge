@@ -461,6 +461,13 @@ pub(crate) fn export_before_copy(
     {
         return Err("Export validation scope rejected".into());
     }
+    if input.backup_fault != BackupFault::None {
+        publish(
+            &root,
+            "backup-helper-fault.json",
+            &serde_json::json!({"fault":input.backup_fault,"attemptId":guard.intent().attempt_id,"process":guard.process()}),
+        )?;
+    }
     match input.backup_fault {
         BackupFault::ExistingDestination => {
             let mut f = fs::OpenOptions::new()

@@ -598,7 +598,11 @@ fn final_backup(
             )
             .unwrap()
             .unwrap();
-            if saved.phase == winbridge_update::state_backup::StateBackupPhase::Running {
+            if saved.phase == winbridge_update::state_backup::StateBackupPhase::Running
+                && v.driver_active
+                && v.candidate_state_backup.as_ref().unwrap().phase
+                    == CandidateStateBackupPhase::CopyingState
+            {
                 let marker: serde_json::Value = serde_json::from_slice(
                     &fs::read(root.join("backup-helper-held.json")).unwrap(),
                 )
@@ -608,10 +612,17 @@ fn final_backup(
                     serde_json::to_value(&saved.process).unwrap()
                 );
                 assert_eq!(marker["attemptId"], saved.intent.attempt_id);
+                let fault_marker: serde_json::Value = serde_json::from_slice(
+                    &fs::read(root.join("backup-helper-fault.json")).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(fault_marker["fault"], json!(expected_fault));
+                assert_eq!(fault_marker["process"], marker["process"]);
+                assert_eq!(fault_marker["attemptId"], marker["attemptId"]);
                 assert!(v.candidate_shutdown.as_ref().unwrap().physical_custody_held);
                 assert!(!saved.intent.backup_path().exists());
                 assert_eq!(journal_bytes(root), bytes);
-                return json!({"expectedFault":expected_fault,"record":saved,"view":v,"sourceRowsSha256":rows.0,"sourceBytesUnchanged":true,"helperHeldBeforeCopy":true});
+                return json!({"expectedFault":expected_fault,"faultMarker":fault_marker,"record":saved,"view":v,"sourceRowsSha256":rows.0,"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"helperHeldBeforeCopy":true,"destinationAbsent":true});
             }
         }
         if !v.driver_active {
@@ -644,6 +655,27 @@ fn final_backup(
         );
         assert!(record.report.is_none());
         assert!(record.cleanup.as_ref().unwrap().tree_empty);
+        let fault_marker: serde_json::Value =
+            serde_json::from_slice(&fs::read(root.join("backup-helper-fault.json")).unwrap())
+                .unwrap();
+        assert_eq!(fault_marker["fault"], json!(expected_fault));
+        assert_eq!(fault_marker["attemptId"], record.intent.attempt_id);
+        assert_eq!(fault_marker["process"], json!(record.process));
+        let expected_exit = match expected_fault {
+            BackupFault::ExistingDestination => 1,
+            BackupFault::ExitAfterCopy => 79,
+            BackupFault::WrongInputReport => {
+                assert_eq!(record.reason.as_deref(), Some("Backup report differs from saved helper/input/exit scope or successful cleanup"));
+                0
+            }
+            _ => unreachable!(),
+        };
+        let destination =
+            winbridge_update::state_backup::pin_backup_file(&record.intent.backup_path()).unwrap();
+        assert_eq!(
+            record.cleanup.as_ref().unwrap().exit_code,
+            Some(expected_exit)
+        );
         let preserved = if expected_fault == BackupFault::ExistingDestination {
             assert_eq!(
                 fs::read(record.intent.backup_path()).unwrap(),
@@ -670,7 +702,7 @@ fn final_backup(
             record
         );
         assert_eq!(journal_bytes(root), bytes);
-        return json!({"expectedFault":expected_fault,"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"sourceBytesUnchanged":true,"destinationPreserved":preserved,"duplicateNoNewAttempt":true});
+        return json!({"expectedFault":expected_fault,"faultMarker":fault_marker,"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"backupRowsSha256":if expected_fault == BackupFault::ExistingDestination {None} else {Some(&rows.0)},"destinationEvidence":destination.evidence(),"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"destinationPreserved":preserved,"duplicateNoNewAttempt":true});
     }
     assert!(done.driver_error.is_none());
     assert_eq!(
@@ -1084,6 +1116,8 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
         std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
     );
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    assert!(!input.backup_faults || input.final_backup);
+    assert!(!input.final_backup || !input.supplemental);
     assert!(input.root.is_dir());
     assert_ne!(
         winbridge_protocol::build_identity().source_commit.as_ref(),

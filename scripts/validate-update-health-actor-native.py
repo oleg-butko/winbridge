@@ -320,6 +320,103 @@ def verify_state_backup_proof(proof, source, target):
         raise ValueError('Final backup scope/history/source preservation or duplicate differs')
 
 
+def verify_state_backup_faults_proof(proof, source, target):
+    build = proof.get('build', {})
+    if (proof.get('kind') != 'state_backup_faults_native_proof' or proof.get('passed') is not True
+            or proof.get('platform') != 'windows' or proof.get('target') != target
+            or build.get('sourceCommit') != source['sourceCommit'] or build.get('sourceDirty') is not False
+            or build.get('sourceManifestSha256') != source['manifestSha256']
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False
+            or any(proof.get(k) is not True for k in ('normalMain', 'actualOldRoles', 'actualCandidateBuild', 'validationFeature'))):
+        raise ValueError('Backup faults source/target/Main isolation differs')
+    faults = ['existing_destination', 'exit_after_copy', 'wrong_input_report', 'hold_before_copy']
+    cases = proof.get('cases', [])
+    if [c.get('finalStateBackup', {}).get('expectedFault') for c in cases] != faults:
+        raise ValueError('Four ordered backup fault cases required')
+    attempts, processes = set(), set()
+    for case, fault in zip(cases, faults):
+        if case.get('fault') != 'none':
+            raise ValueError('Backup fault case requires successful exact stop')
+        _verify_shutdown_main_case(case, build, target)
+        b = case['finalStateBackup']
+        r, view, after = b['record'], b['view'], b['afterOwnedCrash']
+        intent, binding = r['intent'], r['intent']['binding']
+        old = case['shutdown']['intent']['binding']
+        canonical = json.dumps([binding, intent['attemptId']], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+        proc = r['process']
+        stamp = (proc['hostId'], proc['sessionId'], proc['processId'], proc['birth'])
+        if (intent['attemptId'] in attempts or stamp in processes
+                or proc['processId'] <= 0 or not str(proc['birth']).isdigit()
+                or proc == old['worker']['process'] or proc['hostId'] != old['worker']['process']['hostId']
+                or proc['sessionId'] != old['worker']['process']['sessionId']):
+            raise ValueError('Backup helper identity/attempt repeated or differs')
+        attempts.add(intent['attemptId']); processes.add(stamp)
+        held = fault == 'hold_before_copy'
+        if (r.get('schemaVersion') != 1 or intent.get('schemaVersion') != 1
+                or hashlib.sha256(b'winbridge.final-state-backup.intent.v1\n'+canonical).hexdigest() != intent['bindingSha256']
+                or binding['shutdown'] != case['shutdown'] or binding['workerJournalSchema'] != 16
+                or binding['workerConfig'] != case['coldAfterMain']['workerConfig']
+                or PureWindowsPath(binding['parentDirectory']) != PureWindowsPath(old['loadedWorker']['image']['path']).parent/'update'/old['updateId']
+                or case['root']['revision'] != old['parentRevision']+2
+                or r.get('phase') != ('running' if held else 'indeterminate')
+                or r.get('revision') != (3 if held else 5)
+                or r.get('resumeGranted') is not True or r.get('resumeAcknowledged') is not True
+                or r.get('report') is not None or (r.get('reason') is None) is not held
+                or r['updatedAtMs'] < binding['admittedAtMs']
+                or b['faultMarker'] != {'fault': fault, 'attemptId': intent['attemptId'], 'process': proc}
+                or PureWindowsPath(r['inputFile']['path']) != PureWindowsPath(binding['parentDirectory'])/('state-backup-'+intent['attemptId']+'.json')
+                or not re.fullmatch(r'[0-9a-f]{64}', r['inputFile']['sha256'])
+                or not 0 < r['inputFile']['bytes'] <= 65536
+                or not re.fullmatch(r'[0-9a-f]{64}', b.get('sourceRowsSha256', ''))
+                or b.get('sourceTaskCount', 0) < 1 or b.get('sourceOutputCount', 0) < 2
+                or b.get('sourceBytesUnchanged') is not True
+                or b.get('sameHistoryWithoutCustody') is not True):
+            raise ValueError('Backup fault intent/record/marker/history differs')
+        v = view['candidateStateBackup']
+        if (view.get('schemaVersion') != 7 or view['update'] != case['root']
+                or view.get('driverActive') is not held
+                or (view.get('driverError') is None) is not held
+                or view['candidateShutdown'].get('physicalCustodyHeld') is not True
+                or v.get('phase') != ('copying_state' if held else 'indeterminate')
+                or v.get('attemptId') != intent['attemptId'] or v.get('revision') != r['revision']
+                or v.get('helperProcess') != proc or v.get('reason') != r.get('reason')
+                or any(v.get(k) is not None for k in ('backupBytes', 'backupSha256', 'completedAtMs'))
+                or after.get('schemaVersion') != 7 or after.get('driverActive') is not False
+                or after['update'] != case['root'] or after['candidateShutdown'].get('physicalCustodyHeld') is not False
+                or after['candidateStateBackup'] != dict(v, phase='indeterminate')):
+            raise ValueError('Backup fault view invented success/custody or lost history')
+        if held:
+            if (r.get('cleanup') is not None or b.get('helperHeldBeforeCopy') is not True
+                    or b.get('destinationAbsent') is not True):
+                raise ValueError('Held helper fabricated cleanup or backup')
+            continue
+        c = r['cleanup']
+        expected_exit = {'existing_destination': 1, 'exit_after_copy': 79, 'wrong_input_report': 0}[fault]
+        if (c.get('process') != proc or c.get('exitCode') != expected_exit
+                or c.get('noProcessCreated') is not False or c.get('outputExceeded') is not False
+                or any(c.get(k) is not True for k in ('creationConfirmed', 'resumeRequested', 'treeEmpty', 'captureComplete'))
+                or c.get('jobName') != 'Global\\WinBridge-StateBackup-'+intent['bindingSha256']
+                or b['duplicate']['candidateStateBackup'] != v or b['duplicate'].get('driverActive') is not False
+                or b.get('duplicateNoNewAttempt') is not True or b.get('destinationPreserved') is not True):
+            raise ValueError('Backup fault cleanup/duplicate differs')
+        if fault == 'wrong_input_report':
+            if (c.get('failure') is not None or r['reason'] != 'Backup report differs from saved helper/input/exit scope or successful cleanup'):
+                raise ValueError('Wrong input report was not rejected by binding')
+        elif not isinstance(c.get('failure'), str) or not c['failure'].startswith('Artifact query failed; stderr=') or r['reason'] != c['failure']:
+            raise ValueError('Fault helper exit was not preserved')
+        evidence = b['destinationEvidence']
+        if (PureWindowsPath(evidence['path']) != PureWindowsPath(binding['parentDirectory'])/('state-backup-'+intent['attemptId']+'.sqlite')
+                or not re.fullmatch(r'[0-9a-f]{64}', evidence['sha256'])
+                or evidence['fileIdentity'] in (binding['parentIdentity'], old['workerState']['journalIdentity'], r['inputFile']['fileIdentity'])):
+            raise ValueError('Preserved fault destination identity differs')
+        if fault == 'existing_destination':
+            sentinel = b'preserve existing validation backup destination'
+            if evidence['sha256'] != hashlib.sha256(sentinel).hexdigest() or evidence['bytes'] != len(sentinel):
+                raise ValueError('Existing destination was overwritten')
+        elif (evidence['bytes'] <= 0 or evidence['bytes'] % 512 or b.get('backupRowsSha256') != b['sourceRowsSha256']):
+            raise ValueError('Unaccepted copied database lost rows')
+
+
 def verify_shutdown_supplemental_proof(proof, source, target):
     build = proof.get('build', {})
     if (proof.get('kind') != 'shutdown_main_supplemental_proof' or proof.get('passed') is not True
@@ -374,12 +471,13 @@ def main():
     modes.add_argument('--shutdown-main-gate', action='store_true')
     modes.add_argument('--shutdown-main-supplemental', action='store_true')
     modes.add_argument('--final-state-backup-gate', action='store_true')
+    modes.add_argument('--final-state-backup-faults', action='store_true')
     parser.add_argument('--previous-updater')
     parser.add_argument('--previous-updater-sha256')
     parser.add_argument('--controller-config', default='.winbridge/controller-snapshot.local.json', type=Path)
     args = parser.parse_args()
     source, target = archive_pin(args.archive), archive_pin(args.target_archive)
-    drain_parameters = ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
+    drain_parameters = ' -FinalStateBackupFaults' if args.final_state_backup_faults else ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
     if args.drain_gate:
         if (not args.previous_updater or not re.fullmatch(r'[0-9a-f]{64}', args.previous_updater_sha256 or '')
                 or PureWindowsPath(args.previous_updater).drive.casefold() != 'k:'
@@ -424,14 +522,15 @@ Expand-Archive -LiteralPath $copiedArchive -DestinationPath $local
 & pwsh.exe -NoProfile -NonInteractive -File (Join-Path $source 'scripts/test-update-health-actor.ps1') -SourceDirectory $source -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath $target -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(cache)} -ReportDirectory {ps(windows_report)}{drain_parameters}
 exit $LASTEXITCODE
 '''
+    timeout_ms = 3600000 if args.final_state_backup_faults else 1800000
     request = {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': 'snapshot-fixture',
-               'idempotencyKey': 'native-health-'+run, 'timeoutMs': 1800000,
+               'idempotencyKey': 'native-health-'+run, 'timeoutMs': timeout_ms,
                'command': {'kind': 'direct', 'executable': 'pwsh.exe', 'arguments': ['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()], 'workingDirectory': '.'}}
     (local_report / 'request.json').write_text(json.dumps(request, indent=2))
     task = native.call(endpoint, {'method': 'submit', 'request': request})['task']
     print(json.dumps({'taskId': task['taskId'], 'runId': run, 'reportDirectory': str(report)}), flush=True)
     chunks, sequence = [], 0
-    deadline = time.monotonic()+1850
+    deadline = time.monotonic()+timeout_ms/1000+50
     while True:
         task = native.call(endpoint, {'method': 'get_task', 'taskId': task['taskId']})['task']
         while True:
@@ -465,10 +564,10 @@ exit $LASTEXITCODE
         raise RuntimeError({'taskId': task['taskId'], 'error': result['error'], 'reportDirectory': str(report)})
     if 'candidate-health-actor-proof.json' not in verified_names:
         raise ValueError('Ready manifest must cover the actual process proof')
-    expected_kind = 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
+    expected_kind = 'state_backup_faults_native_gate' if args.final_state_backup_faults else 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
     if result.get('kind') != expected_kind or result.get('sourceCommit') != source['sourceCommit'] or result.get('sourceArchiveSha256') != source['archiveSha256'] or result.get('target') != target:
         raise ValueError('Report kind or exact source/target binding differs')
-    verifier = verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
+    verifier = verify_state_backup_faults_proof if args.final_state_backup_faults else verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
     verifier(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report), 'filesVerified': len(ready['files'])}), flush=True)
 

@@ -10,7 +10,7 @@
 U0/internal U1 завершены. U2.1 backup success и updater migration12→13 прошли
 [Windows gates](windows-state-backup-gate-2026-10-21.md); fault gate ещё не закончен,
 поэтому чекбокс U2.1 ниже остаётся открытым. U2 replacement/activation, U3/U4 не
-готовы. По запросу пользователя цель на паузе; новые runs не стартуют.
+готовы. Цель возобновлена 2026-10-22; отдельный fault runner/verifier подготовлен, native gate впереди.
 [Инструкция следующей сессии](resume-2026-10-21.md) — точка продолжения без контекста чата.
 
 ## Постоянные пути и границы

@@ -1,3 +1,27 @@
+# Возобновление updater — 2026-10-22
+
+Пользователь возобновил цель. Controller запущен заново, installed d052 healthy/
+idle0, generation e5b29df5-6e5b-41a4-8f2b-9dc2e664e95f. Desktop не требуется.
+Реализован отдельный --final-state-backup-faults / -FinalStateBackupFaults mode:
+четыре actual Main backup cases, helper fault marker/PID/attempt, specific exit/
+reason, preserved destination evidence, cleanup/duplicate и crash history без
+custody. PS whitelist содержит только public diagnostics, private client исключён.
+Python проверяет ordered cases, canonical input/binding, exact stop, file evidence,
+owned cleanup и after-crash view. Native fault gate ещё НЕ выполнен.
+
+Review исправил race в held-helper assertion: saved Running принимается только
+вместе с наблюдением active/CopyingState. Обе final all-target Clippy, fmt/diff, UI build, ZIP tests3 и retained happy
+proof проверены. Synthetic fault verifier отклонил9 мутаций; это не native evidence.
+Preflight task179b5474-0cd6-47f2-9753-48004f8ec678 подтвердил Windows62,408,929,280
+bytes и все retained caches/target ZIP. Следом clean ZIP и actual native fault gate. Target31fa и cache20261017-061527-f4639971 переиспользуются; файлы Windows
+не удалять. Для четырёх полных build cases runner использует timeout60min;
+это предел наблюдения/Job, не разрешение повторить неизвестную операцию.
+
+План продолжения: native faults → review/закрытие U2.1 → U2.2 consuming replacement
+и activation → U3 desktop/migration/rollback → U4 bootstrap. Подробные инварианты и
+карта кода в [handoff предыдущей сессии](plans/worker-self-update/resume-2026-10-21.md).
+Его статус paused — исторический, текущая цель active. Ниже сохранён snapshot паузы.
+
 # Передача контекста — 2026-10-21, проверки завершены
 
 **Основная цель updater на паузе по запросу пользователя.** Новые Windows runs и
