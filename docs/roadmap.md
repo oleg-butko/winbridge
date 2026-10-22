@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-22: [U2.1 final backup](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
+завершён: happy/migration/refusal +23-test four-case fault gate,31 ready files,
+18 negative proof mutations. [SDK/model gate9/0](plans/worker-self-update/windows-runtime-file-moves-gate-2026-10-22.md)
+и manifest plan подготовили основу U2.2. Следом durable preparation/replacement
+ledger и consuming custody/file driver, затем activation. Public update/U3/U4 не готовы.
+
 2026-10-22: [runtime moves/FSM gate](plans/worker-self-update/windows-runtime-file-moves-gate-2026-10-22.md)
 пройден9 native tests. Immutable full backup fault run203814-bc4258b9 выполняется;
 U2.1 ещё открыт. Manifest plan — data-only; ledger/custody/driver/activation впереди.

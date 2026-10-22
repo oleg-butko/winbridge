@@ -5,6 +5,13 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
+## Текущий статус 2026-10-22
+
+U0/internal U1 и [U2.1 final backup](windows-state-backup-faults-gate-2026-10-22.md)
+завершены. Native SDK/model gate9/0 и pure manifest plan подготовлены для U2.2;
+actual replacement/activation/public update ещё отсутствуют. Цель active.
+Следующий шаг — binding/ledger подготовки файлов и consuming original custody.
+
 ## Статус после проверок 2026-10-21
 
 U0/internal U1 завершены. U2.1 backup success и updater migration12→13 прошли
@@ -185,7 +192,7 @@ U2–U4 и ещё не включены. Final consistent backup делаетс�
 
 ### U2 — same-schema apply и agent tracking
 
-- [ ] [Final consistent worker state backup](final-state-backup.md) под живым exit
+- [x] [Final consistent worker state backup](final-state-backup.md) под живым exit
   guard, отдельный durable helper attempt и проверенная receipt до replacement.
 - [ ] Binary manifest, same-volume replace и verified prior set, exact exit/lock.
 - [ ] New worker verification mode и controller-pinned confirmation.

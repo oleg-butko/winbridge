@@ -39,4 +39,13 @@ class ArchiveTests(unittest.TestCase):
             p=self.package(Path(d));link=Path(d)/'linked.zip';link.symlink_to(p)
             with self.assertRaises(ValueError):health.archive_pin(link)
 
+class BackupReasonTests(unittest.TestCase):
+    def test_cleanup_stderr_controls_match_saved_reason_without_dropping_format_characters(self):
+        self.assertEqual(health.backup_failure_reason('Artifact query failed; stderr=WinBridge: The file exists. (os error 80)\n'),
+                         'Artifact query failed; stderr=WinBridge: The file exists. (os error 80)')
+        self.assertEqual(health.backup_failure_reason('A\n\r\t\x7f\x85B\u200d🧪'), 'AB\u200d🧪')
+
+    def test_reason_bound_counts_scalars_instead_of_utf8_bytes_or_utf16_units(self):
+        self.assertEqual(health.backup_failure_reason('🧪'*901), '🧪'*900)
+
 if __name__=='__main__':unittest.main()

@@ -8,7 +8,8 @@ U0/internal U1 завершены. U2.1 использует updater13/worker16,
 original exit guard удерживается supervisor через Arc и immutable driver loan;
 readonly old-worker helper сохраняет SQLite через backup API. Данные backup/history
 не создают kernel custody. [Native success и migration12→13](plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
-пройдены, fault gate ещё не закончен. Replacement/activation/desktop/public update
+пройдены; [four-case fault gate](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
+завершил U2.1. U2.2 имеет native-проверенные file/model primitives, но пока не driver. Replacement/activation/desktop/public update
 не реализованы. Цель возобновлена 2026-10-22; [предыдущий handoff](plans/worker-self-update/resume-2026-10-21.md).
 Ниже исторические описания блоков; номера schemas там относятся к их native gates.
 

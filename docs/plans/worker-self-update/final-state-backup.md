@@ -1,5 +1,11 @@
 # U2.1: финальный consistent backup worker
 
+**Завершён 2026-10-22:** [four-case fault gate](windows-state-backup-faults-gate-2026-10-22.md)
+23 tests/8 groups вместе с happy/migration12→13/refusal закрывают U2.1. Helper retry
+после неизвестного исхода запрещён; saved Running/Verified не создают OS custody.
+Public update остаётся отключённым. Далее [U2.2](runtime-replacement.md).
+Ниже исторические записи реализации; их pending статусы относятся к моменту записи.
+
 2026-10-21. Следующий блок после [U1 exact shutdown](windows-shutdown-supplemental-gate-2026-10-21.md).
 **Текущий статус:** helper/ledger/consuming driver и supervisor v15/view7 реализованы.
 [Native happy gate22 tests и migration12→13](windows-state-backup-gate-2026-10-21.md)

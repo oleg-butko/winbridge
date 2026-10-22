@@ -10,6 +10,7 @@ from pathlib import Path, PureWindowsPath
 import re
 import time
 import uuid
+import unicodedata
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -320,6 +321,11 @@ def verify_state_backup_proof(proof, source, target):
         raise ValueError('Final backup scope/history/source preservation or duplicate differs')
 
 
+def backup_failure_reason(text):
+    # Match Rust char::is_control and chars().take(900), including non-BMP text.
+    return ''.join(ch for ch in text if unicodedata.category(ch) != 'Cc')[:900]
+
+
 def verify_state_backup_faults_proof(proof, source, target):
     build = proof.get('build', {})
     if (proof.get('kind') != 'state_backup_faults_native_proof' or proof.get('passed') is not True
@@ -409,7 +415,8 @@ def verify_state_backup_faults_proof(proof, source, target):
         if fault == 'wrong_input_report':
             if (c.get('failure') is not None or r['reason'] != 'Backup report differs from saved helper/input/exit scope or successful cleanup'):
                 raise ValueError('Wrong input report was not rejected by binding')
-        elif not isinstance(c.get('failure'), str) or not c['failure'].startswith('Artifact query failed; stderr=') or r['reason'] != c['failure']:
+        elif (not isinstance(c.get('failure'), str) or not c['failure'].startswith('Artifact query failed; stderr=')
+              or r['reason'] != backup_failure_reason(c['failure'])):
             raise ValueError('Fault helper exit was not preserved')
         evidence = b['destinationEvidence']
         if (PureWindowsPath(evidence['path']) != PureWindowsPath(binding['parentDirectory'])/('state-backup-'+intent['attemptId']+'.sqlite')

@@ -115,8 +115,9 @@ status и release только после source/Job/output proof. Добавл�
 сохранённые команды/квитанции и внутренний actor v13; сквозной native gate пройден.
 [Exact shutdown](docs/plans/worker-self-update/exact-shutdown.md) прошёл actual Main
 и supplemental gates; внутренний U1 завершён. [Final backup и migration12→13](docs/plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
-также прошли Windows gate (updater13/worker16, supervisor v15/view7), но backup fault
-проверки ещё не завершены. Install/public update отключены. Реализация возобновлена 2026-10-22;
+также прошли Windows gate (updater13/worker16, supervisor v15/view7).
+[Four-case fault gate](docs/plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
+закрыл U2.1; actual replacement/activation ещё не реализованы. Install/public update отключены. Реализация возобновлена 2026-10-22;
 [подробный handoff предыдущей сессии](docs/plans/worker-self-update/resume-2026-10-21.md).
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

@@ -1,3 +1,38 @@
+## U2.1 complete, U2.2 preparation next — 2026-10-22
+
+Goal ACTIVE. No native/Cargo running. Current checkpoint includes pure manifest plan;
+reason normalizer/progress labels fixed and regression-checked. Installed d052 healthy/idle0,
+controller3413 alive; no installed runtime changes. No UI windows, desktop may open/
+close, leave worker running. **Do not rerun completed tasks below.**
+
+[Full backup fault gate](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
+taskb3fd7ab5/run20261022-203814-bc4258b9 succeeded/exit0:23 tests/8 groups/4 full cases,
+31 ready files verified twice,18 negative mutations rejected. Native producer6f060f0;
+local verifier fixed raw LF vs sanitized900-char reason without another Windows run.
+Source/target/cache exact pins and full proof: state-backup-faults-native-verified.json
+under .winbridge/update-preparation. Source runtimeApplied/windowsOpened false.
+SDK/model gate07e45433/run203417-4db1d2dc also9/0; all previous failed dirs retained.
+With previous happy+actual12→13/refusal gates U2.1 is COMPLETE. U2.2 remains open.
+
+Ready foundation: per-file/batch data FSM, owned Windows rename/no-overwrite adapter,
+manifest plan preserving installation/scope/exact candidate. Six model +three SDK
+native tests, two manifest pure tests and both Clippy pass. Manifest code after6f
+not in native producer; no ledger/file driver/activation/public install exists.
+Read [runtime replacement plan](plans/worker-self-update/runtime-replacement.md).
+
+NEXT implement immutable replacement/preparation binding to saved baseline,
+preimages, candidate/artifacts/health, shutdown and VERIFIED final backup, current
+owner/epoch/launch/root revision/config/parent IDs. Persist create/copy intents and
+receipts before preparing five independent files; fresh non-Serde permit only.
+Then consuming original custody handoff (do not drop state/process/instance lock),
+owned file driver and manifest-last trusted FilesVerified; raw lifecycle remains
+blocked. New schema needs matching helper/candidate fixtures and old-reader refusal;
+compiled13 helper cannot be assumed future-schema compatible. Actual activation,
+controller confirmation, desktop/save/tray/migration/rollback and U4 bootstrap follow.
+Installed worker update is not required yet; stop dependent actions if it becomes
+necessary or installed worker behaves unexpectedly. Normal isolated fixture fixes/
+automatic retries already authorized. Prior entries below are historical.
+
 ## Active full backup gate; nine native file/model tests passed — 2026-10-22
 
 **Не отправлять заново:** taskb3fd7ab5-c875-49e7-b961-2303a265ebc1,

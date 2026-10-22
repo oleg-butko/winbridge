@@ -907,7 +907,7 @@ fn case(
                 .filter(|n| n.starts_with(|c: char| c.is_ascii_digit()))
                 .max();
             println!(
-                "Actual Main shutdown validation {fault:?}: {}",
+                "Actual Main shutdown validation {fault:?}/{backup_fault:?}: {}",
                 last.unwrap_or_else(|| "startup".into())
             );
             progress = Instant::now();
@@ -1262,6 +1262,7 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
             &input.root.join(format!("case-{}.json", cases.len())),
             cases.last().unwrap(),
         );
+        println!("Completed native case {fault:?}/{backup_fault:?}; owned Job closed and saved history checked");
     }
     let proof = json!({"schemaVersion":1,"kind":if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
