@@ -14,6 +14,7 @@ pub mod installed_set;
 pub mod journal;
 mod preparation;
 pub mod runtime_baseline;
+pub mod runtime_exchange;
 pub mod runtime_preimages;
 pub mod shutdown;
 pub mod source;
