@@ -1,3 +1,31 @@
+## Active retry + U2.2 handle adapter WIP — 2026-10-22
+
+Goal ACTIVE. **Do not resubmit running task**5a34314e-e2e5-4302-80c5-3803df8b4646,
+run20261022-200607-a60a7daf, runner PTY21211, log state-backup-faults-retirement-native.log
+under .winbridge/update-preparation. Producer clean2fa306e,
+ZIP winbridge-20261022T200548Z-2fa306e-e78efff5.zip,
+SHA831cc6f460c3e70c0931e6a7ddaaf92e3c628141af44dc92131105af8f827081.
+Same target31fa/cache20261017-061527-f4639971. Observe authoritative Task ID until
+terminal; observation timeout is not permission to restart. No UI windows, installed
+worker only; announce terminal/which worker to leave after run. Current controller3413.
+
+Commits551f287 (data FSM/batch + reviewed runtime-replacement plan) and2fa306e
+(retirement wait/marker read/verifier) are ready. Six pure model tests and both
+Clippy passed. First failed task83efbf45 retained; previous entry below is history.
+
+Parallel new uncommitted WIP: Windows-only crates/platform/src/runtime_files.rs +
+lib export. Owned read+DELETE handle, no-write/delete sharing, source ID/bytes/hash,
+relative destination dir handle, no-overwrite SetFileInformationByHandle rename,
+one OS attempt per object. Three native tests defined, NOT run yet. SDK links in
+runtime-replacement.md. Windows all-target platform Clippy passed after correcting SDK bool type; inspect
+.winbridge/update-preparation/runtime-move-windows-clippy-corrected.log. No driver calls it,
+no source/runtime files changed by adapter on either host. Next after compile:
+review/native primitive check via approved runner, binding/ledger/custody handoff.
+Prepared --runtime-file-moves-only / -RuntimeFileMovesOnly mode in existing
+shutdown-primitives runners; no old reference is needed. Do not run concurrently
+with the active four-case gate/cache. Three SDK tests remain native-unproven.
+Do not claim adapter or U2 replacement native verified yet.
+
 ## U2.1 fixture retirement race corrected; retry next — 2026-10-22
 
 Task83efbf45-c5df-4616-8929-086a7eeeb5df/run20261022-194847-ec2f7702 terminal failed1.

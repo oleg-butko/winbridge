@@ -48,21 +48,31 @@ def main():
     modes=parser.add_mutually_exclusive_group()
     modes.add_argument('--cold-reader-only', action='store_true')
     modes.add_argument('--backup-migration-only', action='store_true')
-    parser.add_argument('--reference-receipt', type=Path, required=True)
+    modes.add_argument('--runtime-file-moves-only', action='store_true')
+    parser.add_argument('--reference-receipt', type=Path)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
-    groups = {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
-    kind = 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
-    mode_switch = ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
+    groups = {'runtime-owned-file-moves': 3} if args.runtime_file_moves_only else {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
+    kind = 'runtime_file_moves_native_gate' if args.runtime_file_moves_only else 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
+    mode_switch = ' -RuntimeFileMovesOnly' if args.runtime_file_moves_only else ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
     pin = health.archive_pin(args.archive)
     with zipfile.ZipFile(args.archive) as source:
-        if (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
+        if not args.runtime_file_moves_only and (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
                 or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != (13 if args.backup_migration_only else 12)):
             raise ValueError('This gate requires reviewed worker16 and matching updater schema source')
     if not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run):
         raise ValueError('Exact retained cache run required')
-    reference = json.loads(args.reference_receipt.read_text())
-    if args.backup_migration_only:
+    if args.runtime_file_moves_only:
+        if args.reference_receipt:
+            parser.error('Runtime file moves use generated fixtures, no old binary reference')
+        reference = {'kind': 'runtime_file_move_validation', 'runtimeApplied': False, 'windowsOpened': False}
+    else:
+        if not args.reference_receipt:
+            parser.error('--reference-receipt is required for shutdown/migration gates')
+        reference = json.loads(args.reference_receipt.read_text())
+    if args.runtime_file_moves_only:
+        pass
+    elif args.backup_migration_only:
         if reference.get('kind') != 'state_backup_schema12_reference' or any(not re.fullmatch(r'[0-9a-f]{64}', reference.get(k, '')) for k in ('sourceProofSha256', 'manifestSha256', 'updaterSha256', 'sourceManifestSha256')):
             raise ValueError('Proven schema12 archive/manifest/updater pins required')
     else:
@@ -78,7 +88,9 @@ def main():
         raise ValueError('Healthy idle installed worker required')
     project = next(p for p in info['projects'] if p['id'] == 'snapshot-fixture')
     project_path = PureWindowsPath(project['workspaceRoot'])
-    if args.backup_migration_only:
+    if args.runtime_file_moves_only:
+        pass
+    elif args.backup_migration_only:
         path=PureWindowsPath(reference['runtimeDirectory'])
         if not path.is_relative_to(project_path/'workflow-validation') or '..' in path.parts:
             raise ValueError('Schema12 reference must be a retained local validation runtime')

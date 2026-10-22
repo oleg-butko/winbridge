@@ -10,6 +10,8 @@ pub mod execution_domain;
 pub mod infrastructure;
 pub mod process_identity;
 pub mod reports;
+#[cfg(windows)]
+pub mod runtime_files;
 pub mod source_files;
 #[cfg(windows)]
 mod windows;

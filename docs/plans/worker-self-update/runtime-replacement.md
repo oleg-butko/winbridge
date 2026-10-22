@@ -140,3 +140,31 @@ uncertainty/reopen, scope/format, manifest-last и mixed/aliased sets. Допо�
 проверено отклонение unknown fields: unit variants Serde игнорировали лишнее поле,
 поэтому Prepared/RetireIssued заданы empty struct variants с тем же JSON tag.
 Они не являются OS proof; native replacement/actor/activation ещё отсутствуют.
+
+## Owned file-handle adapter подготовлен
+
+Windows-only `crates/platform/src/runtime_files.rs` держит read+DELETE handle,
+запрещает другие write/delete opens и сверяет source ID/bytes/SHA. Переименование
+использует тот же handle и fixed leaf относительно удерживаемого destination dir
+handle, `ReplaceIfExists=false`; volume и parent File ID проверяются до вызова.
+Один объект допускает один OS attempt, включая отказ при collision; повторный
+вызов не выполняет эффект. После ошибки readback исход неопределён, не retry.
+Platform primitive не является installation permission; updater пока его не вызывает.
+
+Три Windows tests подготовлены: реальный rename/same ID и отсутствие повторного
+move, occupied destination/no overwrite, wrong ID/hash/parent и held no-delete
+read pin. Cross-check/all-target Clippy проходят, native execution ещё впереди.
+В существующие primitives PS/Python runners добавлен отдельный режим
+`--runtime-file-moves-only` / `-RuntimeFileMovesOnly`, без old binary reference и
+без full desktop/candidate build. Используются generated fixtures и прежний approved
+native test cache. Команда после clean export и окончания текущего fault gate:
+
+```bash
+python3 scripts/validate-update-shutdown-primitives-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/<NEW-CLEAN-ARCHIVE>.zip \
+  --cache-run 20261017-061527-f4639971 --runtime-file-moves-only
+```
+
+Это шаблон, не выполненный прогон. SDK adapter требует native проверки, прежде
+чем его можно включить в consuming replacement driver. Durable binding/ledger и
+передача original custody всё ещё не реализованы.
