@@ -22,6 +22,7 @@ pub mod shutdown;
 pub mod source;
 pub mod state_backup;
 pub mod supervisor;
+pub mod updater_support;
 pub mod worker_compatibility;
 pub mod worker_rehearsal;
 pub mod worker_source;

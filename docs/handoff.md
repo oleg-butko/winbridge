@@ -8,9 +8,14 @@ Observer log: `.winbridge/update-preparation/replacement-faults-native.log`;
 full pins: `replacement-faults-native-active.json` там же. Test runner session97826.
 Проверять тот же Task ID через controller IPC; timeout наблюдения не terminal.
 
+Параллельно добавлена [readonly updater support query](plans/worker-self-update/updater-runtime-support.md):
+новые DTO/marker, `--runtime-support` и image/process-bound inspector. Изменения
+локальные, НЕ входят в native producer e567827. Она ещё не подключена к durable
+approval/drain. Local updater225/0 (6 ignored), обе all-target Clippy, generated TS/typecheck/UI build прошли; native support query ещё не проверена.
+
 После terminal: ready files дважды; `verify_runtime_replacement_faults_proof`;
 затем `scripts/test-update-replacement-proof.py --proof SHARED_PROOF --pin ACTIVE_PIN`.
-Этот audit сам выбирает новый fault verifier. Четыре cases должны пройти, но это
+Этот audit сам выбирает новый fault verifier. Первый case ExistingDirectory уже complete (native log sequence364); остальные три ещё pending/running, полного gate результата нет. Четыре cases должны пройти, но это
 не success whole updater: root остаётся Replacing, history сохраняет uncertainty.
 После этого review и activation/local health/controller confirmation, U3/U4.
 Public install off, installed d052 не менялся. Worker нужен, desktop нет, окон нет.

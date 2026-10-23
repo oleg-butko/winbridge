@@ -58,6 +58,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RuntimeReplacementPhase::decl(&config),
         RuntimeReplacementMove::decl(&config),
         RuntimeReplacementView::decl(&config),
+        UpdaterBuildFlavor::decl(&config),
+        UpdaterRuntimeSupport::decl(&config),
         RuntimeBaselineView::decl(&config),
         RuntimePreimagesView::decl(&config),
         CandidateHealthPhase::decl(&config),
