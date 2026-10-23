@@ -133,6 +133,11 @@ status и release только после source/Job/output proof. Добавл�
 пройдены. [Readonly updater support8/0 gate](docs/plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
 также пройден; typed compatibility policy добавлена как pure foundation.
 Следом durable compatibility до drain, activation и U3/U4. Public install выключен.
+Добавлена [candidate support schema16 foundation](docs/plans/worker-self-update/candidate-support.md)
+и пройден [Windows25/0 metadata/query/migration gate](docs/plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md).
+Новый actor/pre-drain binding и activation ещё впереди.
+[Актуальная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-23-candidate-support.md)
+заменяет прежние NEXT/ACTIVE. Проверки завершены, installed runtime не менялся.
 Прежние U2.1 native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

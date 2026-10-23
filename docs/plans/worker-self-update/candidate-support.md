@@ -52,21 +52,25 @@ Synthetic15→16 тест проверяет consistent backup, сохранен
 ignored writes откатывают receipt целиком. Synthetic тест не доказывает работу
 нового драйвера с реальным Windows процессом.
 
-Подготовлен mode `--candidate-support-migration` в
+[Windows gate25/0](windows-candidate-support-gate-2026-10-23.md) пройден:
+13 ready files twice,36 query +22 migration mutations; actual15→16/refusal.
+Readonly перепроверка той же terminal task тоже прошла. Новый journal-bound
+driver через supervisor Main этим gate не исполнялся.
+
+Добавлен mode `--candidate-support-migration` в
 `scripts/validate-update-support-native.py` / `-CandidateSupportMigration` в
 `scripts/test-update-support.ps1`. Он собирает обе updater flavors, выполняет
 query tests, новые metadata/policy tests и migration/refusal на **новой
 SQLite Backup API копии** actual retained schema15 replacement history.
 Original history, manifest и updater image сохраняются. Старый15 намеренно
 исполняет только известные artifact/journal команды для проверки refusal16.
-Ожидается25 native tests, семь test groups, девять commands; готовность Windows
-gate следует фиксировать только после terminal task и независимой проверки.
+Получено25 native tests, семь test groups, девять commands; terminal task и
+независимый verifier подтвердили результат.
 
 ## Следующий блок
 
-1. Выполнить native metadata/query/migration gate и сохранить immutable source
-   и task/report/proof pins. Он **не проверяет** исполнение нового journal-bound
-   driver через Main.
+1. Native metadata/query/migration gate закрыт, immutable pins сохранены в
+   отчёте выше. Он **не проверяет** исполнение нового journal-bound driver через Main.
 2. Добавить новый versioned supervisor action/view (предположительно18/10),
    admission-before-ACK и единственный blocking workslot. Существующие frozen
    actions/views и health contract не менять. Добавить support-active в abort.

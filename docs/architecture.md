@@ -13,7 +13,9 @@ trusted FilesVerified → VerifyingLocal. Worker schema16 прежняя; update
 прошла отдельный native8/0 gate. [Typed compatibility policy](plans/worker-self-update/updater-compatibility.md)
 дополнена [candidate support schema16](plans/worker-self-update/candidate-support.md):
 immutable ledger/fresh permit/journal-bound driver с frozen executor contracts.
-Новый actor и обязательный support→drain binding, затем activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
+[Native metadata/query/migration25/0 gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md)
+пройден, actual15→16/refusal подтверждён. Новый actor/обязательный support→drain
+binding и actual Main нового driver, затем activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
 содержит точные границы доказательств, карту кода и план продолжения.
 Ниже сохранена история предыдущих commits.
 

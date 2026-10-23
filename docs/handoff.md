@@ -1,23 +1,35 @@
-# Текущая точка: candidate support schema16 — 2026-10-23
+# Текущая точка: candidate support schema16, проверки закрыты — 2026-10-23
 
-Добавлена [durable candidate support foundation](plans/worker-self-update/candidate-support.md):
-strict FSM, immutable intent/current/history, frozen executor contracts,
-fresh one-use permit и journal-bound ProbeObserver driver. Abort сохраняет
-source barrier при unknown/pending probe. Updater16/worker16,
-supervisor17/view9; новый actor/action/drain gate **ещё не подключён**.
-Public install off, updater целиком не готов.
+Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-23-candidate-support.md).
+В ней карта кода, инварианты, exact source/task/report pins, команды readonly
+проверки, окружение и пошаговый план. Она приоритетнее всех старых ACTIVE/NEXT ниже.
 
-Checks: workspace674/0 (16 ignored), final model/ledger10/0, обе all-target
-Clippy, generated contracts/TS/fmt, Python7 и scaffold251 прошли.
-Подготовлен отдельный Windows mode metadata/policy/actual15→16/refusal;
-на момент этого commit он **ещё не запускался**. Предыдущий native support8/0
-относится к f1e2f10 и schema15. Следующий шаг — этот schema16 gate, затем
-versioned actor и обязательная compatibility до production drain.
+- Implementation commit7186bb6: [FSM/ledger/driver schema16](plans/worker-self-update/candidate-support.md),
+  frozen executor contracts, fresh one-use permit и abort source barrier.
+- [Windows gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md):
+  task f88c0185-6665-424c-8e07-92d0867612ad / run20261023-224925-0eae733c,
+  **terminal succeeded/0,25 native tests/7 groups/9 commands**.
+  13 ready files дважды;36 query +22 migration mutations rejected.
+  Actual retained15→16/old15 refusal прошли; readonly verify-run тоже passed.
+- Local workspace674/0 (16 ignored), model/SQL10/0, обе all-target Clippy,
+  generated contracts/TS/fmt/UI, Python7, scaffold254 прошли.
+- Updater16/worker16/supervisor17/view9. **Actor/pre-drain enforcement ещё не
+  подключены**; новый driver через Main этим native gate не исполнялся.
+  Public install off, whole updater не готов.
 
-Installed d052 прежний, connected/active0, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e.
-Controller3922 на192.168.44.203:1143; desktop не нужен, UI-окон нет.
-Подробный закрывающий handoff будет дополнен после текущих проверок.
-Старые ACTIVE/NEXT ниже — история, terminal tasks не пересылать.
+**Следующий implementation block:** versioned support actor/action/view и
+support-active abort coordination → атомарный production support→drain binding →
+native Main blocker до BeginDrain. Затем activation из resident guard,
+local health/controller receipts, remaining U2 faults, U3/U4.
+Не повторять завершённые Windows задачи; новый этап в этой контрольной точке
+не начинался по просьбе пользователя.
+
+Installed d052 unchanged/connected/active0, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
+maintenance/recovery errors=null, coverage complete. Controller3922 оставлен
+на192.168.44.203:1143. Active Cargo/native/observer runs нет.
+Worker оставить, desktop можно закрыть; UI-окон не было.
+Ручное обновление не требуется. Goal active, не complete/paused.
+Final ignored summary: .winbridge/update-preparation/session-close-20261023-candidate-support.json.
 
 ## Предыдущая точка: updater checks закрыты
 

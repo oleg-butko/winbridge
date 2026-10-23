@@ -1,5 +1,10 @@
 # Updater: продолжение после runtime replacement, 2026-10-23
 
+**Текущая точка продолжения перенесена в [candidate support handoff](resume-2026-10-23-candidate-support.md).**
+Schema16 foundation и native25/0 metadata/migration gate закрыты; следом actor/
+pre-drain, activation, U3/U4. Этот документ сохраняет exact replacement evidence,
+его старые NEXT не являются текущими заданиями.
+
 После этой контрольной точки работа возобновлена: [query native8/0 gate](windows-updater-support-gate-2026-10-23.md)
 пройден, [typed compatibility policy](updater-compatibility.md) добавлена.
 Актуальный следующий блок — durable support admission до drain; native discovery

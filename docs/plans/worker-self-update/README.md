@@ -7,10 +7,13 @@
 
 ## Текущий статус 2026-10-23
 
-[Candidate support schema16 foundation](candidate-support.md) добавлена:
-model/ledger/ProbeObserver driver, workspace674/0 и обе Clippy passed.
-Native metadata/migration gate подготовлен; actor/pre-drain binding и activation
-ещё не готовы. Начинать с текущего [handoff](../../handoff.md); статус ниже — история.
+Начать с [новой инструкции следующей сессии](resume-2026-10-23-candidate-support.md):
+schema16 foundation и [Windows25/0 gate](windows-candidate-support-gate-2026-10-23.md)
+пройдены;13 ready files twice,58 mutations, actual15→16/refusal.
+Local workspace674/0, обе Clippy/TS/UI passed. Новый actor/pre-drain binding
+и actual Main driver gate ещё впереди, затем activation/U2 faults/U3/U4.
+Public install off, installed d052 не менялся. Проверки закрыты по просьбе
+пользователя; goal active. Записи ниже — история предыдущих commits.
 
 [Точка продолжения после завершения проверок](resume-2026-10-23-replacement.md)
 содержит карту кода, проверенные task/run/source pins, границы готовности и порядок
