@@ -1,35 +1,25 @@
-# Текущая точка: candidate support schema16, проверки закрыты — 2026-10-23
+# Текущая точка: support actor v18/view10 — 2026-10-23
 
-Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-23-candidate-support.md).
-В ней карта кода, инварианты, exact source/task/report pins, команды readonly
-проверки, окружение и пошаговый план. Она приоритетнее всех старых ACTIVE/NEXT ниже.
+Цель возобновлена после документационного checkpoint ff5b647.
+Добавлен [support actor v18/view10](plans/worker-self-update/candidate-support-actor.md):
+blocking admission вне mailbox, intent до ACK, fresh-only dispatch, duplicate/
+cold observation, command/PID/report/assessment projection и coordinated abort.
+Journal16/worker16 прежние; frozen contracts1–17/views1–9 сохраняют shape.
 
-- Implementation commit7186bb6: [FSM/ledger/driver schema16](plans/worker-self-update/candidate-support.md),
-  frozen executor contracts, fresh one-use permit и abort source barrier.
-- [Windows gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md):
-  task f88c0185-6665-424c-8e07-92d0867612ad / run20261023-224925-0eae733c,
-  **terminal succeeded/0,25 native tests/7 groups/9 commands**.
-  13 ready files дважды;36 query +22 migration mutations rejected.
-  Actual retained15→16/old15 refusal прошли; readonly verify-run тоже passed.
-- Local workspace674/0 (16 ignored), model/SQL10/0, обе all-target Clippy,
-  generated contracts/TS/fmt/UI, Python7, scaffold254 прошли.
-- Updater16/worker16/supervisor17/view9. **Actor/pre-drain enforcement ещё не
-  подключены**; новый driver через Main этим native gate не исполнялся.
-  Public install off, whole updater не готов.
+Local workspace679/0 (16 ignored), новый actual IPC mailbox regression1/0,
+Linux/Windows all-target Clippy, generated contracts/TS/UI и Python3+7 passed.
+Подготовлен отдельный actual Main Windows gate; **на момент этого commit ещё
+не отправлен**. Он проверит journal-bound driver/lost ACK/duplicate/old worker,
+но НЕ production enforcement: legacy DrainCandidate13 пока не меняется,
+productionDrainEnforced=false. Следом атомарный support→production-drain binding
+под новым контрактом и actual blocked-request gate, затем activation/U2 faults/U3/U4.
+Public install off, installed runtime не обновлялся.
 
-**Следующий implementation block:** versioned support actor/action/view и
-support-active abort coordination → атомарный production support→drain binding →
-native Main blocker до BeginDrain. Затем activation из resident guard,
-local health/controller receipts, remaining U2 faults, U3/U4.
-Не повторять завершённые Windows задачи; новый этап в этой контрольной точке
-не начинался по просьбе пользователя.
-
-Installed d052 unchanged/connected/active0, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
-maintenance/recovery errors=null, coverage complete. Controller3922 оставлен
-на192.168.44.203:1143. Active Cargo/native/observer runs нет.
-Worker оставить, desktop можно закрыть; UI-окон не было.
-Ручное обновление не требуется. Goal active, не complete/paused.
-Final ignored summary: .winbridge/update-preparation/session-close-20261023-candidate-support.json.
+Предыдущий [schema16 metadata/migration25/0 gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md)
+terminal succeeded, не повторять. Его [подробный handoff](plans/worker-self-update/resume-2026-10-23-candidate-support.md)
+сохраняет exact pins/окружение/инварианты. Actor из его NEXT теперь добавлен;
+current native Main ещё pending. Older ACTIVE/NEXT ниже — история.
+Installed d052/generation8f8d1fb9 прежние; controller3922 оставлен, desktop не нужен.
 
 ## Предыдущая точка: updater checks закрыты
 

@@ -45,6 +45,8 @@ pub struct Input {
     pub final_backup: bool,
     #[serde(default)]
     pub backup_fault: BackupFault,
+    #[serde(default)]
+    pub candidate_support: bool,
 }
 fn publish(root: &Path, name: &str, value: &impl Serialize) -> Result<()> {
     let mut file = fs::OpenOptions::new()
@@ -253,6 +255,9 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
         "06-health.json",
         &idle(&h, Some(UpdatePhase::CandidateVerified), 90).await?,
     )?;
+    if input.candidate_support {
+        return candidate_support::drive(weak, *h, reg, input).await;
+    }
     h.candidate_drain(true).await?;
     publish(
         &input.root,
@@ -511,3 +516,5 @@ pub(crate) fn export_report(
     }
     report
 }
+
+mod candidate_support;

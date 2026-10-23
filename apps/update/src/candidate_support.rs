@@ -477,5 +477,59 @@ pub(crate) fn physically_quiescent(r: &CandidateSupportRecord) -> Result<()> {
     Ok(())
 }
 
+/// Saved data plus this actor's activity, never a fresh process/drain permission.
+pub(crate) fn view(r: Option<&CandidateSupportRecord>, active: bool) -> CandidateSupportView {
+    use CandidateSupportViewPhase as V;
+    let Some(r) = r else {
+        return CandidateSupportView {
+            phase: V::NotAdmitted,
+            revision: None,
+            attempt_id: None,
+            command: None,
+            process: None,
+            report: None,
+            assessment: None,
+            cleanup_verified: false,
+            reason: None,
+        };
+    };
+    let result = r.result.as_ref();
+    let phase = if let Some(result) = result {
+        match result.outcome {
+            CandidateSupportOutcome::Checked => V::Checked,
+            CandidateSupportOutcome::Unsupported => V::Unsupported,
+            CandidateSupportOutcome::Rejected => V::Rejected,
+            CandidateSupportOutcome::Cancelled => V::Cancelled,
+            CandidateSupportOutcome::Indeterminate => V::Indeterminate,
+        }
+    } else if !active {
+        V::Indeterminate
+    } else {
+        match r.phase {
+            CandidateSupportPhase::Admitted => V::Admitted,
+            CandidateSupportPhase::Creating => V::Creating,
+            CandidateSupportPhase::ResumeGranted => V::ResumeGranted,
+            CandidateSupportPhase::Running => V::Running,
+            CandidateSupportPhase::Captured => V::Captured,
+            CandidateSupportPhase::Finished => V::Indeterminate,
+        }
+    };
+    CandidateSupportView {
+        phase,
+        revision: Some(r.revision),
+        attempt_id: Some(r.intent.attempt_id.clone()),
+        command: r.intent.command().ok(),
+        process: r.probe.as_ref().and_then(|p| p.process.clone()),
+        report: result.and_then(|r| r.report.clone()),
+        assessment: result.and_then(|r| r.assessment.clone()),
+        cleanup_verified: quiescent(r).is_ok(),
+        reason: result.map(|r| r.reason.clone()).or_else(|| {
+            (!active).then(|| {
+                "Живой драйвер проверки не подтверждён; сохранённый запуск не повторяется".into()
+            })
+        }),
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests;

@@ -1355,6 +1355,65 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     fn lease(r: WorkerUpdateControlResponse) -> WorkerUpdateLease {
         r.into_lease().unwrap().expect("Lease receipt")
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn support_v18_observes_without_effects_and_preserves_legacy_views() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let registration = f.worker.control_registration().unwrap();
+        let h = f.supervisor.as_ref().unwrap();
+        let directory = &registration.directory;
+        let before =
+            UpdateJournal::read_snapshot(directory, Some(&h.record.spec.update_id)).unwrap();
+        let v = h.candidate_support(false).await.unwrap();
+        assert_eq!(v.schema_version, 10);
+        assert_eq!(
+            v.candidate_support.unwrap().phase,
+            CandidateSupportViewPhase::NotAdmitted
+        );
+        assert!(
+            h.candidate_support(true).await.is_err(),
+            "No verified health/source; no admission"
+        );
+        #[cfg(feature = "update-validation")]
+        {
+            let mut q = h.validation_private_client().unwrap();
+            q.action = SupervisorAction::ObserveCandidateSupport;
+            let pid = h.record.process.as_ref().unwrap().process_id;
+            for version in [1, 10, 17] {
+                q.contract_version = version;
+                let response: SupervisorResponse =
+                    winbridge_transport::supervisor::call(&h.record.spec.endpoint, pid, &q)
+                        .await
+                        .unwrap();
+                assert!(response.error.is_some());
+                assert!(response.preparation.is_none());
+            }
+            q.contract_version = 18;
+            q.worker_command = Some(WorkerUpdateControlCommand::BeginSource);
+            let response: SupervisorResponse =
+                winbridge_transport::supervisor::call(&h.record.spec.endpoint, pid, &q)
+                    .await
+                    .unwrap();
+            assert!(
+                response.error.is_some(),
+                "Readonly action cannot smuggle a worker command"
+            );
+        }
+        let legacy = h.candidate_health(false).await.unwrap();
+        let legacy_json = serde_json::to_value(legacy).unwrap();
+        assert!(legacy_json.get("candidateSupport").is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(directory, Some(&h.record.spec.update_id)).unwrap(),
+            before
+        );
+        assert!(
+            UpdateJournal::inspect_candidate_support(directory, &h.record.spec.update_id)
+                .unwrap()
+                .is_none()
+        );
+        f.stop().await;
+    }
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn candidate_drain_requires_health_and_preserves_all_legacy_views_without_effects() {
         let mut f = Fixture::new(None).await;

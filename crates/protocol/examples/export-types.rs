@@ -69,6 +69,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RuntimePreimagesView::decl(&config),
         CandidateHealthPhase::decl(&config),
         CandidateHealthView::decl(&config),
+        CandidateSupportViewPhase::decl(&config),
+        CandidateSupportView::decl(&config),
         CandidateDrainPhase::decl(&config),
         CandidateDrainView::decl(&config),
         WorkerShutdownCommand::decl(&config),

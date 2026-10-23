@@ -17,6 +17,8 @@ use winbridge_update::{
     shutdown::{ShutdownDeliveryState, ShutdownInspectionRequest},
 };
 use winbridge_worker::update_validation::{BackupFault, Fault, Input};
+#[path = "update_shutdown/candidate_support.rs"]
+mod candidate_support;
 #[path = "update_shutdown/replacement.rs"]
 mod replacement;
 #[derive(Deserialize)]
@@ -44,6 +46,8 @@ struct GateInput {
     preparation_faults: bool,
     #[serde(default)]
     validation_updater: Option<PathBuf>,
+    #[serde(default)]
+    candidate_support: bool,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -243,6 +247,7 @@ fn setup(
             fault,
             final_backup: input.final_backup,
             backup_fault,
+            candidate_support: input.candidate_support,
         },
     );
     (root, worker_config, manifest)

@@ -7,6 +7,11 @@
 
 ## Текущий статус 2026-10-23
 
+Продолжение после ff5b647: [actor v18/view10](candidate-support-actor.md) добавлен,
+workspace679/0/Clippy/TS/UI passed, actual Main gate подготовлен.
+Это отдельная support operation; production drain binding ещё впереди.
+Текущий статус в [handoff](../../handoff.md), записи ниже исторические.
+
 Начать с [новой инструкции следующей сессии](resume-2026-10-23-candidate-support.md):
 schema16 foundation и [Windows25/0 gate](windows-candidate-support-gate-2026-10-23.md)
 пройдены;13 ready files twice,58 mutations, actual15→16/refusal.

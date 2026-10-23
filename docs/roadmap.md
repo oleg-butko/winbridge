@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-23: [support actor18/view10](plans/worker-self-update/candidate-support-actor.md)
+добавлен, workspace679/0 и обе Clippy/TS/UI passed. Actual Main support gate
+подготовлен; production drain binding ещё не подключён. После native проверки
+продолжить новым production entry с atomic evidence link, затем activation/U2/U3/U4.
+Ниже сохранены предыдущие checkpoints; public install off.
+
 2026-10-23: [candidate support schema16](plans/worker-self-update/candidate-support.md)
 и [Windows25/0 metadata/query/migration gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md)
 завершены:13 ready files twice,36+22 mutations, actual15→16/refusal.

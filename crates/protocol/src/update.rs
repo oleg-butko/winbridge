@@ -590,6 +590,9 @@ pub enum SupervisorAction {
     /// Internal v17: original-custody replacement, no activation promise.
     ReplaceRuntime,
     ObserveRuntimeReplacement,
+    /// Internal v18: journal-bound updater support query; no drain/install authority.
+    CaptureCandidateSupport,
+    ObserveCandidateSupport,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -657,6 +660,9 @@ pub struct UpdatePreparationView {
     /// V17/view9 only. Physical custody is always a live observation, never data authority.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_replacement: Option<RuntimeReplacementView>,
+    /// V18/view10 only. A checked report is passive evidence, never a drain permit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate_support: Option<CandidateSupportView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1058,3 +1064,6 @@ mod updater_support;
 pub use updater_support::*;
 mod updater_compatibility;
 pub use updater_compatibility::*;
+
+mod candidate_support;
+pub use candidate_support::*;

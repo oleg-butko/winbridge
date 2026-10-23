@@ -135,7 +135,8 @@ status и release только после source/Job/output proof. Добавл�
 Следом durable compatibility до drain, activation и U3/U4. Public install выключен.
 Добавлена [candidate support schema16 foundation](docs/plans/worker-self-update/candidate-support.md)
 и пройден [Windows25/0 metadata/query/migration gate](docs/plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md).
-Новый actor/pre-drain binding и activation ещё впереди.
+[Actor v18/view10](docs/plans/worker-self-update/candidate-support-actor.md)
+добавлен, actual Main gate подготовлен; pre-drain binding и activation впереди.
 [Актуальная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-23-candidate-support.md)
 заменяет прежние NEXT/ACTIVE. Проверки завершены, installed runtime не менялся.
 Прежние U2.1 native gates относятся к schema13.

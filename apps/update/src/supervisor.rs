@@ -98,6 +98,23 @@ fn runtime_files_view(
     }
     Ok(view)
 }
+fn support_view(
+    directory: &Path,
+    id: &str,
+    active: bool,
+    error: Option<String>,
+    admitting: bool,
+) -> Result<UpdatePreparationView> {
+    let mut view = UpdateJournal::candidate_support_snapshot(directory, id, active, error)
+        .map_err(crate::supervisor::error)?;
+    if let Some(support) = &mut view.candidate_support {
+        if admitting && support.attempt_id.is_none() {
+            support.phase = CandidateSupportViewPhase::Admitting;
+        }
+    }
+    Ok(view)
+}
+
 fn local(path: &Path) -> Result<PathBuf> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
     winbridge_platform::require_local_disk(path).map_err(error)?;
@@ -850,6 +867,52 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// V18 captures journal-bound updater evidence; it never authorizes drain.
+    pub async fn candidate_support(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 18,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::CaptureCandidateSupport
+            } else {
+                SupervisorAction::ObserveCandidateSupport
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 18
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Support response scope/version changed; no fallback".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response.preparation.ok_or("Support view missing")?;
+        if view.schema_version != 10
+            || view.candidate_support.is_none()
+            || view.candidate_health.is_none()
+            || view.runtime_preimages.is_none()
+            || view.runtime_baseline.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Support response belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     /// V10 admission is duplicate-first and never replays a saved pending health check.
     pub async fn candidate_health(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -1280,6 +1343,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveRuntimeFiles
                 | SupervisorAction::ReplaceRuntime
                 | SupervisorAction::ObserveRuntimeReplacement
+                | SupervisorAction::CaptureCandidateSupport
+                | SupervisorAction::ObserveCandidateSupport
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1445,12 +1510,16 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         RuntimeAdmitted(Result<crate::runtime_preparation::RuntimePreparationAdmission>),
         ReplacementAdmitted(Result<crate::runtime_replacement::RuntimeReplacementAdmission>),
         ReplacementDone(crate::runtime_replacement::ReplacementOutcome),
+        SupportAdmitted(Result<crate::candidate_support::CandidateSupportAdmission>),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
     let mut artifacts_active = false;
     let mut preimages_active = false;
     let mut health_active = false;
+    let mut support_active = false;
+    let mut support_admitting = false;
+    let mut support_reply: Option<ipc::Stream> = None;
     let mut drain_active = false;
     let mut shutdown_preparing = false;
     let shutdown_custody = crate::shutdown::Custody::default();
@@ -1493,6 +1562,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             let mut backup_permit = None;
             let mut runtime_permit = None;
             let mut replacement_permit = None;
+            let mut support_permit = None;
             let outcome = match outcome {
                 DriverCompletion::Complete(outcome) => outcome,
                 DriverCompletion::ShutdownPrepared(Ok(value)) => {
@@ -1530,6 +1600,16 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     crate::runtime_replacement::RuntimeReplacementAdmission::Existing(_),
                 )) => Ok(()),
                 DriverCompletion::ReplacementAdmitted(Err(e)) => Err(e),
+                DriverCompletion::SupportAdmitted(Ok(
+                    crate::candidate_support::CandidateSupportAdmission::Fresh(p),
+                )) => {
+                    support_permit = Some(p);
+                    Ok(())
+                }
+                DriverCompletion::SupportAdmitted(Ok(
+                    crate::candidate_support::CandidateSupportAdmission::Existing(_),
+                )) => Ok(()),
+                DriverCompletion::SupportAdmitted(Err(e)) => Err(e),
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -1545,6 +1625,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             artifacts_active = false;
             preimages_active = false;
             health_active = false;
+            support_active = false;
+            support_admitting = false;
             drain_active = false;
             driver_error = outcome
                 .err()
@@ -1562,6 +1644,50 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some(mut stream) = support_reply.take() {
+                let snapshot = support_view(
+                    &directory,
+                    &r.spec.update_id,
+                    support_permit.is_some(),
+                    driver_error.clone(),
+                    false,
+                );
+                let (preparation, error) = match snapshot {
+                    Ok(v) => (Some(v), driver_error.clone()),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 18,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
+                };
+                let dispatch = response.error.is_none();
+                if response.error.is_some() {
+                    driver_error = response.error.clone();
+                }
+                let _ = ipc::write(&mut stream, &response).await;
+                // A lost ACK does not revoke this already-committed fresh permit.
+                if let Some(permit) = support_permit.filter(|_| dispatch) {
+                    let (mut journal, owner) =
+                        idle.take().ok_or("Support owner missing after admission")?;
+                    let spec = r.clone();
+                    let io = tokio::runtime::Handle::current();
+                    support_active = true;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = crate::preparation::candidate_support(
+                            &mut journal,
+                            &owner,
+                            &spec,
+                            *permit,
+                            io,
+                        );
+                        (journal, owner, DriverCompletion::Complete(result))
+                    }));
+                }
+            }
             if let Some((mut stream, backup_required)) = shutdown_reply.take() {
                 let outcome = if backup_required {
                     backup_view(
@@ -2261,6 +2387,82 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         }
         if matches!(
             request.action,
+            SupervisorAction::CaptureCandidateSupport | SupervisorAction::ObserveCandidateSupport
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 18
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Support requires exact Active worker-bound v18 supervisor".into());
+                }
+                let view = support_view(
+                    &directory,
+                    &r.spec.update_id,
+                    support_active,
+                    driver_error.clone(),
+                    support_admitting,
+                )?;
+                if request.action == SupervisorAction::ObserveCandidateSupport
+                    || support_admitting
+                    || view
+                        .candidate_support
+                        .as_ref()
+                        .is_some_and(|s| s.attempt_id.is_some())
+                {
+                    return Ok(view);
+                }
+                if !cfg!(windows)
+                    || work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::CandidateVerified
+                {
+                    return Err("Support requires native Windows, idle verified candidate and no unresolved failure".into());
+                }
+                start = true;
+                Ok(view)
+            })();
+            if start && outcome.is_ok() {
+                let (mut journal, owner) = idle.take().ok_or("Support admission owner missing")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                support_active = true;
+                support_admitting = true;
+                support_reply = Some(stream);
+                driver_error = None;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result = crate::preparation::admit_candidate_support(
+                        &mut journal,
+                        &owner,
+                        &spec,
+                        io,
+                    );
+                    (journal, owner, DriverCompletion::SupportAdmitted(result))
+                }));
+            } else {
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 18,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
+            continue;
+        }
+        if matches!(
+            request.action,
             SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth
         ) {
             let mut admitted = None;
@@ -2609,12 +2811,18 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         if work.is_some()
                             && !preimages_active
                             && !health_active
+                            && !support_active
                             && !drain_active
                             && !shutdown_preparing
                         {
                             return Err("Preparation driver active; wait for confirmed source/compiler cleanup".into());
                         }
-                        if preimages_active || health_active || drain_active || shutdown_preparing {
+                        if preimages_active
+                            || health_active
+                            || support_active
+                            || drain_active
+                            || shutdown_preparing
+                        {
                             // Same physical owner/epoch; Root Aborting fences the
                             // copier. Cleanup waits for its blocking callback.
                             let cfg = crate::preparation::configuration(&r)?;
@@ -3056,7 +3264,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     ).map_err(error)
                 }
                 SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown | SupervisorAction::ShutdownCandidateForBackup | SupervisorAction::BackupWorkerState | SupervisorAction::ObserveStateBackup | SupervisorAction::PrepareRuntimeFiles | SupervisorAction::ObserveRuntimeFiles
-                | SupervisorAction::ReplaceRuntime | SupervisorAction::ObserveRuntimeReplacement => Err("Action needs its separate handler".into()),
+                | SupervisorAction::ReplaceRuntime | SupervisorAction::ObserveRuntimeReplacement
+                | SupervisorAction::CaptureCandidateSupport | SupervisorAction::ObserveCandidateSupport => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
@@ -3135,11 +3344,20 @@ mod tests {
             UpdateJournal::backup_preparation_snapshot,
             UpdateJournal::runtime_files_preparation_snapshot,
             UpdateJournal::runtime_replacement_snapshot,
+            UpdateJournal::candidate_support_snapshot,
         ];
         for (index, snapshot) in snapshots.into_iter().enumerate() {
             let view = snapshot(&directory, &f.id, false, None).unwrap();
             assert_eq!(view.schema_version as usize, index + 1);
             let value = serde_json::to_value(&view).unwrap();
+            if index < 9 {
+                assert!(value.get("candidateSupport").is_none());
+            } else {
+                let support = view.candidate_support.as_ref().unwrap();
+                assert_eq!(support.phase, CandidateSupportViewPhase::NotAdmitted);
+                assert!(!support.cleanup_verified);
+                assert!(support.attempt_id.is_none());
+            }
             if index < 8 {
                 assert!(value.get("runtimeReplacement").is_none());
             } else {

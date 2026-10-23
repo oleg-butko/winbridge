@@ -281,3 +281,55 @@ fn missing_pid_after_creation_never_becomes_confirmed_cleanup() {
     cleanup.capture_complete = true;
     assert!(forged.validate().is_err());
 }
+
+#[test]
+fn support_projection_preserves_live_progress_and_cold_unknown_without_replay() {
+    let r = fixture();
+    let original = serde_json::to_value(&r).unwrap();
+    assert_eq!(
+        view(None, false).phase,
+        CandidateSupportViewPhase::NotAdmitted
+    );
+    assert_eq!(
+        view(Some(&r), true).phase,
+        CandidateSupportViewPhase::Admitted
+    );
+    let cold = view(Some(&r), false);
+    assert_eq!(cold.phase, CandidateSupportViewPhase::Indeterminate);
+    assert!(!cold.cleanup_verified);
+    assert!(cold.reason.unwrap().contains("не повторяется"));
+    for (saved, expected) in stages(&r).iter().zip([
+        CandidateSupportViewPhase::Creating,
+        CandidateSupportViewPhase::ResumeGranted,
+        CandidateSupportViewPhase::Running,
+        CandidateSupportViewPhase::Captured,
+        CandidateSupportViewPhase::Checked,
+    ]) {
+        let live = view(Some(saved), true);
+        assert_eq!(live.phase, expected);
+        assert_eq!(
+            live.attempt_id.as_deref(),
+            Some(r.intent.attempt_id.as_str())
+        );
+        assert_eq!(live.command, Some(r.intent.command().unwrap()));
+        if saved.result.is_none() {
+            let cold = view(Some(saved), false);
+            assert_eq!(cold.phase, CandidateSupportViewPhase::Indeterminate);
+            assert!(!cold.cleanup_verified);
+        }
+    }
+    assert_eq!(serde_json::to_value(&r).unwrap(), original);
+}
+#[test]
+fn checked_projection_keeps_blockers_and_never_becomes_install_permission() {
+    let r = stages(&fixture()).pop().unwrap();
+    let cold = view(Some(&r), false);
+    assert_eq!(cold.phase, CandidateSupportViewPhase::Checked);
+    assert!(cold.cleanup_verified);
+    assert!(!cold.assessment.as_ref().unwrap().blockers.is_empty());
+    assert_eq!(cold.report, r.result.as_ref().unwrap().report);
+    let json = serde_json::to_value(&cold).unwrap();
+    for field in ["canInstall", "canDrain", "permit", "physicalCustodyHeld"] {
+        assert!(json.get(field).is_none());
+    }
+}

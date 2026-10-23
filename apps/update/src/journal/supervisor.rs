@@ -182,6 +182,15 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 9)
     }
+    /// V18/view10: support and all parent evidence share one readonly transaction.
+    pub fn candidate_support_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 10)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -293,6 +302,14 @@ impl UpdateJournal {
             candidate_state_backup,
             runtime_preparation,
             runtime_replacement,
+            candidate_support: if view_schema >= 10 {
+                Some(crate::candidate_support::view(
+                    super::candidate_support::read(&tx, id)?.as_ref(),
+                    driver_active,
+                ))
+            } else {
+                None
+            },
             runtime_baseline: if view_schema >= 2 {
                 Some(super::runtime_baseline::read(&tx, id)?.view())
             } else {

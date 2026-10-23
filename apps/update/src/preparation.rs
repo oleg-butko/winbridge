@@ -366,3 +366,56 @@ pub(crate) fn health(
     };
     crate::health::execute(journal, owner, record, permit, &mut control).map(|_| ())
 }
+
+/// Admission preflight is blocking: worker IPC and exact executor hashing must
+/// not occupy the supervisor mailbox. Only the saved admission can mint a permit.
+pub(crate) fn admit_candidate_support(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    io: Handle,
+) -> Result<crate::candidate_support::CandidateSupportAdmission> {
+    let cfg = configuration(s)?;
+    let mut c = Control {
+        worker: WorkerSourceControl::new(
+            s.spec
+                .worker
+                .clone()
+                .ok_or("Support worker binding missing")?,
+            &cfg.worker_config_path,
+            io,
+        )?,
+        record: s.clone(),
+    };
+    let source = crate::build::saved_source_guard_for(
+        j,
+        a,
+        &cfg,
+        &s.spec.update_id,
+        UpdatePhase::CandidateVerified,
+    )?;
+    let root = j.get(&s.spec.update_id).map_err(|e| e.to_string())?;
+    let lease = crate::source::live_lease(&mut c, &root, Some(&source))?;
+    crate::candidate_support::admit(j, a, s, &lease)
+}
+pub(crate) fn candidate_support(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    p: crate::candidate_support::CandidateSupportPermit,
+    io: Handle,
+) -> Result<()> {
+    let cfg = configuration(s)?;
+    let mut c = Control {
+        worker: WorkerSourceControl::new(
+            s.spec
+                .worker
+                .clone()
+                .ok_or("Support worker binding missing")?,
+            &cfg.worker_config_path,
+            io,
+        )?,
+        record: s.clone(),
+    };
+    crate::candidate_support::execute(j, a, s, p, &mut c).map(|_| ())
+}
