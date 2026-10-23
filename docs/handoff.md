@@ -1,3 +1,20 @@
+# ACTIVE: четыре replacement fault cases запущены — 2026-10-23
+
+Task `63232320-8bf6-4826-b13c-315ead0b4433`, run `20261023-173625-e4eea0a6`,
+producer `e5678273f0a3f913c9c1aa88702e96ef81b8835b`, source ZIP
+`winbridge-20261023T173516Z-e567827-79b806bb.zip`. Task running; **не resubmit**.
+Mode `--runtime-replacement-faults`, timeout1h, cache20261017-061527-f4639971.
+Observer log: `.winbridge/update-preparation/replacement-faults-native.log`;
+full pins: `replacement-faults-native-active.json` там же. Test runner session97826.
+Проверять тот же Task ID через controller IPC; timeout наблюдения не terminal.
+
+После terminal: ready files дважды; `verify_runtime_replacement_faults_proof`;
+затем `scripts/test-update-replacement-proof.py --proof SHARED_PROOF --pin ACTIVE_PIN`.
+Этот audit сам выбирает новый fault verifier. Четыре cases должны пройти, но это
+не success whole updater: root остаётся Replacing, history сохраняет uncertainty.
+После этого review и activation/local health/controller confirmation, U3/U4.
+Public install off, installed d052 не менялся. Worker нужен, desktop нет, окон нет.
+
 # WIP: четыре actual replacement faults подготовлены
 
 [Fault matrix](plans/worker-self-update/runtime-replacement-faults.md): occupied
