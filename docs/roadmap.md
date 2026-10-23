@@ -1,5 +1,8 @@
 # Постепенная реализация и расширение
 
+2026-10-22: подготовлен [actual13→14 migration/refusal gate](plans/worker-self-update/preparation-schema-migration.md)
+на сохранённой Verified-backup13 истории; native пока не пройден.
+
 2026-10-22 WIP: [preparation driver/actor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
 добавлены; local workspace636/0, Clippy/TS/UI и
 [actual Main40/0 gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md)

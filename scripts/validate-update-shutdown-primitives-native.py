@@ -41,6 +41,33 @@ def verify_migration_proof(proof, pin, reference):
         raise ValueError('Actual schema12 history/migration/refusal/source preservation differs')
 
 
+def verify_preparation_migration_proof(proof, pin, reference):
+    build = proof.get('build', {})
+    manifest_text = proof.get('referenceManifestJson', '')
+    if not isinstance(manifest_text, str) or hashlib.sha256(manifest_text.encode()).hexdigest() != reference['manifestSha256']:
+        raise ValueError('Actual retained manifest bytes differ')
+    manifest = json.loads(manifest_text)
+    updaters = [a for a in manifest.get('artifacts', []) if a.get('name') == 'winbridge-update.exe']
+    if (len(updaters) != 1 or updaters[0]['sha256'] != proof.get('referenceUpdaterSha256')
+            or updaters[0]['descriptor']['role'] != 'updater'
+            or updaters[0]['descriptor']['build'].get('sourceCommit') != reference['sourceCommit']
+            or updaters[0]['descriptor']['build'].get('sourceManifestSha256') != reference['sourceManifestSha256']):
+        raise ValueError('Actual old13 image/manifest/source differs')
+    if (proof.get('schemaVersion') != 1 or proof.get('kind') != 'runtime_preparation_schema_migration_proof'
+            or proof.get('passed') is not True or proof.get('platform') != 'windows'
+            or build.get('sourceCommit') != pin['sourceCommit'] or build.get('sourceManifestSha256') != pin['manifestSha256'] or build.get('sourceDirty') is not False
+            or proof.get('sourceProofSha256') != reference['sourceProofSha256'] or proof.get('referenceManifestSha256') != reference['manifestSha256']
+            or not re.fullmatch(r'[0-9a-f]{64}', proof.get('referenceUpdaterSha256', ''))
+            or proof.get('updateId') != reference['updateId'] or proof.get('fromSchema') != 13 or proof.get('toSchema') != 14
+            or type(proof.get('epochBefore')) is not int or type(proof.get('epochAfter')) is not int
+            or not 0 <= proof['epochBefore'] < proof['epochAfter'] <= 9007199254740991
+            or proof['epochAfter'] != proof['epochBefore'] + 1
+            or not re.fullmatch(r'[0-9a-f]{64}', proof.get('retainedRowsSha256', ''))
+            or any(proof.get(k) is not True for k in ('allOldRowsPreserved', 'verifiedBackupHistoryPreserved', 'shutdownHistoryPreserved', 'migrationBackupVerified', 'noPreparationInvented', 'historicalBackupObservationOnly', 'noCustodyAdopted', 'oldThirteenInitRefused', 'oldThirteenStatusRefused', 'sourceBytesUnchanged'))
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False):
+        raise ValueError('Actual13 backup history/migration/refusal differs')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', type=Path, required=True)
@@ -50,19 +77,22 @@ def main():
     modes.add_argument('--backup-migration-only', action='store_true')
     modes.add_argument('--runtime-file-moves-only', action='store_true')
     modes.add_argument('--runtime-preparation-only', action='store_true')
+    modes.add_argument('--preparation-migration-only', action='store_true')
     parser.add_argument('--reference-receipt', type=Path)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
     generated_fixtures = args.runtime_file_moves_only or args.runtime_preparation_only
-    groups = {'runtime-preparation-data-ledger': 10} if args.runtime_preparation_only else {'runtime-owned-file-moves': 3, 'runtime-file-exchange-data': 6} if args.runtime_file_moves_only else {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
-    kind = 'runtime_preparation_native_gate' if args.runtime_preparation_only else 'runtime_file_moves_native_gate' if args.runtime_file_moves_only else 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
-    mode_switch = ' -RuntimePreparationOnly' if args.runtime_preparation_only else ' -RuntimeFileMovesOnly' if args.runtime_file_moves_only else ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
+    groups = {'preparation-schema13-history-migration': 1} if args.preparation_migration_only else {'runtime-preparation-data-ledger': 10} if args.runtime_preparation_only else {'runtime-owned-file-moves': 3, 'runtime-file-exchange-data': 6} if args.runtime_file_moves_only else {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
+    kind = 'runtime_preparation_migration_native_gate' if args.preparation_migration_only else 'runtime_preparation_native_gate' if args.runtime_preparation_only else 'runtime_file_moves_native_gate' if args.runtime_file_moves_only else 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
+    mode_switch = ' -PreparationMigrationOnly' if args.preparation_migration_only else ' -RuntimePreparationOnly' if args.runtime_preparation_only else ' -RuntimeFileMovesOnly' if args.runtime_file_moves_only else ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
     pin = health.archive_pin(args.archive)
     with zipfile.ZipFile(args.archive) as source:
         if args.runtime_preparation_only and (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
                 or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 14):
             raise ValueError('Preparation gate requires reviewed worker16/updater14 source')
-        if not generated_fixtures and (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
+        if args.preparation_migration_only and native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 14:
+            raise ValueError('Preparation migration requires updater14 source')
+        if not generated_fixtures and not args.preparation_migration_only and (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
                 or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != (13 if args.backup_migration_only else 12)):
             raise ValueError('This gate requires reviewed worker16 and matching updater schema source')
     if not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run):
@@ -77,6 +107,12 @@ def main():
         reference = json.loads(args.reference_receipt.read_text())
     if generated_fixtures:
         pass
+    elif args.preparation_migration_only:
+        if (set(reference) != {'kind', 'sourceProofSha256', 'runtimeDirectory', 'manifestSha256', 'updateId', 'sourceCommit', 'sourceManifestSha256'}
+                or reference.get('kind') != 'preparation_schema13_reference'
+                or not re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', reference.get('sourceCommit', ''))
+                or any(not re.fullmatch(r'[0-9a-f]{64}', reference.get(k, '')) for k in ('sourceProofSha256', 'manifestSha256', 'sourceManifestSha256'))):
+            raise ValueError('Proven schema13 manifest/source/proof pins required')
     elif args.backup_migration_only:
         if reference.get('kind') != 'state_backup_schema12_reference' or any(not re.fullmatch(r'[0-9a-f]{64}', reference.get(k, '')) for k in ('sourceProofSha256', 'manifestSha256', 'updaterSha256', 'sourceManifestSha256')):
             raise ValueError('Proven schema12 archive/manifest/updater pins required')
@@ -95,10 +131,10 @@ def main():
     project_path = PureWindowsPath(project['workspaceRoot'])
     if generated_fixtures:
         pass
-    elif args.backup_migration_only:
+    elif args.backup_migration_only or args.preparation_migration_only:
         path=PureWindowsPath(reference['runtimeDirectory'])
         if not path.is_relative_to(project_path/'workflow-validation') or '..' in path.parts:
-            raise ValueError('Schema12 reference must be a retained local validation runtime')
+            raise ValueError('Migration reference must be a retained local validation runtime')
     else:
         for item in reference['files']:
             path = PureWindowsPath(item['path'])
@@ -192,6 +228,10 @@ exit $LASTEXITCODE
         if 'state-backup-migration-proof.json' not in names:
             raise ValueError('Migration report missing actual proof')
         verify_migration_proof(json.loads((report/'state-backup-migration-proof.json').read_text(encoding='utf-8-sig')), pin, reference)
+    if args.preparation_migration_only:
+        if 'runtime-preparation-migration-proof.json' not in names:
+            raise ValueError('Preparation migration proof missing')
+        verify_preparation_migration_proof(json.loads((report/'runtime-preparation-migration-proof.json').read_text(encoding='utf-8-sig')), pin, reference)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report),
                       'filesVerified': len(names), 'testsPassed': sum(g['passed'] for g in result['commands'])}), flush=True)
 

@@ -1,6 +1,11 @@
 # Updater: actual preparation v16 проверен — 2026-10-22
 
 Цель active. **Нет текущих native/Cargo проверок.**
+Продолжение: добавлен [actual13→14 migration/refusal scenario](plans/worker-self-update/preparation-schema-migration.md),
+Windows all-target Clippy пройден; новый native test ещё не запущен. Reference — actual
+Verified backup13 из20261021-155003-a33e1e12 (12 ready files повторно сверены),
+local pin `preparation-schema13-reference-pin.json`. Сценарий только consistent
+clone; исходный reference/installed runtime не меняются.
 [Actual Main preparation gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md):
 40 native tests / 10 groups, task `d9805159-8804-486a-8aae-95ddb6e12e79`,
 run `20261023-012740-9feb95b9`, succeeded/exit0. 16 ready files сверены дважды,

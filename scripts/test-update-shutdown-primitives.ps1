@@ -11,10 +11,11 @@ param(
   [switch]$ColdReaderOnly,
   [switch]$BackupMigrationOnly,
   [switch]$RuntimeFileMovesOnly,
-  [switch]$RuntimePreparationOnly
+  [switch]$RuntimePreparationOnly,
+  [switch]$PreparationMigrationOnly
 )
 $ErrorActionPreference='Stop'
-if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly,$RuntimePreparationOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
+if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly,$RuntimePreparationOnly,$PreparationMigrationOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
@@ -28,9 +29,9 @@ Assert-WorkflowCachePath $cache
 if(-not (Test-Path -LiteralPath $cache -PathType Container)){throw 'Existing approved test cache required'}
 $manifest=Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 if($manifest.dirty){throw 'Clean exported source required'}
-$kind=if($RuntimePreparationOnly){'runtime_preparation_native_gate'}elseif($RuntimeFileMovesOnly){'runtime_file_moves_native_gate'}elseif($BackupMigrationOnly){'state_backup_migration_native_gate'}elseif($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
+$kind=if($PreparationMigrationOnly){'runtime_preparation_migration_native_gate'}elseif($RuntimePreparationOnly){'runtime_preparation_native_gate'}elseif($RuntimeFileMovesOnly){'runtime_file_moves_native_gate'}elseif($BackupMigrationOnly){'state_backup_migration_native_gate'}elseif($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
 $report=[ordered]@{schemaVersion=1;kind=$kind;platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;windowsOpened=$false;commands=@();error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
-$variables=@('CARGO_TARGET_DIR','CARGO_INCREMENTAL','TEMP','TMP','WINBRIDGE_SHUTDOWN_REFERENCE_WORKER','WINBRIDGE_UPDATE_REFERENCE_UPDATER','WINBRIDGE_STATE_BACKUP_MIGRATION_INPUT')
+$variables=@('CARGO_TARGET_DIR','CARGO_INCREMENTAL','TEMP','TMP','WINBRIDGE_SHUTDOWN_REFERENCE_WORKER','WINBRIDGE_UPDATE_REFERENCE_UPDATER','WINBRIDGE_STATE_BACKUP_MIGRATION_INPUT','WINBRIDGE_RUNTIME_PREPARATION_MIGRATION_INPUT')
 $old=@{};foreach($name in $variables){$old[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
 $oldLocation=Get-Location;$oldEncoding=[Console]::OutputEncoding;$oldOutputEncoding=$OutputEncoding;$lease=$null
 try {
@@ -41,7 +42,22 @@ try {
     if((Get-Item -LiteralPath $p).Length -ne $f.bytes -or (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() -cne $f.sha256){throw "Source mismatch: $($f.path)"}
   }
   $refs=Get-Content -LiteralPath $ReferenceReceipt -Raw | ConvertFrom-Json
-  if($RuntimePreparationOnly){
+  if($PreparationMigrationOnly){
+    if($refs.kind -cne 'preparation_schema13_reference'){throw 'Proven schema13 final backup reference required'}
+    Assert-SessionDirectory $refs.runtimeDirectory
+    $refManifest=Join-Path $refs.runtimeDirectory 'winbridge-installed-set.json';Assert-SessionFile $refManifest
+    if((Get-FileHash -LiteralPath $refManifest -Algorithm SHA256).Hash.ToLowerInvariant() -cne $refs.manifestSha256){throw 'Retained schema13 manifest changed'}
+    $installed=Get-Content -LiteralPath $refManifest -Raw | ConvertFrom-Json
+    $updaters=@($installed.artifacts | Where-Object {$_.name -ceq 'winbridge-update.exe'})
+    if($updaters.Count -ne 1){throw 'Exact retained updater role required'}
+    $refUpdater=Join-Path $refs.runtimeDirectory 'winbridge-update.exe';Assert-SessionFile $refUpdater
+    if((Get-FileHash -LiteralPath $refUpdater -Algorithm SHA256).Hash.ToLowerInvariant() -cne $updaters[0].sha256){throw 'Retained schema13 updater changed'}
+    $migrationRoot=Join-Path (Split-Path $source -Parent) 'preparation-migration-case'
+    if(Test-Path -LiteralPath $migrationRoot){throw 'Existing migration preserved'}
+    $inputPath=Join-Path (Split-Path $source -Parent) 'preparation-migration-input.json'
+    Write-NewJson $inputPath @{root=$migrationRoot;reference=$refs}
+    $env:WINBRIDGE_RUNTIME_PREPARATION_MIGRATION_INPUT=$inputPath
+  } elseif($RuntimePreparationOnly){
     if($refs.kind -cne 'runtime_preparation_validation'){throw 'Fixed preparation fixture declaration required'}
   } elseif($RuntimeFileMovesOnly){
     if($refs.kind -cne 'runtime_file_move_validation'){throw 'Fixed file-move fixture declaration required'}
@@ -106,6 +122,9 @@ try {
   if($RuntimePreparationOnly){
     $groups=@(@{name='runtime-preparation-data-ledger';minimum=10;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_preparation','--locked','--offline')})
   }
+  if($PreparationMigrationOnly){
+    $groups=@(@{name='preparation-schema13-history-migration';minimum=1;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','runtime_preparation_migration','actual_thirteen_backup_history_survives_fourteen_and_old_thirteen_refuses','--locked','--offline','--','--exact','--ignored')})
+  }
   foreach($g in $groups){
     $log=Join-Path $ReportDirectory ($g.name+'.log')
     $arguments=@($g.args)
@@ -121,6 +140,9 @@ try {
   }
   if($BackupMigrationOnly){
     [IO.File]::Copy((Join-Path $migrationRoot 'migration-proof.json'),(Join-Path $ReportDirectory 'state-backup-migration-proof.json'),$false)
+  }
+  if($PreparationMigrationOnly){
+    [IO.File]::Copy((Join-Path $migrationRoot 'migration-proof.json'),(Join-Path $ReportDirectory 'runtime-preparation-migration-proof.json'),$false)
   }
   $report.passed=$true
 } catch {$report.error=$_.Exception.Message;Write-Output ("Shutdown primitives failed: "+$report.error)} finally {
