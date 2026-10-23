@@ -19,12 +19,20 @@ pub struct RuntimeReplacementIntent {
 /// A saved intent or an Existing reply cannot recreate this non-Serde value.
 pub struct RuntimeReplacementPermit {
     pub(crate) intent: RuntimeReplacementIntent,
+    pub(crate) shutdown: crate::shutdown::ShutdownIntent,
 }
 impl RuntimeReplacementPermit {
     pub fn intent(&self) -> &RuntimeReplacementIntent {
         &self.intent
     }
+    pub fn shutdown_intent(&self) -> &crate::shutdown::ShutdownIntent {
+        &self.shutdown
+    }
 }
+#[cfg(windows)]
+mod physical;
+#[cfg(windows)]
+pub use physical::{RuntimeReplacementFailure, RuntimeReplacementGuard};
 pub enum RuntimeReplacementAdmission {
     Fresh(Box<RuntimeReplacementPermit>),
     Existing(Box<RuntimeReplacementRecord>),

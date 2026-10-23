@@ -10,7 +10,10 @@ Local workspace647/0 и обе Clippy passed;
 [native15 metadata11/0](plans/worker-self-update/windows-runtime-replacement-ledger-gate-2026-10-23.md)
 пройден; [actual retained14→15/refusal](plans/worker-self-update/windows-replacement-migration-gate-2026-10-23.md)
 также проверен. Rename
-callback/consuming guard/IO ещё не подключены. Проверенные preparation gates ниже —14.
+callback/consuming guard/IO добавлены как
+[trusted library](plans/worker-self-update/runtime-replacement-custody.md), ещё не
+подключены к actor и не имеют positive native replacement proof. Проверенные
+preparation gates ниже —14.
 
 Текущий блок — [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md):
 её проверенные gates используют updater14/worker16. Foundation native10 относится к v15/view7;

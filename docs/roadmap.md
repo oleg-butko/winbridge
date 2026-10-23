@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-23 WIP: [consuming custody/rename library](plans/worker-self-update/runtime-replacement-custody.md)
+добавлена, local workspace648/0 и обе Clippy passed. Библиотека удерживает original
+process/state/instance lock и выполняет только сохранённые one-attempt moves с
+physical receipt checks. Actor/driver/trusted root transition и positive native
+replacement ещё впереди; public install остаётся off.
+
 2026-10-23 WIP: [replacement ledger schema15](plans/worker-self-update/runtime-replacement-ledger.md)
 добавляет immutable current/history и fresh original-guard admission, без rename
 callback/actor. Package216/0, workspace647/0 и обе Clippy passed.

@@ -7,11 +7,16 @@
 
 ## Текущий статус 2026-10-23
 
+[Consuming custody/owned rename library](runtime-replacement-custody.md) добавлена:
+local workspace648/0, обе Clippy passed. Blocking driver/actor/trusted FilesVerified
+и actual positive/fault replacement gates ещё впереди; public install off.
+
 [Replacement ledger](runtime-replacement-ledger.md) добавлен в source schema15:
 immutable history/fresh admission, local workspace647/0 и обе Clippy passed.
 [Native15 metadata11/0](windows-runtime-replacement-ledger-gate-2026-10-23.md) пройден;
 [Actual retained14→15/refusal](windows-replacement-migration-gate-2026-10-23.md)
-тоже пройден; successful rename callbacks не открыты.
+тоже пройден; новые success callbacks доступны лишь trusted Rust library под
+consuming native guard, actor/public RPC ещё не подключены.
 Следом consuming original custody/guard и IO/actor. Native results ниже относятся к14.
 
 После передачи контекста цель возобновлена. [Actual preparation fault gate](runtime-preparation-faults.md)

@@ -1,5 +1,19 @@
 # Updater: preparation faults и replacement model проверены — 2026-10-23
 
+## Current WIP: consuming custody/owned rename library
+
+Добавлена [native custody/rename library](plans/worker-self-update/runtime-replacement-custody.md):
+unique original Arc transfer с busy restoration, same process/state/instance lock,
+five prepared +five old owned handles, fixed anchors, one-attempt directory/file IO
+и guarded SQL success callbacks. Existing directory/unknown entries сохраняются;
+failed acquisition/IO возвращают retained boxed custody. Schema15/16,v16/view8 прежние.
+Local package217/0, workspace648/0,16 ignored и обе all-target Clippy passed.
+**Actor/driver/trusted FilesVerified/actual positive replacement ещё не подключены.**
+Новый Windows directory test только compiled, не run. Native/Cargo runs сейчас нет.
+Следом blocking driver и supervisor новыйcontract/view, затем actual Main15 positive/
+fault gates. До того не объявлять whole replacement проверенным. Installed d052
+healthy/unchanged; public install off. Ниже готовая metadata/migration foundation.
+
 ## Current: replacement ledger schema15 metadata gate пройден
 
 Добавлен [durable admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)

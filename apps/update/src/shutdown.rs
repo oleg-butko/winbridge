@@ -8,7 +8,9 @@ pub use state::{LockedShutdownState, ShutdownStateObservation, ShutdownStatePins
 mod inspection;
 pub use inspection::{inspect_saved_receipt, ShutdownInspectionRequest};
 mod physical;
-pub(crate) use physical::Custody;
+pub use physical::Custody;
+#[cfg(windows)]
+pub(crate) use physical::ExitedStateCustody;
 pub use physical::ShutdownExitGuard;
 mod driver;
 pub(crate) use driver::{execute, prepare, prepare_for_backup, Prepared};

@@ -153,16 +153,31 @@ fn current(
 }
 /// Keep all checked files/directories pinned until admission COMMIT. This is
 /// still not consuming custody: the future guard must revalidate before rename.
-struct AdmissionPins {
+pub(crate) struct AdmissionPins {
     _files: Vec<crate::artifact::Pinned>,
     _directories: Vec<winbridge_platform::source_files::PinnedDirectory>,
     _backup: crate::state_backup::StateBackupFilePin,
+}
+#[cfg(windows)]
+impl AdmissionPins {
+    pub(crate) fn revalidate(&self) -> std::result::Result<(), String> {
+        for directory in &self._directories {
+            directory.revalidate().map_err(|e| e.to_string())?;
+        }
+        for file in &self._files {
+            if crate::artifact::inspect_image(Path::new(&file.evidence.path))? != file.evidence {
+                return Err("Replacement fixed file/config pin changed".into());
+            }
+        }
+        self._backup.revalidate()
+    }
 }
 fn physical(
     c: &Connection,
     s: &SupervisorRecord,
     r: &crate::runtime_preparation::RuntimePreparationRecord,
     guard: &crate::shutdown::ShutdownExitGuard,
+    hold_prepared: bool,
 ) -> Result<AdmissionPins> {
     runtime_preparation::physical(c, &r.plan, guard)?;
     let cfg = crate::preparation::configuration(s).map_err(storage)?;
@@ -256,11 +271,9 @@ fn physical(
         .map_err(storage)?,
     );
     let batch = r.exchange_batch().map_err(bad)?;
-    for image in batch
+    for image in pr
         .files
         .iter()
-        .map(|f| &f.spec.prepared)
-        .chain(&pr.files)
         .chain(r.plan.files.iter().filter_map(|f| f.source.as_ref()))
     {
         let pin = crate::artifact::pin(Path::new(&image.path)).map_err(storage)?;
@@ -271,6 +284,18 @@ fn physical(
             ));
         }
         pins.push(pin);
+    }
+    for image in batch.files.iter().map(|f| &f.spec.prepared) {
+        let pin = crate::artifact::pin(Path::new(&image.path)).map_err(storage)?;
+        if pin.evidence != *image {
+            return Err(fail(
+                JournalErrorCode::PreconditionsChanged,
+                "Replacement prepared file changed",
+            ));
+        }
+        if hold_prepared {
+            pins.push(pin);
+        }
     }
     let names = fs::read_dir(r.plan.directory())
         .map_err(storage)?
@@ -295,6 +320,52 @@ fn physical(
     })
 }
 impl UpdateJournal {
+    pub fn require_runtime_replacement_current(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        expected: &RuntimeReplacementRecord,
+        permit: &RuntimeReplacementPermit,
+    ) -> Result<()> {
+        expected.validate().map_err(bad)?;
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        current(&tx, a, s, &expected.intent)?;
+        if permit.intent != expected.intent
+            || read(&tx, id(&expected.intent))?.as_ref() != Some(expected)
+        {
+            return Err(fail(
+                JournalErrorCode::RevisionConflict,
+                "Replacement current scope/permit/revision differs",
+            ));
+        }
+        let shutdown = state_backup::read(&tx, id(&expected.intent))?
+            .ok_or_else(|| bad("Replacement backup missing"))?
+            .intent
+            .binding
+            .shutdown
+            .intent
+            .clone();
+        if permit.shutdown != shutdown {
+            return Err(bad("Replacement original shutdown scope differs"));
+        }
+        tx.commit().map_err(storage)
+    }
+    #[cfg(windows)]
+    pub(crate) fn replacement_anchors(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        expected: &RuntimeReplacementRecord,
+        permit: &RuntimeReplacementPermit,
+        guard: &crate::shutdown::ShutdownExitGuard,
+    ) -> Result<AdmissionPins> {
+        self.require_runtime_replacement_current(a, s, expected, permit)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        let pins = physical(&tx, s, &expected.intent.preparation, guard, false)?;
+        tx.commit().map_err(storage)?;
+        Ok(pins)
+    }
     pub fn inspect_runtime_replacement(
         directory: &Path,
         update_id: &str,
@@ -350,17 +421,64 @@ impl UpdateJournal {
                     "Replacement needs original OS custody",
                 )
             })?,
+            true,
         )?;
+        let shutdown = state_backup::read(&tx, id(&intent))?
+            .ok_or_else(|| bad("Replacement shutdown missing"))?
+            .intent
+            .binding
+            .shutdown
+            .intent
+            .clone();
         insert(&tx, &r)?;
         if read(&tx, id(&intent))?.as_ref() != Some(&r) {
             return Err(bad("Replacement causal admission readback differs"));
         }
         tx.commit().map_err(storage)?;
         Ok(RuntimeReplacementAdmission::Fresh(Box::new(
-            RuntimeReplacementPermit { intent },
+            RuntimeReplacementPermit { intent, shutdown },
         )))
     }
-    /// No success receipts are exposed until consuming physical replacement guard exists.
+    /// Successful progress requires the original consuming native guard and
+    /// actual file locations matching the proposed exact causal prefix.
+    #[cfg(windows)]
+    pub fn update_runtime_replacement(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        old: &RuntimeReplacementRecord,
+        next: RuntimeReplacementRecord,
+        guard: &mut crate::runtime_replacement::RuntimeReplacementGuard,
+    ) -> Result<RuntimeReplacementRecord> {
+        // Validate every callback path/scope before any physical inspection.
+        old.advance(&next).map_err(bad)?;
+        self.check_directory(a)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        current(&tx, a, s, &old.intent)?;
+        if guard.permit().intent != old.intent || read(&tx, id(&old.intent))?.as_ref() != Some(old)
+        {
+            return Err(fail(
+                JournalErrorCode::RevisionConflict,
+                "Replacement guard/scope/revision differs",
+            ));
+        }
+        if matches!(next.state, RuntimeReplacementState::Indeterminate { .. }) {
+            if let RuntimeReplacementState::Indeterminate { reason, .. } = &next.state {
+                guard.stop(reason.clone());
+            }
+        } else {
+            guard
+                .require_progress(&next)
+                .map_err(|e| fail(JournalErrorCode::PreconditionsChanged, e))?;
+        }
+        persist(&tx, old, &next)?;
+        tx.commit().map_err(storage)?;
+        Ok(next)
+    }
+    /// Recording uncertainty grants no further physical effect or success receipt.
     pub fn mark_runtime_replacement_indeterminate(
         &mut self,
         a: &UpdateAuthority,

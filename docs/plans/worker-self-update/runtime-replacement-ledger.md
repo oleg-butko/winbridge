@@ -33,9 +33,10 @@ admission не подменяют consuming guard: перед будущим IO 
 
 Пока открыт только `mark_runtime_replacement_indeterminate`: current authority,
 original permit, exact saved prefix и readable reason. Он не исполняет IO и не
-создаёт success receipt. Production callback успешного rename **не существует**:
-его добавлять с transition-aware consuming physical guard, не с ослабленным старым
-`ShutdownExitGuard::require`. Actor/RPC и projection для replacement ещё не подключены.
+создаёт success receipt. В следующем блоке добавлен
+[Windows-only callback под consuming physical guard](runtime-replacement-custody.md),
+не ослабляющий старый `ShutdownExitGuard::require`. Actor/RPC и projection для
+replacement ещё не подключены; positive native rename gate впереди.
 
 ## Проверки и последующие шаги
 

@@ -30,6 +30,8 @@ mod runtime_baseline;
 mod runtime_preimages;
 mod runtime_preparation;
 mod runtime_replacement;
+#[cfg(windows)]
+pub(crate) use runtime_replacement::AdmissionPins;
 mod shutdown;
 mod source;
 mod state_backup;
