@@ -6,9 +6,12 @@
 новые PS/Python modes `RuntimePreparationFaults`/`--runtime-preparation-faults`.
 Windows cross-check и обе all-target Clippy прошли; local preparation16/0,
 Python5/0 и scaffold237 прошли.
-Native fault gate ещё не запускался. Installed d052 connected/idle/healthy;
-controller3413 прежний. Public install отключён. Следом завершить local checks,
-review/commit/export и запустить новый isolated gate, затем независимо сверить proof.
+Native fault gate **выполняется**: task `50979d1f-6f38-4d0a-8f15-6e96a243222d`,
+run `20261023-081649-b9bf5a72`, producer `ddce866`, runner session43440.
+Log `.winbridge/update-preparation/preparation-faults-native.log`, scope/pins в
+`preparation-faults-active.json`. **Не отправлять task повторно:** читать тот же
+Task ID до terminal, затем независимо сверить ready files/proof. Installed d052
+исправен, controller3413 прежний, UI окон нет. Public install отключён.
 После pass — consuming replacement custody/rename ledger/driver, activation/U3/U4.
 
 ## Зафиксированная точка закрытия перед возобновлением
