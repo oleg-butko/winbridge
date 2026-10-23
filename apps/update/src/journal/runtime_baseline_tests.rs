@@ -90,6 +90,11 @@ impl Fixture {
                 "Fixture PID receipt",
             )
             .unwrap();
+        // Other parallel tests spawn processes. A Unix fork may briefly retain
+        // a reference to this same lock description until exec, so close alone
+        // need not release it synchronously. This synthetic fixture launches no
+        // supervisor; explicitly finish its handoff before the next owner.
+        fs2::FileExt::unlock(&owner.lock).unwrap();
         drop(owner);
         let owner = journal.acquire_owner().unwrap();
         let s = journal

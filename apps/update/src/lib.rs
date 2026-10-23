@@ -1,5 +1,5 @@
 //! Update preparation and its independent durable journal.
-//! Source effects require a trusted worker lease; runtime replacement is not implemented.
+//! Effects require trusted internal drivers; public runtime installation remains disabled.
 pub mod abort;
 pub mod archive;
 pub mod artifact;

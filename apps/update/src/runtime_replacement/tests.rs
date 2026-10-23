@@ -10,6 +10,97 @@ fn planned() -> RuntimeReplacementRecord {
     })
     .unwrap()
 }
+#[test]
+fn readonly_diagnostics_do_not_claim_unchanged_runtime_after_cutover() {
+    use winbridge_protocol::update::UpdatePhase::*;
+    assert_eq!(applied_observation(None), None);
+    for phase in [Replacing, ManualIntervention] {
+        assert_eq!(applied_observation(Some(phase)), None);
+    }
+    for phase in [VerifyingLocal, AwaitingController, Committed] {
+        assert_eq!(applied_observation(Some(phase)), Some(true));
+    }
+    for phase in [
+        Requested,
+        Preparing,
+        SourceApplying,
+        Building,
+        ValidatingCandidate,
+        CandidateVerified,
+        Draining,
+        Quiesced,
+        Stopping,
+        Aborting,
+        Deferred,
+        FailedBeforeCutover,
+    ] {
+        assert_eq!(applied_observation(Some(phase)), Some(false));
+    }
+}
+#[test]
+fn replacement_projection_separates_saved_progress_from_live_custody() {
+    use winbridge_protocol::update::{
+        RuntimeReplacementMove as Move, RuntimeReplacementPhase as Phase,
+    };
+    let absent = view(None, false, false, false);
+    assert_eq!(absent.phase, Phase::NotAdmitted);
+    assert!(!absent.physical_custody_held);
+    assert_eq!(view(None, false, true, false).phase, Phase::Blocked);
+    let r = planned();
+    let active = view(Some(&r), true, false, false);
+    assert_eq!(active.phase, Phase::Acquiring);
+    assert!(!active.physical_custody_held);
+    let cold = view(Some(&r), false, false, false);
+    assert_eq!(cold.phase, Phase::Indeterminate);
+    assert!(cold.reason.unwrap().contains("Автоматического повтора нет"));
+    let mut r = directory();
+    let n = r.batch.files[0].issue_retire().unwrap();
+    r = r.advance_file(0, n).unwrap();
+    let issued = view(Some(&r), true, false, true);
+    assert_eq!(issued.phase, Phase::MovingFiles);
+    assert_eq!(issued.issued_move, Some(Move::Retire));
+    assert_eq!(issued.retired_files, 0);
+    assert_eq!(issued.installed_files, 0);
+    assert!(issued.physical_custody_held);
+    let mut receipt = r.batch.files[0].spec.old.clone();
+    receipt.path = r.batch.files[0]
+        .spec
+        .retained_path()
+        .to_str()
+        .unwrap()
+        .into();
+    let n = r.batch.files[0].retired(receipt).unwrap();
+    r = r.advance_file(0, n).unwrap();
+    let n = r.batch.files[0].issue_place().unwrap();
+    r = r.advance_file(0, n).unwrap();
+    let issued = view(Some(&r), true, false, true);
+    assert_eq!(issued.issued_move, Some(Move::Place));
+    assert_eq!(issued.retired_files, 1);
+    assert_eq!(issued.installed_files, 0);
+    let failed = r.indeterminate("Move outcome unknown".into()).unwrap();
+    let v = view(Some(&failed), false, true, true);
+    assert_eq!(v.phase, Phase::Indeterminate);
+    assert!(v.physical_custody_held, "Failure retains original locks");
+    assert_eq!(v.reason.as_deref(), Some("Move outcome unknown"));
+}
+#[test]
+fn completed_projection_remains_historical_without_activation_or_custody() {
+    use winbridge_protocol::update::RuntimeReplacementPhase as Phase;
+    let mut r = directory();
+    for i in 0..5 {
+        r = moved(r, i);
+    }
+    for held in [true, false] {
+        let v = view(Some(&r), false, false, held);
+        assert_eq!(v.phase, Phase::FilesMoved);
+        assert_eq!(v.revision, Some(22));
+        assert_eq!((v.retired_files, v.installed_files), (5, 5));
+        assert_eq!(v.physical_custody_held, held);
+        assert_eq!(v.issued_file, None);
+        assert_eq!(v.issued_move, None);
+        assert_eq!(v.reason, None);
+    }
+}
 fn directory() -> RuntimeReplacementRecord {
     planned()
         .issue_directory()

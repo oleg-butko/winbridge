@@ -587,6 +587,9 @@ pub enum SupervisorAction {
     /// Internal v16: create-only independent files, never installed runtime rename.
     PrepareRuntimeFiles,
     ObserveRuntimeFiles,
+    /// Internal v17: original-custody replacement, no activation promise.
+    ReplaceRuntime,
+    ObserveRuntimeReplacement,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -651,6 +654,9 @@ pub struct UpdatePreparationView {
     /// V16/view8 only; older replies omit this saved-data projection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_preparation: Option<RuntimePreparationView>,
+    /// V17/view9 only. Physical custody is always a live observation, never data authority.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_replacement: Option<RuntimeReplacementView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1046,3 +1052,5 @@ mod state_backup;
 pub use state_backup::*;
 mod runtime_preparation;
 pub use runtime_preparation::*;
+mod runtime_replacement;
+pub use runtime_replacement::*;

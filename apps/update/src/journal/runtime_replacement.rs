@@ -1,4 +1,4 @@
-//! Schema15: replacement acceptance/history only. No rename-success callback yet.
+//! Schema15: replacement admission/history and guarded physical callbacks.
 use super::*;
 use crate::runtime_replacement::*;
 use winbridge_protocol::update::SupervisorRecord;
@@ -320,6 +320,77 @@ fn physical(
     })
 }
 impl UpdateJournal {
+    /// The only FilesVerified path: physical full set plus terminal replacement
+    /// receipt and root CAS are joined under this same writer transaction.
+    #[cfg(windows)]
+    pub fn finish_runtime_replacement(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        replacement: &RuntimeReplacementRecord,
+        guard: &mut crate::runtime_replacement::RuntimeReplacementGuard,
+    ) -> Result<UpdateRecord> {
+        replacement.validate().map_err(bad)?;
+        if !matches!(
+            replacement.state,
+            RuntimeReplacementState::FilesMoved { .. }
+        ) || guard.permit().intent != replacement.intent
+        {
+            return Err(bad(
+                "FilesVerified requires exact completed owned replacement",
+            ));
+        }
+        self.check_directory(a)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        current(&tx, a, s, &replacement.intent)?;
+        if read(&tx, id(&replacement.intent))?.as_ref() != Some(replacement) {
+            return Err(bad("Final replacement receipt differs"));
+        }
+        guard
+            .require_progress(replacement)
+            .map_err(|e| fail(JournalErrorCode::PreconditionsChanged, e))?;
+        let mut root = record(&tx, id(&replacement.intent))?;
+        let command = winbridge_protocol::update::UpdateCommand {
+            idempotency_key: format!("runtime-files-verified-{}", replacement.intent.attempt_id),
+            expected_revision: root.revision,
+            event: winbridge_protocol::update::UpdateEvent::FilesVerified,
+            reason: "Runtime replacement: exact five moved files verified; activation pending"
+                .into(),
+        };
+        supervisor::require_driver(&tx, a, &root.update_id, command.event)?;
+        let previous = root.phase;
+        root.phase = advance_update(root.phase, command.event).map_err(bad)?;
+        root.revision = root
+            .revision
+            .checked_add(1)
+            .filter(|n| *n <= MAX_UPDATE_COUNTER)
+            .ok_or_else(|| bad("Replacement root revision exhausted"))?;
+        root.updated_at_ms = now_ms()?.max(root.updated_at_ms);
+        root.reason = Some(command.reason.clone());
+        let raw = encode(&root)?;
+        one(tx.execute("UPDATE updates SET record=?1,revision=?2,phase=?3,active=?4 WHERE id=?5 AND revision=?6",
+            params![raw,root.revision as i64,encode(&root.phase)?,update_blocks_installation(root.phase),root.update_id,command.expected_revision as i64]).map_err(storage)?)?;
+        let transition = UpdateTransition {
+            sequence: 0,
+            update_id: root.update_id.clone(),
+            revision: root.revision,
+            previous_phase: Some(previous),
+            phase: root.phase,
+            occurred_at_ms: root.updated_at_ms,
+            owner_epoch: a.epoch(),
+            owner_id: a.owner_id().into(),
+            command: Some(command.clone()),
+        };
+        append_transition(&tx, &transition, Some(&encode(&command)?), &raw)?;
+        if record(&tx, &root.update_id)? != root {
+            return Err(bad("FilesVerified root readback differs"));
+        }
+        tx.commit().map_err(storage)?;
+        Ok(root)
+    }
     pub fn require_runtime_replacement_current(
         &self,
         a: &UpdateAuthority,

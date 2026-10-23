@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-23 WIP: [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md)
+добавлен: admission-before-ACK, original custody, manifest-last IO и trusted
+FilesVerified → VerifyingLocal. Updater15/worker16 без новой миграции.
+Actual Main positive/fault replacement gates и activation ещё впереди;
+локальные/cross проверки не означают готовый updater. Public install off.
+Ниже — исторические точки; текущий порядок продолжения в указанной инструкции.
+
 2026-10-23 WIP: [consuming custody/rename library](plans/worker-self-update/runtime-replacement-custody.md)
 добавлена, local workspace648/0 и обе Clippy passed. Библиотека удерживает original
 process/state/instance lock и выполняет только сохранённые one-attempt moves с

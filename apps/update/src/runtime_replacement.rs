@@ -6,6 +6,29 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 type Result<T> = std::result::Result<T, String>;
+mod driver;
+pub(crate) use driver::{execute, ReplacementOutcome};
+/// Live-object observation only; never an execution permission or durable fact.
+#[derive(Clone, Default)]
+pub struct CustodySignal(std::sync::Arc<std::sync::atomic::AtomicBool>);
+impl CustodySignal {
+    pub fn held(&self) -> bool {
+        self.0.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
+/// Conservative observation for legacy readonly diagnostics. Replacing does not
+/// reveal whether an issued native effect happened. Never report `false` there.
+/// `true` describes verified file placement, not activation or update completion.
+pub fn applied_observation(phase: Option<winbridge_protocol::update::UpdatePhase>) -> Option<bool> {
+    use winbridge_protocol::update::UpdatePhase::*;
+    match phase? {
+        Replacing | ManualIntervention => None,
+        VerifyingLocal | AwaitingController | Committed => Some(true),
+        Requested | Preparing | SourceApplying | Building | ValidatingCandidate
+        | CandidateVerified | Draining | Quiesced | Stopping | Aborting | Deferred
+        | FailedBeforeCutover => Some(false),
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -283,6 +306,83 @@ impl RuntimeReplacementRecord {
             return Err("Replacement transition changed receipt/prefix".into());
         }
         Ok(())
+    }
+}
+pub(crate) fn view(
+    saved: Option<&RuntimeReplacementRecord>,
+    active: bool,
+    failed: bool,
+    held: bool,
+) -> winbridge_protocol::update::RuntimeReplacementView {
+    use winbridge_protocol::update::{
+        RuntimeReplacementMove as Move, RuntimeReplacementPhase as Phase, RuntimeReplacementView,
+    };
+    let Some(r) = saved else {
+        return RuntimeReplacementView {
+            phase: if failed {
+                Phase::Blocked
+            } else {
+                Phase::NotAdmitted
+            },
+            attempt_id: None,
+            revision: None,
+            directory: None,
+            retired_files: 0,
+            installed_files: 0,
+            total_files: 5,
+            issued_file: None,
+            issued_move: None,
+            physical_custody_held: false,
+            reason: None,
+        };
+    };
+    let terminal = matches!(
+        r.state,
+        RuntimeReplacementState::FilesMoved { .. } | RuntimeReplacementState::Indeterminate { .. }
+    );
+    let (issued_file, issued_move) = r
+        .batch
+        .files
+        .iter()
+        .find_map(|f| match f.state {
+            FileExchangeState::RetireIssued {} => {
+                Some((Some(f.spec.file.name().into()), Some(Move::Retire)))
+            }
+            FileExchangeState::PlaceIssued { .. } => {
+                Some((Some(f.spec.file.name().into()), Some(Move::Place)))
+            }
+            _ => None,
+        })
+        .unwrap_or((None, None));
+    RuntimeReplacementView {
+        phase: if !active && !terminal {
+            Phase::Indeterminate
+        } else {
+            match r.state {
+                RuntimeReplacementState::Planned {} => Phase::Acquiring,
+                RuntimeReplacementState::DirectoryIssued {} => Phase::CreatingDirectory,
+                RuntimeReplacementState::Replacing { .. } => Phase::MovingFiles,
+                RuntimeReplacementState::FilesMoved { .. } => Phase::FilesMoved,
+                RuntimeReplacementState::Indeterminate { .. } => Phase::Indeterminate,
+            }
+        },
+        attempt_id: Some(r.intent.attempt_id.clone()),
+        revision: Some(r.revision),
+        directory: Some(r.intent.retained_directory().to_string_lossy().into()),
+        retired_files: r.batch.files.iter().filter(|f| matches!(f.state,
+            FileExchangeState::Retired { .. } | FileExchangeState::PlaceIssued { .. }
+                | FileExchangeState::Installed { .. })).count() as u16,
+        installed_files: r.batch.files.iter().filter(|f| matches!(f.state,
+            FileExchangeState::Installed { .. })).count() as u16,
+        total_files: 5,
+        issued_file,
+        issued_move,
+        physical_custody_held: held,
+        reason: match &r.state {
+            RuntimeReplacementState::Indeterminate { reason, .. } => Some(reason.clone()),
+            _ if !active && !terminal => Some("Сохранена незавершённая замена; активного исполнителя нет. Автоматического повтора нет.".into()),
+            _ => None,
+        },
     }
 }
 #[cfg(test)]

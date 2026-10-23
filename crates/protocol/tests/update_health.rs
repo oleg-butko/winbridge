@@ -82,3 +82,51 @@ fn preparation_v16_is_explicit_and_accepts_no_caller_paths_or_receipts() {
         "indeterminate"
     );
 }
+#[test]
+fn replacement_v17_accepts_no_caller_authority_or_physical_evidence() {
+    for (action, name) in [
+        (SupervisorAction::ReplaceRuntime, "replace_runtime"),
+        (
+            SupervisorAction::ObserveRuntimeReplacement,
+            "observe_runtime_replacement",
+        ),
+    ] {
+        let request = SupervisorRequest {
+            contract_version: 17,
+            launch_id: "launch".into(),
+            expected_revision: 2,
+            action,
+            token: "a".repeat(64),
+            worker_command: None,
+        };
+        let value = serde_json::to_value(&request).unwrap();
+        assert_eq!(value["action"], name);
+        assert_eq!(value["contractVersion"], 17);
+        let decoded = serde_json::from_value::<SupervisorRequest>(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+        for field in [
+            "permit",
+            "custody",
+            "plan",
+            "directory",
+            "fileIdentity",
+            "receipt",
+            "resume",
+            "replay",
+            "executable",
+        ] {
+            let mut bad = value.clone();
+            bad[field] = serde_json::json!({});
+            assert!(
+                serde_json::from_value::<SupervisorRequest>(bad).is_err(),
+                "{field}"
+            );
+        }
+    }
+    assert!(
+        serde_json::from_value::<RuntimeReplacementPhase>(serde_json::json!("committed")).is_err()
+    );
+    assert!(
+        serde_json::from_value::<RuntimeReplacementPhase>(serde_json::json!("activated")).is_err()
+    );
+}

@@ -4,6 +4,13 @@
 
 ## Текущее состояние updater — завершение проверок 2026-10-23
 
+В текущем source подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
+одноразовое admission, consuming original custody, manifest-last перенос и
+trusted FilesVerified → VerifyingLocal. Схемы updater15/worker16 прежние.
+Actual Main replacement gate ещё не запускался; activation/public install остаются
+выключены. Следующий шаг и точные ограничения описаны в указанной инструкции.
+Ниже сохранена история предыдущих commits.
+
 Продолжение: [replacement admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)
 добавлен в текущий source **schema15**; worker16/supervisor v16/view8 прежние.
 Local workspace647/0 и обе Clippy passed;

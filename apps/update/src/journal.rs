@@ -944,7 +944,7 @@ impl UpdateJournal {
                 | winbridge_protocol::update::UpdateEvent::ControllerConfirmed
         ) {
             return Err(fail(JournalErrorCode::InvalidRequest,
-                "Runtime replacement/activation require their trusted drivers and receipts; post-cutover drivers are not implemented"));
+                "Raw lifecycle cannot verify runtime files or activation; trusted drivers and physical receipts are required"));
         }
         if matches!(
             command.event,

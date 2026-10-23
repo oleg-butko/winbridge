@@ -36,7 +36,7 @@
 apps/
   controller/       Debian coordinator; ws:// listener и CLI submit/get/cancel/watch
   worker/           Local execution authority, CLI, SQLite, fixture executable
-  update/           Source/ZIP verifier, update journal и supervisor; runtime apply ещё не реализован
+  update/           Source/ZIP verifier, update journal и supervisor; публичная установка пока выключена
   desktop/          Tauri shell с worker IPC bridge, отдельный Cargo package
 crates/
   protocol/         Общие wire DTO и версия протокола
@@ -126,7 +126,9 @@ status и release только после source/Job/output proof. Добавл�
 [Actual13→14 migration/refusal](docs/plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
 также проверен. [Три actual preparation faults](docs/plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md)
 прошли40 native tests; [replacement data model](docs/plans/worker-self-update/windows-runtime-replacement-model-gate-2026-10-23.md)
-прошла12 native tests. Replacement ledger/custody/IO/activation ещё не реализованы.
+прошла12 native tests. Затем добавлены schema15 ledger, consuming custody и
+[replacement driver/actor v17/view9](docs/plans/worker-self-update/runtime-replacement-actor.md).
+Actual Main replacement gate, activation и U3/U4 ещё впереди; public install выключен.
 Прежние U2.1 native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

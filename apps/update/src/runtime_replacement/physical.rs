@@ -34,6 +34,7 @@ pub struct RuntimeReplacementGuard {
     retained: Option<PinnedDirectory>,
     directory_attempted: bool,
     error: Option<String>,
+    signal: CustodySignal,
 }
 /// Failure keeps the very same kernel resources and any partial acquisitions.
 /// It cannot be converted back to a fresh permit or retried as a new acquisition.
@@ -63,6 +64,7 @@ impl RuntimeReplacementGuard {
         j: &UpdateJournal,
         a: &UpdateAuthority,
         s: &SupervisorRecord,
+        signal: CustodySignal,
     ) -> std::result::Result<Self, RuntimeReplacementFailure> {
         let mut guard = Self {
             permit,
@@ -74,6 +76,7 @@ impl RuntimeReplacementGuard {
             retained: None,
             directory_attempted: false,
             error: None,
+            signal,
         };
         match guard.acquire_inner(j, a, s) {
             Ok(()) => Ok(guard),
@@ -101,6 +104,9 @@ impl RuntimeReplacementGuard {
             .as_ref()
             .ok_or("Original custody missing before conversion")?;
         original.require(self.permit.shutdown_intent())?;
+        self.signal
+            .0
+            .store(true, std::sync::atomic::Ordering::Release);
         let retained = self.permit.intent.retained_directory();
         if retained.try_exists().map_err(|e| e.to_string())? {
             return Err("Displaced runtime directory already exists; preserve, never adopt".into());
@@ -398,6 +404,13 @@ impl RuntimeReplacementGuard {
             );
         }
         Ok(())
+    }
+}
+impl Drop for RuntimeReplacementGuard {
+    fn drop(&mut self) {
+        self.signal
+            .0
+            .store(false, std::sync::atomic::Ordering::Release);
     }
 }
 #[cfg(test)]

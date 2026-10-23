@@ -628,7 +628,10 @@ fn cli_journal_init_and_inspection_preserve_source_config_and_runtime_payload() 
     let status: serde_json::Value = serde_json::from_slice(&status.stdout).unwrap();
     assert_eq!(status["info"], first["info"]);
     assert_eq!(status["readOnly"], true);
-    assert_eq!(status["runtimeApplied"], false);
+    assert_eq!(status["schemaVersion"], 2);
+    // No update is selected: readonly diagnostics cannot infer the state of
+    // runtime files from an absent record. Actual preservation is checked below.
+    assert_eq!(status.get("runtimeApplied"), Some(&serde_json::Value::Null));
     assert_eq!(fs::read_to_string(worker).unwrap(), "preserve config");
     assert_eq!(
         fs::read_to_string(source.join("main.rs")).unwrap(),

@@ -1,3 +1,17 @@
+# Updater: текущая точка — driver/actor v17, Windows replacement gate впереди
+
+2026-10-23. Начать с [подробной инструкции продолжения](plans/worker-self-update/runtime-replacement-actor.md).
+Добавлены blocking replacement driver, supervisor v17/view9, resident original
+custody и trusted FilesVerified → VerifyingLocal. Схемы updater15/worker16 прежние.
+**Новый actual Main replacement/activation ещё не проверены на Windows**; public
+install выключен. Следом отдельный positive Main15 gate, затем faults и activation,
+U3/U4. Workspace653/0,16 ignored; final schema2 CLI1/0, Linux/Windows all-target Clippy,
+contracts/TS/UI, Python7+4 и scaffold244 прошли. Все проверки завершены; активных
+Cargo/native runs нет. Логи и границы доказательств перечислены в новой инструкции.
+Controller этой сессии запущен заново (PID3922); installed d052 connected, desktop
+не нужен. Исторические PID/ACTIVE/NEXT и «не подключено» ниже относятся к прежним
+commits и не являются текущим статусом. Завершённые Windows tasks не пересылать.
+
 # Updater: preparation faults и replacement model проверены — 2026-10-23
 
 ## Current WIP: consuming custody/owned rename library
