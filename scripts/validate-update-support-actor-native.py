@@ -49,7 +49,7 @@ def strict_counters(value):
             strict_counters(item)
 
 
-def verify(proof, source, target, root):
+def verify(proof, source, target, expected_root):
     strict_counters(proof)
     need(type(proof.get('schemaVersion')) is int and proof['schemaVersion'] == 1
          and proof.get('kind') == 'candidate_support_actor_main_native_proof'
@@ -82,7 +82,7 @@ def verify(proof, source, target, root):
          and record['schemaVersion'] == 1 and record['phase'] == 'finished', 'Support terminal record changed')
     intent, probe, result = (record[k] for k in ('intent', 'probe', 'result'))
     supervisor, worker = before['supervisor'], before['worker']
-    runtime = PureWindowsPath(root)/'support-main-cases'/'None'/'runtime'
+    runtime = PureWindowsPath(expected_root)/'support-main-cases'/'None'/'runtime'
     need(support.windows_path(supervisor['spec']['runtimeDirectory']) == runtime
          and support.windows_path(supervisor['spec']['configPath']) == runtime/'winbridge-update.local.json'
          and support.windows_path(supervisor['spec']['imagePath']) ==

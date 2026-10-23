@@ -1,7 +1,7 @@
 # Durable candidate support: schema16 foundation
 
 Продолжение: [actor18/view10](candidate-support-actor.md) добавлен после этой
-foundation; его native Main gate пока pending. Production drain binding не готов.
+foundation; его actual Main23/0 gate пройден. Production drain binding не готов.
 
 2026-10-23. Добавлены модель, SQLite ledger и trusted Rust driver проверки
 контрактов candidate updater. Это отдельная prerequisite после worker health,

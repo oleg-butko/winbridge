@@ -7,6 +7,10 @@
 
 ## Текущий статус 2026-10-23
 
+[Actor18 actual Main23/0](windows-candidate-support-actor-gate-2026-10-23.md)
+пройден; следующая реализация — required production support→drain/schema17.
+Текущая точка в [handoff](../../handoff.md); lower WIP/pending — история.
+
 Продолжение после ff5b647: [actor v18/view10](candidate-support-actor.md) добавлен,
 workspace679/0/Clippy/TS/UI passed, actual Main gate подготовлен.
 Это отдельная support operation; production drain binding ещё впереди.

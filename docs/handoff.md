@@ -1,36 +1,35 @@
-# Текущая точка: support actor v18/view10 — 2026-10-23
+# Текущая точка: support actor18 native gate закрыт — 2026-10-23
 
-Цель возобновлена после документационного checkpoint ff5b647.
-Добавлен [support actor v18/view10](plans/worker-self-update/candidate-support-actor.md):
-blocking admission вне mailbox, intent до ACK, fresh-only dispatch, duplicate/
-cold observation, command/PID/report/assessment projection и coordinated abort.
-Journal16/worker16 прежние; frozen contracts1–17/views1–9 сохраняют shape.
+[Actual Main support gate](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md):
+task adf48103-c02b-40e6-9442-6d089882c48c / run20261023-233438-99674bc1,
+producerdb0105a, **terminal succeeded/0,23 native tests/6 groups/8 commands**.
+21 ready files twice,28 mutations. Readonly verify-run passed после исправления
+shadowed verifier variable. **Не resubmit**. Actual query Checked5/history6,
+lost ACK/duplicate, normal IPC, owned abort и old file identities подтверждены.
+Exact source/target/report/proof pins и readonly команда — в отчёте.
 
-Local workspace679/0 (16 ignored), новый actual IPC mailbox regression1/0,
-Linux/Windows all-target Clippy, generated contracts/TS/UI и Python3+7 passed.
-Первый actual Main run20261023-231817-d6b1374c / task
-fe719061-08e8-4f5a-a0a7-6c6b225dd3a5 terminal failed/1; **не resubmit**.
-22 prerequisites и actual support query/Checked5/lost ACK/duplicate прошли,
-затем test parent ошибочно отправил normal Info в update-control pipe (EOF).
-Исправлен только harness endpoint; installed worker healthy/active0.
-19 ready files сверены дважды; success proof отсутствует. Exact evidence:
+[Actor18/view10](plans/worker-self-update/candidate-support-actor.md) добавлен;
+schema16/worker16 прежние, старые actions/views frozen. Local workspace679/0
+(16 ignored), обе all-target Clippy, jsonschema/TS/UI, Python3+7 passed.
+Первый native run20261023-231817-d6b1374c terminal failed/1 из-за normal Info
+в control pipe; harness исправлен без ослабления guards.19 failed ready files
+сохранены; это отдельная попытка, не replay. Full pins:
 .winbridge/update-preparation/candidate-support-actor-native-first-failed.json.
-Следом новый clean source export/fresh isolated retry под тем же cache.
-Controller verifier review190d180 также требует readonly recheck terminal retry. Он проверит journal-bound driver/lost ACK/duplicate/old worker,
-но НЕ production enforcement: legacy DrainCandidate13 пока не меняется,
-productionDrainEnforced=false. Следом атомарный support→production-drain binding
-под новым контрактом и actual blocked-request gate, затем activation/U2 faults/U3/U4.
-Public install off, installed runtime не обновлялся.
 
-Предыдущий [schema16 metadata/migration25/0 gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md)
-terminal succeeded, не повторять. Его [подробный handoff](plans/worker-self-update/resume-2026-10-23-candidate-support.md)
-сохраняет exact pins/окружение/инварианты. Actor из его NEXT теперь добавлен;
-current native Main success gate ещё pending. Controller verifier review добавил exact run
-paths, strict passive-view shape и final-worker/lease/image scope binding.
-После terminal выполнить readonly --verify-run тем же source/target/cache:
-текущий observer process загрузил verifier до этого review; source producer
-и Windows выполнение не меняются. Границы проверки/дальнейшие шаги — в actor doc. Older ACTIVE/NEXT ниже — история.
-Installed d052/generation8f8d1fb9 прежние; controller3922 оставлен, desktop не нужен.
+**Следующий блок:** обязательный production support→drain binding (schema17,
+supervisor19/view11), durable Blocked/Admitted record + atomic drain outbox/root
+edge, actual16→17/refusal и Main blocked-request gate. В текущем gate drain
+НЕ вызывался, productionDrainEnforced=false. Затем activation/U2 faults/U3/U4.
+Public install off, whole updater не готов; цель active, ручное обновление
+установленного worker пока не требуется.
+
+Installed d052 unchanged/connected/active0, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
+maintenance/recovery errors=null. Controller3922 оставлен192.168.44.203:1143;
+worker оставить, desktop можно закрыть, UI-окон не было.
+Active native/Cargo runs нет. Исторические ACTIVE/NEXT ниже не повторять.
+[Полный предыдущий handoff](plans/worker-self-update/resume-2026-10-23-candidate-support.md)
+сохраняет карту фундамента, окружение и ограничения; первый actor шаг в нём
+теперь реализован и проверен. Форма следующего блока уточнена в actor doc выше.
 
 ## Предыдущая точка: updater checks закрыты
 

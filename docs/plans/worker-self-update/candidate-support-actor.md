@@ -45,17 +45,13 @@ Support-active входит в coordinated abort: Root Aborting останавл
   validate-update-support-actor-native.py. Один retained cache lease, immutable
   producer/target source pins, ready files twice и independent mutation audit.
 
-Native gate: task fe719061-08e8-4f5a-a0a7-6c6b225dd3a5,
-run20261023-231817-d6b1374c, producer ede7318, terminal failed/1; не resubmit.
-22 prerequisites и actual support Checked5 прошли; следующий test parent
-использовал control pipe для normal Info и получил EOF. Harness исправлен на
-основной pipe из instance context, сохранённые effects не повторяются.
-Следом новый isolated run, подробные failed pins в handoff. После terminal нужны ready/proof audit и
-readonly --verify-run текущим verifier. В controller-only review устранены
-cross-run proof reuse и принятие лишних authority полей в passive projection;
-проверяются exact runtime paths, final worker/config/schema/lease/image scope.
-Новые checks не меняют immutable producer/Windows execution. Код теста сам по
-себе не доказывает actual Main исполнение.
+[Actual Main Windows23/0 gate](windows-candidate-support-actor-gate-2026-10-23.md)
+пройден: retry run20261023-233438-99674bc1 / task
+adf48103-c02b-40e6-9442-6d089882c48c, producerdb0105a.
+21 ready files twice/28 mutations, normal IPC/owned abort/history проверены.
+Первый run failed из-за harness endpoint; source/failed reports сохранены.
+Controller-only verifier shadowing исправлен и readonly recheck прошёл.
+Local workspace679/0, обе Clippy, jsonschema/TS/UI/Python passed.
 
 ## Следующий блок: обязательный production drain
 
@@ -74,3 +70,33 @@ actual Main gate должен **запросить** этот entry и полу�
 После этого authorized activation из resident replacement guard, local IPC и
 controller confirmation, remaining U2 faults, U3 desktop и U4 public/bootstrap.
 Public installation остаётся выключена; installed worker пока не обновляется.
+
+## Уточнение следующей реализации: ещё не выполнено
+
+Рекомендуемая форма обязательного допуска:
+
+1. Новый supervisor19/view11 и separate production-drain record. Следующий
+   schema17 нужен для новой таблицы/связи; старые16 обязаны отказать до effects.
+   Query1 и DrainIntent1 не расширять молча.
+2. Immutable gate record связывает support attempt/revision/digest, installation/
+   owner/epoch/root, source/health/config/executor. Терминальный результат:
+   Blocked с сохранёнными typed reasons либо Admitted с exact drain attempt.
+   Pending support не превращать в terminal blocked: сначала дождаться query.
+3. Blocked сохраняется без BeginDrain/root transition/worker command; existing
+   запрос возвращает ту же запись. Saved blocker не становится authority после
+   расширения поддержки будущим executable; нужен новый update attempt.
+4. Для Admitted использовать тот же transaction callback advance_with_driver,
+   который создаёт frozen DrainIntent1/command outbox и root edge. Link и root
+   либо сохраняются вместе с readback, либо полностью откатываются.
+5. Fresh DrainPermit может удерживать sealed in-memory production binding;
+   сохранённая JSON-запись не восстанавливает permit. Перед каждым worker effect
+   consuming driver сверяет link/current evidence и удерживает exact image/config
+   pins. Legacy внутренние tests остаются на прежнем контракте.
+6. Production entry сначала сверяет owner/root/support context. Даже empty
+   blockers не заменяют revalidation actual executor/source/health/config/worker.
+   Старый schema16 support record после миграции — история, не fresh admission.
+7. Native actual17 Main должен запросить новый entry, получить durable blocker
+   при missing activation/controller/desktop и сохранить SourceHeld revision1/
+   zero BeginDrain. Это отличается от нынешнего теста, который drain не вызывает.
+8. Actual16→17/refusal делать на consistent копии retained successful support16
+   history. Проверить backup, epoch fence, старые rows и отсутствие нового permit.

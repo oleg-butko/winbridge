@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-23: [support actor18 Main gate23/0](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md)
+пройден,21 ready files twice/28 mutations. Lost ACK/duplicate/normal IPC/abort
+подтверждены. Следом production support→drain/schema17/actor19 и migration/Main
+blocked-request gates, затем activation/U2/U3/U4. Public install off.
+
 2026-10-23: [support actor18/view10](plans/worker-self-update/candidate-support-actor.md)
 добавлен, workspace679/0 и обе Clippy/TS/UI passed. Actual Main support gate
 подготовлен; production drain binding ещё не подключён. После native проверки

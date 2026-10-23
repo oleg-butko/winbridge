@@ -1,7 +1,7 @@
 # Updater: передача контекста после candidate support, 2026-10-23
 
 **Продолжение после checkpoint:** [actor18/view10](candidate-support-actor.md)
-добавлен; actual Main gate подготовлен. Текущие task/ready results см. в
+добавлен; actual Main23/0 gate пройден. Текущие task/ready results см. в
 [handoff](../../handoff.md). Этот документ хранит exact schema16 foundation
 evidence; пункт1 дальнейшего плана уже реализован на уровне кода.
 

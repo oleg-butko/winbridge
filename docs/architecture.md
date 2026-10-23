@@ -15,7 +15,8 @@ trusted FilesVerified → VerifyingLocal. Worker schema16 прежняя; update
 immutable ledger/fresh permit/journal-bound driver с frozen executor contracts.
 [Native metadata/query/migration25/0 gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md)
 пройден, actual15→16/refusal подтверждён. [Support actor18/view10](plans/worker-self-update/candidate-support-actor.md)
-добавлен; native Main driver gate подготовлен. Обязательный production
+добавлен; [actual Main23/0](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md)
+проверен. Обязательный production
 support→drain binding и activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
 содержит точные границы доказательств, карту кода и план продолжения.
 Ниже сохранена история предыдущих commits.

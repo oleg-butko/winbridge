@@ -8,8 +8,8 @@ supervisor17/view9 не меняются. **Durable admission, новый actor 
 Продолжение: [candidate support schema16 foundation](candidate-support.md)
 реализует пункты1–4 ниже на уровне trusted library/ledger; frozen driver snapshot
 позволяет читать историю после расширения реализации. [Windows25/0 metadata/query/migration gate](windows-candidate-support-gate-2026-10-23.md)
-пройден. Actor/pre-drain admission и native Main execution нового driver
-ещё впереди; продолжать по [новому handoff](resume-2026-10-23-candidate-support.md). Исходная pure-policy точка ниже историческая.
+пройден. [Actor18 actual Main23/0](windows-candidate-support-actor-gate-2026-10-23.md)
+проверен. Обязательный production pre-drain admission ещё впереди; продолжать по [новому handoff](resume-2026-10-23-candidate-support.md). Исходная pure-policy точка ниже историческая.
 
 ## Реализованная модель
 
