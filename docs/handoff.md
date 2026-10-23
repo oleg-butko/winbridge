@@ -1,3 +1,21 @@
+# Current: первый Main15 run остановлен тестовым reader; исправлен сценарий
+
+Task `cf49a541-0abf-4aa3-bb64-295faca99381` / run `20261023-160520-ee8053b8`
+**terminal failed/exit1**, producer6ffc289. Не resubmit. 58 prerequisite native tests
+прошли; actual Main достиг FilesMoved22 и VerifyingLocal. Следующий test reader
+`inspect_image` несовместим с resident READ+DELETE handles (sharing violation32).
+Это ошибка harness: production guard/строгие pins не ослаблялись. Добавлен test-only
+reader с FILE_SHARE_READ|FILE_SHARE_DELETE и отдельный native SDK regression,
+подтверждающий, что owner продолжает запрещать запись/чужое удаление.
+
+17 ready files сверены дважды; итогового success proof нет. Exact pins/диагностика:
+`.winbridge/update-preparation/replacement-main-native-first-failed.json` и
+`replacement-main-native.log`. Source ZIP6ffc и retained runtime сохранить.
+Installed d052 здоров, same generation8f8d1fb9, active0, maintenance/recovery errors=null.
+Следом clean source export и **новый isolated run**, не повтор прежнего effect.
+После success: независимый verifier и `scripts/test-update-replacement-proof.py`
+(на actual proof), затем fault matrix и activation. Worker only, UI не нужен.
+
 # WIP: отдельный actual Main15 replacement gate подготовлен
 
 2026-10-23. Добавлены native integration helper/test, `-RuntimeReplacementGate` /

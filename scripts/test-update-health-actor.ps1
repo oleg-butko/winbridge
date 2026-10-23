@@ -135,6 +135,7 @@ try {
   }
   if($RuntimeReplacementGate){
     $commands=@(
+      @{name='runtime-replacement-observer-sharing';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','replacement::observer_reads_owned_file_without_weakening_owner','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
       @{name='runtime-replacement-model-ledger-and-directory';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_replacement','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='runtime-replacement-original-custody';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','custody_busy_restores_same_arc','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='runtime-replacement-contract';arguments=@('test','-p','winbridge-protocol','--test','update_health','--locked','--offline','--','--test-threads=1','--nocapture')}

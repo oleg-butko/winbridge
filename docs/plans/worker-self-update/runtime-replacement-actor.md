@@ -2,7 +2,8 @@
 
 2026-10-23. Это текущая точка продолжения после [custody library](runtime-replacement-custody.md).
 Реализован внутренний путь от свежего admission до переноса файлов и
-`Replacing → VerifyingLocal`. **Actual Main replacement gate ещё не запускался.**
+`Replacing → VerifyingLocal`. **Первый actual Main run дошёл до FilesMoved22/VerifyingLocal, но gate failed
+из-за test-reader sharing mode; полная зелёная проверка ещё отсутствует.**
 Windows cross-check не подтверждает исполнение native IO. Updater целиком не готов,
 публичные install/CLI/MCP capability выключены; установленный Windows runtime не менялся.
 
@@ -152,6 +153,25 @@ Desktop не нужен; тестовых окон в этой точке не �
 разделах handoff не актуальны; текущая инструкция — этот документ.
 
 ## Что делать следующим
+
+Первый actual run: `cf49a541-0abf-4aa3-bb64-295faca99381` /
+`20261023-160520-ee8053b8`, producer6ffc289, failed/exit1. 58 prerequisite tests
+passed, replacement22/VerifyingLocal достигнуты; test `retained_files` затем вызвал
+строгий `artifact::inspect_image`, чей FILE_SHARE_READ несовместим с resident
+READ+DELETE owned handle. SDK guard сработал правильно. Обычная ошибка harness
+исправлена без ослабления production pins: отдельный test-only reader открывает
+только READ с share READ|DELETE, проверяет полный bounded SHA/FileID/bytes/marker
+и не является pin/authority. Добавлен ранний native regression, проверяющий чтение,
+перенос и сохранённый запрет записи. Повторять **новым run**, прежний namespace
+не чистить/не продолжать. Windows disk первого run: 42,530,332,672 →39,145,603,072
+bytes. 17 ready files verified twice; complete proof не был создан из-за panic.
+Полные pins/причина: `replacement-main-native-first-failed.json` в local namespace.
+
+Verifier review добавляет strict int counters (Python bool не считается int
+контракта) и запрет extra intent fields. Audit actual proof —
+`scripts/test-update-replacement-proof.py --proof PATH --pin PIN_JSON`; выполняет
+сначала positive verification и затем набор намеренных искажений. На момент
+исправления actual success proof отсутствует, audit ещё не выполнялся.
 
 Продолжение этой сессии: подготовлен **отдельный positive gate Main15**, ещё не
 исполненный на Windows. Native helper — `apps/worker/tests/update_shutdown/replacement.rs`;

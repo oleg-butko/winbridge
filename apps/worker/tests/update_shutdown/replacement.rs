@@ -6,6 +6,98 @@ use winbridge_update::{
     runtime_replacement::{RuntimeReplacementRecord, RuntimeReplacementState},
 };
 
+/// Observation is not a pin/permission. Share DELETE so this read can coexist
+/// with the supervisor's original READ+DELETE handle. Its deny-write/delete
+/// policy remains authoritative; never weaken artifact::pin for this test.
+fn observe_owned_file(path: &Path) -> ImageEvidence {
+    use sha2::{Digest, Sha256};
+    use std::os::windows::fs::OpenOptionsExt;
+    winbridge_platform::require_safe_path(path).unwrap();
+    let mut options = fs::OpenOptions::new();
+    options.read(true).share_mode(1 | 4); // FILE_SHARE_READ | FILE_SHARE_DELETE
+    let mut file = options.open(path).unwrap();
+    let meta = file.metadata().unwrap();
+    assert!(meta.is_file() && meta.len() > 0 && meta.len() <= 256 * 1024 * 1024);
+    let identity = winbridge_platform::file_identity(&file).unwrap();
+    let mut digest = Sha256::new();
+    let mut count = 0;
+    let mut buffer = [0; 65536];
+    let mut tail = Vec::new();
+    let mut supported = false;
+    let marker = winbridge_protocol::ARTIFACT_QUERY_MARKER;
+    loop {
+        let n = file.read(&mut buffer).unwrap();
+        if n == 0 {
+            break;
+        }
+        count += n as u64;
+        assert!(count <= meta.len());
+        digest.update(&buffer[..n]);
+        if !supported {
+            tail.extend_from_slice(&buffer[..n]);
+            supported = tail.windows(marker.len()).any(|w| w == marker);
+            if tail.len() >= marker.len() {
+                tail.drain(..tail.len() - (marker.len() - 1));
+            }
+        }
+    }
+    assert_eq!(count, meta.len());
+    assert_eq!(file.metadata().unwrap().len(), count);
+    assert_eq!(
+        winbridge_platform::file_identity(&options.open(path).unwrap()).unwrap(),
+        identity
+    );
+    winbridge_platform::require_safe_path(path).unwrap();
+    ImageEvidence {
+        path: path.canonicalize().unwrap().to_str().unwrap().into(),
+        bytes: count,
+        sha256: format!("{:x}", digest.finalize()),
+        file_identity: identity,
+        query_supported: supported,
+    }
+}
+
+#[test]
+fn observer_reads_owned_file_without_weakening_owner() {
+    use winbridge_platform::runtime_files::OwnedRuntimeFile;
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("old.exe");
+    fs::write(
+        &path,
+        [winbridge_protocol::ARTIFACT_QUERY_MARKER, b"preserve bytes"].concat(),
+    )
+    .unwrap();
+    let expected = inspect_image(&path).unwrap();
+    let mut owner = OwnedRuntimeFile::acquire(
+        &path,
+        &expected.file_identity,
+        expected.bytes,
+        &expected.sha256,
+    )
+    .unwrap();
+    assert!(
+        inspect_image(&path).is_err(),
+        "Strict pin must still refuse concurrent DELETE ownership"
+    );
+    assert_eq!(observe_owned_file(&path), expected);
+    assert!(fs::OpenOptions::new().write(true).open(&path).is_err());
+    assert!(fs::remove_file(&path).is_err());
+    let moved = temp.path().join("new.exe");
+    owner
+        .move_new(
+            &moved,
+            &winbridge_platform::source_files::directory_identity(temp.path()).unwrap(),
+        )
+        .unwrap();
+    let mut expected = expected;
+    expected.path = moved.canonicalize().unwrap().to_str().unwrap().into();
+    assert_eq!(observe_owned_file(&moved), expected);
+    assert!(fs::OpenOptions::new().write(true).open(&moved).is_err());
+    assert!(fs::remove_file(&moved).is_err());
+    drop(owner);
+    assert_eq!(inspect_image(&moved).unwrap(), expected);
+}
+
 fn history(directory: &Path, id: &str) -> Vec<RuntimeReplacementRecord> {
     let c = rusqlite::Connection::open_with_flags(
         directory.join("updates.sqlite"),
@@ -34,11 +126,8 @@ fn retained_files(r: &RuntimeReplacementRecord) -> (Vec<ImageEvidence>, Vec<Imag
         else {
             panic!("Missing native move receipt");
         };
-        assert_eq!(inspect_image(Path::new(&retained.path)).unwrap(), *retained);
-        assert_eq!(
-            inspect_image(Path::new(&installed.path)).unwrap(),
-            *installed
-        );
+        assert_eq!(observe_owned_file(Path::new(&retained.path)), *retained);
+        assert_eq!(observe_owned_file(Path::new(&installed.path)), *installed);
         assert_eq!(retained.file_identity, file.spec.old.file_identity);
         assert_eq!(installed.file_identity, file.spec.prepared.file_identity);
         old.push(retained.clone());

@@ -31,7 +31,7 @@ def expected_batch(preparation, revision):
 
 
 def verify(proof, source, target, verify_preparation, preimages_bytes):
-    require(proof.get('schemaVersion') == 1 and proof.get('kind') == 'runtime_replacement_main_native_proof'
+    require(type(proof.get('schemaVersion')) is int and proof.get('schemaVersion') == 1 and proof.get('kind') == 'runtime_replacement_main_native_proof'
             and proof.get('passed') is True and proof.get('platform') == 'windows'
             and proof.get('runtimeApplied') is True and proof.get('installedRuntimeApplied') is False
             and proof.get('windowsOpened') is False and len(proof.get('cases', [])) == 1,
@@ -49,7 +49,9 @@ def verify(proof, source, target, verify_preparation, preimages_bytes):
     root = PureWindowsPath(plan['runtimeDirectory'])
     directory = root/'update'/plan['updateId']/'displaced-runtime'
     attempt = intent['attemptId']
-    require(str(uuid.UUID(attempt)) == attempt and attempt not in [plan[k] for k in
+    require(set(intent) == {'schemaVersion', 'attemptId', 'admittedAtMs', 'preparation'}
+            and type(intent['schemaVersion']) is int
+            and str(uuid.UUID(attempt)) == attempt and attempt not in [plan[k] for k in
             ('updateId', 'attemptId', 'ownerId', 'launchId')] + [plan['manifest']['setId']]
             and intent.get('schemaVersion') == 1 and intent['preparation'] == preparation
             and type(intent['admittedAtMs']) is int
@@ -62,6 +64,10 @@ def verify(proof, source, target, verify_preparation, preimages_bytes):
     history = replacement['history']
     require(len(history) == 23 and history[-1] == r, 'Missing exact replacement causal history')
     for revision, entry in enumerate(history):
+        require(type(entry.get('schemaVersion')) is int and type(entry.get('revision')) is int
+                and type(entry['batch'].get('schemaVersion')) is int
+                and all(type(f.get('schemaVersion')) is int and type(f.get('revision')) is int for f in entry['batch']['files']),
+                'Replacement typed counters must not be booleans')
         expected_state = ({'phase': 'planned'} if revision == 0 else
                           {'phase': 'directory_issued'} if revision == 1 else
                           {'phase': 'files_moved' if revision == 22 else 'replacing',
