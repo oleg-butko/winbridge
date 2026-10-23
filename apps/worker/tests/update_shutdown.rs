@@ -17,6 +17,8 @@ use winbridge_update::{
     shutdown::{ShutdownDeliveryState, ShutdownInspectionRequest},
 };
 use winbridge_worker::update_validation::{BackupFault, Fault, Input};
+#[path = "update_shutdown/replacement.rs"]
+mod replacement;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct GateInput {
@@ -34,6 +36,8 @@ struct GateInput {
     backup_faults: bool,
     #[serde(default)]
     runtime_preparation: bool,
+    #[serde(default)]
+    runtime_replacement: bool,
     #[serde(default)]
     preparation_faults: bool,
     #[serde(default)]
@@ -1244,6 +1248,7 @@ fn case(
     preparation_fault: PreparationFault,
 ) -> serde_json::Value {
     let (root, config, manifest) = setup(input, fault, adapter, backup_fault, preparation_fault);
+    let replacement_requested = input.runtime_replacement;
     let worker = root.join("runtime/winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -1486,7 +1491,11 @@ fn case(
                 image.sha256
             );
         }
-        json!({"fault":fault,"finalStateBackup":final_state_backup,"runtimePreparation":runtime_preparation,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true})
+        let mut proof = json!({"fault":fault,"finalStateBackup":final_state_backup,"runtimePreparation":runtime_preparation,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true});
+        if replacement_requested {
+            proof["runtimeReplacement"] = replacement::execute(&root, &sup, &proof);
+        }
+        proof
     };
     // The closure may panic; an RAII owner still closes the test Job. On success
     // explicitly verify its complete termination and the post-crash history.
@@ -1684,15 +1693,37 @@ fn case(
     proof["delayedOriginalLockVerified"] = json!(fault == Fault::DelayedInstanceLock);
     proof["readOnlyObservationRetries"] = json!(observation_retries);
     proof["ownedSupervisorCrashRetainsHistoryWithoutCustody"] = json!(true);
-    proof
+    if input.runtime_replacement {
+        // Refusal must be caused by maintenance, not this temporary test lock.
+        fs2::FileExt::unlock(&lock).unwrap();
+        let replacement = proof
+            .as_object_mut()
+            .unwrap()
+            .remove("runtimeReplacement")
+            .unwrap();
+        let after = replacement::after_owned_exit(&root, &config, &worker, id, &replacement);
+        json!({"beforeReplacement":proof,"replacement":replacement,"afterOwnedExit":after})
+    } else {
+        proof
+    }
 }
 #[test]
 #[ignore = "Explicit clean native Main shutdown gate; builds a real candidate and retains case directories"]
 fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement() {
+    run_gate(false);
+}
+#[test]
+#[ignore = "Explicit clean native Main15 replacement gate; preserves isolated runtime/history"]
+fn actual_main_and_supervisor_replace_runtime_without_activation() {
+    run_gate(true);
+}
+fn run_gate(replacement_requested: bool) {
     let path = PathBuf::from(
         std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
     );
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    assert_eq!(input.runtime_replacement, replacement_requested);
+    assert!(!input.runtime_replacement || (input.runtime_preparation && !input.preparation_faults));
     assert!(!input.backup_faults || input.final_backup);
     assert!(!input.runtime_preparation || (input.final_backup && !input.backup_faults));
     assert!(
@@ -1768,6 +1799,6 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
             println!("Completed native case {fault:?}/{backup_fault:?}/{preparation_fault:?}; owned Job closed and saved history checked");
         }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":input.runtime_replacement,"installedRuntimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

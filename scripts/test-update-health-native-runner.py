@@ -67,4 +67,31 @@ class BackupReasonTests(unittest.TestCase):
     def test_reason_bound_counts_scalars_instead_of_utf8_bytes_or_utf16_units(self):
         self.assertEqual(health.backup_failure_reason('🧪'*901), '🧪'*900)
 
+class RuntimeSchemaAdmissionTests(unittest.TestCase):
+    def package(self, root, name, updater, worker=16):
+        path = root/name
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('winbridge/apps/update/src/journal.rs', f'pub const UPDATE_SCHEMA_VERSION: u32 = {updater};\n')
+            archive.writestr('winbridge/apps/worker/src/store.rs', f'pub const JOURNAL_SCHEMA_VERSION: u32 = {worker};\n')
+        return path
+
+    def test_runtime_modes_keep_explicit_matching_schemas(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            for schema in [14, 15]:
+                producer = self.package(root, f'producer{schema}.zip', schema)
+                target = self.package(root, f'target{schema}.zip', schema)
+                health.require_runtime_schemas([producer, target], schema)
+                with self.assertRaises(ValueError):
+                    health.require_runtime_schemas([producer, target], 29-schema)
+
+    def test_mixed_updater_or_worker_generations_never_reach_submission(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            producer = self.package(root, 'producer.zip', 15)
+            for name, updater, worker in [('old-updater.zip', 14, 16), ('old-worker.zip', 15, 15)]:
+                target = self.package(root, name, updater, worker)
+                with self.assertRaises(ValueError):
+                    health.require_runtime_schemas([producer, target], 15)
+
 if __name__=='__main__':unittest.main()

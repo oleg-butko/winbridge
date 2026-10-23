@@ -1,5 +1,9 @@
 # Постепенная реализация и расширение
 
+2026-10-23: отдельный actual Main15 replacement gate подготовлен в native test /
+PS/Python runner и independent verifier. Cross-check и9 Python tests passed;
+Windows исполнение ещё впереди. Public install выключен.
+
 2026-10-23 WIP: [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md)
 добавлен: admission-before-ACK, original custody, manifest-last IO и trusted
 FilesVerified → VerifyingLocal. Updater15/worker16 без новой миграции.

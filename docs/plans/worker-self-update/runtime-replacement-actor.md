@@ -153,10 +153,24 @@ Desktop не нужен; тестовых окон в этой точке не �
 
 ## Что делать следующим
 
+Продолжение этой сессии: подготовлен **отдельный positive gate Main15**, ещё не
+исполненный на Windows. Native helper — `apps/worker/tests/update_shutdown/replacement.rs`;
+новый ignored test — `actual_main_and_supervisor_replace_runtime_without_activation`.
+PS mode `-RuntimeReplacementGate`, Python mode `--runtime-replacement-gate`.
+Оба архива явно требуют updater15/worker16; старые preparation modes сохраняют14/16.
+Verifier `scripts/update-replacement-proof.py` независимо восстанавливает все23
+состояния из immutable before-images, проверяет exact File IDs/paths/digests,
+root CAS, before/after custody и отсутствие activation. До-stage proof вынесен в
+`beforeReplacement`, чтобы не заявлять неизменность runtime после переноса.
+Тест освобождает временный instance lock до ordinary startup refusal; иначе он
+мог бы подтвердить неправильную причину отказа. Windows cross-Clippy passed,
+Python archive/schema admission9/0. Native positive результат пока отсутствует.
+Пункты1–7 ниже описывают требования к этому gate; implementation flag уже есть.
+
 1. **Ревью окончательного driver/actor и actual Main15 positive gate.** Расширить
    `apps/worker/tests/update_shutdown.rs`, `scripts/test-update-health-actor.ps1`
    и `scripts/validate-update-health-actor-native.py` отдельным replacement mode.
-   Такого mode/CLI flag пока нет; не запускать старый preparation gate на новых15
+   Новый replacement mode подготовлен выше; не запускать старый preparation gate на новых15
    архивах: он намеренно требует updater14/worker16.
 2. Producer — чистый commit с новым actor17; target — отдельный чистый schema15
    архив `winbridge-20261023T091226Z-5fbc1cf-b4ac44a5.zip` из shared sources.

@@ -1,3 +1,13 @@
+# WIP: отдельный actual Main15 replacement gate подготовлен
+
+2026-10-23. Добавлены native integration helper/test, `-RuntimeReplacementGate` /
+`--runtime-replacement-gate` и независимый verifier23 causal states. Windows
+cross-Clippy прошёл, Python9/0; native run ещё не отправлен на момент этого commit.
+Следом clean source export → изолированный positive Windows gate (worker only,
+без UI), затем proof mutation review, faults и activation. Target schema15 fixture
+5fbc1cf; public install off. Подробности в
+[актуальной инструкции](plans/worker-self-update/runtime-replacement-actor.md).
+
 # Updater: текущая точка — driver/actor v17, Windows replacement gate впереди
 
 2026-10-23. Начать с [подробной инструкции продолжения](plans/worker-self-update/runtime-replacement-actor.md).

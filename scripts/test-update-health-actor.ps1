@@ -16,10 +16,12 @@ param(
   [switch]$FinalStateBackupFaults,
   [switch]$RuntimePreparationGate,
   [switch]$RuntimePreparationFaults,
+  [switch]$RuntimeReplacementGate,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($RuntimeReplacementGate){if($RuntimePreparationGate -or $RuntimePreparationFaults -or $DrainGate -or $ShutdownMainGate -or $ShutdownMainSupplemental -or $FinalStateBackupGate -or $FinalStateBackupFaults){throw 'Select one native gate mode'};$RuntimePreparationGate=$true}
 if($RuntimePreparationFaults){if($RuntimePreparationGate){throw 'Select one native gate mode'};$RuntimePreparationGate=$true}
 if($RuntimePreparationGate){if($DrainGate -or $ShutdownMainSupplemental -or $FinalStateBackupGate -or $FinalStateBackupFaults){throw 'Select one native gate mode'};$FinalStateBackupGate=$true}
 if($FinalStateBackupFaults){if($DrainGate -or $ShutdownMainSupplemental -or $FinalStateBackupGate){throw 'Select one native gate mode'};$FinalStateBackupGate=$true}
@@ -38,7 +40,7 @@ $manifestPath=Join-Path $source 'winbridge-source-manifest.json'
 $manifest=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if($manifest.dirty -or -not $manifest.includesBuiltUi){throw 'Clean exported source with built UI required'}
 New-Item -ItemType Directory -Path $ReportDirectory -Force | Out-Null
-$report=[ordered]@{schemaVersion=1;kind='candidate_health_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();runtimeApplied=$false;windowsOpened=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+$report=[ordered]@{schemaVersion=1;kind='candidate_health_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();runtimeApplied=$(if($RuntimeReplacementGate){$null}else{$false});installedRuntimeApplied=$false;windowsOpened=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 $oldShutdownInput=$env:WINBRIDGE_SHUTDOWN_GATE_INPUT
 $oldPreviousUpdater=$env:WINBRIDGE_PREVIOUS_UPDATER10
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_HEALTH_GATE_INPUT;$oldProof=$env:WINBRIDGE_HEALTH_GATE_PROOF
@@ -98,20 +100,22 @@ try {
     )+$commands
   }
   if($ShutdownMainGate){
-    $report.kind=if($RuntimePreparationFaults){'runtime_preparation_faults_native_gate'}elseif($RuntimePreparationGate){'runtime_preparation_main_native_gate'}elseif($FinalStateBackupFaults){'state_backup_faults_native_gate'}elseif($FinalStateBackupGate){'state_backup_main_native_gate'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_native_gate'}else{'shutdown_main_native_gate'}
+    $report.kind=if($RuntimeReplacementGate){'runtime_replacement_main_native_gate'}elseif($RuntimePreparationFaults){'runtime_preparation_faults_native_gate'}elseif($RuntimePreparationGate){'runtime_preparation_main_native_gate'}elseif($FinalStateBackupFaults){'state_backup_faults_native_gate'}elseif($FinalStateBackupGate){'state_backup_main_native_gate'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_native_gate'}else{'shutdown_main_native_gate'}
     $caseRoot=Join-Path (Split-Path $source -Parent) 'shutdown-main-cases'
     New-Item -ItemType Directory -Path $caseRoot | Out-Null
     $oldStage=Join-Path (Split-Path $source -Parent) 'shutdown-old-set'
     $shutdownInput=Join-Path (Split-Path $source -Parent) 'shutdown-main-input.json'
     $shutdownArguments=@{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache;supplemental=[bool]$ShutdownMainSupplemental;finalBackup=[bool]$FinalStateBackupGate;backupFaults=[bool]$FinalStateBackupFaults}
     if($RuntimePreparationGate){$shutdownArguments.runtimePreparation=$true}
+    if($RuntimeReplacementGate){$shutdownArguments.runtimeReplacement=$true}
     if($RuntimePreparationFaults){$shutdownArguments.preparationFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     Write-NewJson $shutdownInput $shutdownArguments
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
+    $mainTest=if($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
     $commands=@(
       @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
       @{name='shutdown-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
-      @{name='shutdown-main-pipeline';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement','--ignored','--test-threads=1','--nocapture')}
+      @{name='shutdown-main-pipeline';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact',$mainTest,'--ignored','--test-threads=1','--nocapture')}
     )
   }
   if($FinalStateBackupGate){
@@ -127,6 +131,13 @@ try {
     $commands=@(
       @{name='runtime-preparation-driver-and-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_preparation','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='runtime-preparation-directory-pins';arguments=@('test','-p','winbridge-platform','--lib','source_files::tests::directory_pin','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
+  if($RuntimeReplacementGate){
+    $commands=@(
+      @{name='runtime-replacement-model-ledger-and-directory';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_replacement','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='runtime-replacement-original-custody';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','custody_busy_restores_same_arc','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='runtime-replacement-contract';arguments=@('test','-p','winbridge-protocol','--test','update_health','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
   # Worker IPC fixtures launch this executable. Reused caches may still hold an
@@ -148,12 +159,19 @@ try {
       $passed=0;foreach($count in $counts){$passed+=[int]$count.Groups[1].Value}
       if($passed -lt $minimum){throw "Expected preparation tests were not selected: $($command.name)"}
     }
+    if($RuntimeReplacementGate -and $command.name -like 'runtime-replacement-*'){
+      $minimum=if($command.name -ceq 'runtime-replacement-model-ledger-and-directory'){15}elseif($command.name -ceq 'runtime-replacement-contract'){3}else{1}
+      $counts=[regex]::Matches((Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')
+      $passed=0;foreach($count in $counts){$passed+=[int]$count.Groups[1].Value}
+      if($passed -lt $minimum){throw "Expected replacement tests were not selected: $($command.name)"}
+    }
   }
   if($ShutdownMainGate){[IO.File]::Copy((Join-Path $caseRoot 'proof.json'),$env:WINBRIDGE_HEALTH_GATE_PROOF,$false)}
   $proof=Get-Content -LiteralPath $env:WINBRIDGE_HEALTH_GATE_PROOF -Raw | ConvertFrom-Json
-  $expectedKind=if($RuntimePreparationFaults){'runtime_preparation_faults_native_proof'}elseif($RuntimePreparationGate){'runtime_preparation_main_native_proof'}elseif($FinalStateBackupFaults){'state_backup_faults_native_proof'}elseif($FinalStateBackupGate){'state_backup_main_native_proof'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
+  $expectedKind=if($RuntimeReplacementGate){'runtime_replacement_main_native_proof'}elseif($RuntimePreparationFaults){'runtime_preparation_faults_native_proof'}elseif($RuntimePreparationGate){'runtime_preparation_main_native_proof'}elseif($FinalStateBackupFaults){'state_backup_faults_native_proof'}elseif($FinalStateBackupGate){'state_backup_main_native_proof'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
   $expectedCases=if($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
-  if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $false -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
+  if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne [bool]$RuntimeReplacementGate -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
+  if($RuntimeReplacementGate){if($proof.installedRuntimeApplied -ne $false){throw 'Installed runtime must remain unchanged'};$report.runtimeApplied=$proof.runtimeApplied}
   $report.passed=$true
 } catch {$report.error=$_.Exception.Message;Write-Output ("Health gate failed: "+$report.error)} finally {
   try { if($ShutdownMainGate -and (Get-Variable caseRoot -ErrorAction SilentlyContinue)){
