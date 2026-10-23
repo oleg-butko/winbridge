@@ -63,6 +63,25 @@ readonly. Новый owner получает history, не новый permit. С�
 должен отказать15 без изменений DB/WAL. Не переделывать прошлый13→14 gate в новый
 с тем же названием и не запускать compiled14 helper на15 как совместимый.
 
+Для этого добавлен отдельный ignored Windows integration test
+`apps/update/tests/runtime_replacement_migration.rs`, режим
+`--replacement-migration-only` / `-ReplacementMigrationOnly` в прежних primitives
+runners. Local reference pin — `.winbridge/update-preparation/replacement-schema14-reference-pin.json`:
+он получен после повторной сверки16 ready files и полного approved Main proof14,
+содержит old manifest/source pins и **canonical SHA всего original Prepared record**.
+Test сверяет этот SHA до копирования и возвращает exact record в public proof;
+Python независимо сравнивает его с исходным approved snapshot. Все old SQL tables,
+включая preparation intents/current/history, входят в retained rows fingerprint.
+Старый updater14 связан exact raw manifest bytes и настоящим artifact query.
+Native execution нового test ещё впереди; metadata11/0 gate его не включает.
+
+```bash
+python3 scripts/validate-update-shutdown-primitives-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/<NEW-CLEAN-SCHEMA15-ARCHIVE>.zip \
+  --cache-run 20261017-061527-f4639971 --replacement-migration-only \
+  --reference-receipt .winbridge/update-preparation/replacement-schema14-reference-pin.json
+```
+
 После этого consuming original custody, retained directory и owned rename driver,
 native per-effect faults и activation. Для fresh whole pipeline нужны **оба schema15
 archives**; прежний cee06a7/schema14 не подходит. Перед production drain остаётся

@@ -14,6 +14,10 @@ fixtures; предыдущие gates ниже относятся к14 и не п
 Production callback rename-success/consuming guard/IO ещё отсутствуют. Следом
 actual retained14→15/old14 refusal и positive original-custody admission при
 подключении consuming guard. Installed d052 прежний; ручное обновление не требуется.
+Подготовлены actual14→15/refusal integration test/runners (`--replacement-migration-only`)
+и pin `replacement-schema14-reference-pin.json` из approved Main14 proof. Полный
+original Prepared canonical SHA `a2b823d95c1a6cee157cbb8f9387df309d8dccca4eadec08b0c9877ee1638029`
+связывает переносимые данные с прежним gate. Native actual migration ещё не запускался.
 
 ## Возобновление2026-10-23: actual preparation faults
 

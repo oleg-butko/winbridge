@@ -68,6 +68,48 @@ def verify_preparation_migration_proof(proof, pin, reference):
         raise ValueError('Actual13 backup history/migration/refusal differs')
 
 
+def verify_replacement_migration_proof(proof, pin, reference):
+    build = proof.get('build', {})
+    raw = proof.get('referenceManifestJson', '')
+    if not isinstance(raw, str) or hashlib.sha256(raw.encode()).hexdigest() != reference['manifestSha256']:
+        raise ValueError('Actual retained14 manifest bytes differ')
+    manifest = json.loads(raw)
+    updaters = [a for a in manifest.get('artifacts', []) if a.get('name') == 'winbridge-update.exe']
+    if (len(updaters) != 1 or updaters[0]['sha256'] != proof.get('referenceUpdaterSha256')
+            or updaters[0]['descriptor']['role'] != 'updater'
+            or updaters[0]['descriptor']['build'].get('sourceCommit') != reference['sourceCommit']
+            or updaters[0]['descriptor']['build'].get('sourceManifestSha256') != reference['sourceManifestSha256']):
+        raise ValueError('Actual old14 image/manifest/source differs')
+    preparation = proof.get('retainedPreparation', {})
+    digest = hashlib.sha256(json.dumps(preparation, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()).hexdigest()
+    runtime = preparation.get('plan', {}).get('runtimeDirectory', '')
+    if runtime.startswith('\\\\?\\'):
+        runtime = runtime[4:]
+    if (digest != reference['preparationSha256'] or digest != proof.get('retainedPreparationSha256')
+            or preparation.get('schemaVersion') != 1 or preparation.get('phase') != 'prepared'
+            or preparation.get('revision') != 12 or preparation.get('plan', {}).get('updateId') != reference['updateId']
+            or PureWindowsPath(runtime) != PureWindowsPath(reference['runtimeDirectory'])
+            or len(preparation.get('files', [])) != 5 or any(f.get('phase') != 'verified' for f in preparation['files'])):
+        raise ValueError('Actual retained Prepared14 receipt differs from original proof')
+    flags = ('allOldRowsPreserved', 'verifiedBackupHistoryPreserved', 'shutdownHistoryPreserved',
+             'migrationBackupVerified', 'preparedHistoryPreserved', 'noReplacementInvented',
+             'historicalPreparationObservationOnly', 'historicalBackupObservationOnly', 'noCustodyAdopted',
+             'oldFourteenInitRefused', 'oldFourteenStatusRefused', 'sourceBytesUnchanged')
+    if (proof.get('schemaVersion') != 1 or proof.get('kind') != 'runtime_replacement_schema_migration_proof'
+            or proof.get('passed') is not True or proof.get('platform') != 'windows'
+            or build.get('sourceCommit') != pin['sourceCommit'] or build.get('sourceManifestSha256') != pin['manifestSha256'] or build.get('sourceDirty') is not False
+            or proof.get('sourceProofSha256') != reference['sourceProofSha256'] or proof.get('referenceManifestSha256') != reference['manifestSha256']
+            or not re.fullmatch(r'[0-9a-f]{64}', proof.get('referenceUpdaterSha256', ''))
+            or proof.get('updateId') != reference['updateId'] or proof.get('fromSchema') != 14 or proof.get('toSchema') != 15
+            or type(proof.get('epochBefore')) is not int or type(proof.get('epochAfter')) is not int
+            or not 0 <= proof['epochBefore'] < proof['epochAfter'] <= 9007199254740991
+            or proof['epochAfter'] != proof['epochBefore'] + 1
+            or not re.fullmatch(r'[0-9a-f]{64}', proof.get('retainedRowsSha256', ''))
+            or any(proof.get(k) is not True for k in flags)
+            or proof.get('runtimeApplied') is not False or proof.get('windowsOpened') is not False):
+        raise ValueError('Actual14 Prepared/backup history/migration/refusal differs')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', type=Path, required=True)
@@ -80,6 +122,7 @@ def main():
     modes.add_argument('--runtime-replacement-only', action='store_true')
     modes.add_argument('--runtime-replacement-ledger-only', action='store_true')
     modes.add_argument('--preparation-migration-only', action='store_true')
+    modes.add_argument('--replacement-migration-only', action='store_true')
     parser.add_argument('--reference-receipt', type=Path)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
@@ -90,8 +133,13 @@ def main():
     if args.runtime_replacement_ledger_only:
         groups = {'runtime-replacement-transaction-data': 6, 'runtime-replacement-ledger': 5}
         kind, mode_switch = 'runtime_replacement_ledger_native_gate', ' -RuntimeReplacementLedgerOnly'
+    if args.replacement_migration_only:
+        groups = {'replacement-schema14-history-migration': 1}
+        kind, mode_switch = 'runtime_replacement_migration_native_gate', ' -ReplacementMigrationOnly'
     pin = health.archive_pin(args.archive)
     with zipfile.ZipFile(args.archive) as source:
+        if args.replacement_migration_only and native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 15:
+            raise ValueError('Replacement migration requires updater15 source')
         if args.runtime_replacement_ledger_only and (native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 15
                 or native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16):
             raise ValueError('Replacement ledger gate requires updater15/worker16 source')
@@ -100,7 +148,7 @@ def main():
             raise ValueError('Preparation gate requires reviewed worker16/updater14 source')
         if args.preparation_migration_only and native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 14:
             raise ValueError('Preparation migration requires updater14 source')
-        if not generated_fixtures and not args.preparation_migration_only and (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
+        if not generated_fixtures and not args.preparation_migration_only and not args.replacement_migration_only and (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
                 or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != (13 if args.backup_migration_only else 12)):
             raise ValueError('This gate requires reviewed worker16 and matching updater schema source')
     if not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run):
@@ -115,6 +163,12 @@ def main():
         reference = json.loads(args.reference_receipt.read_text())
     if generated_fixtures:
         pass
+    elif args.replacement_migration_only:
+        if (set(reference) != {'kind', 'sourceProofSha256', 'runtimeDirectory', 'manifestSha256', 'updateId', 'sourceCommit', 'sourceManifestSha256', 'preparationSha256'}
+                or reference.get('kind') != 'runtime_replacement_schema14_reference'
+                or any(not re.fullmatch(r'[0-9a-f]{64}', reference.get(k, '')) for k in ('sourceProofSha256', 'manifestSha256', 'sourceManifestSha256', 'preparationSha256'))
+                or not re.fullmatch(r'[0-9a-f]{40}', reference.get('sourceCommit', ''))):
+            raise ValueError('Proven schema14 Prepared reference required')
     elif args.preparation_migration_only:
         if (set(reference) != {'kind', 'sourceProofSha256', 'runtimeDirectory', 'manifestSha256', 'updateId', 'sourceCommit', 'sourceManifestSha256'}
                 or reference.get('kind') != 'preparation_schema13_reference'
@@ -139,7 +193,7 @@ def main():
     project_path = PureWindowsPath(project['workspaceRoot'])
     if generated_fixtures:
         pass
-    elif args.backup_migration_only or args.preparation_migration_only:
+    elif args.backup_migration_only or args.preparation_migration_only or args.replacement_migration_only:
         path=PureWindowsPath(reference['runtimeDirectory'])
         if not path.is_relative_to(project_path/'workflow-validation') or '..' in path.parts:
             raise ValueError('Migration reference must be a retained local validation runtime')
@@ -240,6 +294,10 @@ exit $LASTEXITCODE
         if 'runtime-preparation-migration-proof.json' not in names:
             raise ValueError('Preparation migration proof missing')
         verify_preparation_migration_proof(json.loads((report/'runtime-preparation-migration-proof.json').read_text(encoding='utf-8-sig')), pin, reference)
+    if args.replacement_migration_only:
+        if 'runtime-replacement-migration-proof.json' not in names:
+            raise ValueError('Replacement migration actual proof missing')
+        verify_replacement_migration_proof(json.loads((report/'runtime-replacement-migration-proof.json').read_text(encoding='utf-8-sig')), pin, reference)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report),
                       'filesVerified': len(names), 'testsPassed': sum(g['passed'] for g in result['commands'])}), flush=True)
 
