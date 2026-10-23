@@ -1,9 +1,13 @@
 # Постепенная реализация и расширение
 
-2026-10-23: [replacement fault matrix](plans/worker-self-update/runtime-replacement-faults.md)
-подготовлена: directory/handle/receipt rejection и actual move-before-receipt crash.
-Native запуск ещё впереди. Release code не содержит private validation barrier.
-Positive60/0 gate ниже остаётся отдельным доказательством; activation/U3/U4 впереди.
+2026-10-23: проверки завершены по просьбе пользователя. [Четыре replacement faults](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
+прошли60 native tests/12 groups,32 ready files twice/68 negative mutations.
+Positive gate тоже повторно сверён; оба task terminal succeeded/0, активных
+native/Cargo runs нет. [Актуальный handoff](plans/worker-self-update/resume-2026-10-23-replacement.md)
+задаёт порядок продолжения: native updater support query и durable compatibility
+до drain → activation/local health/controller confirmation → оставшиеся U2 faults
+и U3/U4. Query пока local/cross only, public install off; whole updater не готов.
+Исторические NEXT/ACTIVE ниже не являются заданиями к повтору.
 
 2026-10-23: [actual Main15 replacement gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
 **пройден60/0**: original custody, manifest-last/FilesMoved22, trusted FilesVerified,

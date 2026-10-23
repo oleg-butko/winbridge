@@ -1,24 +1,39 @@
-# ACTIVE: четыре replacement fault cases запущены — 2026-10-23
+# Текущая точка: updater checks закрыты — 2026-10-23
 
-Task `63232320-8bf6-4826-b13c-315ead0b4433`, run `20261023-173625-e4eea0a6`,
-producer `e5678273f0a3f913c9c1aa88702e96ef81b8835b`, source ZIP
-`winbridge-20261023T173516Z-e567827-79b806bb.zip`. Task running; **не resubmit**.
-Mode `--runtime-replacement-faults`, timeout1h, cache20261017-061527-f4639971.
-Observer log: `.winbridge/update-preparation/replacement-faults-native.log`;
-full pins: `replacement-faults-native-active.json` там же. Test runner session97826.
-Проверять тот же Task ID через controller IPC; timeout наблюдения не terminal.
+Начать с [подробного handoff для новой сессии](plans/worker-self-update/resume-2026-10-23-replacement.md).
+В нём проверенные source/target/report hashes, код и инварианты, readonly команды,
+окружение, ограничения и последовательность дальнейшей реализации. Этот документ
+и указанная инструкция приоритетнее всех исторических ACTIVE/NEXT ниже.
 
-Параллельно добавлена [readonly updater support query](plans/worker-self-update/updater-runtime-support.md):
-новые DTO/marker, `--runtime-support` и image/process-bound inspector. Изменения
-локальные, НЕ входят в native producer e567827. Она ещё не подключена к durable
-approval/drain. Local updater225/0 (6 ignored), обе all-target Clippy, generated TS/typecheck/UI build прошли; native support query ещё не проверена.
+- [Positive actual Main15 replacement](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md):
+  task `665e7e2f-e734-49cf-ae87-d83498a29cbd`, run20261023-163606-15675844,
+  terminal succeeded/0,60 native tests/12 groups,20 ready files twice/44 mutations.
+- [Четыре actual replacement faults](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md):
+  task `63232320-8bf6-4826-b13c-315ead0b4433`, run20261023-173625-e4eea0a6,
+  terminal succeeded/0,60 native tests/12 groups,32 ready files twice/68 mutations.
+  Existing directory, foreign handle, receipt rejection, owned crash до receipt.
+- При закрытии заново сверены оба full proofs,52 ready files дважды и source ZIPs.
+  Observer завершён exit0; **активных native/Cargo runs нет, не resubmit**.
+- [Readonly updater support query](plans/worker-self-update/updater-runtime-support.md)
+  в commit d1b2bea: updater225/0 (6 ignored), обе all-target Clippy/TS/UI прошли.
+  Она НЕ входит в native producer e567827; Windows query ещё pending.
+- Updater15/worker16/supervisor17/view9. FilesMoved/VerifyingLocal проверены;
+  **activation/local health/controller confirmation и U3/U4 не готовы**.
+  Public install off, полный updater не завершён.
 
-После terminal: ready files дважды; `verify_runtime_replacement_faults_proof`;
-затем `scripts/test-update-replacement-proof.py --proof SHARED_PROOF --pin ACTIVE_PIN`.
-Этот audit сам выбирает новый fault verifier. Первый case ExistingDirectory уже complete (native log sequence364); остальные три ещё pending/running, полного gate результата нет. Четыре cases должны пройти, но это
-не success whole updater: root остаётся Replacing, history сохраняет uncertainty.
-После этого review и activation/local health/controller confirmation, U3/U4.
-Public install off, installed d052 не менялся. Worker нужен, desktop нет, окон нет.
+**Следующий блок:** native support query и durable candidate compatibility до drain,
+затем authorized activation из resident guard, оставшиеся U2 faults, U3/U4.
+Реализация остановлена на контрольной точке по просьбе пользователя; новая Windows
+задача или ручное обновление установленного worker сейчас не требуется.
+
+Controller3922 оставлен на192.168.44.203:1143; installed d052 unchanged,
+generation8f8d1fb9-e5b1-4984-a17e-d067db46268e, connected/active0, errors=null,
+coverage complete. Worker оставить, desktop можно закрыть, UI-окон не было.
+Debian free26,487,005,184; Windows после gate35,630,841,856 bytes; очистки не было.
+Все PID/session/disk перепроверять в новой сессии. Полная закрывающая сводка:
+`.winbridge/update-preparation/session-close-20261023-replacement-verification.json`.
+
+## История предыдущих точек: не текущие задания
 
 # WIP: четыре actual replacement faults подготовлены
 

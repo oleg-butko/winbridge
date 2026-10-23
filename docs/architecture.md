@@ -8,7 +8,11 @@
 одноразовое admission, consuming original custody, manifest-last перенос и
 trusted FilesVerified → VerifyingLocal. Схемы updater15/worker16 прежние.
 [Actual Main15 replacement60/0 gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
-пройден; fault matrix и activation ещё впереди, public install выключен. Следующий шаг и точные ограничения описаны в указанной инструкции.
+и [четыре actual faults60/0](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
+пройдены; активных native/Cargo runs нет. Readonly updater support query добавлена
+отдельно и пока проверена локально/cross. Следом native support/compatibility до
+drain и activation; public install выключен. [Актуальный handoff](plans/worker-self-update/resume-2026-10-23-replacement.md)
+содержит точные границы доказательств, карту кода и план продолжения.
 Ниже сохранена история предыдущих commits.
 
 Продолжение: [replacement admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)

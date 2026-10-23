@@ -91,7 +91,7 @@ bytes, финальное измерение в local summary. Кэш20261017-06
 generation8f8d1fb9-e5b1-4984-a17e-d067db46268e, active0/no maintenance/recovery errors,
 coverage complete. Desktop можно закрыть, worker оставить.
 
-**Следом:** actual replacement fault matrix (occupied directory, incompatible
-handle, receipt-write rejection, crash between effect/receipt), затем activation/
-local health/controller confirmation и U3/U4. Positive gate завершён, **весь U2.2
-и updater не завершены**, public install по-прежнему off.
+Позднее [четыре actual replacement faults](windows-runtime-replacement-faults-gate-2026-10-23.md)
+тоже завершены60/0. Следом native support/compatibility до drain, activation/
+local health/controller confirmation и U3/U4; [актуальный handoff](resume-2026-10-23-replacement.md).
+Positive gate завершён, **весь U2.2 и updater не завершены**, public install off.

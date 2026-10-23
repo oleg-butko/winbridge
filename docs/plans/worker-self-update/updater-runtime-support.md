@@ -4,7 +4,9 @@
 меняет updater15/worker16 journal и supervisor17/view9, не открывает config/store
 и не выдаёт permission на install. Public update по-прежнему выключен.
 **Durable health/approval integration ещё не подключена.** Матрица replacement
-faults сейчас работает на предыдущем immutable archive e567827, без этой функции.
+faults завершилась на предыдущем immutable archive e567827, без этой функции;
+[native60/0 result](windows-runtime-replacement-faults-gate-2026-10-23.md) не является
+проверкой новой query.
 
 ## Контракт и вызов
 
@@ -55,7 +57,7 @@ support gate ещё не было**, durable approval/drain enforcement не п�
 build не должен стать production target. Отсутствующие/новые неподдержанные версии
 объяснять до остановки worker, без fallback и без автоматического запуска unknown
 flags. Добавить native actual query и marker-negative checks в следующую Windows
-проверку после завершения текущей матрицы; не занимать общий build cache параллельно.
+проверку после завершённой матрицы; не занимать общий build cache параллельно.
 После реализации activation обновить declaration по действительному execution
 contract, а не заранее. Подробности основной очередности — в
 [runtime-replacement-actor](runtime-replacement-actor.md).

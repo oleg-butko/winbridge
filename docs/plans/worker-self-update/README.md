@@ -7,10 +7,21 @@
 
 ## Текущий статус 2026-10-23
 
+[Точка продолжения после завершения проверок](resume-2026-10-23-replacement.md)
+содержит карту кода, проверенные task/run/source pins, границы готовности и порядок
+продолжения без истории чата. Она приоритетнее исторических NEXT/ACTIVE ниже.
+Read-only [updater support query](updater-runtime-support.md) добавлена отдельно:
+local/cross проверки прошли, native query и durable approval/drain integration
+ещё предстоят. Updater целиком не готов, installed runtime не обновлялся.
+
 [Driver/actor v17 и актуальный handoff](runtime-replacement-actor.md) добавлены:
 one-use admission, blocking IO, resident custody и guarded FilesVerified.
 Views1–8 не получают новые поля. Updater15/worker16 прежние. [Actual Main15 positive60/0 gate](windows-runtime-replacement-main-gate-2026-10-23.md)
-пройден; следующим делать fault matrix, activation, U3/U4. Public install off.
+и [четыре replacement faults60/0](windows-runtime-replacement-faults-gate-2026-10-23.md)
+пройдены. Все проверки завершены, активных native/Cargo runs нет. Следом native
+updater support/durable compatibility до drain, activation, оставшиеся U2 faults,
+U3/U4. Public install off. Работа остановлена на контрольной точке по просьбе
+пользователя; продолжать по новому handoff.
 Остальные записи раздела ниже — история предыдущих commits.
 
 [Consuming custody/owned rename library](runtime-replacement-custody.md) добавлена:
@@ -235,7 +246,10 @@ U2–U4 и ещё не включены. Final consistent backup делаетс�
 
 - [x] [Final consistent worker state backup](final-state-backup.md) под живым exit
   guard, отдельный durable helper attempt и проверенная receipt до replacement.
-- [ ] Binary manifest, same-volume replace и verified prior set, exact exit/lock.
+- [x] Binary manifest, same-volume replace и verified prior set, exact exit/lock:
+  [positive Main](windows-runtime-replacement-main-gate-2026-10-23.md) и
+  [четыре actual faults](windows-runtime-replacement-faults-gate-2026-10-23.md).
+  Это замена файлов; activation и полная fault matrix остаются отдельными пунктами.
 - [ ] New worker verification mode и controller-pinned confirmation.
 - [ ] Installation-level management contract/CLI/MCP/status с opt-in local policy;
   произвольные archive/runtime paths запрещены; legacy readonly transport прежний.

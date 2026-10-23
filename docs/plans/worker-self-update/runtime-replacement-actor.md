@@ -1,5 +1,11 @@
 # U2.2: replacement driver, supervisor v17 и передача контекста
 
+Актуальная точка продолжения: [handoff после закрытия проверок](resume-2026-10-23-replacement.md).
+Positive Main и [четыре actual faults](windows-runtime-replacement-faults-gate-2026-10-23.md)
+завершены60/0 каждый; ниже сохранено описание реализации и её прежних checks.
+Далее native support/compatibility до drain и activation, затем U3/U4.
+Не повторять terminal runs по историческому списку «что делать следующим» ниже.
+
 2026-10-23. Это текущая точка продолжения после [custody library](runtime-replacement-custody.md).
 Реализован внутренний путь от свежего admission до переноса файлов и
 `Replacing → VerifyingLocal`. **[Actual Main15 positive gate](windows-runtime-replacement-main-gate-2026-10-23.md)

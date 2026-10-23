@@ -117,8 +117,8 @@ status и release только после source/Job/output proof. Добавл�
 и supplemental gates; внутренний U1 завершён. [Final backup и migration12→13](docs/plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
 также прошли Windows gate (updater13/worker16, supervisor v15/view7).
 [Four-case fault gate](docs/plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
-закрыл U2.1; actual replacement/activation ещё не реализованы. Install/public update отключены.
-[Подробный handoff завершения проверок 2026-10-23](docs/plans/worker-self-update/resume-2026-10-23.md)
+закрыл U2.1; дальнейший прогресс U2.2 описан ниже. Install/public update отключены.
+[Актуальный handoff завершения проверок 2026-10-23](docs/plans/worker-self-update/resume-2026-10-23-replacement.md)
 содержит результаты, карту кода и порядок продолжения U2.2 без контекста чата.
 В продолжении добавлена [preparation library schema14](docs/plans/worker-self-update/runtime-preparation.md):
 модель пяти копий и durable ledger. [Copy driver/actor v16](docs/plans/worker-self-update/runtime-preparation-actor.md)
@@ -129,7 +129,9 @@ status и release только после source/Job/output proof. Добавл�
 прошла12 native tests. Затем добавлены schema15 ledger, consuming custody и
 [replacement driver/actor v17/view9](docs/plans/worker-self-update/runtime-replacement-actor.md).
 [Actual Main15 replacement60/0 gate](docs/plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
-пройден; fault matrix, activation и U3/U4 ещё впереди. Public install выключен.
+и [четыре actual replacement faults60/0](docs/plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
+пройдены. Проверки завершены, активных прогонов нет. Следом native updater support/
+durable compatibility до drain, activation и U3/U4. Public install выключен.
 Прежние U2.1 native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

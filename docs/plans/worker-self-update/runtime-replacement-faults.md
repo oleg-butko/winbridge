@@ -1,8 +1,10 @@
-# U2.2: actual replacement fault matrix — подготовлена
+# U2.2: actual replacement fault matrix — проверена на Windows
 
 2026-10-23. [Positive Main15 gate](windows-runtime-replacement-main-gate-2026-10-23.md)
-пройден60/0. Подготовлены четыре actual fault cases; **новая матрица ещё не
-исполнялась на Windows**. Схемы updater15/worker16, supervisor17/view9 прежние;
+пройден60/0. [Четыре actual fault cases прошли gate](windows-runtime-replacement-faults-gate-2026-10-23.md):
+60 native tests/12 groups,32 ready files twice/68 negative proof mutations.
+Task63232320/run20261023-173625-e4eea0a6 terminal succeeded/0, не повторять.
+Схемы updater15/worker16, supervisor17/view9 прежние;
 public install выключен. Release path не получает новый fault API.
 
 ## Cases
@@ -51,8 +53,10 @@ controller confirmation, candidate updater feature compatibility и U3/U4 ост
 Windows check (без validation hook) прошли; package/protocol local tests прошли,
 Python schema admission9/0. Exact окончательные counts/logs — в handoff.
 
-Следом clean commit/export, затем новый native run с новым namespace и тем же
-cache20261017-061527-f4639971. Проверить ready files дважды и actual proof mutation
-catalog; не повторять terminal positive task665e7e2f или failed cf49a541. До нового
-run измерить диск Debian/Windows, минимум6 GiB; retained Windows directories не
-удалять. Worker оставить, desktop не нужен, UI-окон не будет.
+Матрица завершена, native observer завершился exit0; при закрытии перепроверены
+оба actual proofs и52 ready files дважды. Следом native updater support/durable
+compatibility до drain и activation по [новому handoff](resume-2026-10-23-replacement.md).
+Это четыре fault boundaries, не полная crash/disk-full matrix всего U2.
+Не повторять terminal tasks и не удалять retained Windows directories. Перед
+будущими сборками заново измерить диск, минимум6 GiB. Рабочий worker оставить;
+desktop можно закрыть, тестовых UI-окон не было.
