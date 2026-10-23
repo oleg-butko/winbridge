@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-23: цель возобновлена; [actual preparation faults](plans/worker-self-update/runtime-preparation-faults.md)
+реализуются отдельным gate (occupied destination, changed candidate, owned crash
+до receipt). Cross-check/all-target Windows Clippy прошли; native execution впереди.
+Public install отключён, installed d052 worker не менялся.
+
 2026-10-23: проверки завершены по просьбе пользователя; следующий агент начинает
 с [подробной точки продолжения](plans/worker-self-update/resume-2026-10-23.md).
 Оба последних Windows tasks terminal succeeded/0; повторно сверены22 ready files

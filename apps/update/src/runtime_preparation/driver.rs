@@ -307,6 +307,8 @@ fn copy_set(observer: &mut impl Observer, record: &mut RuntimePreparationRecord)
         } else {
             manifest_new(record)?
         };
+        #[cfg(feature = "update-validation")]
+        super::validation::hold_before_receipt(record, index, &copy, || observer.pulse(record))?;
         target.revalidate().map_err(error)?;
         parent.revalidate().map_err(error)?;
         observer.checkpoint(record)?;

@@ -7,6 +7,10 @@
 
 ## Текущий статус 2026-10-23
 
+После передачи контекста цель возобновлена. [Actual preparation fault gate](runtime-preparation-faults.md)
+реализован в fixture/runner с feature-only barrier; native execution ещё впереди.
+Следом — consuming original custody и durable rename/activation, U3/U4.
+
 Возобновлена реализация [U2.2 preparation library](runtime-preparation.md): updater14,
 data FSM/immutable ledger и original-custody admission. [Native model/ledger10/0](windows-runtime-preparation-gate-2026-10-22.md)
 пройден. [Copy driver/actor v16/view8](runtime-preparation-actor.md) добавлены;

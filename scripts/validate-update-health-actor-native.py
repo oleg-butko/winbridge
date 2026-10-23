@@ -424,6 +424,138 @@ def verify_runtime_preparation_proof(proof, source, target):
         raise ValueError('Preparation retained bytes/history or lost-custody view differs')
 
 
+def verify_runtime_preparation_faults_proof(proof, source, target):
+    cases = proof.get('cases', [])
+    faults = ['existing_directory', 'changed_candidate', 'hold_before_receipt']
+    if (proof.get('kind') != 'runtime_preparation_faults_native_proof'
+            or len(cases) != len(faults)
+            or [c.get('runtimePreparation', {}).get('fault') for c in cases] != faults):
+        raise ValueError('Missing ordered actual preparation fault cases')
+    attempts, updates = set(), set()
+    names = ['winbridge-worker.exe', 'winbridge-fixture.exe', 'winbridge-desktop.exe', 'winbridge-update.exe', 'winbridge-installed-set.json']
+    roles = ['worker', 'fixture', 'desktop', 'updater', 'manifest']
+    for case, fault in zip(cases, faults):
+        verify_state_backup_proof(dict(proof, kind='state_backup_main_native_proof', cases=[case]), source, target)
+        p = case['runtimePreparation']
+        r, v = p['record'], p['view']
+        plan, files = r['plan'], r['files']
+        old = case['shutdown']['intent']['binding']
+        root = PureWindowsPath(old['loadedWorker']['image']['path']).parent
+        directory = root/'update'/old['updateId']/'prepared-runtime'
+        projection = v['runtimePreparation']
+        held = fault == 'hold_before_receipt'
+        revision = 3 if held else 1
+        if (r.get('schemaVersion') != 1 or r.get('revision') != revision
+                or r.get('phase') != ('preparing' if held else 'indeterminate')
+                or (r.get('reason') is None) != held or bool(r.get('directoryIdentity')) != held
+                or plan.get('schemaVersion') != 1 or plan.get('updateId') != old['updateId']
+                or plan.get('parentRevision') != case['root']['revision']
+                or str(uuid.UUID(plan['attemptId'])) != plan['attemptId'] or plan['attemptId'] in attempts
+                or plan['updateId'] in updates
+                or plan.get('ownerId') != old['ownerId'] or plan.get('ownerEpoch') != old['ownerEpoch']
+                or plan.get('launchId') != old['launchId'] or PureWindowsPath(plan['runtimeDirectory']) != root
+                or plan.get('runtimeIdentity') != old['loadedWorker']['runtimeIdentity']
+                or plan.get('parentIdentity') != case['finalStateBackup']['record']['intent']['binding']['parentIdentity']
+                or not re.fullmatch(r'[0-9a-f]{64}', plan.get('configSha256', ''))
+                or len(plan.get('files', [])) != 5 or len(files) != 5
+                or len(p.get('oldImagesBefore', [])) != 5 or len(p.get('sourceFiles', [])) != 4
+                or len(plan['manifest']['artifacts']) != 4 or len(p['preimages']['files']) != 5
+                or plan['manifest']['installationId'] != case['root']['request']['expected']['installationId']
+                or plan['manifest']['scopeSha256'] != case['root']['request']['expected']['scopeSha256']
+                or str(uuid.UUID(plan['manifest']['setId'])) != plan['manifest']['setId']
+                or plan['manifest']['setId'] == old['loadedWorker']['setId']
+                or v.get('schemaVersion') != 8 or v.get('driverActive') != held
+                or (v.get('driverError') is None) != held or v['update'] != case['root']
+                or v['candidateShutdown'].get('physicalCustodyHeld') is not True
+                or projection.get('phase') != ('preparing_files' if held else 'indeterminate')
+                or projection.get('revision') != revision or projection.get('attemptId') != plan['attemptId']
+                or projection.get('preparedFiles') != 0 or projection.get('totalFiles') != 5
+                or projection.get('issuedFile') != (names[0] if held else None)
+                or projection.get('reason') != r['reason'] or PureWindowsPath(projection['directory']) != directory
+                or p['duplicate']['runtimePreparation'] != projection
+                or p['admitted']['runtimePreparation'].get('attemptId') != plan['attemptId']
+                or p['beforeAdmission'].get('driverActive') is not False
+                or p['beforeAdmission']['runtimePreparation'].get('attemptId') is not None
+                or p['beforeAdmission']['candidateStateBackup'].get('phase') != 'verified'
+                or p['beforeAdmission']['candidateShutdown'].get('physicalCustodyHeld') is not True
+                or p['backupFile'] != case['finalStateBackup']['record']['report']['backup']
+                or case.get('retainedRuntimePreparationRecord') != r
+                or any(p.get(k) is not True for k in ('sourceBytesUnchanged', 'oldRuntimeUnchanged', 'preimagesUnchanged', 'backupUnchanged', 'duplicateNoNewAttempt', 'privateAuthorityNotExported'))):
+            raise ValueError('Preparation fault scope/history/projection/custody differs')
+        attempts.add(plan['attemptId']); updates.add(plan['updateId'])
+        digests = {'requestSha256', 'supervisorSpecSha256', 'baselineSha256', 'preimagesSha256', 'artifactsSha256', 'healthSha256', 'shutdownSha256', 'backupSha256'}
+        if set(plan['proofs']) != digests or any(not re.fullmatch(r'[0-9a-f]{64}', h) for h in plan['proofs'].values()):
+            raise ValueError('Fault preparation causal digests differ')
+        ids = set()
+        for i, (spec, old_image, name, role) in enumerate(zip(plan['files'], p['oldImagesBefore'], names, roles)):
+            if (spec['file'] != role or spec['old'] != old_image or PureWindowsPath(old_image['path']) != root/name
+                    or PureWindowsPath(spec['destination']) != directory/name or old_image['fileIdentity'] in ids
+                    or files[i] != {'phase': 'issued' if held and i == 0 else 'pending'}):
+                raise ValueError('Fault fixed-file scope/issued prefix differs')
+            ids.add(old_image['fileIdentity'])
+        if p['oldImagesBefore'][0] != old['loadedWorker']['image']:
+            raise ValueError('Fault old worker differs from shutdown binding')
+        for spec, image, artifact, name, role in zip(plan['files'][:4], p['sourceFiles'], plan['manifest']['artifacts'], names, roles):
+            if (spec['source'] != image or PureWindowsPath(image['path']) != root/'update'/plan['updateId']/'candidate'/'payload'/name
+                    or image['sha256'] != spec['sha256'] or image['bytes'] != spec['bytes'] or image['fileIdentity'] in ids
+                    or artifact['name'] != name or artifact['bytes'] != image['bytes'] or artifact['sha256'] != image['sha256']
+                    or artifact['descriptor']['role'] != role or artifact['descriptor']['build'].get('sourceDirty') is not False
+                    or artifact['descriptor']['build'].get('sourceCommit') != target['sourceCommit']
+                    or artifact['descriptor']['build'].get('sourceManifestSha256') != target['manifestSha256']):
+                raise ValueError('Fault candidate/source/manifest differs')
+            ids.add(image['fileIdentity'])
+        manifest_bytes = prepared_manifest_bytes(plan['manifest'])
+        total = sum(f['bytes'] for f in plan['files'])
+        if (plan['files'][4]['source'] is not None or plan['files'][4]['bytes'] != len(manifest_bytes)
+                or plan['files'][4]['sha256'] != hashlib.sha256(manifest_bytes).hexdigest()
+                or plan['availableBytesBefore'] < 6*1024**3+total or projection['totalBytes'] != total):
+            raise ValueError('Fault manifest bytes or disk reserve differs')
+        cold = case['runtimePreparationAfterOwnedExit']
+        cold_p = cold['runtimePreparation']
+        if (cold['candidateShutdown'].get('physicalCustodyHeld') is not False or cold.get('driverActive') is not False
+                or cold_p.get('phase') != 'indeterminate' or cold_p.get('attemptId') != plan['attemptId']
+                or cold_p.get('revision') != revision or cold_p.get('preparedFiles') != 0
+                or cold_p.get('issuedFile') != projection['issuedFile']
+                or not cold_p.get('reason')):
+            raise ValueError('Fault cold history reconstructed physical authority')
+        if held:
+            marker = p['held']; images = p['actualFiles']
+            if (len(images) != 1 or marker.get('kind') != 'runtime_preparation_before_receipt'
+                    or marker.get('schemaVersion') != 1 or marker['record'] != r or marker['copiedFile'] != images[0]
+                    or marker['inputSha256'] != p['hookSha256'] or not re.fullmatch(r'[0-9a-f]{64}', p['hookSha256'])
+                    or marker.get('processId') != case['beforeMainExit']['supervisor']['process']['processId']
+                    or marker['build'].get('sourceCommit') != source['sourceCommit'] or marker['build'].get('sourceManifestSha256') != source['manifestSha256']
+                    or marker['build'].get('sourceDirty') is not False
+                    or PureWindowsPath(images[0]['path']) != directory/names[0]
+                    or images[0]['sha256'] != plan['files'][0]['sha256'] or images[0]['bytes'] != plan['files'][0]['bytes']
+                    or images[0]['fileIdentity'] in ids or images[0]['querySupported'] is not True
+                    or p.get('changedCandidate') is not None or p.get('sentinel') is not None):
+                raise ValueError('Actual held copy/owned process barrier differs')
+        elif p['actualFiles'] or p.get('held') is not None or p.get('hookSha256') is not None:
+            raise ValueError('Preflight failure invented file effects/barrier')
+        if fault == 'existing_directory':
+            sentinel = p['sentinel']
+            raw = b'preserve existing preparation destination'
+            if (PureWindowsPath(sentinel['path']) != directory/'sentinel' or sentinel['bytes'] != len(raw)
+                    or sentinel['sha256'] != hashlib.sha256(raw).hexdigest() or sentinel['fileIdentity'] in ids
+                    or p['changedCandidate'] is not None or 'already exists' not in r['reason']):
+                raise ValueError('Occupied destination was not preserved')
+        elif fault == 'changed_candidate':
+            changed = p['changedCandidate']; original = p['sourceFiles'][0]
+            if (changed['path'] != original['path'] or changed['fileIdentity'] != original['fileIdentity']
+                    or changed['bytes'] != original['bytes']+len(b'\npreparation validation changed candidate\n')
+                    or changed['sha256'] == original['sha256'] or not re.fullmatch(r'[0-9a-f]{64}', changed['sha256'])
+                    or p['sentinel'] is not None or 'Candidate source changed' not in r['reason']):
+                raise ValueError('Changed candidate was not rejected before create')
+        expected_files = p['actualFiles'] + ([p['sentinel']] if p['sentinel'] is not None else [])
+        expected_sources = list(p['sourceFiles'])
+        if p['changedCandidate'] is not None:
+            expected_sources[0] = p['changedCandidate']
+        if (case.get('runtimePreparationFilesAfterOwnedExit') != expected_files
+                or case.get('runtimePreparationSourcesAfterOwnedExit') != expected_sources):
+            raise ValueError('Owned crash changed preserved files or replayed preparation')
+
+
 def backup_failure_reason(text):
     # Match Rust char::is_control and chars().take(900), including non-BMP text.
     return ''.join(ch for ch in text if unicodedata.category(ch) != 'Cc')[:900]
@@ -590,13 +722,14 @@ def main():
     modes.add_argument('--final-state-backup-gate', action='store_true')
     modes.add_argument('--final-state-backup-faults', action='store_true')
     modes.add_argument('--runtime-preparation-gate', action='store_true')
+    modes.add_argument('--runtime-preparation-faults', action='store_true')
     parser.add_argument('--previous-updater')
     parser.add_argument('--previous-updater-sha256')
     parser.add_argument('--controller-config', default='.winbridge/controller-snapshot.local.json', type=Path)
     args = parser.parse_args()
     source, target = archive_pin(args.archive), archive_pin(args.target_archive)
-    drain_parameters = ' -RuntimePreparationGate' if args.runtime_preparation_gate else ' -FinalStateBackupFaults' if args.final_state_backup_faults else ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
-    if args.runtime_preparation_gate:
+    drain_parameters = ' -RuntimePreparationFaults' if args.runtime_preparation_faults else ' -RuntimePreparationGate' if args.runtime_preparation_gate else ' -FinalStateBackupFaults' if args.final_state_backup_faults else ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
+    if args.runtime_preparation_gate or args.runtime_preparation_faults:
         for archive in [args.archive, args.target_archive]:
             with zipfile.ZipFile(archive) as contents:
                 if (native.updater_schema_from_source(contents.read('winbridge/apps/update/src/journal.rs')) != 14
@@ -646,7 +779,7 @@ Expand-Archive -LiteralPath $copiedArchive -DestinationPath $local
 & pwsh.exe -NoProfile -NonInteractive -File (Join-Path $source 'scripts/test-update-health-actor.ps1') -SourceDirectory $source -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath $target -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(cache)} -ReportDirectory {ps(windows_report)}{drain_parameters}
 exit $LASTEXITCODE
 '''
-    timeout_ms = 3600000 if args.final_state_backup_faults else 1800000
+    timeout_ms = 3600000 if args.final_state_backup_faults or args.runtime_preparation_faults else 1800000
     request = {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': 'snapshot-fixture',
                'idempotencyKey': 'native-health-'+run, 'timeoutMs': timeout_ms,
                'command': {'kind': 'direct', 'executable': 'pwsh.exe', 'arguments': ['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()], 'workingDirectory': '.'}}
@@ -688,10 +821,10 @@ exit $LASTEXITCODE
         raise RuntimeError({'taskId': task['taskId'], 'error': result['error'], 'reportDirectory': str(report)})
     if 'candidate-health-actor-proof.json' not in verified_names:
         raise ValueError('Ready manifest must cover the actual process proof')
-    expected_kind = 'runtime_preparation_main_native_gate' if args.runtime_preparation_gate else 'state_backup_faults_native_gate' if args.final_state_backup_faults else 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
+    expected_kind = 'runtime_preparation_faults_native_gate' if args.runtime_preparation_faults else 'runtime_preparation_main_native_gate' if args.runtime_preparation_gate else 'state_backup_faults_native_gate' if args.final_state_backup_faults else 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
     if result.get('kind') != expected_kind or result.get('sourceCommit') != source['sourceCommit'] or result.get('sourceArchiveSha256') != source['archiveSha256'] or result.get('target') != target:
         raise ValueError('Report kind or exact source/target binding differs')
-    verifier = verify_runtime_preparation_proof if args.runtime_preparation_gate else verify_state_backup_faults_proof if args.final_state_backup_faults else verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
+    verifier = verify_runtime_preparation_faults_proof if args.runtime_preparation_faults else verify_runtime_preparation_proof if args.runtime_preparation_gate else verify_state_backup_faults_proof if args.final_state_backup_faults else verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
     verifier(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report), 'filesVerified': len(ready['files'])}), flush=True)
 

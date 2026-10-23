@@ -9,6 +9,8 @@ use std::path::Path;
 use winbridge_core::update::valid_hash;
 type Result<T> = std::result::Result<T, String>;
 mod driver;
+#[cfg(feature = "update-validation")]
+mod validation;
 pub use driver::prepare_runtime_files;
 pub const FILE_ORDER: [RuntimeFile; 5] = [
     RuntimeFile::Worker,

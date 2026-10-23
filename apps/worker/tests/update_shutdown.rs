@@ -1,7 +1,7 @@
 //! Actual feature-gated product Main and an independent updater supervisor.
 //! All four old roles and candidate helpers are real executables. No installed update.
 #![cfg(all(windows, feature = "update-validation"))]
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     fs,
@@ -34,6 +34,19 @@ struct GateInput {
     backup_faults: bool,
     #[serde(default)]
     runtime_preparation: bool,
+    #[serde(default)]
+    preparation_faults: bool,
+    #[serde(default)]
+    validation_updater: Option<PathBuf>,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PreparationFault {
+    #[default]
+    None,
+    ExistingDirectory,
+    ChangedCandidate,
+    HoldBeforeReceipt,
 }
 fn write(path: &Path, value: &impl serde::Serialize) {
     use std::io::Write;
@@ -119,8 +132,11 @@ fn setup(
     fault: Fault,
     adapter: &Path,
     backup_fault: BackupFault,
+    preparation_fault: PreparationFault,
 ) -> (PathBuf, PathBuf, InstalledSetManifest) {
-    let label = if backup_fault == BackupFault::None {
+    let label = if preparation_fault != PreparationFault::None {
+        format!("{fault:?}-Preparation{preparation_fault:?}")
+    } else if backup_fault == BackupFault::None {
         format!("{fault:?}")
     } else {
         format!("{fault:?}-{backup_fault:?}")
@@ -159,7 +175,13 @@ fn setup(
         ("winbridge-desktop.exe", ArtifactRole::Desktop),
         ("winbridge-update.exe", ArtifactRole::Updater),
     ] {
-        let original = if role == ArtifactRole::Worker {
+        let original = if role == ArtifactRole::Updater && input.preparation_faults {
+            input
+                .validation_updater
+                .as_ref()
+                .expect("Explicit validation updater")
+                .clone()
+        } else if role == ArtifactRole::Worker {
             PathBuf::from(env!("CARGO_BIN_EXE_winbridge-worker"))
         } else {
             input.old_images.join(name)
@@ -590,7 +612,11 @@ fn journal_fingerprint_allows_only_empty_wal_creation_and_detects_data_changes()
     fs::write(&main, b"changed main").unwrap();
     assert_ne!(journal_bytes(root.path()), before);
 }
-fn prepare_runtime(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
+fn prepare_runtime(
+    root: &Path,
+    sup: &SupervisorRecord,
+    fault: PreparationFault,
+) -> serde_json::Value {
     let mut request: SupervisorRequest =
         serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
             .unwrap();
@@ -645,6 +671,9 @@ fn prepare_runtime(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
         .unwrap()
         .attempt_id
         .is_none());
+    if fault != PreparationFault::None {
+        return prepare_runtime_fault(root, sup, request, &call, before, fault);
+    }
     let directory = root.join("runtime/update-state");
     let id = &sup.spec.update_id;
     let source_bytes = journal_bytes(root);
@@ -779,6 +808,193 @@ fn prepare_runtime(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
     assert!(legacy["error"].is_null());
     assert!(legacy["preparation"].get("runtimePreparation").is_none());
     json!({"beforeAdmission":before,"admitted":admitted,"view":done,"duplicate":duplicate,"record":record,"actualFiles":actual,"oldImagesBefore":old_images,"sourceFiles":source_files,"sourceBytesUnchanged":true,"oldRuntimeUnchanged":true,"preimagesUnchanged":true,"allCopiesIndependent":true,"duplicateNoNewAttempt":true,"privateAuthorityNotExported":true,"oldViewsOmitPreparation":true,"retainedGraphMatches":true})
+}
+fn prepare_runtime_fault(
+    root: &Path,
+    sup: &SupervisorRecord,
+    mut request: SupervisorRequest,
+    call: &impl Fn(&SupervisorRequest) -> UpdatePreparationView,
+    before: UpdatePreparationView,
+    fault: PreparationFault,
+) -> serde_json::Value {
+    use winbridge_update::runtime_preparation::{PreparationFileState, PreparationPhase};
+    let directory = root.join("runtime/update-state");
+    let id = &sup.spec.update_id;
+    let parent = root.join("runtime/update").join(id);
+    let destination = parent.join("prepared-runtime");
+    let bytes = journal_bytes(root);
+    let baseline = UpdateJournal::inspect_runtime_baseline(&directory, id)
+        .unwrap()
+        .receipt
+        .unwrap();
+    let mut old = baseline.installed.images.clone();
+    old.push(baseline.installed.manifest_file.clone());
+    let sources = UpdateJournal::inspect_candidate_artifacts(&directory, id)
+        .unwrap()
+        .inspection
+        .artifacts
+        .into_iter()
+        .map(|a| a.image)
+        .collect::<Vec<_>>();
+    let previous = UpdateJournal::inspect_runtime_preimages(&directory, id)
+        .unwrap()
+        .receipt
+        .unwrap();
+    let backup = UpdateJournal::inspect_state_backup(&directory, id)
+        .unwrap()
+        .unwrap();
+    let backup_file = backup.report.as_ref().unwrap().backup.clone();
+    let mut changed = None;
+    let mut sentinel = None;
+    let mut hook_sha = None;
+    match fault {
+        PreparationFault::ExistingDirectory => {
+            fs::create_dir(&destination).unwrap();
+            fs::write(
+                destination.join("sentinel"),
+                b"preserve existing preparation destination",
+            )
+            .unwrap();
+            sentinel = Some(inspect_image(&destination.join("sentinel")).unwrap());
+        }
+        PreparationFault::ChangedCandidate => {
+            use std::io::Write;
+            let mut f = fs::OpenOptions::new()
+                .append(true)
+                .open(&sources[0].path)
+                .unwrap();
+            f.write_all(b"\npreparation validation changed candidate\n")
+                .unwrap();
+            f.sync_all().unwrap();
+            drop(f);
+            changed = Some(inspect_image(Path::new(&sources[0].path)).unwrap());
+            assert_ne!(changed.as_ref().unwrap().sha256, sources[0].sha256);
+        }
+        PreparationFault::HoldBeforeReceipt => {
+            let path = parent.join("runtime-preparation-validation.json");
+            write(
+                &path,
+                &json!({"schemaVersion":1,"kind":"winbridge_runtime_preparation_validation",
+                "updateId":id,"launchId":sup.spec.launch_id,"ownerId":sup.owner_id,
+                "ownerEpoch":sup.owner_epoch,"configSha256":sup.spec.config_sha256,
+                "runtimeIdentity":baseline.installed.runtime_identity}),
+            );
+            hook_sha = Some(winbridge_update::sha256(&fs::read(path).unwrap()));
+        }
+        PreparationFault::None => panic!("Fault required"),
+    }
+    request.action = SupervisorAction::PrepareRuntimeFiles;
+    let admitted = call(&request);
+    let attempt = admitted
+        .runtime_preparation
+        .as_ref()
+        .unwrap()
+        .attempt_id
+        .clone()
+        .unwrap();
+    request.action = SupervisorAction::ObserveRuntimeFiles;
+    let until = Instant::now() + Duration::from_secs(90);
+    let mut held = None;
+    let done = loop {
+        let view = call(&request);
+        let state = view.runtime_preparation.as_ref().unwrap();
+        assert_eq!(state.attempt_id.as_deref(), Some(attempt.as_str()));
+        if fault == PreparationFault::HoldBeforeReceipt {
+            let marker = parent.join("runtime-preparation-held.json");
+            if marker.is_file() {
+                // A file's existence precedes its write/sync. Read only after valid
+                // complete JSON is published; partial marker is not failure/replay.
+                if let Ok(value) =
+                    serde_json::from_slice::<serde_json::Value>(&fs::read(marker).unwrap())
+                {
+                    assert_eq!(value["processId"], sup.process.as_ref().unwrap().process_id);
+                    assert_eq!(value["inputSha256"], hook_sha.as_ref().unwrap().as_str());
+                    assert!(view.driver_active);
+                    assert!(view.driver_error.is_none());
+                    held = Some(value);
+                    break view;
+                }
+            }
+        } else if !view.driver_active && state.phase == RuntimePreparationPhase::Indeterminate {
+            assert!(view.driver_error.is_some());
+            break view;
+        }
+        assert!(
+            Instant::now() < until,
+            "Preparation fault deadline: {fault:?}"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    };
+    let record = UpdateJournal::inspect_runtime_preparation(&directory, id)
+        .unwrap()
+        .unwrap();
+    let mut actual = Vec::new();
+    if fault == PreparationFault::HoldBeforeReceipt {
+        assert_eq!(record.phase, PreparationPhase::Preparing);
+        assert_eq!(record.revision, 3);
+        assert!(matches!(record.files[0], PreparationFileState::Issued {}));
+        assert!(record.files[1..]
+            .iter()
+            .all(|f| matches!(f, PreparationFileState::Pending {})));
+        assert_eq!(
+            held.as_ref().unwrap()["record"],
+            serde_json::to_value(&record).unwrap()
+        );
+        let image = inspect_image(Path::new(&record.plan.files[0].destination)).unwrap();
+        assert_eq!(
+            held.as_ref().unwrap()["copiedFile"],
+            serde_json::to_value(&image).unwrap()
+        );
+        assert_eq!(image.sha256, sources[0].sha256);
+        assert_ne!(image.file_identity, sources[0].file_identity);
+        actual.push(image);
+    } else {
+        assert_eq!(record.phase, PreparationPhase::Indeterminate);
+        assert_eq!(record.revision, 1);
+        assert!(record.directory_identity.is_none());
+        assert!(record
+            .files
+            .iter()
+            .all(|f| matches!(f, PreparationFileState::Pending {})));
+    }
+    request.action = SupervisorAction::PrepareRuntimeFiles;
+    let duplicate = call(&request);
+    assert_eq!(duplicate.runtime_preparation, done.runtime_preparation);
+    assert_eq!(
+        UpdateJournal::inspect_runtime_preparation(&directory, id)
+            .unwrap()
+            .unwrap(),
+        record
+    );
+    for image in old.iter().chain(&previous.files) {
+        assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *image);
+    }
+    for (index, image) in sources.iter().enumerate() {
+        let expected = if index == 0 {
+            changed.as_ref().unwrap_or(image)
+        } else {
+            image
+        };
+        assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *expected);
+    }
+    if let Some(image) = &sentinel {
+        assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *image);
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 1);
+    } else if fault == PreparationFault::ChangedCandidate {
+        assert!(!destination.exists());
+    } else {
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 1);
+    }
+    let saved_backup =
+        winbridge_update::state_backup::pin_backup_file(Path::new(&backup_file.path)).unwrap();
+    assert_eq!(saved_backup.evidence(), &backup_file);
+    assert_eq!(journal_bytes(root), bytes);
+    json!({"fault":fault,"beforeAdmission":before,"admitted":admitted,"view":done,"duplicate":duplicate,
+        "record":record,"actualFiles":actual,"oldImagesBefore":old,"sourceFiles":sources,
+        "changedCandidate":changed,"sentinel":sentinel,"held":held,"hookSha256":hook_sha,
+        "preimages":previous,"backupFile":backup_file,"sourceBytesUnchanged":true,
+        "oldRuntimeUnchanged":true,"preimagesUnchanged":true,"backupUnchanged":true,
+        "duplicateNoNewAttempt":true,"privateAuthorityNotExported":true})
 }
 fn final_backup(
     root: &Path,
@@ -1025,8 +1241,9 @@ fn case(
     fault: Fault,
     adapter: &Path,
     backup_fault: BackupFault,
+    preparation_fault: PreparationFault,
 ) -> serde_json::Value {
-    let (root, config, manifest) = setup(input, fault, adapter, backup_fault);
+    let (root, config, manifest) = setup(input, fault, adapter, backup_fault, preparation_fault);
     let worker = root.join("runtime/winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -1228,7 +1445,7 @@ fn case(
             .then(|| final_backup(&root, &sup, backup_fault));
         let runtime_preparation = input
             .runtime_preparation
-            .then(|| prepare_runtime(&root, &sup));
+            .then(|| prepare_runtime(&root, &sup, preparation_fault));
         let input = ShutdownInspectionRequest {
             schema_version: 1,
             intent: shutdown.intent.clone(),
@@ -1322,10 +1539,50 @@ fn case(
         );
         assert_eq!(
             runtime_view.runtime_preparation.as_ref().unwrap().phase,
-            RuntimePreparationPhase::Prepared
+            if preparation_fault == PreparationFault::None {
+                RuntimePreparationPhase::Prepared
+            } else {
+                RuntimePreparationPhase::Indeterminate
+            }
         );
         proof["retainedRuntimePreparationRecord"] = serde_json::to_value(retained).unwrap();
         proof["runtimePreparationAfterOwnedExit"] = serde_json::to_value(runtime_view).unwrap();
+        if preparation_fault != PreparationFault::None {
+            let p = &proof["runtimePreparation"];
+            let expected: Vec<winbridge_update::artifact::ImageEvidence> =
+                serde_json::from_value(p["actualFiles"].clone()).unwrap();
+            let mut expected = expected;
+            if !p["sentinel"].is_null() {
+                expected.push(serde_json::from_value(p["sentinel"].clone()).unwrap());
+            }
+            let target = root
+                .join("runtime/update")
+                .join(id)
+                .join("prepared-runtime");
+            let after = if target.is_dir() {
+                fs::read_dir(&target)
+                    .unwrap()
+                    .map(|e| inspect_image(&e.unwrap().path()).unwrap())
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            };
+            assert_eq!(
+                after, expected,
+                "Owned crash changed prepared prefix/sentinel"
+            );
+            let mut sources: Vec<winbridge_update::artifact::ImageEvidence> =
+                serde_json::from_value(p["sourceFiles"].clone()).unwrap();
+            if !p["changedCandidate"].is_null() {
+                sources[0] = serde_json::from_value(p["changedCandidate"].clone()).unwrap();
+            }
+            for image in &sources {
+                assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *image);
+            }
+            proof["runtimePreparationFilesAfterOwnedExit"] = serde_json::to_value(after).unwrap();
+            proof["runtimePreparationSourcesAfterOwnedExit"] =
+                serde_json::to_value(sources).unwrap();
+        }
     }
     let phase = view.candidate_shutdown.unwrap();
     assert!(!phase.physical_custody_held);
@@ -1438,6 +1695,10 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     assert!(!input.backup_faults || input.final_backup);
     assert!(!input.runtime_preparation || (input.final_backup && !input.backup_faults));
+    assert!(
+        !input.preparation_faults
+            || (input.runtime_preparation && input.validation_updater.is_some())
+    );
     assert!(!input.final_backup || !input.supplemental);
     assert!(input.root.is_dir());
     assert_ne!(
@@ -1481,14 +1742,32 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
             .map(|f| (f, BackupFault::None))
             .collect()
     };
-    for (fault, backup_fault) in selected {
-        cases.push(case(&input, fault, &adapter, backup_fault));
-        write(
-            &input.root.join(format!("case-{}.json", cases.len())),
-            cases.last().unwrap(),
-        );
-        println!("Completed native case {fault:?}/{backup_fault:?}; owned Job closed and saved history checked");
+    let preparation_faults: &[PreparationFault] = if input.preparation_faults {
+        &[
+            PreparationFault::ExistingDirectory,
+            PreparationFault::ChangedCandidate,
+            PreparationFault::HoldBeforeReceipt,
+        ]
+    } else {
+        &[PreparationFault::None]
+    };
+    for preparation_fault in preparation_faults {
+        for (fault, backup_fault) in &selected {
+            let (fault, backup_fault) = (*fault, *backup_fault);
+            cases.push(case(
+                &input,
+                fault,
+                &adapter,
+                backup_fault,
+                *preparation_fault,
+            ));
+            write(
+                &input.root.join(format!("case-{}.json", cases.len())),
+                cases.last().unwrap(),
+            );
+            println!("Completed native case {fault:?}/{backup_fault:?}/{preparation_fault:?}; owned Job closed and saved history checked");
+        }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

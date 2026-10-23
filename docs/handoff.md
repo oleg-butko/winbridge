@@ -1,5 +1,18 @@
 # Updater: проверки завершены, передача следующей сессии — 2026-10-23
 
+## Возобновление2026-10-23: actual preparation faults
+
+Цель вновь active. Добавлены [три actual fault cases и feature-only barrier](plans/worker-self-update/runtime-preparation-faults.md),
+новые PS/Python modes `RuntimePreparationFaults`/`--runtime-preparation-faults`.
+Windows cross-check и обе all-target Clippy прошли; local preparation16/0,
+Python5/0 и scaffold237 прошли.
+Native fault gate ещё не запускался. Installed d052 connected/idle/healthy;
+controller3413 прежний. Public install отключён. Следом завершить local checks,
+review/commit/export и запустить новый isolated gate, затем независимо сверить proof.
+После pass — consuming replacement custody/rename ledger/driver, activation/U3/U4.
+
+## Зафиксированная точка закрытия перед возобновлением
+
 **Начать с [подробного handoff 2026-10-23](plans/worker-self-update/resume-2026-10-23.md).**
 Пользователь попросил завершить проверки и зафиксировать точку продолжения.
 Дальнейшая реализация приостановлена до возобновления; updater целиком не завершён.
