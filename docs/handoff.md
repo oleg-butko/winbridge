@@ -1,32 +1,45 @@
-# Updater U2.2: preparation library начата — 2026-10-22
+# Updater: actual preparation v16 проверен — 2026-10-22
 
-Продолжение: [copy driver и supervisor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
-добавлены; schema14/worker16 без изменения. Workspace636/0,16 ignored; после review
-fix canonical config/runtime comparison повторены16 preparation tests,2 directory
-tests, обе all-target Clippy, TS/contracts/UI build. Native fixture Windows all-target
-Clippy также passed. Подготовлен --runtime-preparation-gate (один actual Main case,
-matching14 archives), ещё не запускался. Target может быть clean cee06a7 archive
-005835Z; последний native10 ниже — только foundation. Runtime rename/activation
-не реализованы. Следом clean export → actual Main/source/build/health/shutdown/
-backup/preparation gate → verify all ready/proof/mutations → fault matrix + actual13
-refusal → consuming replacement custody/rename. Installed worker не обновлять.
+Цель active. **Нет текущих native/Cargo проверок.**
+[Actual Main preparation gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md):
+40 native tests / 10 groups, task `d9805159-8804-486a-8aae-95ddb6e12e79`,
+run `20261023-012740-9feb95b9`, succeeded/exit0. 16 ready files сверены дважды,
+22 искажения actual proof отклонены. **Не отправлять готовую task заново.**
 
-Цель возобновлена. [Preparation data/ledger](plans/worker-self-update/runtime-preparation.md)
-добавлены: updater schema14/worker16, supervisor пока v15/view7. Есть fixed five-file
-plan, separate directory/file intent/receipt, immutable causal history и fresh
-non-Serde preparation permit под original shutdown custody. 10 targeted local
-tests и весь updater package (199/0, 6 ignored), Linux/Windows all-target Clippy прошли.
-[Native preparation gate](plans/worker-self-update/windows-runtime-preparation-gate-2026-10-22.md)
-прошёл10/0, task1ecc73f3-4170-49c5-97fa-7f7e29b4fee1/run20261023-005847-b276db76,
-5 ready files twice, producer cee06a7. Native/Cargo сейчас не выполняются.
-Full actual admission/copy driver/новый actor,
-custody handoff/rename/activation/public install не реализованы.
-Old schema13 native gates ниже остаются историей. Следующий полный actor gate
-требует matching schema14 old-role/candidate archives; helper13 не читает future DB.
-Working installed d052 не менялся, connected/active0/no errors. Desktop можно
-открывать/закрывать, worker оставить работать. Далее consuming create-only
-preparation driver и новый actor, actual full graph/fault gate и actual13→14/refusal.
-Затем consuming replacement custody/rename/activation/U3/U4. Цель остаётся active.
+Текущий код: updater schema14 / worker16 / supervisor v16 / view8.
+[Preparation library](plans/worker-self-update/runtime-preparation.md) и
+[copy driver/actor](plans/worker-self-update/runtime-preparation-actor.md) реализованы:
+полный baseline/preimages/candidate/health/shutdown/Verified-backup graph admission,
+fresh non-Serde permit, directory/file intents до IO, пять independent copies,
+manifest-last receipt, revisions0→12, same duplicate attempt. После owned Job exit
+сохранился Prepared record, physical custody=false; history не разрешает replay.
+Runtime/source/worker DB bytes не менялись; actual installed replacement не выполнялся.
+
+Producer clean9a02ca9 / targetcee06a7, оба schema14/worker16. Exact archive,
+manifest/report/proof SHA и storage приведены в gate report; полная локальная сводка
+`.winbridge/update-preparation/runtime-preparation-main-native-verified.json`.
+Предыдущий foundation gate cee06a7 (10 tests / 5 ready files) относится к v15/view7;
+SDK/model9/0 и U2.1 happy/migration/fault gates также сохранены как отдельные proofs.
+U0/internal U1/U2.1 завершены; **весь U2.2 и updater не завершены**.
+
+Локально: workspace636/0,16 ignored. После review canonical config/runtime comparison
+повторены16 preparation и2 directory tests, Linux/Windows all-target Clippy;
+generated TS/contracts/typecheck/UI build, Python regressions и Windows all-target
+validation-fixture Clippy прошли. Production disk threshold не ослаблялся: Debian
+filesystem tests перенесены из малого /tmp tmpfs в ignored main target temp directory.
+
+**Следом:** review → actual preparation IO fault matrix + actual old13 refusal
+новой14 БД → consuming original custody/rename ledger/driver → activation → U3/U4.
+Candidate cee06a7 — limited same-schema copy fixture, не production install target:
+совпадение worker schema не доказывает весь updater feature set. До public cutover
+добавить versioned candidate-updater compatibility check **до drain**.
+Public install и raw FilesVerified/local health/controller confirmation отключены.
+
+Installed Windows worker d052 прежний, connected/active0/no maintenance/recovery
+errors; ручное обновление сейчас не требуется. Worker оставить, desktop можно
+открывать/закрывать. Controller этой сессии PID3413, listener192.168.44.203:1143.
+Окружение/restart/cache rules — в [checkpoint handoff](plans/worker-self-update/resume-2026-10-22.md).
+Ниже исторические записи; их прежние NEXT/ACTIVE/номера контрактов не актуальны.
 
 ## Передача контекста до возобновления U2.2 — 2026-10-22
 

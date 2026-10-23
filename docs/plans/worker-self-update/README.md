@@ -9,14 +9,18 @@
 
 Возобновлена реализация [U2.2 preparation library](runtime-preparation.md): updater14,
 data FSM/immutable ledger и original-custody admission. [Native model/ledger10/0](windows-runtime-preparation-gate-2026-10-22.md)
-пройден, пока без copy driver/нового actor/full actual admission gate.
+пройден. [Copy driver/actor v16/view8](runtime-preparation-actor.md) добавлены;
+[full actual Main40/0 gate](windows-runtime-preparation-main-gate-2026-10-22.md)
+пройден. Native fault matrix и actual13 refusal ещё впереди.
 Старые U2.1 gates ниже относятся к schema13.
 
 U0/internal U1 и [U2.1 final backup](windows-state-backup-faults-gate-2026-10-22.md)
 завершены. Native SDK/model gate9/0 и pure manifest plan подготовлены для U2.2;
 actual replacement/activation/public update ещё отсутствуют. Цель active.
-Binding/ledger подготовки добавлены в library14; следующий шаг — create-only copy
-driver и новый actor/full gate, затем consuming original custody и rename driver.
+Binding/ledger и copy driver/actor добавлены в14; happy actual Main gate пройден.
+Следующий шаг — actual fault matrix/old13 refusal, затем consuming original
+custody и rename driver. До public cutover нужен candidate-updater feature check
+до drain; fixture cee06a7 не является готовым production auto-update target.
 Проверки завершены по просьбе пользователя; [подробный handoff 2026-10-22](resume-2026-10-22.md)
 содержит результаты, точные pins, карту кода и инструкцию продолжения без контекста.
 

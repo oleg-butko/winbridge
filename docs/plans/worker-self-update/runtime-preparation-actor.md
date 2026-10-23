@@ -1,7 +1,8 @@
 # U2.2: create-only preparation driver и supervisor v16
 
 2026-10-22. Продолжение [schema14 library](runtime-preparation.md).
-Код driver/actor добавлен; новый сквозной Windows gate ещё не пройден.
+Код driver/actor добавлен; [сквозной Windows gate пройден](windows-runtime-preparation-main-gate-2026-10-22.md):
+40 native tests/10 groups,16 ready files twice,22 negative proof mutations.
 **Runtime rename, activation и public installation по-прежнему отключены.**
 
 ## Что выполняется
@@ -86,7 +87,7 @@ TEMP на K:, не shared и не reused test state.
 
 Новый `-RuntimePreparationGate` / `--runtime-preparation-gate` подготовлен в
 `test-update-health-actor.ps1` / `validate-update-health-actor-native.py` и actual
-`update_shutdown` fixture. Gate пока не запускался. Он сохраняет actual files,
+`update_shutdown` fixture. Gate пройден на producer9a02ca9/targetcee06a7. Он сохраняет actual files,
 immutable attempt/duplicates, legacy-view omission и post-owned-exit history без
 custody; Python отдельно сверяет фиксированные manifest bytes и их SHA.
 Для target schema14 уже есть clean архив cee06a7:
@@ -94,3 +95,8 @@ custody; Python отдельно сверяет фиксированные manif
 `ce86846bbe82153286744a769b188eb3ff4dece82656e9af62d5328a29543272`.
 Это другой source generation, подходящий кандидат для same-schema подготовки;
 production установленный d052 остаётся обычным TaskSubmit executor.
+Target cee06a7 — fixture для same-schema copy test, он ещё не имеет всего нового
+updater actor. Worker rehearsal/schema compatibility не доказывает поддержку
+всего updater pipeline у candidate updater. Перед public cutover нужен отдельный
+versioned compatibility/feature check candidate updater; partial fixture не должен
+стать production auto-update target только на основании совпадения schema14.

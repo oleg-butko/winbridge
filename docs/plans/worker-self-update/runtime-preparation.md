@@ -2,13 +2,16 @@
 
 2026-10-22. Следующий блок после [плана замены](runtime-replacement.md) и
 [закрытия U2.1](windows-state-backup-faults-gate-2026-10-22.md).
-Реализованы data FSM и trusted library ledger; production IO/actor для подготовки,
-replacement custody, rename driver и activation пока отсутствуют.
+Foundation реализовал data FSM и trusted library ledger. В продолжении добавлены
+[copy driver/actor v16/view8](runtime-preparation-actor.md), их отдельный actual
+Main gate пройден40/0. Fault matrix/actual13 refusal, replacement custody, rename
+driver и activation остаются впереди.
 
 ## Контракт и admission
 
-Updater journal **14**, worker journal **16**. Supervisor остаётся **v15/view7**:
-новой команды подготовки и UI projection пока нет. Public install отключён.
+Updater journal **14**, worker journal **16**. Foundation native10 — **v15/view7**;
+последующее продолжение добавляет **v16/view8** с новой командой и projection.
+Public install отключён.
 
 `admit_runtime_preparation` сначала читает существующую запись. Повтор возвращает
 историю без нового permit. Fresh admission требует исходную owner lock/epoch,

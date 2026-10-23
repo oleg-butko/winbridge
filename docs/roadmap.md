@@ -1,20 +1,22 @@
 # Постепенная реализация и расширение
 
 2026-10-22 WIP: [preparation driver/actor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
-добавлены; local workspace636/0, Clippy/TS/UI passed. Full graph gate подготовлен,
-native выполнение/fault matrix и actual13→14 refusal
+добавлены; local workspace636/0, Clippy/TS/UI и
+[actual Main40/0 gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md)
+пройдены. Fault matrix и actual13→14 refusal
 впереди. Это создание независимых files, не rename/activation/public install.
 
 2026-10-22, продолжение: [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md)
 добавляет data FSM/ledger schema14. Targeted local10/0, package199/0 и обе Clippy passed;
 [native model/ledger10/0](plans/worker-self-update/windows-runtime-preparation-gate-2026-10-22.md).
-Далее create-only preparation driver + новый actor/actual
-gate, затем consuming custody/rename/activation. Public install остаётся отключённым.
+Затем разработаны copy driver/actor и пройден actual gate выше; consuming
+custody/rename/activation впереди. Public install остаётся отключённым.
 
-## Точка продолжения после проверок 2026-10-22
+## Историческая точка перед началом U2.2 — 2026-10-22
 
-[Подробный handoff](plans/worker-self-update/resume-2026-10-22.md) — актуальная
-инструкция следующему агенту. U0/internal U1 и U2.1 закрыты; U2.2 имеет file/FSM
+[Подробный handoff](plans/worker-self-update/resume-2026-10-22.md) сохраняет эту
+контрольную точку; текущий прогресс U2.2 указан выше. Тогда U0/internal U1 и U2.1
+были закрыты; U2.2 имел file/FSM
 primitives и manifest planner. **Первый незавершённый блок:** immutable proof
 binding и durable preparation/replacement ledger, затем consuming custody и file
 driver, activation, U3 и U4. Public update отключён. Windows-прогоны завершены;
