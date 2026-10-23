@@ -118,11 +118,13 @@ status и release только после source/Job/output proof. Добавл�
 также прошли Windows gate (updater13/worker16, supervisor v15/view7).
 [Four-case fault gate](docs/plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
 закрыл U2.1; actual replacement/activation ещё не реализованы. Install/public update отключены.
-[Подробный handoff завершения проверок 2026-10-22](docs/plans/worker-self-update/resume-2026-10-22.md)
+[Подробный handoff завершения проверок 2026-10-23](docs/plans/worker-self-update/resume-2026-10-23.md)
 содержит результаты, карту кода и порядок продолжения U2.2 без контекста чата.
 В продолжении добавлена [preparation library schema14](docs/plans/worker-self-update/runtime-preparation.md):
 модель пяти копий и durable ledger. [Copy driver/actor v16](docs/plans/worker-self-update/runtime-preparation-actor.md)
-добавлены и прошли [actual Main40/0 gate](docs/plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md); actual replacement/activation
+добавлены и прошли [actual Main40/0 gate](docs/plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md).
+[Actual13→14 migration/refusal](docs/plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
+также проверен; preparation fault matrix и actual replacement/activation
 ещё не реализованы. Прежние U2.1 native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

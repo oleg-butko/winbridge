@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-23: проверки завершены по просьбе пользователя; следующий агент начинает
+с [подробной точки продолжения](plans/worker-self-update/resume-2026-10-23.md).
+Оба последних Windows tasks terminal succeeded/0; повторно сверены22 ready files
+и полные proofs, новых runs нет. Первый незавершённый блок — actual preparation
+fault matrix, затем consuming custody/rename/activation, U3/U4. Public install отключён.
+
 2026-10-23: [actual13→14 migration/refusal gate](plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
 пройден1 integration test/6 ready files/19 negative mutations на реальном Verified-backup13
 graph. Следом actual preparation fault matrix; installed worker unchanged.
@@ -7,8 +13,8 @@ graph. Следом actual preparation fault matrix; installed worker unchanged.
 2026-10-22 WIP: [preparation driver/actor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
 добавлены; local workspace636/0, Clippy/TS/UI и
 [actual Main40/0 gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md)
-пройдены. Fault matrix и actual13→14 refusal
-впереди. Это создание независимых files, не rename/activation/public install.
+пройдены. Actual13→14/refusal закрыт2026-10-23; fault matrix впереди.
+Это создание независимых files, не rename/activation/public install.
 
 2026-10-22, продолжение: [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md)
 добавляет data FSM/ledger schema14. Targeted local10/0, package199/0 и обе Clippy passed;

@@ -80,8 +80,10 @@ TEMP на K:, не shared и не reused test state.
    пять actual ID/hash/size receipts, прежние runtime/source/DB bytes и startup refusal.
 3. Faults после directory/file intents и receipts: occupied destination, stream
    fence, callback failure, supervisor crash; history не даёт новую custody/dispatch.
-4. Actual old13 updater отказ новой14 БД без изменения; старый13 helper не считается
-   совместимым с14. Согласованные old-role/candidate fixtures собирать из14 archives.
+4. [Actual old13 updater отказ новой14 БД](windows-preparation-migration-gate-2026-10-23.md)
+   проверен2026-10-23 без изменения DB/WAL; historical graph сохранён, fresh permit
+   не появился. Старый13 helper не считается совместимым с14. Согласованные
+   old-role/candidate fixtures для preparation собирать из14 archives.
 5. Consuming replacement guard, rename ledger/driver и manifest-last trusted
    FilesVerified, затем activation/controller confirmation/U3/U4.
 

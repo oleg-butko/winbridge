@@ -1,6 +1,12 @@
-# Updater: actual preparation v16 проверен — 2026-10-22
+# Updater: проверки завершены, передача следующей сессии — 2026-10-23
 
-Цель active. **Нет текущих native/Cargo проверок.**
+**Начать с [подробного handoff 2026-10-23](plans/worker-self-update/resume-2026-10-23.md).**
+Пользователь попросил завершить проверки и зафиксировать точку продолжения.
+Дальнейшая реализация приостановлена до возобновления; updater целиком не завершён.
+**Нет текущих native/Cargo проверок.** При закрытии readonly-повторно подтверждены
+оба terminal succeeded/0, все22 ready files, source/target ZIP и полные proof
+verifiers. Новый Windows run не запускался. Rust fmt и5 Python regressions прошли.
+
 Продолжение2026-10-23: [actual13→14 migration/refusal gate](plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
 пройден1 native test,6 ready files twice,19 proof mutations rejected. Task
 4c252e55-f681-4f8f-87d2-05a18e410d28/run20261023-020641-5eca976a succeeded/0,
@@ -46,7 +52,7 @@ Public install и raw FilesVerified/local health/controller confirmation отк�
 Installed Windows worker d052 прежний, connected/active0/no maintenance/recovery
 errors; ручное обновление сейчас не требуется. Worker оставить, desktop можно
 открывать/закрывать. Controller этой сессии PID3413, listener192.168.44.203:1143.
-Окружение/restart/cache rules — в [checkpoint handoff](plans/worker-self-update/resume-2026-10-22.md).
+Окружение/restart/cache rules — в [новом handoff](plans/worker-self-update/resume-2026-10-23.md).
 Ниже исторические записи; их прежние NEXT/ACTIVE/номера контрактов не актуальны.
 
 ## Передача контекста до возобновления U2.2 — 2026-10-22

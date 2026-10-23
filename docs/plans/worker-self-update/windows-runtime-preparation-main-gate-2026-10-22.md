@@ -57,7 +57,8 @@ duplicate, manifest role/build, retained graph и отсутствие custody �
 Это **happy actual preparation**, не native IO fault matrix и не whole U2.2.
 Synthetic/core faults уже проверены, но actual supervisor crash/unknown outcome
 на directory/file intents/receipts ещё нужно проверить отдельно. Actual old13
-executable refusal новой14 БД также впереди. Target cee06a7 — limited same-schema
+executable refusal новой14 БД проверен [отдельным gate2026-10-23](windows-preparation-migration-gate-2026-10-23.md).
+Target cee06a7 — limited same-schema
 fixture, а не готовый production target со всеми новыми updater capabilities.
 До public cutover нужен versioned candidate-updater compatibility check до drain.
 Затем consuming replacement custody/rename/manifest-last FilesVerified, activation,

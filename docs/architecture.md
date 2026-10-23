@@ -2,13 +2,14 @@
 
 Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
-## Текущее состояние updater — завершение проверок 2026-10-22
+## Текущее состояние updater — завершение проверок 2026-10-23
 
-После этой контрольной точки начата [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md):
+Текущий блок — [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md):
 текущая updater schema14, worker16. Foundation native10 относится к v15/view7;
 [copy driver и supervisor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
 добавлены и прошли [actual Main40/0 gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md).
-Fault matrix/actual13 refusal и rename/activation не готовы.
+[Actual13→14/refusal](plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
+также пройден. Actual preparation fault matrix и rename/activation ещё впереди.
 Native U2.1 ниже — schema13.
 
 U0/internal U1 завершены. U2.1 использует updater13/worker16, supervisor v15/view7:
@@ -16,9 +17,10 @@ original exit guard удерживается supervisor через Arc и immuta
 readonly old-worker helper сохраняет SQLite через backup API. Данные backup/history
 не создают kernel custody. [Native success и migration12→13](plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
 пройдены; [four-case fault gate](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
-завершил U2.1. U2.2 имеет native-проверенные file/model primitives, но пока не driver. Replacement/activation/desktop/public update
-не реализованы. Следом immutable proof binding/preparation ledger и consuming OS
-custody; [актуальный handoff](plans/worker-self-update/resume-2026-10-22.md)
+завершил U2.1. U2.2 имеет preparation binding/ledger/copy driver и native-проверенные
+file/model primitives для будущего rename. Replacement/activation/desktop/public
+update не реализованы. Следом preparation faults и consuming OS custody/rename
+ledger/driver; [актуальный handoff](plans/worker-self-update/resume-2026-10-23.md)
 содержит проверки, карту кода и последовательность продолжения.
 Ниже исторические описания блоков; номера schemas там относятся к их native gates.
 
