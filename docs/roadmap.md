@@ -4,6 +4,9 @@
 реализуются отдельным gate (occupied destination, changed candidate, owned crash
 до receipt). Cross-check/all-target Windows Clippy прошли; native execution впереди.
 Public install отключён, installed d052 worker не менялся.
+Следующий data-only replacement record добавлен отдельно:6 local tests/обе Clippy
+passed; native production rename/ledger/custody ещё впереди. Модель не входит в
+выполняющийся immutable preparation fault producer.
 
 2026-10-23: проверки завершены по просьбе пользователя; следующий агент начинает
 с [подробной точки продолжения](plans/worker-self-update/resume-2026-10-23.md).

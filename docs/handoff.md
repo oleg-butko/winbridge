@@ -13,6 +13,12 @@ Log `.winbridge/update-preparation/preparation-faults-native.log`, scope/pins в
 Task ID до terminal, затем независимо сверить ready files/proof. Installed d052
 исправен, controller3413 прежний, UI окон нет. Public install отключён.
 После pass — consuming replacement custody/rename ledger/driver, activation/U3/U4.
+Параллельно добавлена [data-only replacement transaction](plans/worker-self-update/runtime-replacement.md):
+`apps/update/src/runtime_replacement.rs`,6 local tests и обе all-target Clippy passed.
+Exact preparation binding/retained-directory FSM +22 file steps, terminal uncertainty;
+нет ledger/permit/custody/IO/public action. Эта модель НЕ входит в native producerddce866.
+Для неё подготовлен lightweight `--runtime-replacement-only` / PS RuntimeReplacementOnly
+(12 data tests); запускать после terminal текущего fault gate и clean export.
 
 ## Зафиксированная точка закрытия перед возобновлением
 

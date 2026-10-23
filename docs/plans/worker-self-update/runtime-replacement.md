@@ -1,12 +1,48 @@
 # U2.2: замена runtime под сохранённым владением
 
 2026-10-22. План следующего блока после [U2.1](final-state-backup.md).
-Это проектирование; file replacement, activation и public install не реализованы.
+File replacement, activation и public install не реализованы. Ниже проектирование
+и уже реализованные data-only части; они не дают разрешения на файловые эффекты.
 U2.1 final backup fault gate завершён успешно; file/FSM primitives также прошли
 native gate. [Handoff 2026-10-22](resume-2026-10-22.md) сохраняет эту контрольную точку;
 новая preparation library ниже не означает готовность custody handoff/driver/activation.
 В продолжении начата [preparation library schema14](runtime-preparation.md):
-binding/ledger/model добавлены; IO/actor/full native admission пока впереди.
+binding/ledger/model, copy driver/actor и happy actual Main gate пройдены;
+actual13→14/refusal также закрыт. [Preparation fault gate](runtime-preparation-faults.md)
+выполняется отдельно; не путать его с rename/activation.
+
+## Модель всей replacement transaction — 2026-10-23
+
+`apps/update/src/runtime_replacement.rs` добавляет immutable intent, exact completed
+preparation snapshot и новый distinct attempt. State: Planned → DirectoryIssued →
+Replacing → FilesMoved, отдельный terminal Indeterminate с exact предыдущим prefix.
+Retained destination фиксирован: `runtime/update/<id>/displaced-runtime`.
+
+Directory receipt предшествует любому file exchange. Batch выполняет по четыре
+перехода каждого из пяти файлов: retire issue/receipt, place issue/receipt.
+Четыре бинарника идут перед manifest; полный record имеет revisions0→22. Root CAS
+проверяет один exact step, immutable intent, directory identity и все предыдущие
+receipts. Unknown outcome не переписывает prefix и не допускает новый шаг после
+JSON reopen. Directory identity не может совпасть с runtime/parent/prepared directory
+или old/source/prepared file ID. Nested uncertainty и unknown JSON fields отклоняются.
+
+**FilesMoved — только согласованная data-модель receipts**, не trusted FilesVerified
+и не право запуска нового worker. Ledger, fresh non-Serde permit, consuming original
+custody, IO/actor и native whole-replacement gate ещё предстоят. Никаких новых schema,
+supervisor actions или public capabilities этот модуль не включает.
+
+Шесть local tests и Linux/Windows all-target Clippy прошли. Tests проверяют каждый
+из22 causal steps, skipped CAS, directory/attempt aliases, manifest-last, изменённые
+preparation/receipt identity, terminal/reopen и strict JSON. Это synthetic data,
+не actual rename. Модуль добавлен после immutable producerddce866 выполняющегося
+preparation fault gate; native результат того gate нельзя приписывать новой модели.
+
+Для проверки модели подготовлен lightweight режим `--runtime-replacement-only` /
+`-RuntimeReplacementOnly` в существующих shutdown-primitives runners: шесть
+per-file exchange и шесть aggregate transaction tests, generated fixtures без
+old executable reference, desktop и candidate build. Запускать после terminal
+текущего fault gate, когда approved cache свободен, из нового clean export.
+Это будет проверка data FSM на Windows, а не исполнение whole-runtime rename.
 
 ## Что уже можно переиспользовать
 
