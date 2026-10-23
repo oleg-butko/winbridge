@@ -22,6 +22,14 @@ replacement_spec = importlib.util.spec_from_file_location('replacement_proof', R
 replacement_proof = importlib.util.module_from_spec(replacement_spec)
 replacement_spec.loader.exec_module(replacement_proof)
 
+faults_spec = importlib.util.spec_from_file_location('replacement_faults_proof', ROOT / 'scripts/update-replacement-faults-proof.py')
+faults_proof = importlib.util.module_from_spec(faults_spec)
+faults_spec.loader.exec_module(faults_proof)
+
+
+def verify_runtime_replacement_faults_proof(proof, source, target):
+    faults_proof.verify(proof, source, target, verify_runtime_preparation_proof, preimages_receipt_bytes, replacement_proof.expected_batch)
+
 
 def verify_runtime_replacement_proof(proof, source, target):
     replacement_proof.verify(proof, source, target, verify_runtime_preparation_proof, preimages_receipt_bytes)
@@ -769,14 +777,15 @@ def main():
     modes.add_argument('--runtime-preparation-gate', action='store_true')
     modes.add_argument('--runtime-preparation-faults', action='store_true')
     modes.add_argument('--runtime-replacement-gate', action='store_true')
+    modes.add_argument('--runtime-replacement-faults', action='store_true')
     parser.add_argument('--previous-updater')
     parser.add_argument('--previous-updater-sha256')
     parser.add_argument('--controller-config', default='.winbridge/controller-snapshot.local.json', type=Path)
     args = parser.parse_args()
     source, target = archive_pin(args.archive), archive_pin(args.target_archive)
-    drain_parameters = ' -RuntimeReplacementGate' if args.runtime_replacement_gate else ' -RuntimePreparationFaults' if args.runtime_preparation_faults else ' -RuntimePreparationGate' if args.runtime_preparation_gate else ' -FinalStateBackupFaults' if args.final_state_backup_faults else ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
-    if args.runtime_replacement_gate or args.runtime_preparation_gate or args.runtime_preparation_faults:
-        require_runtime_schemas([args.archive, args.target_archive], 15 if args.runtime_replacement_gate else 14)
+    drain_parameters = ' -RuntimeReplacementFaults' if args.runtime_replacement_faults else ' -RuntimeReplacementGate' if args.runtime_replacement_gate else ' -RuntimePreparationFaults' if args.runtime_preparation_faults else ' -RuntimePreparationGate' if args.runtime_preparation_gate else ' -FinalStateBackupFaults' if args.final_state_backup_faults else ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
+    if args.runtime_replacement_faults or args.runtime_replacement_gate or args.runtime_preparation_gate or args.runtime_preparation_faults:
+        require_runtime_schemas([args.archive, args.target_archive], 15 if (args.runtime_replacement_gate or args.runtime_replacement_faults) else 14)
     if args.drain_gate:
         if (not args.previous_updater or not re.fullmatch(r'[0-9a-f]{64}', args.previous_updater_sha256 or '')
                 or PureWindowsPath(args.previous_updater).drive.casefold() != 'k:'
@@ -821,7 +830,7 @@ Expand-Archive -LiteralPath $copiedArchive -DestinationPath $local
 & pwsh.exe -NoProfile -NonInteractive -File (Join-Path $source 'scripts/test-update-health-actor.ps1') -SourceDirectory $source -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath $target -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(cache)} -ReportDirectory {ps(windows_report)}{drain_parameters}
 exit $LASTEXITCODE
 '''
-    timeout_ms = 3600000 if args.final_state_backup_faults or args.runtime_preparation_faults else 1800000
+    timeout_ms = 3600000 if args.runtime_replacement_faults or args.final_state_backup_faults or args.runtime_preparation_faults else 1800000
     request = {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': 'snapshot-fixture',
                'idempotencyKey': 'native-health-'+run, 'timeoutMs': timeout_ms,
                'command': {'kind': 'direct', 'executable': 'pwsh.exe', 'arguments': ['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()], 'workingDirectory': '.'}}
@@ -863,10 +872,12 @@ exit $LASTEXITCODE
         raise RuntimeError({'taskId': task['taskId'], 'error': result['error'], 'reportDirectory': str(report)})
     if 'candidate-health-actor-proof.json' not in verified_names:
         raise ValueError('Ready manifest must cover the actual process proof')
-    expected_kind = 'runtime_replacement_main_native_gate' if args.runtime_replacement_gate else 'runtime_preparation_faults_native_gate' if args.runtime_preparation_faults else 'runtime_preparation_main_native_gate' if args.runtime_preparation_gate else 'state_backup_faults_native_gate' if args.final_state_backup_faults else 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
+    expected_kind = 'runtime_replacement_faults_native_gate' if args.runtime_replacement_faults else 'runtime_replacement_main_native_gate' if args.runtime_replacement_gate else 'runtime_preparation_faults_native_gate' if args.runtime_preparation_faults else 'runtime_preparation_main_native_gate' if args.runtime_preparation_gate else 'state_backup_faults_native_gate' if args.final_state_backup_faults else 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
     if result.get('kind') != expected_kind or result.get('sourceCommit') != source['sourceCommit'] or result.get('sourceArchiveSha256') != source['archiveSha256'] or result.get('target') != target:
         raise ValueError('Report kind or exact source/target binding differs')
-    verifier = verify_runtime_replacement_proof if args.runtime_replacement_gate else verify_runtime_preparation_faults_proof if args.runtime_preparation_faults else verify_runtime_preparation_proof if args.runtime_preparation_gate else verify_state_backup_faults_proof if args.final_state_backup_faults else verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
+    verifier = verify_runtime_replacement_faults_proof if args.runtime_replacement_faults else verify_runtime_replacement_proof if args.runtime_replacement_gate else verify_runtime_preparation_faults_proof if args.runtime_preparation_faults else verify_runtime_preparation_proof if args.runtime_preparation_gate else verify_state_backup_faults_proof if args.final_state_backup_faults else verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
+    if args.runtime_replacement_faults and ('runtimeApplied' not in result or result.get('runtimeApplied') is not None or result.get('installedRuntimeApplied') is not False):
+        raise ValueError('Fault report must preserve partial/unknown isolated outcome and unchanged installed runtime')
     if args.runtime_replacement_gate and (result.get('runtimeApplied') is not True or result.get('installedRuntimeApplied') is not False):
         raise ValueError('Replacement report must distinguish isolated and installed runtime effects')
     verifier(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)

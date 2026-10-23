@@ -1,5 +1,8 @@
 //! Native effects in this test's own runtime only. Never an installed cutover.
+#[path = "replacement/faults.rs"]
+mod faults;
 use super::*;
+pub(super) use faults::{after_fault_owned_exit, execute_fault, ReplacementFault};
 use winbridge_update::{
     artifact::ImageEvidence,
     runtime_exchange::FileExchangeState,

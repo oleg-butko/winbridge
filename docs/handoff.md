@@ -1,3 +1,16 @@
+# WIP: четыре actual replacement faults подготовлены
+
+[Fault matrix](plans/worker-self-update/runtime-replacement-faults.md): occupied
+displaced directory, foreign old-file handle, ignored retired receipt и owned
+crash после OS retire до receipt. Новый mode `--runtime-replacement-faults` /
+`-RuntimeReplacementFaults`, dedicated independent verifier/audit. Native fault
+run пока не отправлен; **не объявлять матрицу пройденной**. Release path не имеет
+fault barrier; он только в clean native Windows validation feature.
+Linux/Windows all-target Clippy и production Windows check прошли; local updater/
+protocol268/0 (6 ignored), Python9/0, scaffold246. Positive60/0 ниже — отдельный уже terminal gate.
+Следом чистый commit/export и новый4-case native run (worker only, no UI), затем
+ready/proof audit и activation. Updater целиком не готов, public install off.
+
 # Current: actual Main15 replacement gate пройден — 2026-10-23
 
 Начать с [проверенного gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)

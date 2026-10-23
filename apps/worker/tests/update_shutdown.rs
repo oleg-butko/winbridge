@@ -39,6 +39,8 @@ struct GateInput {
     #[serde(default)]
     runtime_replacement: bool,
     #[serde(default)]
+    replacement_faults: bool,
+    #[serde(default)]
     preparation_faults: bool,
     #[serde(default)]
     validation_updater: Option<PathBuf>,
@@ -137,8 +139,11 @@ fn setup(
     adapter: &Path,
     backup_fault: BackupFault,
     preparation_fault: PreparationFault,
+    replacement_fault: replacement::ReplacementFault,
 ) -> (PathBuf, PathBuf, InstalledSetManifest) {
-    let label = if preparation_fault != PreparationFault::None {
+    let label = if replacement_fault != replacement::ReplacementFault::None {
+        format!("{fault:?}-Replacement{replacement_fault:?}")
+    } else if preparation_fault != PreparationFault::None {
         format!("{fault:?}-Preparation{preparation_fault:?}")
     } else if backup_fault == BackupFault::None {
         format!("{fault:?}")
@@ -179,7 +184,9 @@ fn setup(
         ("winbridge-desktop.exe", ArtifactRole::Desktop),
         ("winbridge-update.exe", ArtifactRole::Updater),
     ] {
-        let original = if role == ArtifactRole::Updater && input.preparation_faults {
+        let original = if role == ArtifactRole::Updater
+            && (input.preparation_faults || input.replacement_faults)
+        {
             input
                 .validation_updater
                 .as_ref()
@@ -1246,8 +1253,16 @@ fn case(
     adapter: &Path,
     backup_fault: BackupFault,
     preparation_fault: PreparationFault,
+    replacement_fault: replacement::ReplacementFault,
 ) -> serde_json::Value {
-    let (root, config, manifest) = setup(input, fault, adapter, backup_fault, preparation_fault);
+    let (root, config, manifest) = setup(
+        input,
+        fault,
+        adapter,
+        backup_fault,
+        preparation_fault,
+        replacement_fault,
+    );
     let replacement_requested = input.runtime_replacement;
     let worker = root.join("runtime/winbridge-worker.exe");
     let input_path = root.join("input.json");
@@ -1493,7 +1508,12 @@ fn case(
         }
         let mut proof = json!({"fault":fault,"finalStateBackup":final_state_backup,"runtimePreparation":runtime_preparation,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true});
         if replacement_requested {
-            proof["runtimeReplacement"] = replacement::execute(&root, &sup, &proof);
+            proof["runtimeReplacement"] =
+                if replacement_fault == replacement::ReplacementFault::None {
+                    replacement::execute(&root, &sup, &proof)
+                } else {
+                    replacement::execute_fault(&root, &sup, &proof, replacement_fault)
+                };
         }
         proof
     };
@@ -1701,7 +1721,18 @@ fn case(
             .unwrap()
             .remove("runtimeReplacement")
             .unwrap();
-        let after = replacement::after_owned_exit(&root, &config, &worker, id, &replacement);
+        let after = if replacement_fault == replacement::ReplacementFault::None {
+            replacement::after_owned_exit(&root, &config, &worker, id, &replacement)
+        } else {
+            replacement::after_fault_owned_exit(
+                &root,
+                &config,
+                &worker,
+                id,
+                &replacement,
+                replacement_fault,
+            )
+        };
         json!({"beforeReplacement":proof,"replacement":replacement,"afterOwnedExit":after})
     } else {
         proof
@@ -1710,19 +1741,29 @@ fn case(
 #[test]
 #[ignore = "Explicit clean native Main shutdown gate; builds a real candidate and retains case directories"]
 fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement() {
-    run_gate(false);
+    run_gate(false, false);
 }
 #[test]
 #[ignore = "Explicit clean native Main15 replacement gate; preserves isolated runtime/history"]
 fn actual_main_and_supervisor_replace_runtime_without_activation() {
-    run_gate(true);
+    run_gate(true, false);
 }
-fn run_gate(replacement_requested: bool) {
+#[test]
+#[ignore = "Explicit clean Main15 replacement fault matrix; preserves all isolated cases"]
+fn actual_main_preserves_replacement_faults_without_retry() {
+    run_gate(true, true);
+}
+fn run_gate(replacement_requested: bool, faults_requested: bool) {
     let path = PathBuf::from(
         std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
     );
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     assert_eq!(input.runtime_replacement, replacement_requested);
+    assert_eq!(input.replacement_faults, faults_requested);
+    assert!(
+        !input.replacement_faults
+            || (input.runtime_replacement && input.validation_updater.is_some())
+    );
     assert!(!input.runtime_replacement || (input.runtime_preparation && !input.preparation_faults));
     assert!(!input.backup_faults || input.final_backup);
     assert!(!input.runtime_preparation || (input.final_backup && !input.backup_faults));
@@ -1782,23 +1823,36 @@ fn run_gate(replacement_requested: bool) {
     } else {
         &[PreparationFault::None]
     };
-    for preparation_fault in preparation_faults {
-        for (fault, backup_fault) in &selected {
-            let (fault, backup_fault) = (*fault, *backup_fault);
-            cases.push(case(
-                &input,
-                fault,
-                &adapter,
-                backup_fault,
-                *preparation_fault,
-            ));
-            write(
-                &input.root.join(format!("case-{}.json", cases.len())),
-                cases.last().unwrap(),
-            );
-            println!("Completed native case {fault:?}/{backup_fault:?}/{preparation_fault:?}; owned Job closed and saved history checked");
+    let replacement_faults: &[replacement::ReplacementFault] = if input.replacement_faults {
+        &[
+            replacement::ReplacementFault::ExistingDirectory,
+            replacement::ReplacementFault::LockedOldFile,
+            replacement::ReplacementFault::ReceiptWriteDenied,
+            replacement::ReplacementFault::HoldBeforeReceipt,
+        ]
+    } else {
+        &[replacement::ReplacementFault::None]
+    };
+    for replacement_fault in replacement_faults {
+        for preparation_fault in preparation_faults {
+            for (fault, backup_fault) in &selected {
+                let (fault, backup_fault) = (*fault, *backup_fault);
+                cases.push(case(
+                    &input,
+                    fault,
+                    &adapter,
+                    backup_fault,
+                    *preparation_fault,
+                    *replacement_fault,
+                ));
+                write(
+                    &input.root.join(format!("case-{}.json", cases.len())),
+                    cases.last().unwrap(),
+                );
+                println!("Completed native case {fault:?}/{backup_fault:?}/{preparation_fault:?}/{replacement_fault:?}; owned Job closed and saved history checked");
+            }
         }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":input.runtime_replacement,"installedRuntimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

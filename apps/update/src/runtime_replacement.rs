@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 type Result<T> = std::result::Result<T, String>;
 mod driver;
+#[cfg(all(windows, feature = "update-validation"))]
+mod validation;
 pub(crate) use driver::{execute, ReplacementOutcome};
 /// Live-object observation only; never an execution permission or durable fact.
 #[derive(Clone, Default)]

@@ -298,6 +298,11 @@ impl RuntimeReplacementGuard {
         self.require_progress(&next)?;
         j.require_runtime_replacement_current(a, s, record, &self.permit)
             .map_err(|e| e.to_string())?;
+        #[cfg(feature = "update-validation")]
+        super::validation::hold_before_receipt(record, &next, || {
+            self.require_exit_custody()?;
+            j.check_source_authority(a).map_err(|e| e.to_string())
+        })?;
         Ok(next)
     }
     /// Custody is independent of success: failed acquisition still keeps locks.

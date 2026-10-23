@@ -27,7 +27,47 @@ def all_records(proof, change):
         change(record)
 
 
+def audit_faults(proof, source, target):
+    health.verify_runtime_replacement_faults_proof(proof, source, target)
+    edits = [('kind', 'wrong'), ('schemaVersion', True), ('runtimeApplied', False),
+             ('installedRuntimeApplied', True), ('windowsOpened', True), ('build/sourceDirty', True)]
+    for i in range(4):
+        prefix = f'cases/{i}/replacement/'
+        after = f'cases/{i}/afterOwnedExit/'
+        edits += [(prefix+'expectedFault', 'wrong'), (prefix+'record/revision', 22),
+                  (prefix+'actualOldFiles/0/fileIdentity', 'different'),
+                  (prefix+'actualPreparedFiles/0/sha256', '0'*64),
+                  (prefix+'view/runtimeReplacement/physicalCustodyHeld', False),
+                  (prefix+'view/update/phase', 'committed'),
+                  (prefix+'duplicate/runtimeReplacement/attemptId', 'different'),
+                  (prefix+'preservation/preimages/files/0/sha256', '0'*64),
+                  (prefix+'preservation/backupFile/sha256', '0'*64),
+                  (prefix+'workerBytesAfter/0/1', '0'*64),
+                  (prefix+'activationStarted', True),
+                  (after+'view/runtimeReplacement/physicalCustodyHeld', True),
+                  (after+'normalStartupRefused', False), (after+'ownedJobEmpty', False)]
+    edits += [('cases/0/replacement/sentinel/sha256', '0'*64),
+              ('cases/1/replacement/causeRemovedBeforeDuplicate', False),
+              ('cases/2/replacement/causeRemovedBeforeDuplicate', False),
+              ('cases/3/replacement/heldMarker/inputSha256', '0'*64),
+              ('cases/3/replacement/heldMarker/afterEffect/revision', 3),
+              ('cases/3/replacement/heldMarker/processId', 0)]
+    rejected = []
+    for path, value in edits:
+        bad = copy.deepcopy(proof)
+        set_value(bad, path, value)
+        try:
+            health.verify_runtime_replacement_faults_proof(bad, source, target)
+        except (ValueError, KeyError, TypeError, IndexError):
+            rejected.append(path)
+        else:
+            raise ValueError('Verifier accepted mutated fault proof: '+path)
+    return rejected
+
+
 def audit(proof, source, target):
+    if proof.get('kind') == 'runtime_replacement_faults_native_proof':
+        return audit_faults(proof, source, target)
     health.verify_runtime_replacement_proof(proof, source, target)
     prefix = 'cases/0/replacement/'
     paths = [
