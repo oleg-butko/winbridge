@@ -1,5 +1,17 @@
 # Updater: preparation faults и replacement model проверены — 2026-10-23
 
+## Current WIP: replacement ledger schema15
+
+Добавлен [durable admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)
+и non-Serde fresh permit. Текущий source updater15/worker16, supervisor v16/view8
+без новых wire actions. Package updater216/0,6 ignored; workspace647/0,16 ignored
+и обе all-target Clippy прошли. Native15 ещё не запускался. Дополнены synthetic downgrade
+fixtures; предыдущие gates ниже относятся к14 и не подтверждают15.
+Production callback rename-success/consuming guard/IO ещё отсутствуют. Следом
+завершить checks/review/commit/export, generated Windows ledger11-test gate,
+actual retained14→15/old14 refusal и positive original-custody admission при
+подключении consuming guard. Installed d052 прежний; ручное обновление не требуется.
+
 ## Возобновление2026-10-23: actual preparation faults
 
 Цель вновь active. Добавлены [три actual fault cases и feature-only barrier](plans/worker-self-update/runtime-preparation-faults.md),

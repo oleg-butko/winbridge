@@ -15,6 +15,20 @@ pub struct RuntimeReplacementIntent {
     pub admitted_at_ms: u64,
     pub preparation: RuntimePreparationRecord,
 }
+/// Returned only after fresh durable admission under original OS custody.
+/// A saved intent or an Existing reply cannot recreate this non-Serde value.
+pub struct RuntimeReplacementPermit {
+    pub(crate) intent: RuntimeReplacementIntent,
+}
+impl RuntimeReplacementPermit {
+    pub fn intent(&self) -> &RuntimeReplacementIntent {
+        &self.intent
+    }
+}
+pub enum RuntimeReplacementAdmission {
+    Fresh(Box<RuntimeReplacementPermit>),
+    Existing(Box<RuntimeReplacementRecord>),
+}
 impl RuntimeReplacementIntent {
     pub fn validate(&self) -> Result<()> {
         self.preparation.validate()?;

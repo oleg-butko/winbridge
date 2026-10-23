@@ -4,8 +4,13 @@
 
 ## Текущее состояние updater — завершение проверок 2026-10-23
 
+Продолжение: [replacement admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)
+добавлен в текущий source **schema15**; worker16/supervisor v16/view8 прежние.
+Local workspace647/0 и обе Clippy passed; native15/actual14→15 впереди. Rename
+callback/consuming guard/IO ещё не подключены. Проверенные preparation gates ниже —14.
+
 Текущий блок — [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md):
-текущая updater schema14, worker16. Foundation native10 относится к v15/view7;
+её проверенные gates используют updater14/worker16. Foundation native10 относится к v15/view7;
 [copy driver и supervisor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
 добавлены и прошли [actual Main40/0 gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md).
 [Actual13→14/refusal](plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)

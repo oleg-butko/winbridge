@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-23 WIP: [replacement ledger schema15](plans/worker-self-update/runtime-replacement-ledger.md)
+добавляет immutable current/history и fresh original-guard admission, без rename
+callback/actor. Package216/0, workspace647/0 и обе Clippy passed. Native15 и actual14→15
+ещё впереди. Старые14 gates ниже не переносить на новую schema.
+
 2026-10-23: [три actual preparation faults](plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md)
 пройдены40 tests/10 groups,24 ready files twice,48 negative mutations. Review
 исправил недостающую сверку preimages в Python verifier,7 tests passed. Lightweight

@@ -489,7 +489,7 @@ fn schema_eight_migration_preserves_baseline_without_adopting_preimages() {
     let id = f.supervisor.spec.update_id.clone();
     let dir = f.journal.directory.clone();
     let baseline = UpdateJournal::inspect_runtime_baseline(&dir, &id).unwrap();
-    f.journal.connection.execute_batch("DROP TABLE runtime_preparation_history; DROP TABLE runtime_preparation_records; DROP TABLE runtime_preparation_intents; DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; DROP TABLE shutdown_history; DROP TABLE shutdown_records; DROP TABLE shutdown_intents; DROP TABLE drain_history; DROP TABLE drain_commands; DROP TABLE drain_intents; DROP TABLE candidate_health; DROP TABLE runtime_preimages; DROP TABLE runtime_preimage_intents; PRAGMA user_version=8; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    f.journal.connection.execute_batch("DROP TABLE runtime_replacement_history; DROP TABLE runtime_replacement_records; DROP TABLE runtime_replacement_intents; DROP TABLE runtime_preparation_history; DROP TABLE runtime_preparation_records; DROP TABLE runtime_preparation_intents; DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; DROP TABLE shutdown_history; DROP TABLE shutdown_records; DROP TABLE shutdown_intents; DROP TABLE drain_history; DROP TABLE drain_commands; DROP TABLE drain_intents; DROP TABLE candidate_health; DROP TABLE runtime_preimages; DROP TABLE runtime_preimage_intents; PRAGMA user_version=8; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let old = UpdateJournal::inspect(&dir).unwrap();
     assert!(UpdateJournal::open(&dir, &old.scope_sha256).is_err());
     drop(f.owner);

@@ -173,11 +173,11 @@ fn schema_thirteen_migration_has_consistent_backup_and_preserves_old_rows() {
     drop(j);
     {
         let c = Connection::open(dir.join("updates.sqlite")).unwrap();
-        c.execute_batch("DROP TABLE runtime_preparation_history;DROP TABLE runtime_preparation_records;DROP TABLE runtime_preparation_intents;PRAGMA user_version=13;").unwrap();
+        c.execute_batch("DROP TABLE runtime_replacement_history; DROP TABLE runtime_replacement_records; DROP TABLE runtime_replacement_intents; DROP TABLE runtime_preparation_history;DROP TABLE runtime_preparation_records;DROP TABLE runtime_preparation_intents;PRAGMA user_version=13;").unwrap();
     }
     let mut j = UpdateJournal::open(&dir, &scope).unwrap();
     let after = j.info().unwrap();
-    assert_eq!(after.schema_version, 14);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(j.get(&saved.update_id).unwrap(), saved);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert!(

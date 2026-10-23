@@ -13,10 +13,11 @@ param(
   [switch]$RuntimeFileMovesOnly,
   [switch]$RuntimePreparationOnly,
   [switch]$RuntimeReplacementOnly,
+  [switch]$RuntimeReplacementLedgerOnly,
   [switch]$PreparationMigrationOnly
 )
 $ErrorActionPreference='Stop'
-if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly,$RuntimePreparationOnly,$RuntimeReplacementOnly,$PreparationMigrationOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
+if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly,$RuntimePreparationOnly,$RuntimeReplacementOnly,$RuntimeReplacementLedgerOnly,$PreparationMigrationOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
@@ -30,7 +31,7 @@ Assert-WorkflowCachePath $cache
 if(-not (Test-Path -LiteralPath $cache -PathType Container)){throw 'Existing approved test cache required'}
 $manifest=Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 if($manifest.dirty){throw 'Clean exported source required'}
-$kind=if($RuntimeReplacementOnly){'runtime_replacement_model_native_gate'}elseif($PreparationMigrationOnly){'runtime_preparation_migration_native_gate'}elseif($RuntimePreparationOnly){'runtime_preparation_native_gate'}elseif($RuntimeFileMovesOnly){'runtime_file_moves_native_gate'}elseif($BackupMigrationOnly){'state_backup_migration_native_gate'}elseif($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
+$kind=if($RuntimeReplacementLedgerOnly){'runtime_replacement_ledger_native_gate'}elseif($RuntimeReplacementOnly){'runtime_replacement_model_native_gate'}elseif($PreparationMigrationOnly){'runtime_preparation_migration_native_gate'}elseif($RuntimePreparationOnly){'runtime_preparation_native_gate'}elseif($RuntimeFileMovesOnly){'runtime_file_moves_native_gate'}elseif($BackupMigrationOnly){'state_backup_migration_native_gate'}elseif($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
 $report=[ordered]@{schemaVersion=1;kind=$kind;platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;windowsOpened=$false;commands=@();error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 $variables=@('CARGO_TARGET_DIR','CARGO_INCREMENTAL','TEMP','TMP','WINBRIDGE_SHUTDOWN_REFERENCE_WORKER','WINBRIDGE_UPDATE_REFERENCE_UPDATER','WINBRIDGE_STATE_BACKUP_MIGRATION_INPUT','WINBRIDGE_RUNTIME_PREPARATION_MIGRATION_INPUT')
 $old=@{};foreach($name in $variables){$old[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
@@ -58,6 +59,8 @@ try {
     $inputPath=Join-Path (Split-Path $source -Parent) 'preparation-migration-input.json'
     Write-NewJson $inputPath @{root=$migrationRoot;reference=$refs}
     $env:WINBRIDGE_RUNTIME_PREPARATION_MIGRATION_INPUT=$inputPath
+  } elseif($RuntimeReplacementLedgerOnly){
+    if($refs.kind -cne 'runtime_replacement_ledger_validation'){throw 'Fixed replacement ledger fixture declaration required'}
   } elseif($RuntimeReplacementOnly){
     if($refs.kind -cne 'runtime_replacement_validation'){throw 'Fixed replacement model fixture declaration required'}
   } elseif($RuntimePreparationOnly){
@@ -128,7 +131,13 @@ try {
   if($RuntimeReplacementOnly){
     $groups=@(
       @{name='runtime-file-exchange-data';minimum=6;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_exchange','--locked','--offline')},
-      @{name='runtime-replacement-transaction-data';minimum=6;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_replacement','--locked','--offline')}
+      @{name='runtime-replacement-transaction-data';minimum=6;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_replacement','--locked','--offline','--','--skip','journal::runtime_replacement')}
+    )
+  }
+  if($RuntimeReplacementLedgerOnly){
+    $groups=@(
+      @{name='runtime-replacement-transaction-data';minimum=6;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_replacement','--locked','--offline','--','--skip','journal::runtime_replacement')},
+      @{name='runtime-replacement-ledger';minimum=5;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','journal::runtime_replacement','--locked','--offline')}
     )
   }
   if($PreparationMigrationOnly){

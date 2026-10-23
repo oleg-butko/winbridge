@@ -280,7 +280,7 @@ fn persist(
     }
     Ok(())
 }
-fn current(
+pub(super) fn current(
     c: &Connection,
     a: &UpdateAuthority,
     s: &SupervisorRecord,
@@ -304,7 +304,7 @@ fn current(
     }
     Ok(())
 }
-fn physical(
+pub(super) fn physical(
     c: &Connection,
     p: &RuntimePreparationPlan,
     guard: &crate::shutdown::ShutdownExitGuard,

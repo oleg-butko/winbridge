@@ -7,6 +7,11 @@
 
 ## Текущий статус 2026-10-23
 
+[Replacement ledger](runtime-replacement-ledger.md) добавлен в source schema15:
+immutable history/fresh admission, local workspace647/0 и обе Clippy passed.
+Native15 и actual14→15/refusal ещё впереди; successful rename callbacks не открыты.
+Следом consuming original custody/guard и IO/actor. Native results ниже относятся к14.
+
 После передачи контекста цель возобновлена. [Actual preparation fault gate](runtime-preparation-faults.md)
 реализован в fixture/runner с feature-only barrier;
 [40-test/3-case gate](windows-runtime-preparation-faults-gate-2026-10-23.md) пройден.

@@ -245,7 +245,7 @@ fn schema_ten_migration_preserves_root_history_backs_up_and_invents_no_drain_aut
     let old = j.accept(&a, &r, &r.expected).unwrap();
     let epoch = a.epoch();
     drop(a);
-    j.connection.execute_batch("DROP TABLE runtime_preparation_history; DROP TABLE runtime_preparation_records; DROP TABLE runtime_preparation_intents; DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; DROP TABLE shutdown_history; DROP TABLE shutdown_records; DROP TABLE shutdown_intents; DROP TABLE drain_history;DROP TABLE drain_commands;DROP TABLE drain_intents;PRAGMA user_version=10;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    j.connection.execute_batch("DROP TABLE runtime_replacement_history; DROP TABLE runtime_replacement_records; DROP TABLE runtime_replacement_intents; DROP TABLE runtime_preparation_history; DROP TABLE runtime_preparation_records; DROP TABLE runtime_preparation_intents; DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; DROP TABLE shutdown_history; DROP TABLE shutdown_records; DROP TABLE shutdown_intents; DROP TABLE drain_history;DROP TABLE drain_commands;DROP TABLE drain_intents;PRAGMA user_version=10;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     // Preserve a typed schema10 snapshot as data. The deliberately incomplete
     // artifact provenance below MUST NOT be mistaken for executable authority.
     let mut historic = crate::health::tests::verified();

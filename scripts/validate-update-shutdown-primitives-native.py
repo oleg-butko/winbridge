@@ -78,16 +78,23 @@ def main():
     modes.add_argument('--runtime-file-moves-only', action='store_true')
     modes.add_argument('--runtime-preparation-only', action='store_true')
     modes.add_argument('--runtime-replacement-only', action='store_true')
+    modes.add_argument('--runtime-replacement-ledger-only', action='store_true')
     modes.add_argument('--preparation-migration-only', action='store_true')
     parser.add_argument('--reference-receipt', type=Path)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
-    generated_fixtures = args.runtime_file_moves_only or args.runtime_preparation_only or args.runtime_replacement_only
+    generated_fixtures = args.runtime_file_moves_only or args.runtime_preparation_only or args.runtime_replacement_only or args.runtime_replacement_ledger_only
     groups = {'runtime-file-exchange-data': 6, 'runtime-replacement-transaction-data': 6} if args.runtime_replacement_only else {'preparation-schema13-history-migration': 1} if args.preparation_migration_only else {'runtime-preparation-data-ledger': 10} if args.runtime_preparation_only else {'runtime-owned-file-moves': 3, 'runtime-file-exchange-data': 6} if args.runtime_file_moves_only else {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
     kind = 'runtime_replacement_model_native_gate' if args.runtime_replacement_only else 'runtime_preparation_migration_native_gate' if args.preparation_migration_only else 'runtime_preparation_native_gate' if args.runtime_preparation_only else 'runtime_file_moves_native_gate' if args.runtime_file_moves_only else 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
     mode_switch = ' -RuntimeReplacementOnly' if args.runtime_replacement_only else ' -PreparationMigrationOnly' if args.preparation_migration_only else ' -RuntimePreparationOnly' if args.runtime_preparation_only else ' -RuntimeFileMovesOnly' if args.runtime_file_moves_only else ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
+    if args.runtime_replacement_ledger_only:
+        groups = {'runtime-replacement-transaction-data': 6, 'runtime-replacement-ledger': 5}
+        kind, mode_switch = 'runtime_replacement_ledger_native_gate', ' -RuntimeReplacementLedgerOnly'
     pin = health.archive_pin(args.archive)
     with zipfile.ZipFile(args.archive) as source:
+        if args.runtime_replacement_ledger_only and (native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 15
+                or native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16):
+            raise ValueError('Replacement ledger gate requires updater15/worker16 source')
         if args.runtime_preparation_only and (native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16
                 or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 14):
             raise ValueError('Preparation gate requires reviewed worker16/updater14 source')
@@ -101,7 +108,7 @@ def main():
     if generated_fixtures:
         if args.reference_receipt:
             parser.error('File/preparation gates use generated fixtures, no old binary reference')
-        reference = {'kind': 'runtime_replacement_validation' if args.runtime_replacement_only else 'runtime_preparation_validation' if args.runtime_preparation_only else 'runtime_file_move_validation', 'runtimeApplied': False, 'windowsOpened': False}
+        reference = {'kind': 'runtime_replacement_ledger_validation' if args.runtime_replacement_ledger_only else 'runtime_replacement_validation' if args.runtime_replacement_only else 'runtime_preparation_validation' if args.runtime_preparation_only else 'runtime_file_move_validation', 'runtimeApplied': False, 'windowsOpened': False}
     else:
         if not args.reference_receipt:
             parser.error('--reference-receipt is required for shutdown/migration gates')
