@@ -3,8 +3,8 @@
 2026-10-22. План следующего блока после [U2.1](final-state-backup.md).
 Это проектирование; file replacement, activation и public install не реализованы.
 U2.1 final backup fault gate завершён успешно; file/FSM primitives также прошли
-native gate. [Handoff 2026-10-22](resume-2026-10-22.md) отделяет эти результаты от
-ещё не реализованных binding/ledger/custody handoff/driver/activation.
+native gate. [Handoff 2026-10-22](resume-2026-10-22.md) сохраняет эту контрольную точку;
+новая preparation library ниже не означает готовность custody handoff/driver/activation.
 В продолжении начата [preparation library schema14](runtime-preparation.md):
 binding/ledger/model добавлены; IO/actor/full native admission пока впереди.
 

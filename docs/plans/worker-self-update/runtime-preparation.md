@@ -114,8 +114,9 @@ python3 scripts/validate-update-shutdown-primitives-native.py \
   --cache-run 20261017-061527-f4639971 --runtime-preparation-only
 ```
 
-Результат этого native mode фиксируется отдельно после terminal task/ready hashes;
-шаблон выше не является заявлением о пройденном прогоне.
+[Native gate пройден](windows-runtime-preparation-gate-2026-10-22.md): clean cee06a7,
+10 tests/1 group, terminal succeeded/0, 5 ready files проверены дважды. Это model/
+ledger coverage, не whole-graph actual admission и не copy/rename/activation gate.
 
 ## Следующая вертикаль
 

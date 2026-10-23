@@ -4,12 +4,18 @@
 добавлены: updater schema14/worker16, supervisor пока v15/view7. Есть fixed five-file
 plan, separate directory/file intent/receipt, immutable causal history и fresh
 non-Serde preparation permit под original shutdown custody. 10 targeted local
-tests и весь updater package (199/0, 6 ignored), Linux/Windows all-target Clippy прошли. Native preparation
-mode подготовлен, ещё не пройден. Full actual admission/copy driver/новый actor,
+tests и весь updater package (199/0, 6 ignored), Linux/Windows all-target Clippy прошли.
+[Native preparation gate](plans/worker-self-update/windows-runtime-preparation-gate-2026-10-22.md)
+прошёл10/0, task1ecc73f3-4170-49c5-97fa-7f7e29b4fee1/run20261023-005847-b276db76,
+5 ready files twice, producer cee06a7. Native/Cargo сейчас не выполняются.
+Full actual admission/copy driver/новый actor,
 custody handoff/rename/activation/public install не реализованы.
 Old schema13 native gates ниже остаются историей. Следующий полный actor gate
 требует matching schema14 old-role/candidate archives; helper13 не читает future DB.
-Working installed d052 не менялся, Windows tasks этого блока пока не запускались.
+Working installed d052 не менялся, connected/active0/no errors. Desktop можно
+открывать/закрывать, worker оставить работать. Далее consuming create-only
+preparation driver и новый actor, actual full graph/fault gate и actual13→14/refusal.
+Затем consuming replacement custody/rename/activation/U3/U4. Цель остаётся active.
 
 ## Передача контекста до возобновления U2.2 — 2026-10-22
 

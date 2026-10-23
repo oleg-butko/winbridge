@@ -8,13 +8,15 @@
 ## Текущий статус 2026-10-22
 
 Возобновлена реализация [U2.2 preparation library](runtime-preparation.md): updater14,
-data FSM/immutable ledger и original-custody admission. Пока без copy driver/нового
-actor/native gate. Старые U2.1 gates ниже относятся к schema13.
+data FSM/immutable ledger и original-custody admission. [Native model/ledger10/0](windows-runtime-preparation-gate-2026-10-22.md)
+пройден, пока без copy driver/нового actor/full actual admission gate.
+Старые U2.1 gates ниже относятся к schema13.
 
 U0/internal U1 и [U2.1 final backup](windows-state-backup-faults-gate-2026-10-22.md)
 завершены. Native SDK/model gate9/0 и pure manifest plan подготовлены для U2.2;
 actual replacement/activation/public update ещё отсутствуют. Цель active.
-Следующий шаг — binding/ledger подготовки файлов и consuming original custody.
+Binding/ledger подготовки добавлены в library14; следующий шаг — create-only copy
+driver и новый actor/full gate, затем consuming original custody и rename driver.
 Проверки завершены по просьбе пользователя; [подробный handoff 2026-10-22](resume-2026-10-22.md)
 содержит результаты, точные pins, карту кода и инструкцию продолжения без контекста.
 
