@@ -1,11 +1,14 @@
 # Updater: actual preparation v16 проверен — 2026-10-22
 
 Цель active. **Нет текущих native/Cargo проверок.**
-Продолжение: добавлен [actual13→14 migration/refusal scenario](plans/worker-self-update/preparation-schema-migration.md),
-Windows all-target Clippy пройден; новый native test ещё не запущен. Reference — actual
-Verified backup13 из20261021-155003-a33e1e12 (12 ready files повторно сверены),
-local pin `preparation-schema13-reference-pin.json`. Сценарий только consistent
-clone; исходный reference/installed runtime не меняются.
+Продолжение2026-10-23: [actual13→14 migration/refusal gate](plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
+пройден1 native test,6 ready files twice,19 proof mutations rejected. Task
+4c252e55-f681-4f8f-87d2-05a18e410d28/run20261023-020641-5eca976a succeeded/0,
+producer6286ad9. Реальный Verified-backup13 graph сохранён, epoch2→3, fresh permit
+не выдан; actual old13 init/status отказывают14 без изменений DB/WAL. Original
+reference и installed runtime не менялись. Local pins/proof:
+`preparation-schema13-reference-pin.json`, `preparation-migration-native-verified.json`
+в .winbridge/update-preparation. Следом actual preparation fault matrix.
 [Actual Main preparation gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md):
 40 native tests / 10 groups, task `d9805159-8804-486a-8aae-95ddb6e12e79`,
 run `20261023-012740-9feb95b9`, succeeded/exit0. 16 ready files сверены дважды,
@@ -33,8 +36,8 @@ generated TS/contracts/typecheck/UI build, Python regressions и Windows all-tar
 validation-fixture Clippy прошли. Production disk threshold не ослаблялся: Debian
 filesystem tests перенесены из малого /tmp tmpfs в ignored main target temp directory.
 
-**Следом:** review → actual preparation IO fault matrix + actual old13 refusal
-новой14 БД → consuming original custody/rename ledger/driver → activation → U3/U4.
+**Следом:** review → actual preparation IO fault matrix → consuming original
+custody/rename ledger/driver → activation → U3/U4. Actual13 refusal закрыт выше.
 Candidate cee06a7 — limited same-schema copy fixture, не production install target:
 совпадение worker schema не доказывает весь updater feature set. До public cutover
 добавить versioned candidate-updater compatibility check **до drain**.

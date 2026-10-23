@@ -1,8 +1,9 @@
 # Updater13 →14: реальная история и отказ прежнего executable
 
 2026-10-22. Этот gate отделён от [happy preparation v16](windows-runtime-preparation-main-gate-2026-10-22.md)
-и от synthetic schema13 fixture. Новый сценарий добавлен, native результат ещё
-не получен. Production updater schema14/worker16/supervisor v16/view8 не меняются.
+и от synthetic schema13 fixture. [Native gate пройден](windows-preparation-migration-gate-2026-10-23.md):
+1 integration test,6 ready files twice,19 отрицательных proof mutations.
+Production updater schema14/worker16/supervisor v16/view8 не меняются.
 
 ## Источник и границы
 
