@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-23: реализация возобновлена. [Native updater support gate](plans/worker-self-update/updater-runtime-support.md)
+подготовлен: обе build flavors и marker-negative на actual retained updater.
+Local/cross checks прошли; native исполнение pending. После него — новый durable
+compatibility/approval contract до drain, затем activation и U3/U4. Public install
+выключен; завершённые replacement tasks ниже не повторять.
+
 2026-10-23: проверки завершены по просьбе пользователя. [Четыре replacement faults](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
 прошли60 native tests/12 groups,32 ready files twice/68 negative mutations.
 Positive gate тоже повторно сверён; оба task terminal succeeded/0, активных

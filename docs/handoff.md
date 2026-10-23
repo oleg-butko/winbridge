@@ -1,4 +1,14 @@
-# Текущая точка: updater checks закрыты — 2026-10-23
+# Работа возобновлена: готовится native updater support gate — 2026-10-23
+
+После checkpoint11e506a добавлен [короткий discovery gate](plans/worker-self-update/updater-runtime-support.md):
+standard/validation actual query и actual retained5fbc marker-negative без его
+запуска. Windows all-target Clippy/local CLI3/Python4 прошли; native ещё не run.
+Следом clean commit/export → headless native gate → review/proof audit → durable
+candidate compatibility до drain. Installed worker d052 healthy/active0, прежний;
+desktop не нужен. Цель active, public install off. Предыдущая закрытая точка ниже
+сохраняет проверенные replacement results, её paused формулировки исторические.
+
+## Предыдущая точка: updater checks закрыты
 
 Начать с [подробного handoff для новой сессии](plans/worker-self-update/resume-2026-10-23-replacement.md).
 В нём проверенные source/target/report hashes, код и инварианты, readonly команды,

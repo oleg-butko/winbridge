@@ -51,6 +51,43 @@ support gate ещё не было**, durable approval/drain enforcement не п�
 
 ## Что делать дальше
 
+### Подготовлен короткий native gate
+
+Реализация возобновлена после checkpoint11e506a. Добавлен отдельный approved
+сценарий без повторения полного build/drain/replacement pipeline:
+
+- `scripts/test-update-support.ps1` собирает standard и validation updater в
+  общем cache под одной lease, копирует их в разные новые каталоги и проверяет
+  обе CLI версии с намеренно испорченным config. Рабочий runtime не затрагивает.
+- `apps/update/tests/updater_support_native.rs` запускает trusted inspector на
+  обеих реальных сборках, проверяет source/image/process binding и отсутствие
+  побочных файлов. Actual retained updater5fbc из positive replacement gate
+  должен дать Unsupported по отсутствию marker **без запуска старого exe**.
+- `scripts/validate-update-support-native.py` проверяет full prior proof/pins и
+  terminal reference task до нового submit; готовый отчёт сверяет дважды, затем
+  проверяет actual proof и negative mutations. `--verify-run` наблюдает ту же
+  задачу после timeout/разрыва, не создаёт новую. Временный state/config не
+  заимствуется из рабочего worker, берётся лишь readonly executable reference.
+
+Windows all-target Clippy прошёл; local CLI3/0 и Python report/process admission4/0
+прошли. **Новый native gate пока не запускался.** Он проверяет только discovery;
+durable approval/drain enforcement и activation не реализованы этим сценарием.
+Команда после clean source export:
+
+```bash
+python3 scripts/validate-update-support-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/NEW_CLEAN_SOURCE.zip \
+  --reference-pin .winbridge/update-preparation/replacement-main-native-verified.json \
+  --cache-run 20261017-061527-f4639971
+```
+
+Перед submit сообщить: установленный worker нужен, desktop не нужен, окон не
+будет. Измерения диска сохраняются до сборки, минимум6 GiB. Retained runtime5fbc
+не удалять и не обновлять. После результата сверить proof/ready files и только
+потом интегрировать support в новый durable контракт до production drain.
+
+### Durable integration
+
 Перед production drain сохранить проверенный support в immutable evidence,
 связанной с candidate ImageEvidence/descriptor/source/health и owner scope. Проверять
 совместимость всех требуемых contracts, не просто matching SQLite schema. Validation
