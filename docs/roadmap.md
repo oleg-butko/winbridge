@@ -1,10 +1,12 @@
 # Постепенная реализация и расширение
 
-2026-10-23: реализация возобновлена. [Native updater support gate](plans/worker-self-update/updater-runtime-support.md)
-подготовлен: обе build flavors и marker-negative на actual retained updater.
-Local/cross checks прошли; native исполнение pending. После него — новый durable
-compatibility/approval contract до drain, затем activation и U3/U4. Public install
-выключен; завершённые replacement tasks ниже не повторять.
+2026-10-23: [updater support native8/0 gate](plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
+пройден,9 ready files twice/36 mutations. [Pure typed compatibility policy](plans/worker-self-update/updater-compatibility.md)
+добавлена: default107/schema108 core/protocol tests, обе Clippy/TS passed.
+Это foundation, не durable gate. Следом versioned intent/journal-bound probe/
+pre-drain admission (schema16 при необходимости, actual15→16/refusal), затем
+activation и U3/U4. Installed d052 unchanged, public install off, цель active.
+Исторические checkpoints и terminal задачи ниже не повторять.
 
 2026-10-23: проверки завершены по просьбе пользователя. [Четыре replacement faults](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
 прошли60 native tests/12 groups,32 ready files twice/68 negative mutations.

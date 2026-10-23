@@ -130,8 +130,9 @@ status и release только после source/Job/output proof. Добавл�
 [replacement driver/actor v17/view9](docs/plans/worker-self-update/runtime-replacement-actor.md).
 [Actual Main15 replacement60/0 gate](docs/plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
 и [четыре actual replacement faults60/0](docs/plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
-пройдены. Проверки завершены, активных прогонов нет. Следом native updater support/
-durable compatibility до drain, activation и U3/U4. Public install выключен.
+пройдены. [Readonly updater support8/0 gate](docs/plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
+также пройден; typed compatibility policy добавлена как pure foundation.
+Следом durable compatibility до drain, activation и U3/U4. Public install выключен.
 Прежние U2.1 native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

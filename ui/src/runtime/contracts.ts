@@ -102,6 +102,14 @@ export type RuntimeReplacementMove = "retire" | "place";
 export type RuntimeReplacementView = { phase: RuntimeReplacementPhase, attemptId: string | null, revision: number | null, directory: string | null, retiredFiles: number, installedFiles: number, totalFiles: number, issuedFile: string | null, issuedMove: RuntimeReplacementMove | null, physicalCustodyHeld: boolean, reason: string | null, };
 export type UpdaterBuildFlavor = "standard" | "validation";
 export type UpdaterRuntimeSupport = { schemaVersion: number, kind: string, queryContract: number, descriptor: ArtifactDescriptor, process: SupervisorProcess, updaterJournalSchema: number, buildFlavor: UpdaterBuildFlavor, finalStateBackupContract: number | null, runtimePreparationContract: number | null, runtimeReplacementContract: number | null, activationContract: number | null, controllerConfirmationContract: number | null, desktopUpdateContract: number | null, };
+export type UpdaterExecutionContract = "final_state_backup" | "runtime_preparation" | "runtime_replacement" | "activation" | "controller_confirmation" | "desktop_update";
+export type UpdaterCompatibilityPolicy = "same_schema_install_v1";
+export type UpdaterCompatibilityBlocker = { "kind": "unsupported_query", } | { "kind": "invalid_descriptor", } | { "kind": "uncommitted_build", } | { "kind": "validation_build", } | { "kind": "journal_schema_mismatch", expected: number, actual: number, } | { "kind": "missing_contract", contract: UpdaterExecutionContract, } | { "kind": "contract_version_mismatch", contract: UpdaterExecutionContract, expected: number, actual: number, } | { "kind": "driver_not_implemented", contract: UpdaterExecutionContract, };
+export type UpdaterCompatibilityAssessment = { schemaVersion: number,
+/**
+ * Frozen meaning: full same-schema set, including desktop coordination.
+ */
+policy: UpdaterCompatibilityPolicy, expectedUpdaterJournalSchema: number, blockers: Array<UpdaterCompatibilityBlocker>, };
 export type RuntimeBaselineView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, } | { "phase": "verified", intentRevision: number, receiptRevision: number, observedAtMs: number, setId: string, workerProcess: SupervisorProcess, workerImageSha256: string, };
 export type RuntimePreimagesView = { "phase": "not_admitted" } | { "phase": "pending", intentRevision: number, admittedAtMs: number, directory: string, } | { "phase": "verified", intentRevision: number, receiptRevision: number, completedAtMs: number, directory: string, fileCount: number, totalBytes: number, };
 export type CandidateHealthPhase = "not_admitted" | "pending" | "verified" | "rejected" | "cancelled" | "indeterminate";

@@ -1,5 +1,11 @@
 # Updater: продолжение после runtime replacement, 2026-10-23
 
+После этой контрольной точки работа возобновлена: [query native8/0 gate](windows-updater-support-gate-2026-10-23.md)
+пройден, [typed compatibility policy](updater-compatibility.md) добавлена.
+Актуальный следующий блок — durable support admission до drain; native discovery
+заново не запускать. Текущий статус — в [общем handoff](../../handoff.md).
+Ниже сохранено подробное состояние закрытия replacement, не новая pause-команда.
+
 Это актуальная точка входа для новой сессии без истории чата. Она заменяет
 очерёдность из [предыдущего handoff этого дня](resume-2026-10-23.md), где ещё
 предстояли preparation faults и replacement driver. Старый документ сохраняет

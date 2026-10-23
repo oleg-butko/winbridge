@@ -1,12 +1,41 @@
-# Работа возобновлена: готовится native updater support gate — 2026-10-23
+# Текущая точка: support native gate и compatibility policy — 2026-10-23
 
-После checkpoint11e506a добавлен [короткий discovery gate](plans/worker-self-update/updater-runtime-support.md):
-standard/validation actual query и actual retained5fbc marker-negative без его
-запуска. Windows all-target Clippy/local CLI3/Python4 прошли; native ещё не run.
-Следом clean commit/export → headless native gate → review/proof audit → durable
-candidate compatibility до drain. Installed worker d052 healthy/active0, прежний;
-desktop не нужен. Цель active, public install off. Предыдущая закрытая точка ниже
-сохраняет проверенные replacement results, её paused формулировки исторические.
+[Readonly updater support gate](plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
+пройден: task `d97ea580-8adb-43ff-bf71-224d0d9b222c`, run20261023-190500-afa1564e,
+producer f1e2f10, terminal succeeded/0.8 native tests/4 groups,9 ready files twice,
+36 mutations rejected. Standard/validation actual queries и actual old5fbc
+Unsupported без запуска. Не resubmit. Local pins:
+`.winbridge/workflow-validation/20261023-190500-afa1564e/support-verified.json`.
+`--verify-run` успешно перепроверяет ту же terminal task без submit.
+
+Следующий блок начат: [typed compatibility policy](plans/worker-self-update/updater-compatibility.md)
+в protocol/core и generated TS. Это **pure data foundation**, не journal-bound
+approval/drain gate. Matching schema не отменяет missing contracts, validation
+build запрещён, выдуманные future contracts не включают отсутствующие drivers.
+Review исправил SHA-1-only policy на manifest40/64; в старом projection test
+исправлен вызов optional schema API без feature, projection coverage сохранён.
+
+Checks: core/protocol default107/0, jsonschema108/0; frozen fenced RPC hash прежний,
+Linux/Windows all-target Clippy, generated contracts check, TS typecheck и Python7
+прошли. Native8 относится к immutable f1e2f10, **не проверяет новую policy**.
+Observer review исправил pre-ACK gap: pending/request атомарно сохраняются до
+submit; readonly history/get восстанавливает тот же task без resend. Проверено
+на actual d97ea580 и unit cases missing/conflict/bounds. Нового Windows run нет.
+Journal15/worker16/supervisor17/view9 не менялись. Public install off.
+
+**Продолжать:** versioned durable support intent/record и journal-bound probe
+observer до production drain; source/artifact/health/config/owner/root binding,
+immutable assessment, fresh one-use admission, duplicate-first/cold no replay.
+Не сохранять unjournaled inspector JSON как approval. При schema16 нужны actual
+retained15→16/refusal и обновление synthetic fixtures. Новый action/view сохраняет
+frozen health/actions. Затем activation/local health/controller confirmation,
+remaining U2 faults, U3/U4. Подробные критерии — в compatibility документе выше.
+
+Цель active; installed d052 unchanged/healthy/active0, generation8f8d1fb9 прежняя.
+Controller3922 на192.168.44.203:1143 оставлен; desktop не нужен, окон не было.
+Worker оставить, desktop можно закрыть. Активных Windows/Cargo runs нет.
+Предыдущие checkpoints/paused/ACTIVE/NEXT ниже — история. Ручное обновление
+установленного worker пока не требуется.
 
 ## Предыдущая точка: updater checks закрыты
 

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('support', Path(__file__).with_name('validate-update-support-native.py'))
 support = importlib.util.module_from_spec(spec)
@@ -64,6 +65,52 @@ class ProcessChecks(unittest.TestCase):
     def test_local_extended_path_matches_only_same_windows_path(self):
         self.assertEqual(support.windows_path(r'\\?\K:\fixture\image.exe'), support.windows_path(r'K:\fixture\image.exe'))
         self.assertNotEqual(support.windows_path(r'\\host\fixture\image.exe'), support.windows_path(r'K:\fixture\image.exe'))
+
+
+class LostAckChecks(unittest.TestCase):
+    def test_recovery_finds_exact_accepted_request_without_submit(self):
+        request = dict(projectId='snapshot-fixture', idempotencyKey='saved-key', command={'executable': 'pwsh.exe'})
+        task = dict(taskId='existing', submission=request)
+        def call(endpoint, q):
+            if q['method'] == 'history':
+                return {'page': dict(records=[dict(operationId='existing')], hasMore=False, nextCursor=None)}
+            self.assertEqual(q, dict(method='get_task', taskId='existing'))
+            return {'task': task}
+        with patch.object(support.native, 'call', call):
+            self.assertEqual(support.recover_task('unused', request), task)
+
+    def test_different_payload_or_missing_task_never_falls_back_to_submit(self):
+        request = dict(projectId='snapshot-fixture', idempotencyKey='saved-key')
+        for exists in (False, True):
+            def call(endpoint, q):
+                if q['method'] == 'history':
+                    return {'page': dict(records=[dict(operationId='different')] if exists else [], hasMore=False, nextCursor=None)}
+                self.assertEqual(q['method'], 'get_task')
+                return {'task': dict(submission=dict(request, command='changed'))}
+            with patch.object(support.native, 'call', call), self.assertRaises(ValueError):
+                support.recover_task('unused', request)
+
+    def test_recovery_is_bounded_and_atomic_pending_metadata_survives_missing_ack(self):
+        request = dict(projectId='snapshot-fixture', idempotencyKey='saved-key')
+        calls = []
+        def call(endpoint, q):
+            self.assertEqual(q['method'], 'history')
+            calls.append(q)
+            return {'page': dict(records=[], hasMore=True, nextCursor=dict(createdAtMs=len(calls), operationId=str(len(calls))))}
+        with patch.object(support.native, 'call', call), self.assertRaises(ValueError):
+            support.recover_task('unused', request, max_pages=2)
+        self.assertEqual(len(calls), 2)
+        with patch.object(support.time, 'monotonic', side_effect=[0, 31]), patch.object(support.native, 'call') as network:
+            with self.assertRaises(ValueError):
+                support.recover_task('unused', request)
+            network.assert_not_called()
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d)/'pending.json'
+            support.save_meta(path, dict(taskId=None, request=request))
+            self.assertIsNone(json.loads(path.read_text())['taskId'])
+            support.save_meta(path, dict(taskId='accepted', request=request))
+            self.assertEqual(json.loads(path.read_text())['taskId'], 'accepted')
+            self.assertEqual(list(path.parent.iterdir()), [path])
 
 
 if __name__ == '__main__':

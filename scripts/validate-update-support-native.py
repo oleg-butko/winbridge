@@ -6,6 +6,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import re
 import shutil
@@ -76,6 +77,51 @@ def reference_from_pin(pin, reports):
 
 def windows_path(path):
     return PureWindowsPath(path.removeprefix('\\\\?\\'))
+
+
+def save_meta(path, value):
+    """Atomic local observer state; save the pending ID before any network submit."""
+    temporary = path.with_name(path.name+'.'+uuid.uuid4().hex+'.new')
+    with temporary.open('x') as stream:
+        json.dump(value, stream, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    if os.name == 'posix':
+        descriptor = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def recover_task(endpoint, request, max_pages=20):
+    """Lost ACK recovery is readonly. Missing/incomplete history never resends."""
+    cursor = None
+    seen = set()
+    deadline = time.monotonic()+30
+    for _ in range(max_pages):
+        need(time.monotonic() < deadline, 'Readonly ACK recovery time limit; no request resent')
+        page = native.call(endpoint, {'method': 'history', 'query': dict(
+            projectId=request['projectId'], kind='task', status=None, search='', before=cursor)})['page']
+        need(len(page['records']) <= 50, 'Oversized recovery page; no request resent')
+        for entry in page['records']:
+            need(time.monotonic() < deadline and len(seen) < 200,
+                 'Readonly ACK recovery bound reached; no request resent')
+            task_id = entry['operationId']
+            need(task_id not in seen, 'History repeated a task while recovering ACK')
+            seen.add(task_id)
+            task = native.call(endpoint, {'method': 'get_task', 'taskId': task_id})['task']
+            submission = task['submission']
+            if submission.get('idempotencyKey') == request['idempotencyKey']:
+                need(submission == request, 'Saved key has a different payload; never resubmit')
+                return task
+        if page['hasMore'] is False:
+            break
+        next_cursor = page['nextCursor']
+        need(next_cursor is not None and next_cursor != cursor, 'Incomplete recovery history cursor')
+        cursor = next_cursor
+    raise ValueError('Accepted task not found in bounded readonly history; outcome unknown, no request resent')
 
 
 def stamp(process):
@@ -228,6 +274,15 @@ def main():
     if args.verify_run:
         meta = json.loads((local/'support-run.json').read_text())
         need(meta['source'] == source and meta['reference'] == reference, 'Saved source/reference differs')
+        if meta.get('taskId') is None:
+            raw = (local/'request.json').read_bytes()
+            need(hashlib.sha256(raw).hexdigest() == meta['requestSha256'], 'Saved request changed after lost ACK')
+            request = json.loads(raw)
+            need(request['projectId'] == 'snapshot-fixture' and request['idempotencyKey'] == 'native-support-'+run,
+                 'Saved request differs from pending run')
+            task = recover_task(endpoint, request)
+            meta['taskId'] = task['taskId']
+            save_meta(local/'support-run.json', meta)
     else:
         local.mkdir(parents=True); report.mkdir()
         raw = json.dumps(reference, indent=2).encode()
@@ -257,11 +312,18 @@ exit $LASTEXITCODE
                        idempotencyKey='native-support-'+run, timeoutMs=900000,
                        command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.',
                                     arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()]))
-        (local/'request.json').write_text(json.dumps(request))
+        raw = json.dumps(request).encode()
+        with (local/'request.json').open('xb') as stream:
+            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+        meta = dict(taskId=None, run=run, source=source, reference=reference,
+                    referenceSha256=reference_sha, debianFreeBytesBefore=free, cacheRun=args.cache_run,
+                    requestSha256=hashlib.sha256(raw).hexdigest())
+        save_meta(local/'support-run.json', meta)
+        print(json.dumps(dict(taskId=None, run=run, reportDirectory=str(report),
+                              recovery='--verify-run '+run)), flush=True)
         task = native.call(endpoint, {'method': 'submit', 'request': request})['task']
-        meta = dict(taskId=task['taskId'], run=run, source=source, reference=reference,
-                    referenceSha256=reference_sha, debianFreeBytesBefore=free, cacheRun=args.cache_run)
-        (local/'support-run.json').write_text(json.dumps(meta, indent=2))
+        meta['taskId'] = task['taskId']
+        save_meta(local/'support-run.json', meta)
         print(json.dumps(dict(taskId=task['taskId'], run=run, reportDirectory=str(report))), flush=True)
     deadline = time.monotonic()+950
     while True:

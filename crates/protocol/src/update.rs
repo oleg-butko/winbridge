@@ -1056,3 +1056,5 @@ mod runtime_replacement;
 pub use runtime_replacement::*;
 mod updater_support;
 pub use updater_support::*;
+mod updater_compatibility;
+pub use updater_compatibility::*;

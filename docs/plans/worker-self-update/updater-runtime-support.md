@@ -1,6 +1,7 @@
 # Readonly runtime support candidate updater
 
-2026-10-23. Реализована query foundation перед будущим production drain. Она не
+2026-10-23. Реализована и [проверена на Windows](windows-updater-support-gate-2026-10-23.md)
+query foundation перед будущим production drain. Она не
 меняет updater15/worker16 journal и supervisor17/view9, не открывает config/store
 и не выдаёт permission на install. Public update по-прежнему выключен.
 **Durable health/approval integration ещё не подключена.** Матрица replacement
@@ -46,12 +47,13 @@ exact ImageEvidence + ArtifactDescriptor из frozen trusted candidate set:
 Local updater package **225 passed /0 failed /6 ignored**; сюда входят3 integration
 tests и binding unit test. Linux/Windows all-target Clippy с update-validation
 прошли; Rust fmt и generated TypeScript совпадают. Native fault task63232320
-использует immutable e567827 и не подтверждает query. **Нового native Windows
-support gate ещё не было**, durable approval/drain enforcement не подключены.
+использует immutable e567827 и не подтверждает query. Отдельный query gate
+прошёл **8/0**,9 ready files twice/36 negative mutations; durable approval/drain
+enforcement ещё не подключены.
 
 ## Что делать дальше
 
-### Подготовлен короткий native gate
+### Короткий native gate завершён
 
 Реализация возобновлена после checkpoint11e506a. Добавлен отдельный approved
 сценарий без повторения полного build/drain/replacement pipeline:
@@ -66,12 +68,18 @@ support gate ещё не было**, durable approval/drain enforcement не п�
 - `scripts/validate-update-support-native.py` проверяет full prior proof/pins и
   terminal reference task до нового submit; готовый отчёт сверяет дважды, затем
   проверяет actual proof и negative mutations. `--verify-run` наблюдает ту же
-  задачу после timeout/разрыва, не создаёт новую. Временный state/config не
+  задачу после timeout/разрыва, не создаёт новую. Pending run/request сохраняются
+  атомарно до submit; lost ACK без Task ID восстанавливается readonly history/get,
+  с полным сравнением frozen payload, лимитами страниц/времени и без resend.
+  Временный state/config не
   заимствуется из рабочего worker, берётся лишь readonly executable reference.
 
-Windows all-target Clippy прошёл; local CLI3/0 и Python report/process admission4/0
-прошли. **Новый native gate пока не запускался.** Он проверяет только discovery;
+Windows all-target Clippy прошёл; local CLI3/0 и Python admission/recovery7/0
+прошли. [Native8/0 gate](windows-updater-support-gate-2026-10-23.md) также пройден,
+task d97ea580/run20261023-190500-afa1564e terminal succeeded/0. Он проверяет discovery;
 durable approval/drain enforcement и activation не реализованы этим сценарием.
+После native gate review исправлен pre-ACK gap в Debian observer; readonly lookup
+проверен на том же actual accepted Task ID. Это не новый Windows execution run.
 Команда после clean source export:
 
 ```bash
@@ -88,13 +96,17 @@ python3 scripts/validate-update-support-native.py \
 
 ### Durable integration
 
+Следом реализуется [versioned compatibility admission](updater-compatibility.md).
+Pure production policy/typed blockers добавлены отдельно после native producer
+f1e2f10; она не является journal-bound approval и не входит в его Windows proof.
+
 Перед production drain сохранить проверенный support в immutable evidence,
 связанной с candidate ImageEvidence/descriptor/source/health и owner scope. Проверять
 совместимость всех требуемых contracts, не просто matching SQLite schema. Validation
 build не должен стать production target. Отсутствующие/новые неподдержанные версии
 объяснять до остановки worker, без fallback и без автоматического запуска unknown
-flags. Добавить native actual query и marker-negative checks в следующую Windows
-проверку после завершённой матрицы; не занимать общий build cache параллельно.
+flags. Native actual query и marker-negative checks закрыты; следующий Windows
+gate должен проверять durable contract, а не повторять discovery без новых причин.
 После реализации activation обновить declaration по действительному execution
 contract, а не заранее. Подробности основной очередности — в
 [runtime-replacement-actor](runtime-replacement-actor.md).

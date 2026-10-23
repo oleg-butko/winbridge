@@ -9,9 +9,10 @@
 trusted FilesVerified → VerifyingLocal. Схемы updater15/worker16 прежние.
 [Actual Main15 replacement60/0 gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
 и [четыре actual faults60/0](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
-пройдены; активных native/Cargo runs нет. Readonly updater support query добавлена
-отдельно и пока проверена локально/cross. Следом native support/compatibility до
-drain и activation; public install выключен. [Актуальный handoff](plans/worker-self-update/resume-2026-10-23-replacement.md)
+пройдены. [Readonly updater support query](plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
+прошла отдельный native8/0 gate. [Typed compatibility policy](plans/worker-self-update/updater-compatibility.md)
+добавлена как pure foundation; durable support admission до drain и activation
+ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
 содержит точные границы доказательств, карту кода и план продолжения.
 Ниже сохранена история предыдущих commits.
 

@@ -44,6 +44,7 @@ fn readonly_projection_readers_agree_on_foreign_future_and_inconsistent_frames()
             case["name"]
         );
     }
+    #[cfg(feature = "jsonschema")]
     assert_eq!(
         fenced_rpc_schema_sha256(),
         include_str!("../../../tests/fixtures/readiness/fenced-rpc-2.sha256").trim()

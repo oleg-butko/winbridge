@@ -11,15 +11,17 @@
 содержит карту кода, проверенные task/run/source pins, границы готовности и порядок
 продолжения без истории чата. Она приоритетнее исторических NEXT/ACTIVE ниже.
 Read-only [updater support query](updater-runtime-support.md) добавлена отдельно:
-local/cross проверки прошли, native query и durable approval/drain integration
-ещё предстоят. Updater целиком не готов, installed runtime не обновлялся.
+[native query8/0](windows-updater-support-gate-2026-10-23.md) пройдена.
+[Pure compatibility policy](updater-compatibility.md) и strict DTO добавлены;
+core/protocol107/108 tests и обе Clippy passed. Durable approval/drain integration
+ещё впереди. Updater целиком не готов, installed runtime не обновлялся.
 
 [Driver/actor v17 и актуальный handoff](runtime-replacement-actor.md) добавлены:
 one-use admission, blocking IO, resident custody и guarded FilesVerified.
 Views1–8 не получают новые поля. Updater15/worker16 прежние. [Actual Main15 positive60/0 gate](windows-runtime-replacement-main-gate-2026-10-23.md)
 и [четыре replacement faults60/0](windows-runtime-replacement-faults-gate-2026-10-23.md)
 пройдены. Все проверки завершены, активных native/Cargo runs нет. Следом native
-updater support/durable compatibility до drain, activation, оставшиеся U2 faults,
+durable compatibility до drain, activation, оставшиеся U2 faults,
 U3/U4. Public install off. Работа остановлена на контрольной точке по просьбе
 пользователя; продолжать по новому handoff.
 Остальные записи раздела ниже — история предыдущих commits.
