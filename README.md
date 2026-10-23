@@ -128,7 +128,8 @@ status и release только после source/Job/output proof. Добавл�
 прошли40 native tests; [replacement data model](docs/plans/worker-self-update/windows-runtime-replacement-model-gate-2026-10-23.md)
 прошла12 native tests. Затем добавлены schema15 ledger, consuming custody и
 [replacement driver/actor v17/view9](docs/plans/worker-self-update/runtime-replacement-actor.md).
-Actual Main replacement gate, activation и U3/U4 ещё впереди; public install выключен.
+[Actual Main15 replacement60/0 gate](docs/plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
+пройден; fault matrix, activation и U3/U4 ещё впереди. Public install выключен.
 Прежние U2.1 native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

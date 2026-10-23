@@ -1,3 +1,24 @@
+# Current: actual Main15 replacement gate пройден — 2026-10-23
+
+Начать с [проверенного gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
+и [карты кода / дальнейших шагов](plans/worker-self-update/runtime-replacement-actor.md).
+Task `665e7e2f-e734-49cf-ae87-d83498a29cbd`, run `20261023-163606-15675844`,
+producer8457004 — **terminal succeeded/exit0**,60 native tests/12 groups,
+20 ready files verified twice,44 actual-proof mutations rejected. **Не resubmit.**
+Полный proof/pins: `.winbridge/update-preparation/replacement-main-native-verified.json`.
+FilesMoved22, Root14→15 / VerifyingLocal; original custody=true до owned Job exit,
+после него history остаётся FilesMoved/custody=false. Новое обычное startup
+отвергнуто maintenance до DB effects. Worker/source/preimages/backup bytes сохранены.
+
+**Нет текущих native/Cargo runs.** Installed d052 healthy/active0, unchanged
+8f8d1fb9 generation, controller3922/192.168.44.203:1143. Desktop не нужен.
+Updaterschema15/worker16/supervisor17/view9. Positive IO подтверждён, но **весь U2.2
+не завершён**: следом actual fault matrix, activation/local health/controller
+confirmation, U3/U4. Public install off. Ручное обновление installed worker пока
+не требуется. Старые ACTIVE/NEXT ниже — история, не команды к повтору.
+
+## История предыдущих попыток и commits
+
 # ACTIVE: повтор Main15 после исправления test reader
 
 Task `665e7e2f-e734-49cf-ae87-d83498a29cbd`, run `20261023-163606-15675844`,

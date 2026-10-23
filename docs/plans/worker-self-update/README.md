@@ -9,9 +9,8 @@
 
 [Driver/actor v17 и актуальный handoff](runtime-replacement-actor.md) добавлены:
 one-use admission, blocking IO, resident custody и guarded FilesVerified.
-Views1–8 не получают новые поля. Updater15/worker16 прежние. Actual Main
-replacement/activation gate ещё не запускался; следующим делать отдельный Main15
-positive gate, затем fault matrix, activation, U3/U4. Public install off.
+Views1–8 не получают новые поля. Updater15/worker16 прежние. [Actual Main15 positive60/0 gate](windows-runtime-replacement-main-gate-2026-10-23.md)
+пройден; следующим делать fault matrix, activation, U3/U4. Public install off.
 Остальные записи раздела ниже — история предыдущих commits.
 
 [Consuming custody/owned rename library](runtime-replacement-custody.md) добавлена:

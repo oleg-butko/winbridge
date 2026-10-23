@@ -2,8 +2,9 @@
 
 2026-10-23. Это текущая точка продолжения после [custody library](runtime-replacement-custody.md).
 Реализован внутренний путь от свежего admission до переноса файлов и
-`Replacing → VerifyingLocal`. **Первый actual Main run дошёл до FilesMoved22/VerifyingLocal, но gate failed
-из-за test-reader sharing mode; полная зелёная проверка ещё отсутствует.**
+`Replacing → VerifyingLocal`. **[Actual Main15 positive gate](windows-runtime-replacement-main-gate-2026-10-23.md)
+пройден60/0**,20 ready files twice/44 actual-proof mutations rejected.
+Первый failed run из-за test-reader sharing mode сохранён как отдельная история.
 Windows cross-check не подтверждает исполнение native IO. Updater целиком не готов,
 публичные install/CLI/MCP capability выключены; установленный Windows runtime не менялся.
 
@@ -154,76 +155,36 @@ Desktop не нужен; тестовых окон в этой точке не �
 
 ## Что делать следующим
 
-Первый actual run: `cf49a541-0abf-4aa3-bb64-295faca99381` /
-`20261023-160520-ee8053b8`, producer6ffc289, failed/exit1. 58 prerequisite tests
-passed, replacement22/VerifyingLocal достигнуты; test `retained_files` затем вызвал
-строгий `artifact::inspect_image`, чей FILE_SHARE_READ несовместим с resident
-READ+DELETE owned handle. SDK guard сработал правильно. Обычная ошибка harness
-исправлена без ослабления production pins: отдельный test-only reader открывает
-только READ с share READ|DELETE, проверяет полный bounded SHA/FileID/bytes/marker
-и не является pin/authority. Добавлен ранний native regression, проверяющий чтение,
-перенос и сохранённый запрет записи. Повторять **новым run**, прежний namespace
-не чистить/не продолжать. Windows disk первого run: 42,530,332,672 →39,145,603,072
-bytes. 17 ready files verified twice; complete proof не был создан из-за panic.
-Полные pins/причина: `replacement-main-native-first-failed.json` в local namespace.
+Positive gate закрыт. Сохранять оба namespace первого failed и второго passed
+run; не продолжать их эффекты и не отправлять terminal tasks повторно. Полные
+source/target pins и actual IDs приведены в [отчёте](windows-runtime-replacement-main-gate-2026-10-23.md).
+Тестовый target5fbc1cf — limited fixture, не production updater.
 
-Verifier review добавляет strict int counters (Python bool не считается int
-контракта) и запрет extra intent fields. Audit actual proof —
-`scripts/test-update-replacement-proof.py --proof PATH --pin PIN_JSON`; выполняет
-сначала positive verification и затем набор намеренных искажений. На момент
-исправления actual success proof отсутствует, audit ещё не выполнялся.
-
-Продолжение этой сессии: подготовлен **отдельный positive gate Main15**, ещё не
-исполненный на Windows. Native helper — `apps/worker/tests/update_shutdown/replacement.rs`;
-новый ignored test — `actual_main_and_supervisor_replace_runtime_without_activation`.
-PS mode `-RuntimeReplacementGate`, Python mode `--runtime-replacement-gate`.
-Оба архива явно требуют updater15/worker16; старые preparation modes сохраняют14/16.
-Verifier `scripts/update-replacement-proof.py` независимо восстанавливает все23
-состояния из immutable before-images, проверяет exact File IDs/paths/digests,
-root CAS, before/after custody и отсутствие activation. До-stage proof вынесен в
-`beforeReplacement`, чтобы не заявлять неизменность runtime после переноса.
-Тест освобождает временный instance lock до ordinary startup refusal; иначе он
-мог бы подтвердить неправильную причину отказа. Windows cross-Clippy passed,
-Python archive/schema admission9/0. Native positive результат пока отсутствует.
-Пункты1–7 ниже описывают требования к этому gate; implementation flag уже есть.
-
-1. **Ревью окончательного driver/actor и actual Main15 positive gate.** Расширить
-   `apps/worker/tests/update_shutdown.rs`, `scripts/test-update-health-actor.ps1`
-   и `scripts/validate-update-health-actor-native.py` отдельным replacement mode.
-   Новый replacement mode подготовлен выше; не запускать старый preparation gate на новых15
-   архивах: он намеренно требует updater14/worker16.
-2. Producer — чистый commit с новым actor17; target — отдельный чистый schema15
-   архив `winbridge-20261023T091226Z-5fbc1cf-b4ac44a5.zip` из shared sources.
-   Target SHA `3891ad4689779c2eb2507b70be4ad5d2f599cf4816fb4b882d64f2de0006c6fb`,
-   manifest SHA `98e52e10e99e25fbc8cf9864b4af3e4d83419e8a1297cbcd330dc61e5c4546f3`.
-   Это **ограниченный fixture**, не production install target. Совпадение схем
-   не доказывает updater features. Прежний cee06a7/schema14 target не использовать.
-3. Сохранить старую цепочку real old roles → actual candidate build/health →
-   actual Main drain/shutdown → final backup → prepared copies. Старый cold
-   shutdown reader/restart refusal/old hashes проверить **до** replacement:
-   затем старые имена закономерно меняются и прежний full-runtime guard неприменим.
-4. Отдельно проверить v16 отказ до admission, admission-before-ACK, дубликат того
-   же attempt, отзывчивое наблюдение прогресса; затем actual old/new File IDs
-   во всех десяти конечных путях, пять retained originals, empty prepared dir,
-   manifest-last/history22 и root VerifyingLocal/revision+1. Сохранить исходные
-   worker DB/WAL bytes, source/candidate payload/previous preimages/final backup.
-5. Убедиться в resident custody=true до завершения owned Job. Завершить только
-   собственный isolated Job, проверить history FilesMoved/custody=false, затем
-   обычный новый worker должен отказать в startup из-за maintenance до DB effects.
-   Не реконструировать handles из journal. Не писать в installed runtime.
-6. Добавить исполнение Windows directory-preservation test из physical.rs и
-   original Arc busy-restoration test. Эти проверки сейчас только локальные
-   либо cross-compiled; native исполнение новой Windows directory ветки впереди.
-7. Проверить ready files дважды, exact source/target/report/proof hashes,
-   отрицательные мутации actual proof. Затем fault matrix: acquisition locks,
-   occupied destination, receipt-write rejection, crash на intents/receipts.
-   Ни ошибка, ни observation timeout не разрешают повторную отправку эффекта.
-8. После этого activation/local health/controller confirmation с тем же retained
-   owner и state locks. До production drain добавить versioned candidate-updater
-   feature compatibility query, связанную с реально проверенным образом.
-9. U3: desktop shutdown/update/restore visibility, migration/rollback и понятные
-   popup/tray сообщения. U4: public orchestration и единственный ручной bootstrap
-   установленного d052, затем сквозное самообновление/ошибка и manual recovery.
+1. **Actual fault matrix.** Начать с existing displaced directory и стороннего
+   no-delete handle старого файла. Проверить Indeterminate/original custody,
+   неизменные старые/подготовленные files и запрет повторной попытки после снятия
+   блокировки. Затем receipt-write rejection и crash между OS effect/receipt:
+   сохранять исходный causal prefix и фактические перемещённые файлы, не cleanup/
+   retry/adopt. Завершать только собственный test Job.
+2. На каждом case проверить live/cold projection, owner/root CAS, startup barrier,
+   отсутствие DB/source/preimage/backup изменений. Отдельный контракт proof/mode
+   не должен выдавать ожидаемый fault за success whole replacement. Whole Main15
+   pipeline и reusable native build cache сохраняются; для нескольких полных
+   cases дать task достаточный bounded timeout.
+3. **Activation.** Новый one-use intent/permit и consuming handoff из resident
+   replacement guard, suspended PID-before-resume, точная передача state/instance
+   locks. Обычный startup остаётся запрещён до разрешённого activation path.
+   Physical FilesMoved/history сами не разрешают запуск. Local health и controller
+   confirmation должны иметь собственные проверенные receipts, затем Committed.
+4. **Candidate updater compatibility до production drain.** Запрос должен быть
+   versioned и связан с реально проверенным образом, исходниками/manifest. Matching
+   updater schema15 и worker16 не доказывает наличие actor/activation features.
+5. **U3.** Desktop shutdown/update/restore visibility, migration/rollback и понятные
+   popup/tray сообщения. Если desktop был закрыт — запуск в tray без popup; рабочие
+   окна/внимание и результат успеха/ошибки должны следовать принятому плану.
+6. **U4.** Public orchestration и единственный ручной bootstrap установленного
+   d052, затем настоящий installed self-update и failure/manual recovery. До этой
+   точки installed runtime не изменять; сообщить, если его обновление потребуется.
 
 Native build cache: `20261017-061527-f4639971`, один build lease одновременно.
 Перед сборками измерить Debian/Windows disk (минимум6 GiB), сохранить в отчёте.

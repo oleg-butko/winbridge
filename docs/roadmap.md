@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-23: [actual Main15 replacement gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
+**пройден60/0**: original custody, manifest-last/FilesMoved22, trusted FilesVerified,
+post-crash history и maintenance startup refusal.20 ready files twice/44 negative
+proof mutations. Следом fault matrix и activation, U3/U4. Public install off;
+полный updater ещё не готов. Старые WIP/ACTIVE ниже — исторические точки.
+
 2026-10-23: отдельный actual Main15 replacement gate подготовлен в native test /
 PS/Python runner и independent verifier. Cross-check и9 Python tests passed;
 Windows исполнение ещё впереди. Public install выключен.

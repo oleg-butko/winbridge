@@ -7,8 +7,8 @@
 В текущем source подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
 одноразовое admission, consuming original custody, manifest-last перенос и
 trusted FilesVerified → VerifyingLocal. Схемы updater15/worker16 прежние.
-Actual Main replacement gate ещё не запускался; activation/public install остаются
-выключены. Следующий шаг и точные ограничения описаны в указанной инструкции.
+[Actual Main15 replacement60/0 gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
+пройден; fault matrix и activation ещё впереди, public install выключен. Следующий шаг и точные ограничения описаны в указанной инструкции.
 Ниже сохранена история предыдущих commits.
 
 Продолжение: [replacement admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)
