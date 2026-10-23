@@ -1,3 +1,20 @@
+# ACTIVE: повтор Main15 после исправления test reader
+
+Task `665e7e2f-e734-49cf-ae87-d83498a29cbd`, run `20261023-163606-15675844`,
+producer `8457004c315fc5718e216fd0f364d5800a083eee`, source archive
+`winbridge-20261023T163545Z-8457004-b8548a57.zip`. Task running; **не resubmit**.
+Native observer: `.winbridge/update-preparation/replacement-main-native-retry.log`,
+exact source/target pins: `replacement-main-native-active.json` там же.
+Controller3922/192.168.44.203:1143, installed d052 прежний; worker only, без UI.
+После terminal: ready files дважды, independent proof verifier, затем
+`scripts/test-update-replacement-proof.py --proof SHARED_PROOF --pin ACTIVE_PIN`.
+Это полная новая isolated попытка с тем же cache, не продолжение первого namespace.
+58 прежних prerequisites + новый observer SDK regression + full Main дают ожидаемо
+60 tests при полном success. Новый observer SDK regression уже native passed1/0:
+совместимое чтение, rename, сохранение write/delete exclusion и возврат строгого
+pin после освобождения owner. Полный Main retry ещё running; gate пока не объявлять
+пройденным. Цель active.
+
 # Current: первый Main15 run остановлен тестовым reader; исправлен сценарий
 
 Task `cf49a541-0abf-4aa3-bb64-295faca99381` / run `20261023-160520-ee8053b8`
