@@ -124,8 +124,10 @@ status и release только после source/Job/output proof. Добавл�
 модель пяти копий и durable ledger. [Copy driver/actor v16](docs/plans/worker-self-update/runtime-preparation-actor.md)
 добавлены и прошли [actual Main40/0 gate](docs/plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md).
 [Actual13→14 migration/refusal](docs/plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
-также проверен; preparation fault matrix и actual replacement/activation
-ещё не реализованы. Прежние U2.1 native gates относятся к schema13.
+также проверен. [Три actual preparation faults](docs/plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md)
+прошли40 native tests; [replacement data model](docs/plans/worker-self-update/windows-runtime-replacement-model-gate-2026-10-23.md)
+прошла12 native tests. Replacement ledger/custody/IO/activation ещё не реализованы.
+Прежние U2.1 native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

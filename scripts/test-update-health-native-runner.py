@@ -39,6 +39,25 @@ class ArchiveTests(unittest.TestCase):
             p=self.package(Path(d));link=Path(d)/'linked.zip';link.symlink_to(p)
             with self.assertRaises(ValueError):health.archive_pin(link)
 
+class ReceiptBytesTests(unittest.TestCase):
+    def receipt(self):
+        return dict(schemaVersion=1, updateId='u', intentSha256='h', parentRevision=2,
+                    completedAtMs=3, directoryIdentity='d', files=[dict(path='K:\\é', bytes=7,
+                    sha256='s', fileIdentity='i', querySupported=True)])
+
+    def test_preimage_hash_uses_rust_field_order_and_utf8_after_json_key_reordering(self):
+        receipt = self.receipt()
+        receipt['files'][0] = dict(reversed(list(receipt['files'][0].items())))
+        receipt = dict(reversed(list(receipt.items())))
+        expected = '{"schemaVersion":1,"updateId":"u","intentSha256":"h","parentRevision":2,"completedAtMs":3,"directoryIdentity":"d","files":[{"path":"K:\\\\é","bytes":7,"sha256":"s","fileIdentity":"i","querySupported":true}]}'.encode()
+        self.assertEqual(health.preimages_receipt_bytes(receipt), expected)
+
+    def test_unknown_receipt_or_image_fields_are_never_silently_dropped_from_hash(self):
+        for image in [False, True]:
+            receipt = self.receipt()
+            (receipt['files'][0] if image else receipt)['unknown'] = True
+            with self.assertRaises(ValueError): health.preimages_receipt_bytes(receipt)
+
 class BackupReasonTests(unittest.TestCase):
     def test_cleanup_stderr_controls_match_saved_reason_without_dropping_format_characters(self):
         self.assertEqual(health.backup_failure_reason('Artifact query failed; stderr=WinBridge: The file exists. (os error 80)\n'),

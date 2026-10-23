@@ -9,7 +9,9 @@
 [copy driver и supervisor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
 добавлены и прошли [actual Main40/0 gate](plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md).
 [Actual13→14/refusal](plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
-также пройден. Actual preparation fault matrix и rename/activation ещё впереди.
+также пройден. [Три actual preparation faults](plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md)
+прошли40 tests; [whole replacement data model](plans/worker-self-update/windows-runtime-replacement-model-gate-2026-10-23.md)
+прошла12 native tests. Actual rename/activation ещё впереди.
 Native U2.1 ниже — schema13.
 
 U0/internal U1 завершены. U2.1 использует updater13/worker16, supervisor v15/view7:
@@ -19,8 +21,8 @@ readonly old-worker helper сохраняет SQLite через backup API. Да
 пройдены; [four-case fault gate](plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
 завершил U2.1. U2.2 имеет preparation binding/ledger/copy driver и native-проверенные
 file/model primitives для будущего rename. Replacement/activation/desktop/public
-update не реализованы. Следом preparation faults и consuming OS custody/rename
-ledger/driver; [актуальный handoff](plans/worker-self-update/resume-2026-10-23.md)
+update не реализованы. Следом replacement ledger/fresh permit/consuming OS custody
+и rename driver; [подробный handoff](plans/worker-self-update/resume-2026-10-23.md)
 содержит проверки, карту кода и последовательность продолжения.
 Ниже исторические описания блоков; номера schemas там относятся к их native gates.
 

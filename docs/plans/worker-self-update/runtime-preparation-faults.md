@@ -1,7 +1,9 @@
 # U2.2: actual preparation fault gate
 
 2026-10-23. Реализованы fixture, feature-only barrier и отдельные native runners.
-**Native выполнение этого нового gate ещё впереди.** Happy preparation и migration
+[Native gate пройден](windows-runtime-preparation-faults-gate-2026-10-23.md):40 tests,
+три actual cases,24 ready files twice,48 отрицательных mutations после ревью verifier.
+Happy preparation и migration
 уже проверены; [закрытая точка перед продолжением](resume-2026-10-23.md) остаётся
 историей. Whole-runtime replacement/activation и public install не включены.
 

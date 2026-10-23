@@ -424,6 +424,16 @@ def verify_runtime_preparation_proof(proof, source, target):
         raise ValueError('Preparation retained bytes/history or lost-custody view differs')
 
 
+def preimages_receipt_bytes(receipt):
+    keys = ['schemaVersion', 'updateId', 'intentSha256', 'parentRevision', 'completedAtMs', 'directoryIdentity', 'files']
+    image_keys = ['path', 'bytes', 'sha256', 'fileIdentity', 'querySupported']
+    if set(receipt) != set(keys) or any(set(image) != set(image_keys) for image in receipt['files']):
+        raise ValueError('Preimage receipt typed fields differ')
+    result = {k: receipt[k] for k in keys}
+    result['files'] = [{k: image[k] for k in image_keys} for image in receipt['files']]
+    return json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode()
+
+
 def verify_runtime_preparation_faults_proof(proof, source, target):
     cases = proof.get('cases', [])
     faults = ['existing_directory', 'changed_candidate', 'hold_before_receipt']
@@ -504,6 +514,25 @@ def verify_runtime_preparation_faults_proof(proof, source, target):
                     or artifact['descriptor']['build'].get('sourceManifestSha256') != target['manifestSha256']):
                 raise ValueError('Fault candidate/source/manifest differs')
             ids.add(image['fileIdentity'])
+        preimages = p['preimages']
+        image_keys = ['path', 'bytes', 'sha256', 'fileIdentity', 'querySupported']
+        old_order = p['oldImagesBefore'][-1:] + p['oldImagesBefore'][:-1]
+        for image, old_image, name in zip(preimages['files'], old_order, names[-1:] + names[:-1]):
+            if (set(image) != set(image_keys)
+                    or PureWindowsPath(image['path']) != root/'update'/plan['updateId']/'previous-runtime'/name
+                    or image['bytes'] != old_image['bytes'] or image['sha256'] != old_image['sha256']
+                    or image['querySupported'] != old_image['querySupported'] or image['fileIdentity'] in ids):
+                raise ValueError('Fault retained previous-runtime copy differs')
+            ids.add(image['fileIdentity'])
+        preimage_sha = hashlib.sha256(preimages_receipt_bytes(preimages)).hexdigest()
+        if (preimages['schemaVersion'] != 1 or preimages['updateId'] != plan['updateId']
+                or not 0 < preimages['parentRevision'] < plan['parentRevision']
+                or not 0 < preimages['completedAtMs'] <= plan['admittedAtMs']
+                or not re.fullmatch(r'[0-9a-f]{64}', preimages['intentSha256'])
+                or not preimages['directoryIdentity'] or preimages['directoryIdentity'] in ids
+                or preimages['directoryIdentity'] in (plan['runtimeIdentity'], plan['parentIdentity'], r['directoryIdentity'])
+                or preimage_sha != plan['proofs']['preimagesSha256']):
+            raise ValueError('Fault preimage receipt digest/scope differs')
         manifest_bytes = prepared_manifest_bytes(plan['manifest'])
         total = sum(f['bytes'] for f in plan['files'])
         if (plan['files'][4]['source'] is not None or plan['files'][4]['bytes'] != len(manifest_bytes)

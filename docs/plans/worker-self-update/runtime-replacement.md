@@ -9,7 +9,7 @@ native gate. [Handoff 2026-10-22](resume-2026-10-22.md) сохраняет эт�
 В продолжении начата [preparation library schema14](runtime-preparation.md):
 binding/ledger/model, copy driver/actor и happy actual Main gate пройдены;
 actual13→14/refusal также закрыт. [Preparation fault gate](runtime-preparation-faults.md)
-выполняется отдельно; не путать его с rename/activation.
+пройден; не путать его с rename/activation.
 
 ## Модель всей replacement transaction — 2026-10-23
 
@@ -40,9 +40,10 @@ preparation fault gate; native результат того gate нельзя п�
 Для проверки модели подготовлен lightweight режим `--runtime-replacement-only` /
 `-RuntimeReplacementOnly` в существующих shutdown-primitives runners: шесть
 per-file exchange и шесть aggregate transaction tests, generated fixtures без
-old executable reference, desktop и candidate build. Запускать после terminal
-текущего fault gate, когда approved cache свободен, из нового clean export.
-Это будет проверка data FSM на Windows, а не исполнение whole-runtime rename.
+old executable reference, desktop и candidate build.
+[Native12/0 gate](windows-runtime-replacement-model-gate-2026-10-23.md) пройден,
+6 ready files проверены дважды. Это проверка data FSM на Windows, не исполнение
+whole-runtime rename. Не повторять готовую task без новых изменений/оснований.
 
 ## Что уже можно переиспользовать
 

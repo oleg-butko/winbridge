@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-23: [три actual preparation faults](plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md)
+пройдены40 tests/10 groups,24 ready files twice,48 negative mutations. Review
+исправил недостающую сверку preimages в Python verifier,7 tests passed. Lightweight
+replacement [model gate12/0](plans/worker-self-update/windows-runtime-replacement-model-gate-2026-10-23.md)
+producer7f3a952 также пройден,6 ready files twice; ledger/custody/rename/
+activation и U3/U4 ещё впереди. Установленный worker не менялся, public install off.
+
 2026-10-23: цель возобновлена; [actual preparation faults](plans/worker-self-update/runtime-preparation-faults.md)
 реализуются отдельным gate (occupied destination, changed candidate, owned crash
 до receipt). Cross-check/all-target Windows Clippy прошли; native execution впереди.

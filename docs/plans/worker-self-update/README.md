@@ -8,24 +8,28 @@
 ## Текущий статус 2026-10-23
 
 После передачи контекста цель возобновлена. [Actual preparation fault gate](runtime-preparation-faults.md)
-реализован в fixture/runner с feature-only barrier; native execution ещё впереди.
-Следом — consuming original custody и durable rename/activation, U3/U4.
+реализован в fixture/runner с feature-only barrier;
+[40-test/3-case gate](windows-runtime-preparation-faults-gate-2026-10-23.md) пройден.
+Data-only whole replacement record добавлен отдельно;
+[native12/0 gate](windows-runtime-replacement-model-gate-2026-10-23.md) пройден.
+Следом — durable replacement ledger/fresh permit, consuming original custody,
+rename/activation и U3/U4.
 
 Возобновлена реализация [U2.2 preparation library](runtime-preparation.md): updater14,
 data FSM/immutable ledger и original-custody admission. [Native model/ledger10/0](windows-runtime-preparation-gate-2026-10-22.md)
 пройден. [Copy driver/actor v16/view8](runtime-preparation-actor.md) добавлены;
 [full actual Main40/0 gate](windows-runtime-preparation-main-gate-2026-10-22.md)
 пройден. [Actual13→14/refusal gate](windows-preparation-migration-gate-2026-10-23.md)
-также пройден; native preparation fault matrix ещё впереди.
+также пройден; первые три actual preparation faults закрыты выше.
 Старые U2.1 gates ниже относятся к schema13.
 
 U0/internal U1 и [U2.1 final backup](windows-state-backup-faults-gate-2026-10-22.md)
 завершены. Native SDK/model gate9/0 и pure manifest plan подготовлены для U2.2;
-actual replacement/activation/public update ещё отсутствуют. Пользователь попросил
-закончить проверки и передать контекст; дальнейшая реализация приостановлена.
+actual replacement/activation/public update ещё отсутствуют. После зафиксированной
+передачи контекста пользователь возобновил цель; реализация active.
 Binding/ledger и copy driver/actor добавлены в14; happy actual Main gate пройден.
-Следующий шаг — actual preparation fault matrix, затем consuming original
-custody и rename driver. До public cutover нужен candidate-updater feature check
+Следующий шаг — replacement ledger/fresh original-custody admission,
+consuming custody и rename driver. До public cutover нужен candidate-updater feature check
 до drain; fixture cee06a7 не является готовым production auto-update target.
 Проверки завершены по просьбе пользователя; [подробный handoff 2026-10-23](resume-2026-10-23.md)
 содержит результаты, точные pins, карту кода и инструкцию продолжения без контекста.

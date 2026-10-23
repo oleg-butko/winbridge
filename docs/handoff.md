@@ -1,24 +1,39 @@
-# Updater: проверки завершены, передача следующей сессии — 2026-10-23
+# Updater: preparation faults и replacement model проверены — 2026-10-23
 
 ## Возобновление2026-10-23: actual preparation faults
 
 Цель вновь active. Добавлены [три actual fault cases и feature-only barrier](plans/worker-self-update/runtime-preparation-faults.md),
 новые PS/Python modes `RuntimePreparationFaults`/`--runtime-preparation-faults`.
 Windows cross-check и обе all-target Clippy прошли; local preparation16/0,
-Python5/0 и scaffold237 прошли.
-Native fault gate **выполняется**: task `50979d1f-6f38-4d0a-8f15-6e96a243222d`,
-run `20261023-081649-b9bf5a72`, producer `ddce866`, runner session43440.
-Log `.winbridge/update-preparation/preparation-faults-native.log`, scope/pins в
-`preparation-faults-active.json`. **Не отправлять task повторно:** читать тот же
-Task ID до terminal, затем независимо сверить ready files/proof. Installed d052
-исправен, controller3413 прежний, UI окон нет. Public install отключён.
-После pass — consuming replacement custody/rename ledger/driver, activation/U3/U4.
+Python7/0 и scaffold239 прошли после verifier review.
+Native [fault gate прошёл](plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md):
+task `50979d1f-6f38-4d0a-8f15-6e96a243222d`/run `20261023-081649-b9bf5a72`,
+producerddce866, succeeded/0.40 tests/3 actual cases,24 ready files twice,
+48 negative mutations rejected. Review усилил exact preimage receipt digest/IDs/
+paths в verifier;7 Python tests passed. Original installed d052 healthy/unchanged.
+Полный proof/pins: `.winbridge/update-preparation/preparation-faults-native-verified.json`.
+**Не отправлять завершённую task повторно.** Controller3413, UI окон нет, public install off.
+Следом — replacement ledger/fresh permit/consuming custody, rename driver и activation/U3/U4.
 Параллельно добавлена [data-only replacement transaction](plans/worker-self-update/runtime-replacement.md):
 `apps/update/src/runtime_replacement.rs`,6 local tests и обе all-target Clippy passed.
 Exact preparation binding/retained-directory FSM +22 file steps, terminal uncertainty;
 нет ledger/permit/custody/IO/public action. Эта модель НЕ входит в native producerddce866.
-Для неё подготовлен lightweight `--runtime-replacement-only` / PS RuntimeReplacementOnly
-(12 data tests); запускать после terminal текущего fault gate и clean export.
+Её [lightweight Windows gate](plans/worker-self-update/windows-runtime-replacement-model-gate-2026-10-23.md)
+тоже пройден:12 data tests/2 groups,6 ready files twice, task
+`f1e772de-7a28-4ddd-9164-ed3c8a8434f8`/run `20261023-084849-45c8a2e5`,
+producer7f3a952, succeeded/0. Полные pins:
+`.winbridge/update-preparation/replacement-model-native-verified.json`.
+**Нет текущих native/Cargo runs; обе task terminal, не resubmit.**
+Текущие schemas14/16, supervisor v16/view8. Следом ledger/fresh original-custody
+admission + consuming handoff, IO/actor/activation. Полный updater не готов.
+Для следующего ledger: joined read exact Prepared record и его retained graph,
+immutable intent/current/history и current owner/epoch/launch/root CAS; admission
+проверяет original exit guard, backup и prepared files и выдаёт non-Serde permit
+только один раз после commit. Existing/reopen не создают permit. После первого
+rename original full-runtime guard уже неприменим: callbacks должны использовать
+consuming transition-aware guard; не ослаблять прежний `ShutdownExitGuard::require`.
+Новая schema потребует migration/read-only old-reader refusal и обновления synthetic
+downgrade fixtures; native архивы14 и их gates не считать проверкой следующей schema.
 
 ## Зафиксированная точка закрытия перед возобновлением
 
