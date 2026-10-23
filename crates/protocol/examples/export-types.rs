@@ -53,6 +53,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         SupervisorRequest::decl(&config),
         SupervisorResponse::decl(&config),
         UpdatePreparationView::decl(&config),
+        RuntimePreparationPhase::decl(&config),
+        RuntimePreparationView::decl(&config),
         RuntimeBaselineView::decl(&config),
         RuntimePreimagesView::decl(&config),
         CandidateHealthPhase::decl(&config),

@@ -166,6 +166,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 7)
     }
+    pub fn runtime_files_preparation_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 8)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -244,6 +252,15 @@ impl UpdateJournal {
         } else {
             None
         };
+        let runtime_preparation = if view_schema >= 8 {
+            Some(crate::runtime_preparation::view(
+                super::runtime_preparation::read(&tx, id)?.as_ref(),
+                driver_active,
+                driver_error.is_some(),
+            ))
+        } else {
+            None
+        };
         let view = UpdatePreparationView {
             schema_version: view_schema,
             observed_at_ms: now_ms()?,
@@ -256,6 +273,7 @@ impl UpdateJournal {
             candidate_drain,
             candidate_shutdown,
             candidate_state_backup,
+            runtime_preparation,
             runtime_baseline: if view_schema >= 2 {
                 Some(super::runtime_baseline::read(&tx, id)?.view())
             } else {

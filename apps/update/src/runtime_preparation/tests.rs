@@ -263,3 +263,22 @@ fn preparation_causal_step_rejects_mutated_plan_prefix_and_unknown_json() {
     changed.files[0] = PreparationFileState::Pending {};
     assert!(changed.validate().is_err());
 }
+#[test]
+fn preparation_projection_separates_saved_progress_from_live_execution() {
+    use winbridge_protocol::update::RuntimePreparationPhase as Phase;
+    assert_eq!(view(None, false, false).phase, Phase::NotAdmitted);
+    assert_eq!(view(None, false, true).phase, Phase::Blocked);
+    let original = fixture();
+    let issued = stages(&original)[2].clone();
+    let active = view(Some(&issued), true, false);
+    assert_eq!(active.phase, Phase::PreparingFiles);
+    assert!(active.issued_file.is_some());
+    let historical = view(Some(&issued), false, false);
+    assert_eq!(historical.phase, Phase::Indeterminate);
+    assert_eq!(historical.attempt_id, active.attempt_id);
+    assert!(historical.reason.is_some());
+    let ready = stages(&original).pop().unwrap();
+    let historical = view(Some(&ready), false, false);
+    assert_eq!(historical.phase, Phase::Prepared);
+    assert_eq!(historical.prepared_files, 5);
+}

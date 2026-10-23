@@ -14,10 +14,12 @@ param(
   [switch]$ShutdownMainSupplemental,
   [switch]$FinalStateBackupGate,
   [switch]$FinalStateBackupFaults,
+  [switch]$RuntimePreparationGate,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($RuntimePreparationGate){if($DrainGate -or $ShutdownMainSupplemental -or $FinalStateBackupGate -or $FinalStateBackupFaults){throw 'Select one native gate mode'};$FinalStateBackupGate=$true}
 if($FinalStateBackupFaults){if($DrainGate -or $ShutdownMainSupplemental -or $FinalStateBackupGate){throw 'Select one native gate mode'};$FinalStateBackupGate=$true}
 if($ShutdownMainSupplemental){$ShutdownMainGate=$true}
 if($FinalStateBackupGate){if($DrainGate -or $ShutdownMainSupplemental){throw 'Select one native gate mode'};$ShutdownMainGate=$true}
@@ -94,12 +96,14 @@ try {
     )+$commands
   }
   if($ShutdownMainGate){
-    $report.kind=if($FinalStateBackupFaults){'state_backup_faults_native_gate'}elseif($FinalStateBackupGate){'state_backup_main_native_gate'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_native_gate'}else{'shutdown_main_native_gate'}
+    $report.kind=if($RuntimePreparationGate){'runtime_preparation_main_native_gate'}elseif($FinalStateBackupFaults){'state_backup_faults_native_gate'}elseif($FinalStateBackupGate){'state_backup_main_native_gate'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_native_gate'}else{'shutdown_main_native_gate'}
     $caseRoot=Join-Path (Split-Path $source -Parent) 'shutdown-main-cases'
     New-Item -ItemType Directory -Path $caseRoot | Out-Null
     $oldStage=Join-Path (Split-Path $source -Parent) 'shutdown-old-set'
     $shutdownInput=Join-Path (Split-Path $source -Parent) 'shutdown-main-input.json'
-    Write-NewJson $shutdownInput @{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache;supplemental=[bool]$ShutdownMainSupplemental;finalBackup=[bool]$FinalStateBackupGate;backupFaults=[bool]$FinalStateBackupFaults}
+    $shutdownArguments=@{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache;supplemental=[bool]$ShutdownMainSupplemental;finalBackup=[bool]$FinalStateBackupGate;backupFaults=[bool]$FinalStateBackupFaults}
+    if($RuntimePreparationGate){$shutdownArguments.runtimePreparation=$true}
+    Write-NewJson $shutdownInput $shutdownArguments
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $commands=@(
       @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
@@ -116,6 +120,12 @@ try {
       @{name='backup-exact-entry';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','state_backup_export','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($RuntimePreparationGate){
+    $commands=@(
+      @{name='runtime-preparation-driver-and-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_preparation','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='runtime-preparation-directory-pins';arguments=@('test','-p','winbridge-platform','--lib','source_files::tests::directory_pin','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
   # Worker IPC fixtures launch this executable. Reused caches may still hold an
   # older updater that correctly refuses the freshly migrated journal.
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build'})
@@ -126,10 +136,16 @@ try {
     & $executable @arguments 2>&1 | Tee-Object -FilePath (Join-Path $ReportDirectory $log)
     $code=$LASTEXITCODE;$report.commands+=@{name=$command.name;arguments=$arguments;exitCode=$code;log=$log}
     if($code -ne 0){throw "Health native command failed: $($command.name); see $log"}
+    if($RuntimePreparationGate -and $command.name -in @('runtime-preparation-driver-and-ledger','runtime-preparation-directory-pins')){
+      $minimum=if($command.name -ceq 'runtime-preparation-driver-and-ledger'){16}else{1}
+      $counts=[regex]::Matches((Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')
+      $passed=0;foreach($count in $counts){$passed+=[int]$count.Groups[1].Value}
+      if($passed -lt $minimum){throw "Expected preparation tests were not selected: $($command.name)"}
+    }
   }
   if($ShutdownMainGate){[IO.File]::Copy((Join-Path $caseRoot 'proof.json'),$env:WINBRIDGE_HEALTH_GATE_PROOF,$false)}
   $proof=Get-Content -LiteralPath $env:WINBRIDGE_HEALTH_GATE_PROOF -Raw | ConvertFrom-Json
-  $expectedKind=if($FinalStateBackupFaults){'state_backup_faults_native_proof'}elseif($FinalStateBackupGate){'state_backup_main_native_proof'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
+  $expectedKind=if($RuntimePreparationGate){'runtime_preparation_main_native_proof'}elseif($FinalStateBackupFaults){'state_backup_faults_native_proof'}elseif($FinalStateBackupGate){'state_backup_main_native_proof'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
   $expectedCases=if($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $false -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
   $report.passed=$true

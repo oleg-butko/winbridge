@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-22 WIP: [preparation driver/actor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
+добавлены; local workspace636/0, Clippy/TS/UI passed. Full graph gate подготовлен,
+native выполнение/fault matrix и actual13→14 refusal
+впереди. Это создание независимых files, не rename/activation/public install.
+
 2026-10-22, продолжение: [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md)
 добавляет data FSM/ledger schema14. Targeted local10/0, package199/0 и обе Clippy passed;
 [native model/ledger10/0](plans/worker-self-update/windows-runtime-preparation-gate-2026-10-22.md).

@@ -321,6 +321,109 @@ def verify_state_backup_proof(proof, source, target):
         raise ValueError('Final backup scope/history/source preservation or duplicate differs')
 
 
+def prepared_manifest_bytes(manifest):
+    """Exact v1 Rust struct encoding, independent of public JSON object key order."""
+    def ordered(value, keys):
+        if set(value) != set(keys):
+            raise ValueError('Prepared manifest typed fields differ')
+        return {key: value[key] for key in keys}
+    result = ordered(manifest, ['schemaVersion', 'kind', 'setId', 'installationId', 'scopeSha256', 'artifacts'])
+    result['artifacts'] = []
+    for artifact in manifest['artifacts']:
+        a = ordered(artifact, ['name', 'bytes', 'sha256', 'descriptor'])
+        a['descriptor'] = ordered(a['descriptor'], ['schemaVersion', 'kind', 'queryContract', 'role', 'build', 'targetOs', 'targetArch'])
+        a['descriptor']['build'] = ordered(a['descriptor']['build'], ['version', 'sourceCommit', 'sourceDirty', 'sourceManifestSha256', 'buildId'])
+        result['artifacts'].append(a)
+    return json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode()
+
+
+def verify_runtime_preparation_proof(proof, source, target):
+    if proof.get('kind') != 'runtime_preparation_main_native_proof':
+        raise ValueError('Runtime preparation proof kind differs')
+    component = dict(proof, kind='state_backup_main_native_proof')
+    verify_state_backup_proof(component, source, target)
+    case = proof['cases'][0]
+    p = case['runtimePreparation']
+    r, v = p['record'], p['view']
+    plan, files = r['plan'], r['files']
+    old = case['shutdown']['intent']['binding']
+    root = PureWindowsPath(old['loadedWorker']['image']['path']).parent
+    directory = root/'update'/old['updateId']/'prepared-runtime'
+    names = ['winbridge-worker.exe', 'winbridge-fixture.exe', 'winbridge-desktop.exe', 'winbridge-update.exe', 'winbridge-installed-set.json']
+    roles = ['worker', 'fixture', 'desktop', 'updater', 'manifest']
+    projection = v.get('runtimePreparation', {})
+    if (r.get('schemaVersion') != 1 or r.get('phase') != 'prepared' or r.get('revision') != 12
+            or r.get('reason') is not None or not r.get('directoryIdentity')
+            or plan.get('schemaVersion') != 1 or plan.get('updateId') != old['updateId']
+            or plan.get('parentRevision') != case['root']['revision']
+            or str(uuid.UUID(plan['attemptId'])) != plan['attemptId']
+            or plan.get('ownerId') != old['ownerId'] or plan.get('ownerEpoch') != old['ownerEpoch']
+            or plan.get('launchId') != old['launchId'] or PureWindowsPath(plan['runtimeDirectory']) != root
+            or plan.get('runtimeIdentity') != old['loadedWorker']['runtimeIdentity']
+            or not re.fullmatch(r'[0-9a-f]{64}', plan.get('configSha256', ''))
+            or plan.get('parentIdentity') != case['finalStateBackup']['record']['intent']['binding']['parentIdentity']
+            or plan.get('admittedAtMs', 0) < case['finalStateBackup']['record']['updatedAtMs']
+            or plan['manifest']['installationId'] != case['root']['request']['expected']['installationId']
+            or plan['manifest']['scopeSha256'] != case['root']['request']['expected']['scopeSha256']
+            or uuid.UUID(plan['manifest']['setId']) == uuid.UUID(old['loadedWorker']['setId'])
+            or len(plan.get('files', [])) != 5 or len(files) != 5 or len(p['actualFiles']) != 5
+            or len(plan['manifest'].get('artifacts', [])) != 4
+            or len(p['oldImagesBefore']) != 5 or len(p['sourceFiles']) != 4
+            or p['oldImagesBefore'][0] != old['loadedWorker']['image']
+            or v.get('schemaVersion') != 8 or v.get('driverActive') is not False or v.get('driverError') is not None
+            or v['update'] != case['root'] or v['candidateShutdown'].get('physicalCustodyHeld') is not True
+            or projection.get('phase') != 'prepared' or projection.get('attemptId') != plan['attemptId']
+            or projection.get('revision') != 12 or projection.get('preparedFiles') != 5 or projection.get('totalFiles') != 5
+            or PureWindowsPath(projection['directory']) != directory
+            or projection.get('issuedFile') is not None or projection.get('reason') is not None
+            or p['duplicate']['runtimePreparation'] != projection
+            or p['beforeAdmission'].get('driverActive') is not False
+            or p['beforeAdmission']['runtimePreparation'].get('attemptId') is not None
+            or p['beforeAdmission']['candidateStateBackup'].get('phase') != 'verified'
+            or p['beforeAdmission']['candidateShutdown'].get('physicalCustodyHeld') is not True
+            or p['admitted']['runtimePreparation'].get('attemptId') != plan['attemptId']
+            or any(p.get(k) is not True for k in ('sourceBytesUnchanged', 'oldRuntimeUnchanged', 'preimagesUnchanged', 'allCopiesIndependent', 'duplicateNoNewAttempt', 'privateAuthorityNotExported', 'oldViewsOmitPreparation', 'retainedGraphMatches'))):
+        raise ValueError('Runtime preparation graph/authority/phase/projection differs')
+    if set(plan['proofs']) != {'requestSha256', 'supervisorSpecSha256', 'baselineSha256', 'preimagesSha256', 'artifactsSha256', 'healthSha256', 'shutdownSha256', 'backupSha256'} or any(not re.fullmatch(r'[0-9a-f]{64}', h) for h in plan['proofs'].values()):
+        raise ValueError('Runtime preparation causal digests differ')
+    identities = set()
+    for spec, old_image, name, role in zip(plan['files'], p['oldImagesBefore'], names, roles):
+        if spec['file'] != role or spec['old'] != old_image or PureWindowsPath(old_image['path']) != root/name:
+            raise ValueError('Preparation old-role scope differs')
+        if old_image['fileIdentity'] in identities:
+            raise ValueError('Old runtime IDs alias')
+        identities.add(old_image['fileIdentity'])
+    for spec, image, artifact, name, role in zip(plan['files'][:4], p['sourceFiles'], plan['manifest']['artifacts'], names, roles):
+        if (spec['source'] != image or PureWindowsPath(image['path']) != root/'update'/old['updateId']/'candidate'/'payload'/name
+                or image['sha256'] != spec['sha256'] or image['bytes'] != spec['bytes']
+                or artifact['name'] != name or artifact['bytes'] != image['bytes'] or artifact['sha256'] != image['sha256']
+                or artifact['descriptor']['role'] != role or artifact['descriptor']['build'].get('sourceDirty') is not False
+                or artifact['descriptor']['build'].get('sourceCommit') != target['sourceCommit']
+                or artifact['descriptor']['build'].get('sourceManifestSha256') != target['manifestSha256']
+                or image['fileIdentity'] in identities):
+            raise ValueError('Preparation source/target/manifest differs')
+        identities.add(image['fileIdentity'])
+    total = 0
+    for index, (spec, state, actual, name) in enumerate(zip(plan['files'], files, p['actualFiles'], names)):
+        if (state.get('phase') != 'verified' or state['image'] != actual
+                or PureWindowsPath(actual['path']) != directory/name or spec['destination'] != actual['path']
+                or actual['bytes'] != spec['bytes'] or actual['sha256'] != spec['sha256']
+                or actual['querySupported'] != (index < 4) or not re.fullmatch(r'[0-9a-f]{64}', actual['sha256'])
+                or not 0 < actual['bytes'] <= (256*1024*1024 if index < 4 else 65536)
+                or actual['fileIdentity'] in identities or actual['fileIdentity'] == r['directoryIdentity']):
+            raise ValueError('Preparation actual independent copy differs')
+        identities.add(actual['fileIdentity']); total += actual['bytes']
+    raw_manifest = prepared_manifest_bytes(plan['manifest'])
+    if (plan['files'][4]['source'] is not None or projection['totalBytes'] != total
+            or plan['manifest'].get('schemaVersion') != 1 or plan['manifest'].get('kind') != 'winbridge_installed_set'
+            or len(raw_manifest) != plan['files'][4]['bytes'] or hashlib.sha256(raw_manifest).hexdigest() != plan['files'][4]['sha256']
+            or plan['availableBytesBefore'] < 6*1024**3+total
+            or case.get('retainedRuntimePreparationRecord') != r
+            or case['runtimePreparationAfterOwnedExit']['runtimePreparation'] != projection
+            or case['runtimePreparationAfterOwnedExit']['candidateShutdown'].get('physicalCustodyHeld') is not False):
+        raise ValueError('Preparation retained bytes/history or lost-custody view differs')
+
+
 def backup_failure_reason(text):
     # Match Rust char::is_control and chars().take(900), including non-BMP text.
     return ''.join(ch for ch in text if unicodedata.category(ch) != 'Cc')[:900]
@@ -486,12 +589,19 @@ def main():
     modes.add_argument('--shutdown-main-supplemental', action='store_true')
     modes.add_argument('--final-state-backup-gate', action='store_true')
     modes.add_argument('--final-state-backup-faults', action='store_true')
+    modes.add_argument('--runtime-preparation-gate', action='store_true')
     parser.add_argument('--previous-updater')
     parser.add_argument('--previous-updater-sha256')
     parser.add_argument('--controller-config', default='.winbridge/controller-snapshot.local.json', type=Path)
     args = parser.parse_args()
     source, target = archive_pin(args.archive), archive_pin(args.target_archive)
-    drain_parameters = ' -FinalStateBackupFaults' if args.final_state_backup_faults else ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
+    drain_parameters = ' -RuntimePreparationGate' if args.runtime_preparation_gate else ' -FinalStateBackupFaults' if args.final_state_backup_faults else ' -FinalStateBackupGate' if args.final_state_backup_gate else ' -ShutdownMainSupplemental' if args.shutdown_main_supplemental else ' -ShutdownMainGate' if args.shutdown_main_gate else ''
+    if args.runtime_preparation_gate:
+        for archive in [args.archive, args.target_archive]:
+            with zipfile.ZipFile(archive) as contents:
+                if (native.updater_schema_from_source(contents.read('winbridge/apps/update/src/journal.rs')) != 14
+                        or native.worker_schema_from_source(contents.read('winbridge/apps/worker/src/store.rs')) != 16):
+                    raise ValueError('Runtime preparation requires explicit matching updater14/worker16 archives')
     if args.drain_gate:
         if (not args.previous_updater or not re.fullmatch(r'[0-9a-f]{64}', args.previous_updater_sha256 or '')
                 or PureWindowsPath(args.previous_updater).drive.casefold() != 'k:'
@@ -578,10 +688,10 @@ exit $LASTEXITCODE
         raise RuntimeError({'taskId': task['taskId'], 'error': result['error'], 'reportDirectory': str(report)})
     if 'candidate-health-actor-proof.json' not in verified_names:
         raise ValueError('Ready manifest must cover the actual process proof')
-    expected_kind = 'state_backup_faults_native_gate' if args.final_state_backup_faults else 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
+    expected_kind = 'runtime_preparation_main_native_gate' if args.runtime_preparation_gate else 'state_backup_faults_native_gate' if args.final_state_backup_faults else 'state_backup_main_native_gate' if args.final_state_backup_gate else 'shutdown_main_supplemental_native_gate' if args.shutdown_main_supplemental else 'shutdown_main_native_gate' if args.shutdown_main_gate else 'candidate_drain_native_gate' if args.drain_gate else 'candidate_health_native_gate'
     if result.get('kind') != expected_kind or result.get('sourceCommit') != source['sourceCommit'] or result.get('sourceArchiveSha256') != source['archiveSha256'] or result.get('target') != target:
         raise ValueError('Report kind or exact source/target binding differs')
-    verifier = verify_state_backup_faults_proof if args.final_state_backup_faults else verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
+    verifier = verify_runtime_preparation_proof if args.runtime_preparation_gate else verify_state_backup_faults_proof if args.final_state_backup_faults else verify_state_backup_proof if args.final_state_backup_gate else verify_shutdown_supplemental_proof if args.shutdown_main_supplemental else verify_shutdown_main_proof if args.shutdown_main_gate else verify_drain_proof if args.drain_gate else verify_proof
     verifier(json.loads((report/'candidate-health-actor-proof.json').read_text(encoding='utf-8-sig')), source, target)
     print(json.dumps({'passed': True, 'taskId': task['taskId'], 'reportDirectory': str(report), 'filesVerified': len(ready['files'])}), flush=True)
 

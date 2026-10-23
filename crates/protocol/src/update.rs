@@ -584,6 +584,9 @@ pub enum SupervisorAction {
     ShutdownCandidateForBackup,
     BackupWorkerState,
     ObserveStateBackup,
+    /// Internal v16: create-only independent files, never installed runtime rename.
+    PrepareRuntimeFiles,
+    ObserveRuntimeFiles,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -645,6 +648,9 @@ pub struct UpdatePreparationView {
     /// V15/view7 only; old views omit this field. Historical data is not custody.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_state_backup: Option<CandidateStateBackupView>,
+    /// V16/view8 only; older replies omit this saved-data projection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_preparation: Option<RuntimePreparationView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1038,3 +1044,5 @@ pub use shutdown::*;
 
 mod state_backup;
 pub use state_backup::*;
+mod runtime_preparation;
+pub use runtime_preparation::*;

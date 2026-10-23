@@ -1,5 +1,16 @@
 # Updater U2.2: preparation library начата — 2026-10-22
 
+Продолжение: [copy driver и supervisor v16/view8](plans/worker-self-update/runtime-preparation-actor.md)
+добавлены; schema14/worker16 без изменения. Workspace636/0,16 ignored; после review
+fix canonical config/runtime comparison повторены16 preparation tests,2 directory
+tests, обе all-target Clippy, TS/contracts/UI build. Native fixture Windows all-target
+Clippy также passed. Подготовлен --runtime-preparation-gate (один actual Main case,
+matching14 archives), ещё не запускался. Target может быть clean cee06a7 archive
+005835Z; последний native10 ниже — только foundation. Runtime rename/activation
+не реализованы. Следом clean export → actual Main/source/build/health/shutdown/
+backup/preparation gate → verify all ready/proof/mutations → fault matrix + actual13
+refusal → consuming replacement custody/rename. Installed worker не обновлять.
+
 Цель возобновлена. [Preparation data/ledger](plans/worker-self-update/runtime-preparation.md)
 добавлены: updater schema14/worker16, supervisor пока v15/view7. Есть fixed five-file
 plan, separate directory/file intent/receipt, immutable causal history и fresh

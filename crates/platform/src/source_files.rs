@@ -1,6 +1,68 @@
 //! Local source moves never overwrite a destination or fall back to copy/delete.
 use std::{io, path::Path};
 
+/// Retain every ancestor while creating children. Windows handles deny rename/
+/// delete of the chain; other platforms additionally detect rebinding on check.
+pub struct PinnedDirectory {
+    chain: Vec<(std::path::PathBuf, std::fs::File, String)>,
+}
+impl PinnedDirectory {
+    pub fn acquire(path: &Path, expected_identity: Option<&str>) -> io::Result<Self> {
+        crate::require_local_path_prefix(path)?;
+        crate::require_safe_path(path)?;
+        crate::require_local_disk(path)?;
+        let path = path.canonicalize()?;
+        let mut chain = Vec::new();
+        for directory in path.ancestors().collect::<Vec<_>>().into_iter().rev() {
+            crate::require_safe_path(directory)?;
+            let mut options = std::fs::OpenOptions::new();
+            options.read(true);
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::OpenOptionsExt;
+                use windows_sys::Win32::Storage::FileSystem::{
+                    FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
+                    FILE_SHARE_WRITE,
+                };
+                options
+                    .access_mode(FILE_READ_ATTRIBUTES)
+                    .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+                    .custom_flags(FILE_FLAG_BACKUP_SEMANTICS);
+            }
+            let file = options.open(directory)?;
+            if !file.metadata()?.is_dir() {
+                return Err(io::Error::other("Expected local directory"));
+            }
+            let id = crate::file_identity(&file)?;
+            chain.push((directory.to_path_buf(), file, id));
+        }
+        let pin = Self { chain };
+        pin.revalidate()?;
+        if expected_identity.is_some_and(|id| id != pin.identity()) {
+            return Err(io::Error::other("Directory identity changed"));
+        }
+        Ok(pin)
+    }
+    pub fn identity(&self) -> &str {
+        &self
+            .chain
+            .last()
+            .expect("canonical directory includes root")
+            .2
+    }
+    pub fn revalidate(&self) -> io::Result<()> {
+        for (path, file, id) in &self.chain {
+            if !file.metadata()?.is_dir()
+                || crate::file_identity(file)? != *id
+                || directory_identity(path)? != *id
+            {
+                return Err(io::Error::other("Pinned directory chain changed"));
+            }
+        }
+        Ok(())
+    }
+}
+
 pub fn directory_identity(path: &Path) -> io::Result<String> {
     crate::require_local_path_prefix(path)?;
     crate::require_safe_path(path)?;
@@ -95,6 +157,25 @@ pub fn move_new(source: &Path, destination: &Path) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn directory_pin_rejects_wrong_identity_and_denies_or_detects_rebinding() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("parent").join("child");
+        std::fs::create_dir_all(&directory).unwrap();
+        let id = super::directory_identity(&directory).unwrap();
+        assert!(super::PinnedDirectory::acquire(&directory, Some("wrong-identity")).is_err());
+        let pin = super::PinnedDirectory::acquire(&directory, Some(&id)).unwrap();
+        pin.revalidate().unwrap();
+        let moved = root.path().join("moved");
+        let result = std::fs::rename(directory.parent().unwrap(), &moved);
+        if cfg!(windows) {
+            assert!(result.is_err());
+            pin.revalidate().unwrap();
+        } else {
+            result.unwrap();
+            assert!(pin.revalidate().is_err());
+        }
+    }
     #[test]
     fn existing_destination_is_never_replaced_and_new_move_keeps_bytes() {
         let dir = tempfile::tempdir().unwrap();

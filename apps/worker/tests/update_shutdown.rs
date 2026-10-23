@@ -32,6 +32,8 @@ struct GateInput {
     final_backup: bool,
     #[serde(default)]
     backup_faults: bool,
+    #[serde(default)]
+    runtime_preparation: bool,
 }
 fn write(path: &Path, value: &impl serde::Serialize) {
     use std::io::Write;
@@ -588,6 +590,196 @@ fn journal_fingerprint_allows_only_empty_wal_creation_and_detects_data_changes()
     fs::write(&main, b"changed main").unwrap();
     assert_ne!(journal_bytes(root.path()), before);
 }
+fn prepare_runtime(root: &Path, sup: &SupervisorRecord) -> serde_json::Value {
+    let mut request: SupervisorRequest =
+        serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
+            .unwrap();
+    assert_eq!(
+        winbridge_update::sha256(request.token.as_bytes()),
+        sup.spec.token_sha256
+    );
+    request.contract_version = 16;
+    request.action = SupervisorAction::ObserveRuntimeFiles;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let call = |q: &SupervisorRequest| -> UpdatePreparationView {
+        let response: SupervisorResponse = rt
+            .block_on(winbridge_transport::supervisor::call_with_timeout(
+                &sup.spec.endpoint,
+                sup.process.as_ref().unwrap().process_id,
+                q,
+                winbridge_transport::supervisor::CONTROL_TIMEOUT,
+            ))
+            .unwrap();
+        assert_eq!(response.contract_version, 16);
+        assert!(response.error.is_none(), "{:?}", response.error);
+        let view = response.preparation.unwrap();
+        assert_eq!(view.schema_version, 8);
+        view
+    };
+    let until = Instant::now() + Duration::from_secs(65);
+    let before = loop {
+        let view = call(&request);
+        assert!(view.driver_error.is_none(), "{:?}", view.driver_error);
+        assert_eq!(
+            view.candidate_state_backup.as_ref().unwrap().phase,
+            CandidateStateBackupPhase::Verified
+        );
+        if !view.driver_active
+            && view
+                .candidate_shutdown
+                .as_ref()
+                .unwrap()
+                .physical_custody_held
+        {
+            break view;
+        }
+        assert!(
+            Instant::now() < until,
+            "Backup driver did not retire into original custody"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    };
+    assert!(before
+        .runtime_preparation
+        .as_ref()
+        .unwrap()
+        .attempt_id
+        .is_none());
+    let directory = root.join("runtime/update-state");
+    let id = &sup.spec.update_id;
+    let source_bytes = journal_bytes(root);
+    let baseline = UpdateJournal::inspect_runtime_baseline(&directory, id)
+        .unwrap()
+        .receipt
+        .unwrap();
+    let mut old_images = baseline.installed.images.clone();
+    old_images.push(baseline.installed.manifest_file.clone());
+    let source_files = UpdateJournal::inspect_candidate_artifacts(&directory, id)
+        .unwrap()
+        .inspection
+        .artifacts
+        .into_iter()
+        .map(|a| a.image)
+        .collect::<Vec<_>>();
+    let preimages = UpdateJournal::inspect_runtime_preimages(&directory, id)
+        .unwrap()
+        .receipt
+        .unwrap();
+    // A new action cannot acquire a new meaning through a frozen v15 request.
+    let mut invalid = request.clone();
+    invalid.contract_version = 15;
+    invalid.action = SupervisorAction::PrepareRuntimeFiles;
+    let refused: SupervisorResponse = rt
+        .block_on(winbridge_transport::supervisor::call_with_timeout(
+            &sup.spec.endpoint,
+            sup.process.as_ref().unwrap().process_id,
+            &invalid,
+            winbridge_transport::supervisor::CONTROL_TIMEOUT,
+        ))
+        .unwrap();
+    assert!(refused.error.is_some());
+    assert!(UpdateJournal::inspect_runtime_preparation(&directory, id)
+        .unwrap()
+        .is_none());
+    request.action = SupervisorAction::PrepareRuntimeFiles;
+    let admitted = call(&request);
+    let attempt = admitted
+        .runtime_preparation
+        .as_ref()
+        .unwrap()
+        .attempt_id
+        .clone()
+        .unwrap();
+    request.action = SupervisorAction::ObserveRuntimeFiles;
+    let until = Instant::now() + Duration::from_secs(600);
+    let mut progress = None;
+    let done = loop {
+        let view = call(&request);
+        let state = view.runtime_preparation.as_ref().unwrap();
+        assert!(
+            view.driver_error.is_none(),
+            "Preparation failed: {:?}",
+            view.driver_error
+        );
+        assert_eq!(state.attempt_id.as_deref(), Some(attempt.as_str()));
+        if progress != state.revision {
+            eprintln!(
+                "Runtime preparation revision {:?}, phase {:?}, files {}/{}",
+                state.revision, state.phase, state.prepared_files, state.total_files
+            );
+            progress = state.revision;
+        }
+        if !view.driver_active && state.phase == RuntimePreparationPhase::Prepared {
+            break view;
+        }
+        assert!(
+            Instant::now() < until,
+            "Preparation deadline; preserve original attempt"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    };
+    let record = UpdateJournal::inspect_runtime_preparation(&directory, id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        record.phase,
+        winbridge_update::runtime_preparation::PreparationPhase::Prepared
+    );
+    assert_eq!(record.revision, 12);
+    record.exchange_batch().unwrap().validate().unwrap();
+    let actual = record
+        .plan
+        .files
+        .iter()
+        .map(|f| inspect_image(Path::new(&f.destination)).unwrap())
+        .collect::<Vec<_>>();
+    for (index, image) in actual.iter().enumerate() {
+        let winbridge_update::runtime_preparation::PreparationFileState::Verified { image: saved } =
+            &record.files[index]
+        else {
+            panic!("No prepared receipt");
+        };
+        assert_eq!(saved, image);
+    }
+    for image in old_images
+        .iter()
+        .chain(&source_files)
+        .chain(&preimages.files)
+    {
+        assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *image);
+    }
+    let manifest: InstalledSetManifest =
+        serde_json::from_slice(&fs::read(record.plan.directory().join(MANIFEST_NAME)).unwrap())
+            .unwrap();
+    assert_eq!(manifest, record.plan.manifest);
+    assert_eq!(journal_bytes(root), source_bytes);
+    request.action = SupervisorAction::PrepareRuntimeFiles;
+    let duplicate = call(&request);
+    assert_eq!(duplicate.runtime_preparation, done.runtime_preparation);
+    assert_eq!(
+        UpdateJournal::inspect_runtime_preparation(&directory, id)
+            .unwrap()
+            .unwrap(),
+        record
+    );
+    for image in &actual {
+        assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *image);
+    }
+    let mut old_view = request.clone();
+    old_view.contract_version = 15;
+    old_view.action = SupervisorAction::ObserveStateBackup;
+    let legacy: serde_json::Value = rt
+        .block_on(winbridge_transport::supervisor::call_with_timeout(
+            &sup.spec.endpoint,
+            sup.process.as_ref().unwrap().process_id,
+            &old_view,
+            winbridge_transport::supervisor::CONTROL_TIMEOUT,
+        ))
+        .unwrap();
+    assert!(legacy["error"].is_null());
+    assert!(legacy["preparation"].get("runtimePreparation").is_none());
+    json!({"beforeAdmission":before,"admitted":admitted,"view":done,"duplicate":duplicate,"record":record,"actualFiles":actual,"oldImagesBefore":old_images,"sourceFiles":source_files,"sourceBytesUnchanged":true,"oldRuntimeUnchanged":true,"preimagesUnchanged":true,"allCopiesIndependent":true,"duplicateNoNewAttempt":true,"privateAuthorityNotExported":true,"oldViewsOmitPreparation":true,"retainedGraphMatches":true})
+}
 fn final_backup(
     root: &Path,
     sup: &SupervisorRecord,
@@ -1034,6 +1226,9 @@ fn case(
         let final_state_backup = input
             .final_backup
             .then(|| final_backup(&root, &sup, backup_fault));
+        let runtime_preparation = input
+            .runtime_preparation
+            .then(|| prepare_runtime(&root, &sup));
         let input = ShutdownInspectionRequest {
             schema_version: 1,
             intent: shutdown.intent.clone(),
@@ -1074,7 +1269,7 @@ fn case(
                 image.sha256
             );
         }
-        json!({"fault":fault,"finalStateBackup":final_state_backup,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true})
+        json!({"fault":fault,"finalStateBackup":final_state_backup,"runtimePreparation":runtime_preparation,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true})
     };
     // The closure may panic; an RAII owner still closes the test Job. On success
     // explicitly verify its complete termination and the post-crash history.
@@ -1103,6 +1298,35 @@ fn case(
         UpdateJournal::shutdown_preparation_snapshot(&directory, id, false, None)
     })
     .unwrap();
+    if input.runtime_preparation {
+        let (retained, retries) =
+            observe_after_owned_exit(|| UpdateJournal::inspect_runtime_preparation(&directory, id))
+                .unwrap();
+        observation_retries += retries;
+        let retained = retained.unwrap();
+        assert_eq!(
+            serde_json::to_value(&retained).unwrap(),
+            proof["runtimePreparation"]["record"]
+        );
+        let (runtime_view, retries) = observe_after_owned_exit(|| {
+            UpdateJournal::runtime_files_preparation_snapshot(&directory, id, false, None)
+        })
+        .unwrap();
+        observation_retries += retries;
+        assert!(
+            !runtime_view
+                .candidate_shutdown
+                .as_ref()
+                .unwrap()
+                .physical_custody_held
+        );
+        assert_eq!(
+            runtime_view.runtime_preparation.as_ref().unwrap().phase,
+            RuntimePreparationPhase::Prepared
+        );
+        proof["retainedRuntimePreparationRecord"] = serde_json::to_value(retained).unwrap();
+        proof["runtimePreparationAfterOwnedExit"] = serde_json::to_value(runtime_view).unwrap();
+    }
     let phase = view.candidate_shutdown.unwrap();
     assert!(!phase.physical_custody_held);
     assert_eq!(
@@ -1213,6 +1437,7 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
     );
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     assert!(!input.backup_faults || input.final_backup);
+    assert!(!input.runtime_preparation || (input.final_backup && !input.backup_faults));
     assert!(!input.final_backup || !input.supplemental);
     assert!(input.root.is_dir());
     assert_ne!(
@@ -1264,6 +1489,6 @@ fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement
         );
         println!("Completed native case {fault:?}/{backup_fault:?}; owned Job closed and saved history checked");
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

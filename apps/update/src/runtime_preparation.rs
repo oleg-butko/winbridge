@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use winbridge_core::update::valid_hash;
 type Result<T> = std::result::Result<T, String>;
+mod driver;
+pub use driver::prepare_runtime_files;
 pub const FILE_ORDER: [RuntimeFile; 5] = [
     RuntimeFile::Worker,
     RuntimeFile::Fixture,
@@ -473,6 +475,51 @@ impl RuntimePreparationPermit {
 pub enum RuntimePreparationAdmission {
     Fresh(Box<RuntimePreparationPermit>),
     Existing(Box<RuntimePreparationRecord>),
+}
+
+pub(crate) fn view(
+    record: Option<&RuntimePreparationRecord>,
+    active: bool,
+    failed: bool,
+) -> winbridge_protocol::update::RuntimePreparationView {
+    use winbridge_protocol::update::{RuntimePreparationPhase as Phase, RuntimePreparationView};
+    let Some(r) = record else {
+        return RuntimePreparationView {
+            phase: if failed {
+                Phase::Blocked
+            } else {
+                Phase::NotAdmitted
+            },
+            attempt_id: None,
+            revision: None,
+            directory: None,
+            prepared_files: 0,
+            total_files: 5,
+            issued_file: None,
+            total_bytes: None,
+            reason: None,
+        };
+    };
+    let terminal = matches!(
+        r.phase,
+        PreparationPhase::Prepared | PreparationPhase::Indeterminate
+    );
+    let phase = if !active && !terminal {
+        Phase::Indeterminate
+    } else {
+        match r.phase {
+            PreparationPhase::Planned => Phase::Admitted,
+            PreparationPhase::DirectoryIssued => Phase::CreatingDirectory,
+            PreparationPhase::Preparing => Phase::PreparingFiles,
+            PreparationPhase::Prepared => Phase::Prepared,
+            PreparationPhase::Indeterminate => Phase::Indeterminate,
+        }
+    };
+    RuntimePreparationView {phase,attempt_id:Some(r.plan.attempt_id.clone()),revision:Some(r.revision),directory:Some(r.plan.directory().to_string_lossy().into()),
+        prepared_files:r.files.iter().filter(|s|matches!(s,PreparationFileState::Verified {..})).count() as u16,total_files:5,
+        issued_file:r.plan.files.iter().zip(&r.files).find_map(|(f,s)|matches!(s,PreparationFileState::Issued {}).then(||f.file.name().into())),total_bytes:r.plan.required_bytes().ok(),
+        reason:r.reason.clone().or_else(||(!active && !terminal).then(||"Сохранён незавершённый intent; текущего драйвера нет, автоматического повтора нет".into())),
+    }
 }
 
 #[cfg(test)]

@@ -76,6 +76,28 @@ fn now() -> Result<u64> {
     )
     .map_err(error)
 }
+fn runtime_files_view(
+    directory: &Path,
+    id: &str,
+    active: bool,
+    failure: Option<String>,
+    custody: &crate::shutdown::Custody,
+    admitting: bool,
+) -> Result<UpdatePreparationView> {
+    let mut view =
+        UpdateJournal::runtime_files_preparation_snapshot(directory, id, active, failure)
+            .map_err(error)?;
+    if let Some(shutdown) = &mut view.candidate_shutdown {
+        shutdown.physical_custody_held =
+            shutdown.phase == CandidateShutdownPhase::Exited && custody.present()?;
+    }
+    if let Some(preparation) = &mut view.runtime_preparation {
+        if admitting && preparation.attempt_id.is_none() {
+            preparation.phase = RuntimePreparationPhase::Admitting;
+        }
+    }
+    Ok(view)
+}
 fn local(path: &Path) -> Result<PathBuf> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
     winbridge_platform::require_local_disk(path).map_err(error)?;
@@ -664,6 +686,53 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    pub async fn runtime_files(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 16,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::PrepareRuntimeFiles
+            } else {
+                SupervisorAction::ObserveRuntimeFiles
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 16
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Runtime preparation response scope/version changed; no fallback".into());
+        }
+        if let Some(error) = response.error {
+            return Err(error);
+        }
+        let view = response
+            .preparation
+            .ok_or("Runtime preparation view missing")?;
+        if view.schema_version != 8
+            || view.runtime_preparation.is_none()
+            || view.candidate_state_backup.is_none()
+            || view.candidate_shutdown.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Runtime preparation response belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     pub async fn candidate_drain(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
             return Err("Supervisor exact process changed".into());
@@ -1135,6 +1204,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ShutdownCandidateForBackup
                 | SupervisorAction::BackupWorkerState
                 | SupervisorAction::ObserveStateBackup
+                | SupervisorAction::PrepareRuntimeFiles
+                | SupervisorAction::ObserveRuntimeFiles
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1297,6 +1368,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         Complete(Result<()>),
         ShutdownPrepared(Result<Box<crate::shutdown::Prepared>>),
         BackupAdmitted(Result<crate::state_backup::StateBackupAdmission>),
+        RuntimeAdmitted(Result<crate::runtime_preparation::RuntimePreparationAdmission>),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -1309,6 +1381,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut shutdown_reply: Option<(ipc::Stream, bool)> = None;
     let mut backup_reply: Option<ipc::Stream> = None;
     let mut backup_preparing = false;
+    let mut runtime_reply: Option<ipc::Stream> = None;
+    let mut runtime_admitting = false;
     let mut drain_telemetry = crate::drain::Telemetry::default();
     let mut pending_abort: Option<Box<crate::abort::AbortPermit>> = None;
     // One readonly query at a time; dropping the set aborts its IO task. The
@@ -1328,6 +1402,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
             let mut prepared = None;
             let mut backup_permit = None;
+            let mut runtime_permit = None;
             let outcome = match outcome {
                 DriverCompletion::Complete(outcome) => outcome,
                 DriverCompletion::ShutdownPrepared(Ok(value)) => {
@@ -1345,9 +1420,20 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     crate::state_backup::StateBackupAdmission::Existing(_),
                 )) => Ok(()),
                 DriverCompletion::BackupAdmitted(Err(e)) => Err(e),
+                DriverCompletion::RuntimeAdmitted(Ok(
+                    crate::runtime_preparation::RuntimePreparationAdmission::Fresh(p),
+                )) => {
+                    runtime_permit = Some(p);
+                    Ok(())
+                }
+                DriverCompletion::RuntimeAdmitted(Ok(
+                    crate::runtime_preparation::RuntimePreparationAdmission::Existing(_),
+                )) => Ok(()),
+                DriverCompletion::RuntimeAdmitted(Err(e)) => Err(e),
             };
             shutdown_preparing = false;
             backup_preparing = false;
+            runtime_admitting = false;
             artifacts_active = false;
             preimages_active = false;
             health_active = false;
@@ -1463,6 +1549,52 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     let spec = r.clone();
                     work = Some(tokio::task::spawn_blocking(move || {
                         let result = crate::state_backup::capture_final_state(
+                            &mut journal,
+                            &owner,
+                            &spec,
+                            *permit,
+                            &guard,
+                        )
+                        .map(|_| ());
+                        (journal, owner, DriverCompletion::Complete(result))
+                    }));
+                }
+            }
+            if let Some(mut stream) = runtime_reply.take() {
+                let outcome = runtime_files_view(
+                    &directory,
+                    &r.spec.update_id,
+                    runtime_permit.is_some(),
+                    driver_error.clone(),
+                    &shutdown_custody,
+                    false,
+                );
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), driver_error.clone()),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 16,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    error,
+                    worker_control: None,
+                    preparation,
+                };
+                let dispatch = response.error.is_none();
+                if response.error.is_some() {
+                    driver_error = response.error.clone();
+                }
+                let _ = ipc::write(&mut stream, &response).await;
+                if let Some(permit) = runtime_permit.filter(|_| dispatch) {
+                    let guard = shutdown_custody
+                        .loan()?
+                        .ok_or("Runtime preparation original custody missing")?;
+                    let (mut journal, owner) =
+                        idle.take().ok_or("Runtime preparation owner missing")?;
+                    let spec = r.clone();
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = crate::runtime_preparation::prepare_runtime_files(
                             &mut journal,
                             &owner,
                             &spec,
@@ -1615,6 +1747,89 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 };
                 let response = SupervisorResponse {
                     contract_version: if backup_required { 15 } else { 14 },
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    error,
+                    worker_control: None,
+                    preparation,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::PrepareRuntimeFiles | SupervisorAction::ObserveRuntimeFiles
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 16
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err(
+                        "Runtime preparation requires exact Active bound v16 supervisor".into(),
+                    );
+                }
+                let view = runtime_files_view(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                    &shutdown_custody,
+                    runtime_admitting,
+                )?;
+                if request.action == SupervisorAction::ObserveRuntimeFiles
+                    || view
+                        .runtime_preparation
+                        .as_ref()
+                        .is_some_and(|v| v.attempt_id.is_some())
+                    || runtime_admitting
+                {
+                    return Ok(view);
+                }
+                if work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::Replacing
+                    || !shutdown_custody.present()?
+                    || view
+                        .candidate_state_backup
+                        .as_ref()
+                        .is_none_or(|b| b.phase != CandidateStateBackupPhase::Verified)
+                {
+                    return Err("Runtime preparation needs verified final backup, original custody and idle Replacing owner".into());
+                }
+                start = true;
+                Ok(view)
+            })();
+            if start && outcome.is_ok() {
+                let guard = shutdown_custody
+                    .loan()?
+                    .ok_or("Runtime preparation custody missing")?;
+                let (mut journal, owner) = idle
+                    .take()
+                    .ok_or("Runtime preparation admission owner missing")?;
+                let spec = r.clone();
+                runtime_admitting = true;
+                runtime_reply = Some(stream);
+                driver_error = None;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result = journal
+                        .admit_runtime_preparation(&owner, &spec, Some(&guard))
+                        .map_err(error);
+                    (journal, owner, DriverCompletion::RuntimeAdmitted(result))
+                }));
+            } else {
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 16,
                     launch_id: r.spec.launch_id.clone(),
                     record: None,
                     error,
@@ -2592,7 +2807,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         "Handoff сохранён; supervisor продолжает работу после parent exit. Дальнейшие действия требуют отдельных проверенных команд",
                     ).map_err(error)
                 }
-                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown | SupervisorAction::ShutdownCandidateForBackup | SupervisorAction::BackupWorkerState | SupervisorAction::ObserveStateBackup => Err("Action needs its separate handler".into()),
+                SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown | SupervisorAction::ShutdownCandidateForBackup | SupervisorAction::BackupWorkerState | SupervisorAction::ObserveStateBackup | SupervisorAction::PrepareRuntimeFiles | SupervisorAction::ObserveRuntimeFiles => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

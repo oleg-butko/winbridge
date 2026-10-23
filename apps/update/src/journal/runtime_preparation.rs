@@ -197,7 +197,7 @@ fn ledger(c: &Connection, p: &RuntimePreparationPlan) -> Result<RuntimePreparati
     }
     Ok(current)
 }
-fn read(c: &Connection, id: &str) -> Result<Option<RuntimePreparationRecord>> {
+pub(super) fn read(c: &Connection, id: &str) -> Result<Option<RuntimePreparationRecord>> {
     if schema(c)? < 14 {
         return Ok(None);
     }
@@ -349,6 +349,40 @@ fn physical(
     Ok(())
 }
 impl UpdateJournal {
+    pub(crate) fn runtime_preparation(&self, id: &str) -> Result<Option<RuntimePreparationRecord>> {
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        let result = read(&tx, id)?;
+        tx.commit().map_err(storage)?;
+        Ok(result)
+    }
+    pub(crate) fn require_runtime_preparation_current(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        r: &RuntimePreparationRecord,
+    ) -> Result<()> {
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        current(&tx, a, s, &r.plan)?;
+        if read(&tx, &r.plan.update_id)?.as_ref() != Some(r) {
+            return Err(fail(
+                JournalErrorCode::RevisionConflict,
+                "Preparation current record changed",
+            ));
+        }
+        tx.commit().map_err(storage)
+    }
+    /// Small fence check for streaming chunks; the complete graph is checked
+    /// before/after each file while the same source/directory pins remain held.
+    pub(crate) fn preparation_stream_fence(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        p: &RuntimePreparationPlan,
+    ) -> Result<()> {
+        self.check_directory(a)?;
+        current(&self.connection, a, s, p)
+    }
     pub fn inspect_runtime_preparation(
         directory: &Path,
         id: &str,

@@ -32,6 +32,15 @@ impl Pinned {
     /// Internal generation writer: create_new only, never copy metadata from a
     /// caller-selected file. Both original and returned read pins stay live.
     pub(crate) fn copy_new(&self, destination: &Path) -> Result<Self> {
+        self.copy_new_checked(destination, || Ok(()))
+    }
+    /// The owner checks fencing before create and each bounded write. This does
+    /// not grant authority; the caller must commit its intent before calling.
+    pub(crate) fn copy_new_checked(
+        &self,
+        destination: &Path,
+        mut checkpoint: impl FnMut() -> Result<()>,
+    ) -> Result<Self> {
         winbridge_platform::require_safe_path(&self.path).map_err(error)?;
         winbridge_platform::require_local_path_prefix(destination).map_err(error)?;
         winbridge_platform::require_safe_path(destination).map_err(error)?;
@@ -54,6 +63,7 @@ impl Pinned {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
+        checkpoint()?;
         let mut output = options.open(destination).map_err(error)?;
         let created = winbridge_platform::file_identity(&output).map_err(error)?;
         let mut digest = Sha256::new();
@@ -68,10 +78,12 @@ impl Pinned {
             if total > self.evidence.bytes {
                 return Err("Preimage source grew; partial copy preserved".into());
             }
+            checkpoint()?;
             output.write_all(&buffer[..n]).map_err(error)?;
             digest.update(&buffer[..n]);
         }
         output.sync_all().map_err(error)?;
+        checkpoint()?;
         drop(output);
         winbridge_platform::source_files::sync_parent(destination).map_err(error)?;
         if total != self.evidence.bytes
