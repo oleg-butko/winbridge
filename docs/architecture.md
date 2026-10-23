@@ -6,7 +6,9 @@
 
 Продолжение: [replacement admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)
 добавлен в текущий source **schema15**; worker16/supervisor v16/view8 прежние.
-Local workspace647/0 и обе Clippy passed; native15/actual14→15 впереди. Rename
+Local workspace647/0 и обе Clippy passed;
+[native15 metadata11/0](plans/worker-self-update/windows-runtime-replacement-ledger-gate-2026-10-23.md)
+пройден, actual retained14→15/refusal впереди. Rename
 callback/consuming guard/IO ещё не подключены. Проверенные preparation gates ниже —14.
 
 Текущий блок — [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md):

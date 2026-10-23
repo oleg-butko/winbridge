@@ -1,14 +1,17 @@
 # Updater: preparation faults и replacement model проверены — 2026-10-23
 
-## Current WIP: replacement ledger schema15
+## Current: replacement ledger schema15 metadata gate пройден
 
 Добавлен [durable admission ledger](plans/worker-self-update/runtime-replacement-ledger.md)
 и non-Serde fresh permit. Текущий source updater15/worker16, supervisor v16/view8
 без новых wire actions. Package updater216/0,6 ignored; workspace647/0,16 ignored
-и обе all-target Clippy прошли. Native15 ещё не запускался. Дополнены synthetic downgrade
+и обе all-target Clippy прошли. [Native15 metadata11/0](plans/worker-self-update/windows-runtime-replacement-ledger-gate-2026-10-23.md)
+пройден,6 ready files twice, task `e292eb2f-33b6-4d7f-b281-a954b5f24d63`/
+run `20261023-091331-b6f35ac8`, producer5fbc1cf. Локальный result/pins:
+`.winbridge/update-preparation/replacement-ledger-native-verified.json`.
+**Нет активных native/Cargo runs, не повторять terminal tasks.** Дополнены synthetic downgrade
 fixtures; предыдущие gates ниже относятся к14 и не подтверждают15.
 Production callback rename-success/consuming guard/IO ещё отсутствуют. Следом
-завершить checks/review/commit/export, generated Windows ledger11-test gate,
 actual retained14→15/old14 refusal и positive original-custody admission при
 подключении consuming guard. Installed d052 прежний; ручное обновление не требуется.
 

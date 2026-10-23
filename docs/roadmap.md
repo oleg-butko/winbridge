@@ -2,8 +2,10 @@
 
 2026-10-23 WIP: [replacement ledger schema15](plans/worker-self-update/runtime-replacement-ledger.md)
 добавляет immutable current/history и fresh original-guard admission, без rename
-callback/actor. Package216/0, workspace647/0 и обе Clippy passed. Native15 и actual14→15
-ещё впереди. Старые14 gates ниже не переносить на новую schema.
+callback/actor. Package216/0, workspace647/0 и обе Clippy passed.
+[Native15 metadata11/0](plans/worker-self-update/windows-runtime-replacement-ledger-gate-2026-10-23.md)
+пройден,6 ready files twice; actual retained14→15/refusal и original-custody positive
+admission ещё впереди. Старые14 gates ниже не переносить на новую schema.
 
 2026-10-23: [три actual preparation faults](plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md)
 пройдены40 tests/10 groups,24 ready files twice,48 negative mutations. Review

@@ -2,8 +2,9 @@
 
 2026-10-23. Добавлены journal15 tables и trusted library admission. Package216/0,
 workspace647/0 (16 ignored), обе all-target Clippy/Python7/0/scaffold240 прошли.
-**Native ledger gate, actual14→15/refusal и positive admission
-под настоящим original guard ещё не подтверждены**. [Data model](runtime-replacement.md)
+[Native ledger11/0 gate](windows-runtime-replacement-ledger-gate-2026-10-23.md)
+пройден; **actual14→15/refusal и positive admission под настоящим original guard
+ещё не подтверждены**. [Data model](runtime-replacement.md)
 уже прошла отдельный schema14/native12-test gate; он не подтверждает новый journal15.
 Whole rename/activation и public update по-прежнему отключены.
 
@@ -51,9 +52,9 @@ updater15/worker16 source guard. Старый model-only режим исключ
 `journal::runtime_replacement`, сохраняя собственные6 aggregate tests.
 Никакой desktop/candidate build или Windows UI не нужен.
 
-Перед native execution: complete local workspace и Linux/Windows all-target Clippy,
-review → clean commit/export → announce worker-only run → verify task/ready files/
-actual test counts. Native metadata gate не заменит positive original-custody admission.
+Native run20261023-091331-b6f35ac8 terminal succeeded/0,11 tests/6 ready files twice;
+полный workspace и обе Clippy passed. Повтор той же task не нужен. Этот metadata gate
+не заменяет positive original-custody admission.
 
 Затем обязательно проверить **actual retained14→15 и actual old14 refusal** на
 отдельной consistent-копии прежнего successful14 Prepared history. Reference —

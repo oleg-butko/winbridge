@@ -9,7 +9,8 @@
 
 [Replacement ledger](runtime-replacement-ledger.md) добавлен в source schema15:
 immutable history/fresh admission, local workspace647/0 и обе Clippy passed.
-Native15 и actual14→15/refusal ещё впереди; successful rename callbacks не открыты.
+[Native15 metadata11/0](windows-runtime-replacement-ledger-gate-2026-10-23.md) пройден;
+actual retained14→15/refusal ещё впереди, successful rename callbacks не открыты.
 Следом consuming original custody/guard и IO/actor. Native results ниже относятся к14.
 
 После передачи контекста цель возобновлена. [Actual preparation fault gate](runtime-preparation-faults.md)
