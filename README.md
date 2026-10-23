@@ -120,6 +120,9 @@ status и release только после source/Job/output proof. Добавл�
 закрыл U2.1; actual replacement/activation ещё не реализованы. Install/public update отключены.
 [Подробный handoff завершения проверок 2026-10-22](docs/plans/worker-self-update/resume-2026-10-22.md)
 содержит результаты, карту кода и порядок продолжения U2.2 без контекста чата.
+В продолжении добавлена [preparation library schema14](docs/plans/worker-self-update/runtime-preparation.md):
+модель пяти копий и durable ledger. Copy driver, новый actor и actual replacement
+остаются следующими блоками; прежние native gates относятся к schema13.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-22, продолжение: [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md)
+добавляет data FSM/ledger schema14. Targeted local10/0, package199/0 и обе Clippy passed;
+native ещё не пройден. Далее create-only preparation driver + новый actor/actual
+gate, затем consuming custody/rename/activation. Public install остаётся отключённым.
+
 ## Точка продолжения после проверок 2026-10-22
 
 [Подробный handoff](plans/worker-self-update/resume-2026-10-22.md) — актуальная

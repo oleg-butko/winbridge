@@ -4,6 +4,10 @@
 
 ## Текущее состояние updater — завершение проверок 2026-10-22
 
+После этой контрольной точки начата [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md):
+текущая updater schema14, worker16; supervisor пока v15/view7. Есть data FSM/ledger,
+но нет copy/rename driver или новой actor-команды. Native U2.1 ниже — schema13.
+
 U0/internal U1 завершены. U2.1 использует updater13/worker16, supervisor v15/view7:
 original exit guard удерживается supervisor через Arc и immutable driver loan;
 readonly old-worker helper сохраняет SQLite через backup API. Данные backup/history

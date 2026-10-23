@@ -28,11 +28,12 @@ mod drain;
 mod health;
 mod runtime_baseline;
 mod runtime_preimages;
+mod runtime_preparation;
 mod shutdown;
 mod source;
 mod state_backup;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 13;
+pub const UPDATE_SCHEMA_VERSION: u32 = 14;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -493,6 +494,7 @@ impl UpdateJournal {
             drain::migrate(&tx)?;
             shutdown::migrate(&tx)?;
             state_backup::migrate(&tx)?;
+            runtime_preparation::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -548,6 +550,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 12 {
                 state_backup::migrate(&tx)?;
+            }
+            if schema(&tx)? == 13 {
+                runtime_preparation::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(

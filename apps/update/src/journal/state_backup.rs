@@ -270,10 +270,10 @@ impl UpdateJournal {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
         let tx = c.transaction().map_err(storage)?;
-        if schema(&tx)? != 13 {
+        if schema(&tx)? != UPDATE_SCHEMA_VERSION {
             return Err(fail(
                 JournalErrorCode::UnsupportedSchema,
-                "Final state export requires updater schema13; no migration",
+                "Final state export requires the exporter's compiled updater schema; no migration",
             ));
         }
         let saved = read(&tx, id)?.ok_or_else(|| {

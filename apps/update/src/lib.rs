@@ -16,6 +16,7 @@ mod preparation;
 pub mod runtime_baseline;
 pub mod runtime_exchange;
 pub mod runtime_preimages;
+pub mod runtime_preparation;
 pub mod shutdown;
 pub mod source;
 pub mod state_backup;

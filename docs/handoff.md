@@ -1,4 +1,17 @@
-# Передача контекста updater — завершение проверок 2026-10-22
+# Updater U2.2: preparation library начата — 2026-10-22
+
+Цель возобновлена. [Preparation data/ledger](plans/worker-self-update/runtime-preparation.md)
+добавлены: updater schema14/worker16, supervisor пока v15/view7. Есть fixed five-file
+plan, separate directory/file intent/receipt, immutable causal history и fresh
+non-Serde preparation permit под original shutdown custody. 10 targeted local
+tests и весь updater package (199/0, 6 ignored), Linux/Windows all-target Clippy прошли. Native preparation
+mode подготовлен, ещё не пройден. Full actual admission/copy driver/новый actor,
+custody handoff/rename/activation/public install не реализованы.
+Old schema13 native gates ниже остаются историей. Следующий полный actor gate
+требует matching schema14 old-role/candidate archives; helper13 не читает future DB.
+Working installed d052 не менялся, Windows tasks этого блока пока не запускались.
+
+## Передача контекста до возобновления U2.2 — 2026-10-22
 
 **Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-22.md).**
 В ней сохранены фактическая готовность, карта кода, отчёты/Task IDs/SHA, исправления,

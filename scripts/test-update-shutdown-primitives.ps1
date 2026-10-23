@@ -10,10 +10,11 @@ param(
   [Parameter(Mandatory)][string]$ReferenceReceipt,
   [switch]$ColdReaderOnly,
   [switch]$BackupMigrationOnly,
-  [switch]$RuntimeFileMovesOnly
+  [switch]$RuntimeFileMovesOnly,
+  [switch]$RuntimePreparationOnly
 )
 $ErrorActionPreference='Stop'
-if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
+if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly,$RuntimePreparationOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
@@ -27,7 +28,7 @@ Assert-WorkflowCachePath $cache
 if(-not (Test-Path -LiteralPath $cache -PathType Container)){throw 'Existing approved test cache required'}
 $manifest=Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 if($manifest.dirty){throw 'Clean exported source required'}
-$kind=if($RuntimeFileMovesOnly){'runtime_file_moves_native_gate'}elseif($BackupMigrationOnly){'state_backup_migration_native_gate'}elseif($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
+$kind=if($RuntimePreparationOnly){'runtime_preparation_native_gate'}elseif($RuntimeFileMovesOnly){'runtime_file_moves_native_gate'}elseif($BackupMigrationOnly){'state_backup_migration_native_gate'}elseif($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
 $report=[ordered]@{schemaVersion=1;kind=$kind;platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;windowsOpened=$false;commands=@();error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 $variables=@('CARGO_TARGET_DIR','CARGO_INCREMENTAL','TEMP','TMP','WINBRIDGE_SHUTDOWN_REFERENCE_WORKER','WINBRIDGE_UPDATE_REFERENCE_UPDATER','WINBRIDGE_STATE_BACKUP_MIGRATION_INPUT')
 $old=@{};foreach($name in $variables){$old[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
@@ -40,7 +41,9 @@ try {
     if((Get-Item -LiteralPath $p).Length -ne $f.bytes -or (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() -cne $f.sha256){throw "Source mismatch: $($f.path)"}
   }
   $refs=Get-Content -LiteralPath $ReferenceReceipt -Raw | ConvertFrom-Json
-  if($RuntimeFileMovesOnly){
+  if($RuntimePreparationOnly){
+    if($refs.kind -cne 'runtime_preparation_validation'){throw 'Fixed preparation fixture declaration required'}
+  } elseif($RuntimeFileMovesOnly){
     if($refs.kind -cne 'runtime_file_move_validation'){throw 'Fixed file-move fixture declaration required'}
   } elseif($BackupMigrationOnly){
     if($refs.kind -cne 'state_backup_schema12_reference'){throw 'Proven schema12 full history reference required'}
@@ -99,6 +102,9 @@ try {
       @{name='runtime-owned-file-moves';minimum=3;args=@('test','-p','winbridge-platform','--lib','runtime_files::tests','--locked','--offline')},
       @{name='runtime-file-exchange-data';minimum=6;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_exchange','--locked','--offline')}
     )
+  }
+  if($RuntimePreparationOnly){
+    $groups=@(@{name='runtime-preparation-data-ledger';minimum=10;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_preparation','--locked','--offline')})
   }
   foreach($g in $groups){
     $log=Join-Path $ReportDirectory ($g.name+'.log')
