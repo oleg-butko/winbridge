@@ -232,11 +232,11 @@ fn schema_fourteen_migration_backs_up_fences_owner_and_invents_no_replacement() 
     drop(owner);
     drop(j);
     let c = Connection::open(dir.join("updates.sqlite")).unwrap();
-    c.execute_batch("DROP TABLE runtime_replacement_history;DROP TABLE runtime_replacement_records;DROP TABLE runtime_replacement_intents;PRAGMA user_version=14;").unwrap();
+    c.execute_batch("DROP TABLE candidate_support_history; DROP TABLE candidate_support_records; DROP TABLE candidate_support_intents; DROP TABLE runtime_replacement_history;DROP TABLE runtime_replacement_records;DROP TABLE runtime_replacement_intents;PRAGMA user_version=14;").unwrap();
     drop(c);
     let mut j = UpdateJournal::open(&dir, &scope).unwrap();
     let after = j.info().unwrap();
-    assert_eq!(after.schema_version, 15);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(j.get(&saved.update_id).unwrap(), saved);
     assert!(

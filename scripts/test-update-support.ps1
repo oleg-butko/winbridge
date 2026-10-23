@@ -8,7 +8,8 @@ param(
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
   [Parameter(Mandatory)][string]$ReferenceFile,
   [Parameter(Mandatory)][string]$ReferenceSha256,
-  [Parameter(Mandatory)][string]$ReportDirectory
+  [Parameter(Mandatory)][string]$ReportDirectory,
+  [switch]$CandidateSupportMigration
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -21,8 +22,10 @@ $source=[IO.Path]::GetFullPath($SourceDirectory)
 $root=Split-Path $source -Parent
 $manifest=Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 $report=[ordered]@{schemaVersion=1;kind='updater_runtime_support_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();images=@{};referenceSha256=$ReferenceSha256;runtimeApplied=$false;installedRuntimeApplied=$false;windowsOpened=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+if($CandidateSupportMigration){$report.kind='candidate_support_migration_native_gate'}
 $lease=$null
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_SUPPORT_GATE_INPUT
+$oldMigrationInput=$env:WINBRIDGE_CANDIDATE_SUPPORT_MIGRATION_INPUT
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP;$oldLocation=Get-Location
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
 try {
@@ -32,9 +35,14 @@ try {
   Assert-SessionFile $ReferenceFile
   if((Get-FileHash -LiteralPath $ReferenceFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $ReferenceSha256){throw 'Reference receipt changed'}
   $reference=Get-Content -LiteralPath $ReferenceFile -Raw | ConvertFrom-Json
-  if($reference.schemaVersion -ne 1 -or $reference.kind -cne 'retained_updater_support_reference'){throw 'Unsupported reference receipt'}
+  $expectedReference=if($CandidateSupportMigration){'candidate_support_schema15_reference'}else{'retained_updater_support_reference'}
+  if($reference.schemaVersion -ne 1 -or $reference.kind -cne $expectedReference){throw 'Unsupported reference receipt'}
   Assert-SessionFile $reference.image.path
   if((Get-Item -LiteralPath $reference.image.path).Length -ne $reference.image.bytes -or (Get-FileHash -LiteralPath $reference.image.path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $reference.image.sha256){throw 'Retained old updater changed; preserve reference'}
+  if($CandidateSupportMigration){
+    Assert-SessionFile $reference.manifest.path
+    if((Get-FileHash -LiteralPath $reference.manifest.path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $reference.manifest.sha256){throw 'Retained actual15 manifest changed'}
+  }
   $env:CARGO_TARGET_DIR=Join-Path $ValidationCacheDirectory 'test-build-cache'
   Assert-WorkflowCachePath $env:CARGO_TARGET_DIR
   if(-not (Test-Path -LiteralPath $env:CARGO_TARGET_DIR -PathType Container)){throw 'Existing native cache required'}
@@ -70,8 +78,18 @@ try {
   Write-NewJson $inputPath @{schemaVersion=1;standard=$report.images.standard.path;standardSha256=$report.images.standard.sha256;validation=$report.images.validation.path;validationSha256=$report.images.validation.sha256;oldImage=$reference.image;oldDescriptor=$reference.descriptor;proof=(Join-Path $ReportDirectory 'updater-support-proof.json')}
   $env:WINBRIDGE_SUPPORT_GATE_INPUT=$inputPath
   Invoke-SupportCargo 'support-actual' @('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--test','updater_support_native','--locked','--offline','--','--exact','actual_support_queries_are_image_bound_and_old_marker_is_not_executed','--ignored','--test-threads=1','--nocapture')
-  foreach($name in @('standard-cli','validation-cli','support-binding','support-actual')){
-    $minimum=if($name -like '*-cli'){3}else{1}
+  $minimums=@{'standard-cli'=3;'validation-cli'=3;'support-binding'=1;'support-actual'=1}
+  if($CandidateSupportMigration){
+    Invoke-SupportCargo 'candidate-support-model-ledger' @('test','-p','winbridge-update','--features','bundled-sqlite','--lib','candidate_support','--locked','--offline','--','--test-threads=1','--nocapture')
+    Invoke-SupportCargo 'candidate-support-policy' @('test','-p','winbridge-core','--lib','updater_compatibility','--locked','--offline','--','--test-threads=1','--nocapture')
+    $migrationInput=Join-Path $root 'support-migration-input.json'
+    Write-NewJson $migrationInput @{root=(Join-Path $root 'support-migration-case');reference=$reference;proof=(Join-Path $ReportDirectory 'candidate-support-migration-proof.json')}
+    $env:WINBRIDGE_CANDIDATE_SUPPORT_MIGRATION_INPUT=$migrationInput
+    Invoke-SupportCargo 'candidate-support-actual-migration' @('test','-p','winbridge-update','--features','bundled-sqlite','--test','candidate_support_migration','actual_fifteen_replacement_history_survives_sixteen_and_old_fifteen_refuses','--locked','--offline','--','--exact','--ignored','--test-threads=1','--nocapture')
+    $minimums['candidate-support-model-ledger']=10;$minimums['candidate-support-policy']=6;$minimums['candidate-support-actual-migration']=1
+  }
+  foreach($name in $minimums.Keys){
+    $minimum=$minimums[$name]
     $counts=[regex]::Matches((Get-Content -LiteralPath (Join-Path $ReportDirectory ($name+'.log')) -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')
     $passed=0;foreach($count in $counts){$passed+=[int]$count.Groups[1].Value}
     if($passed -lt $minimum){throw "Expected support tests not selected: $name"}
@@ -81,6 +99,7 @@ try {
   $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
   if($lease){$lease.Dispose()}
   $env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_SUPPORT_GATE_INPUT=$oldInput;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
+  $env:WINBRIDGE_CANDIDATE_SUPPORT_MIGRATION_INPUT=$oldMigrationInput
   [Console]::OutputEncoding=$oldConsoleEncoding;$OutputEncoding=$oldPipelineEncoding
   Set-Location -LiteralPath $oldLocation
   Write-NewJson (Join-Path $ReportDirectory 'report.json') $report

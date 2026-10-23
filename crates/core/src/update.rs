@@ -4,7 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use winbridge_protocol::update::*;
 
 mod updater_compatibility;
-pub use updater_compatibility::assess_updater_compatibility;
+pub use updater_compatibility::{
+    assess_updater_compatibility, assess_updater_compatibility_with_drivers,
+};
 
 pub const SOURCE_MANIFEST_NAME: &str = "winbridge-source-manifest.json";
 pub const MAX_SOURCE_MANIFEST_BYTES: u64 = 2 * 1024 * 1024;

@@ -239,6 +239,9 @@ impl AbortPermit {
             {
                 return Err("Abort already attempted; observe only".into());
             }
+            if let Some(support) = j.candidate_support(&r.spec.update_id).map_err(err)? {
+                crate::candidate_support::physically_quiescent(&support)?;
+            }
             if let Some(health) = j.health(&r.spec.update_id).map_err(err)? {
                 crate::health::physically_quiescent(&health)?;
             }

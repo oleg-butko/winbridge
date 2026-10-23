@@ -5,6 +5,11 @@
 supervisor17/view9 не меняются. **Durable admission, новый actor и обязательная
 проверка перед production drain ещё не подключены.** Public install off.
 
+Продолжение: [candidate support schema16 foundation](candidate-support.md)
+реализует пункты1–4 ниже на уровне trusted library/ledger; frozen driver snapshot
+позволяет читать историю после расширения реализации. Actor/pre-drain admission
+и native Main execution ещё впереди. Исходная pure-policy точка ниже историческая.
+
 ## Реализованная модель
 
 `crates/protocol/src/update/updater_compatibility.rs` задаёт strict DTO:

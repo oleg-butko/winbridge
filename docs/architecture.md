@@ -6,13 +6,14 @@
 
 В текущем source подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
 одноразовое admission, consuming original custody, manifest-last перенос и
-trusted FilesVerified → VerifyingLocal. Схемы updater15/worker16 прежние.
+trusted FilesVerified → VerifyingLocal. Worker schema16 прежняя; updater source теперь schema16 (см. ниже).
 [Actual Main15 replacement60/0 gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
 и [четыре actual faults60/0](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
 пройдены. [Readonly updater support query](plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
 прошла отдельный native8/0 gate. [Typed compatibility policy](plans/worker-self-update/updater-compatibility.md)
-добавлена как pure foundation; durable support admission до drain и activation
-ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
+дополнена [candidate support schema16](plans/worker-self-update/candidate-support.md):
+immutable ledger/fresh permit/journal-bound driver с frozen executor contracts.
+Новый actor и обязательный support→drain binding, затем activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
 содержит точные границы доказательств, карту кода и план продолжения.
 Ниже сохранена история предыдущих commits.
 

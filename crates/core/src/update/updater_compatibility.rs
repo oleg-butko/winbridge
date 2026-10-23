@@ -8,9 +8,41 @@ pub fn assess_updater_compatibility(
     support: &UpdaterRuntimeSupport,
     expected_updater_journal_schema: u32,
 ) -> UpdaterCompatibilityAssessment {
+    assess_updater_compatibility_with_drivers(
+        support,
+        expected_updater_journal_schema,
+        &UpdaterDriverContracts::implemented_windows(),
+    )
+}
+
+/// Recompute historical data with its frozen executing-driver snapshot. Live
+/// admission must independently bind this snapshot to the actual owner image.
+pub fn assess_updater_compatibility_with_drivers(
+    support: &UpdaterRuntimeSupport,
+    expected_updater_journal_schema: u32,
+    drivers: &UpdaterDriverContracts,
+) -> UpdaterCompatibilityAssessment {
     use UpdaterCompatibilityBlocker as B;
     use UpdaterExecutionContract as C;
     let mut blockers = vec![];
+    if drivers.build_flavor != UpdaterBuildFlavor::Standard {
+        blockers.push(B::ValidationExecutor {});
+    }
+    if drivers.schema_version != 1
+        || [
+            drivers.final_state_backup,
+            drivers.runtime_preparation,
+            drivers.runtime_replacement,
+            drivers.activation,
+            drivers.controller_confirmation,
+            drivers.desktop_update,
+        ]
+        .into_iter()
+        .flatten()
+        .any(|v| v == 0)
+    {
+        blockers.push(B::InvalidDriverContext {});
+    }
     if support.schema_version != 1
         || support.kind != "winbridge_updater_runtime_support"
         || support.query_contract != 1
@@ -55,26 +87,34 @@ pub fn assess_updater_compatibility(
     let requirements = [
         (
             C::FinalStateBackup,
-            Some(15),
+            drivers.final_state_backup,
             support.final_state_backup_contract,
         ),
         (
             C::RuntimePreparation,
-            Some(16),
+            drivers.runtime_preparation,
             support.runtime_preparation_contract,
         ),
         (
             C::RuntimeReplacement,
-            Some(17),
+            drivers.runtime_replacement,
             support.runtime_replacement_contract,
         ),
-        (C::Activation, None, support.activation_contract),
+        (
+            C::Activation,
+            drivers.activation,
+            support.activation_contract,
+        ),
         (
             C::ControllerConfirmation,
-            None,
+            drivers.controller_confirmation,
             support.controller_confirmation_contract,
         ),
-        (C::DesktopUpdate, None, support.desktop_update_contract),
+        (
+            C::DesktopUpdate,
+            drivers.desktop_update,
+            support.desktop_update_contract,
+        ),
     ];
     for (contract, implemented, candidate) in requirements {
         if candidate.is_none() {
@@ -212,5 +252,40 @@ mod tests {
         assert!(assess_updater_compatibility(&support, 15)
             .blockers
             .contains(&UpdaterCompatibilityBlocker::UncommittedBuild {}));
+    }
+
+    #[test]
+    fn frozen_context_preserves_history_and_validation_executor_is_blocked() {
+        let mut support = fixture();
+        support.activation_contract = Some(18);
+        support.controller_confirmation_contract = Some(19);
+        support.desktop_update_contract = Some(20);
+        let old = UpdaterDriverContracts::implemented_windows();
+        let historical = assess_updater_compatibility_with_drivers(&support, 15, &old);
+        let mut future = old.clone();
+        future.activation = Some(18);
+        future.controller_confirmation = Some(19);
+        future.desktop_update = Some(20);
+        assert!(
+            assess_updater_compatibility_with_drivers(&support, 15, &future)
+                .blockers
+                .is_empty()
+        );
+        assert_eq!(
+            assess_updater_compatibility_with_drivers(&support, 15, &old),
+            historical
+        );
+        future.build_flavor = UpdaterBuildFlavor::Validation;
+        assert!(
+            assess_updater_compatibility_with_drivers(&support, 15, &future)
+                .blockers
+                .contains(&UpdaterCompatibilityBlocker::ValidationExecutor {})
+        );
+        future.schema_version = 2;
+        assert!(
+            assess_updater_compatibility_with_drivers(&support, 15, &future)
+                .blockers
+                .contains(&UpdaterCompatibilityBlocker::InvalidDriverContext {})
+        );
     }
 }

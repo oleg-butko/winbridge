@@ -33,3 +33,18 @@ pub struct UpdaterRuntimeSupport {
     pub controller_confirmation_contract: Option<u16>,
     pub desktop_update_contract: Option<u16>,
 }
+impl UpdaterRuntimeSupport {
+    /// Data snapshot; the trusted caller must bind it to the executing owner.
+    pub fn driver_contracts(&self) -> super::UpdaterDriverContracts {
+        super::UpdaterDriverContracts {
+            schema_version: 1,
+            build_flavor: self.build_flavor,
+            final_state_backup: self.final_state_backup_contract,
+            runtime_preparation: self.runtime_preparation_contract,
+            runtime_replacement: self.runtime_replacement_contract,
+            activation: self.activation_contract,
+            controller_confirmation: self.controller_confirmation_contract,
+            desktop_update: self.desktop_update_contract,
+        }
+    }
+}

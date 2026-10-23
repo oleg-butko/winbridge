@@ -62,6 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         UpdaterRuntimeSupport::decl(&config),
         UpdaterExecutionContract::decl(&config),
         UpdaterCompatibilityPolicy::decl(&config),
+        UpdaterDriverContracts::decl(&config),
         UpdaterCompatibilityBlocker::decl(&config),
         UpdaterCompatibilityAssessment::decl(&config),
         RuntimeBaselineView::decl(&config),

@@ -3,13 +3,21 @@ use crate::artifact::{self, ImageEvidence};
 use serde::Serialize;
 use std::path::Path;
 use winbridge_protocol::{
-    update::{UpdaterBuildFlavor, UpdaterRuntimeSupport, UPDATER_RUNTIME_SUPPORT_MARKER},
+    update::{
+        UpdaterBuildFlavor, UpdaterDriverContracts, UpdaterRuntimeSupport,
+        UPDATER_RUNTIME_SUPPORT_MARKER,
+    },
     ArtifactDescriptor, ArtifactRole,
 };
 type Result<T> = std::result::Result<T, String>;
 
 pub fn current() -> Result<UpdaterRuntimeSupport> {
     std::hint::black_box(UPDATER_RUNTIME_SUPPORT_MARKER);
+    let drivers = if cfg!(windows) {
+        UpdaterDriverContracts::implemented_windows()
+    } else {
+        UpdaterDriverContracts::unavailable()
+    };
     Ok(UpdaterRuntimeSupport {
         schema_version: 1,
         kind: "winbridge_updater_runtime_support".into(),
@@ -23,13 +31,13 @@ pub fn current() -> Result<UpdaterRuntimeSupport> {
         } else {
             UpdaterBuildFlavor::Standard
         },
-        final_state_backup_contract: cfg!(windows).then_some(15),
-        runtime_preparation_contract: cfg!(windows).then_some(16),
-        runtime_replacement_contract: cfg!(windows).then_some(17),
+        final_state_backup_contract: drivers.final_state_backup,
+        runtime_preparation_contract: drivers.runtime_preparation,
+        runtime_replacement_contract: drivers.runtime_replacement,
         // Declare these only when their trusted execution paths actually exist.
-        activation_contract: None,
-        controller_confirmation_contract: None,
-        desktop_update_contract: None,
+        activation_contract: drivers.activation,
+        controller_confirmation_contract: drivers.controller_confirmation,
+        desktop_update_contract: drivers.desktop_update,
     })
 }
 
@@ -46,7 +54,7 @@ pub struct UpdaterSupportInspection {
     pub candidate_verified: bool,
 }
 
-fn require_report_binding(
+pub(crate) fn require_report_binding(
     support: &UpdaterRuntimeSupport,
     descriptor: &ArtifactDescriptor,
     process: &winbridge_protocol::update::SupervisorProcess,

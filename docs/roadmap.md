@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-23: [candidate support schema16 foundation](plans/worker-self-update/candidate-support.md)
+добавлена: FSM/ledger/fresh permit и journal-bound query driver, workspace674/0,
+model/SQL10/0, обе Clippy/TS passed. Actual Windows metadata/migration gate
+подготовлен; actor и обязательный pre-drain binding ещё впереди.
+После него activation/local health/controller receipts, remaining U2 faults,
+U3/U4. Public install off. Текущая инструкция в handoff; записи ниже исторические.
+
 2026-10-23: [updater support native8/0 gate](plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
 пройден,9 ready files twice/36 mutations. [Pure typed compatibility policy](plans/worker-self-update/updater-compatibility.md)
 добавлена: default107/schema108 core/protocol tests, обе Clippy/TS passed.

@@ -24,6 +24,7 @@ mod abort;
 mod build;
 mod build_report;
 mod candidate;
+mod candidate_support;
 mod drain;
 mod health;
 mod runtime_baseline;
@@ -36,7 +37,7 @@ mod shutdown;
 mod source;
 mod state_backup;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 15;
+pub const UPDATE_SCHEMA_VERSION: u32 = 16;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -499,6 +500,7 @@ impl UpdateJournal {
             state_backup::migrate(&tx)?;
             runtime_preparation::migrate(&tx)?;
             runtime_replacement::migrate(&tx)?;
+            candidate_support::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -560,6 +562,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 14 {
                 runtime_replacement::migrate(&tx)?;
+            }
+            if schema(&tx)? == 15 {
+                candidate_support::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(

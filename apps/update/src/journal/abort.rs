@@ -445,6 +445,9 @@ impl UpdateJournal {
             next.reason = cmd.reason.clone();
             persist(c, old, &next)?;
             if success {
+                if let Some(support) = super::candidate_support::read(c, &old.spec.update_id)? {
+                    crate::candidate_support::quiescent(&support).map_err(storage)?;
+                }
                 source::abort_prepared(c, &old.spec.update_id)?;
                 supervisor::stop_after_abort(c, a, &old.spec.update_id)?;
             }
@@ -464,26 +467,28 @@ impl UpdateJournal {
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
         let tx = c.transaction().map_err(storage)?;
         let r = read(&tx, id)?;
-        Ok(
-            winbridge_platform::source_files::directory_identity(Path::new(
+        let support_safe = super::candidate_support::read(&tx, id)?
+            .as_ref()
+            .is_none_or(|r| crate::candidate_support::quiescent(r).is_ok());
+        Ok(support_safe
+            && winbridge_platform::source_files::directory_identity(Path::new(
                 &r.spec.runtime_directory,
             ))
             .map_err(storage)?
                 == r.spec.runtime_identity
-                && record(&tx, id)?.phase == UpdatePhase::Aborting
-                && r.spec.owner_id == owner
-                && r.spec.owner_epoch == epoch
-                && matches!(r.phase, AbortPhase::Verified | AbortPhase::Released)
-                && r.cleanup_verified
-                && r.worker_before.as_ref().is_some_and(|l| &l.spec == spec)
-                && r.release_command.as_ref() == Some(command)
-                && evidence(&tx, id)?
-                    == (
-                        r.spec.source_digest,
-                        r.spec.build_digest,
-                        r.spec.candidate_digest,
-                    ),
-        )
+            && record(&tx, id)?.phase == UpdatePhase::Aborting
+            && r.spec.owner_id == owner
+            && r.spec.owner_epoch == epoch
+            && matches!(r.phase, AbortPhase::Verified | AbortPhase::Released)
+            && r.cleanup_verified
+            && r.worker_before.as_ref().is_some_and(|l| &l.spec == spec)
+            && r.release_command.as_ref() == Some(command)
+            && evidence(&tx, id)?
+                == (
+                    r.spec.source_digest,
+                    r.spec.build_digest,
+                    r.spec.candidate_digest,
+                ))
     }
 }
 

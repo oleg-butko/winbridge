@@ -7,6 +7,11 @@
 
 ## Текущий статус 2026-10-23
 
+[Candidate support schema16 foundation](candidate-support.md) добавлена:
+model/ledger/ProbeObserver driver, workspace674/0 и обе Clippy passed.
+Native metadata/migration gate подготовлен; actor/pre-drain binding и activation
+ещё не готовы. Начинать с текущего [handoff](../../handoff.md); статус ниже — история.
+
 [Точка продолжения после завершения проверок](resume-2026-10-23-replacement.md)
 содержит карту кода, проверенные task/run/source pins, границы готовности и порядок
 продолжения без истории чата. Она приоритетнее исторических NEXT/ACTIVE ниже.

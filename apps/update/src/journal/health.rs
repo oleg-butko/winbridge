@@ -406,7 +406,7 @@ mod tests {
         let owner = j.acquire_owner().unwrap();
         let epoch = owner.epoch();
         drop(owner);
-        j.connection.execute_batch("DROP TABLE runtime_replacement_history; DROP TABLE runtime_replacement_records; DROP TABLE runtime_replacement_intents; DROP TABLE runtime_preparation_history; DROP TABLE runtime_preparation_records; DROP TABLE runtime_preparation_intents; DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; DROP TABLE shutdown_history; DROP TABLE shutdown_records; DROP TABLE shutdown_intents; DROP TABLE drain_history; DROP TABLE drain_commands; DROP TABLE drain_intents; DROP TABLE candidate_health; PRAGMA user_version=9; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        j.connection.execute_batch("DROP TABLE candidate_support_history; DROP TABLE candidate_support_records; DROP TABLE candidate_support_intents; DROP TABLE runtime_replacement_history; DROP TABLE runtime_replacement_records; DROP TABLE runtime_replacement_intents; DROP TABLE runtime_preparation_history; DROP TABLE runtime_preparation_records; DROP TABLE runtime_preparation_intents; DROP TABLE state_backup_history; DROP TABLE state_backup_records; DROP TABLE state_backup_intents; DROP TABLE shutdown_history; DROP TABLE shutdown_records; DROP TABLE shutdown_intents; DROP TABLE drain_history; DROP TABLE drain_commands; DROP TABLE drain_intents; DROP TABLE candidate_health; PRAGMA user_version=9; PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
         drop(j);
         let mut j = UpdateJournal::open(temp.path(), &scope).unwrap();
         assert_eq!(j.info().unwrap().schema_version, UPDATE_SCHEMA_VERSION);
