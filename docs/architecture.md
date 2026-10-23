@@ -8,7 +8,8 @@
 добавлен в текущий source **schema15**; worker16/supervisor v16/view8 прежние.
 Local workspace647/0 и обе Clippy passed;
 [native15 metadata11/0](plans/worker-self-update/windows-runtime-replacement-ledger-gate-2026-10-23.md)
-пройден, actual retained14→15/refusal впереди. Rename
+пройден; [actual retained14→15/refusal](plans/worker-self-update/windows-replacement-migration-gate-2026-10-23.md)
+также проверен. Rename
 callback/consuming guard/IO ещё не подключены. Проверенные preparation gates ниже —14.
 
 Текущий блок — [U2.2 preparation library](plans/worker-self-update/runtime-preparation.md):

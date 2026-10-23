@@ -3,8 +3,9 @@
 2026-10-23. Добавлены journal15 tables и trusted library admission. Package216/0,
 workspace647/0 (16 ignored), обе all-target Clippy/Python7/0/scaffold240 прошли.
 [Native ledger11/0 gate](windows-runtime-replacement-ledger-gate-2026-10-23.md)
-пройден; **actual14→15/refusal и positive admission под настоящим original guard
-ещё не подтверждены**. [Data model](runtime-replacement.md)
+пройден; [actual14→15/refusal](windows-replacement-migration-gate-2026-10-23.md)
+также проверен. **Positive admission под настоящим original guard ещё не подтверждён**.
+[Data model](runtime-replacement.md)
 уже прошла отдельный schema14/native12-test gate; он не подтверждает новый journal15.
 Whole rename/activation и public update по-прежнему отключены.
 
@@ -73,7 +74,8 @@ Test сверяет этот SHA до копирования и возвраща
 Python независимо сравнивает его с исходным approved snapshot. Все old SQL tables,
 включая preparation intents/current/history, входят в retained rows fingerprint.
 Старый updater14 связан exact raw manifest bytes и настоящим artifact query.
-Native execution нового test ещё впереди; metadata11/0 gate его не включает.
+[Native execution](windows-replacement-migration-gate-2026-10-23.md) завершён:1 test,
+6 ready files twice,27 negative proof mutations; metadata11/0 gate его не включает.
 
 ```bash
 python3 scripts/validate-update-shutdown-primitives-native.py \

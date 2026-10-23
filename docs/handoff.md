@@ -12,12 +12,18 @@ run `20261023-091331-b6f35ac8`, producer5fbc1cf. Локальный result/pins:
 **Нет активных native/Cargo runs, не повторять terminal tasks.** Дополнены synthetic downgrade
 fixtures; предыдущие gates ниже относятся к14 и не подтверждают15.
 Production callback rename-success/consuming guard/IO ещё отсутствуют. Следом
-actual retained14→15/old14 refusal и positive original-custody admission при
-подключении consuming guard. Installed d052 прежний; ручное обновление не требуется.
-Подготовлены actual14→15/refusal integration test/runners (`--replacement-migration-only`)
+positive original-custody admission при подключении consuming guard. Installed
+d052 прежний; ручное обновление не требуется.
+[Actual14→15/refusal gate](plans/worker-self-update/windows-replacement-migration-gate-2026-10-23.md)
+тоже пройден:task `11987f79-3786-4155-aa39-6277d74d6950`/run20261023-092901-d1c837e1,
+producer aaf721f, succeeded/0.1 native test,6 ready files twice,27 mutations rejected.
+Полные pins/proof: `replacement-migration-native-verified.json` в local namespace.
+Integration test/runners (`--replacement-migration-only`)
 и pin `replacement-schema14-reference-pin.json` из approved Main14 proof. Полный
 original Prepared canonical SHA `a2b823d95c1a6cee157cbb8f9387df309d8dccca4eadec08b0c9877ee1638029`
-связывает переносимые данные с прежним gate. Native actual migration ещё не запускался.
+связывает переносимые данные с прежним gate. Actual old14 init/status отказали15,
+DB/WAL/reference сохранились, новая permission не появилась. Следом consuming
+original custody/transition-aware guard, success callbacks/IO/actor, затем activation.
 
 ## Возобновление2026-10-23: actual preparation faults
 
