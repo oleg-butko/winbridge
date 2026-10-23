@@ -28,6 +28,12 @@ native, health = support.native, support.health
 need = support.need
 
 
+def root_id(root):
+    value = root['updateId']
+    need(str(uuid.UUID(value)) == value, 'Invalid update ID')
+    return value
+
+
 def strict_counters(value):
     if isinstance(value, list):
         for item in value:
@@ -43,7 +49,7 @@ def strict_counters(value):
             strict_counters(item)
 
 
-def verify(proof, source, target):
+def verify(proof, source, target, root):
     strict_counters(proof)
     need(type(proof.get('schemaVersion')) is int and proof['schemaVersion'] == 1
          and proof.get('kind') == 'candidate_support_actor_main_native_proof'
@@ -76,6 +82,15 @@ def verify(proof, source, target):
          and record['schemaVersion'] == 1 and record['phase'] == 'finished', 'Support terminal record changed')
     intent, probe, result = (record[k] for k in ('intent', 'probe', 'result'))
     supervisor, worker = before['supervisor'], before['worker']
+    runtime = PureWindowsPath(root)/'support-main-cases'/'None'/'runtime'
+    need(support.windows_path(supervisor['spec']['runtimeDirectory']) == runtime
+         and support.windows_path(supervisor['spec']['configPath']) == runtime/'winbridge-update.local.json'
+         and support.windows_path(supervisor['spec']['imagePath']) ==
+             runtime/'update'/root_id(before['before']['update'])/'supervisor'/'winbridge-update.exe'
+         and support.windows_path(intent['workerConfig']['path']) == runtime/'winbridge-worker.local.json'
+         and support.windows_path(intent['image']['path']) ==
+             runtime/'update'/root_id(before['before']['update'])/'candidate'/'payload'/'winbridge-update.exe',
+         'Proof reused another run or runtime/source scope')
     need(intent['updateId'] == root['updateId']
          and intent['installationId'] == root['request']['expected']['installationId']
          and intent['scopeSha256'] == root['request']['expected']['scopeSha256']
@@ -134,7 +149,27 @@ def verify(proof, source, target):
                                   controllerConfirmation=None, desktopUpdate=None)
          and result['assessment'] == dict(schemaVersion=1, policy='same_schema_install_v1',
               expectedUpdaterJournalSchema=16, blockers=expected_blockers), 'Frozen policy blockers differ')
+    final = result['finalWorker']
+    need(final['schemaVersion'] == 1 and final['kind'] == 'worker_runtime_compatibility'
+         and final['context'] == worker['context'] and final['generation'] == worker['generation']
+         and final['workerConfigSha256'] == worker['configSha256'] == intent['workerConfig']['sha256']
+         and final['workerConfigSchema'] == final['protocolVersion'] == 1
+         and final['workerJournalSchema'] == final['updaterJournalSchema'] == 16
+         and intent['admittedAtMs'] <= final['observedAtMs'] <= result['completedAtMs']
+         and final['identity']['process'] == worker['process']
+         and final['identity']['descriptor']['build'] == worker['build']
+         and final['identity']['descriptor']['role'] == 'worker'
+         and support.windows_path(final['identity']['image']['path']) == runtime/'winbridge-worker.exe',
+         'Final worker/schema/config differs from actual Main')
+    images = proof['oldRuntimeImages']
+    need(len(images) == 4 and images[0] == final['identity']['image']
+         and all(support.windows_path(image['path']) == runtime/name for image, name in zip(images,
+             ('winbridge-worker.exe','winbridge-fixture.exe','winbridge-desktop.exe','winbridge-update.exe'))),
+         'Old image evidence came from another runtime')
     view = after['candidateSupport']
+    need(set(view) == {'phase','revision','attemptId','command','process','report','assessment','cleanupVerified','reason'}
+         and set(record) == {'schemaVersion','revision','intent','phase','probe','result'},
+         'Passive observation contains unknown authority fields')
     need(view == duplicate['candidateSupport'] == proof['coldView']['candidateSupport']
          and view['phase'] == 'checked' and view['revision'] == 5
          and view['attemptId'] == intent['attemptId'] and view['process'] == process
@@ -157,6 +192,13 @@ def verify(proof, source, target):
                  and p['resumeGranted'] is (index >= 2) and p['resumeAcknowledged'] is (index >= 3)
                  and p['cleanup'] == (cleanup if index >= 4 else None), 'Causal process/grant/cleanup changed')
     lease = before['sourceLease']
+    need(lease['spec']['instanceId'] == worker['context']['instanceId']
+         and lease['spec']['journalIncarnation'] == worker['context']['journalIncarnation']
+         and lease['spec']['workerGeneration'] == worker['generation']
+         and lease['spec']['updaterOwnerId'] == intent['ownerId']
+         and lease['spec']['updaterEpoch'] == intent['ownerEpoch']
+         and lease['spec']['targetManifestSha256'] == target['manifestSha256'],
+         'Source lease scope differs from support and actual worker')
     need(lease['phase'] == 'source_held' and lease['revision'] == 1 and lease['spec']['updateId'] == root['updateId']
          and proof['coldView']['update']['phase'] == 'failed_before_cutover'
          and proof['cleanup']['abort']['phase'] == 'completed' and proof['cleanup']['supportUnchanged'] is True
@@ -164,18 +206,22 @@ def verify(proof, source, target):
          'Fixture cleanup changed support or requested worker shutdown')
 
 
-def audit(proof, source, target):
-    verify(proof, source, target)
+def audit(proof, source, target, root):
+    verify(proof, source, target, root)
     edits = [
         ('passed', False), ('schemaVersion', True), ('runtimeApplied', True),
         ('installedRuntimeApplied', True), ('windowsOpened', True), ('productionDrainEnforced', True),
         ('actualNormalIpc', False), ('oldRuntimeUnchanged', False),
+        ('beforeCleanup/supervisor/spec/runtimeDirectory', 'K:/another-run/runtime'),
         ('beforeCleanup/lostAckSentOnce', False), ('beforeCleanup/requestShutdownCount', 1),
         ('beforeCleanup/after/driverActive', True), ('beforeCleanup/after/update/phase', 'draining'),
         ('record/schemaVersion', True), ('record/revision', 4), ('record/intent/ownerEpoch', 0), ('record/probe/process/birth', '0'),
         ('record/probe/cleanup/treeEmpty', False), ('record/result/assessment/blockers', []),
         ('coldRecord/result/outcome', 'unsupported'), ('coldView/candidateSupport/cleanupVerified', False),
-        ('cleanup/supportUnchanged', False), ('normalIpcGeneration', 'other'), ('history', proof['history'][:5]),
+        ('cleanup/supportUnchanged', False), ('normalIpcGeneration', 'other'),
+        ('record/result/finalWorker/workerConfigSha256', '0'*64),
+        ('record/result/finalWorker/updaterJournalSchema', 15),
+        ('beforeCleanup/sourceLease/spec/targetManifestSha256', '0'*64), ('history', proof['history'][:5]),
     ]
     for path, value in edits:
         changed = copy.deepcopy(proof)
@@ -185,11 +231,20 @@ def audit(proof, source, target):
             obj = obj[part]
         obj[parts[-1]] = value
         try:
-            verify(changed, source, target)
+            verify(changed, source, target, root)
         except (ValueError, KeyError, TypeError, IndexError):
             continue
         raise ValueError('Accepted mutated actor proof: '+path)
-    return len(edits)
+    changed = copy.deepcopy(proof)
+    for value in (changed['beforeCleanup']['after']['candidateSupport'],
+                  changed['beforeCleanup']['duplicate']['candidateSupport'],
+                  changed['coldView']['candidateSupport']):
+        value['canInstall'] = True
+    try:
+        verify(changed, source, target, root)
+    except (ValueError, KeyError, TypeError):
+        return len(edits)+1
+    raise ValueError('Accepted fabricated authority in every projected copy')
 
 
 def main():
@@ -299,7 +354,7 @@ exit $LASTEXITCODE
                                                        files[name+'.log'].decode('utf-8-sig')))
         need(counts[name] >= minimum, 'Tests were not selected: '+name)
     proof = json.loads(files['candidate-support-actor-proof.json'].decode('utf-8-sig'))
-    rejected = audit(proof, source, target)
+    rejected = audit(proof, source, target, root)
     verified = dict(meta, passed=True, filesVerifiedTwice=len(files), nativeTestsPassed=sum(counts.values()),
                     testCounts=counts, negativeMutationsRejected=rejected, groupsPassed=len(groups),
                     proofSha256=hashlib.sha256(files['candidate-support-actor-proof.json']).hexdigest(),
