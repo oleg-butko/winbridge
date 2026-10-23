@@ -8,12 +8,15 @@ Journal16/worker16 прежние; frozen contracts1–17/views1–9 сохра�
 
 Local workspace679/0 (16 ignored), новый actual IPC mailbox regression1/0,
 Linux/Windows all-target Clippy, generated contracts/TS/UI и Python3+7 passed.
-Actual Main Windows gate активен: task fe719061-08e8-4f5a-a0a7-6c6b225dd3a5,
-run20261023-231817-d6b1374c, immutable producer ede7318/source ZIP
-winbridge-20261023T231807Z-ede7318-ccac4104.zip. **Не resubmit**;
-observer .winbridge/update-preparation/candidate-support-actor-native.log.
-Task metadata .winbridge/workflow-validation/20261023-231817-d6b1374c/support-actor-run.json.
-Первые22 prerequisites passed; actual Main pipeline выполняется. Он проверит journal-bound driver/lost ACK/duplicate/old worker,
+Первый actual Main run20261023-231817-d6b1374c / task
+fe719061-08e8-4f5a-a0a7-6c6b225dd3a5 terminal failed/1; **не resubmit**.
+22 prerequisites и actual support query/Checked5/lost ACK/duplicate прошли,
+затем test parent ошибочно отправил normal Info в update-control pipe (EOF).
+Исправлен только harness endpoint; installed worker healthy/active0.
+19 ready files сверены дважды; success proof отсутствует. Exact evidence:
+.winbridge/update-preparation/candidate-support-actor-native-first-failed.json.
+Следом новый clean source export/fresh isolated retry под тем же cache.
+Controller verifier review190d180 также требует readonly recheck terminal retry. Он проверит journal-bound driver/lost ACK/duplicate/old worker,
 но НЕ production enforcement: legacy DrainCandidate13 пока не меняется,
 productionDrainEnforced=false. Следом атомарный support→production-drain binding
 под новым контрактом и actual blocked-request gate, затем activation/U2 faults/U3/U4.
@@ -22,7 +25,7 @@ Public install off, installed runtime не обновлялся.
 Предыдущий [schema16 metadata/migration25/0 gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md)
 terminal succeeded, не повторять. Его [подробный handoff](plans/worker-self-update/resume-2026-10-23-candidate-support.md)
 сохраняет exact pins/окружение/инварианты. Actor из его NEXT теперь добавлен;
-current native Main ещё pending. Controller verifier review добавил exact run
+current native Main success gate ещё pending. Controller verifier review добавил exact run
 paths, strict passive-view shape и final-worker/lease/image scope binding.
 После terminal выполнить readonly --verify-run тем же source/target/cache:
 текущий observer process загрузил verifier до этого review; source producer

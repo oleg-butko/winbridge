@@ -46,8 +46,11 @@ Support-active входит в coordinated abort: Root Aborting останавл
   producer/target source pins, ready files twice и independent mutation audit.
 
 Native gate: task fe719061-08e8-4f5a-a0a7-6c6b225dd3a5,
-run20261023-231817-d6b1374c, producer ede7318, пока running; не resubmit.
-Первые22 prerequisites passed. После terminal нужны ready/proof audit и
+run20261023-231817-d6b1374c, producer ede7318, terminal failed/1; не resubmit.
+22 prerequisites и actual support Checked5 прошли; следующий test parent
+использовал control pipe для normal Info и получил EOF. Harness исправлен на
+основной pipe из instance context, сохранённые effects не повторяются.
+Следом новый isolated run, подробные failed pins в handoff. После terminal нужны ready/proof audit и
 readonly --verify-run текущим verifier. В controller-only review устранены
 cross-run proof reuse и принятие лишних authority полей в passive projection;
 проверяются exact runtime paths, final worker/config/schema/lease/image scope.

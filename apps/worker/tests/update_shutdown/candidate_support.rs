@@ -111,9 +111,14 @@ fn actual_main_queries_candidate_support_without_draining_and_retains_lost_ack()
             child.identity().unwrap().process_id
         );
         let rt = tokio::runtime::Runtime::new().unwrap();
+        // binding.endpoint speaks WorkerUpdateControlRequest, not LocalRequest.
+        // The normal serve pipe is selected by the immutable instance context.
+        let normal_endpoint =
+            winbridge_transport::endpoint(&root.join("state"), &binding.context.instance_id)
+                .unwrap();
         let winbridge_protocol::LocalResponse::Info { info } = rt
             .block_on(winbridge_transport::call(
-                &binding.endpoint,
+                &normal_endpoint,
                 &winbridge_protocol::LocalRequest::Info,
             ))
             .unwrap()
