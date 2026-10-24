@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-24: [activation intent/startup FSM](plans/worker-self-update/runtime-activation.md)
+реализованы как data model:10 новых regressions, workspace703/0 (16 ignored),
+обе Clippy passed. No-process отделён от unknown, late observations сохраняются
+без новых grants. Fresh permission/ledger/OS driver ещё отсутствуют; activation
+support=None. Следом schema18/graph-bound admission и physical handoff.
+
 2026-10-24: [production drain17 actual Main/migration gate](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md)
 **пройден33/0**,27 ready files twice/38+19 mutations и readonly recheck.
 Taska4f17a0d terminal succeeded/0, не resubmit. Root/SourceHeld сохранены при

@@ -40,6 +40,53 @@ fields. Linux/MSVC all-target Clippy update/worker passed; логи
 Эта модель добавлена **после** export628c0f6 и не входит в текущий native17 run.
 Новый actual activation/ledger proof отсутствует; updater schema остаётся17.
 
+## Intent и FSM запуска: модель реализована
+
+`apps/update/src/activation/lifecycle.rs` добавляет frozen `ActivationContext`,
+`ActivationIntent`, typed receipts и `ActivationRecord`. Все проверки/переходы
+получают retained RuntimeReplacementRecord и сверяют плоский source binding.
+Context сохраняет предыдущий worker, supervisor, logical journal scope,
+config/file identities, ожидаемые schemas/protocol, timeout и **только SHA256**
+будущего channel nonce. Actual nonce не сериализуется в эти данные.
+
+| State | Подтверждённые данные |
+| --- | --- |
+| Prepared | Намерение подготовлено, OS launch permission отсутствует. |
+| Creating | Intent создания; исход OS call ещё не подтверждён. |
+| Created | Сохранены actual process stamp и собственный scoped Job. |
+| ResumeGranted | Разрешение записано до resume; это ещё не Ready. |
+| ReadyForState | Тот же PID сообщил exact loaded set/manifest/image/config. |
+| HandoffIssued | Intent передачи instance/state; новый owner ещё не подтверждён. |
+| StateOwned | Подтверждены тот же PID, прежние journal/lock IDs и новый generation. |
+| LocalVerified | Совпали frozen schemas/protocol, loaded identity и normal local compatibility. Это не whole update commit. |
+| CreationFailed | Подтверждённый no-process outcome; сохранять его может только будущий trusted creation observer. |
+| Indeterminate | Последний подтверждённый prefix сохранён, новых внешних действий нет. |
+
+Revision идёт по одному причинному шагу. Duplicate create/resume/handoff,
+перезапись nonce/context/receipts, чужой process/Job и nested uncertainty
+отклоняются. Схемы сравниваются с frozen context, а не с будущими глобальными
+константами executable.
+
+Deadline запрещает **новые внешние grants**, но поздний PID/Ready/fact не
+теряется: его можно сохранить и остановиться без resume/handoff. Тайм-аут
+не превращается в «процесс не создан». При будущей реализации ledger/root
+transition поздний local fact также не должен автоматически объявлять весь
+update успешным: это отдельное решение live driver с его monotonic deadline.
+
+Только metadata: нет launch/state-open/commit callbacks, RPC, fresh permit или
+новой capability. Будущий schema18 reader обязан загрузить связанные shutdown,
+health и supervisor rows и сверить **весь Context**, включая config/state/schemas,
+с этими authoritative records; одного `record.validate(replacement)` недостаточно
+для fresh admission. JSON нельзя использовать как источник текущих полномочий.
+
+Проверки:10 новых lifecycle regressions (всего16 в activation filter, включая
+5 Source tests и прежний projection), workspace703/0 (16 ignored), Linux/MSVC
+all-target Clippy update/worker passed. Логи `activation-lifecycle-*.log` в
+`.winbridge/update-preparation/`. Actual native activation ещё не выполнялась.
+Следом ledger/schema18 и original-custody admission, затем physical launcher,
+private worker receiver и handoff. Controller/lifetime/global commit остаются
+отдельными следующими блоками; support activation пока=None.
+
 ## Ограничения фактического кода
 
 - `RuntimeReplacementGuard` удерживает original exited process/state/instance

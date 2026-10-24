@@ -12,8 +12,14 @@ Actual16→17/refusal/backup/history также прошли. Exact pins и read
 Current source updater17/worker16/supervisor19/view11; public install off.
 Следующий [activation block](plans/worker-self-update/runtime-activation.md):
 ActivationSource model уже в cae9a45,5 новых model tests +1 projection/обе Clippy.
-Она не в immutable native producer628c0f6. Теперь intent/FSM/ledger/fresh
-original-custody admission, затем physical handoff/driver/local/controller gates.
+Она не в immutable native producer628c0f6. Intent/FSM startup data также
+добавлены:10 новых lifecycle tests, workspace703/0 (16 ignored), обе Clippy passed.
+Prepared→Creating→Created→ResumeGranted→Ready→Handoff→StateOwned→LocalVerified,
+отдельные no-process/unknown outcomes. Поздние факты сохраняются, поздние новые
+grants запрещены. Это metadata, не разрешение запуска; context надо связать
+с authoritative shutdown/health/supervisor rows в следующем reader.
+Теперь ledger/schema18/fresh original-custody admission, затем physical
+handoff/driver/local/controller gates. Новых RPC/capabilities/schema пока нет.
 U3/U4 ещё впереди. Installed d052 healthy/active0/unchanged, ручное обновление
 не требуется; desktop можно закрыть, worker оставить. Старые ACTIVE/NEXT ниже — история.
 

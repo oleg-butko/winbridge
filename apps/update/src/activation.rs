@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use winbridge_core::update::MAX_UPDATE_COUNTER;
 use winbridge_protocol::ArtifactDescriptor;
 type Result<T> = std::result::Result<T, String>;
+mod lifecycle;
+pub use lifecycle::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
