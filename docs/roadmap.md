@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-24: второй native17 run тоже failed после успешного health10: main
+stack overflow сохраняется при heap boxing. Package244/0 и обе Clippy отдельного
+owner thread8MiB прошли; далее fresh namespace. Migration/refusal в обоих
+прогонах подтверждены, полный Main gate ещё открыт.
+
 2026-10-24: [первый native17 run](plans/worker-self-update/windows-compatible-drain-first-attempt-2026-10-24.md)
 прошёл32 preliminary tests и actual16→17/refusal (23 ready files twice,
 19 negative mutations), но Main завершился stack overflow до health/support.

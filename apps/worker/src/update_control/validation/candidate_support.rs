@@ -1,4 +1,4 @@
-//! Test-only actual Main support scenario. Never requests drain or installation.
+//! Test-only actual Main support/blocked-decision scenario; never installs runtime.
 use super::*;
 use winbridge_update::candidate_support::{CandidateSupportOutcome, CandidateSupportPhase};
 
@@ -12,6 +12,7 @@ pub(super) async fn drive(
         return Err("Support validation cannot request shutdown/backup faults".into());
     }
     let id = h.record.spec.update_id.clone();
+    eprintln!("WinBridge support validation: observe candidate support");
     let before = h.candidate_support(false).await?;
     if before.update.phase != UpdatePhase::CandidateVerified
         || before.driver_active
@@ -25,6 +26,7 @@ pub(super) async fn drive(
     // Send once. Wait for committed admission without reading its ACK, then
     // discard the original response. Closing a pipe before the server reads
     // its request could lose the request itself rather than just its ACK.
+    eprintln!("WinBridge support validation: send support request once, discard its ACK");
     let mut request = h.validation_private_client()?;
     request.contract_version = 18;
     request.action = SupervisorAction::CaptureCandidateSupport;
@@ -76,6 +78,7 @@ pub(super) async fn drive(
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     };
+    eprintln!("WinBridge support validation: verify terminal saved support");
     let saved = UpdateJournal::inspect_candidate_support(&reg.directory, &id)
         .map_err(|e| e.to_string())?
         .ok_or("Support record missing")?;
@@ -92,6 +95,7 @@ pub(super) async fn drive(
             "Support query did not retain checked blockers without a root transition".into(),
         );
     }
+    eprintln!("WinBridge support validation: observe duplicate and frozen health view");
     let duplicate = h.candidate_support(true).await?;
     if duplicate.candidate_support != after.candidate_support
         || duplicate.driver_active
@@ -107,6 +111,7 @@ pub(super) async fn drive(
         return Err("Support changed the legacy health view".into());
     }
     let compatible = if input.compatible_drain {
+        eprintln!("WinBridge support validation: request production drain decision");
         let first = h.compatible_drain(true).await?;
         let record = UpdateJournal::inspect_compatible_drain(&reg.directory, &id)
             .map_err(|e| e.to_string())?
@@ -129,6 +134,7 @@ pub(super) async fn drive(
         {
             return Err("Missing contracts did not stop production drain before its outbox".into());
         }
+        eprintln!("WinBridge support validation: verify duplicate blocked decision");
         let again = h.compatible_drain(true).await?;
         if again.compatible_drain != first.compatible_drain
             || again.update != first.update
@@ -136,6 +142,7 @@ pub(super) async fn drive(
         {
             return Err("Production drain duplicate changed its immutable decision".into());
         }
+        eprintln!("WinBridge support validation: verify legacy fallback rejection");
         if h.candidate_drain(true).await.is_ok() {
             return Err("Legacy entry bypassed the selected production contract".into());
         }

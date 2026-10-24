@@ -1,5 +1,35 @@
 # Schema17: миграция прошла, первый Main gate завершился ошибкой
 
+## Повтор после heap boxing: тоже failed
+
+Task **21f28f01-3733-4fa7-9f31-6233d12c6327**, run
+**20261024-083044-f6ed4809**, producer `ddd5619777d8d567736fec7bbecfb98e1bae0883`
+— terminal failed/1.32 preliminary tests и actual migration/refusal снова
+прошли;24 ready files twice/19 migration mutations. В этот раз health
+Verified/rev10 завершён; дальше Main получил IPC timeout. Readonly diagnostic
+task `6c53e9d4-7cfc-4fa4-9ad2-4ee1eca12c2a` снова обнаружила main stack overflow.
+Heap boxing недостаточен для большого poll/serde frame на Main stack.
+
+Source ZIP `winbridge-20261024T083023Z-ddd5619-779b66cc.zip`,
+SHA256 `242d9e56c923b84bb71f107a2a682f32b2ac4e23c71f1adec53bc1357ca4816a`,
+manifest `fe2570cbc58fbad04ed8b9f4c245800341a79962fa7f1774ec6884f6cd426658`.
+Fixture efccfbe прежняя. Report SHA256
+`573d8fb4469e8b5b0d6e318fe867e8cbd40f66e75b4f7914dfa056fa53523683`;
+migration proof `4880fb55750e99f8c287c6459fb56aa288f2db9a321444cea39e1f6fa388a2a5`.
+Полная сводка `.winbridge/update-preparation/compatible-drain-second-failed-verified.json`,
+лог `compatible-drain-native-retry.log`. Не переигрывать namespace/не считать Main успешным.
+Windows free29,418,315,776→29,373,071,360 bytes, installed worker healthy/unchanged.
+
+Следующее исправление: отдельный owner thread supervisor с явным8MiB stack,
+без глобальных settings. Package244/0 (6 ignored) и обе all-target Clippy
+update/worker прошли; после добавления безопасных stage messages в test-only
+stderr final Linux/MSVC Clippy тоже passed. Эти сообщения не содержат nonce/control
+input и позволят определить последний RPC без новой диагностической задачи.
+Следом fresh actual Main proof. Логи `supervisor-owner-thread-*.log` в ignored
+`.winbridge/update-preparation/`.
+
+## Первая попытка
+
 2026-10-24. Producer `cdea687`, fixture `efccfbe`.
 Run **20261024-003723-8bd37767**, task
 **73081bc6-ea78-45e1-a79e-cc5f3d5a27c3** — terminal **failed/exit1**.

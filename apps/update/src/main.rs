@@ -154,9 +154,21 @@ fn run() -> Result<bool, String> {
             Ok(true)
         }
         [op, id, token] if op == "supervisor-internal" => {
-            tokio::runtime::Runtime::new()
-                .map_err(|e| e.to_string())?
-                .block_on(winbridge_update::supervisor::run(&config_path, id, token))?;
+            // Debug mailbox/serde frames must not share the Windows Main stack
+            // with this CLI's other command branches. One updater owner gets a
+            // bounded dedicated stack; no global thread/environment setting.
+            let (id, token) = (id.clone(), token.clone());
+            std::thread::Builder::new()
+                .name("winbridge-update-owner".into())
+                .stack_size(8 * 1024 * 1024)
+                .spawn(move || {
+                    tokio::runtime::Runtime::new()
+                        .map_err(|e| e.to_string())?
+                        .block_on(winbridge_update::supervisor::run(&config_path, &id, &token))
+                })
+                .map_err(|e| format!("Cannot create updater owner thread: {e}"))?
+                .join()
+                .map_err(|_| "Updater owner thread failed; preserve journal and barrier")??;
             Ok(true)
         }
         [op, action, id, paging @ ..]

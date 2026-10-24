@@ -1,4 +1,31 @@
-# Текущая точка: actual17 миграция прошла; исправляется stack overflow Main — 2026-10-24
+# Текущая точка: две actual17 попытки failed; проверяется dedicated owner stack — 2026-10-24
+
+**Живых native runs сейчас нет, старые tasks не resubmit.** Второй
+task21f28f01-3733-4fa7-9f31-6233d12c6327/run20261024-083044-f6ed4809
+terminal failed/1. Health Verified10 прошёл, затем supervisor снова stack
+overflow; timeout был следствием, переносить health admission пока нет оснований.
+24 ready files twice,32 preliminary tests, actual16→17/refusal +19 mutations.
+Readonly diagnostic task6c53e9d4 подтвердила main stack overflow после heap fix.
+Main теперь исполняет supervisor на отдельном owner thread с8MiB stack;
+package244/0 (6 ignored), Linux/MSVC Clippy passed. Test-only stderr получил
+безопасные stage messages, final Linux/MSVC Clippy тоже passed. Следом clean
+producer/export и fresh native gate. Installed d052 healthy/active0/unchanged.
+План activation добавлен ниже как подготовка, driver не реализован.
+
+## История второго native run: уже terminal, не текущая задача
+
+**Наблюдать тот же task, не resubmit:**
+`21f28f01-3733-4fa7-9f31-6233d12c6327`, run `20261024-083044-f6ed4809`,
+producer `ddd5619` (heap mailbox fix), fixture `efccfbe`.
+Observer exec session56910; PID/session перепроверить, authoritative статус
+читать через controller get_task. Лог `.winbridge/update-preparation/compatible-drain-native-retry.log`.
+Saved metadata/request: `.winbridge/workflow-validation/20261024-083044-f6ed4809/`.
+На промежуточном наблюдении task running, затем terminal failed (см. выше).
+Не считать gate законченным по наличию отдельных логов.
+Installed d052 unchanged, worker only/no UI. Далее proof audit → review →
+[activation](plans/worker-self-update/runtime-activation.md); это пока план, не driver.
+
+## Предыдущая попытка: actual17 migration passed, Main stack overflow
 
 [Первый actual17 run](plans/worker-self-update/windows-compatible-drain-first-attempt-2026-10-24.md)
 20261024-003723-8bd37767 / task73081bc6-ea78-45e1-a79e-cc5f3d5a27c3

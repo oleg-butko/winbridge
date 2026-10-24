@@ -7,6 +7,14 @@
 
 ## Текущий статус 2026-10-23
 
+Продолжение2026-10-24: [две native17 попытки](windows-compatible-drain-first-attempt-2026-10-24.md)
+terminal failed из-за supervisor main stack overflow; actual16→17/refusal
+прошёл в обеих. Heap boxing недостаточен; dedicated owner stack8MiB прошёл
+package244/0 и обе Clippy перед fresh run. Точная точка в [handoff](../../handoff.md),
+старые tasks не resubmit.
+Следующий [activation driver](runtime-activation.md) спланирован, не реализован.
+Записи ниже сохраняют прежнюю контрольную точку.
+
 Начать с [подробной инструкции продолжения](resume-2026-10-23-compatible-drain.md).
 [Required production drain17/actor19](compatible-drain.md) реализован,
 workspace688/0 (16 ignored), обе all-target Clippy/contracts/TS/UI и остальные
