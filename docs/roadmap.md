@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-24: [production drain17 actual Main/migration gate](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md)
+**пройден33/0**,27 ready files twice/38+19 mutations и readonly recheck.
+Taska4f17a0d terminal succeeded/0, не resubmit. Root/SourceHeld сохранены при
+Blocked, BeginDrain0, duplicate/legacy rejection и actual16→17/refusal прошли.
+Следом activation intent/FSM/ledger и original-custody execution по плану ниже,
+затем U2 faults/U3/U4. Public install off; whole updater не готов.
+
 2026-10-24: [activation source model](plans/worker-self-update/runtime-activation.md)
 добавлена отдельно: exact completed replacement digest/owner/generation и
 installed worker/manifest,5 новых model tests +1 projection/обе Clippy passed.

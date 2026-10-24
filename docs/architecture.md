@@ -8,7 +8,9 @@
 [Production drain17/19](plans/worker-self-update/compatible-drain.md) связывает
 immutable decision с exact support и atomic root/outbox; сохранённый Blocked
 запрещает legacy fallback. Workspace688/0 и local/cross checks завершены;
-**actual17 Main/migration16→17 gate ещё не запускался**.
+**[actual17 Main/migration16→17 gate33/0 пройден](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md)**,
+27 ready files twice/38+19 mutations. ActivationSource model добавлена отдельно
+без permissions/OS effects; следующий блок — activation intent/FSM/ledger/driver.
 [Подробный checkpoint](plans/worker-self-update/resume-2026-10-23-compatible-drain.md)
 задаёт следующий gate и последовательность activation/U2/U3/U4.
 
@@ -25,7 +27,7 @@ immutable ledger/fresh permit/journal-bound driver с frozen executor contracts.
 пройден, actual15→16/refusal подтверждён. [Support actor18/view10](plans/worker-self-update/candidate-support-actor.md)
 добавлен; [actual Main23/0](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md)
 проверен. Production support→drain binding реализован с local/cross проверками;
-его native gate и activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
+его native gate прошёл, activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
 содержит точные границы доказательств, карту кода и план продолжения.
 Ниже сохранена история предыдущих commits.
 

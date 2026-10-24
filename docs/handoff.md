@@ -1,4 +1,23 @@
-# Текущая точка: третий actual17 gate запущен — 2026-10-24
+# Текущая точка: production drain17 Main/migration gate пройден — 2026-10-24
+
+[Actual gate33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md):
+taska4f17a0d-4eea-4af2-8f2c-78bc6235c0af/run20261024-085627-3a106020,
+producer628c0f6, terminal succeeded/0.27 ready files twice,38 Main +19 migration
+mutations, readonly recheck passed. **Не resubmit, активных native runs нет.**
+Actual production request сохранён Blocked, root CandidateVerified10 без
+drain outbox/BeginDrain/shutdown; duplicate и legacy rejection проверены.
+Actual16→17/refusal/backup/history также прошли. Exact pins и readonly команда
+в отчёте. Dedicated owner thread8MiB прошёл реальный Main после двух stack failures.
+
+Current source updater17/worker16/supervisor19/view11; public install off.
+Следующий [activation block](plans/worker-self-update/runtime-activation.md):
+ActivationSource model уже в cae9a45,5 новых model tests +1 projection/обе Clippy.
+Она не в immutable native producer628c0f6. Теперь intent/FSM/ledger/fresh
+original-custody admission, затем physical handoff/driver/local/controller gates.
+U3/U4 ещё впереди. Installed d052 healthy/active0/unchanged, ручное обновление
+не требуется; desktop можно закрыть, worker оставить. Старые ACTIVE/NEXT ниже — история.
+
+## История третьего native run: теперь terminal succeeded
 
 **Наблюдать, не resubmit:** task `a4f17a0d-4eea-4af2-8f2c-78bc6235c0af`,
 run `20261024-085627-3a106020`, producer `628c0f6` с dedicated owner stack8MiB,

@@ -1,5 +1,11 @@
 # Required production drain: schema17 / supervisor19 / view11
 
+**Actual Main/migration gate2026-10-24 пройден:** [33 native tests](windows-compatible-drain-gate-2026-10-24.md),
+27 ready files twice/38+19 mutations; production Blocked/duplicate/legacy rejection,
+BeginDrain0 и actual16→17/refusal подтверждены. Две предыдущие неуспешные попытки
+сохранены; dedicated owner thread8MiB проверен actual Main. Далее activation/U2/U3/U4.
+Ниже — описание контракта и история подготовки gate, не текущие задания к запуску.
+
 Текущая проверка2026-10-24: [первый native run](windows-compatible-drain-first-attempt-2026-10-24.md)
 дал32 preliminary tests и actual16→17/refusal, но Main не дошёл до нового entry:
 stack overflow isolated supervisor во время health admission. Исправляется

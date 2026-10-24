@@ -7,6 +7,12 @@
 
 ## Текущий статус 2026-10-23
 
+Актуально2026-10-24: [production drain17 actual Main33/0](windows-compatible-drain-gate-2026-10-24.md)
+прошёл,27 ready files twice/38+19 mutations, taska4f17a0d terminal succeeded/0.
+Активных native runs нет. Следом [activation intent/FSM/ledger/driver](runtime-activation.md).
+ActivationSource model уже local-tested отдельно; installed runtime не менялся.
+Нижние статусы — история предыдущих попыток.
+
 Actual17 третья попытка2026-10-24: taska4f17a0d/run20261024-085627-3a106020
 запущена с producer628c0f6/dedicated owner stack8MiB. Наблюдать тот же task;
 точная команда/recovery в [handoff](../../handoff.md). Полного proof ещё нет.
