@@ -7,6 +7,11 @@
 
 ## Текущий статус 2026-10-24
 
+Четвёртый run941a2e6 **выполняется**:20261024-205117-2da937b6,
+task60d8285c-3fbe-45dd-8feb-ef63fe75486b. [Pins/readonly recovery](windows-activation-files-gate-2026-10-24.md).
+Expected97 tests/20 groups/22 commands; positive proof пока нет. Наблюдать ту же
+task и проверить реальные timings до перехода к execution.
+
 Третий run17c980c failed:94 preliminary/1 Main failed;140 timing entries показали
 custody83.742s и graph14.297s. [Measured fix/следующий97-test gate](windows-activation-files-gate-2026-10-24.md):
 exact marker search ускорен с полным SHA/identity и после-I/O deadline check.

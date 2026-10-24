@@ -1,5 +1,15 @@
 # Точка продолжения updater: оптимизация измеренной custody-задержки — 2026-10-24
 
+**ACTIVE четвёртый Main21:** task `60d8285c-3fbe-45dd-8feb-ef63fe75486b`,
+run `20261024-205117-2da937b6`, producer941a2e6/fixture7f6a029,
+`--activation-files`. Authoritative get_task running. Observer exec90087,
+log `.winbridge/update-preparation/activation-marker-native-main.log`.
+[Exact pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Expected **97 tests/20 groups/22 commands**, marker regressions и internal trace.
+Сначала terminal/proof/timing audit этой task; не resubmit. Positive proof пока
+нет. Только installed worker; desktop не нужен, UI-окон не будет. Три failed
+runs ниже сохраняются как история; исходные120000ms не менялись.
+
 **Третий Main21 terminal failed/exit1:** task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
 run20261024-200207-c87a1025, producer17c980c.94 preliminary passed/1 Main failed,
 27 ready files twice/migration audit12; positive proof отсутствует. На этот раз

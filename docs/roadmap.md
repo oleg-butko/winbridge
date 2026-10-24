@@ -2,6 +2,11 @@
 
 ## Текущий checkpoint updater — 2026-10-24
 
+**ACTIVE run941a2e6:**20261024-205117-2da937b6,
+task60d8285c-3fbe-45dd-8feb-ef63fe75486b. [Pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Expected97 tests/20 groups/22 commands. Результат ещё неизвестен; наблюдать ту
+же task, затем полный proof/timing audit. Старые failed attempts не replay.
+
 Третий Main21 (`17c980c`) тоже failed по deadline:94 preliminary/1 Main failed,
 run20261024-200207-c87a1025. Получены140 timing entries: custody83.742s,
 graph14.297s в binding105.960s. [Measured fix/pins](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md):

@@ -69,6 +69,7 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 Третий run17c980c failed по deadline; trace выявил дорогой marker search в custody.
 Ускорение точного поиска проверяется с сохранением полного SHA и identity checks;
 следом97-test native gate. Positive read-binding proof пока нет.
+Новый run941a2e6 выполняется:20261024-205117-2da937b6. [Точная команда наблюдения](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
 Preparation20 и read-binding21 реализованы, но новый whole-set Main gate failed
 по deadline:94 preliminary tests passed/1 Main failed. Сначала исправить этот
 переход и получить positive gate; запуск нового worker, state handoff и полное

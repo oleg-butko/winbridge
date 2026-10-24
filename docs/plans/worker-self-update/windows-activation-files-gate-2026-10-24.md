@@ -1,5 +1,45 @@
 # Actor21 read binding: trace выявил стоимость custody marker search
 
+**ACTIVE четвёртый run, результата ещё нет:** task
+`60d8285c-3fbe-45dd-8feb-ef63fe75486b`, run `20261024-205117-2da937b6`,
+producer941a2e6/fixture7f6a029, `--activation-files`. Первое get_task running.
+Expected97 native tests/20 groups/22 commands; затем actual Main/file/migration
+proof audit и timings. Старые failed runs не resubmit.
+
+## Текущий run941a2e6: pins и readonly recovery
+
+- Producer `941a2e6125e27d753588988639fd7bb6c08bb90e`:
+  `winbridge-20261024T205029Z-941a2e6-57b71ec0.zip`, SHA256
+  `cf91e79d0f1bbbf44d83c49b6a33a5adf8773253a5f9bdea59542738e9aa6907`, manifest
+  `77659ef4d7063e40b273da32f9daa9691a9f2fcc3e2a3245e49d481115bbc9a4`.
+- Fixture7f6a029, successful17 migration reference и cache20261017-061527-f4639971
+  прежние. Не подменять reference failed audit третьего run.
+- Local `.winbridge/workflow-validation/20261024-205117-2da937b6/activation-preparation-run.json`;
+  request/meta сохранены до ACK, task ID сохранён, activationFiles=true.
+- Shared `/mnt/hgfs/shared/WinBridge/workflow-validation/20261024-205117-2da937b6`.
+- Observer exec90087, log `.winbridge/update-preparation/activation-marker-native-main.log`.
+- Debian free перед submit32,532,987,904 bytes; Windows проверяется перед build.
+  После завершения прошлых local checks очищены только358 unused Debian test
+  executables;96 current/root binaries/process inodes защищены. Cleanup receipts
+  `activation-marker-cache-prune-*.json`; Windows directories не очищались.
+- Local workspace717/0 (16 ignored), marker2/0, Python5+9, Linux/MSVC validation
+  и MSVC production Clippy/fmt/scaffold265 passed; package lock versions прежние.
+
+~~~bash
+python3 scripts/validate-update-activation-preparation-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261024T205029Z-941a2e6-57b71ec0.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261024T103055Z-7f6a029-3e94038a.zip \
+  --cache-run 20261017-061527-f4639971 \
+  --reference-pin .winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json \
+  --activation-files --verify-run 20261024-205117-2da937b6
+~~~
+
+Это readonly observe той же task, не replay. Observation timeout не terminal:
+сначала get_task, затем тот же run/flags/pins. До positive Bound/cold proof
+не начинать launcher/state handoff. Нужен только installed worker, UI-окон нет.
+После terminal сообщить, что desktop можно закрыть, какой worker оставить.
+Результаты далее относятся к завершённым трём failed attempts.
+
 **Третий run17c980c завершён failed/exit1**, task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
 run20261024-200207-c87a1025.94 preliminary passed/1 Main failed;27 ready files
 проверены дважды, actual17→18/refusal audit отверг12 mutations. Main1088.04s,
