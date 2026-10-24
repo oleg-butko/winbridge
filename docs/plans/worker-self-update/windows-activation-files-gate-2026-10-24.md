@@ -1,14 +1,77 @@
-# Actor21 whole-set read binding: actual Windows run выполняется
+# Actor21 whole-set read binding: gate завершён с ошибкой deadline
 
-2026-10-24. **Результат ещё не известен.** Task
+2026-10-24. **Terminal failed/exit1, gate не пройден.** Task
 `01d7bf76-6c53-427c-8cd9-81d8f8798962`, run `20261024-153856-fe2e4f76`,
-producer `74e8839`. Первое authoritative get_task: running. Не resubmit.
+producer `74e8839`. **94 preliminary tests passed,1 Main test failed**;
+21 commands, последний Cargo command exit101, остальные exit0.
+Задача завершилась за1575.266s, Main test —1044.21s. Это не общий timeout
+30-минутной задачи и не ошибка только Debian observer. Старый task не resubmit.
 
-Ожидаются не менее95 native tests/19 групп/21 commands: прежняя real Main цепочка
-до Prepared20, новый Bind/Observe21, strict reader refusal до handoff и success
-после, exact five-file read set, write/delete denial, original instance lock,
-duplicate/cold no-adoption, actual17→18/refusal и four-case file primitive.
-Новый worker не запускается и state не передаётся; public install/activation off.
+Последний успешный positive native gate остаётся
+[preparation20/actual17→18,87/0](windows-activation-preparation-gate-2026-10-24.md),
+отдельный one-file handoff также прошёл4/0. Whole-set21 реализован, но positive
+сквозного proof пока нет. [Подробная передача контекста](resume-2026-10-24-activation-files.md).
+
+## Ошибка и границы диагностики
+
+Main дошёл до FilesMoved/revision22,5/5 installed, затем prepare20 и binding21.
+В `apps/worker/tests/update_shutdown/activation_files.rs:60` проверка driver_error
+получила:
+
+~~~text
+Runtime read-pin handoff stopped: PreconditionsChanged: Activation preparation deadline expired; no new execution or adoption
+~~~
+
+`None-supervisor-stderr.log` содержит ту же причину и указание сохранить journals/
+barrier без automatic retry. Это сработавший live monotonic guard120000ms,
+а не отказ firewall, потеря controller или сбой установленного worker.
+Весь процесс **не** объявляется прошедшим на основании94 preliminary successes.
+
+Точный источник расхода времени ещё не измерен. В текущем harness между
+durable Prepared и Bind есть тяжёлые observe/duplicate/inspect/history проверки;
+сам driver также повторяет graph/custody/hash preflights. По имеющимся логам
+нельзя установить номер файла/checkpoint, на котором исчерпан бюджет, или
+доказать, что достаточно только переставить assertions.
+
+Следом нужны scoped timings без private material: preparation commit/ACK wait,
+observe/duplicate/graph reads, начальный original.require_progress и каждый
+file checkpoint, elapsed/remaining monotonic budget. Сначала выяснить, можно ли
+перенести тяжёлые тестовые observations после live handoff без потери проверок,
+и убрать повторное дорогое чтение без ослабления authority/identity checks.
+Если потребуется изменение политики сроков — отдельный явный контракт; нельзя
+молча увеличить120000, обновить исходный deadline при duplicate/cold read или
+отключить stale-owner/nonce/FileID guard.
+
+Success/cold assertions **после** места падения не выполнены; не считать
+доказанными whole-set Bound, полный write/delete denial, duplicate после Bound
+или cold no-adoption именно в этом run. `candidate-health-actor-proof.json`
+отсутствует; успешного `activation-preparation-verified.json` для этого run нет.
+Fixture выполняет catch_unwind → terminate_tree → tree_is_empty → resume_unwind;
+нового cleanup panic в логе нет, но полноценного post-crash success proof тоже нет.
+
+Новый worker этим режимом не создаётся и state не передаётся. Public install/
+activation off; installed runtime не менялся. В задаче checkpoint дальнейших
+Windows-прогонов не запускалось; следующий этап реализации не начат.
+
+## Что действительно проверено
+
+Все18 preliminary groups прошли:4 handoff primitive,2 strict21 contract,
+1 IPC21 rejection,24 activation model/ledger/timer,2 strict20 contract,
+1 IPC20 rejection,1 actual17→18 migration и прежние replacement/preparation/
+backup groups. Это94 tests, **не95/0**.
+
+27 опубликованных ready files прочитаны/хэшированы дважды; failed report,
+все preliminary logs и migration proof сохранены. Migration verifier отдельно
+проверил actual17→18/refusal и отверг12 negative mutations. Успешные Main/file
+mutation suites не запускались против отсутствующего positive proof; counts72/19
+для нового run не заявляются.
+
+- Report SHA256 `650f1779f77130e3b4e7158f923172320c29f90893fcd5ee066de926091de538`.
+- Failed Main log SHA256 `1e55ba7ae515a64ed70b6a8ac760e3393132c53018920db7533470fdb82eac40`.
+- Migration proof SHA256 `6aedf35ceaac7115aab43b41824b4acabf00342770317f834538a2ecb23c4891`.
+- Local readonly failure audit:
+  `.winbridge/workflow-validation/20261024-153856-fe2e4f76/activation-files-failed-audit.json`.
+  `passed=false`; не использовать его как successful migration reference pin.
 
 ## Immutable pins и наблюдение
 
@@ -24,17 +87,20 @@ duplicate/cold no-adoption, actual17→18/refusal и four-case file primitive.
   `.winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json`.
 - Metadata:
   `.winbridge/workflow-validation/20261024-153856-fe2e4f76/activation-preparation-run.json`.
-  `activationFiles=true`; будущий verified result имеет имя
-  `activation-preparation-verified.json` того же run. Private request/EncodedCommand/
+  `activationFiles=true`; successful verified result **не создан**.
+  Private request/EncodedCommand/
   config/token не печатать.
 - Shared reports:
   `/mnt/hgfs/shared/WinBridge/workflow-validation/20261024-153856-fe2e4f76`.
 - Observer log `.winbridge/update-preparation/activation-files-native-main.log`;
-  при запуске exec session62989/PID123026. Проверять handles/get_task заново.
+  observer terminal exit1 после корректного отклонения failed report. Прежние
+  exec62989/PID123026 завершены, не возобновлять.
 - Cache `20261017-061527-f4639971`, один build lease.
-  Debian free перед submit16,472,887,296 bytes; Windows measurement будет в report.
+  Debian free перед submit16,472,887,296 bytes, после audit16,469,987,328 bytes
+  (около15.3GiB). Windows free27,462,344,704→27,239,272,448 bytes. Cleanup не было.
 
-Readonly recheck **прежнего task**, без submit:
+Readonly recheck **прежнего task**, без submit; ожидаемо завершится ошибкой
+`Native preparation failed`, потому что actual Main failed. Это не команда повтора:
 
 ~~~bash
 python3 scripts/validate-update-activation-preparation-native.py \
@@ -60,12 +126,16 @@ Legacy preparation87/0 readonly recheck сохранён, он не доказы
 [Native20 preparation87/0](windows-activation-preparation-gate-2026-10-24.md) и
 [one-file native4/0 pins](runtime-activation.md) относятся к прежним producers.
 
-До final proof whole-set branch не считать выполненным. После terminal audit/
-review продолжать [activation plan](runtime-activation.md): process creation/
-private receiver, original state handoff, local/controller/lifetime, U2 faults/
-U3/U4. Для будущего create admission binding guard должен быть consumed вместе
-с его живым deadline/nonce; JSON и cold Snapshot не дают этих ресурсов.
+**Первый следующий шаг:** диагностировать и исправить расход deadline в Main21,
+затем clean producer/new namespace и успешный whole-set gate. Старую задачу
+не replay; завершённые reports/runtime/state/reference данные не удалять.
+Только после positive gate/review продолжать [activation plan](runtime-activation.md):
+process creation/private receiver, original state handoff, local/controller/
+lifetime, U2 faults/U3/U4. JSON и cold Snapshot не дают живых ресурсов.
 
-Нужен только installed d052 worker. Desktop не нужен, UI-окон не будет;
-рабочий runtime/config/journal не меняются. После terminal явно сообщить:
-desktop можно закрыть, installed worker оставить работать.
+Закрывающий Info: installed d052 healthy, generation
+`8f8d1fb9-e5b1-4984-a17e-d067db46268e`, activeTaskCount0,
+maintenanceError=null/journalRecoveryRequired=null/recoveryCoverage.complete=true.
+Активных native/Cargo/observer runs нет; controller PID3922 оставлен работать.
+UI-окон не было. Desktop можно закрыть; installed worker оставить работать.
+Ручное обновление установленного worker сейчас не требуется.

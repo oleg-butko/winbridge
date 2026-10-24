@@ -1,5 +1,23 @@
 # Постепенная реализация и расширение
 
+## Текущий checkpoint updater — 2026-10-24
+
+Начатые проверки завершены; [подробная инструкция продолжения](plans/worker-self-update/resume-2026-10-24-activation-files.md)
+заменяет прежние NEXT/ACTIVE. Source updater18/worker16/supervisor21/view13.
+[Whole-set native gate](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
+terminal **failed/exit1**:94 preliminary tests passed,1 Main failed из-за live
+preparation deadline120000ms при read-pin handoff.27 ready files twice;
+actual17→18/refusal отдельно принят с12 mutations. Full Bound/cold proof нет.
+Local workspace716/0 (16 ignored), обе Clippy/protocol55/TS/UI/Python passed.
+
+**Далее:** профилировать участок Prepared→Bind и custody/graph/file checks,
+исправить bottleneck без обновления старого окна/ослабления guards; новый clean
+producer и новый95-test run. После positive gate/review — launcher/private
+receiver/state handoff, local/controller/lifetime и remaining U2/U3/U4.
+Public install off; installed d052 unchanged/healthy/active0. Активных проверок нет.
+
+## История предыдущих checkpoints: не текущие задания
+
 2026-10-24: [combined native95 actor21/read binding запущен](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md),
 task01d7bf76-6c53-427c-8cd9-81d8f8798962/run20261024-153856-fe2e4f76,
 producer74e8839. Наблюдать тот же task; proof ещё нет. Public install off,

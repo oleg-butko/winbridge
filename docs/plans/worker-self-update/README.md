@@ -7,19 +7,22 @@
 
 ## Текущий статус 2026-10-24
 
-Начать с [подробного checkpoint следующей сессии](resume-2026-10-24-activation-preparation.md).
-Текущий source: updater18/worker16/supervisor21/view13. Activation source/intent/
-FSM/ledger и original-custody metadata preparation подключены к actor;
-execution/capability пока нет. Whole-set read binding library/actor21 добавлены;
-workspace716/0 (16 ignored), Linux/MSVC Clippy/protocol55/0/TS/UI passed. Positive
-native95 binding gate ещё впереди. Итоги предыдущих проверок — в checkpoint.
+Начать с [подробного checkpoint следующей сессии](resume-2026-10-24-activation-files.md).
+Текущий source: updater18/worker16/supervisor21/view13. Preparation20 и whole-set
+read-binding library/actor21 реализованы, execution/capability нет.
+[Последний native run](windows-activation-files-gate-2026-10-24.md) terminal
+**failed/exit1**:94 preliminary tests passed,1 Main failed из-за истечения120000ms
+preparation deadline в read-pin handoff.27 ready files twice; actual17→18/refusal
+отдельно проверен с12 mutations. Positive whole-set Bound/cold proof отсутствует.
 
-[Actual Windows17 Main/migration33/0](windows-compatible-drain-gate-2026-10-24.md)
-пройден и повторно проверен readonly. Active native runs нет. [Combined native18 preparation/migration87/0 gate](windows-activation-preparation-gate-2026-10-24.md)
-также пройден,26 files twice/72+12 mutations и readonly recheck. Следом physical
-startup/state handoff по [activation plan](runtime-activation.md). Public install
-выключен, installed d052 unchanged, U2 целиком/U3/U4 не завершены.
-Нижние NEXT/ACTIVE относятся к прошлым checkpoints.
+Первое следующее задание — timings/bottleneck Prepared→Bind/graph/custody/files,
+исправление без продления старого окна, новый clean producer и positive95-test
+native gate. Только затем [activation execution](runtime-activation.md): launcher/
+receiver/state handoff, local/controller/lifetime и оставшиеся U2/U3/U4.
+[Preparation87/0](windows-activation-preparation-gate-2026-10-24.md) и one-file4/0
+успешны, но не заменяют gate21. Workspace716/0 (16 ignored), Linux/MSVC Clippy,
+protocol55/TS/UI/Python passed. Public install off, installed d052 unchanged,
+active0. Все начатые проверки завершены. Нижние NEXT/ACTIVE — история.
 
 ### История предыдущих checkpoints
 

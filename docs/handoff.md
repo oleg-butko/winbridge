@@ -1,63 +1,41 @@
-# Точка продолжения updater: native18 preparation gate закрыт — 2026-10-24
+# Точка продолжения updater: проверки завершены — 2026-10-24
 
-**Текущий run95 запущен, не resubmit:** task
-`01d7bf76-6c53-427c-8cd9-81d8f8798962`, run `20261024-153856-fe2e4f76`,
-producer74e8839/fixture7f6a029, `--activation-files`. Первое get_task: running.
-[Exact pins, log и readonly команда](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Ожидаются95 tests/19 групп, actual Main21 read binding и actual17→18/refusal.
-Proof ещё нет. Worker only/no UI; installed d052 unchanged. После terminal —
-audit/review, затем suspended launcher/private receiver/state handoff. Старые
-«ещё не запускался» ниже — история.
+**Начать с [подробного checkpoint следующей сессии](plans/worker-self-update/resume-2026-10-24-activation-files.md).**
+Он содержит результаты, карту кода, окружение, точные task/run/source/proof pins,
+диагностику и порядок продолжения. Этот блок заменяет старые NEXT/ACTIVE ниже.
+Пользователь попросил закрыть текущие проверки и сохранить передачу контекста;
+новый execution этап в этой задаче не начинался. Полный updater не завершён.
 
-**Новый source после47ba586:** whole-set ActivationFilesGuard library и internal
-actor21/view13 добавлены, source schemas18/16 прежние. Fresh nonce/monotonic window/
-Prepared/root/owner/epoch/self PID сверяются перед read binding; ошибка удерживает
-original и partial kernel resources. Typed FilesActor отделяет Idle/Binding/Bound/
-Failed. Worker не создаётся, instance lock не передаётся; public activation off.
-Workspace716/0 (16 ignored), final Linux/MSVC all-target Clippy, protocol-jsonschema55/0,
-contracts/TS/UI/fmt/scaffold263 прошли. Python5+9 passed.
-Native95 mode подготовлен (`--activation-files`), **пока не запускался**. Старый87/0
-readonly recheck прошёл; он не доказывает новый21 whole-set branch. После final
-checks — clean distinct producer18 export, native95 Main/read binding/migration,
-audit/review, затем launcher/private receiver/state handoff. [Карта и ограничения](plans/worker-self-update/runtime-activation.md).
+Текущий source: **updater schema18/worker schema16, supervisor21/view13**.
+Activation model/ledger/preparation20 и consuming whole-set read-binding factory/
+actor21 реализованы. Однако [новый native gate](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
+**не пройден**: task `01d7bf76-6c53-427c-8cd9-81d8f8798962`,
+run `20261024-153856-fe2e4f76`, producer74e8839, terminal **failed/exit1**.
+94 preliminary tests passed,1 Main failed: во время read-pin handoff исчерпан
+live preparation deadline120000ms.27 ready files twice; actual17→18/refusal
+проверен отдельно с12 negative mutations. Полного Bound/cold proof и successful
+verified pin нет. Старый task не resubmit, pending/running записи ниже — история.
 
+**Первое следующее задание:** измерить расход времени между Prepared и Bind,
+в graph/custody/file preflights; исправить измеренный bottleneck без продления
+старого deadline или ослабления fencing. Затем новый clean producer/namespace,
+explicit `--activation-files` и успешный95-test gate. Только после positive proof/
+review — suspended launcher/private receiver/state handoff, local/controller/
+lifetime, remaining U2 faults и U3/U4. [Activation plan](plans/worker-self-update/runtime-activation.md).
 
-**Продолжение после5741432:** начат physical file-handle bridge. Добавлен consuming
-однофайловый read handoff с удержанием denial-WRITE и exact File ID/hash; partial
-failure сохраняет оставшийся handle и не выдаётся за успешный read pin. Windows
-Clippy platform/update/worker passed (первый large Err исправлен Box). **Native4/0
-пройден**, taskade260bf-de0a-436b-9920-589eb26ee86c/run20261024-143036-03cf8cbb,
-producerd4c27a3.5 ready files twice; exact pins/report/log в activation plan.
-Active native runs нет. Следом whole-set
-original-guard/journal/actor binding. [Карта](plans/worker-self-update/runtime-activation.md).
-Schemas updater18/worker16/supervisor20/view12 прежние, public install off.
+Предыдущие successful gates: preparation20/actual17→18 **87/0** и однофайловый
+read handoff **4/0**. Они не доказывают whole-set21. Local workspace716/0
+(16 ignored), protocol-jsonschema55/0, Linux/MSVC all-target Clippy, generated
+contracts/TS/UI/fmt и Python5+9 passed. Итоговые docs/links проверены отдельно.
+Public install выключен, activation/controller_confirmation/desktop_update
+не объявлены готовыми; process creation/state transfer ещё не реализованы.
 
-[Actual Main18 preparation/migration87/0](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md)
-**пройден**, task `c1675a54-b250-4fa9-b2d3-66c653033180`,
-run `20261024-111115-9272d0e2`, producerb12ecc6/fixture7f6a029.
-26 ready files twice,72 Main +12 migration mutations, readonly recheck passed.
-Новых задач после terminal не отправлялось; active native/Cargo runs нет.
-Observer исправлен: FilesVerified — tagged object, не строка. Exact pins,
-диагностика, hashes и readonly команда — в linked gate report; старый task не resubmit.
-
-Текущий source updater18/worker16/supervisor20/view12. Actual original-supervisor
-capture20 сохранил Prepared0/history1 до ACK consumption; duplicate не создал
-новый attempt. Root VerifyingLocal15, replacement FilesMoved22, original custody,
-files и worker DB/WAL сохранены. Cold read не получил custody; normal serve
-по-прежнему refused до writer. Actual17→18/refusal/backup/history на новой копии
-прошли, original reference сохранён. Это подготовка metadata, **не запуск worker**.
-Public install и activation/controller_confirmation/desktop_update capabilities off.
-
-**Следующий шаг:** consuming physical file-handle bridge после FilesMoved и
-Prepared, затем suspended launcher/private receiver и original state/lock handoff.
-[Activation plan](plans/worker-self-update/runtime-activation.md) содержит порядок;
-future execution gate обязан подтверждать actual PID/Job/receipts, а не нулевые
-scope counters preparation. После review продолжать physical implementation,
-затем local/controller/lifetime, remaining U2 faults/U3/U4. Whole updater не готов.
-
-Installed d052 healthy/active0/unchanged, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
-maintenance/recovery errors=null. Desktop можно закрыть, installed worker оставить.
-Ручное обновление сейчас не требуется. Нижние running/NEXT/ACTIVE — история.
+Installed d052 healthy/unchanged, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
+activeTaskCount0, maintenanceError=null/journalRecoveryRequired=null. Все начатые
+native/Cargo/observer runs завершены; controller PID3922 оставлен работать.
+Desktop можно закрыть, installed worker оставить. Ручное обновление не требуется.
+Debian осталось около15.3GiB; cleanup не выполнялся. Config/journals/reports и
+Windows validation directories не удалять. Дальше — исторические checkpoints.
 
 ## История checkpoint daa88da (до native18 harness/gate)
 

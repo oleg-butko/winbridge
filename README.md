@@ -62,10 +62,12 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
-Актуальная точка разработки апдейтера: [handoff](docs/handoff.md),
-[actual18 preparation/migration87/0 gate](docs/plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md).
-Реализована внутренняя подготовка activation18/20; запуск нового worker и полное
-самообновление ещё не готовы. Этот checkpoint приоритетнее истории U0–U2 ниже.
+Актуальная точка разработки апдейтера: [подробная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-24-activation-files.md),
+[handoff](docs/handoff.md) и [последний native report](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Preparation20 и read-binding21 реализованы, но новый whole-set Main gate failed
+по deadline:94 preliminary tests passed/1 Main failed. Сначала исправить этот
+переход и получить positive gate; запуск нового worker, state handoff и полное
+самообновление ещё впереди. Public install off. Checkpoint приоритетнее истории ниже.
 
 Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):
 `winbridge-update` проверяет исходники и показывает план замен, отдельный build-only

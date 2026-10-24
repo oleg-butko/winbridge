@@ -1,11 +1,16 @@
 # Activation после проверенного replacement
 
-2026-10-24. **Execution driver ещё не реализован; actor20 preparation добавлен.**
-Текущий source updater18/worker16/supervisor21/view13 (read binding, native gate pending). Actual production drain17 gate
-закрыт; [combined native18 preparation/migration87/0 gate пройден](windows-activation-preparation-gate-2026-10-24.md).
-26 ready files twice/72 Main +12 migration mutations, readonly recheck. Execution
-ещё нет; следующим реализовать physical bridge, затем launcher/private receiver/state handoff.
-[Актуальный checkpoint и проверки](resume-2026-10-24-activation-preparation.md),
+2026-10-24. **Execution driver ещё не реализован; read binding21 gate failed.**
+Текущий source updater18/worker16/supervisor21/view13. Preparation20/actual17→18
+[прошли87/0](windows-activation-preparation-gate-2026-10-24.md), one-file read
+adapter прошёл4/0. Whole-set factory/actor21 добавлены, однако
+[новый Main gate](windows-activation-files-gate-2026-10-24.md) terminal failed/exit1:
+94 preliminary passed/1 Main failed, во время read-pin handoff истёк preparation
+deadline120000ms. Positive Bound/cold proof отсутствует; миграция отдельно принята.
+Сначала timings/исправление этого перехода и positive95-test gate в новом
+namespace, затем launcher/private receiver/state handoff. Execution capability
+и public install off. Все начатые проверки завершены, installed runtime unchanged.
+[Актуальный checkpoint и проверки](resume-2026-10-24-activation-files.md),
 [общий U0–U4 план](README.md),
 [original custody](runtime-replacement-custody.md),
 [resident replacement actor](runtime-replacement-actor.md).
@@ -240,13 +245,12 @@ Windows free27,557,306,368→27,689,910,272 bytes, Debian после audit16,529
 Cleanup не выполнялся, installed d052/generation прежние/active0/errors=null.
 UI-окон не было, desktop можно закрыть, installed worker оставить. Active runs нет.
 
-Это пока однофайловая операция: consuming whole-set bridge под original updater
-guard, journal/current-owner binding и actor/launcher ещё требуется реализовать.
-После native primitives объединить пять **installed** файлов в PinnedInstalledSet,
-сохраняя старые displaced move handles и original exit/state custody. Только
-после полного exact readback разрешено приступать к отдельному create admission.
+На момент primitive gate это была однофайловая операция. Следом реализованы
+whole-set bridge под original guard, journal/current-owner binding и actor21,
+описанные ниже; их positive Main gate не пройден. Только после полного exact
+readback и положительного gate можно приступать к отдельному create admission.
 
-## Whole-set library и actor21/view13 добавлены, native binding ещё впереди
+## Whole-set library/actor21: Main обнаружил истечение deadline
 
 `runtime_replacement/activation_files.rs` потребляет свежий non-Serde
 ActivationPreparation и **тот же Box original guard**. `require_activation_prepared`
@@ -273,8 +277,9 @@ Cold snapshot показывает NotBound/heldFiles0/originalStateHeld=false �
 реконструирует handles. Views1–12 не получают нового поля.
 
 Native Main harness расширен флагом `-ActivationFilesGate`, observer —
-`--activation-files` (добавить к прежней preparation команде вместо выбора нового
-namespace при readonly recheck). Режим сохраняется в metadata; старый87/0
+`--activation-files`. Mode сохраняется в metadata: при readonly recheck его
+нельзя добавлять к старому preparation-only run или удалять из нового files run.
+Старый87/0
 `--verify-run` по-прежнему проходит из текущего checkout. В новом mode ожидаются
 не менее95 native tests: прежний Main/actual17→18 gate, monotonic timer test,
 4 read-handoff primitives, strict21 DTO и actual IPC21 rejection. Сам Main после20
@@ -286,14 +291,26 @@ instance lock/root/history/DB/WAL, duplicate и cold no-adoption. Новый ind
 Локальные проверки нового source: workspace716/0 (16 ignored), final Linux/MSVC
 all-target Clippy, protocol-jsonschema55/0, generated contracts/TypeScript/UI build,
 fmt/diff/scaffold263 passed. Python5+9 tests passed. Логи `activation-files-*` в
-`.winbridge/update-preparation/`. После commit/export выполнить новый native95
+`.winbridge/update-preparation/`. Из clean producer74e8839 выполнен native95
 mode; архив fixture18 остаётся7f6a029, источник migration — successful17 pin.
+Task01d7bf76-6c53-427c-8cd9-81d8f8798962/run20261024-153856-fe2e4f76 terminal
+failed/exit1:94 preliminary passed,1 Main failed по live deadline в read-pin
+handoff.27 ready files twice, actual17→18 audit12 passed; полного Main proof нет.
+[Диагностика и pins](windows-activation-files-gate-2026-10-24.md).
+
+Первая следующая работа — измерить Prepared→Bind: тяжёлые observations и
+duplicates в harness, graph/custody/hash preflights driver и per-file checkpoints.
+Номер файла/источник расхода бюджета пока неизвестны. Перестановку assertions
+или оптимизацию повторного чтения подтвердить измерениями, сохраняя authority/
+nonce/FileID проверки. Старый deadline не продлевать; изменение политики сроков
+требует явного контракта. После исправления — новый clean producer/namespace и
+positive gate; failed task не replay. Execution до этого не начинать.
 
 Подключены только read handles. Private worker receiver, suspended launcher,
 state handoff, controller/lifetime и actual update остаются незавершёнными;
 activation capability=None, public install off. Positive whole-set branch пока
-не исполнен на Windows: Native87 относится к producerb12ecc6 (preparation20),
-Native4 — кd4c27a3 (one-file adapter). Проверки нового source указаны в handoff.
+не доказан: Native87 относится к producerb12ecc6 (preparation20), Native4 —
+кd4c27a3 (one-file adapter); новый Main21 failed. Проверки source — в handoff.
 
 ## Ограничения фактического кода
 
@@ -373,8 +390,9 @@ handle. Значит, «parent завершился успешно» и «child 
    Потерянный ACK сверяется тем же command ID. Раздельно показывать install
    outcome, текущую доступность процесса и доставку уведомления/отчёта.
 
-Предложенные schema18/worker17 — следующий свободный шаг на момент документа,
-не объявленная capability. Уточнять номера при имплементации по фактическому HEAD.
+Updater schema18 уже реализована; worker17 остаётся возможным будущим изменением
+при добавлении durable receipt, не объявленной capability. Уточнять номера и
+compatibility policy при имплементации по фактическому HEAD.
 Supervisor остаётся владельцем одного blocking slot. Heap boundary после
 stack overflow сохраняется; тяжёлые physical preflights не переносить в mailbox.
 
