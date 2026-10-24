@@ -1,30 +1,60 @@
-# Actor21 whole-set read binding: повторный Main выполняется
+# Actor21 whole-set read binding: две попытки failed по deadline
 
-2026-10-24. **ACTIVE retry после исправления612df2e, результата ещё нет.**
-Task `46d57134-48fc-4188-81cd-b94f59074d15`, run `20261024-162445-229e2220`.
-Первое authoritative get_task: running. Ожидаются95 tests/19 groups/21 commands,
-новый Bound/cold proof и scalar timing trace. Не resubmit при observation timeout.
+2026-10-24. **Последняя task46d57134-48fc-4188-81cd-b94f59074d15 terminal
+failed/exit1**, run20261024-162445-229e2220, producer612df2e.94 preliminary tests
+passed/1 Main failed;27 ready files twice; actual17→18/refusal отдельно принят
+с12 negative mutations. Успешного whole-set proof нет. Повторный submit старых
+tasks запрещён; дальнейшие runs — только новый namespace/clean producer.
 
-## Текущий повтор: pins и восстановление наблюдения
+## Вторая попытка612df2e и исправление подключения диагностики
+
+Устранение повторного graph read и перенос audit после Bind не обеспечили
+успех: снова `Runtime read-pin handoff stopped: PreconditionsChanged: Activation
+preparation deadline expired; no new execution or adoption`.
+Main test1083.53s; это не общий task timeout. Harness timings: request1118ms,
+durable record16270ms, resident preparation19324ms; pre-binding view2089ms и
+Bind ACK6309ms относительно начала helper. Но **внутреннего timing trace нет**.
+
+Review выявил причину отсутствия trace: диагностика собрана под feature
+`update-validation`, а actual Main копировал updater из обычного old-set build.
+Feature тестового harness не распространяется на запущенный executable.
+Источник расхода бюджета внутри driver пока не измерен; nonce/deadline не менять.
+
+Подготовлено исправление runner/fixture: health-supervisor-build для files gate
+собирает validation updater, сразу сохраняет независимую create-only копию
+`activation-validation-updater.exe` в run directory с SHA256 readback. Другие
+Cargo feature variants не могут подменить эту копию. Input validationUpdater
+указывает на неё; Main требует exact path этого run, копирует её в runtime как
+Updater role и заново получает descriptor/hash для manifest. Перед Bind тест
+требует actual timing prefix в stderr работающего supervisor. Production build
+и его features не меняются; fault hooks не активируются без своих marker inputs.
+
+Это исправление диагностики, **не закрытый deadline defect**. Следом новый
+clean producer/namespace, реальные per-file/graph/custody timings; затем measured
+fix и positive95-test proof. Launcher/state handoff до positive gate не начинать.
+
+### Pins второй попытки и readonly повтор чтения
 
 - Producer `612df2e562c3a13b1006237a2db3937f553e94f5`:
   `winbridge-20261024T162421Z-612df2e-1f018014.zip`, SHA256
   `0679f07d9851451efd66547f1a99a726b0579a8ae260f20e839899f83e7688ce`, manifest
   `25396d675245bbe1ad0eda41719b135329ed005b733c87465955b65fa3a4a9cf`.
-- Fixture7f6a029 и successful17 reference те же, что в первой попытке ниже.
-  Старый failed audit не используется как reference.
-- Metadata `.winbridge/workflow-validation/20261024-162445-229e2220/activation-preparation-run.json`,
-  `activationFiles=true`; request/meta записаны до ACK, task ID сохранён.
+- Fixture7f6a029/successful17 reference те же, что в первой попытке ниже.
+- Metadata `.winbridge/workflow-validation/20261024-162445-229e2220/activation-preparation-run.json`;
+  failure audit `activation-files-failed-audit.json`, `passed=false`, не reference.
 - Shared `/mnt/hgfs/shared/WinBridge/workflow-validation/20261024-162445-229e2220`.
-- Observer exec11882, лог `.winbridge/update-preparation/activation-budget-native-main.log`.
-  Проверять handle/get_task заново, не считать observation timeout terminal.
-- Cache20261017-061527-f4639971 с единственным lease. Debian free перед
-  submit16,465,453,056 bytes; Windows измеряется самим сценарием до build.
-- Local focused31/0, Python5+9, Linux/MSVC validation и MSVC production
-  all-target Clippy/fmt/scaffold265 passed. Логи/receipts `activation-budget-*`.
-  Full workspace716/0 относится к предыдущему producer74e8839, повторно не заявляется.
+  Observer exec11882/PID127032 завершён exit1; log
+  `.winbridge/update-preparation/activation-budget-native-main.log`.
+- Report SHA256 `0123447737827f6ab3a64151eef2f536c13a3a5a8ada256c6612ee22d41fd242`.
+- Main log SHA256 `04a8166faeb632a88894a8188a0b6d7881f91ae23ed17540f5e3c0eda4eb3264`.
+- Migration SHA256 `b207137654763137dbda4bb32be43ca8ff008bc163c8ff452150d951dcafbde5`.
+- Windows free27,210,063,872→26,419,474,432 bytes; Debian after audit16,464,531,456.
+  Cleanup не выполнялся. Cache20261017-061527-f4639971, только один lease.
+- Installed d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e healthy/active0;
+  maintenance/recovery errors=null. Desktop можно закрыть, worker оставить работать.
+  Ручное обновление не требуется. Активного native run сейчас нет.
 
-Readonly наблюдение **новой task**, без submit:
+Readonly команда ожидаемо возвращает `Native preparation failed`; это **не** replay:
 
 ~~~bash
 python3 scripts/validate-update-activation-preparation-native.py \
@@ -35,16 +65,10 @@ python3 scripts/validate-update-activation-preparation-native.py \
   --activation-files --verify-run 20261024-162445-229e2220
 ~~~
 
-Исправление возвращает тот же validated replacement из одного graph snapshot
-вместо повторного full history read, добавляет deadline recheck после I/O и
-переносит тестовые duplicate/history audits после Bind. Исходные120000ms не
-изменены. Timings включены только в validation build; `trace_end` не success.
-После terminal проверить actual task/report/ready/proof, negative mutations,
-timing trace и unchanged installed worker. До positive gate execution не начинать.
-
-Нужен только installed d052 worker; desktop не нужен, UI-окон не будет. После
-terminal явно сообщить, что desktop можно закрыть и какой worker оставить.
-Исторические counts/pins/ошибка ниже относятся **только к первой попытке**.
+Local producer612 checks: focused31/0/Python5+9, Linux/MSVC validation и MSVC
+production all-target Clippy/fmt/scaffold265 passed. Новый routing patch имеет
+свои checks в актуальном handoff. Ни один из двух runs не доказывает Bound/cold;
+Main/file mutation suites не запускались против отсутствующего positive proof.
 
 ## Первая попытка74e8839 — terminal failed по deadline
 

@@ -1,13 +1,19 @@
-# Точка продолжения updater: повторный Main21 выполняется — 2026-10-24
+# Точка продолжения updater: подключение native timing trace — 2026-10-24
 
-**ACTIVE повторный Main21, наблюдать ту же task:**
-`46d57134-48fc-4188-81cd-b94f59074d15`, run `20261024-162445-229e2220`,
-producer612df2e/fixture7f6a029, `--activation-files`. Authoritative get_task:
-running. Observer exec11882, лог `.winbridge/update-preparation/activation-budget-native-main.log`.
-[Exact pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Request/meta сохранены до ACK. Ожидаются95 tests/19 groups/21 commands, затем
-ready/proof audit и анализ timing trace. Полного результата ещё нет; новый submit
-не делать. Installed worker only/no UI. Старый failed task остаётся failed.
+**Последний повтор terminal failed/exit1:** task46d57134-48fc-4188-81cd-b94f59074d15 /
+run20261024-162445-229e2220, producer612df2e.94 preliminary passed/1 Main failed
+по deadline,27 ready files twice, migration audit12 passed. Internal timings
+не появились: actual updater был обычным old-set build, feature harness не
+включает его диагностику. Installed d052 healthy/active0, native runs нет.
+[Диагностика, hashes, readonly command](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+
+**Текущий routing fix:** отдельная validation updater copy с SHA readback в
+новом run namespace; Main использует её, требует exact path и actual timing
+prefix до Bind. Deadline120000ms и production features прежние. После local
+checks — commit/clean producer, новый95-test run и анализ внутренних timings;
+источник расхода бюджета внутри driver ещё неизвестен. Не начинать launcher.
+MSVC all-target Clippy/update-validation, Python5+9, fmt/scaffold265 passed;
+логи `activation-trace-routing-*` в `.winbridge/update-preparation/`.
 
 **Возобновление после21fbc86:** review подтвердил повторный full replacement
 read внутри одной activation transaction. Добавлен общий validated `read_graph`,

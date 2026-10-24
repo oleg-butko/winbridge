@@ -199,7 +199,7 @@ fn setup(
         ("winbridge-update.exe", ArtifactRole::Updater),
     ] {
         let original = if role == ArtifactRole::Updater
-            && (input.preparation_faults || input.replacement_faults)
+            && (input.preparation_faults || input.replacement_faults || input.activation_files)
         {
             input
                 .validation_updater
@@ -1826,6 +1826,25 @@ fn run_gate(
     assert_eq!(input.activation_preparation, activation_requested);
     assert_eq!(input.activation_files, files_requested);
     assert!(!files_requested || activation_requested);
+    assert!(!files_requested || input.validation_updater.is_some());
+    if files_requested {
+        assert_eq!(
+            input
+                .validation_updater
+                .as_ref()
+                .unwrap()
+                .canonicalize()
+                .unwrap(),
+            input
+                .root
+                .parent()
+                .unwrap()
+                .join("activation-validation-updater.exe")
+                .canonicalize()
+                .unwrap(),
+            "Activation diagnostics require the frozen updater from this run"
+        );
+    }
     assert_eq!(input.replacement_faults, faults_requested);
     assert!(
         !input.activation_preparation || (input.runtime_replacement && !input.replacement_faults)

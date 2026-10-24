@@ -64,8 +64,8 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 Актуальная точка разработки апдейтера: [подробная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-24-activation-files.md),
 [handoff](docs/handoff.md) и [последний native report](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Повтор после исправления612df2e выполняется: run20261024-162445-229e2220,
-итог пока неизвестен. Failed checkpoint ниже относится к первой попытке.
+Повтор612df2e также failed по deadline; исправляется подключение timing trace
+в actual updater. Текущие результаты и следующий run — в handoff.
 Preparation20 и read-binding21 реализованы, но новый whole-set Main gate failed
 по deadline:94 preliminary tests passed/1 Main failed. Сначала исправить этот
 переход и получить positive gate; запуск нового worker, state handoff и полное

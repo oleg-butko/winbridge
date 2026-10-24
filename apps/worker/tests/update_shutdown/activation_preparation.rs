@@ -139,6 +139,17 @@ pub(super) fn execute(
     // Spend the original live window on binding, not duplicate/history audits.
     // Those observations remain mandatory after the consuming handoff; neither
     // binding nor a duplicate may change the durable Prepared record or nonce.
+    if bind_files {
+        let diagnostic_log = root
+            .join("runtime/update")
+            .join(id)
+            .join("supervisor/stderr.log");
+        let diagnostic = fs::read_to_string(diagnostic_log).unwrap();
+        assert!(
+            diagnostic.contains("WinBridge activation timing "),
+            "The actual copied supervisor must emit validation timings; harness features alone do not enable them"
+        );
+    }
     let binding = bind_files.then(|| super::activation_files::execute(root, sup, &record));
     println!(
         "Activation preparation timing: binding returned at {}ms",

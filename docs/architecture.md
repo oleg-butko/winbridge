@@ -4,9 +4,9 @@
 
 ## Текущее состояние updater — checkpoint 2026-10-24
 
-После исправления612df2e [повторный Main21 выполняется](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md),
-run20261024-162445-229e2220. Positive proof пока нет; первая failed попытка ниже
-сохранена как диагностика, новый run не resubmit.
+Второй Main21612df2e также failed по deadline; внутренний trace не включился
+в actual copied updater. [Текущий routing fix и результаты](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
+отделяют features harness от запускаемого supervisor. Positive proof пока нет.
 
 В текущем source: **updater18/worker16, supervisor21/view13**.
 [Activation preparation/read binding](plans/worker-self-update/runtime-activation.md)

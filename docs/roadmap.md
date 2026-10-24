@@ -2,10 +2,12 @@
 
 ## Текущий checkpoint updater — 2026-10-24
 
-**Новый native run выполняется:** task46d57134-48fc-4188-81cd-b94f59074d15,
-run20261024-162445-229e2220, producer612df2e. Наблюдать ту же task; expected95
-tests/19 groups. [Pins/readonly command](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Результат пока неизвестен; не считать старый failed run исправленным доказательством.
+Второй Main21 тоже terminal failed/exit1: run20261024-162445-229e2220,
+producer612df2e;94 preliminary passed/1 Main failed по deadline. Внутреннего
+trace нет из-за обычного copied updater вместо validation build. Исправляется
+routing на frozen validation copy с SHA/readback и обязательным actual trace.
+[Pins/результаты](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+После local checks — clean producer/new run; actual performance fix ещё впереди.
 
 Продолжение после21fbc86: удалено дублирующее чтение full replacement graph
 в одном snapshot, сохранены все проверки и добавлен deadline recheck после I/O.

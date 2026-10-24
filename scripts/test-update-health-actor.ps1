@@ -128,7 +128,11 @@ try {
     if($RuntimePreparationGate){$shutdownArguments.runtimePreparation=$true}
     if($RuntimeReplacementGate){$shutdownArguments.runtimeReplacement=$true}
     if($ActivationPreparationGate){$shutdownArguments.activationPreparation=$true;$report.kind='activation_preparation_main_native_gate'}
-    if($ActivationFilesGate){$shutdownArguments.activationFiles=$true;$report.kind='activation_files_main_native_gate'}
+    if($ActivationFilesGate){
+      $validationSupervisor=Join-Path (Split-Path $source -Parent) 'activation-validation-updater.exe'
+      $shutdownArguments.activationFiles=$true;$shutdownArguments.validationUpdater=$validationSupervisor
+      $report.kind='activation_files_main_native_gate'
+    }
     if($RuntimeReplacementFaults){$shutdownArguments.replacementFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     if($RuntimePreparationFaults){$shutdownArguments.preparationFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     Write-NewJson $shutdownInput $shutdownArguments
@@ -136,8 +140,11 @@ try {
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
     if($ActivationPreparationGate){$mainTest='actual_main_prepares_activation_without_launch_or_cold_adoption'}
     if($ActivationFilesGate){$mainTest='actual_main_binds_activation_files_without_launch_or_cold_adoption'}
+    # The Main fixture copies its supervisor from validationUpdater. Building a
+    # validation test harness alone does not enable diagnostics in that process.
+    $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
     $commands=@(
-      @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
+      @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features',$supervisorFeatures,'--locked','--offline')},
       @{name='shutdown-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
       @{name='shutdown-main-pipeline';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact',$mainTest,'--ignored','--test-threads=1','--nocapture')}
     )
@@ -193,6 +200,14 @@ try {
     & $executable @arguments 2>&1 | Tee-Object -FilePath (Join-Path $ReportDirectory $log)
     $code=$LASTEXITCODE;$report.commands+=@{name=$command.name;arguments=$arguments;exitCode=$code;log=$log}
     if($code -ne 0){throw "Health native command failed: $($command.name); see $log"}
+    if($ActivationFilesGate -and $command.name -ceq 'health-supervisor-build'){
+      # Other cargo feature variants may replace debug/winbridge-update.exe.
+      # Freeze this exact validation build before running those commands.
+      $builtSupervisor=Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'
+      [IO.File]::Copy($builtSupervisor,$validationSupervisor,$false)
+      $report.validationSupervisorSha256=(Get-FileHash -LiteralPath $validationSupervisor -Algorithm SHA256).Hash.ToLowerInvariant()
+      if((Get-FileHash -LiteralPath $builtSupervisor -Algorithm SHA256).Hash.ToLowerInvariant() -cne $report.validationSupervisorSha256){throw 'Validation supervisor copy differs'}
+    }
     if($RuntimePreparationGate -and $command.name -in @('runtime-preparation-driver-and-ledger','runtime-preparation-directory-pins')){
       $minimum=if($command.name -ceq 'runtime-preparation-driver-and-ledger'){16}else{1}
       $counts=[regex]::Matches((Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')
