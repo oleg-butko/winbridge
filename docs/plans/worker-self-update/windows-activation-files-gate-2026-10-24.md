@@ -1,4 +1,52 @@
-# Actor21 whole-set read binding: gate завершён с ошибкой deadline
+# Actor21 whole-set read binding: повторный Main выполняется
+
+2026-10-24. **ACTIVE retry после исправления612df2e, результата ещё нет.**
+Task `46d57134-48fc-4188-81cd-b94f59074d15`, run `20261024-162445-229e2220`.
+Первое authoritative get_task: running. Ожидаются95 tests/19 groups/21 commands,
+новый Bound/cold proof и scalar timing trace. Не resubmit при observation timeout.
+
+## Текущий повтор: pins и восстановление наблюдения
+
+- Producer `612df2e562c3a13b1006237a2db3937f553e94f5`:
+  `winbridge-20261024T162421Z-612df2e-1f018014.zip`, SHA256
+  `0679f07d9851451efd66547f1a99a726b0579a8ae260f20e839899f83e7688ce`, manifest
+  `25396d675245bbe1ad0eda41719b135329ed005b733c87465955b65fa3a4a9cf`.
+- Fixture7f6a029 и successful17 reference те же, что в первой попытке ниже.
+  Старый failed audit не используется как reference.
+- Metadata `.winbridge/workflow-validation/20261024-162445-229e2220/activation-preparation-run.json`,
+  `activationFiles=true`; request/meta записаны до ACK, task ID сохранён.
+- Shared `/mnt/hgfs/shared/WinBridge/workflow-validation/20261024-162445-229e2220`.
+- Observer exec11882, лог `.winbridge/update-preparation/activation-budget-native-main.log`.
+  Проверять handle/get_task заново, не считать observation timeout terminal.
+- Cache20261017-061527-f4639971 с единственным lease. Debian free перед
+  submit16,465,453,056 bytes; Windows измеряется самим сценарием до build.
+- Local focused31/0, Python5+9, Linux/MSVC validation и MSVC production
+  all-target Clippy/fmt/scaffold265 passed. Логи/receipts `activation-budget-*`.
+  Full workspace716/0 относится к предыдущему producer74e8839, повторно не заявляется.
+
+Readonly наблюдение **новой task**, без submit:
+
+~~~bash
+python3 scripts/validate-update-activation-preparation-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261024T162421Z-612df2e-1f018014.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261024T103055Z-7f6a029-3e94038a.zip \
+  --cache-run 20261017-061527-f4639971 \
+  --reference-pin .winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json \
+  --activation-files --verify-run 20261024-162445-229e2220
+~~~
+
+Исправление возвращает тот же validated replacement из одного graph snapshot
+вместо повторного full history read, добавляет deadline recheck после I/O и
+переносит тестовые duplicate/history audits после Bind. Исходные120000ms не
+изменены. Timings включены только в validation build; `trace_end` не success.
+После terminal проверить actual task/report/ready/proof, negative mutations,
+timing trace и unchanged installed worker. До positive gate execution не начинать.
+
+Нужен только installed d052 worker; desktop не нужен, UI-окон не будет. После
+terminal явно сообщить, что desktop можно закрыть и какой worker оставить.
+Исторические counts/pins/ошибка ниже относятся **только к первой попытке**.
+
+## Первая попытка74e8839 — terminal failed по deadline
 
 2026-10-24. **Terminal failed/exit1, gate не пройден.** Task
 `01d7bf76-6c53-427c-8cd9-81d8f8798962`, run `20261024-153856-fe2e4f76`,

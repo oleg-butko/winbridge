@@ -1,4 +1,13 @@
-# Точка продолжения updater: проверки завершены — 2026-10-24
+# Точка продолжения updater: повторный Main21 выполняется — 2026-10-24
+
+**ACTIVE повторный Main21, наблюдать ту же task:**
+`46d57134-48fc-4188-81cd-b94f59074d15`, run `20261024-162445-229e2220`,
+producer612df2e/fixture7f6a029, `--activation-files`. Authoritative get_task:
+running. Observer exec11882, лог `.winbridge/update-preparation/activation-budget-native-main.log`.
+[Exact pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Request/meta сохранены до ACK. Ожидаются95 tests/19 groups/21 commands, затем
+ready/proof audit и анализ timing trace. Полного результата ещё нет; новый submit
+не делать. Installed worker only/no UI. Старый failed task остаётся failed.
 
 **Возобновление после21fbc86:** review подтвердил повторный full replacement
 read внутри одной activation transaction. Добавлен общий validated `read_graph`,

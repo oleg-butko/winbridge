@@ -4,6 +4,10 @@
 
 ## Текущее состояние updater — checkpoint 2026-10-24
 
+После исправления612df2e [повторный Main21 выполняется](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md),
+run20261024-162445-229e2220. Positive proof пока нет; первая failed попытка ниже
+сохранена как диагностика, новый run не resubmit.
+
 В текущем source: **updater18/worker16, supervisor21/view13**.
 [Activation preparation/read binding](plans/worker-self-update/runtime-activation.md)
 объединяют flat source binding, frozen startup FSM, graph-bound ledger и

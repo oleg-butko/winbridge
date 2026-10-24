@@ -7,6 +7,10 @@
 
 ## Текущий статус 2026-10-24
 
+Повтор после исправления612df2e **выполняется**, task46d57134-48fc-4188-81cd-b94f59074d15 /
+run20261024-162445-229e2220. [Pins/readonly recovery](windows-activation-files-gate-2026-10-24.md).
+Наблюдать ту же task; ниже — закрытый checkpoint первой failed попытки.
+
 Начать с [подробного checkpoint следующей сессии](resume-2026-10-24-activation-files.md).
 Текущий source: updater18/worker16/supervisor21/view13. Preparation20 и whole-set
 read-binding library/actor21 реализованы, execution/capability нет.
