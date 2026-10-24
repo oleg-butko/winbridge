@@ -13,8 +13,10 @@ Created/ResumeGranted/ReadyForState связываются с actual child и au
 IPC; failure сохраняет original resources и запрещает второй create.
 **Actor dispatch и actual native execution gate ещё не реализованы/не пройдены.**
 Schemas18/16, supervisor21/view13, activation/public install off прежние.
-Следом подключить новый versioned action/view и native Main с новой receiver
-fixture, затем state/controller/lifetime. Подробности и checks — в новом документе;
+Clean receiver fixture1c23d48 уже экспортирована:
+`winbridge-20261024T215731Z-1c23d48-0490a451.zip`; exact pins — в новом документе.
+Следом подключить новый versioned action/view и native Main с этой fixture и
+distinct producer, затем state/controller/lifetime. Подробности и checks — в новом документе;
 старый97/0 ниже относится к read binding producer941a2e6, не к execution.
 
 ## Проверки закрыты

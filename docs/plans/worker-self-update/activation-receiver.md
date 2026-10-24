@@ -102,12 +102,25 @@ Drop native owner запрашивает kill-on-close через existing bound
 | `apps/update/src/runtime_replacement/activation_process.rs` | Consuming suspended OS driver и resident process/failure owner. |
 | `apps/worker/src/activation.rs`, `main.rs` | Private pre-writer receiver/owner thread; normal serve прежний. |
 
+## Готовая source fixture после local/cross review
+
+Receiver/driver commit `1c23d48520316af0bf493cbf1be5bf441dffcea3` экспортирован
+чистым с built UI:774 files,5,682,595 bytes. Archive в shared sources:
+`winbridge-20261024T215731Z-1c23d48-0490a451.zip`.
+ZIP SHA256 `08003571809f0733dfa9dedd75d9f86f13de68c96c9affec0dec615a7a811575`,
+manifest SHA256 `249205a0d2d9d54ad6254dd260987d639996649a92acd2b7adac3d4e844df2d6`.
+Pins в `.winbridge/update-preparation/activation-receiver-fixture18-export.json`
+и `activation-receiver-fixture18-pin.json`. Проверены ZIP hash, manifest clean/
+commit/UI, source receiver marker/CLI и schema18. **Это source fixture, не
+проверенный Windows executable или запуск.** Следующий actor producer должен
+иметь другой clean commit; старый target7f6a029 не использовать как receiver.
+
 ## Следующий реальный gate
 
-1. Завершить local/cross checks и review, commit receiver/driver. Проверки
-   compilation/model не доказывают настоящий запуск Windows.
-2. Export clean receiver fixture с built UI. Старый target7f6a029 не содержит
-   receiver и обязан быть отклонён до CreateProcess. Затем distinct producer
+1. Local/cross checks и review завершены, receiver/driver commit и fixture
+   сохранены выше. Compilation/model не доказывают настоящий запуск Windows.
+2. Использовать clean receiver fixture1c23d48 с built UI выше. Старый target7f6a029
+   не содержит receiver и обязан быть отклонён до CreateProcess. Подготовить distinct producer
    с actor dispatch/harness. [Export и окружение](resume-2026-10-24-activation-files.md).
 3. В supervisor добавить новый versioned action/view, не расширять frozen21/13.
    Move единственного Bound guard в blocking owner; duplicates только observe.
