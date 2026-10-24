@@ -1,4 +1,24 @@
-# Текущая точка: support actor18 native gate закрыт — 2026-10-23
+# Текущая точка: проверки закрыты, production drain17 готов к native gate — 2026-10-23
+
+**Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-23-compatible-drain.md).**
+В ней карта кода, exact source/target/report/proof pins, окружение, команды
+продолжения, критерии успеха и границы готовности. Она приоритетнее исторических
+ACTIVE/NEXT ниже. Пользователь попросил завершить проверки и сохранить checkpoint.
+
+[Required drain schema17/actor19/view11](plans/worker-self-update/compatible-drain.md)
+реализован: immutable Blocked/Admitted decision, exact support binding,
+atomic root/outbox/link и запрет legacy fallback после production decision.
+**Локальные проверки завершены:** workspace688/0 (16 ignored), model/SQL7,
+actual IPC19 rejection1, protocol-jsonschema51/0, обе all-target Clippy
+update/worker/protocol, Rust/TS contracts, typecheck/UI build, Python3+7,
+format/docs passed. Это не Windows исполнение нового route.
+
+**Следующий шаг:** combined33-test actual17 Main + actual16→17/refusal gate.
+Сценарий подготовлен, **ещё не запускался**, Task ID для него нет. Нужны два
+distinct clean schema17 exports с built UI; schema16 run ниже используется
+только как copy-only migration reference. После gate — activation/U2 faults/U3/U4.
+Current source updater17/worker16/supervisor19/view11. Public install off,
+полный updater ещё не готов; installed d052 не менялся.
 
 [Actual Main support gate](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md):
 task adf48103-c02b-40e6-9442-6d089882c48c / run20261023-233438-99674bc1,
@@ -16,17 +36,15 @@ schema16/worker16 прежние, старые actions/views frozen. Local works
 сохранены; это отдельная попытка, не replay. Full pins:
 .winbridge/update-preparation/candidate-support-actor-native-first-failed.json.
 
-**Следующий блок:** обязательный production support→drain binding (schema17,
-supervisor19/view11), durable Blocked/Admitted record + atomic drain outbox/root
-edge, actual16→17/refusal и Main blocked-request gate. В текущем gate drain
-НЕ вызывался, productionDrainEnforced=false. Затем activation/U2 faults/U3/U4.
-Public install off, whole updater не готов; цель active, ручное обновление
-установленного worker пока не требуется.
+Последний readonly recheck того же actor18 run прошёл:23 tests/21 files twice/
+28 mutations. Drain в этом schema16 gate НЕ вызывался,
+productionDrainEnforced=false. Не приписывать ему свойства будущего gate17.
 
 Installed d052 unchanged/connected/active0, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
 maintenance/recovery errors=null. Controller3922 оставлен192.168.44.203:1143;
 worker оставить, desktop можно закрыть, UI-окон не было.
-Active native/Cargo runs нет. Исторические ACTIVE/NEXT ниже не повторять.
+Active native/Cargo runs нет. Ручное обновление worker сейчас не требуется.
+Исторические ACTIVE/NEXT ниже не повторять.
 [Полный предыдущий handoff](plans/worker-self-update/resume-2026-10-23-candidate-support.md)
 сохраняет карту фундамента, окружение и ограничения; первый actor шаг в нём
 теперь реализован и проверен. Форма следующего блока уточнена в actor doc выше.

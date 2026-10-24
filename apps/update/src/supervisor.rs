@@ -115,6 +115,23 @@ fn support_view(
     Ok(view)
 }
 
+fn compatible_view(
+    directory: &Path,
+    id: &str,
+    active: bool,
+    error: Option<String>,
+    admitting: bool,
+) -> Result<UpdatePreparationView> {
+    let mut view = UpdateJournal::compatible_drain_snapshot(directory, id, active, error)
+        .map_err(crate::supervisor::error)?;
+    if let Some(gate) = &mut view.compatible_drain {
+        if admitting && gate.attempt_id.is_none() {
+            gate.phase = CompatibleDrainPhase::Admitting;
+        }
+    }
+    Ok(view)
+}
+
 fn local(path: &Path) -> Result<PathBuf> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
     winbridge_platform::require_local_disk(path).map_err(error)?;
@@ -867,6 +884,54 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// V19 is the production prerequisite route; there is no fallback to v13.
+    pub async fn compatible_drain(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 19,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::DrainCompatibleCandidate
+            } else {
+                SupervisorAction::ObserveCompatibleDrain
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 19
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Production drain response scope/version changed; no fallback".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response
+            .preparation
+            .ok_or("Production drain view missing")?;
+        if view.schema_version != 11
+            || view.compatible_drain.is_none()
+            || view.candidate_support.is_none()
+            || view.candidate_drain.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Production drain view belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     /// V18 captures journal-bound updater evidence; it never authorizes drain.
     pub async fn candidate_support(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -1345,6 +1410,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveRuntimeReplacement
                 | SupervisorAction::CaptureCandidateSupport
                 | SupervisorAction::ObserveCandidateSupport
+                | SupervisorAction::DrainCompatibleCandidate
+                | SupervisorAction::ObserveCompatibleDrain
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1511,6 +1578,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
         ReplacementAdmitted(Result<crate::runtime_replacement::RuntimeReplacementAdmission>),
         ReplacementDone(crate::runtime_replacement::ReplacementOutcome),
         SupportAdmitted(Result<crate::candidate_support::CandidateSupportAdmission>),
+        CompatibleAdmitted(Result<crate::compatible_drain::CompatibleDrainAdmission>),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -1520,6 +1588,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut support_active = false;
     let mut support_admitting = false;
     let mut support_reply: Option<ipc::Stream> = None;
+    let mut compatible_admitting = false;
+    let mut compatible_reply: Option<ipc::Stream> = None;
     let mut drain_active = false;
     let mut shutdown_preparing = false;
     let shutdown_custody = crate::shutdown::Custody::default();
@@ -1563,6 +1633,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             let mut runtime_permit = None;
             let mut replacement_permit = None;
             let mut support_permit = None;
+            let mut compatible_permit = None;
             let outcome = match outcome {
                 DriverCompletion::Complete(outcome) => outcome,
                 DriverCompletion::ShutdownPrepared(Ok(value)) => {
@@ -1610,6 +1681,17 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     crate::candidate_support::CandidateSupportAdmission::Existing(_),
                 )) => Ok(()),
                 DriverCompletion::SupportAdmitted(Err(e)) => Err(e),
+                DriverCompletion::CompatibleAdmitted(Ok(
+                    crate::compatible_drain::CompatibleDrainAdmission::Fresh(p),
+                )) => {
+                    compatible_permit = Some(p);
+                    Ok(())
+                }
+                DriverCompletion::CompatibleAdmitted(Ok(
+                    crate::compatible_drain::CompatibleDrainAdmission::Blocked(_)
+                    | crate::compatible_drain::CompatibleDrainAdmission::Observed(_),
+                )) => Ok(()),
+                DriverCompletion::CompatibleAdmitted(Err(e)) => Err(e),
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -1627,6 +1709,7 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
             health_active = false;
             support_active = false;
             support_admitting = false;
+            compatible_admitting = false;
             drain_active = false;
             driver_error = outcome
                 .err()
@@ -1644,6 +1727,52 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some(mut stream) = compatible_reply.take() {
+                let snapshot = compatible_view(
+                    &directory,
+                    &r.spec.update_id,
+                    compatible_permit.is_some(),
+                    driver_error.clone(),
+                    false,
+                );
+                let (preparation, error) = match snapshot {
+                    Ok(v) => (Some(v), driver_error.clone()),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 19,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
+                };
+                let dispatch = response.error.is_none();
+                if response.error.is_some() {
+                    driver_error = response.error.clone();
+                }
+                let _ = ipc::write(&mut stream, &response).await;
+                if let Some(permit) = compatible_permit.filter(|_| dispatch) {
+                    let (mut journal, owner) =
+                        idle.take().ok_or("Production drain owner missing")?;
+                    let spec = r.clone();
+                    let io = tokio::runtime::Handle::current();
+                    let telemetry = crate::drain::Telemetry::default();
+                    drain_telemetry = telemetry.clone();
+                    drain_active = true;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = crate::preparation::drain(
+                            &mut journal,
+                            &owner,
+                            &spec,
+                            *permit,
+                            io,
+                            telemetry,
+                        );
+                        (journal, owner, DriverCompletion::Complete(result))
+                    }));
+                }
+            }
             if let Some(mut stream) = support_reply.take() {
                 let snapshot = support_view(
                     &directory,
@@ -2286,6 +2415,82 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     error,
                     worker_control: None,
                     preparation,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::DrainCompatibleCandidate | SupervisorAction::ObserveCompatibleDrain
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 19
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err(
+                        "Production drain requires exact Active bound v19 supervisor".into(),
+                    );
+                }
+                let view = compatible_view(
+                    &directory,
+                    &r.spec.update_id,
+                    drain_active,
+                    driver_error.clone(),
+                    compatible_admitting,
+                )?;
+                if request.action == SupervisorAction::ObserveCompatibleDrain
+                    || compatible_admitting
+                    || view
+                        .compatible_drain
+                        .as_ref()
+                        .is_some_and(|v| v.attempt_id.is_some())
+                {
+                    return Ok(view);
+                }
+                if !cfg!(windows)
+                    || work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::CandidateVerified
+                {
+                    return Err("Production drain needs idle native verified candidate and terminal support".into());
+                }
+                start = true;
+                Ok(view)
+            })();
+            if start && outcome.is_ok() {
+                let (mut journal, owner) = idle
+                    .take()
+                    .ok_or("Production drain admission owner missing")?;
+                let spec = r.clone();
+                let io = tokio::runtime::Handle::current();
+                compatible_admitting = true;
+                compatible_reply = Some(stream);
+                drain_active = true;
+                driver_error = None;
+                work = Some(tokio::task::spawn_blocking(move || {
+                    let result =
+                        crate::preparation::compatible_drain(&mut journal, &owner, &spec, io);
+                    (journal, owner, DriverCompletion::CompatibleAdmitted(result))
+                }));
+            } else {
+                let (preparation, error) = match outcome {
+                    Ok(v) => (Some(v), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 19,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
                 };
                 let _ = ipc::write(&mut stream, &response).await;
             }
@@ -3265,7 +3470,8 @@ pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 }
                 SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown | SupervisorAction::ShutdownCandidateForBackup | SupervisorAction::BackupWorkerState | SupervisorAction::ObserveStateBackup | SupervisorAction::PrepareRuntimeFiles | SupervisorAction::ObserveRuntimeFiles
                 | SupervisorAction::ReplaceRuntime | SupervisorAction::ObserveRuntimeReplacement
-                | SupervisorAction::CaptureCandidateSupport | SupervisorAction::ObserveCandidateSupport => Err("Action needs its separate handler".into()),
+                | SupervisorAction::CaptureCandidateSupport | SupervisorAction::ObserveCandidateSupport
+                | SupervisorAction::DrainCompatibleCandidate | SupervisorAction::ObserveCompatibleDrain => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
@@ -3345,11 +3551,13 @@ mod tests {
             UpdateJournal::runtime_files_preparation_snapshot,
             UpdateJournal::runtime_replacement_snapshot,
             UpdateJournal::candidate_support_snapshot,
+            UpdateJournal::compatible_drain_snapshot,
         ];
         for (index, snapshot) in snapshots.into_iter().enumerate() {
             let view = snapshot(&directory, &f.id, false, None).unwrap();
             assert_eq!(view.schema_version as usize, index + 1);
             let value = serde_json::to_value(&view).unwrap();
+            assert_eq!(value.get("compatibleDrain").is_some(), index >= 10);
             if index < 9 {
                 assert!(value.get("candidateSupport").is_none());
             } else {

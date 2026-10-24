@@ -8,7 +8,10 @@ param(
   [Parameter(Mandatory)][string]$TargetArchivePath,
   [Parameter(Mandatory)][string]$TargetArchiveSha256,
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
-  [Parameter(Mandatory)][string]$ReportDirectory
+  [Parameter(Mandatory)][string]$ReportDirectory,
+  [switch]$CompatibleDrainGate,
+  [string]$MigrationReferenceFile,
+  [string]$MigrationReferenceSha256
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -23,7 +26,9 @@ $cache=[IO.Path]::GetFullPath($ValidationCacheDirectory)
 $manifestPath=Join-Path $source 'winbridge-source-manifest.json'
 $manifest=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $report=[ordered]@{schemaVersion=1;kind='candidate_support_actor_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();runtimeApplied=$false;installedRuntimeApplied=$false;windowsOpened=$false;productionDrainEnforced=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+if($CompatibleDrainGate){$report.kind='compatible_drain_main_native_gate';$report.productionDrainEnforced=$true}
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_SHUTDOWN_GATE_INPUT
+$oldMigrationInput=$env:WINBRIDGE_COMPATIBLE_DRAIN_MIGRATION_INPUT
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP;$oldLocation=Get-Location
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
 $lease=$null
@@ -44,6 +49,13 @@ try {
   if($targetManifest.dirty -or -not $targetManifest.includesBuiltUi -or $targetManifest.sourceCommit -ceq $manifest.sourceCommit){throw 'Distinct clean target required'}
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
   $report.target=$pin
+  if($CompatibleDrainGate){
+    Assert-SessionFile $MigrationReferenceFile
+    if($MigrationReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $MigrationReferenceFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $MigrationReferenceSha256){throw 'Exact16 migration reference required'}
+    $reference=Get-Content -LiteralPath $MigrationReferenceFile -Raw|ConvertFrom-Json
+    if($reference.kind -cne 'compatible_drain_schema16_reference' -or $reference.schemaVersion -ne 1){throw 'Unexpected migration reference'}
+    $report.migrationReferenceSha256=$MigrationReferenceSha256
+  }
   $env:CARGO_TARGET_DIR=Join-Path $cache 'test-build-cache'
   Assert-WorkflowCachePath $env:CARGO_TARGET_DIR
   if(-not (Test-Path -LiteralPath $env:CARGO_TARGET_DIR -PathType Container)){throw 'Retained native cache required'}
@@ -60,6 +72,16 @@ try {
   $oldStage=Join-Path $root 'support-old-set'
   $inputPath=Join-Path $root 'support-main-input.json'
   Write-NewJson $inputPath @{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache;candidateSupport=$true}
+  if($CompatibleDrainGate){
+    $gateInput=Get-Content -LiteralPath $inputPath -Raw|ConvertFrom-Json -AsHashtable
+    $gateInput.compatibleDrain=$true
+    # The original create-only input is still unpublished; build a separate file.
+    $inputPath=Join-Path $root 'compatible-main-input.json'
+    Write-NewJson $inputPath $gateInput
+    $migrationInput=Join-Path $root 'compatible-migration-input.json'
+    Write-NewJson $migrationInput @{root=(Join-Path $root 'compatible-migration-case');reference=$reference;proof=(Join-Path $ReportDirectory 'compatible-migration-proof.json')}
+    $env:WINBRIDGE_COMPATIBLE_DRAIN_MIGRATION_INPUT=$migrationInput
+  }
   $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$inputPath
   $commands=@(
     @{name='support-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
@@ -71,6 +93,15 @@ try {
     @{name='support-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
     @{name='support-main-pipeline';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','candidate_support::actual_main_queries_candidate_support_without_draining_and_retains_lost_ack','--ignored','--test-threads=1','--nocapture')}
   )
+  if($CompatibleDrainGate){
+    $commands=$commands[0..5]+@(
+      @{name='compatible-model-ledger';minimum=7;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','compatible_drain','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='compatible-contract';minimum=1;arguments=@('test','-p','winbridge-protocol','--test','update_compatible_drain','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='compatible-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','production_drain_v19_observes_and_rejects_missing_support_without_effects','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='compatible-actual-migration';minimum=1;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','compatible_drain_migration','--locked','--offline','--','--exact','actual_sixteen_support_history_survives_seventeen_and_old_sixteen_refuses','--ignored','--test-threads=1','--nocapture')}
+    )+$commands[6..7]
+    $commands[-1].arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','candidate_support::actual_main_blocks_incompatible_production_drain_before_worker_effects','--ignored','--test-threads=1','--nocapture')
+  }
   foreach($command in $commands){
     Write-Output "Candidate support actor: $($command.name); installed worker remains active"
     $log=$command.name+'.log'
@@ -99,6 +130,7 @@ try {
   $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
   if($lease){$lease.Dispose()}
   $env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$oldInput
+  $env:WINBRIDGE_COMPATIBLE_DRAIN_MIGRATION_INPUT=$oldMigrationInput
   $env:TEMP=$oldTemp;$env:TMP=$oldTmp
   [Console]::OutputEncoding=$oldConsoleEncoding;$OutputEncoding=$oldPipelineEncoding
   Set-Location -LiteralPath $oldLocation

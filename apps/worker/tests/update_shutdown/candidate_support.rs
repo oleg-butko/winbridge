@@ -4,9 +4,18 @@ use winbridge_update::candidate_support::{CandidateSupportOutcome, CandidateSupp
 #[test]
 #[ignore = "Explicit clean actual Main support gate; preserves all isolated files"]
 fn actual_main_queries_candidate_support_without_draining_and_retains_lost_ack() {
+    run(false);
+}
+#[test]
+#[ignore = "Explicit clean actual17 production drain prerequisite gate"]
+fn actual_main_blocks_incompatible_production_drain_before_worker_effects() {
+    run(true);
+}
+fn run(production: bool) {
     let path = std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit support gate");
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     assert!(input.candidate_support);
+    assert_eq!(input.compatible_drain, production);
     assert!(
         !input.final_backup
             && !input.runtime_replacement
@@ -192,9 +201,13 @@ fn actual_main_queries_candidate_support_without_draining_and_retains_lost_ack()
             .unwrap()
             .unwrap();
         assert_eq!(cold, record);
-        let view =
+        let view = if production {
+            UpdateJournal::compatible_drain_snapshot(&directory, &sup.spec.update_id, false, None)
+        } else {
             UpdateJournal::candidate_support_snapshot(&directory, &sup.spec.update_id, false, None)
-                .unwrap();
+        }
+        .unwrap();
+        assert_eq!(view.schema_version, if production { 11 } else { 10 });
         assert_eq!(view.update.phase, UpdatePhase::FailedBeforeCutover);
         assert_eq!(
             view.candidate_support.as_ref().unwrap().phase,
@@ -206,12 +219,26 @@ fn actual_main_queries_candidate_support_without_draining_and_retains_lost_ack()
                 *pin
             );
         }
-        json!({"schemaVersion":1,"kind":"candidate_support_actor_main_native_proof","passed":true,
+        if production {
+            let gate = UpdateJournal::inspect_compatible_drain(&directory, &sup.spec.update_id)
+                .unwrap()
+                .unwrap();
+            gate.validate(&record).unwrap();
+            assert_eq!(
+                serde_json::to_value(&gate).unwrap(),
+                before["compatible"]["record"]
+            );
+            assert_eq!(
+                view.compatible_drain.as_ref().unwrap().phase,
+                CompatibleDrainPhase::Blocked
+            );
+        }
+        json!({"schemaVersion":1,"kind":if production {"compatible_drain_main_native_proof"} else {"candidate_support_actor_main_native_proof"},"passed":true,
             "platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,
             "beforeCleanup":before,"cleanup":cleanup,"record":record,"coldRecord":cold,"coldView":view,"history":history,
             "normalIpcGeneration":info.generation,"normalIpcBuild":info.build,"oldRuntimeImages":image_ids,
             "actualNormalIpc":true,"oldRuntimeUnchanged":true,"runtimeApplied":false,
-            "installedRuntimeApplied":false,"windowsOpened":false,"productionDrainEnforced":false})
+            "installedRuntimeApplied":false,"windowsOpened":false,"productionDrainEnforced":production})
     }));
     child.terminate_tree().unwrap();
     fs::write(root.join("stdout.log"), capture.0.join().unwrap()).unwrap();

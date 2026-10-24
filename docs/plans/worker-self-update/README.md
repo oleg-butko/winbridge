@@ -7,9 +7,16 @@
 
 ## Текущий статус 2026-10-23
 
+Начать с [подробной инструкции продолжения](resume-2026-10-23-compatible-drain.md).
+[Required production drain17/actor19](compatible-drain.md) реализован,
+workspace688/0 (16 ignored), обе all-target Clippy/contracts/TS/UI и остальные
+локальные проверки прошли. Combined33-test actual Main17 + actual16→17/refusal
+подготовлен, **не запускался**. Следом этот gate, затем activation/U2 faults/U3/U4.
 [Actor18 actual Main23/0](windows-candidate-support-actor-gate-2026-10-23.md)
-пройден; следующая реализация — required production support→drain/schema17.
-Текущая точка в [handoff](../../handoff.md); lower WIP/pending — история.
+пройден отдельно; он не запрашивал drain. Public install off, installed d052
+не менялся. Проверки закрыты по просьбе пользователя, активных runs нет.
+
+### История предыдущих checkpoints
 
 Продолжение после ff5b647: [actor v18/view10](candidate-support-actor.md) добавлен,
 workspace679/0/Clippy/TS/UI passed, actual Main gate подготовлен.

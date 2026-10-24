@@ -419,3 +419,43 @@ pub(crate) fn candidate_support(
     };
     crate::candidate_support::execute(j, a, s, p, &mut c).map(|_| ())
 }
+
+pub(crate) fn compatible_drain(
+    j: &mut UpdateJournal,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    io: Handle,
+) -> Result<crate::compatible_drain::CompatibleDrainAdmission> {
+    let cfg = configuration(s)?;
+    let mut c = Control {
+        worker: WorkerSourceControl::new(
+            s.spec.worker.clone().ok_or("Worker binding missing")?,
+            &cfg.worker_config_path,
+            io,
+        )?,
+        record: s.clone(),
+    };
+    let root = j.get(&s.spec.update_id).map_err(|e| e.to_string())?;
+    let support = j
+        .candidate_support(&s.spec.update_id)
+        .map_err(|e| e.to_string())?
+        .ok_or("Run candidate support before production drain")?;
+    crate::compatible_drain::revalidate_executor(s, &support)?;
+    let source = crate::build::saved_source_guard_for(
+        j,
+        a,
+        &cfg,
+        &s.spec.update_id,
+        UpdatePhase::CandidateVerified,
+    )?;
+    let lease = crate::source::live_lease(&mut c, &root, Some(&source))?;
+    let _pins = if crate::compatible_drain::blocked(&support)?.is_none() {
+        Some(crate::compatible_drain::preflight(
+            j, a, s, &support, &mut c,
+        )?)
+    } else {
+        None
+    };
+    j.consider_compatible_drain(a, s, &lease)
+        .map_err(|e| e.to_string())
+}

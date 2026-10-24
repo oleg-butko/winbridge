@@ -65,6 +65,7 @@ pub struct DrainSnapshot {
 /// Exists only after fresh durable admission; never reconstructed from JSON.
 pub struct DrainPermit {
     pub(crate) intent: DrainIntent,
+    pub(crate) production: Option<crate::compatible_drain::CompatibleDrainRecord>,
 }
 pub enum DrainAdmission {
     Fresh(Box<DrainPermit>),

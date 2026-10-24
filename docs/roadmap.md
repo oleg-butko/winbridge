@@ -1,5 +1,14 @@
 # Постепенная реализация и расширение
 
+2026-10-23 checkpoint по просьбе пользователя: [required production drain17/19](plans/worker-self-update/compatible-drain.md)
+реализован, workspace688/0 (16 ignored), model/SQL7/IPC1/jsonschema51,
+обе all-target Clippy/contracts/TS/UI/Python/docs passed. Immutable decision
+и atomic outbox link блокируют legacy fallback после production decision.
+Combined actual33 Main17 + migration16→17/refusal **не запускался**.
+[Подробный порядок продолжения](plans/worker-self-update/resume-2026-10-23-compatible-drain.md):
+два clean distinct exports17 → native gate/proof audit → activation/U2 faults/U3/U4.
+Public install off, установленный worker не менялся. Нижние checkpoints — история.
+
 2026-10-23: [support actor18 Main gate23/0](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md)
 пройден,21 ready files twice/28 mutations. Lost ACK/duplicate/normal IPC/abort
 подтверждены. Следом production support→drain/schema17/actor19 и migration/Main

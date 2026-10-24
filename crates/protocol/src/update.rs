@@ -593,6 +593,9 @@ pub enum SupervisorAction {
     /// Internal v18: journal-bound updater support query; no drain/install authority.
     CaptureCandidateSupport,
     ObserveCandidateSupport,
+    /// Internal v19: immutable prerequisite and atomic production drain admission.
+    DrainCompatibleCandidate,
+    ObserveCompatibleDrain,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -663,6 +666,9 @@ pub struct UpdatePreparationView {
     /// V18/view10 only. A checked report is passive evidence, never a drain permit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub candidate_support: Option<CandidateSupportView>,
+    /// V19/view11 only. A blocked decision never emits BeginDrain.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compatible_drain: Option<CompatibleDrainView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1067,3 +1073,6 @@ pub use updater_compatibility::*;
 
 mod candidate_support;
 pub use candidate_support::*;
+
+mod compatible_drain;
+pub use compatible_drain::*;

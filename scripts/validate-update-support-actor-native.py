@@ -49,24 +49,26 @@ def strict_counters(value):
             strict_counters(item)
 
 
-def verify(proof, source, target, expected_root):
+def verify(proof, source, target, expected_root, expected_schema=16, production=False):
     strict_counters(proof)
     need(type(proof.get('schemaVersion')) is int and proof['schemaVersion'] == 1
-         and proof.get('kind') == 'candidate_support_actor_main_native_proof'
+         and proof.get('kind') == ('compatible_drain_main_native_proof' if production else 'candidate_support_actor_main_native_proof')
          and proof.get('platform') == 'windows' and proof.get('passed') is True
          and proof['target'] == target, 'Support actor proof scope differs')
     build = proof['build']
     need(build['sourceCommit'] == source['sourceCommit']
          and build['sourceManifestSha256'] == source['manifestSha256']
          and build['sourceDirty'] is False, 'Producer differs')
-    need(all(proof.get(k) is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened', 'productionDrainEnforced'))
+    need(all(proof.get(k) is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened'))
+         and proof['productionDrainEnforced'] is production
          and proof['actualNormalIpc'] is True and proof['oldRuntimeUnchanged'] is True, 'Proof changed execution scope')
     before = proof['beforeCleanup']
     need(before['kind'] == 'candidate_support_main_before_cleanup' and before['passed'] is True
          and before['normalMain'] is True and before['normalServe'] is True
          and type(before['requestShutdownCount']) is int and before['requestShutdownCount'] == 0
          and before['lostAckSentOnce'] is True and before['legacyHealthFieldAbsent'] is True
-         and all(before[k] is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened', 'productionDrainEnforced')),
+         and all(before[k] is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened'))
+         and before['productionDrainEnforced'] is production,
          'Main validation did not preserve old worker/no-drain scope')
     root = before['before']['update']
     after, duplicate = before['after'], before['duplicate']
@@ -97,7 +99,7 @@ def verify(proof, source, target, expected_root):
          and intent['launchId'] == supervisor['spec']['launchId']
          and intent['ownerId'] == supervisor['ownerId'] and intent['ownerEpoch'] == supervisor['ownerEpoch']
          and intent['parentRevision'] == root['revision']
-         and intent['expectedUpdaterJournalSchema'] == 16
+         and intent['expectedUpdaterJournalSchema'] == expected_schema
          and intent['configSha256'] == supervisor['spec']['configSha256']
          and intent['supervisorImageSha256'] == supervisor['spec']['imageSha256']
          and proof['normalIpcGeneration'] == worker['generation']
@@ -135,7 +137,7 @@ def verify(proof, source, target, expected_root):
     need(result['outcome'] == 'checked' and report['process'] == process and report['descriptor'] == descriptor
          and report['queryContract'] == report['schemaVersion'] == 1
          and report['kind'] == 'winbridge_updater_runtime_support'
-         and report['updaterJournalSchema'] == 16 and report['buildFlavor'] == 'standard'
+         and report['updaterJournalSchema'] == expected_schema and report['buildFlavor'] == 'standard'
          and type(result['completedAtMs']) is int and result['completedAtMs'] >= intent['admittedAtMs'],
          'Report is not the admitted process/candidate')
     need([report[k] for k in ('finalStateBackupContract', 'runtimePreparationContract', 'runtimeReplacementContract',
@@ -148,13 +150,13 @@ def verify(proof, source, target, expected_root):
                                   runtimePreparation=16, runtimeReplacement=17, activation=None,
                                   controllerConfirmation=None, desktopUpdate=None)
          and result['assessment'] == dict(schemaVersion=1, policy='same_schema_install_v1',
-              expectedUpdaterJournalSchema=16, blockers=expected_blockers), 'Frozen policy blockers differ')
+              expectedUpdaterJournalSchema=expected_schema, blockers=expected_blockers), 'Frozen policy blockers differ')
     final = result['finalWorker']
     need(final['schemaVersion'] == 1 and final['kind'] == 'worker_runtime_compatibility'
          and final['context'] == worker['context'] and final['generation'] == worker['generation']
          and final['workerConfigSha256'] == worker['configSha256'] == intent['workerConfig']['sha256']
          and final['workerConfigSchema'] == final['protocolVersion'] == 1
-         and final['workerJournalSchema'] == final['updaterJournalSchema'] == 16
+         and final['workerJournalSchema'] == 16 and final['updaterJournalSchema'] == expected_schema
          and intent['admittedAtMs'] <= final['observedAtMs'] <= result['completedAtMs']
          and final['identity']['process'] == worker['process']
          and final['identity']['descriptor']['build'] == worker['build']
@@ -206,11 +208,35 @@ def verify(proof, source, target, expected_root):
          'Fixture cleanup changed support or requested worker shutdown')
 
 
-def audit(proof, source, target, root):
-    verify(proof, source, target, root)
+    if production:
+        gate=before['compatible']
+        record=gate['record']
+        digest=hashlib.sha256(b'winbridge.compatible-drain.support.v1\n'+json.dumps(
+            proof['record'],sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
+        need(record['schemaVersion']==1 and record['updateId']==intent['updateId']
+             and record['ownerId']==intent['ownerId'] and record['ownerEpoch']==intent['ownerEpoch']
+             and record['parentRevision']==intent['parentRevision']
+             and record['supportAttemptId']==intent['attemptId'] and record['supportRevision']==5
+             and record['supportSha256']==digest and record['decidedAtMs']>=result['completedAtMs']
+             and record['decision']==dict(kind='blocked',outcome='checked',assessment=result['assessment']),
+             'Production blocker lost support/root/owner binding')
+        decision=gate['view']['compatibleDrain']
+        need(gate['view']['schemaVersion']==11 and gate['view']['update']==root
+             and gate['view']['driverActive'] is False and gate['view']['driverError'] is None
+             and decision['phase']=='blocked' and decision['attemptId']==record['attemptId']
+             and decision['supportAttemptId']==intent['attemptId'] and decision['supportRevision']==5
+             and decision['drainAttemptId'] is None and decision['assessment']==result['assessment']
+             and gate['duplicate']['compatibleDrain']==decision and gate['duplicate']['update']==root
+             and gate['legacyFallbackRejected'] is True and type(gate['beginDrainCount']) is int
+             and gate['beginDrainCount']==0 and proof['coldView']['compatibleDrain']==decision,
+             'Production entry/fallback emitted drain or changed its durable decision')
+
+
+def audit(proof, source, target, root, expected_schema=16, production=False):
+    verify(proof, source, target, root, expected_schema, production)
     edits = [
         ('passed', False), ('schemaVersion', True), ('runtimeApplied', True),
-        ('installedRuntimeApplied', True), ('windowsOpened', True), ('productionDrainEnforced', True),
+        ('installedRuntimeApplied', True), ('windowsOpened', True), ('productionDrainEnforced', not production),
         ('actualNormalIpc', False), ('oldRuntimeUnchanged', False),
         ('beforeCleanup/supervisor/spec/runtimeDirectory', 'K:/another-run/runtime'),
         ('beforeCleanup/lostAckSentOnce', False), ('beforeCleanup/requestShutdownCount', 1),
@@ -223,6 +249,11 @@ def audit(proof, source, target, root):
         ('record/result/finalWorker/updaterJournalSchema', 15),
         ('beforeCleanup/sourceLease/spec/targetManifestSha256', '0'*64), ('history', proof['history'][:5]),
     ]
+    if production:
+        edits += [('beforeCleanup/compatible/legacyFallbackRejected',False),
+                  ('beforeCleanup/compatible/beginDrainCount',1),
+                  ('beforeCleanup/compatible/record/supportSha256','0'*64),
+                  ('beforeCleanup/compatible/view/compatibleDrain/phase','draining')]
     for path, value in edits:
         changed = copy.deepcopy(proof)
         obj = changed
@@ -231,7 +262,7 @@ def audit(proof, source, target, root):
             obj = obj[part]
         obj[parts[-1]] = value
         try:
-            verify(changed, source, target, root)
+            verify(changed, source, target, root, expected_schema, production)
         except (ValueError, KeyError, TypeError, IndexError):
             continue
         raise ValueError('Accepted mutated actor proof: '+path)
@@ -241,10 +272,69 @@ def audit(proof, source, target, root):
                   changed['coldView']['candidateSupport']):
         value['canInstall'] = True
     try:
-        verify(changed, source, target, root)
+        verify(changed, source, target, root, expected_schema, production)
     except (ValueError, KeyError, TypeError):
         return len(edits)+1
     raise ValueError('Accepted fabricated authority in every projected copy')
+
+
+def reference_from_pin(pin,reports,workspace):
+    files=support.ready_files(reports/pin['run'])
+    need(support.ready_files(reports/pin['run'])==files and pin['passed'] is True
+         and hashlib.sha256(files['report.json']).hexdigest()==pin['reportSha256']
+         and hashlib.sha256(files['candidate-support-actor-proof.json']).hexdigest()==pin['proofSha256'],
+         'Retained16 reference files changed')
+    proof=json.loads(files['candidate-support-actor-proof.json'].decode('utf-8-sig'))
+    verify(proof,pin['source'],pin['target'],str(PureWindowsPath(workspace)/'workflow-validation'/pin['run']))
+    record=proof['record']
+    return dict(schemaVersion=1,kind='compatible_drain_schema16_reference',referenceRun=pin['run'],
+                reportSha256=pin['reportSha256'],proofSha256=pin['proofSha256'],source=pin['source'],
+                image=proof['oldRuntimeImages'][3],descriptor=record['intent']['executor'],
+                manifestSha256=record['result']['finalWorker']['identity']['manifestSha256'],
+                updateId=record['intent']['updateId'],supportSha256=hashlib.sha256(json.dumps(
+                    record,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest())
+
+def verify_migration(proof,source,reference):
+    strict_counters(proof)
+    need(proof['schemaVersion']==1 and proof['kind']=='compatible_drain_schema_migration_proof'
+         and proof['passed'] is True and proof['platform']=='windows'
+         and proof['build']['sourceCommit']==source['sourceCommit']
+         and proof['build']['sourceManifestSha256']==source['manifestSha256']
+         and proof['build']['sourceDirty'] is False and proof['referenceProofSha256']==reference['proofSha256']
+         and proof['referenceImage']==reference['image'] and proof['referenceManifestSha256']==reference['manifestSha256'],
+         'Migration scope/reference differs')
+    before,after=proof['before'],proof['after']
+    need(before['schemaVersion']==16 and after==dict(before,schemaVersion=17,ownerEpoch=before['ownerEpoch']+1)
+         and proof['backupInfo']==before,'Migration metadata/epoch/backup differs')
+    record=proof['retainedSupport']
+    need(record['revision']==5 and record['result']['outcome']=='checked'
+         and record['intent']['updateId']==reference['updateId']
+         and hashlib.sha256(json.dumps(record,sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()==reference['supportSha256']
+         and proof['rowsBefore']==proof['rowsAfter']==proof['backupRows']
+         and re.fullmatch(r'[0-9a-f]{64}',proof['rowsBefore'])
+         and type(proof['gateRows']) is int and proof['gateRows']==0,
+         'Migration rewrote support/history or invented a production decision')
+    need(all(proof[k] is True for k in ('oldSixteenInitRefused','oldSixteenStatusRefused','sourceBytesUnchanged',
+            'copyBytesUnchangedByOld','newAdmissionDenied','migrationBackupVerified'))
+         and all(proof[k] is False for k in ('runtimeApplied','installedRuntimeApplied','windowsOpened')),
+         'Migration adopted stale authority or let16 change17')
+
+def audit_migration(proof,source,reference):
+    verify_migration(proof,source,reference)
+    edits=[('passed',False),('runtimeApplied',True),('installedRuntimeApplied',True),('windowsOpened',True),
+           ('before/schemaVersion',15),('after/schemaVersion',16),('after/ownerEpoch',proof['before']['ownerEpoch']),
+           ('gateRows',True),('gateRows',1),('rowsAfter','0'*64),('backupRows','0'*64),
+           ('retainedSupport/revision',4),('oldSixteenInitRefused',False),('oldSixteenStatusRefused',False),
+           ('sourceBytesUnchanged',False),('copyBytesUnchangedByOld',False),('newAdmissionDenied',False),
+           ('migrationBackupVerified',False),('referenceManifestSha256','0'*64)]
+    for path,value in edits:
+        changed=copy.deepcopy(proof);obj=changed;parts=path.split('/')
+        for key in parts[:-1]:obj=obj[key]
+        obj[parts[-1]]=value
+        try:verify_migration(changed,source,reference)
+        except (ValueError,KeyError,TypeError):continue
+        raise ValueError('Accepted mutated17 migration: '+path)
+    return len(edits)
 
 
 def main():
@@ -254,13 +344,19 @@ def main():
     parser.add_argument('--cache-run', required=True)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     parser.add_argument('--verify-run', help='Observe/recheck the same task; never resubmit')
+    parser.add_argument('--compatible-drain',action='store_true',help='Explicit schema17 production prerequisite and actual16 migration gate')
+    parser.add_argument('--reference-pin',type=Path,help='Verified actual support16 run used only as a copy-only migration source')
     args = parser.parse_args()
+    expected_schema=17 if args.compatible_drain else 16
+    prefix='native-compatible-drain-' if args.compatible_drain else 'native-support-actor-'
+    reference=None
+
     source, target = (health.archive_pin(p) for p in (args.archive, args.target_archive))
     need(source['sourceCommit'] != target['sourceCommit'], 'Distinct source/candidate required')
     for path in (args.archive, args.target_archive):
         with zipfile.ZipFile(path) as z:
-            need(native.updater_schema_from_source(z.read('winbridge/apps/update/src/journal.rs')) == 16,
-                 'This actor gate requires schema16 on both sides')
+            need(native.updater_schema_from_source(z.read('winbridge/apps/update/src/journal.rs')) == expected_schema,
+                 'Actor gate source/target schema differs from explicit mode')
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run), 'Invalid cache run')
     cfg = json.loads(args.controller_config.read_text())
     shared = Path(cfg['delivery']['root'])/cfg['delivery']['namespace']
@@ -275,15 +371,24 @@ def main():
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', run), 'Invalid run')
     local, report = ROOT/'.winbridge/workflow-validation'/run, shared/'workflow-validation'/run
     root = str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/run)
+    if args.compatible_drain:
+        need(args.reference_pin is not None,'Verified schema16 reference required')
+        reference=reference_from_pin(json.loads(args.reference_pin.read_text()),shared/'workflow-validation',project['workspaceRoot'])
+        prior=native.call(endpoint,{'method':'get_task','taskId':json.loads(args.reference_pin.read_text())['taskId']})['task']
+        need(prior['status']=='succeeded' and prior['exitCode']==0
+             and prior['submission']['projectId']=='snapshot-fixture'
+             and prior['submission']['idempotencyKey']=='native-support-actor-'+reference['referenceRun'],
+             'Reference task is not the exact terminal support run')
     peer = PureWindowsPath(cfg['delivery']['peerRoot'])/cfg['delivery']['namespace']
     if args.verify_run:
         meta = json.loads((local/'support-actor-run.json').read_text())
-        need(meta['source'] == source and meta['target'] == target, 'Saved source/target differs')
+        need(meta['source'] == source and meta['target'] == target
+             and meta.get('reference')==reference,'Saved source/target/reference differs')
         if meta.get('taskId') is None:
             raw = (local/'request.json').read_bytes()
             need(hashlib.sha256(raw).hexdigest() == meta['requestSha256'], 'Saved request changed')
             request = json.loads(raw)
-            need(request['idempotencyKey'] == 'native-support-actor-'+run, 'Pending run differs')
+            need(request['idempotencyKey'] == prefix+run, 'Pending run differs')
             meta['taskId'] = support.recover_task(endpoint, request)['taskId']
             support.save_meta(local/'support-actor-run.json', meta)
     else:
@@ -292,6 +397,12 @@ def main():
         archive = peer/'sources'/args.archive.resolve().relative_to((shared/'sources').resolve())
         target_archive = peer/'sources'/args.target_archive.resolve().relative_to((shared/'sources').resolve())
         ps = native.ps_string
+        mode=''
+        if reference is not None:
+            raw=json.dumps(reference,indent=2).encode()
+            (report/'reference.json').write_bytes(raw)
+            reference_sha=hashlib.sha256(raw).hexdigest()
+            mode=' -CompatibleDrainGate -MigrationReferenceFile '+ps(str(peer/'workflow-validation'/run/'reference.json'))+' -MigrationReferenceSha256 '+ps(reference_sha)
         script = f"""$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $root={ps(root)}
@@ -304,11 +415,11 @@ $copy=Join-Path $root 'source.zip'
 [IO.File]::Copy($archive,$copy,$false)
 if((Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash.ToLowerInvariant() -cne {ps(source['archiveSha256'])}){{throw 'Source ZIP copy changed'}}
 Expand-Archive -LiteralPath $copy -DestinationPath $root
-& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $root 'winbridge/scripts/test-update-support-actor.ps1') -SourceDirectory (Join-Path $root 'winbridge') -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath {ps(str(target_archive))} -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/args.cache_run))} -ReportDirectory {ps(str(peer/'workflow-validation'/run))}
+& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $root 'winbridge/scripts/test-update-support-actor.ps1') -SourceDirectory (Join-Path $root 'winbridge') -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath {ps(str(target_archive))} -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/args.cache_run))} -ReportDirectory {ps(str(peer/'workflow-validation'/run))}{mode}
 exit $LASTEXITCODE
 """
         request = dict(protocolVersion=1, requestId=str(uuid.uuid4()), projectId='snapshot-fixture',
-                       idempotencyKey='native-support-actor-'+run, timeoutMs=1800000,
+                       idempotencyKey=prefix+run, timeoutMs=1800000,
                        command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.',
                                     arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand',
                                                base64.b64encode(script.encode('utf-16le')).decode()]))
@@ -317,7 +428,7 @@ exit $LASTEXITCODE
             stream.write(raw)
             stream.flush()
             support.os.fsync(stream.fileno())
-        meta = dict(taskId=None, run=run, source=source, target=target, cacheRun=args.cache_run,
+        meta = dict(taskId=None, run=run, source=source, target=target, reference=reference, cacheRun=args.cache_run,
                     requestSha256=hashlib.sha256(raw).hexdigest(), debianFreeBytesBefore=shutil.disk_usage(ROOT).free)
         support.save_meta(local/'support-actor-run.json', meta)
         print(json.dumps(dict(taskId=None, run=run, recovery='--verify-run '+run)), flush=True)
@@ -328,7 +439,7 @@ exit $LASTEXITCODE
     while True:
         task = native.call(endpoint, {'method': 'get_task', 'taskId': meta['taskId']})['task']
         need(task['submission']['projectId'] == 'snapshot-fixture'
-             and task['submission']['idempotencyKey'] == 'native-support-actor-'+run, 'Task scope differs')
+             and task['submission']['idempotencyKey'] == prefix+run, 'Task scope differs')
         if task['status'] not in ('queued', 'running'):
             break
         need(time.monotonic() < deadline, 'Observation expired; recheck the same run, never resubmit')
@@ -338,13 +449,17 @@ exit $LASTEXITCODE
     need(support.ready_files(report) == files, 'Ready files changed')
     result = json.loads(files['report.json'].decode('utf-8-sig'))
     need(task['status'] == 'succeeded' and task['exitCode'] == 0 and result['passed'] is True
-         and result['kind'] == 'candidate_support_actor_native_gate' and result['error'] is None
+         and result['kind'] == ('compatible_drain_main_native_gate' if args.compatible_drain else 'candidate_support_actor_native_gate') and result['error'] is None
          and result['sourceCommit'] == source['sourceCommit'] and result['sourceArchiveSha256'] == source['archiveSha256']
          and result['target'] == target
-         and all(result[k] is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened', 'productionDrainEnforced')),
+         and all(result[k] is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened'))
+         and result['productionDrainEnforced'] is args.compatible_drain,
          'Native actor task/report failed; inspect '+str(report))
     groups = [('support-model-ledger', 12), ('support-contract', 2), ('support-policy', 6),
               ('support-frozen-views', 1), ('support-worker-mailbox', 1), ('support-main-pipeline', 1)]
+    if args.compatible_drain:
+        groups=groups[:-1]+[('compatible-model-ledger',7),('compatible-contract',1),
+            ('compatible-mailbox',1),('compatible-actual-migration',1)]+groups[-1:]
     need([c['name'] for c in result['commands']] == ['support-supervisor-build']+[n for n, _ in groups[:-1]]
          + ['support-old-real-set', 'support-main-pipeline'] and all(c['exitCode'] == 0 for c in result['commands']),
          'Native command selection differs')
@@ -354,12 +469,18 @@ exit $LASTEXITCODE
                                                        files[name+'.log'].decode('utf-8-sig')))
         need(counts[name] >= minimum, 'Tests were not selected: '+name)
     proof = json.loads(files['candidate-support-actor-proof.json'].decode('utf-8-sig'))
-    rejected = audit(proof, source, target, root)
+    rejected = audit(proof, source, target, root, expected_schema,args.compatible_drain)
     verified = dict(meta, passed=True, filesVerifiedTwice=len(files), nativeTestsPassed=sum(counts.values()),
                     testCounts=counts, negativeMutationsRejected=rejected, groupsPassed=len(groups),
                     proofSha256=hashlib.sha256(files['candidate-support-actor-proof.json']).hexdigest(),
                     reportSha256=hashlib.sha256(files['report.json']).hexdigest(), storage=result['storage'],
                     debianFreeBytesAfter=shutil.disk_usage(ROOT).free)
+    if reference is not None:
+        need(hashlib.sha256(files['reference.json']).hexdigest()==result['migrationReferenceSha256'],
+             'Migration reference changed')
+        migration=json.loads(files['compatible-migration-proof.json'].decode('utf-8-sig'))
+        verified['migrationMutationsRejected']=audit_migration(migration,source,reference)
+        verified['migrationProofSha256']=hashlib.sha256(files['compatible-migration-proof.json']).hexdigest()
     (local/'support-actor-verified.json').write_text(json.dumps(verified, indent=2))
     print(json.dumps(verified), flush=True)
 

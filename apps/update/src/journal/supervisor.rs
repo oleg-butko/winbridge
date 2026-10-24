@@ -191,6 +191,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 10)
     }
+    pub fn compatible_drain_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 11)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -288,6 +296,7 @@ impl UpdateJournal {
         } else {
             None
         };
+        let parent_phase = update.phase;
         let view = UpdatePreparationView {
             schema_version: view_schema,
             observed_at_ms: now_ms()?,
@@ -302,6 +311,29 @@ impl UpdateJournal {
             candidate_state_backup,
             runtime_preparation,
             runtime_replacement,
+            compatible_drain: if view_schema >= 11 {
+                Some(crate::compatible_drain::view(
+                    super::compatible_drain::read(&tx, id)?.as_ref(),
+                    super::candidate_support::read(&tx, id)?.as_ref(),
+                    &crate::drain::view(
+                        &super::drain::read(&tx, id)?,
+                        parent_phase,
+                        driver_active,
+                        if matches!(
+                            parent_phase,
+                            UpdatePhase::Aborting
+                                | UpdatePhase::Deferred
+                                | UpdatePhase::FailedBeforeCutover
+                        ) {
+                            super::abort::released_after_abort(&tx, id)?
+                        } else {
+                            false
+                        },
+                    ),
+                ))
+            } else {
+                None
+            },
             candidate_support: if view_schema >= 10 {
                 Some(crate::candidate_support::view(
                     super::candidate_support::read(&tx, id)?.as_ref(),

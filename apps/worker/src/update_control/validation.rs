@@ -47,6 +47,8 @@ pub struct Input {
     pub backup_fault: BackupFault,
     #[serde(default)]
     pub candidate_support: bool,
+    #[serde(default)]
+    pub compatible_drain: bool,
 }
 fn publish(root: &Path, name: &str, value: &impl Serialize) -> Result<()> {
     let mut file = fs::OpenOptions::new()

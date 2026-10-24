@@ -122,14 +122,14 @@ fn schema_fifteen_migration_preserves_root_backs_up_and_fences_stale_callbacks()
         },
     };
     let saved = old.accept(&owner, &request, &request.expected).unwrap();
-    old.connection.execute_batch("DROP TABLE candidate_support_history;DROP TABLE candidate_support_records;DROP TABLE candidate_support_intents;PRAGMA user_version=15;").unwrap();
+    old.connection.execute_batch("DROP TABLE compatible_drain_records; DROP TABLE candidate_support_history;DROP TABLE candidate_support_records;DROP TABLE candidate_support_intents;PRAGMA user_version=15;").unwrap();
     let before = old.info().unwrap();
     // No real supervisor was spawned. Release the synthetic OS lease explicitly;
     // retain the old value to exercise the independent persistent epoch fence.
     fs2::FileExt::unlock(&owner.lock).unwrap();
     let mut new = UpdateJournal::open(root.path(), &scope).unwrap();
     let after = new.info().unwrap();
-    assert_eq!(after.schema_version, 16);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.last_sequence, before.last_sequence);

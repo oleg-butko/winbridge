@@ -4,9 +4,17 @@
 
 ## Текущее состояние updater — завершение проверок 2026-10-23
 
-В текущем source подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
+В текущем source: **updater17/worker16, supervisor19/view11**.
+[Production drain17/19](plans/worker-self-update/compatible-drain.md) связывает
+immutable decision с exact support и atomic root/outbox; сохранённый Blocked
+запрещает legacy fallback. Workspace688/0 и local/cross checks завершены;
+**actual17 Main/migration16→17 gate ещё не запускался**.
+[Подробный checkpoint](plans/worker-self-update/resume-2026-10-23-compatible-drain.md)
+задаёт следующий gate и последовательность activation/U2/U3/U4.
+
+Подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
 одноразовое admission, consuming original custody, manifest-last перенос и
-trusted FilesVerified → VerifyingLocal. Worker schema16 прежняя; updater source теперь schema16 (см. ниже).
+trusted FilesVerified → VerifyingLocal. Их native gates относятся к schema15.
 [Actual Main15 replacement60/0 gate](plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
 и [четыре actual faults60/0](plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
 пройдены. [Readonly updater support query](plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
@@ -16,8 +24,8 @@ immutable ledger/fresh permit/journal-bound driver с frozen executor contracts.
 [Native metadata/query/migration25/0 gate](plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md)
 пройден, actual15→16/refusal подтверждён. [Support actor18/view10](plans/worker-self-update/candidate-support-actor.md)
 добавлен; [actual Main23/0](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md)
-проверен. Обязательный production
-support→drain binding и activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
+проверен. Production support→drain binding реализован с local/cross проверками;
+его native gate и activation ещё впереди. Public install выключен. [Актуальный handoff](handoff.md)
 содержит точные границы доказательств, карту кода и план продолжения.
 Ниже сохранена история предыдущих commits.
 

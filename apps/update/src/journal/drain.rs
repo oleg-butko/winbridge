@@ -309,6 +309,7 @@ impl UpdateJournal {
     ) -> Result<()> {
         self.check_directory(a)?;
         require(&self.connection, a, s, &p.intent, false)?;
+        compatible_drain::require_bound(&self.connection, p)?;
         if read(&self.connection, &p.intent.binding.update_id)?
             .intent
             .as_ref()
@@ -333,12 +334,36 @@ impl UpdateJournal {
         s: &SupervisorRecord,
         lease: &WorkerUpdateLease,
     ) -> Result<DrainAdmission> {
+        self.admit_drain_inner(a, s, lease, None)
+    }
+    pub(crate) fn admit_drain_bound(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        lease: &WorkerUpdateLease,
+        support: &crate::candidate_support::CandidateSupportRecord,
+    ) -> Result<DrainAdmission> {
+        self.admit_drain_inner(a, s, lease, Some(support))
+    }
+    fn admit_drain_inner(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        lease: &WorkerUpdateLease,
+        support: Option<&crate::candidate_support::CandidateSupportRecord>,
+    ) -> Result<DrainAdmission> {
         self.check_directory(a)?;
         runtime_baseline::current_supervisor(&self.connection, a, s)?;
         let id = &s.spec.update_id;
         let saved = read(&self.connection, id)?;
         if saved.intent.is_some() {
             return Ok(DrainAdmission::Observed(Box::new(saved)));
+        }
+        if compatible_drain::read(&self.connection, id)?.is_some() {
+            return Err(fail(
+                JournalErrorCode::PreconditionsChanged,
+                "Production drain decision already exists; no legacy fallback",
+            ));
         }
         let parent = self.get(id)?;
         let health = health::read(&self.connection, id)?
@@ -374,6 +399,18 @@ impl UpdateJournal {
             Uuid::new_v4().to_string(),
         )
         .map_err(bad)?;
+        let production = support
+            .map(|s| {
+                crate::compatible_drain::CompatibleDrainRecord::new(
+                    s,
+                    crate::compatible_drain::CompatibleDrainDecision::Admitted {
+                        drain_attempt_id: intent.attempt_id.clone(),
+                    },
+                    now_ms().map_err(|e| e.to_string())?,
+                )
+            })
+            .transpose()
+            .map_err(bad)?;
         let cmd = UpdateCommand {idempotency_key:ADMIT.into(),expected_revision:parent.revision,event:UpdateEvent::BeginDrain,
             reason:"Обновление принято: дождаться принятых задач, затем закрыть запуск; runtime ещё не заменяется".into()};
         self.advance_with_driver(a, id, &cmd, Driver::Drain, |c, root| {
@@ -382,6 +419,24 @@ impl UpdateJournal {
                 || root.revision != intent.binding.parent_revision + 1
             {
                 return Err(bad("Drain admission parent edge changed"));
+            }
+            if let Some(expected) = support {
+                let current = compatible_drain::current_source(c, a, s, true)?;
+                if current != *expected
+                    || crate::compatible_drain::blocked(&current)
+                        .map_err(bad)?
+                        .is_some()
+                {
+                    return Err(fail(
+                        JournalErrorCode::PreconditionsChanged,
+                        "Production support changed before atomic drain admission",
+                    ));
+                }
+            } else if compatible_drain::read(c, id)?.is_some() {
+                return Err(fail(
+                    JournalErrorCode::PreconditionsChanged,
+                    "No legacy bypass of production decision",
+                ));
             }
             one(c
                 .execute(
@@ -407,9 +462,15 @@ impl UpdateJournal {
             if read(c, id)?.intent.as_ref() != Some(&intent) {
                 return Err(bad("Drain admission write ignored"));
             }
+            if let Some(production) = &production {
+                compatible_drain::insert(c, production)?;
+            }
             Ok(())
         })?;
-        Ok(DrainAdmission::Fresh(Box::new(DrainPermit { intent })))
+        Ok(DrainAdmission::Fresh(Box::new(DrainPermit {
+            intent,
+            production,
+        })))
     }
     pub fn issue_drain_command(
         &mut self,
@@ -424,6 +485,7 @@ impl UpdateJournal {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage)?;
         require(&tx, a, s, &permit.intent, false)?;
+        compatible_drain::require_bound(&tx, permit)?;
         let saved = read(&tx, &permit.intent.binding.update_id)?;
         if saved.intent.as_ref() != Some(&permit.intent) {
             return Err(bad("Drain permit differs from saved intent"));
@@ -467,6 +529,7 @@ impl UpdateJournal {
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage)?;
         require(&tx, a, s, &permit.intent, true)?;
+        compatible_drain::require_bound(&tx, permit)?;
         let saved = read(&tx, &permit.intent.binding.update_id)?;
         if saved.intent.as_ref() != Some(&permit.intent)
             || saved.commands.get(old.ordinal as usize) != Some(old)
@@ -547,6 +610,7 @@ impl UpdateJournal {
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(storage)?;
             require(&tx, a, s, &permit.intent, true)?;
+            compatible_drain::require_bound(&tx, permit)?;
             let fresh = read(&tx, &permit.intent.binding.update_id)?;
             if fresh.commands.get(ordinal as usize) != Some(old) {
                 return Err(fail(

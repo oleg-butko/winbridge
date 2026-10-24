@@ -48,6 +48,8 @@ struct GateInput {
     validation_updater: Option<PathBuf>,
     #[serde(default)]
     candidate_support: bool,
+    #[serde(default)]
+    compatible_drain: bool,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -248,6 +250,7 @@ fn setup(
             final_backup: input.final_backup,
             backup_fault,
             candidate_support: input.candidate_support,
+            compatible_drain: input.compatible_drain,
         },
     );
     (root, worker_config, manifest)

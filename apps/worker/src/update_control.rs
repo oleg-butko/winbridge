@@ -42,7 +42,7 @@ pub(crate) struct Registration {
     shutdown_requests: AtomicUsize,
     #[cfg(any(test, feature = "update-validation"))]
     shutdown_test_gate: std::sync::Mutex<Option<Arc<ControlTestGate>>>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "update-validation"))]
     begin_drain_requests: AtomicUsize,
 }
 #[cfg(any(test, feature = "update-validation"))]
@@ -168,7 +168,7 @@ impl Worker {
             shutdown_requests: AtomicUsize::new(0),
             #[cfg(any(test, feature = "update-validation"))]
             shutdown_test_gate: std::sync::Mutex::new(None),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "update-validation"))]
             begin_drain_requests: AtomicUsize::new(0),
         }));
         Ok(binding)
@@ -725,11 +725,15 @@ pub(crate) fn start(worker: Arc<Worker>) -> Result<Option<ControlServer>> {
             );
             let (w, r) = (worker.clone(), state.clone());
             #[cfg(any(test, feature = "update-validation"))]
+            if matches!(&request.command, WorkerUpdateControlCommand::Advance {command} if command.action == WorkerUpdateAction::BeginDrain)
+            {
+                state.begin_drain_requests.fetch_add(1, Ordering::AcqRel);
+            }
+            #[cfg(any(test, feature = "update-validation"))]
             let drop_ack = {
                 #[cfg(test)]
                 if matches!(&request.command, WorkerUpdateControlCommand::Advance {command} if command.action == WorkerUpdateAction::BeginDrain)
                 {
-                    state.begin_drain_requests.fetch_add(1, Ordering::AcqRel);
                     state.drop_drain_ack.swap(false, Ordering::AcqRel)
                 } else {
                     shutdown_validation_delivery(&state, &request.command)
@@ -1356,6 +1360,44 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
         r.into_lease().unwrap().expect("Lease receipt")
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn production_drain_v19_observes_and_rejects_missing_support_without_effects() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_ref().unwrap();
+        let directory = Path::new(&h.record.spec.runtime_directory).join("update-state");
+        let before =
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap();
+        let v = h.compatible_drain(false).await.unwrap();
+        assert_eq!(v.schema_version, 11);
+        assert_eq!(
+            v.compatible_drain.unwrap().phase,
+            CompatibleDrainPhase::NotAdmitted
+        );
+        assert!(h.compatible_drain(true).await.is_err());
+        let legacy = h.candidate_support(false).await.unwrap();
+        assert_eq!(legacy.schema_version, 10);
+        assert!(serde_json::to_value(legacy)
+            .unwrap()
+            .get("compatibleDrain")
+            .is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap(),
+            before
+        );
+        assert!(
+            UpdateJournal::inspect_compatible_drain(&directory, &h.record.spec.update_id)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            UpdateJournal::inspect_drain(&directory, &h.record.spec.update_id)
+                .unwrap()
+                .intent
+                .is_none()
+        );
+        f.stop().await;
+    }
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn support_v18_observes_without_effects_and_preserves_legacy_views() {
         let mut f = Fixture::new(None).await;

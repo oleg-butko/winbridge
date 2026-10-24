@@ -106,6 +106,49 @@ pub(super) async fn drive(
     if legacy.schema_version != 4 || legacy.candidate_support.is_some() {
         return Err("Support changed the legacy health view".into());
     }
+    let compatible = if input.compatible_drain {
+        let first = h.compatible_drain(true).await?;
+        let record = UpdateJournal::inspect_compatible_drain(&reg.directory, &id)
+            .map_err(|e| e.to_string())?
+            .ok_or("Production decision missing before ACK")?;
+        record.validate(&saved)?;
+        if first.driver_active
+            || first.update != before.update
+            || first
+                .compatible_drain
+                .as_ref()
+                .is_none_or(|v| v.phase != CompatibleDrainPhase::Blocked)
+            || !matches!(
+                record.decision,
+                winbridge_update::compatible_drain::CompatibleDrainDecision::Blocked { .. }
+            )
+            || UpdateJournal::inspect_drain(&reg.directory, &id)
+                .map_err(|e| e.to_string())?
+                .intent
+                .is_some()
+        {
+            return Err("Missing contracts did not stop production drain before its outbox".into());
+        }
+        let again = h.compatible_drain(true).await?;
+        if again.compatible_drain != first.compatible_drain
+            || again.update != first.update
+            || again.driver_active
+        {
+            return Err("Production drain duplicate changed its immutable decision".into());
+        }
+        if h.candidate_drain(true).await.is_ok() {
+            return Err("Legacy entry bypassed the selected production contract".into());
+        }
+        if reg.begin_drain_requests.load(Ordering::Acquire) != 0 {
+            return Err("Blocked decision issued BeginDrain".into());
+        }
+        Some(
+            serde_json::json!({"record":record,"view":first,"duplicate":again,
+            "legacyFallbackRejected":true,"beginDrainCount":0}),
+        )
+    } else {
+        None
+    };
     let worker = weak
         .upgrade()
         .ok_or("Old worker disappeared during support")?;
@@ -132,7 +175,7 @@ pub(super) async fn drive(
             "record":saved,"duplicate":duplicate,"sourceLease":lease,"requestShutdownCount":count,
             "lostAckSentOnce":true,"legacyHealthFieldAbsent":true,
             "runtimeApplied":false,"installedRuntimeApplied":false,"windowsOpened":false,
-            "productionDrainEnforced":false
+            "productionDrainEnforced":input.compatible_drain,"compatible":compatible
         }),
     )?;
     // The parent observes the marker only after the complete proof was synced.

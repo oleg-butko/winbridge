@@ -9,6 +9,7 @@ pub mod build_report;
 pub mod candidate;
 pub mod candidate_artifacts;
 pub mod candidate_support;
+pub mod compatible_drain;
 pub mod drain;
 pub mod health;
 pub mod installed_set;
