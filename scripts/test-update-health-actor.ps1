@@ -19,12 +19,14 @@ param(
   [switch]$RuntimeReplacementGate,
   [switch]$RuntimeReplacementFaults,
   [switch]$ActivationPreparationGate,
+  [switch]$ActivationFilesGate,
   [string]$MigrationReferenceFile,
   [string]$MigrationReferenceSha256,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ActivationFilesGate){if($ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationPreparationGate=$true}
 if($ActivationPreparationGate){if($RuntimeReplacementGate -or $RuntimeReplacementFaults){throw 'Select one native gate mode'};$RuntimeReplacementGate=$true}
 if($RuntimeReplacementFaults){if($RuntimeReplacementGate){throw 'Select one native gate mode'};$RuntimeReplacementGate=$true}
 if($RuntimeReplacementGate){if($RuntimePreparationGate -or $RuntimePreparationFaults -or $DrainGate -or $ShutdownMainGate -or $ShutdownMainSupplemental -or $FinalStateBackupGate -or $FinalStateBackupFaults){throw 'Select one native gate mode'};$RuntimePreparationGate=$true}
@@ -126,12 +128,14 @@ try {
     if($RuntimePreparationGate){$shutdownArguments.runtimePreparation=$true}
     if($RuntimeReplacementGate){$shutdownArguments.runtimeReplacement=$true}
     if($ActivationPreparationGate){$shutdownArguments.activationPreparation=$true;$report.kind='activation_preparation_main_native_gate'}
+    if($ActivationFilesGate){$shutdownArguments.activationFiles=$true;$report.kind='activation_files_main_native_gate'}
     if($RuntimeReplacementFaults){$shutdownArguments.replacementFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     if($RuntimePreparationFaults){$shutdownArguments.preparationFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     Write-NewJson $shutdownInput $shutdownArguments
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
     if($ActivationPreparationGate){$mainTest='actual_main_prepares_activation_without_launch_or_cold_adoption'}
+    if($ActivationFilesGate){$mainTest='actual_main_binds_activation_files_without_launch_or_cold_adoption'}
     $commands=@(
       @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
       @{name='shutdown-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
@@ -171,6 +175,13 @@ try {
       @{name='activation-actual-migration';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','activation_migration','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($ActivationFilesGate){
+    $commands=@(
+      @{name='activation-files-primitives';arguments=@('test','-p','winbridge-platform','--lib','runtime_files::read_handoff::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-files-contract';arguments=@('test','-p','winbridge-protocol','--test','update_activation_files','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-files-mailbox';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','activation_files_v21','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
@@ -199,6 +210,7 @@ try {
   $proof=Get-Content -LiteralPath $env:WINBRIDGE_HEALTH_GATE_PROOF -Raw | ConvertFrom-Json
   $expectedKind=if($RuntimeReplacementFaults){'runtime_replacement_faults_native_proof'}elseif($RuntimeReplacementGate){'runtime_replacement_main_native_proof'}elseif($RuntimePreparationFaults){'runtime_preparation_faults_native_proof'}elseif($RuntimePreparationGate){'runtime_preparation_main_native_proof'}elseif($FinalStateBackupFaults){'state_backup_faults_native_proof'}elseif($FinalStateBackupGate){'state_backup_main_native_proof'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
   if($ActivationPreparationGate){$expectedKind='activation_preparation_main_native_proof'}
+  if($ActivationFilesGate){$expectedKind='activation_files_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}

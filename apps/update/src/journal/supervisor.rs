@@ -207,6 +207,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 12)
     }
+    pub fn activation_files_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 13)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -305,6 +313,11 @@ impl UpdateJournal {
             None
         };
         let parent_phase = update.phase;
+        let activation = if view_schema >= 12 {
+            super::activation::read(&tx, id)?
+        } else {
+            None
+        };
         let view = UpdatePreparationView {
             schema_version: view_schema,
             observed_at_ms: now_ms()?,
@@ -319,10 +332,22 @@ impl UpdateJournal {
             candidate_state_backup,
             runtime_preparation,
             runtime_replacement,
+            activation_files: if view_schema >= 13 {
+                Some(winbridge_protocol::update::ActivationFilesView {
+                    phase: winbridge_protocol::update::ActivationFilesPhase::NotBound,
+                    attempt_id: activation.as_ref().map(|v| v.intent.attempt_id.clone()),
+                    set_id: activation.as_ref().map(|v| v.intent.source.set_id.clone()),
+                    held_files: 0,
+                    worker: None,
+                    manifest_sha256: None,
+                    original_state_held: false,
+                    reason: None,
+                })
+            } else {
+                None
+            },
             activation_preparation: if view_schema >= 12 {
-                Some(crate::activation::view(
-                    super::activation::read(&tx, id)?.as_ref(),
-                ))
+                Some(crate::activation::view(activation.as_ref()))
             } else {
                 None
             },

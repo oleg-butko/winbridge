@@ -8,9 +8,11 @@
 ## Текущий статус 2026-10-24
 
 Начать с [подробного checkpoint следующей сессии](resume-2026-10-24-activation-preparation.md).
-Текущий source: updater18/worker16/supervisor20/view12. Activation source/intent/
+Текущий source: updater18/worker16/supervisor21/view13. Activation source/intent/
 FSM/ledger и original-custody metadata preparation подключены к actor;
-execution/capability пока нет. Итоги закрывающих local/cross checks — в checkpoint.
+execution/capability пока нет. Whole-set read binding library/actor21 добавлены;
+workspace716/0 (16 ignored), Linux/MSVC Clippy/protocol55/0/TS/UI passed. Positive
+native95 binding gate ещё впереди. Итоги предыдущих проверок — в checkpoint.
 
 [Actual Windows17 Main/migration33/0](windows-compatible-drain-gate-2026-10-24.md)
 пройден и повторно проверен readonly. Active native runs нет. [Combined native18 preparation/migration87/0 gate](windows-activation-preparation-gate-2026-10-24.md)

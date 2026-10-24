@@ -162,6 +162,8 @@ fn activation_view(
     Ok(view)
 }
 
+mod activation_files;
+
 fn local(path: &Path) -> Result<PathBuf> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
     winbridge_platform::require_local_disk(path).map_err(error)?;
@@ -961,6 +963,53 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// Internal21 binds read handles only. No worker process or state transfer.
+    pub async fn activation_files(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 21,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::BindActivationFiles
+            } else {
+                SupervisorAction::ObserveActivationFiles
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 21
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Activation files reply scope/version changed; no fallback".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response
+            .preparation
+            .ok_or("Activation files view missing")?;
+        if view.schema_version != 13
+            || view.activation_files.is_none()
+            || view.activation_preparation.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Activation files view belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     /// V19 is the production prerequisite route; there is no fallback to v13.
     pub async fn compatible_drain(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -1491,6 +1540,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveCompatibleDrain
                 | SupervisorAction::PrepareActivation
                 | SupervisorAction::ObserveActivationPreparation
+                | SupervisorAction::BindActivationFiles
+                | SupervisorAction::ObserveActivationFiles
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1675,6 +1726,13 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             guard: Box<crate::runtime_replacement::RuntimeReplacementGuard>,
             result: Result<crate::activation::ActivationPreparationAdmission>,
         },
+        #[cfg(windows)]
+        ActivationFiles(
+            std::result::Result<
+                Box<crate::activation::ActivationFilesGuard>,
+                crate::activation::ActivationFilesFailure,
+            >,
+        ),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -1688,6 +1746,9 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut compatible_reply: Option<ipc::Stream> = None;
     let mut activation_preparing = false;
     let mut activation_reply: Option<ipc::Stream> = None;
+    let files_actor = activation_files::FilesActor::default();
+    #[cfg(windows)]
+    let mut files_actor = files_actor;
     #[cfg(windows)]
     let mut activation_preparation: Option<Box<crate::activation::ActivationPreparation>> = None;
     let mut drain_active = false;
@@ -1713,6 +1774,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut driver_error: Option<String> = None;
     let ready_deadline = Instant::now() + Duration::from_secs(12);
     loop {
+        files_actor.require_scope(&r)?;
         #[cfg(windows)]
         if let Some(prepared) = &activation_preparation {
             if prepared.record().intent.source.update_id != r.spec.update_id
@@ -1814,6 +1876,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                         Err(e) => Err(e),
                     }
                 }
+                #[cfg(windows)]
+                DriverCompletion::ActivationFiles(result) => files_actor.complete(result),
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -2568,6 +2632,98 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 };
                 let _ = ipc::write(&mut stream, &response).await;
             }
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::BindActivationFiles | SupervisorAction::ObserveActivationFiles
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 21
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Activation files require exact Active bound v21 supervisor".into());
+                }
+                let view = files_actor.view(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                    &replacement_signal,
+                )?;
+                if request.action == SupervisorAction::ObserveActivationFiles
+                    || !files_actor.is_idle()
+                {
+                    return Ok(view);
+                }
+                #[cfg(windows)]
+                let present = replacement_guard.is_some() && activation_preparation.is_some();
+                #[cfg(not(windows))]
+                let present = false;
+                if !present
+                    || work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::VerifyingLocal
+                {
+                    return Err("Activation files need fresh resident preparation and idle original custody".into());
+                }
+                start = true;
+                Ok(view)
+            })();
+            let outcome = if start && outcome.is_ok() {
+                #[cfg(windows)]
+                {
+                    let (journal, owner) = idle.take().ok_or("Activation files owner missing")?;
+                    let preparation = activation_preparation
+                        .take()
+                        .ok_or("Fresh preparation missing")?;
+                    let original = replacement_guard
+                        .take()
+                        .ok_or("Original replacement custody missing")?;
+                    files_actor.begin(preparation.record())?;
+                    let spec = r.clone();
+                    driver_error = None;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result =
+                            journal.bind_activation_files(&owner, &spec, *preparation, original);
+                        (journal, owner, DriverCompletion::ActivationFiles(result))
+                    }));
+                    // This ACK reports volatile resource binding, not an effect
+                    // grant. Prepared is already durable; cold data never binds.
+                    files_actor.view(
+                        &directory,
+                        &r.spec.update_id,
+                        true,
+                        None,
+                        &replacement_signal,
+                    )
+                }
+                #[cfg(not(windows))]
+                {
+                    Err("Activation file binding requires native custody".into())
+                }
+            } else {
+                outcome
+            };
+            let (preparation, error) = match outcome {
+                Ok(value) => (Some(value), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 21,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                worker_control: None,
+                preparation,
+                error,
+            };
+            let _ = ipc::write(&mut stream, &response).await;
             continue;
         }
         if matches!(
@@ -3713,7 +3869,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 | SupervisorAction::ReplaceRuntime | SupervisorAction::ObserveRuntimeReplacement
                 | SupervisorAction::CaptureCandidateSupport | SupervisorAction::ObserveCandidateSupport
                 | SupervisorAction::DrainCompatibleCandidate | SupervisorAction::ObserveCompatibleDrain
-                | SupervisorAction::PrepareActivation | SupervisorAction::ObserveActivationPreparation => Err("Action needs its separate handler".into()),
+                | SupervisorAction::PrepareActivation | SupervisorAction::ObserveActivationPreparation
+                | SupervisorAction::BindActivationFiles | SupervisorAction::ObserveActivationFiles => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
@@ -3795,6 +3952,7 @@ mod tests {
             UpdateJournal::candidate_support_snapshot,
             UpdateJournal::compatible_drain_snapshot,
             UpdateJournal::activation_preparation_snapshot,
+            UpdateJournal::activation_files_snapshot,
         ];
         for (index, snapshot) in snapshots.into_iter().enumerate() {
             let view = snapshot(&directory, &f.id, false, None).unwrap();
@@ -3802,6 +3960,7 @@ mod tests {
             let value = serde_json::to_value(&view).unwrap();
             assert_eq!(value.get("compatibleDrain").is_some(), index >= 10);
             assert_eq!(value.get("activationPreparation").is_some(), index >= 11);
+            assert_eq!(value.get("activationFiles").is_some(), index >= 12);
             if index < 9 {
                 assert!(value.get("candidateSupport").is_none());
             } else {

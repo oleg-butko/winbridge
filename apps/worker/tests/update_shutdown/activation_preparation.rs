@@ -21,6 +21,7 @@ pub(super) fn execute(
     root: &Path,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
+    bind_files: bool,
 ) -> serde_json::Value {
     let directory = root.join("runtime/update-state");
     let id = &sup.spec.update_id;
@@ -140,6 +141,7 @@ pub(super) fn execute(
         Some(&record)
     );
     assert_eq!(history(&directory, id), vec![record.clone()]);
+    let binding = bind_files.then(|| super::activation_files::execute(root, sup, &record));
     let health = UpdateJournal::inspect_health(&directory, id)
         .unwrap()
         .unwrap();
@@ -200,11 +202,15 @@ pub(super) fn execute(
         .unwrap()
         .get("activationPreparation")
         .is_none());
-    json!({"before":initial,"view":observed,"duplicate":duplicate,"record":record,"history":history(&directory,id),"health":health,"rootEdge":edge,
+    let mut proof = json!({"before":initial,"view":observed,"duplicate":duplicate,"record":record,"history":history(&directory,id),"health":health,"rootEdge":edge,
         "healthEncoded":String::from_utf8(serde_json::to_vec(&health).unwrap()).unwrap(),
         "supervisor":sup,"workerBytesBefore":bytes,"workerBytesAfter":journal_bytes(root),"lostAckSentOnce":true,"durableBeforeAckConsumption":true,
         "wrongVersionRefused":true,"oldViewFieldAbsent":true,"instanceLockHeld":true,"filesUnchanged":true,
-        "workerLaunchCount":0,"stateHandoffCount":0,"publicActivationEnabled":false})
+        "workerLaunchCount":0,"stateHandoffCount":0,"publicActivationEnabled":false});
+    if let Some(binding) = binding {
+        proof["activationFiles"] = binding;
+    }
+    proof
 }
 
 pub(super) fn after_owned_exit(

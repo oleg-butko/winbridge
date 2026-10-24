@@ -599,6 +599,9 @@ pub enum SupervisorAction {
     /// Internal v20: original-custody preparation only; no process/state effect.
     PrepareActivation,
     ObserveActivationPreparation,
+    /// Internal21: consume original file custody into a strict readable set.
+    BindActivationFiles,
+    ObserveActivationFiles,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -675,6 +678,8 @@ pub struct UpdatePreparationView {
     /// V20/view12 only. No nonce or execution permission is exposed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_preparation: Option<ActivationPreparationView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_files: Option<ActivationFilesView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1085,3 +1090,5 @@ pub use compatible_drain::*;
 
 mod activation_preparation;
 pub use activation_preparation::*;
+mod activation_files;
+pub use activation_files::*;

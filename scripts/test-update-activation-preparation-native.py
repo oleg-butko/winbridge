@@ -12,7 +12,7 @@ spec.loader.exec_module(gate)
 class EvidenceChecks(unittest.TestCase):
     def test_preparation_counters_do_not_accept_boolean_or_fractional_success(self):
         for key in ('workerLaunchCount', 'stateHandoffCount', 'workerConfigSchema', 'workerJournalSchema',
-                    'updaterJournalSchema', 'protocolVersion', 'startupTimeoutMs', 'gateRows', 'ownerEpoch'):
+                    'updaterJournalSchema', 'protocolVersion', 'startupTimeoutMs', 'gateRows', 'ownerEpoch', 'heldFiles'):
             for value in (True, False, '0', -1, 1.0, 9007199254740992):
                 with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                     gate.checks.strict({'nested': [{key: value}]})
@@ -27,6 +27,12 @@ class EvidenceChecks(unittest.TestCase):
     def test_utf8_canonical_binding_is_independent_of_object_key_order(self):
         self.assertEqual(gate.checks.canonical({'b': 'Привет ✓', 'a': 1}),
                          '{"a":1,"b":"Привет ✓"}'.encode())
+
+    def test_boolean_observations_do_not_accept_numeric_substitutes(self):
+        for field in ('originalStateHeld','physicalCustodyHeld','readOnly','driverActive','querySupported','sourceDirty'):
+            for value in (0,1,None,'true'):
+                with self.subTest(field=field,value=value),self.assertRaises(ValueError):
+                    gate.checks.strict({field:value})
 
     def test_extended_local_path_does_not_alias_network_path(self):
         self.assertEqual(gate.checks.windows_path(r'\\?\K:\isolated\runtime'), gate.checks.windows_path(r'K:\isolated\runtime'))

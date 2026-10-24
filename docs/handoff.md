@@ -1,5 +1,18 @@
 # Точка продолжения updater: native18 preparation gate закрыт — 2026-10-24
 
+**Новый source после47ba586:** whole-set ActivationFilesGuard library и internal
+actor21/view13 добавлены, source schemas18/16 прежние. Fresh nonce/monotonic window/
+Prepared/root/owner/epoch/self PID сверяются перед read binding; ошибка удерживает
+original и partial kernel resources. Typed FilesActor отделяет Idle/Binding/Bound/
+Failed. Worker не создаётся, instance lock не передаётся; public activation off.
+Workspace716/0 (16 ignored), final Linux/MSVC all-target Clippy, protocol-jsonschema55/0,
+contracts/TS/UI/fmt/scaffold263 прошли. Python5+9 passed.
+Native95 mode подготовлен (`--activation-files`), **пока не запускался**. Старый87/0
+readonly recheck прошёл; он не доказывает новый21 whole-set branch. После final
+checks — clean distinct producer18 export, native95 Main/read binding/migration,
+audit/review, затем launcher/private receiver/state handoff. [Карта и ограничения](plans/worker-self-update/runtime-activation.md).
+
+
 **Продолжение после5741432:** начат physical file-handle bridge. Добавлен consuming
 однофайловый read handoff с удержанием denial-WRITE и exact File ID/hash; partial
 failure сохраняет оставшийся handle и не выдаётся за успешный read pin. Windows

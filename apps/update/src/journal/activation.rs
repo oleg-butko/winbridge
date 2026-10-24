@@ -328,6 +328,9 @@ impl UpdateJournal {
         crate::health::validate_fresh_success(&health).map_err(changed)?;
         let nonce = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
         let context = context(&tx, &r, &crate::sha256(nonce.as_bytes()), 120000)?;
+        let deadline = std::time::Instant::now()
+            .checked_add(std::time::Duration::from_millis(context.startup_timeout_ms))
+            .ok_or_else(|| changed("Activation monotonic deadline exhausted"))?;
         let intent = ActivationIntent {
             schema_version: 1,
             attempt_id: Uuid::new_v4().to_string(),
@@ -350,8 +353,53 @@ impl UpdateJournal {
             ActivationPreparation {
                 record: value,
                 channel_nonce: nonce,
+                deadline,
             },
         )))
+    }
+    /// No mutation or reconstructed grant: compare the fresh in-memory object
+    /// with the complete retained graph and this exact original live actor.
+    #[cfg(windows)]
+    pub(crate) fn require_activation_prepared(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        preparation: &ActivationPreparation,
+    ) -> Result<RuntimeReplacementRecord> {
+        preparation.require_live_window().map_err(changed)?;
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        check_authority(&tx, a)?;
+        runtime_baseline::current_supervisor(&tx, a, s)?;
+        let expected = preparation.record();
+        let source = &expected.intent.source;
+        let saved = read(&tx, &s.spec.update_id)?
+            .ok_or_else(|| changed("Activation preparation missing"))?;
+        let root = record(&tx, &s.spec.update_id)?;
+        if saved != *expected
+            || expected.revision != 0
+            || !matches!(expected.state, ActivationState::Prepared {})
+            || source.update_id != s.spec.update_id
+            || source.owner_id != a.owner_id()
+            || source.owner_epoch != a.epoch()
+            || source.launch_id != s.spec.launch_id
+            || root.phase != UpdatePhase::VerifyingLocal
+            || root.revision != source.parent_revision
+            || crate::sha256(preparation.channel_nonce.as_bytes())
+                != expected.intent.context.channel_nonce_sha256
+            || s.process.as_ref()
+                != Some(
+                    &winbridge_platform::infrastructure::stamp(std::process::id())
+                        .map_err(storage)?,
+                )
+        {
+            return Err(changed("Activation files require exact Prepared root, resident nonce and original live owner"));
+        }
+        let replaced = runtime_replacement::read(&tx, &s.spec.update_id)?
+            .ok_or_else(|| changed("Replacement missing"))?;
+        source.validate(&replaced).map_err(changed)?;
+        tx.commit().map_err(storage)?;
+        Ok(replaced)
     }
 }
 

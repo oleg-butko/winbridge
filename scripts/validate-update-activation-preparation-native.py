@@ -25,6 +25,7 @@ def load(name, file):
 actor = load('support_actor', 'validate-update-support-actor-native.py')
 checks = load('activation_checks', 'update-activation-preparation-proof.py')
 replacement_audit = load('replacement_audit', 'test-update-replacement-proof.py')
+file_checks = load('activation_file_checks', 'update-activation-files-proof.py')
 support, health, native, need = actor.support, actor.health, actor.native, checks.need
 PREFIX = 'native-activation-preparation-'
 
@@ -59,7 +60,9 @@ def main():
     parser.add_argument('--reference-pin', type=Path, required=True)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     parser.add_argument('--verify-run', help='Observe the saved task, never resubmit')
+    parser.add_argument('--activation-files',action='store_true',help='Explicit actor21 whole-set read binding; no worker launch')
     args = parser.parse_args()
+    prefix = 'native-activation-files-' if args.activation_files else PREFIX
     source, target = (health.archive_pin(p) for p in (args.archive, args.target_archive))
     health.require_runtime_schemas([args.archive, args.target_archive], 18)
     need(source['sourceCommit'] != target['sourceCommit'], 'Distinct producer18 and fixture18 required')
@@ -88,12 +91,13 @@ def main():
     if args.verify_run:
         meta = json.loads(meta_file.read_text())
         need(meta['source'] == source and meta['target'] == target and meta['reference'] == reference
-             and meta['cacheRun'] == args.cache_run and meta['run'] == run, 'Saved scope changed')
+             and meta['cacheRun'] == args.cache_run and meta['run'] == run
+             and meta.get('activationFiles',False) is args.activation_files, 'Saved scope changed')
         if meta['taskId'] is None:
             raw = (local/'request.json').read_bytes()
             need(hashlib.sha256(raw).hexdigest() == meta['requestSha256'], 'Saved request changed')
             request = json.loads(raw)
-            need(request['idempotencyKey'] == PREFIX+run, 'Pending request changed')
+            need(request['idempotencyKey'] == prefix+run, 'Pending request changed')
             meta['taskId'] = support.recover_task(endpoint, request)['taskId']
             support.save_meta(meta_file, meta)
     else:
@@ -105,6 +109,7 @@ def main():
         (report/'reference.json').write_bytes(raw_reference)
         reference_sha = hashlib.sha256(raw_reference).hexdigest()
         ps = native.ps_string
+        mode = '-ActivationFilesGate' if args.activation_files else '-ActivationPreparationGate'
         script = f"""$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $root={ps(root)}
@@ -117,10 +122,10 @@ $copy=Join-Path $root 'source.zip'
 [IO.File]::Copy($archive,$copy,$false)
 if((Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash.ToLowerInvariant() -cne {ps(source['archiveSha256'])}){{throw 'Source ZIP copy changed'}}
 Expand-Archive -LiteralPath $copy -DestinationPath $root
-& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $root 'winbridge/scripts/test-update-health-actor.ps1') -SourceDirectory (Join-Path $root 'winbridge') -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath {ps(str(target_archive))} -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/args.cache_run))} -ReportDirectory {ps(str(peer/'workflow-validation'/run))} -ActivationPreparationGate -MigrationReferenceFile {ps(str(peer/'workflow-validation'/run/'reference.json'))} -MigrationReferenceSha256 {ps(reference_sha)}
+& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $root 'winbridge/scripts/test-update-health-actor.ps1') -SourceDirectory (Join-Path $root 'winbridge') -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath {ps(str(target_archive))} -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/args.cache_run))} -ReportDirectory {ps(str(peer/'workflow-validation'/run))} {mode} -MigrationReferenceFile {ps(str(peer/'workflow-validation'/run/'reference.json'))} -MigrationReferenceSha256 {ps(reference_sha)}
 exit $LASTEXITCODE
 """
-        request = dict(protocolVersion=1, requestId=str(uuid.uuid4()), projectId='snapshot-fixture', idempotencyKey=PREFIX+run,
+        request = dict(protocolVersion=1, requestId=str(uuid.uuid4()), projectId='snapshot-fixture', idempotencyKey=prefix+run,
                        timeoutMs=1800000, command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.',
                        arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()]))
         raw = json.dumps(request).encode()
@@ -128,7 +133,7 @@ exit $LASTEXITCODE
             f.write(raw)
             f.flush()
             os.fsync(f.fileno())
-        meta = dict(taskId=None, run=run, source=source, target=target, reference=reference, cacheRun=args.cache_run,
+        meta = dict(taskId=None, run=run, source=source, target=target, reference=reference, cacheRun=args.cache_run, activationFiles=args.activation_files,
                     requestSha256=hashlib.sha256(raw).hexdigest(), debianFreeBytesBefore=shutil.disk_usage(ROOT).free)
         support.save_meta(meta_file, meta)
         print(json.dumps(dict(taskId=None, run=run, recovery='--verify-run '+run)), flush=True)
@@ -138,7 +143,7 @@ exit $LASTEXITCODE
     deadline = time.monotonic()+1850
     while True:
         task = native.call(endpoint, {'method': 'get_task', 'taskId': meta['taskId']})['task']
-        need(task['submission']['projectId'] == 'snapshot-fixture' and task['submission']['idempotencyKey'] == PREFIX+run, 'Task scope differs')
+        need(task['submission']['projectId'] == 'snapshot-fixture' and task['submission']['idempotencyKey'] == prefix+run, 'Task scope differs')
         if task['status'] not in ('queued', 'running'):
             break
         need(time.monotonic() < deadline, 'Observation expired; inspect this same task/run, never resubmit')
@@ -148,29 +153,33 @@ exit $LASTEXITCODE
     need(support.ready_files(report) == files, 'Ready files changed')
     result = json.loads(files['report.json'].decode('utf-8-sig'))
     need(task['status'] == 'succeeded' and task['exitCode'] == 0 and result['passed'] is True
-         and result['kind'] == 'activation_preparation_main_native_gate' and result['error'] is None
+         and result['kind'] == ('activation_files_main_native_gate' if args.activation_files else 'activation_preparation_main_native_gate') and result['error'] is None
          and result['sourceCommit'] == source['sourceCommit'] and result['sourceArchiveSha256'] == source['archiveSha256']
          and result['target'] == target and result['runtimeApplied'] is True
          and result['installedRuntimeApplied'] is False and result['windowsOpened'] is False,
          'Native preparation failed; inspect '+str(report))
-    groups = [('activation-data-ledger', 23), ('activation-contract', 2), ('activation-mailbox', 1), ('activation-actual-migration', 1),
+    groups = [('activation-data-ledger', 24 if args.activation_files else 23), ('activation-contract', 2), ('activation-mailbox', 1), ('activation-actual-migration', 1),
               ('runtime-replacement-observer-sharing', 1), ('runtime-replacement-model-ledger-and-directory', 15),
               ('runtime-replacement-original-custody', 1), ('runtime-replacement-contract', 3),
               ('runtime-preparation-driver-and-ledger', 16), ('runtime-preparation-directory-pins', 1),
               ('backup-empty-wal-fingerprint', 1), ('backup-crash-observation', 1), ('backup-data-and-ledger', 15),
               ('backup-sqlite-wal-and-pins', 3), ('backup-exact-entry', 2), ('shutdown-main-pipeline', 1)]
+    if args.activation_files:
+        groups=[('activation-files-primitives',4),('activation-files-contract',2),('activation-files-mailbox',1)]+groups
     need([c['name'] for c in result['commands']] == ['health-supervisor-build']+[n for n,_ in groups[:-1]]+['shutdown-old-real-set',groups[-1][0]]
          and all(c['exitCode'] == 0 for c in result['commands']), 'Selected native commands changed')
     counts = {name: sum(int(m[1]) for m in re.finditer(r'test result: ok\. ([0-9]+) passed; 0 failed;',files[name+'.log'].decode('utf-8-sig'))) for name,_ in groups}
     need(all(counts[n] >= minimum for n,minimum in groups), 'Expected native tests were not selected')
     proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
-    rejected = checks.audit(proof, source, target, root, health)
+    component=dict(proof,kind='activation_preparation_main_native_proof') if args.activation_files else proof
+    rejected = checks.audit(component, source, target, root, health)
+    file_rejected=file_checks.audit(proof,source,target,root,checks,health) if args.activation_files else 0
     rejected += len(replacement_audit.audit(dict(proof, kind='runtime_replacement_main_native_proof'), source, target))
     need(hashlib.sha256(files['reference.json']).hexdigest() == result['migrationReferenceSha256'], 'Migration reference changed')
     migration = json.loads(files['activation-migration-proof.json'].decode('utf-8-sig'))
     migration_rejected = checks.audit_migration(migration, source, reference)
     verified = dict(meta, passed=True, filesVerifiedTwice=len(files), nativeTestsPassed=sum(counts.values()), testCounts=counts,
-                    negativeMutationsRejected=rejected, migrationMutationsRejected=migration_rejected,
+                    negativeMutationsRejected=rejected, activationFilesMutationsRejected=file_rejected, migrationMutationsRejected=migration_rejected,
                     proofSha256=hashlib.sha256(files['candidate-health-actor-proof.json']).hexdigest(),
                     migrationProofSha256=hashlib.sha256(files['activation-migration-proof.json']).hexdigest(),
                     reportSha256=hashlib.sha256(files['report.json']).hexdigest(), storage=result['storage'], debianFreeBytesAfter=shutil.disk_usage(ROOT).free)

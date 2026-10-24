@@ -1,6 +1,28 @@
 //! Synthetic receipts test data binding, never physical activation or OS authority.
 use super::*;
 use crate::runtime_replacement::tests::{completed, planned};
+#[cfg(windows)]
+#[test]
+fn activation_live_window_uses_original_monotonic_deadline() {
+    let (_, record) = activation_fixture();
+    let expired = ActivationPreparation {
+        record: record.clone(),
+        channel_nonce: "a".repeat(64),
+        deadline: std::time::Instant::now() - std::time::Duration::from_secs(1),
+    };
+    assert!(expired.require_live_window().is_err());
+    let fresh = ActivationPreparation {
+        record,
+        channel_nonce: "a".repeat(64),
+        deadline: std::time::Instant::now() + std::time::Duration::from_secs(1),
+    };
+    assert!(fresh.require_live_window().is_ok());
+    assert_eq!(
+        expired.record(),
+        fresh.record(),
+        "Identical saved data does not renew the original deadline"
+    );
+}
 
 #[test]
 fn preparation_projection_preserves_progress_and_never_restores_custody_or_nonce() {

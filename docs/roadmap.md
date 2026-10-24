@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-24: whole-set read binding library и **actor21/view13 добавлены**, пока
+без native proof. Worker/updater schemas16/18 прежние, activation/public install off.
+Workspace716/0 (16 ignored), legacy87/0 readonly recheck passed. Final checks,
+clean producer export и combined native95 (`--activation-files`) впереди, затем
+launcher/private receiver/state handoff и remaining U2/U3/U4. [Activation plan](plans/worker-self-update/runtime-activation.md).
+
+
 2026-10-24: consuming one-file **read handoff прошёл native4/0**,
 taskade260bf-de0a-436b-9920-589eb26ee86c/run20261024-143036-03cf8cbb,
 producerd4c27a3,5 ready files twice. [Pins и свойства](plans/worker-self-update/runtime-activation.md).

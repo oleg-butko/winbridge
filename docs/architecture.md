@@ -4,13 +4,15 @@
 
 ## Текущее состояние updater — checkpoint 2026-10-24
 
-В текущем source: **updater18/worker16, supervisor20/view12**.
+В текущем source: **updater18/worker16, supervisor21/view13**.
 [Activation preparation](plans/worker-self-update/runtime-activation.md) объединяет
 flat source binding, frozen startup data FSM, graph-bound ledger и guarded
 metadata preparation в original supervisor. Blocking slot возвращает тот же
 original guard; nonce остаётся только в resident non-Serde объекте. Prepared
 не предоставляет launch/state-open permission; cold read не восстанавливает custody.
-Старые views1–11 сохраняют форму. Execution driver/private worker receiver,
+Whole-set read binding library/actor21 добавлены с original-guard/current-owner
+проверкой, live monotonic deadline и сохранением partial failure resources;
+его positive native gate95 ещё впереди. Views1–12 сохраняют форму. Execution driver/private worker receiver,
 state/lifetime handoff и controller confirmation ещё не реализованы.
 
 Последний [actual Windows gate33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md)

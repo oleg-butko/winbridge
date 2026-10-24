@@ -1,7 +1,7 @@
 # Activation после проверенного replacement
 
 2026-10-24. **Execution driver ещё не реализован; actor20 preparation добавлен.**
-Текущий source updater18/worker16/supervisor20/view12. Actual production drain17 gate
+Текущий source updater18/worker16/supervisor21/view13 (read binding, native gate pending). Actual production drain17 gate
 закрыт; [combined native18 preparation/migration87/0 gate пройден](windows-activation-preparation-gate-2026-10-24.md).
 26 ready files twice/72 Main +12 migration mutations, readonly recheck. Execution
 ещё нет; следующим реализовать physical bridge, затем launcher/private receiver/state handoff.
@@ -245,6 +245,55 @@ guard, journal/current-owner binding и actor/launcher ещё требуется
 После native primitives объединить пять **installed** файлов в PinnedInstalledSet,
 сохраняя старые displaced move handles и original exit/state custody. Только
 после полного exact readback разрешено приступать к отдельному create admission.
+
+## Whole-set library и actor21/view13 добавлены, native binding ещё впереди
+
+`runtime_replacement/activation_files.rs` потребляет свежий non-Serde
+ActivationPreparation и **тот же Box original guard**. `require_activation_prepared`
+сверяет nonce digest, Prepared0, root VerifyingLocal/source parent revision,
+owner/epoch, actual supervisor self PID и полный сохранённый graph. Окно подготовки
+дополнительно ограничено live monotonic deadline; JSON и коррекция wall clock не
+обновляют его. Повтор старой metadata не создаёт новое окно.
+
+Исходные exited-process/state/instance guards, displaced move handles и anchors
+остаются внутри результата. Пять installed move handles переводятся в строгие
+read pins; после полного readback создаётся PinnedInstalledSet и сверяются все
+File IDs, manifest/set/runtime identity. Любая ошибка удерживает pending/strict/
+residual handles в закрытом ActivationFilesFailure; из ошибки нельзя получить
+успешный guard. Это не create permit. `require_current` относится только к
+Prepared admission; будущая creation factory должна потреблять guard и перейти
+к отдельному typed process owner, не ослабляя проверку Prepared ради следующих фаз.
+
+Actor component `supervisor/activation_files.rs` использует одну typed машину
+Idle → Binding → Bound/Failed, единственный общий blocking slot и Scope check.
+Internal21 BindActivationFiles/ObserveActivationFiles возвращают view13.
+Первый ACK обозначает **volatile resource binding**, а не разрешение внешнего
+эффекта; исходный Prepared уже durable. Duplicate наблюдает тот же процесс.
+Cold snapshot показывает NotBound/heldFiles0/originalStateHeld=false и не
+реконструирует handles. Views1–12 не получают нового поля.
+
+Native Main harness расширен флагом `-ActivationFilesGate`, observer —
+`--activation-files` (добавить к прежней preparation команде вместо выбора нового
+namespace при readonly recheck). Режим сохраняется в metadata; старый87/0
+`--verify-run` по-прежнему проходит из текущего checkout. В новом mode ожидаются
+не менее95 native tests: прежний Main/actual17→18 gate, monotonic timer test,
+4 read-handoff primitives, strict21 DTO и actual IPC21 rejection. Сам Main после20
+вызывает21 до дополнительных тяжёлых file observations и проверяет strict read
+refusal BEFORE, successful whole-set read AFTER, write/delete denial, сохранённый
+instance lock/root/history/DB/WAL, duplicate и cold no-adoption. Новый independent
+`update-activation-files-proof.py` дополняет source/context/migration audits.
+
+Локальные проверки нового source: workspace716/0 (16 ignored), final Linux/MSVC
+all-target Clippy, protocol-jsonschema55/0, generated contracts/TypeScript/UI build,
+fmt/diff/scaffold263 passed. Python5+9 tests passed. Логи `activation-files-*` в
+`.winbridge/update-preparation/`. После commit/export выполнить новый native95
+mode; архив fixture18 остаётся7f6a029, источник migration — successful17 pin.
+
+Подключены только read handles. Private worker receiver, suspended launcher,
+state handoff, controller/lifetime и actual update остаются незавершёнными;
+activation capability=None, public install off. Positive whole-set branch пока
+не исполнен на Windows: Native87 относится к producerb12ecc6 (preparation20),
+Native4 — кd4c27a3 (one-file adapter). Проверки нового source указаны в handoff.
 
 ## Ограничения фактического кода
 

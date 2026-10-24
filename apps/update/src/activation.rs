@@ -17,6 +17,8 @@ pub use lifecycle::*;
 pub struct ActivationPreparation {
     pub(crate) record: ActivationRecord,
     pub(crate) channel_nonce: String,
+    #[cfg(windows)]
+    pub(crate) deadline: std::time::Instant,
 }
 impl ActivationPreparation {
     pub fn record(&self) -> &ActivationRecord {
@@ -26,11 +28,22 @@ impl ActivationPreparation {
     pub fn channel_nonce(&self) -> &str {
         &self.channel_nonce
     }
+    #[cfg(windows)]
+    pub(crate) fn require_live_window(&self) -> Result<()> {
+        if std::time::Instant::now() >= self.deadline {
+            return Err(
+                "Activation preparation deadline expired; no new execution or adoption".into(),
+            );
+        }
+        Ok(())
+    }
 }
 pub enum ActivationPreparationAdmission {
     Prepared(Box<ActivationPreparation>),
     Existing(Box<ActivationRecord>),
 }
+#[cfg(windows)]
+pub use crate::runtime_replacement::{ActivationFilesFailure, ActivationFilesGuard};
 
 pub(crate) fn view(
     value: Option<&ActivationRecord>,

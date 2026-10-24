@@ -21,10 +21,12 @@ def strict(value):
         counters = {'schemaVersion', 'contractVersion', 'queryContract', 'revision', 'ownerEpoch',
                     'parentRevision', 'expectedRevision', 'processId', 'sessionId', 'bytes',
                     'workerConfigSchema', 'workerJournalSchema', 'updaterJournalSchema', 'protocolVersion',
-                    'startupTimeoutMs', 'workerLaunchCount', 'stateHandoffCount', 'gateRows', 'lastSequence'}
+                    'startupTimeoutMs', 'workerLaunchCount', 'stateHandoffCount', 'gateRows', 'lastSequence','heldFiles'}
         for key, item in value.items():
             need(key not in ('nonce', 'channelNonce', 'token', 'permit', 'canSpawn', 'canInstall'),
                  'Private material or fabricated permission: '+key)
+            if key in ('originalStateHeld','physicalCustodyHeld','readOnly','driverActive','querySupported','sourceDirty'):
+                need(type(item) is bool,'Invalid boolean observation: '+key)
             if key in counters or key.endswith('AtMs'):
                 need(item is None or type(item) is int and 0 <= item <= 9007199254740991,
                      'Invalid counter: '+key)
