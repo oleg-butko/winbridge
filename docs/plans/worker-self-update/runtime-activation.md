@@ -219,12 +219,26 @@ Caller обязан сохранять failure вместе с остальны�
 guards и запрещать launch. Ошибка хранит owner в Box; первый Clippy выявил
 128-byte Err, это исправлено без отключения lint.
 
-Windows all-target Clippy platform/update/worker passed. Четыре настоящих
-Windows теста подготовлены (success/before-release failure/after-release failure/
-same-bytes foreign File ID), ещё не выполнены. Для короткой проверки добавлен
+Linux/MSVC all-target Clippy platform/update/worker passed. Четыре настоящих
+Windows теста пройдены (success/before-release failure/after-release failure/
+same-bytes foreign File ID). Для короткой проверки добавлен
 режим `validate-update-shutdown-primitives-native.py --runtime-read-handoff-only`;
 он выполняет только эти primitives в новом namespace и не повторяет полный
 87-test Main/candidate build. Schema/action/capability не меняются.
+
+Native task `ade260bf-de0a-436b-9920-589eb26ee86c`, run
+`20261024-143036-03cf8cbb`, producer `d4c27a3abe99c664cfdd0dc86d1d3a3799bbfaab`
+terminal succeeded/exit0:4 tests,5 ready files проверены дважды. ZIP
+`winbridge-20261024T143017Z-d4c27a3-dd063fec.zip`, SHA256
+`15f47e64e13e597f814002a32df031ae0716ebced34545f271d11db347a25fe0`, manifest
+`6bdab813da54a93cca1681dfcc327136d7ae3b97a5476afca006a4022151a771`.
+Report SHA256 `9331130d7598641c01a465be24ef20e0e75196903a45d754d0cd36c601a94163`,
+test log SHA256 `2a5f1f663f0be3379f100697fcd9aa21888448326c60277aba1c300ff47b4746`.
+Verified pin `.winbridge/update-preparation/activation-read-handoff-native-verified.json`,
+observer log `activation-read-handoff-native.log` в том же каталоге.
+Windows free27,557,306,368→27,689,910,272 bytes, Debian после audit16,529,096,704.
+Cleanup не выполнялся, installed d052/generation прежние/active0/errors=null.
+UI-окон не было, desktop можно закрыть, installed worker оставить. Active runs нет.
 
 Это пока однофайловая операция: consuming whole-set bridge под original updater
 guard, journal/current-owner binding и actor/launcher ещё требуется реализовать.

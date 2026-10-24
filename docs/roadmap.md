@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-24: consuming one-file **read handoff прошёл native4/0**,
+taskade260bf-de0a-436b-9920-589eb26ee86c/run20261024-143036-03cf8cbb,
+producerd4c27a3,5 ready files twice. [Pins и свойства](plans/worker-self-update/runtime-activation.md).
+Следом whole-set original-guard/journal binding, затем actor/launcher/state handoff.
+Schemas18/16/20/view12 прежние; public install off, installed d052 unchanged.
+
 2026-10-24: physical bridge начат с consuming one-file read handoff; Windows
 all-target Clippy passed. Готовы4 native sharing/rebind/failure tests и короткий
 `--runtime-read-handoff-only` gate, ещё не выполненный. Whole-set original-custody

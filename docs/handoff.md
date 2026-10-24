@@ -3,9 +3,10 @@
 **Продолжение после5741432:** начат physical file-handle bridge. Добавлен consuming
 однофайловый read handoff с удержанием denial-WRITE и exact File ID/hash; partial
 failure сохраняет оставшийся handle и не выдаётся за успешный read pin. Windows
-Clippy platform/update/worker passed (первый large Err исправлен Box). Готовы4
-native tests и отдельный `--runtime-read-handoff-only` режим существующего
-primitives runner. Native primitives ещё не запускались; после них whole-set
+Clippy platform/update/worker passed (первый large Err исправлен Box). **Native4/0
+пройден**, taskade260bf-de0a-436b-9920-589eb26ee86c/run20261024-143036-03cf8cbb,
+producerd4c27a3.5 ready files twice; exact pins/report/log в activation plan.
+Active native runs нет. Следом whole-set
 original-guard/journal/actor binding. [Карта](plans/worker-self-update/runtime-activation.md).
 Schemas updater18/worker16/supervisor20/view12 прежние, public install off.
 
