@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-24: [native18 preparation/migration task запущен](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md),
+`c1675a54-b250-4fa9-b2d3-66c653033180` / run20261024-111115-9272d0e2,
+producerb12ecc6. Наблюдать ту же task; результата пока нет. Expected87 tests/16
+групп, installed runtime unchanged, public install off. После terminal audit/review
+продолжать physical activation/state handoff; старые NEXT ниже — история.
+
 2026-10-24, продолжение после daa88da: combined **native18 preparation/migration
 harness добавлен**, actual run ещё впереди. Actor20/ledger18 review без важных
 ошибок, Linux/MSVC Clippy/Python4+9 passed. [Activation plan](plans/worker-self-update/runtime-activation.md)

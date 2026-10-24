@@ -1,4 +1,12 @@
-# Точка продолжения updater: native18 harness — 2026-10-24
+# Точка продолжения updater: native18 запущен — 2026-10-24
+
+**Наблюдать ту же task, не resubmit:**
+`c1675a54-b250-4fa9-b2d3-66c653033180`, run `20261024-111115-9272d0e2`,
+producerb12ecc6, fixture7f6a029. Первое authoritative наблюдение running;
+health-supervisor-build компилирует protocol. [Exact pins, log и readonly команда](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md).
+Ожидаются87 native tests/16 групп, actual Main preparation20 и actual17→18/refusal.
+Proof ещё нет. Worker only/no UI; installed d052 unchanged. После terminal —
+independent audit/review, затем physical activation bridge. Старые «не запущен» ниже — история.
 
 **Продолжение после daa88da:** review actor20/ledger18 выполнен, важных ошибок
 не найдено. Combined native18 harness добавлен: actual Main preparation20 с lost
