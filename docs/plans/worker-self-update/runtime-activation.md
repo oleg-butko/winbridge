@@ -2,7 +2,7 @@
 
 2026-10-24. **Execution driver ещё не реализован; actor20 preparation добавлен.**
 Текущий source updater18/worker16/supervisor20/view12. Actual production drain17 gate
-закрыт; combined native18 preparation/migration harness/gate ещё впереди.
+закрыт; combined native18 preparation/migration harness добавлен, actual run впереди.
 [Актуальный checkpoint и проверки](resume-2026-10-24-activation-preparation.md),
 [общий U0–U4 план](README.md),
 [original custody](runtime-replacement-custody.md),
@@ -154,6 +154,50 @@ activation support по-прежнему=None. Actual positive Windows branch о
    receiver, guarded callbacks и actual startup. Ни Prepared, ни cold view не
    создают права продолжать после потери original owner. Все последующие пункты
    общего плана ниже остаются незавершёнными.
+
+### Combined native18 harness добавлен, gate ещё не пройден
+
+`apps/worker/tests/update_shutdown/activation_preparation.rs` продолжает настоящий
+Main replacement scenario: original supervisor получает20 после FilesMoved;
+Prepared читается из journal до чтения ACK, ответ намеренно не потребляется.
+Observe/duplicate проверяют ту же запись, original lock, неизменность root/files/
+worker DB/WAL и launch/handoff count0. После закрытия owned test Job холодный
+читатель получает ту же историю без physical custody; ordinary startup отказан
+существующей replacement fixture. Production19 policy не отключается: этот
+внутренний fixture route не создаёт production decision и не объявляет capability.
+
+`apps/update/tests/activation_migration.rs` проверяет настоящую историю successful17
+run20261024-085627-3a106020 на новой SQLite Backup API копии:17→18, backup17,
+owner fencing, все прежние rows/support/Blocked decision и пустые activation
+tables. Старый actual17 exe должен отказать init/status18 без DB/WAL writes;
+original DB/WAL/images не мигрируются и не заменяются.
+
+Runner `scripts/test-update-health-actor.ps1 -ActivationPreparationGate` объединяет
+эти проверки с прежними replacement/backup regressions; ожидается не менее87
+native tests/16 групп. Observer
+`scripts/validate-update-activation-preparation-native.py` требует две distinct
+clean schema18 ZIP и verified17 reference pin. Он сохраняет request/meta до
+submit, поддерживает `--verify-run`, проверяет ready files дважды, exact commands
+и actual proof, затем отрицательные мутации. Независимый
+`scripts/update-activation-preparation-proof.py` сверяет source/context/health
+digest/FilesVerified edge, совпадающие copies и отсутствие новых прав у cold view.
+
+Четыре Python evidence tests, прежние9 runner tests, Linux/MSVC all-target Clippy
+прошли; focused Rust filter28/0 также passed. Команда
+реального gate после commit/export (SOURCE18 — новый producer, не fixture7f6a029):
+
+~~~bash
+python3 scripts/validate-update-activation-preparation-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/SOURCE18.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261024T103055Z-7f6a029-3e94038a.zip \
+  --cache-run 20261017-061527-f4639971 \
+  --reference-pin .winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json
+~~~
+
+При observation timeout добавить `--verify-run SAVED_RUN` и наблюдать прежний
+Task ID. Без `--verify-run` создаётся новый namespace/task. До сохранённого terminal
+proof не объявлять gate пройденным. Installed worker only, desktop не нужен,
+тестовые UI-окна не появляются; установленный runtime не меняется.
 
 ## Ограничения фактического кода
 

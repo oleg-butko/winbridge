@@ -12,7 +12,7 @@ use winbridge_update::{
 /// Observation is not a pin/permission. Share DELETE so this read can coexist
 /// with the supervisor's original READ+DELETE handle. Its deny-write/delete
 /// policy remains authoritative; never weaken artifact::pin for this test.
-fn observe_owned_file(path: &Path) -> ImageEvidence {
+pub(super) fn observe_owned_file(path: &Path) -> ImageEvidence {
     use sha2::{Digest, Sha256};
     use std::os::windows::fs::OpenOptionsExt;
     winbridge_platform::require_safe_path(path).unwrap();

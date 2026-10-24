@@ -1,4 +1,14 @@
-# Точка продолжения updater: activation preparation — 2026-10-24
+# Точка продолжения updater: native18 harness — 2026-10-24
+
+**Продолжение после daa88da:** review actor20/ledger18 выполнен, важных ошибок
+не найдено. Combined native18 harness добавлен: actual Main preparation20 с lost
+ACK/duplicate/cold no-custody и copy-only actual17→18/refusal. Linux/MSVC Clippy,
+Python4+9 и focused Rust28/0 прошли. Actual native run
+ещё не начат. Карта, команда с SOURCE18 placeholder и ограничения —
+[в activation plan](plans/worker-self-update/runtime-activation.md).
+Следом clean distinct producer18 export → один native gate → audit/review →
+physical file/state handoff. Installed d052 healthy/active0/unchanged.
+Старый checkpoint ниже фиксирует состояние до harness, его первые NEXT устарели.
 
 **Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-24-activation-preparation.md).**
 Она содержит карту кода, результаты проверок, exact task/run/source/proof pins,

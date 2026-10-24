@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-24, продолжение после daa88da: combined **native18 preparation/migration
+harness добавлен**, actual run ещё впереди. Actor20/ledger18 review без важных
+ошибок, Linux/MSVC Clippy/Python4+9 passed. [Activation plan](plans/worker-self-update/runtime-activation.md)
+содержит режимы и следующий порядок. Public install/activation capability off;
+installed runtime не менялся. Проверки harness не являются native success proof.
+
 2026-10-24, checkpoint: **supervisor20/view12 activation preparation** подключён
 к ledger18; worker schema16 прежняя. Это metadata, не launch capability.
 [Подробное продолжение](plans/worker-self-update/resume-2026-10-24-activation-preparation.md)

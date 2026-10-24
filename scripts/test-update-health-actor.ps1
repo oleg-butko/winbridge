@@ -18,10 +18,14 @@ param(
   [switch]$RuntimePreparationFaults,
   [switch]$RuntimeReplacementGate,
   [switch]$RuntimeReplacementFaults,
+  [switch]$ActivationPreparationGate,
+  [string]$MigrationReferenceFile,
+  [string]$MigrationReferenceSha256,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ActivationPreparationGate){if($RuntimeReplacementGate -or $RuntimeReplacementFaults){throw 'Select one native gate mode'};$RuntimeReplacementGate=$true}
 if($RuntimeReplacementFaults){if($RuntimeReplacementGate){throw 'Select one native gate mode'};$RuntimeReplacementGate=$true}
 if($RuntimeReplacementGate){if($RuntimePreparationGate -or $RuntimePreparationFaults -or $DrainGate -or $ShutdownMainGate -or $ShutdownMainSupplemental -or $FinalStateBackupGate -or $FinalStateBackupFaults){throw 'Select one native gate mode'};$RuntimePreparationGate=$true}
 if($RuntimePreparationFaults){if($RuntimePreparationGate){throw 'Select one native gate mode'};$RuntimePreparationGate=$true}
@@ -44,6 +48,7 @@ if($manifest.dirty -or -not $manifest.includesBuiltUi){throw 'Clean exported sou
 New-Item -ItemType Directory -Path $ReportDirectory -Force | Out-Null
 $report=[ordered]@{schemaVersion=1;kind='candidate_health_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();runtimeApplied=$(if($RuntimeReplacementGate){$null}else{$false});installedRuntimeApplied=$false;windowsOpened=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 $oldShutdownInput=$env:WINBRIDGE_SHUTDOWN_GATE_INPUT
+$oldActivationInput=$env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT
 $oldPreviousUpdater=$env:WINBRIDGE_PREVIOUS_UPDATER10
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_HEALTH_GATE_INPUT;$oldProof=$env:WINBRIDGE_HEALTH_GATE_PROOF
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
@@ -64,6 +69,16 @@ try {
   $targetManifest=[Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json
   if($targetManifest.dirty -or -not $targetManifest.includesBuiltUi -or $targetManifest.sourceCommit -ceq $manifest.sourceCommit){throw 'Distinct clean target generation with built UI required'}
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
+  if($ActivationPreparationGate){
+    Assert-SessionFile $MigrationReferenceFile
+    if($MigrationReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $MigrationReferenceFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $MigrationReferenceSha256){throw 'Pinned actual17 migration reference required'}
+    $reference=Get-Content -LiteralPath $MigrationReferenceFile -Raw|ConvertFrom-Json
+    if($reference.kind -cne 'activation_schema17_reference' -or $reference.schemaVersion -ne 1){throw 'Unexpected activation migration reference'}
+    $migrationInput=Join-Path (Split-Path $source -Parent) 'activation-migration-input.json'
+    Write-NewJson $migrationInput @{root=(Join-Path (Split-Path $source -Parent) 'activation-migration-case');reference=$reference;proof=(Join-Path $ReportDirectory 'activation-migration-proof.json')}
+    $env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT=$migrationInput
+    $report.migrationReferenceSha256=$MigrationReferenceSha256
+  }
   $pwsh=(Get-Command pwsh.exe -ErrorAction Stop).Source
   $inputPath=Join-Path (Split-Path $source -Parent) 'health-input.json'
   if($DrainGate){
@@ -110,11 +125,13 @@ try {
     $shutdownArguments=@{root=$caseRoot;target=$pin;archive=[IO.Path]::GetFullPath($TargetArchivePath);oldImages=(Join-Path $oldStage 'payload');powershell=$pwsh;validationCache=$cache;supplemental=[bool]$ShutdownMainSupplemental;finalBackup=[bool]$FinalStateBackupGate;backupFaults=[bool]$FinalStateBackupFaults}
     if($RuntimePreparationGate){$shutdownArguments.runtimePreparation=$true}
     if($RuntimeReplacementGate){$shutdownArguments.runtimeReplacement=$true}
+    if($ActivationPreparationGate){$shutdownArguments.activationPreparation=$true;$report.kind='activation_preparation_main_native_gate'}
     if($RuntimeReplacementFaults){$shutdownArguments.replacementFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     if($RuntimePreparationFaults){$shutdownArguments.preparationFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     Write-NewJson $shutdownInput $shutdownArguments
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
+    if($ActivationPreparationGate){$mainTest='actual_main_prepares_activation_without_launch_or_cold_adoption'}
     $commands=@(
       @{name='health-supervisor-build';arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--locked','--offline')},
       @{name='shutdown-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
@@ -146,6 +163,14 @@ try {
   }
   # Worker IPC fixtures launch this executable. Reused caches may still hold an
   # older updater that correctly refuses the freshly migrated journal.
+  if($ActivationPreparationGate){
+    $commands=@(
+      @{name='activation-data-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','activation','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-contract';arguments=@('test','-p','winbridge-protocol','--test','update_activation_preparation','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-mailbox';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','activation_preparation_v20','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-actual-migration';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','activation_migration','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
+    )+$commands
+  }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
@@ -173,6 +198,7 @@ try {
   if($ShutdownMainGate){[IO.File]::Copy((Join-Path $caseRoot 'proof.json'),$env:WINBRIDGE_HEALTH_GATE_PROOF,$false)}
   $proof=Get-Content -LiteralPath $env:WINBRIDGE_HEALTH_GATE_PROOF -Raw | ConvertFrom-Json
   $expectedKind=if($RuntimeReplacementFaults){'runtime_replacement_faults_native_proof'}elseif($RuntimeReplacementGate){'runtime_replacement_main_native_proof'}elseif($RuntimePreparationFaults){'runtime_preparation_faults_native_proof'}elseif($RuntimePreparationGate){'runtime_preparation_main_native_proof'}elseif($FinalStateBackupFaults){'state_backup_faults_native_proof'}elseif($FinalStateBackupGate){'state_backup_main_native_proof'}elseif($ShutdownMainSupplemental){'shutdown_main_supplemental_proof'}elseif($ShutdownMainGate){'shutdown_main_native_proof'}elseif($DrainGate){'candidate_drain_actor_proof'}else{'candidate_health_actor_proof'}
+  if($ActivationPreparationGate){$expectedKind='activation_preparation_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
@@ -201,6 +227,7 @@ try {
   $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
   if($lease){$lease.Dispose()}
   $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$oldShutdownInput
+  $env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT=$oldActivationInput
   $env:WINBRIDGE_PREVIOUS_UPDATER10=$oldPreviousUpdater;$env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_HEALTH_GATE_INPUT=$oldInput;$env:WINBRIDGE_HEALTH_GATE_PROOF=$oldProof;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
   [Console]::OutputEncoding=$oldConsoleEncoding;$OutputEncoding=$oldPipelineEncoding
   Set-Location -LiteralPath $oldLocation
