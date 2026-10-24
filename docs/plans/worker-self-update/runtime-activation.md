@@ -1,19 +1,15 @@
 # Activation после проверенного replacement
 
-2026-10-24. **Execution driver ещё не реализован; read binding21 gate failed.**
-Текущий source updater18/worker16/supervisor21/view13. Preparation20/actual17→18
-[прошли87/0](windows-activation-preparation-gate-2026-10-24.md), one-file read
-adapter прошёл4/0. Whole-set factory/actor21 добавлены, однако
-[новый Main gate](windows-activation-files-gate-2026-10-24.md) terminal failed/exit1:
-94 preliminary passed/1 Main failed, во время read-pin handoff истёк preparation
-deadline120000ms. Positive Bound/cold proof отсутствует; миграция отдельно принята.
-Сначала timings/исправление этого перехода и positive95-test gate в новом
-namespace, затем launcher/private receiver/state handoff. Execution capability
-и public install off. Все начатые проверки завершены, installed runtime unchanged.
-[Актуальный checkpoint и проверки](resume-2026-10-24-activation-files.md),
-[общий U0–U4 план](README.md),
-[original custody](runtime-replacement-custody.md),
-[resident replacement actor](runtime-replacement-actor.md).
+2026-10-24. **Whole-set library/actor21 прошли native97/0; execution ещё нет.**
+Current source updater18/worker16/supervisor21/view13. [Actual Main/read binding](windows-activation-files-gate-2026-10-24.md)
+прошёл30 ready files twice/72+19+12 mutations, actual17→18/refusal. Binding43.346s,
+осталось66.407s исходного120s window. Original lock/5 strict pins и cold no-custody
+проверены; source/custody/marker/deadline review без новых важных ошибок.
+[Подробная инструкция новой сессии](resume-2026-10-24-activation-files.md)
+содержит следующий порядок и карту кода. Следом suspended launcher/
+private receiver до Store writer, затем state/local/controller/lifetime и U2/U3/U4.
+Public install/activation capability off; installed runtime unchanged. Исторические
+pending/failed записи ниже относятся к прежним commits, не текущим заданиям.
 
 ## Результат, который нужно получить
 

@@ -7,39 +7,20 @@
 
 ## Текущий статус 2026-10-24
 
-Четвёртый run941a2e6 **выполняется**:20261024-205117-2da937b6,
-task60d8285c-3fbe-45dd-8feb-ef63fe75486b. [Pins/readonly recovery](windows-activation-files-gate-2026-10-24.md).
-Expected97 tests/20 groups/22 commands; positive proof пока нет. Наблюдать ту же
-task и проверить реальные timings до перехода к execution.
+**Начать с [подробной инструкции новой сессии](resume-2026-10-24-activation-files.md).**
+[Whole-set read-binding gate пройден: 97/0](windows-activation-files-gate-2026-10-24.md),
+run `20261024-205117-2da937b6`, producer941a2e6.30 files проверены дважды,
+72 Main +19 files +12 migration мутаций отвергнуты, actual17→18/refusal пройден.
+Original five-file read set и state lock удержаны; cold metadata не создаёт
+custody. Deadline120s сохранён, binding43.346s. Три прежних failed attempts
+и измеренное исправление marker search сохранены в linked gate report.
 
-Третий run17c980c failed:94 preliminary/1 Main failed;140 timing entries показали
-custody83.742s и graph14.297s. [Measured fix/следующий97-test gate](windows-activation-files-gate-2026-10-24.md):
-exact marker search ускорен с полным SHA/identity и после-I/O deadline check.
-Local correctness2/0 и≈8.5x speedup для16MiB; workspace717/0 (16 ignored),
-обе validation Clippy и MSVC production passed. Windows proof
-ещё нет. Public install/activation off, launcher/state handoff впереди.
-
-Повтор612df2e тоже failed по deadline:94 preliminary passed/1 Main failed,
-run20261024-162445-229e2220. Internal trace отсутствует из-за обычного updater.
-[Диагностика и routing fix](windows-activation-files-gate-2026-10-24.md): frozen
-validation copy и actual trace assertion, затем новый run/измерения. Ниже история.
-
-Начать с [подробного checkpoint следующей сессии](resume-2026-10-24-activation-files.md).
-Текущий source: updater18/worker16/supervisor21/view13. Preparation20 и whole-set
-read-binding library/actor21 реализованы, execution/capability нет.
-[Последний native run](windows-activation-files-gate-2026-10-24.md) terminal
-**failed/exit1**:94 preliminary tests passed,1 Main failed из-за истечения120000ms
-preparation deadline в read-pin handoff.27 ready files twice; actual17→18/refusal
-отдельно проверен с12 mutations. Positive whole-set Bound/cold proof отсутствует.
-
-Первое следующее задание — timings/bottleneck Prepared→Bind/graph/custody/files,
-исправление без продления старого окна, новый clean producer и positive95-test
-native gate. Только затем [activation execution](runtime-activation.md): launcher/
-receiver/state handoff, local/controller/lifetime и оставшиеся U2/U3/U4.
-[Preparation87/0](windows-activation-preparation-gate-2026-10-24.md) и one-file4/0
-успешны, но не заменяют gate21. Workspace716/0 (16 ignored), Linux/MSVC Clippy,
-protocol55/TS/UI/Python passed. Public install off, installed d052 unchanged,
-active0. Все начатые проверки завершены. Нижние NEXT/ACTIVE — история.
+Следом [execution](runtime-activation.md): suspended launcher/private receiver
+до ReadyForState без writer, state handoff/local/controller/lifetime, remaining
+U2 faults/management и U3/U4. Source updater18/worker16/supervisor21/view13.
+Installed worker unchanged/healthy/active0. Все проверки завершены; desktop
+можно закрыть, installed worker оставить работать. Public install/activation
+выключены, вся цель не готова. Нижние checkpoints — история.
 
 ### История предыдущих checkpoints
 
@@ -301,6 +282,9 @@ U2–U4 и ещё не включены. Final consistent backup делаетс�
   [positive Main](windows-runtime-replacement-main-gate-2026-10-23.md) и
   [четыре actual faults](windows-runtime-replacement-faults-gate-2026-10-23.md).
   Это замена файлов; activation и полная fault matrix остаются отдельными пунктами.
+- [x] [Original-custody activation preparation/read binding](windows-activation-files-gate-2026-10-24.md):
+  actual Main97/0, five read pins и old state lock, duplicate/cold, actual17→18.
+  Это подготовка файлов; запуск нового worker и передача state ещё впереди.
 - [ ] New worker verification mode и controller-pinned confirmation.
 - [ ] Installation-level management contract/CLI/MCP/status с opt-in local policy;
   произвольные archive/runtime paths запрещены; legacy readonly transport прежний.

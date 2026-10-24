@@ -2,50 +2,26 @@
 
 ## Текущий checkpoint updater — 2026-10-24
 
-**ACTIVE run941a2e6:**20261024-205117-2da937b6,
-task60d8285c-3fbe-45dd-8feb-ef63fe75486b. [Pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Expected97 tests/20 groups/22 commands. Результат ещё неизвестен; наблюдать ту
-же task, затем полный proof/timing audit. Старые failed attempts не replay.
+**Native actor21/read-binding gate пройден: 97 passed / 0 failed.**
+Run `20261024-205117-2da937b6`, task `60d8285c-3fbe-45dd-8feb-ef63fe75486b`,
+producer941a2e6.30 ready files проверены дважды; отвергнуты72 Main +19 files +12
+migration мутаций. Actual17→18/refusal пройден. Original five-file read set и
+state lock удержаны; cold metadata не восстанавливает custody. Binding43.346s,
+осталось66.407s исходного120s window. [Доказательства и история трёх failed attempts](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
 
-Третий Main21 (`17c980c`) тоже failed по deadline:94 preliminary/1 Main failed,
-run20261024-200207-c87a1025. Получены140 timing entries: custody83.742s,
-graph14.297s в binding105.960s. [Measured fix/pins](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md):
-exact marker search через memchr, полный SHA/identity/fencing сохранён; after-I/O
-deadline recheck. Local 16 MiB: 912/931 →110/107ms,2 regressions passed. Workspace717/0
-(16 ignored), Linux/MSVC validation и MSVC production Clippy passed; затем
-новый97-test gate. Удалены358 unused Debian test executables, free≈30.3GiB.
-Positive proof нет; source schemas прежние.
+**Продолжать по [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-24-activation-files.md):**
 
-## История предыдущих checkpoint updater
+1. Consuming suspended launcher/private receiver до ReadyForState, без Store writer.
+2. Original state/instance-lock handoff и actual ownership/local verification.
+3. Controller/lifetime confirmation, remaining U2 faults/management, U3 desktop, U4.
 
-Второй Main21 тоже terminal failed/exit1: run20261024-162445-229e2220,
-producer612df2e;94 preliminary passed/1 Main failed по deadline. Внутреннего
-trace нет из-за обычного copied updater вместо validation build. Исправляется
-routing на frozen validation copy с SHA/readback и обязательным actual trace.
-[Pins/результаты](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-После local checks — clean producer/new run; actual performance fix ещё впереди.
-
-Продолжение после21fbc86: удалено дублирующее чтение full replacement graph
-в одном snapshot, сохранены все проверки и добавлен deadline recheck после I/O.
-Тестовые duplicate/history audits выполняются после Bind; native-only timings
-в captured stderr без новых wire fields. Focused31/0/Python5+9, Linux/MSVC validation
-и MSVC production all-target Clippy/fmt/scaffold265 passed. Новый native gate
-ещё впереди. Старый failed run остаётся failed; positive
-whole-set proof и execution ещё впереди.
-
-Начатые проверки завершены; [подробная инструкция продолжения](plans/worker-self-update/resume-2026-10-24-activation-files.md)
-заменяет прежние NEXT/ACTIVE. Source updater18/worker16/supervisor21/view13.
-[Whole-set native gate](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
-terminal **failed/exit1**:94 preliminary tests passed,1 Main failed из-за live
-preparation deadline120000ms при read-pin handoff.27 ready files twice;
-actual17→18/refusal отдельно принят с12 mutations. Full Bound/cold proof нет.
-Local workspace716/0 (16 ignored), обе Clippy/protocol55/TS/UI/Python passed.
-
-**Далее:** профилировать участок Prepared→Bind и custody/graph/file checks,
-исправить bottleneck без обновления старого окна/ослабления guards; новый clean
-producer и новый95-test run. После positive gate/review — launcher/private
-receiver/state handoff, local/controller/lifetime и remaining U2/U3/U4.
-Public install off; installed d052 unchanged/healthy/active0. Активных проверок нет.
+Fixture7f6a029 не содержит receiver: после реализации entry нужна новая clean
+fixture, затем distinct producer. Source updater18/worker16/supervisor21/view13;
+public install/activation выключены. Полное самообновление ещё не готово.
+Все проверки завершены, installed d052 unchanged/healthy/active0; controller
+оставлен работать. Desktop можно закрыть, installed worker оставить.
+Перед следующей сборкой заново проверить Info/disk. Исторические NEXT ниже
+не являются текущими заданиями.
 
 ## История предыдущих checkpoints: не текущие задания
 

@@ -1,102 +1,72 @@
-# Точка продолжения updater: оптимизация измеренной custody-задержки — 2026-10-24
+# Точка продолжения updater — 2026-10-24
 
-**ACTIVE четвёртый Main21:** task `60d8285c-3fbe-45dd-8feb-ef63fe75486b`,
-run `20261024-205117-2da937b6`, producer941a2e6/fixture7f6a029,
-`--activation-files`. Authoritative get_task running. Observer exec90087,
-log `.winbridge/update-preparation/activation-marker-native-main.log`.
-[Exact pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Expected **97 tests/20 groups/22 commands**, marker regressions и internal trace.
-Сначала terminal/proof/timing audit этой task; не resubmit. Positive proof пока
-нет. Только installed worker; desktop не нужен, UI-окон не будет. Три failed
-runs ниже сохраняются как история; исходные120000ms не менялись.
+**Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-24-activation-files.md).**
+Она содержит результаты, точные task/run/source/proof pins, карту кода, окружение,
+правила восстановления наблюдения и последовательность реализации. Этот блок
+и инструкция приоритетнее исторических NEXT/ACTIVE ниже.
 
-**Третий Main21 terminal failed/exit1:** task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
-run20261024-200207-c87a1025, producer17c980c.94 preliminary passed/1 Main failed,
-27 ready files twice/migration audit12; positive proof отсутствует. На этот раз
-actual diagnostic updater подтверждён, получены140 timing entries. В binding
-105.960s:79.081s в16 custody checkpoints +4.661s initial custody,14.297s graph.
-Четыре файла bound; timeout на пятом. [Pins/trace/hashes](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+## Проверки закрыты
 
-**Текущий measured fix:** custody перечитывает pinned binaries через artifact
-marker search. Exact byte search заменён на memchr Finder, полный SHA/path/FileID
-readback сохранён. memchr2.8.3 уже был locked/transitive; добавлена direct edge и
-project dev/test opt-level2. Local16MiB probe:912/931ms →110/107ms, correctness2/0.
-Также deadline повторно проверяется после slow custody/revalidation: trace
-показал прежний checkpoint_done/file_bound уже при remaining0. Window120000ms,
-schemas18/16/supervisor21/view13 и public install off прежние. Workspace717/0
-(16 ignored), Linux/MSVC validation и MSVC production all-target Clippy, Python5+9
-passed; после final docs checks — clean producer/new native
-**97 tests/20 groups/22 commands**, включая2 marker regressions. Launcher до
-positive gate не начинать. Installed d052 healthy/active0, active native runs нет.
-После завершения Cargo удалены358 unused generated ELF test executables из
-`target/debug/deps`;96 current test executables/root binaries/процессы защищены.
-Freed22,672,437,248 bytes, Debian free32,533,565,440 bytes (около30.3GiB).
-Reports/config/journals и Windows directories не менялись. Plan/result
-`activation-marker-cache-prune-*.json` в `.winbridge/update-preparation/`.
+Native actor21/read-binding gate **пройден: 97 passed / 0 failed**, task
+`60d8285c-3fbe-45dd-8feb-ef63fe75486b`, run `20261024-205117-2da937b6`,
+producer941a2e6 / target fixture7f6a029, terminal succeeded/exit0. Независимый
+observer проверил30 ready files дважды и отверг72 Main +19 file-binding +12 migration
+мутаций. Actual17→18/refusal пройден. [Полный Windows отчёт](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
+сохраняет hashes, timings и историю трёх прежних failed attempts.
 
-## История после второго failed run: routing fix уже вошёл в17c980c
+Exact five-file read set и original state/instance lock удержаны тем же original
+supervisor. Duplicate не создаёт attempt; cold read не восстанавливает handles/
+nonce. Prepared0/history1 и root VerifyingLocal/revision15 неизменны, DB/WAL
+сохранены. **Это file/state custody, запуск нового activation worker ещё не реализован.**
 
-**Последний повтор terminal failed/exit1:** task46d57134-48fc-4188-81cd-b94f59074d15 /
-run20261024-162445-229e2220, producer612df2e.94 preliminary passed/1 Main failed
-по deadline,27 ready files twice, migration audit12 passed. Internal timings
-не появились: actual updater был обычным old-set build, feature harness не
-включает его диагностику. Installed d052 healthy/active0, native runs нет.
-[Диагностика, hashes, readonly command](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Три failed attempts выявили дорогой exact marker scan. Сохранены streamed full
+SHA/path/FileID/fencing checks, поиск ускорен через memchr Finder; добавлен
+повторный deadline check после slow custody/revalidation. Actual binding43.346s,
+исходный budget109.753→66.407s remaining. Window120000ms не увеличен.
+Review новых изменений не выявил важных ошибок. Source updater18/worker16,
+supervisor21/view13; activation/controller_confirmation/desktop_update=None,
+public install выключен. Вся цель updater не завершена.
 
-**Текущий routing fix:** отдельная validation updater copy с SHA readback в
-новом run namespace; Main использует её, требует exact path и actual timing
-prefix до Bind. Deadline120000ms и production features прежние. После local
-checks — commit/clean producer, новый95-test run и анализ внутренних timings;
-источник расхода бюджета внутри driver ещё неизвестен. Не начинать launcher.
-MSVC all-target Clippy/update-validation, Python5+9, fmt/scaffold265 passed;
-логи `activation-trace-routing-*` в `.winbridge/update-preparation/`.
+Local workspace717/0 (16 ignored), marker2/0, Python5+9, Linux/MSVC validation и
+MSVC production Clippy, fmt прошли. Legacy preparation87 readonly recheck текущим
+observer тоже принят без нового submit. Закрывающие `git diff --check` и
+`npm run check:scaffold` прошли (265 Markdown files/local links).
+Runtime receipts/logs не входят в Git.
 
-**Возобновление после21fbc86:** review подтвердил повторный full replacement
-read внутри одной activation transaction. Добавлен общий validated `read_graph`,
-повтор убран без ослабления проверок; live deadline проверяется и после I/O.
-Тяжёлые duplicate/history audits harness перенесены после Bind, metadata
-assertions сохранены. Feature-only scalar timing trace показывает preparation,
-graph/custody/per-file затраты без private material. Focused31/0 и Python5+9
-passed; Linux/MSVC validation и MSVC production all-target Clippy passed.
-Fmt/scaffold265 passed; новый native retest ещё впереди. Это не positive
-gate21 и не основание продолжать launcher. Старый failed task не replay.
+## Что делать дальше
 
-**Начать с [подробного checkpoint следующей сессии](plans/worker-self-update/resume-2026-10-24-activation-files.md).**
-Он содержит результаты, карту кода, окружение, точные task/run/source/proof pins,
-диагностику и порядок продолжения. Этот блок заменяет старые NEXT/ACTIVE ниже.
-Пользователь попросил закрыть текущие проверки и сохранить передачу контекста;
-новый execution этап в этой задаче не начинался. Полный updater не завершён.
+1. Изучить lifecycle/journal/process/worker startup и actual supervisor auth;
+   реализовать consuming suspended launcher и private worker receiver **до Store
+   writer**. Сначала durable Creating, затем один CreateProcess/Job, actual
+   PID/birth/session/host receipt до ResumeGranted/resume и ReadyForState по
+   authenticated channel. JSON/history не дают нового permission.
+2. Текущий guard принимает только Prepared/revision0: не ослаблять его. Новая
+   factory потребляет original guard и создаёт отдельного typed process owner;
+   failures сохраняют resources, unknown outcome запрещает повторный launch.
+3. Fixture7f6a029 не содержит receiver. После реализации entry/contract сначала
+   экспортировать новую clean fixture, затем distinct producer и новый isolated
+   native execution gate. Старые terminal tasks не replay.
+4. После этого — original state/instance-lock handoff, local/controller/lifetime
+   confirmation, remaining U2 faults/management и U3/U4. Схемы/compatibility менять
+   явно; текущая worker policy same-schema-only. [Activation plan](plans/worker-self-update/runtime-activation.md).
 
-Текущий source: **updater schema18/worker schema16, supervisor21/view13**.
-Activation model/ledger/preparation20 и consuming whole-set read-binding factory/
-actor21 реализованы. Однако [новый native gate](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
-**не пройден**: task `01d7bf76-6c53-427c-8cd9-81d8f8798962`,
-run `20261024-153856-fe2e4f76`, producer74e8839, terminal **failed/exit1**.
-94 preliminary tests passed,1 Main failed: во время read-pin handoff исчерпан
-live preparation deadline120000ms.27 ready files twice; actual17→18/refusal
-проверен отдельно с12 negative mutations. Полного Bound/cold proof и successful
-verified pin нет. Старый task не resubmit, pending/running записи ниже — история.
+## Состояние окружения при закрытии
 
-**Первое следующее задание:** измерить расход времени между Prepared и Bind,
-в graph/custody/file preflights; исправить измеренный bottleneck без продления
-старого deadline или ослабления fencing. Затем новый clean producer/namespace,
-explicit `--activation-files` и успешный95-test gate. Только после positive proof/
-review — suspended launcher/private receiver/state handoff, local/controller/
-lifetime, remaining U2 faults и U3/U4. [Activation plan](plans/worker-self-update/runtime-activation.md).
+Installed d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e healthy, connected,
+activeTaskCount0, maintenanceError=null, journalRecoveryRequired=null,
+recoveryCoverage.complete=true. Ручной update не нужен. Все native/Cargo/observer
+runs завершены; controller PID3922 оставлен работать. UI-окон не было: desktop
+можно закрыть, **installed worker оставить работать**. После reboot проверить
+процессы/IPC/Info; команды и точные пути находятся в инструкции выше.
 
-Предыдущие successful gates: preparation20/actual17→18 **87/0** и однофайловый
-read handoff **4/0**. Они не доказывают whole-set21. Local workspace716/0
-(16 ignored), protocol-jsonschema55/0, Linux/MSVC all-target Clippy, generated
-contracts/TS/UI/fmt и Python5+9 passed. Итоговые docs/links проверены отдельно.
-Public install выключен, activation/controller_confirmation/desktop_update
-не объявлены готовыми; process creation/state transfer ещё не реализованы.
+Windows free после native97:16,670,916,608 bytes; Debian при закрытии32,530,321,408
+bytes. До следующей heavy build измерить заново (минимум6GiB на обеих сторонах).
+После local Cargo удалены только358 unused generated Debian test executables,
+освобождено22,672,437,248 bytes; current/root binaries и running controller защищены.
+Receipts `activation-marker-cache-prune-*.json` в `.winbridge/update-preparation/`.
+Windows directories/reports/config/journals не удалялись; Windows cleanup не разрешён.
 
-Installed d052 healthy/unchanged, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
-activeTaskCount0, maintenanceError=null/journalRecoveryRequired=null. Все начатые
-native/Cargo/observer runs завершены; controller PID3922 оставлен работать.
-Desktop можно закрыть, installed worker оставить. Ручное обновление не требуется.
-Debian осталось около15.3GiB; cleanup не выполнялся. Config/journals/reports и
-Windows validation directories не удалять. Дальше — исторические checkpoints.
+Далее — история прежних checkpoints, а не текущие задания.
 
 ## История checkpoint daa88da (до native18 harness/gate)
 

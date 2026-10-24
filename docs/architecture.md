@@ -4,33 +4,25 @@
 
 ## Текущее состояние updater — checkpoint 2026-10-24
 
-Третий Main21 (`17c980c`) failed по deadline;140 timing entries показали доминирующий
-custody marker scan. Точный поиск ускоряется через memchr, сохраняя полный SHA/
-FileID/path и свежие graph/fencing checks. Добавлен deadline check после custody.
-Local2/0 marker tests passed; новый native97 proof ещё впереди.
+[Actual Main actor21/read-binding gate пройден: 97/0](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+После manifest-last replacement тот же original supervisor держит весь новый
+набор пятью strict read pins и прежний state/instance lock. Cold metadata не
+восстанавливает custody. Exact marker search ускорен с сохранением full SHA,
+FileID/path/fencing checks; deadline120s сохранён, binding43.346s.
 
-Второй Main21 (`612df2e`) также failed по deadline; внутренний trace не включился
-в actual copied updater. [Текущий routing fix и результаты](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
-отделяют features harness от запускаемого supervisor. Positive proof пока нет.
+Source: **updater18/worker16, supervisor21/view13**. [Activation preparation/read binding](plans/worker-self-update/runtime-activation.md)
+объединяют source binding, typed startup FSM, graph-bound ledger и consuming
+original guard. Nonce/deadline/kernel handles остаются resident non-Serde
+resources; JSON/history не дают права на OS effects. Views1–12 frozen.
 
-В текущем source: **updater18/worker16, supervisor21/view13**.
-[Activation preparation/read binding](plans/worker-self-update/runtime-activation.md)
-объединяют flat source binding, frozen startup FSM, graph-bound ledger и
-consuming original guard. Nonce/deadline/kernel handles остаются resident
-non-Serde resources; JSON/cold read не восстанавливают authority. Views1–12 frozen.
-Private receiver, process creation, state/lifetime handoff и controller
-confirmation ещё не реализованы, public install/activation capability выключены.
-
-[Preparation20/actual17→18 gate87/0](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md)
-и one-file read adapter4/0 пройдены. Однако
-[whole-set21 Main](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
-**failed/exit1**:94 preliminary passed/1 Main failed по live preparation deadline
-при read-pin handoff. Это не positive Bound/cold proof. Actual17→18/refusal
-принят отдельно с12 mutations. Следом измерить и исправить расход бюджета,
-получить positive gate в новом namespace и лишь затем продолжать execution.
-[Актуальный подробный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-files.md)
-содержит pins, диагностику, карту кода и порядок действий. Все проверки завершены;
-installed d052 healthy/unchanged. Production blockers сохранены. Ниже — история.
+Private receiver, process creation, state/local/controller/lifetime handoff
+ещё не реализованы. Public install выключен; activation/controller_confirmation/
+desktop_update не объявлены готовыми. Следом consuming suspended launcher и
+парный private receiver до Store writer. [Подробный актуальный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-files.md)
+содержит pins, карту кода, правила auth/deadline/ownership и порядок продолжения.
+Все начатые проверки завершены, installed d052 healthy/unchanged. Старые
+preparation87/0 и one-file4/0 дополняются новым whole-set97/0 и actual17→18/refusal;
+история трёх failed attempts сохранена в gate report. Далее — история.
 
 Подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
 одноразовое admission, consuming original custody, manifest-last перенос и

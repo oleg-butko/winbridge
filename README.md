@@ -63,17 +63,14 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 ## Проверка и запуск
 
 Актуальная точка разработки апдейтера: [подробная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-24-activation-files.md),
-[handoff](docs/handoff.md) и [последний native report](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Повтор612df2e также failed по deadline; исправляется подключение timing trace
-в actual updater. Текущие результаты и следующий run — в handoff.
-Третий run17c980c failed по deadline; trace выявил дорогой marker search в custody.
-Ускорение точного поиска проверяется с сохранением полного SHA и identity checks;
-следом97-test native gate. Positive read-binding proof пока нет.
-Новый run941a2e6 выполняется:20261024-205117-2da937b6. [Точная команда наблюдения](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Preparation20 и read-binding21 реализованы, но новый whole-set Main gate failed
-по deadline:94 preliminary tests passed/1 Main failed. Сначала исправить этот
-переход и получить positive gate; запуск нового worker, state handoff и полное
-самообновление ещё впереди. Public install off. Checkpoint приоритетнее истории ниже.
+[handoff](docs/handoff.md) и [Windows отчёт](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Native whole-set read-binding gate пройден: **97 passed / 0 failed**; проверены
+пять runtime read pins, original state lock, duplicate/cold observations и
+actual17→18/refusal. Binding43.346s укладывается в исходные120s.
+Следом suspended launcher/private worker receiver и state/controller/lifetime
+handoff; полное самообновление ещё не готово, public install выключен.
+Все проверки завершены, installed runtime не менялся. Актуальный checkpoint
+приоритетнее исторических NEXT ниже.
 
 Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):
 `winbridge-update` проверяет исходники и показывает план замен, отдельный build-only

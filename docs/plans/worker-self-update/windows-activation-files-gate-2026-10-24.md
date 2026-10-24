@@ -1,12 +1,56 @@
-# Actor21 read binding: trace выявил стоимость custody marker search
+# Actor21 whole-set read binding: native97/0 gate пройден
 
-**ACTIVE четвёртый run, результата ещё нет:** task
-`60d8285c-3fbe-45dd-8feb-ef63fe75486b`, run `20261024-205117-2da937b6`,
-producer941a2e6/fixture7f6a029, `--activation-files`. Первое get_task running.
-Expected97 native tests/20 groups/22 commands; затем actual Main/file/migration
-proof audit и timings. Старые failed runs не resubmit.
+**Четвёртый run941a2e6 terminal succeeded/exit0:97 native tests/20 groups/
+22 commands**, task60d8285c-3fbe-45dd-8feb-ef63fe75486b /
+run20261024-205117-2da937b6.30 ready files проверены дважды; independent verifier
+отверг72 Main +19 file-binding +12 migration mutations. Actual17→18/refusal passed.
+Installed runtime не менялся. Три прежние попытки ниже остаются failed.
 
-## Текущий run941a2e6: pins и readonly recovery
+## Что подтверждено
+
+Original supervisor сохранил Prepared0/history1 до ACK consumption, root
+VerifyingLocal15, replacement FilesMoved22 и resident nonce. Consuming Bind
+получил exact five-file PinnedInstalledSet; actual strict reader отказал до
+handoff и прочитал набор после. Worker write/delete denied, original instance
+lock held, DB/WAL bytes сохранены. Duplicate не создал новый attempt, old views
+не получили новое поле. После owned Job exit cold view:NotBound/heldFiles0/
+originalStateHeld=false, Saved Prepared неизменен. Normal serve refused до writer.
+Это real file/state custody proof, **не запуск нового activation worker**.
+
+Scope:update2200886e-0e1f-4fe9-80ae-156f1f04b6b4,
+activation attemptd6c6dc30-8d0a-4fc7-9204-8b4f298a6936,
+replacement6097c48a-3283-46f2-ab15-0b9a4df95675,
+set30092f6c-0200-4126-b90a-ad1bf4ba08c6. Source schemas18/16/21/view13 прежние.
+Public activation/install off, production missing-capability blockers сохранены.
+
+## Timings и hashes
+
+184 internal timing entries. Binding43.346s, original remaining budget
+109.753→66.407s; все5 files bound. Custody checkpoints20.357s на20 calls плюс
+initial0.975s; graph15.856s. Прежний failed run потратил79.081s на16 custody
+checkpoints плюс4.661s initial и не дошёл до пятого файла. Это разные по объёму
+попытки: ускорение не выдаётся за сравнение двух одинаковых успешных runs.
+Deadline остался120000ms; все SHA/path/FileID/live ownership checks сохранены.
+
+- Report SHA256 `a47044213dd3eca85148fe5650470d5e3a9137510300aa33f3979d6470b61ae0`.
+- Main proof SHA256 `85436df722b67d645796f878307062d3ede75cdc485a00d7f635687bf438e8c9`.
+- Migration proof SHA256 `23fd663dd12affa2451869473045463566368ba2cae11b32369058efd78dadf4`.
+- Supervisor trace SHA256 `eedf9e455479e910a487bc628112f462d0689688d3f7a0aa7fbfd53f004ae3b8`.
+- Local verified `activation-preparation-verified.json`, timings
+  `activation-internal-timings.json`, installed/timing audit
+  `activation-files-timing-verified.json` в local run directory ниже.
+- Windows free20,660,686,848→16,670,916,608 bytes; Debian after audit32,534,073,344.
+  Cleanup Windows directories не выполнялся. До следующей сборки обновить measure.
+- Installed d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e healthy/active0,
+  maintenanceError=null/journalRecoveryRequired=null. Active native/Cargo/observer
+  runs нет; exec90087 завершён exit0. UI-окон не было: desktop можно закрыть,
+  installed worker оставить работать. Manual update не требуется.
+
+Review marker Finder/streaming SHA, post-custody deadline, duplicate/cold scope
+не выявил новых важных ошибок. Следом [suspended launcher/private receiver](runtime-activation.md)
+и state/controller/lifetime handoff; полной готовности updater ещё нет.
+
+## Закрытый run941a2e6: pins и readonly recheck
 
 - Producer `941a2e6125e27d753588988639fd7bb6c08bb90e`:
   `winbridge-20261024T205029Z-941a2e6-57b71ec0.zip`, SHA256
@@ -17,7 +61,7 @@ proof audit и timings. Старые failed runs не resubmit.
 - Local `.winbridge/workflow-validation/20261024-205117-2da937b6/activation-preparation-run.json`;
   request/meta сохранены до ACK, task ID сохранён, activationFiles=true.
 - Shared `/mnt/hgfs/shared/WinBridge/workflow-validation/20261024-205117-2da937b6`.
-- Observer exec90087, log `.winbridge/update-preparation/activation-marker-native-main.log`.
+- Observer exec90087 terminal exit0, log `.winbridge/update-preparation/activation-marker-native-main.log`.
 - Debian free перед submit32,532,987,904 bytes; Windows проверяется перед build.
   После завершения прошлых local checks очищены только358 unused Debian test
   executables;96 current/root binaries/process inodes защищены. Cleanup receipts
@@ -35,10 +79,16 @@ python3 scripts/validate-update-activation-preparation-native.py \
 ~~~
 
 Это readonly observe той же task, не replay. Observation timeout не terminal:
-сначала get_task, затем тот же run/flags/pins. До positive Bound/cold proof
-не начинать launcher/state handoff. Нужен только installed worker, UI-окон нет.
-После terminal сообщить, что desktop можно закрыть, какой worker оставить.
+сначала get_task, затем тот же run/flags/pins. Positive Bound/cold proof пройден. Следом launcher/private receiver/state handoff.
+Для будущего native run нужен installed worker, UI-окон не будет; перед ним
+обновить Info/disk и после него явно сообщить, что оставить работать.
 Результаты далее относятся к завершённым трём failed attempts.
+
+## История завершённых попыток: не текущие задания
+
+Ниже сохранены результаты и планы на момент прежних commits. Они заменены
+успешным run941a2e6 выше и [инструкцией новой сессии](resume-2026-10-24-activation-files.md).
+Старые рекомендации о новом marker gate не выполнять повторно.
 
 **Третий run17c980c завершён failed/exit1**, task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
 run20261024-200207-c87a1025.94 preliminary passed/1 Main failed;27 ready files
