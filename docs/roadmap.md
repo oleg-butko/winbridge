@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-24: [activation source model](plans/worker-self-update/runtime-activation.md)
+добавлена отдельно: exact completed replacement digest/owner/generation и
+installed worker/manifest,5 новых model tests +1 projection/обе Clippy passed.
+Это metadata, не launch permit. Schema17/native gate остаются отдельной задачей;
+следом activation intent/FSM/ledger/fresh original-custody admission и driver.
+
 2026-10-24: второй native17 run тоже failed после успешного health10: main
 stack overflow сохраняется при heap boxing. Package244/0 и обе Clippy отдельного
 owner thread8MiB прошли; далее fresh namespace. Migration/refusal в обоих

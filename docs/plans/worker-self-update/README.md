@@ -7,6 +7,10 @@
 
 ## Текущий статус 2026-10-23
 
+Actual17 третья попытка2026-10-24: taska4f17a0d/run20261024-085627-3a106020
+запущена с producer628c0f6/dedicated owner stack8MiB. Наблюдать тот же task;
+точная команда/recovery в [handoff](../../handoff.md). Полного proof ещё нет.
+
 Продолжение2026-10-24: [две native17 попытки](windows-compatible-drain-first-attempt-2026-10-24.md)
 terminal failed из-за supervisor main stack overflow; actual16→17/refusal
 прошёл в обеих. Heap boxing недостаточен; dedicated owner stack8MiB прошёл

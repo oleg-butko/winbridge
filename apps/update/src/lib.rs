@@ -1,6 +1,7 @@
 //! Update preparation and its independent durable journal.
 //! Effects require trusted internal drivers; public runtime installation remains disabled.
 pub mod abort;
+pub mod activation;
 pub mod archive;
 pub mod artifact;
 pub mod build;

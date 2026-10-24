@@ -388,4 +388,4 @@ pub(crate) fn view(
     }
 }
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

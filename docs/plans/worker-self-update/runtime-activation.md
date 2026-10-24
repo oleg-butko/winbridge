@@ -1,6 +1,6 @@
 # Activation после проверенного replacement
 
-2026-10-24. **План следующего driver; код activation ещё не реализован.**
+2026-10-24. **План следующего driver; execution/ledger ещё не реализованы.**
 Текущий source updater17/supervisor19/view11. Сначала закрыть actual production
 drain17 gate, затем реализовать этот блок. [Общий U0–U4 план](README.md),
 [original custody](runtime-replacement-custody.md),
@@ -17,6 +17,28 @@ drain17 gate, затем реализовать этот блок. [Общий U
 
 Не выдавать наличие FSM или нового DTO за реализованный activation contract.
 `UpdaterDriverContracts::implemented_windows()` пока сохраняет activation=None.
+
+## Первый элемент модели реализован отдельно
+
+`apps/update/src/activation.rs` содержит strict `ActivationSource`: плоскую
+привязку к полному FilesMoved record через domain-separated canonical SHA256.
+Она сохраняет installation/set, owner/epoch/launch, ожидаемый parent revision,
+config/shutdown/backup digests и **installed** worker/manifest evidence.
+Candidate или displaced paths не подставляются. Нет копии всей цепочки
+preparation/history, live observation, permits, файловых или процессных эффектов.
+
+`validate` сравнивает сохранённые данные с exact retained replacement. Это
+проверка исторической связи; она не доказывает текущий VerifyingLocal root,
+владение original guard или готовность capabilities. Всё это обязан проверить
+будущий admission в собственной транзакции и physical bridge.
+
+Пять новых model regressions прошли вместе с одним прежним projection test:
+неполный/unknown prefix, изменённые owner/generation/hash/image, digest всего
+наборa включая retained fixture, exhausted revision и неизвестные authority
+fields. Linux/MSVC all-target Clippy update/worker passed; логи
+`.winbridge/update-preparation/activation-source-*.log`.
+Эта модель добавлена **после** export628c0f6 и не входит в текущий native17 run.
+Новый actual activation/ledger proof отсутствует; updater schema остаётся17.
 
 ## Ограничения фактического кода
 

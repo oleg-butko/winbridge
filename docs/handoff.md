@@ -1,4 +1,24 @@
-# Текущая точка: две actual17 попытки failed; проверяется dedicated owner stack — 2026-10-24
+# Текущая точка: третий actual17 gate запущен — 2026-10-24
+
+**Наблюдать, не resubmit:** task `a4f17a0d-4eea-4af2-8f2c-78bc6235c0af`,
+run `20261024-085627-3a106020`, producer `628c0f6` с dedicated owner stack8MiB,
+fixture `efccfbe`. Observer exec82854; проверить live handle/get_task.
+Лог `.winbridge/update-preparation/compatible-drain-native-owner.log`, metadata
+`.winbridge/workflow-validation/20261024-085627-3a106020/support-actor-run.json`.
+Source ZIP `winbridge-20261024T085529Z-628c0f6-471d2793.zip`; target прежний
+`winbridge-20261024T003539Z-efccfbe-b7a614ff.zip`; cache20261017-061527-f4639971,
+`--compatible-drain --reference-pin .winbridge/workflow-validation/20261023-233438-99674bc1/support-actor-verified.json`.
+При observation timeout повторять только readonly `--verify-run 20261024-085627-3a106020`
+с теми же source/target/mode/reference. Ожидаются33 tests/38+19 mutations;
+полного Main proof пока нет. Worker only/no UI, installed d052 unchanged.
+
+Параллельно добавлена preparatory `ActivationSource` model, **не в native
+producer628c0f6**: strict flat installed-generation binding, без authority/OS
+effects.5 новых model tests +1 прежний projection, обе Clippy passed.
+Новых schema/actions/capabilities нет; ledger/launch ещё не реализованы.
+Карта и следующий порядок: [activation](plans/worker-self-update/runtime-activation.md).
+
+## Предыдущие две попытки и последнее исправление
 
 **Живых native runs сейчас нет, старые tasks не resubmit.** Второй
 task21f28f01-3733-4fa7-9f31-6233d12c6327/run20261024-083044-f6ed4809

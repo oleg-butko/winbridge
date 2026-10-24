@@ -1,6 +1,6 @@
 use super::*;
 use crate::runtime_preparation::tests::{fixture, stages};
-fn planned() -> RuntimeReplacementRecord {
+pub(crate) fn planned() -> RuntimeReplacementRecord {
     let preparation = stages(&fixture()).pop().unwrap();
     RuntimeReplacementRecord::planned(RuntimeReplacementIntent {
         schema_version: 1,
@@ -86,10 +86,7 @@ fn replacement_projection_separates_saved_progress_from_live_custody() {
 #[test]
 fn completed_projection_remains_historical_without_activation_or_custody() {
     use winbridge_protocol::update::RuntimeReplacementPhase as Phase;
-    let mut r = directory();
-    for i in 0..5 {
-        r = moved(r, i);
-    }
+    let r = completed();
     for held in [true, false] {
         let v = view(Some(&r), false, false, held);
         assert_eq!(v.phase, Phase::FilesMoved);
@@ -108,7 +105,14 @@ fn directory() -> RuntimeReplacementRecord {
         .directory_created("displaced-directory".into())
         .unwrap()
 }
-fn moved(mut r: RuntimeReplacementRecord, i: usize) -> RuntimeReplacementRecord {
+pub(crate) fn completed() -> RuntimeReplacementRecord {
+    let mut record = directory();
+    for index in 0..5 {
+        record = moved(record, index);
+    }
+    record
+}
+pub(crate) fn moved(mut r: RuntimeReplacementRecord, i: usize) -> RuntimeReplacementRecord {
     fn step(
         old: &RuntimeReplacementRecord,
         next: RuntimeReplacementRecord,
