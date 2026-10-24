@@ -121,6 +121,8 @@ Actual17→18 migration/refusal и actual original-custody preparation **не з
 
 1. Экспортировать clean source18 с built UI после commit
    как ограниченную fixture. Не использовать17 ZIP как candidate18.
+   Выполнено для7f6a029: `winbridge-20261024T103055Z-7f6a029-3e94038a.zip`,
+   pin `.winbridge/update-preparation/activation-fixture18-export.json`.
 2. Supervisor20/view12: Capture/Observe activation preparation, один blocking
    slot, durable Prepared до ACK. Перемещать тот же Box original guard в callback
    и возвращать actor вместе с результатом; не клонировать и не реконструировать

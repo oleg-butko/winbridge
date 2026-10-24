@@ -10,6 +10,13 @@ non-Serde объекте, это не create permit. SQL6/model22 прошли; 
 preparation ещё впереди. Не объявлять18 gate
 пройденным; ниже immutable native17 success. Active native runs нет.
 
+Fixture18 уже экспортирована из commit7f6a029 (clean, built UI):
+`winbridge-20261024T103055Z-7f6a029-3e94038a.zip`, SHA256
+`4f17e0e0c5f4be899a3e4456b53240c0a9bd9b02b5a5aad2dee458ba29e7a788`.
+Export pin `.winbridge/update-preparation/activation-fixture18-export.json`.
+Не просить пользователя устанавливать этот ZIP: это ограниченная candidate
+fixture для будущего combined18 gate. Далее actor20/view12, distinct producer18.
+
 [Actual gate33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md):
 taska4f17a0d-4eea-4af2-8f2c-78bc6235c0af/run20261024-085627-3a106020,
 producer628c0f6, terminal succeeded/0.27 ready files twice,38 Main +19 migration
