@@ -332,6 +332,37 @@ activation capability=None, public install off. Positive whole-set branch пок
 не доказан: Native87 относится к producerb12ecc6 (preparation20), Native4 —
 кd4c27a3 (one-file adapter); новый Main21 failed. Проверки source — в handoff.
 
+## Измеренная причина третьего deadline failure и marker optimization
+
+Третий run17c980c/task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 завершился failed,
+но actual frozen diagnostic supervisor дал140 timing entries. Из binding105.960s
+на16 custody checkpoints ушло79.081s, ещё4.661s на initial custody; graph14.297s.
+Были bound4 files, отказал checkpoint пятого. [Evidence/pins](windows-activation-files-gate-2026-10-24.md).
+
+Custody anchors снова инспектируют pinned preimage/candidate binaries. Их
+capability-marker search использовал byte-window iteration на больших debug
+images. Введён memchr Finder один раз на file scan, chunk-boundary tail прежний.
+Каждый вызов продолжает читать/hash весь файл до EOF и сверять size/FileID/path;
+marker не подменяет SHA или source policy. memchr2.8.3 уже был locked/transitive,
+добавлена только direct edge и project dev/test optimization2, как для SHA.
+Local16MiB present/absent marker:912/931ms →110/107ms; новая near-EOF/near-match
+regression и прежняя boundary/suffix-hash regression passed. Это измерение на
+Debian; успешного Windows proof для ускорения ещё нет.
+
+Trace показал прежний checkpoint_done/file_bound при remaining0 после custody.
+Deadline проверяется повторно после медленного custody и final installed-set
+revalidation; окно120000ms остаётся исходным. Никаких новых schema/capabilities.
+Native suite расширен2 marker regressions:97 tests/20 groups/22 commands.
+Whole-set success и cold no-adoption всё ещё обязательны до нового execution.
+
+Workspace717/0 (16 ignored), Linux/MSVC validation и MSVC production all-target
+Clippy, Python5+9 прошли. Logs/receipts `activation-marker-*` в
+`.winbridge/update-preparation/`. После завершения Cargo удалены358 старых
+неиспользуемых test executables из Debian target/debug/deps, освобождено
+22,672,437,248 bytes, free32,533,565,440 bytes.96 текущих test executables,
+root binaries и process inodes защищены; reports/runtime/config/journal/Windows
+validation directories не очищались. Следом clean producer/new namespace gate.
+
 ## Ограничения фактического кода
 
 - `RuntimeReplacementGuard` удерживает original exited process/state/instance

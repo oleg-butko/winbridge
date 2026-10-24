@@ -4,7 +4,12 @@
 
 ## Текущее состояние updater — checkpoint 2026-10-24
 
-Второй Main21612df2e также failed по deadline; внутренний trace не включился
+Третий Main21 (`17c980c`) failed по deadline;140 timing entries показали доминирующий
+custody marker scan. Точный поиск ускоряется через memchr, сохраняя полный SHA/
+FileID/path и свежие graph/fencing checks. Добавлен deadline check после custody.
+Local2/0 marker tests passed; новый native97 proof ещё впереди.
+
+Второй Main21 (`612df2e`) также failed по deadline; внутренний trace не включился
 в actual copied updater. [Текущий routing fix и результаты](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
 отделяют features harness от запускаемого supervisor. Positive proof пока нет.
 

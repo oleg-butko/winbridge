@@ -7,10 +7,12 @@
 
 ## Текущий статус 2026-10-24
 
-Третий run17c980c **выполняется**:20261024-200207-c87a1025, task
-3c3c72c1-d8a5-4e1e-babd-0c720f1a6041. [Pins/readonly recovery](windows-activation-files-gate-2026-10-24.md).
-Сначала результат и actual timing audit той же task, затем measured fix/positive
-gate; не resubmit и не начинать execution по прежним partial checks.
+Третий run17c980c failed:94 preliminary/1 Main failed;140 timing entries показали
+custody83.742s и graph14.297s. [Measured fix/следующий97-test gate](windows-activation-files-gate-2026-10-24.md):
+exact marker search ускорен с полным SHA/identity и после-I/O deadline check.
+Local correctness2/0 и≈8.5x speedup для16MiB; workspace717/0 (16 ignored),
+обе validation Clippy и MSVC production passed. Windows proof
+ещё нет. Public install/activation off, launcher/state handoff впереди.
 
 Повтор612df2e тоже failed по deadline:94 preliminary passed/1 Main failed,
 run20261024-162445-229e2220. Internal trace отсутствует из-за обычного updater.

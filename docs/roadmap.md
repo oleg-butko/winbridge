@@ -2,10 +2,16 @@
 
 ## Текущий checkpoint updater — 2026-10-24
 
-**ACTIVE:** третий Main21, task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
-run20261024-200207-c87a1025, producer17c980c с frozen diagnostic supervisor.
-[Pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Наблюдать ту же task; actual result пока неизвестен. Expected95 tests/19 groups.
+Третий Main21 (`17c980c`) тоже failed по deadline:94 preliminary/1 Main failed,
+run20261024-200207-c87a1025. Получены140 timing entries: custody83.742s,
+graph14.297s в binding105.960s. [Measured fix/pins](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md):
+exact marker search через memchr, полный SHA/identity/fencing сохранён; after-I/O
+deadline recheck. Local 16 MiB: 912/931 →110/107ms,2 regressions passed. Workspace717/0
+(16 ignored), Linux/MSVC validation и MSVC production Clippy passed; затем
+новый97-test gate. Удалены358 unused Debian test executables, free≈30.3GiB.
+Positive proof нет; source schemas прежние.
+
+## История предыдущих checkpoint updater
 
 Второй Main21 тоже terminal failed/exit1: run20261024-162445-229e2220,
 producer612df2e;94 preliminary passed/1 Main failed по deadline. Внутреннего

@@ -132,6 +132,7 @@ pub(crate) fn pin(path: &Path) -> Result<Pinned> {
     let mut buffer = [0u8; 65536];
     let mut tail = vec![];
     let mut supported = false;
+    let marker = memchr::memmem::Finder::new(ARTIFACT_QUERY_MARKER);
     loop {
         let n = file.read(&mut buffer).map_err(error)?;
         if n == 0 {
@@ -146,9 +147,7 @@ pub(crate) fn pin(path: &Path) -> Result<Pinned> {
         // does not need another sliding-window scan of a large debug image.
         if !supported {
             tail.extend_from_slice(&buffer[..n]);
-            supported = tail
-                .windows(ARTIFACT_QUERY_MARKER.len())
-                .any(|w| w == ARTIFACT_QUERY_MARKER);
+            supported = marker.find(&tail).is_some();
             let retain = ARTIFACT_QUERY_MARKER.len() - 1;
             if tail.len() > retain {
                 tail.drain(..tail.len() - retain);
@@ -571,6 +570,37 @@ mod tests {
         }
         std::fs::write(&path, vec![0x5a; 128 * 1024]).unwrap();
         assert!(!inspect_image(&path).unwrap().query_supported);
+    }
+    #[test]
+    fn marker_detection_large_image_keeps_exact_hash() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("large-image");
+        let mut bytes = vec![0x5a; 16 * 1024 * 1024];
+        let offset = bytes.len() - ARTIFACT_QUERY_MARKER.len() - 17;
+        bytes[offset..offset + ARTIFACT_QUERY_MARKER.len()].copy_from_slice(ARTIFACT_QUERY_MARKER);
+        std::fs::write(&path, &bytes).unwrap();
+        let started = Instant::now();
+        let marked = inspect_image(&path).unwrap();
+        eprintln!(
+            "Large artifact marker search: present {}ms",
+            started.elapsed().as_millis()
+        );
+        assert!(marked.query_supported);
+        assert_eq!(marked.bytes, bytes.len() as u64);
+        assert_eq!(marked.sha256, crate::sha256(&bytes));
+        // A near match at EOF must not authorize an executable query. Hashing
+        // continues over the entire suffix for both supported and absent cases.
+        bytes[offset + ARTIFACT_QUERY_MARKER.len() - 1] ^= 1;
+        std::fs::write(&path, &bytes).unwrap();
+        let started = Instant::now();
+        let absent = inspect_image(&path).unwrap();
+        eprintln!(
+            "Large artifact marker search: absent {}ms",
+            started.elapsed().as_millis()
+        );
+        assert!(!absent.query_supported);
+        assert_ne!(absent.sha256, marked.sha256);
+        assert_eq!(absent.sha256, crate::sha256(&bytes));
     }
 }
 

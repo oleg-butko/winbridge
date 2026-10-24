@@ -1045,6 +1045,7 @@ version = "0.1.0"
 dependencies = [
  "flate2",
  "fs2",
+ "memchr",
  "rusqlite",
  "serde",
  "serde_json",

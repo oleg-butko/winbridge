@@ -185,6 +185,7 @@ try {
   if($ActivationFilesGate){
     $commands=@(
       @{name='activation-files-primitives';arguments=@('test','-p','winbridge-platform','--lib','runtime_files::read_handoff::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-marker-search';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','marker_detection_','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='activation-files-contract';arguments=@('test','-p','winbridge-protocol','--test','update_activation_files','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='activation-files-mailbox';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','activation_files_v21','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands

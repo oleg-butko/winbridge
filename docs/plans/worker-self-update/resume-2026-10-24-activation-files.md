@@ -1,5 +1,10 @@
 # Продолжение updater: original custody и read binding — 2026-10-24
 
+**Это checkpoint21fbc86 до получения internal trace. Актуальные измерения,
+изменения и первый следующий шаг — в [handoff](../../handoff.md) и
+[native report](windows-activation-files-gate-2026-10-24.md). Старые NEXT ниже
+не выполнять повторно: instrumentation уже подключена, measured fix выполняется.**
+
 Это инструкция для следующей сессии без контекста чата. Она заменяет NEXT/ACTIVE
 из прежних checkpoint и `resume-2026-10-24-activation-preparation.md`.
 Пользователь поручил закончить начатые проверки, подробно сохранить результаты

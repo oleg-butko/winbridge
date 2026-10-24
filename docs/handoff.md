@@ -1,13 +1,30 @@
-# Точка продолжения updater: подключение native timing trace — 2026-10-24
+# Точка продолжения updater: оптимизация измеренной custody-задержки — 2026-10-24
 
-**ACTIVE третий Main21:** task `3c3c72c1-d8a5-4e1e-babd-0c720f1a6041`,
-run `20261024-200207-c87a1025`, producer17c980c/fixture7f6a029,
-`--activation-files`. Authoritative get_task: running. Observer exec3891,
-log `.winbridge/update-preparation/activation-trace-routing-native-main.log`.
-[Exact pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Ожидаются95 tests/19 groups/21 commands и обязательный internal timing trace.
-Сначала terminal/proof/timing audit той же task; не resubmit. Positive Bound
-пока не доказан. Installed worker only, desktop не нужен; публичный update off.
+**Третий Main21 terminal failed/exit1:** task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
+run20261024-200207-c87a1025, producer17c980c.94 preliminary passed/1 Main failed,
+27 ready files twice/migration audit12; positive proof отсутствует. На этот раз
+actual diagnostic updater подтверждён, получены140 timing entries. В binding
+105.960s:79.081s в16 custody checkpoints +4.661s initial custody,14.297s graph.
+Четыре файла bound; timeout на пятом. [Pins/trace/hashes](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+
+**Текущий measured fix:** custody перечитывает pinned binaries через artifact
+marker search. Exact byte search заменён на memchr Finder, полный SHA/path/FileID
+readback сохранён. memchr2.8.3 уже был locked/transitive; добавлена direct edge и
+project dev/test opt-level2. Local16MiB probe:912/931ms →110/107ms, correctness2/0.
+Также deadline повторно проверяется после slow custody/revalidation: trace
+показал прежний checkpoint_done/file_bound уже при remaining0. Window120000ms,
+schemas18/16/supervisor21/view13 и public install off прежние. Workspace717/0
+(16 ignored), Linux/MSVC validation и MSVC production all-target Clippy, Python5+9
+passed; после final docs checks — clean producer/new native
+**97 tests/20 groups/22 commands**, включая2 marker regressions. Launcher до
+positive gate не начинать. Installed d052 healthy/active0, active native runs нет.
+После завершения Cargo удалены358 unused generated ELF test executables из
+`target/debug/deps`;96 current test executables/root binaries/процессы защищены.
+Freed22,672,437,248 bytes, Debian free32,533,565,440 bytes (около30.3GiB).
+Reports/config/journals и Windows directories не менялись. Plan/result
+`activation-marker-cache-prune-*.json` в `.winbridge/update-preparation/`.
+
+## История после второго failed run: routing fix уже вошёл в17c980c
 
 **Последний повтор terminal failed/exit1:** task46d57134-48fc-4188-81cd-b94f59074d15 /
 run20261024-162445-229e2220, producer612df2e.94 preliminary passed/1 Main failed

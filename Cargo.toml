@@ -29,3 +29,11 @@ opt-level = 2
 
 [profile.test.package.sha2]
 opt-level = 2
+
+# Artifact pins search arbitrary binary bytes for a capability marker before
+# querying an executable. Keep that exact search fast in local dev/test builds.
+[profile.dev.package.memchr]
+opt-level = 2
+
+[profile.test.package.memchr]
+opt-level = 2

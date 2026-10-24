@@ -1,12 +1,53 @@
-# Actor21 read binding: третий run с diagnostic supervisor выполняется
+# Actor21 read binding: trace выявил стоимость custody marker search
 
-**ACTIVE 2026-10-24:** task `3c3c72c1-d8a5-4e1e-babd-0c720f1a6041`,
-run `20261024-200207-c87a1025`, producer17c980c. Первое get_task running.
-Positive proof пока нет; expected95 tests/19 groups/21 commands. Этот run
-использует frozen validation updater copy и требует actual timing prefix до
-Bind. Старые два failed runs ниже не resubmit и не считать successful evidence.
+**Третий run17c980c завершён failed/exit1**, task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
+run20261024-200207-c87a1025.94 preliminary passed/1 Main failed;27 ready files
+проверены дважды, actual17→18/refusal audit отверг12 mutations. Main1088.04s,
+вся task1609.093s; это не общий task timeout. Positive Bound/cold proof нет.
 
-## Текущий run17c980c: pins и наблюдение
+## Что измерено и что исправляется
+
+Actual validation supervisor SHA256
+`3f63903a689990b8a2d8e8d7e546f77eb7d203dec26c7023310cfa4eb5c562f3`,
+140 internal timing entries. Routing fix работает, prefix assertion пройден.
+Binding начался с105561ms оставшегося исходного окна и закончился ошибкой через
+105960ms: четыре files bound, следующий checkpoint пятого файла отказал.
+16 custody checkpoints заняли79081ms, initial custody4661ms; graph reads14297ms.
+Это измеренная доминирующая работа, а не прежняя гипотеза о graph-only задержке.
+
+`AdmissionPins::revalidate` снова читает pinned config/preimage/candidate files
+через artifact inspection. Их marker scan использовал byte-window iterator.
+Подготовлено ускорение **точного** поиска: memchr Finder с сохранением chunk
+boundary tail и полной SHA256 до EOF. File ID/size/path и все live authority/
+nonce/root/epoch checks прежние. memchr2.8.3 уже присутствовал в lockfile;
+изменена только direct dependency edge, project dev/test profile opt-level2.
+Никакие file/hash checks не заменяются cached success или одним marker.
+
+Добавлен16MiB near-EOF marker/near-match-absence regression с exact digest.
+Local measured inspect:912/931ms →110/107ms;2 marker tests passed. Это Debian
+measurement, не Windows success proof. Новый native suite будет97 tests/20 groups/
+22 commands, включая обе marker regressions. Source fixtures schemas18/16 прежние.
+
+Trace также показал checkpoint_done/file_bound при remaining0 после slow custody.
+Добавлен повторный live-window check **после** custody и после final installed-set
+revalidation. Исходные120000ms не продлеваются. До полного нового positive gate
+не начинать launcher/state handoff. Все три failed runs сохраняются и не replay.
+
+### Evidence третьего failed run
+
+- Report SHA256 `f631914fd0879ee059c8d50921dd6e60b4b9603c75f70d86dd58b701413311d5`.
+- Main log SHA256 `3aee35e1447a746dfef3dd8ce8831820674bf5a2e9a6942fe8a6372f0fba924d`.
+- Supervisor trace SHA256 `4185ae81764fad0e4b12e682062fab20e144b7989ff3ae3b3dce9051f5f6dac0`.
+- Migration SHA256 `d73a2449efc8c7a52ca518fd5b293fa56ea058d5eb488053ccd4da9603221f31`.
+- Local `activation-files-failed-audit.json` и `activation-internal-timings.json`
+  в `.winbridge/workflow-validation/20261024-200207-c87a1025/`, generated/ignored.
+- Windows free26,328,489,984→25,405,960,192 bytes; Debian after audit16,055,660,544.
+  Cleanup не было. Worker d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e
+  healthy/active0, maintenance/recovery errors=null; runtime/config/journal unchanged.
+- UI-окон не было; desktop можно закрыть, installed worker оставить работать.
+  Ручной update не нужен; observer3891 завершён exit1, active native runs нет.
+
+## Завершённый run17c980c: pins и readonly наблюдение
 
 - Producer `17c980c759706661f7508995fc39bf88ba27db1a`:
   `winbridge-20261024T200106Z-17c980c-13ba9f78.zip`, SHA256
@@ -16,12 +57,13 @@ Bind. Старые два failed runs ниже не resubmit и не счита�
 - Local `.winbridge/workflow-validation/20261024-200207-c87a1025/activation-preparation-run.json`;
   request/meta записаны до ACK, task ID сохранён; `activationFiles=true`.
 - Shared `/mnt/hgfs/shared/WinBridge/workflow-validation/20261024-200207-c87a1025`.
-- Observer exec3891, log `.winbridge/update-preparation/activation-trace-routing-native-main.log`.
+- Observer exec3891 terminal exit1, log `.winbridge/update-preparation/activation-trace-routing-native-main.log`.
 - Debian free перед submit16,468,455,424 bytes; Windows measurement в report.
   MSVC all-target Clippy/update-validation, Python5+9, fmt/scaffold265 passed;
   logs `activation-trace-routing-*`. Production features/120000ms не менялись.
 
-Readonly observe **этой же task**, без нового submit:
+Readonly observe **этой же failed task**, без нового submit; ожидаемая ошибка
+`Native preparation failed`, не replay:
 
 ~~~bash
 python3 scripts/validate-update-activation-preparation-native.py \
@@ -32,12 +74,13 @@ python3 scripts/validate-update-activation-preparation-native.py \
   --activation-files --verify-run 20261024-200207-c87a1025
 ~~~
 
-После terminal: actual task/report/ready proof audit, mutation checks и анализ
-`None-supervisor-stderr.log` с `WinBridge activation timing` JSON entries.
+Completed readonly audit: task/report/27 ready files twice и migration12.
+`None-supervisor-stderr.log` содержит140 timing JSON entries. Positive Main/file
+mutation suites не запускались против отсутствующего proof.
 `trace_end` не success receipt. Нужен установленный worker; desktop не нужен,
 UI-окон не будет. После проверки явно сообщить, что оставить работать.
-Ниже — история двух завершённых failed attempts; их «active runs нет» относится
-к моментам тех checkpoint, а не к текущему третьему run.
+Ниже — история первых двух failed attempts. Все три runs уже terminal; старые
+NEXT/ACTIVE сохраняются для диагностики и не являются командами к replay.
 
 ## История двух failed attempts
 

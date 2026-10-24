@@ -165,7 +165,7 @@ exit $LASTEXITCODE
               ('backup-empty-wal-fingerprint', 1), ('backup-crash-observation', 1), ('backup-data-and-ledger', 15),
               ('backup-sqlite-wal-and-pins', 3), ('backup-exact-entry', 2), ('shutdown-main-pipeline', 1)]
     if args.activation_files:
-        groups=[('activation-files-primitives',4),('activation-files-contract',2),('activation-files-mailbox',1)]+groups
+        groups=[('activation-files-primitives',4),('activation-marker-search',2),('activation-files-contract',2),('activation-files-mailbox',1)]+groups
     need([c['name'] for c in result['commands']] == ['health-supervisor-build']+[n for n,_ in groups[:-1]]+['shutdown-old-real-set',groups[-1][0]]
          and all(c['exitCode'] == 0 for c in result['commands']), 'Selected native commands changed')
     counts = {name: sum(int(m[1]) for m in re.finditer(r'test result: ok\. ([0-9]+) passed; 0 failed;',files[name+'.log'].decode('utf-8-sig'))) for name,_ in groups}

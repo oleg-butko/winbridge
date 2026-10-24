@@ -101,6 +101,11 @@ impl BindingWork {
                 timing.mark("checkpoint_custody_before", Some(index), Some(checkpoint));
                 self.require_fixed_custody(&r)
                     .map_err(std::io::Error::other)?;
+                // Custody checks may themselves be slow. An entry check cannot
+                // authorize a later handle transition after the same deadline.
+                self.preparation
+                    .require_live_window()
+                    .map_err(std::io::Error::other)?;
                 timing.mark("checkpoint_done", Some(index), Some(checkpoint));
                 Ok(())
             });
@@ -206,7 +211,8 @@ impl ActivationFilesGuard {
             .as_ref()
             .ok_or("Activation anchors missing")?
             .revalidate()?;
-        self.installed.revalidate()
+        self.installed.revalidate()?;
+        self.preparation.require_live_window()
     }
 }
 impl UpdateJournal {

@@ -66,7 +66,9 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 [handoff](docs/handoff.md) и [последний native report](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
 Повтор612df2e также failed по deadline; исправляется подключение timing trace
 в actual updater. Текущие результаты и следующий run — в handoff.
-Третий run17c980c выполняется:20261024-200207-c87a1025, итог пока неизвестен.
+Третий run17c980c failed по deadline; trace выявил дорогой marker search в custody.
+Ускорение точного поиска проверяется с сохранением полного SHA и identity checks;
+следом97-test native gate. Positive read-binding proof пока нет.
 Preparation20 и read-binding21 реализованы, но новый whole-set Main gate failed
 по deadline:94 preliminary tests passed/1 Main failed. Сначала исправить этот
 переход и получить positive gate; запуск нового worker, state handoff и полное
