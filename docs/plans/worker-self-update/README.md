@@ -7,6 +7,12 @@
 
 ## Текущий статус 2026-10-23
 
+Текущий source2026-10-24: updater18/worker16/supervisor19/view11. Activation
+source/intent/FSM и ledger/graph reader/guarded metadata preparation реализованы;
+workspace709/0 (16 ignored)/обе Clippy passed. Execution/capability пока нет.
+Следом actor20/view12 и combined native18 preparation/migration gate, затем
+physical startup/state handoff по [activation plan](runtime-activation.md).
+
 Актуально2026-10-24: [production drain17 actual Main33/0](windows-compatible-drain-gate-2026-10-24.md)
 прошёл,27 ready files twice/38+19 mutations, taska4f17a0d terminal succeeded/0.
 Активных native runs нет. Следом [activation intent/FSM/ledger/driver](runtime-activation.md).

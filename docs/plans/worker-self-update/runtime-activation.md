@@ -1,8 +1,8 @@
 # Activation после проверенного replacement
 
-2026-10-24. **План следующего driver; execution/ledger ещё не реализованы.**
-Текущий source updater17/supervisor19/view11. Сначала закрыть actual production
-drain17 gate, затем реализовать этот блок. [Общий U0–U4 план](README.md),
+2026-10-24. **Execution driver ещё не реализован; ledger18 локально проверен.**
+Текущий source updater18/supervisor19/view11. Actual production drain17 gate
+закрыт, следующий шаг — actor20 preparation и native18 gate. [Общий U0–U4 план](README.md),
 [original custody](runtime-replacement-custody.md),
 [resident replacement actor](runtime-replacement-actor.md).
 
@@ -38,7 +38,8 @@ preparation/history, live observation, permits, файловых или проц
 fields. Linux/MSVC all-target Clippy update/worker passed; логи
 `.winbridge/update-preparation/activation-source-*.log`.
 Эта модель добавлена **после** export628c0f6 и не входит в текущий native17 run.
-Новый actual activation/ledger proof отсутствует; updater schema остаётся17.
+На момент Source model commit updater schema оставалась17; ledger18 добавлен
+позже и описан ниже. Actual activation proof отсутствует.
 
 ## Intent и FSM запуска: модель реализована
 
@@ -86,6 +87,56 @@ all-target Clippy update/worker passed. Логи `activation-lifecycle-*.log` в
 Следом ledger/schema18 и original-custody admission, затем physical launcher,
 private worker receiver и handoff. Controller/lifetime/global commit остаются
 отдельными следующими блоками; support activation пока=None.
+
+## Activation ledger18: реализация перед подключением actor
+
+`apps/update/src/journal/activation.rs` добавляет intents/current/history с FK
+к runtime replacement, immutable identity/terminal triggers, causal CAS и
+readback. Нет production API, принимающего готовый record/receipt для записи;
+raw append доступен только synthetic SQL tests до реализации guarded driver.
+
+Reader в одной SQLite transaction проверяет полный retained replacement,
+историю activation и настоящий FilesVerified edge: owner/epoch, Replacing →
+VerifyingLocal, соседние revisions, request и timestamp. Context заново строится
+из shutdown, verified backup, health/config/rehearsal и supervisor. Их digests
+совпадают с preparation proofs. Старые данные проверяются по frozen schemas,
+а не переоцениваются как свежий допуск для текущей версии.
+
+Windows-only `prepare_activation` требует original resident guard, текущий
+Active supervisor/owner/epoch, actual self PID и точный VerifyingLocal root.
+Guard/files/anchors проверяются до и после записи. Сохраняется только Prepared,
+root не меняется, process/job/state не создаются. Дубли возвращают Existing
+без нового transient nonce. Fresh `ActivationPreparation` не Clone/Serde;
+nonce доступен trusted caller только в памяти, в journal находится его SHA256.
+Это подготовка аутентификации, **не create/resume/state-transfer permit**.
+
+Schema17→18 использует существующий consistent migration backup/epoch fencing.
+Synthetic downgrade fixtures сначала удаляют три новых dependent tables.
+SQL6/model22 прошли: ignored admission/history writes, rollback, stale CAS,
+immutable history, cold no-repeat и synthetic17→18. Workspace709/0 (16 ignored),
+final Linux/MSVC all-target Clippy update/worker passed. Логи `activation-ledger-*.log`.
+Actual17→18 migration/refusal и actual original-custody preparation **не запускались**.
+
+### Следующая вертикаль
+
+1. Экспортировать clean source18 с built UI после commit
+   как ограниченную fixture. Не использовать17 ZIP как candidate18.
+2. Supervisor20/view12: Capture/Observe activation preparation, один blocking
+   slot, durable Prepared до ACK. Перемещать тот же Box original guard в callback
+   и возвращать actor вместе с результатом; не клонировать и не реконструировать
+   custody. Fresh nonce держать в resident object, не отправлять в DTO/report.
+3. Дополнить actual replacement Main fixture отдельным preparation-only mode:
+   explicit internal legacy route до FilesMoved → capture20 → duplicate → cold
+   read. Проверить root/files/state неизменны после capture, launch0. Ordinary
+   startup остаётся blocked. Не включать public install или advertised activation.
+4. В тот же native gate включить actual17→18/refusal на новой consistent копии
+   retained successful17 history из run20261024-085627-3a106020 (verified pin в
+   workflow-validation того же run). Original DB/WAL/images не менять. Observer
+   должен сохранить отдельный explicit18 mode, сохранив readonly17 recheck.
+5. После native review — consuming file/state handoff, launcher и private worker
+   receiver, guarded callbacks и actual startup. Ни Prepared, ни cold view не
+   создают права продолжать после потери original owner. Все последующие пункты
+   общего плана ниже остаются незавершёнными.
 
 ## Ограничения фактического кода
 

@@ -590,4 +590,4 @@ impl ActivationRecord {
 
 #[cfg(test)]
 #[path = "lifecycle_tests.rs"]
-mod tests;
+pub(super) mod tests;

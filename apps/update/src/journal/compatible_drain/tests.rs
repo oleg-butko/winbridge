@@ -100,13 +100,13 @@ fn schema_sixteen_migration_backs_up_and_fences_without_creating_decisions() {
     };
     let saved = old.accept(&owner, &request, &request.expected).unwrap();
     old.connection
-        .execute_batch("DROP TABLE compatible_drain_records;PRAGMA user_version=16;")
+        .execute_batch("DROP TABLE activation_history; DROP TABLE activation_records; DROP TABLE activation_intents; DROP TABLE compatible_drain_records;PRAGMA user_version=16;")
         .unwrap();
     let before = old.info().unwrap();
     fs2::FileExt::unlock(&owner.lock).unwrap();
     let mut new = UpdateJournal::open(temp.path(), &scope).unwrap();
     let after = new.info().unwrap();
-    assert_eq!(after.schema_version, 17);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.last_sequence, before.last_sequence);

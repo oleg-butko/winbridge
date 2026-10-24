@@ -12,6 +12,29 @@ type Result<T> = std::result::Result<T, String>;
 mod lifecycle;
 pub use lifecycle::*;
 
+/// Fresh metadata preparation retains authentication material only in memory.
+/// It grants no launch or instance-lock transfer; there is no JSON constructor.
+pub struct ActivationPreparation {
+    pub(crate) record: ActivationRecord,
+    pub(crate) channel_nonce: String,
+}
+impl ActivationPreparation {
+    pub fn record(&self) -> &ActivationRecord {
+        &self.record
+    }
+    /// For the future trusted private-channel driver only; never publish/log it.
+    pub fn channel_nonce(&self) -> &str {
+        &self.channel_nonce
+    }
+}
+pub enum ActivationPreparationAdmission {
+    Prepared(Box<ActivationPreparation>),
+    Existing(Box<ActivationRecord>),
+}
+
+#[cfg(test)]
+pub(crate) use lifecycle::tests::{fixture as activation_fixture, stages as activation_stages};
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActivationSource {

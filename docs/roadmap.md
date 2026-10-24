@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-24: [activation ledger18](plans/worker-self-update/runtime-activation.md)
+добавлен: graph-bound reader, immutable history/CAS/readback и guarded metadata
+preparation с transient nonce (не create permit). SQL6/model22, workspace709/0
+(16 ignored), обе final Clippy passed. Actor20/view12, actual17→18/refusal,
+actual owned preparation и execution driver ещё впереди; activation support=None.
+
 2026-10-24: [activation intent/startup FSM](plans/worker-self-update/runtime-activation.md)
 реализованы как data model:10 новых regressions, workspace703/0 (16 ignored),
 обе Clippy passed. No-process отделён от unknown, late observations сохраняются

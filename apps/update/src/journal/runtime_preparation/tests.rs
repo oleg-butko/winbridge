@@ -173,7 +173,7 @@ fn schema_thirteen_migration_has_consistent_backup_and_preserves_old_rows() {
     drop(j);
     {
         let c = Connection::open(dir.join("updates.sqlite")).unwrap();
-        c.execute_batch("DROP TABLE compatible_drain_records; DROP TABLE candidate_support_history; DROP TABLE candidate_support_records; DROP TABLE candidate_support_intents; DROP TABLE runtime_replacement_history; DROP TABLE runtime_replacement_records; DROP TABLE runtime_replacement_intents; DROP TABLE runtime_preparation_history;DROP TABLE runtime_preparation_records;DROP TABLE runtime_preparation_intents;PRAGMA user_version=13;").unwrap();
+        c.execute_batch("DROP TABLE activation_history; DROP TABLE activation_records; DROP TABLE activation_intents; DROP TABLE compatible_drain_records; DROP TABLE candidate_support_history; DROP TABLE candidate_support_records; DROP TABLE candidate_support_intents; DROP TABLE runtime_replacement_history; DROP TABLE runtime_replacement_records; DROP TABLE runtime_replacement_intents; DROP TABLE runtime_preparation_history;DROP TABLE runtime_preparation_records;DROP TABLE runtime_preparation_intents;PRAGMA user_version=13;").unwrap();
     }
     let mut j = UpdateJournal::open(&dir, &scope).unwrap();
     let after = j.info().unwrap();

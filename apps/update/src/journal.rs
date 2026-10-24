@@ -21,6 +21,7 @@ use winbridge_protocol::update::{
 };
 
 mod abort;
+mod activation;
 mod build;
 mod build_report;
 mod candidate;
@@ -38,7 +39,7 @@ mod shutdown;
 mod source;
 mod state_backup;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 17;
+pub const UPDATE_SCHEMA_VERSION: u32 = 18;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -503,6 +504,7 @@ impl UpdateJournal {
             runtime_replacement::migrate(&tx)?;
             candidate_support::migrate(&tx)?;
             compatible_drain::migrate(&tx)?;
+            activation::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -570,6 +572,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 16 {
                 compatible_drain::migrate(&tx)?;
+            }
+            if schema(&tx)? == 17 {
+                activation::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(

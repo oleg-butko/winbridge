@@ -1,4 +1,14 @@
-# Текущая точка: production drain17 Main/migration gate пройден — 2026-10-24
+# Текущая точка: activation ledger18 готов к actor/native интеграции — 2026-10-24
+
+**Продолжение после model299f312:** source updater schema18, добавлен activation
+ledger/current/history, graph reader и Windows-only preparation с original guard.
+Actor/launch не подключены, schemas/actions worker16/supervisor19/view11 прежние.
+Подготовка сохраняет metadata +nonce digest; transient nonce только в свежем
+non-Serde объекте, это не create permit. SQL6/model22 прошли; workspace709/0
+(16 ignored), final Linux/MSVC all-target Clippy passed. Первый compile исправлен
+(mutable journal в test/cfg import). Actual17→18 migration и actual owned
+preparation ещё впереди. Не объявлять18 gate
+пройденным; ниже immutable native17 success. Active native runs нет.
 
 [Actual gate33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md):
 taska4f17a0d-4eea-4af2-8f2c-78bc6235c0af/run20261024-085627-3a106020,
@@ -9,17 +19,18 @@ drain outbox/BeginDrain/shutdown; duplicate и legacy rejection проверен
 Actual16→17/refusal/backup/history также прошли. Exact pins и readonly команда
 в отчёте. Dedicated owner thread8MiB прошёл реальный Main после двух stack failures.
 
-Current source updater17/worker16/supervisor19/view11; public install off.
+Native producer628c0f6: updater17/worker16/supervisor19/view11; current source
+updater18 (см. верх), остальные версии прежние. Public install off.
 Следующий [activation block](plans/worker-self-update/runtime-activation.md):
 ActivationSource model уже в cae9a45,5 новых model tests +1 projection/обе Clippy.
 Она не в immutable native producer628c0f6. Intent/FSM startup data также
 добавлены:10 новых lifecycle tests, workspace703/0 (16 ignored), обе Clippy passed.
 Prepared→Creating→Created→ResumeGranted→Ready→Handoff→StateOwned→LocalVerified,
 отдельные no-process/unknown outcomes. Поздние факты сохраняются, поздние новые
-grants запрещены. Это metadata, не разрешение запуска; context надо связать
-с authoritative shutdown/health/supervisor rows в следующем reader.
-Теперь ledger/schema18/fresh original-custody admission, затем physical
-handoff/driver/local/controller gates. Новых RPC/capabilities/schema пока нет.
+grants запрещены. Это metadata, не разрешение запуска. Reader18 уже связывает
+context с authoritative shutdown/health/supervisor rows. Теперь actor20/view12
+и native18 preparation/migration gates, затем physical handoff/driver/local/
+controller. Новых RPC/capabilities пока нет.
 U3/U4 ещё впереди. Installed d052 healthy/active0/unchanged, ручное обновление
 не требуется; desktop можно закрыть, worker оставить. Старые ACTIVE/NEXT ниже — история.
 

@@ -8,7 +8,7 @@ fn process(pid: u32) -> SupervisorProcess {
         session_id: 1,
     }
 }
-fn fixture() -> (RuntimeReplacementRecord, ActivationRecord) {
+pub(crate) fn fixture() -> (RuntimeReplacementRecord, ActivationRecord) {
     let replacement = crate::runtime_replacement::tests::completed();
     let runtime = std::path::Path::new(&replacement.intent.preparation.plan.runtime_directory);
     let context = ActivationContext {
@@ -60,7 +60,10 @@ fn created(v: &ActivationRecord, at: u64) -> ActivationCreated {
         observed_at_ms: at,
     }
 }
-fn stages(initial: &ActivationRecord, r: &RuntimeReplacementRecord) -> Vec<ActivationRecord> {
+pub(crate) fn stages(
+    initial: &ActivationRecord,
+    r: &RuntimeReplacementRecord,
+) -> Vec<ActivationRecord> {
     let mut values = vec![initial.clone(), initial.issue_create(201, r).unwrap()];
     values.push(
         values
