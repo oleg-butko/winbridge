@@ -75,20 +75,34 @@ impl BindingWork {
         a: &UpdateAuthority,
         s: &SupervisorRecord,
     ) -> Result<PinnedInstalledSet> {
+        let mut timing =
+            crate::activation::ActivationTiming::new("bind_files", Some(self.preparation.deadline));
+        timing.mark("initial_graph_before", None, None);
         let r = j
             .require_activation_prepared(a, s, &self.preparation)
             .map_err(|e| e.to_string())?;
+        timing.mark("original_progress_before", None, None);
         self.original.require_progress(&r)?;
+        timing.mark("fixed_custody_before", None, None);
         self.require_fixed_custody(&r)?;
+        timing.mark("files_before", None, None);
         self.pending = std::mem::take(&mut self.original.prepared).into();
         while let Some(file) = self.pending.pop_front() {
+            let index = self.pins.len();
+            let mut checkpoint = 0;
+            timing.mark("file_before", Some(index), None);
             // The file itself is now exclusively owned by this call. On any
             // failure its opaque error retains the residual kernel resource.
             let result = file.into_read_pin_checked(|| {
+                checkpoint += 1;
+                timing.mark("checkpoint_graph_before", Some(index), Some(checkpoint));
                 j.require_activation_prepared(a, s, &self.preparation)
                     .map_err(std::io::Error::other)?;
+                timing.mark("checkpoint_custody_before", Some(index), Some(checkpoint));
                 self.require_fixed_custody(&r)
-                    .map_err(std::io::Error::other)
+                    .map_err(std::io::Error::other)?;
+                timing.mark("checkpoint_done", Some(index), Some(checkpoint));
+                Ok(())
             });
             match result {
                 Ok(pin) => self.pins.push(pin),
@@ -98,6 +112,7 @@ impl BindingWork {
                     return Err(reason);
                 }
             }
+            timing.mark("file_bound", Some(index), None);
         }
         if self.pins.len() != 5
             || !self.original.prepared.is_empty()
@@ -106,6 +121,7 @@ impl BindingWork {
             return Err("Activation file custody set incomplete".into());
         }
         for (i, file) in r.batch.files.iter().enumerate() {
+            timing.mark("final_file_before", Some(i), None);
             let FileExchangeState::Installed {
                 retained,
                 installed,
@@ -124,6 +140,7 @@ impl BindingWork {
             {
                 return Err("Activation read/retained identity differs".into());
             }
+            timing.mark("final_file_after", Some(i), None);
         }
         exact_names(&r.intent.preparation.plan.directory(), &Default::default())?;
         exact_names(
@@ -135,11 +152,13 @@ impl BindingWork {
                 .collect(),
         )?;
         let source = &self.preparation.record().intent.source;
+        timing.mark("installed_set_before", None, None);
         let set = pin_installed_set(
             Path::new(&source.runtime_directory),
             &source.installation_id,
             &source.scope_sha256,
         )?;
+        timing.mark("installed_set_after", None, None);
         let observed = set.observation();
         let installed: Vec<_> = r
             .batch
@@ -160,6 +179,7 @@ impl BindingWork {
         self.require_fixed_custody(&r)?;
         j.require_activation_prepared(a, s, &self.preparation)
             .map_err(|e| e.to_string())?;
+        timing.mark("bound", None, None);
         Ok(set)
     }
 }

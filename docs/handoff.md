@@ -1,5 +1,15 @@
 # Точка продолжения updater: проверки завершены — 2026-10-24
 
+**Возобновление после21fbc86:** review подтвердил повторный full replacement
+read внутри одной activation transaction. Добавлен общий validated `read_graph`,
+повтор убран без ослабления проверок; live deadline проверяется и после I/O.
+Тяжёлые duplicate/history audits harness перенесены после Bind, metadata
+assertions сохранены. Feature-only scalar timing trace показывает preparation,
+graph/custody/per-file затраты без private material. Focused31/0 и Python5+9
+passed; Linux/MSVC validation и MSVC production all-target Clippy passed.
+Fmt/scaffold265 passed; новый native retest ещё впереди. Это не positive
+gate21 и не основание продолжать launcher. Старый failed task не replay.
+
 **Начать с [подробного checkpoint следующей сессии](plans/worker-self-update/resume-2026-10-24-activation-files.md).**
 Он содержит результаты, карту кода, окружение, точные task/run/source/proof pins,
 диагностику и порядок продолжения. Этот блок заменяет старые NEXT/ACTIVE ниже.

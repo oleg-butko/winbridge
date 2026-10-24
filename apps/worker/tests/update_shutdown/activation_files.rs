@@ -5,6 +5,7 @@ pub(super) fn execute(
     sup: &SupervisorRecord,
     record: &winbridge_update::activation::ActivationRecord,
 ) -> serde_json::Value {
+    let timing = Instant::now();
     let source = &record.intent.source;
     let directory = root.join("runtime/update-state");
     let bytes = journal_bytes(root);
@@ -18,6 +19,10 @@ pub(super) fn execute(
     assert!(
         pin_set().is_err(),
         "Strict reader must conflict with original DELETE handles before binding"
+    );
+    println!(
+        "Activation files timing: pre-binding strict pin refusal at {}ms",
+        timing.elapsed().as_millis()
     );
     let mut q: SupervisorRequest =
         serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
@@ -41,12 +46,20 @@ pub(super) fn execute(
         v
     };
     let before = call(&q);
+    println!(
+        "Activation files timing: before view at {}ms",
+        timing.elapsed().as_millis()
+    );
     assert_eq!(
         before.activation_files.as_ref().unwrap().phase,
         ActivationFilesPhase::NotBound
     );
     q.action = SupervisorAction::BindActivationFiles;
     let admitted = call(&q);
+    println!(
+        "Activation files timing: binding ACK at {}ms",
+        timing.elapsed().as_millis()
+    );
     assert!(admitted.driver_active);
     assert_eq!(
         admitted.activation_files.as_ref().unwrap().phase,
@@ -69,6 +82,10 @@ pub(super) fn execute(
         );
         std::thread::sleep(Duration::from_millis(50));
     };
+    println!(
+        "Activation files timing: bound view at {}ms",
+        timing.elapsed().as_millis()
+    );
     let held = done.activation_files.as_ref().unwrap();
     assert_eq!(held.held_files, 5);
     assert!(held.original_state_held);

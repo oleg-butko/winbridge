@@ -151,6 +151,14 @@ fn context(
     Ok(value)
 }
 pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationRecord>> {
+    Ok(read_graph(c, id)?.map(|(value, _)| value))
+}
+/// Return the very same validated replacement used by the context/ledger read.
+/// Re-reading its entire history in the same transaction adds no fresh evidence.
+fn read_graph(
+    c: &Connection,
+    id: &str,
+) -> Result<Option<(ActivationRecord, RuntimeReplacementRecord)>> {
     if schema(c)? < 18 {
         return Ok(None);
     }
@@ -209,7 +217,7 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationRecord>>
             "Activation source/root edge/context differs from retained graph",
         ));
     }
-    Ok(Some(value))
+    Ok(Some((value, r)))
 }
 #[cfg(any(windows, test))]
 fn seed(c: &Connection, value: &ActivationRecord, r: &RuntimeReplacementRecord) -> Result<()> {
@@ -292,6 +300,7 @@ impl UpdateJournal {
         s: &SupervisorRecord,
         guard: &mut crate::runtime_replacement::RuntimeReplacementGuard,
     ) -> Result<ActivationPreparationAdmission> {
+        let mut timing = crate::activation::ActivationTiming::new("prepare", None);
         self.check_directory(a)?;
         let tx = self
             .connection
@@ -322,7 +331,9 @@ impl UpdateJournal {
                 "Activation needs exact original live owner/guard/VerifyingLocal root",
             ));
         }
+        timing.mark("original_progress_before", None, None);
         guard.require_progress(&r).map_err(changed)?;
+        timing.mark("original_progress_after", None, None);
         let health =
             health::read(&tx, &s.spec.update_id)?.ok_or_else(|| changed("Health missing"))?;
         crate::health::validate_fresh_success(&health).map_err(changed)?;
@@ -331,6 +342,7 @@ impl UpdateJournal {
         let deadline = std::time::Instant::now()
             .checked_add(std::time::Duration::from_millis(context.startup_timeout_ms))
             .ok_or_else(|| changed("Activation monotonic deadline exhausted"))?;
+        timing.observe_deadline(deadline);
         let intent = ActivationIntent {
             schema_version: 1,
             attempt_id: Uuid::new_v4().to_string(),
@@ -341,14 +353,19 @@ impl UpdateJournal {
             context,
         };
         let value = ActivationRecord::prepared(intent, &r).map_err(bad)?;
+        timing.mark("seed_before", None, None);
         seed(&tx, &value, &r)?;
+        timing.mark("readback_before", None, None);
         if read(&tx, &s.spec.update_id)?.as_ref() != Some(&value)
             || record(&tx, &s.spec.update_id)? != root
         {
             return Err(bad("Activation graph/root readback differs"));
         }
+        timing.mark("final_progress_before", None, None);
         guard.require_progress(&r).map_err(changed)?;
+        timing.mark("commit_before", None, None);
         tx.commit().map_err(storage)?;
+        timing.mark("committed", None, None);
         Ok(ActivationPreparationAdmission::Prepared(Box::new(
             ActivationPreparation {
                 record: value,
@@ -366,6 +383,10 @@ impl UpdateJournal {
         s: &SupervisorRecord,
         preparation: &ActivationPreparation,
     ) -> Result<RuntimeReplacementRecord> {
+        let mut timing = crate::activation::ActivationTiming::new(
+            "require_prepared",
+            Some(preparation.deadline),
+        );
         preparation.require_live_window().map_err(changed)?;
         self.check_directory(a)?;
         let tx = self.connection.unchecked_transaction().map_err(storage)?;
@@ -373,8 +394,10 @@ impl UpdateJournal {
         runtime_baseline::current_supervisor(&tx, a, s)?;
         let expected = preparation.record();
         let source = &expected.intent.source;
-        let saved = read(&tx, &s.spec.update_id)?
+        timing.mark("graph_before", None, None);
+        let (saved, replaced) = read_graph(&tx, &s.spec.update_id)?
             .ok_or_else(|| changed("Activation preparation missing"))?;
+        timing.mark("graph_after", None, None);
         let root = record(&tx, &s.spec.update_id)?;
         if saved != *expected
             || expected.revision != 0
@@ -395,10 +418,11 @@ impl UpdateJournal {
         {
             return Err(changed("Activation files require exact Prepared root, resident nonce and original live owner"));
         }
-        let replaced = runtime_replacement::read(&tx, &s.spec.update_id)?
-            .ok_or_else(|| changed("Replacement missing"))?;
         source.validate(&replaced).map_err(changed)?;
         tx.commit().map_err(storage)?;
+        // A slow graph read is not permission to continue after the live window.
+        preparation.require_live_window().map_err(changed)?;
+        timing.mark("validated", None, None);
         Ok(replaced)
     }
 }

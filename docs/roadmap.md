@@ -2,6 +2,14 @@
 
 ## Текущий checkpoint updater — 2026-10-24
 
+Продолжение после21fbc86: удалено дублирующее чтение full replacement graph
+в одном snapshot, сохранены все проверки и добавлен deadline recheck после I/O.
+Тестовые duplicate/history audits выполняются после Bind; native-only timings
+в captured stderr без новых wire fields. Focused31/0/Python5+9, Linux/MSVC validation
+и MSVC production all-target Clippy/fmt/scaffold265 passed. Новый native gate
+ещё впереди. Старый failed run остаётся failed; positive
+whole-set proof и execution ещё впереди.
+
 Начатые проверки завершены; [подробная инструкция продолжения](plans/worker-self-update/resume-2026-10-24-activation-files.md)
 заменяет прежние NEXT/ACTIVE. Source updater18/worker16/supervisor21/view13.
 [Whole-set native gate](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)

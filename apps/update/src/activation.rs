@@ -11,6 +11,10 @@ use winbridge_protocol::ArtifactDescriptor;
 type Result<T> = std::result::Result<T, String>;
 mod lifecycle;
 pub use lifecycle::*;
+#[cfg(windows)]
+mod timing;
+#[cfg(windows)]
+pub(crate) use timing::ActivationTiming;
 
 /// Fresh metadata preparation retains authentication material only in memory.
 /// It grants no launch or instance-lock transfer; there is no JSON constructor.

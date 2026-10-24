@@ -23,6 +23,7 @@ pub(super) fn execute(
     replacement: &serde_json::Value,
     bind_files: bool,
 ) -> serde_json::Value {
+    let timing = Instant::now();
     let directory = root.join("runtime/update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
@@ -75,6 +76,10 @@ pub(super) fn execute(
         .is_none());
 
     request.action = SupervisorAction::PrepareActivation;
+    println!(
+        "Activation preparation timing: request at {}ms",
+        timing.elapsed().as_millis()
+    );
     // Deliberately do not consume the response. Read committed metadata first.
     let mut stream = rt
         .block_on(winbridge_transport::supervisor::connect(
@@ -98,13 +103,13 @@ pub(super) fn execute(
         );
         std::thread::sleep(Duration::from_millis(25));
     };
+    println!(
+        "Activation preparation timing: durable record at {}ms",
+        timing.elapsed().as_millis()
+    );
     drop(stream);
     assert_eq!(record.revision, 0);
     assert_eq!(record.state, ActivationState::Prepared {});
-    let replaced = UpdateJournal::inspect_runtime_replacement(&directory, id)
-        .unwrap()
-        .unwrap();
-    record.validate(&replaced).unwrap();
     request.action = SupervisorAction::ObserveActivationPreparation;
     let observed = loop {
         let v = view(&request);
@@ -115,6 +120,10 @@ pub(super) fn execute(
         assert!(Instant::now() < until);
         std::thread::sleep(Duration::from_millis(25));
     };
+    println!(
+        "Activation preparation timing: resident preparation at {}ms",
+        timing.elapsed().as_millis()
+    );
     assert_eq!(observed.update, initial.update);
     assert_eq!(
         observed.activation_preparation.as_ref().unwrap().phase,
@@ -127,6 +136,18 @@ pub(super) fn execute(
             .unwrap()
             .physical_custody_held
     );
+    // Spend the original live window on binding, not duplicate/history audits.
+    // Those observations remain mandatory after the consuming handoff; neither
+    // binding nor a duplicate may change the durable Prepared record or nonce.
+    let binding = bind_files.then(|| super::activation_files::execute(root, sup, &record));
+    println!(
+        "Activation preparation timing: binding returned at {}ms",
+        timing.elapsed().as_millis()
+    );
+    let replaced = UpdateJournal::inspect_runtime_replacement(&directory, id)
+        .unwrap()
+        .unwrap();
+    record.validate(&replaced).unwrap();
     request.action = SupervisorAction::PrepareActivation;
     let duplicate = view(&request);
     assert_eq!(
@@ -141,7 +162,10 @@ pub(super) fn execute(
         Some(&record)
     );
     assert_eq!(history(&directory, id), vec![record.clone()]);
-    let binding = bind_files.then(|| super::activation_files::execute(root, sup, &record));
+    println!(
+        "Activation preparation timing: duplicate/history audited at {}ms",
+        timing.elapsed().as_millis()
+    );
     let health = UpdateJournal::inspect_health(&directory, id)
         .unwrap()
         .unwrap();

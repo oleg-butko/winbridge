@@ -306,6 +306,26 @@ nonce/FileID проверки. Старый deadline не продлевать; 
 требует явного контракта. После исправления — новый clean producer/namespace и
 positive gate; failed task не replay. Execution до этого не начинать.
 
+Продолжение после checkpoint21fbc86: введён `read_graph`, который возвращает
+activation и **тот же** validated replacement из одного SQLite snapshot.
+`require_activation_prepared` больше не перечитывает эту history второй раз,
+но сохраняет все graph/context/owner/root/nonce/PID проверки и дополнительно
+проверяет исходный monotonic deadline после чтения. Старое окно не обновляется.
+В harness duplicate/inspect/history audits перенесены после consuming Bind;
+durable-before-ACK и обязательные assertions сохранены. Пока это исправление
+избыточной работы, не измеренное доказательство достаточного120s бюджета.
+
+Для native validation добавлены scalar timings preparation/graph/physical
+progress/per-file checkpoints/whole set. Они пишутся в captured stderr только
+при `update-validation`; production implementation — no-op, wire/views не
+меняются, nonce/token/path/config не логируются. `trace_end` — конец измерения
+при успехе **или** ошибке, не success receipt. Harness отдельно печатает elapsed
+для durable record/resident preparation/Bind ACK/Bound и позднего history audit.
+Focused activation31/0, Python5+9, Linux/MSVC validation и MSVC production
+all-target Clippy/fmt/scaffold265 прошли. Логи/receipts `activation-budget-*`
+в `.winbridge/update-preparation/`. Новый native run уточнять по актуальному
+handoff. Positive whole-set proof пока отсутствует.
+
 Подключены только read handles. Private worker receiver, suspended launcher,
 state handoff, controller/lifetime и actual update остаются незавершёнными;
 activation capability=None, public install off. Positive whole-set branch пока
