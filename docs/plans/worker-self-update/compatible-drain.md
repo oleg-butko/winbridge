@@ -10,6 +10,11 @@ protocol, contracts/TS/UI/Python/docs прошли. Windows gate нового ro
 запускался**. [Полная инструкция следующей сессии](resume-2026-10-23-compatible-drain.md)
 содержит exact reference pins, команды и дальнейший план.
 
+Заключительный review observer дополнительно требует exact passive decision
+shape, отдельный UUID операции, согласованные timestamps/reason и duplicate/cold
+view11 без вымышленных authority fields. Main audit расширен с32 до38 negative
+mutations; migration audit остаётся19. Старый16 режим сохраняет28 mutations.
+
 ## Данные и транзакции
 
 compatible_drain_records хранит одну immutable decision на update:

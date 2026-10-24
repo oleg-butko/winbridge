@@ -9,6 +9,10 @@ Combined actual33 Main17 + migration16→17/refusal **не запускался*
 два clean distinct exports17 → native gate/proof audit → activation/U2 faults/U3/U4.
 Public install off, установленный worker не менялся. Нижние checkpoints — история.
 
+Продолжение review17: независимый observer усилен (exact decision/view scope,
+UUID/time/reason и fabricated-authority mutations), Main audit теперь38 +migration19.
+Old16 readonly recheck28/Python3+7 passed; combined33 native gate ещё не запускался.
+
 2026-10-23: [support actor18 Main gate23/0](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md)
 пройден,21 ready files twice/28 mutations. Lost ACK/duplicate/normal IPC/abort
 подтверждены. Следом production support→drain/schema17/actor19 и migration/Main

@@ -254,7 +254,7 @@ worker offline, сначала read-only диагностика, а не пра�
    backup16, все прежние support/history rows неизменны, gateRows0, fresh
    admission из старого context запрещён. Actual old16 init/status должны
    отказать17 без DB/nonempty WAL изменений. Original reference bytes сохраняются.
-   Observer проверяет ready files дважды и должен отвергнуть **32 Main +19
+   Observer проверяет ready files дважды и должен отвергнуть **38 Main +19
    migration mutations**; не подменять proof вручную.
 6. При observation timeout читать **тот же** accepted Task ID/run. Для recheck
    добавить `--verify-run RUN` к той же команде со всеми mode/reference flags.

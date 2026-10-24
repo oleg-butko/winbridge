@@ -20,6 +20,12 @@ distinct clean schema17 exports с built UI; schema16 run ниже исполь�
 Current source updater17/worker16/supervisor19/view11. Public install off,
 полный updater ещё не готов; installed d052 не менялся.
 
+Продолжение review: observer теперь сверяет полную passive decision/view11,
+отдельный UUID, timestamps/reason и все duplicate/cold projections без authority
+fields. Новый Main mutation audit38 (migration19); old16 recheck28 passed,
+Python3+7/scaffold passed. Clean fixture17 экспортирована из efccfbe;
+следом clean producer export и один actual combined gate.
+
 [Actual Main support gate](plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md):
 task adf48103-c02b-40e6-9442-6d089882c48c / run20261023-233438-99674bc1,
 producerdb0105a, **terminal succeeded/0,23 native tests/6 groups/8 commands**.

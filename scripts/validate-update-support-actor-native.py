@@ -41,7 +41,8 @@ def strict_counters(value):
     elif isinstance(value, dict):
         names = {'schemaVersion', 'contractVersion', 'queryContract', 'revision', 'ownerEpoch',
                  'parentRevision', 'expectedUpdaterJournalSchema', 'updaterJournalSchema',
-                 'processId', 'sessionId', 'timeoutMs', 'bytes', 'requestShutdownCount'}
+                 'processId', 'sessionId', 'timeoutMs', 'bytes', 'requestShutdownCount',
+                 'supportRevision', 'beginDrainCount', 'gateRows'}
         for key, item in value.items():
             if key in names or key.endswith('AtMs'):
                 need(item is None or type(item) is int and 0 <= item <= 9007199254740991,
@@ -213,7 +214,12 @@ def verify(proof, source, target, expected_root, expected_schema=16, production=
         record=gate['record']
         digest=hashlib.sha256(b'winbridge.compatible-drain.support.v1\n'+json.dumps(
             proof['record'],sort_keys=True,ensure_ascii=False,separators=(',',':')).encode()).hexdigest()
-        need(record['schemaVersion']==1 and record['updateId']==intent['updateId']
+        need(set(record)=={'schemaVersion','updateId','attemptId','supportAttemptId','supportRevision',
+                          'supportSha256','ownerId','ownerEpoch','parentRevision','decidedAtMs','decision'}
+             and isinstance(record['attemptId'],str)
+             and str(uuid.UUID(record['attemptId']))==record['attemptId']
+             and record['attemptId'] not in (intent['updateId'],intent['attemptId'])
+             and record['schemaVersion']==1 and record['updateId']==intent['updateId']
              and record['ownerId']==intent['ownerId'] and record['ownerEpoch']==intent['ownerEpoch']
              and record['parentRevision']==intent['parentRevision']
              and record['supportAttemptId']==intent['attemptId'] and record['supportRevision']==5
@@ -221,14 +227,16 @@ def verify(proof, source, target, expected_root, expected_schema=16, production=
              and record['decision']==dict(kind='blocked',outcome='checked',assessment=result['assessment']),
              'Production blocker lost support/root/owner binding')
         decision=gate['view']['compatibleDrain']
-        need(gate['view']['schemaVersion']==11 and gate['view']['update']==root
-             and gate['view']['driverActive'] is False and gate['view']['driverError'] is None
-             and decision['phase']=='blocked' and decision['attemptId']==record['attemptId']
-             and decision['supportAttemptId']==intent['attemptId'] and decision['supportRevision']==5
-             and decision['drainAttemptId'] is None and decision['assessment']==result['assessment']
-             and gate['duplicate']['compatibleDrain']==decision and gate['duplicate']['update']==root
+        expected=dict(phase='blocked',attemptId=record['attemptId'],supportAttemptId=intent['attemptId'],
+                      supportRevision=5,drainAttemptId=None,decidedAtMs=record['decidedAtMs'],
+                      assessment=result['assessment'],reason=result['reason'])
+        need(decision==expected
+             and all(v['schemaVersion']==11 and v['update']==root and v['driverActive'] is False
+                     and v['driverError'] is None and v['compatibleDrain']==expected
+                     for v in (gate['view'],gate['duplicate']))
              and gate['legacyFallbackRejected'] is True and type(gate['beginDrainCount']) is int
-             and gate['beginDrainCount']==0 and proof['coldView']['compatibleDrain']==decision,
+             and gate['beginDrainCount']==0 and proof['coldView']['schemaVersion']==11
+             and proof['coldView']['compatibleDrain']==expected,
              'Production entry/fallback emitted drain or changed its durable decision')
 
 
@@ -253,7 +261,12 @@ def audit(proof, source, target, root, expected_schema=16, production=False):
         edits += [('beforeCleanup/compatible/legacyFallbackRejected',False),
                   ('beforeCleanup/compatible/beginDrainCount',1),
                   ('beforeCleanup/compatible/record/supportSha256','0'*64),
-                  ('beforeCleanup/compatible/view/compatibleDrain/phase','draining')]
+                  ('beforeCleanup/compatible/view/compatibleDrain/phase','draining'),
+                  ('beforeCleanup/compatible/record/attemptId',proof['record']['intent']['updateId']),
+                  ('beforeCleanup/compatible/record/decidedAtMs',0),
+                  ('beforeCleanup/compatible/view/compatibleDrain/decidedAtMs',0),
+                  ('beforeCleanup/compatible/duplicate/driverActive',True),
+                  ('coldView/schemaVersion',10)]
     for path, value in edits:
         changed = copy.deepcopy(proof)
         obj = changed
@@ -266,16 +279,23 @@ def audit(proof, source, target, root, expected_schema=16, production=False):
         except (ValueError, KeyError, TypeError, IndexError):
             continue
         raise ValueError('Accepted mutated actor proof: '+path)
-    changed = copy.deepcopy(proof)
-    for value in (changed['beforeCleanup']['after']['candidateSupport'],
-                  changed['beforeCleanup']['duplicate']['candidateSupport'],
-                  changed['coldView']['candidateSupport']):
-        value['canInstall'] = True
-    try:
-        verify(changed, source, target, root, expected_schema, production)
-    except (ValueError, KeyError, TypeError):
-        return len(edits)+1
-    raise ValueError('Accepted fabricated authority in every projected copy')
+    projections=[('beforeCleanup/after/candidateSupport','beforeCleanup/duplicate/candidateSupport',
+                  'coldView/candidateSupport')]
+    if production:
+        projections.append(('beforeCleanup/compatible/view/compatibleDrain',
+                            'beforeCleanup/compatible/duplicate/compatibleDrain','coldView/compatibleDrain'))
+    for paths in projections:
+        changed=copy.deepcopy(proof)
+        for path in paths:
+            value=changed
+            for part in path.split('/'):value=value[part]
+            value['canInstall']=True
+        try:
+            verify(changed,source,target,root,expected_schema,production)
+        except (ValueError,KeyError,TypeError):
+            continue
+        raise ValueError('Accepted fabricated authority in every projected copy: '+paths[0])
+    return len(edits)+len(projections)
 
 
 def reference_from_pin(pin,reports,workspace):

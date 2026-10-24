@@ -15,7 +15,8 @@ class CounterChecks(unittest.TestCase):
                                                        dict(ownerEpoch=1, admittedAtMs=9007199254740991)]))
 
     def test_boolean_string_negative_and_overflow_are_not_counters(self):
-        for key in ('schemaVersion', 'queryContract', 'revision', 'ownerEpoch', 'completedAtMs', 'bytes'):
+        for key in ('schemaVersion', 'queryContract', 'revision', 'ownerEpoch', 'completedAtMs', 'bytes',
+                    'supportRevision', 'beginDrainCount', 'gateRows'):
             for value in (True, False, '1', -1, 9007199254740992, 1.0):
                 with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                     actor.strict_counters(dict(records=[{key: value}]))
