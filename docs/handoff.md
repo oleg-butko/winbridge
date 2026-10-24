@@ -1,5 +1,14 @@
 # Точка продолжения updater: подключение native timing trace — 2026-10-24
 
+**ACTIVE третий Main21:** task `3c3c72c1-d8a5-4e1e-babd-0c720f1a6041`,
+run `20261024-200207-c87a1025`, producer17c980c/fixture7f6a029,
+`--activation-files`. Authoritative get_task: running. Observer exec3891,
+log `.winbridge/update-preparation/activation-trace-routing-native-main.log`.
+[Exact pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Ожидаются95 tests/19 groups/21 commands и обязательный internal timing trace.
+Сначала terminal/proof/timing audit той же task; не resubmit. Positive Bound
+пока не доказан. Installed worker only, desktop не нужен; публичный update off.
+
 **Последний повтор terminal failed/exit1:** task46d57134-48fc-4188-81cd-b94f59074d15 /
 run20261024-162445-229e2220, producer612df2e.94 preliminary passed/1 Main failed
 по deadline,27 ready files twice, migration audit12 passed. Internal timings

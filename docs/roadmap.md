@@ -2,6 +2,11 @@
 
 ## Текущий checkpoint updater — 2026-10-24
 
+**ACTIVE:** третий Main21, task3c3c72c1-d8a5-4e1e-babd-0c720f1a6041 /
+run20261024-200207-c87a1025, producer17c980c с frozen diagnostic supervisor.
+[Pins/readonly recovery](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Наблюдать ту же task; actual result пока неизвестен. Expected95 tests/19 groups.
+
 Второй Main21 тоже terminal failed/exit1: run20261024-162445-229e2220,
 producer612df2e;94 preliminary passed/1 Main failed по deadline. Внутреннего
 trace нет из-за обычного copied updater вместо validation build. Исправляется

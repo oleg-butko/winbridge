@@ -7,6 +7,11 @@
 
 ## Текущий статус 2026-10-24
 
+Третий run17c980c **выполняется**:20261024-200207-c87a1025, task
+3c3c72c1-d8a5-4e1e-babd-0c720f1a6041. [Pins/readonly recovery](windows-activation-files-gate-2026-10-24.md).
+Сначала результат и actual timing audit той же task, затем measured fix/positive
+gate; не resubmit и не начинать execution по прежним partial checks.
+
 Повтор612df2e тоже failed по deadline:94 preliminary passed/1 Main failed,
 run20261024-162445-229e2220. Internal trace отсутствует из-за обычного updater.
 [Диагностика и routing fix](windows-activation-files-gate-2026-10-24.md): frozen

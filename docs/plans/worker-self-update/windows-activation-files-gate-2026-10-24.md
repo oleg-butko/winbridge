@@ -1,4 +1,45 @@
-# Actor21 whole-set read binding: две попытки failed по deadline
+# Actor21 read binding: третий run с diagnostic supervisor выполняется
+
+**ACTIVE 2026-10-24:** task `3c3c72c1-d8a5-4e1e-babd-0c720f1a6041`,
+run `20261024-200207-c87a1025`, producer17c980c. Первое get_task running.
+Positive proof пока нет; expected95 tests/19 groups/21 commands. Этот run
+использует frozen validation updater copy и требует actual timing prefix до
+Bind. Старые два failed runs ниже не resubmit и не считать successful evidence.
+
+## Текущий run17c980c: pins и наблюдение
+
+- Producer `17c980c759706661f7508995fc39bf88ba27db1a`:
+  `winbridge-20261024T200106Z-17c980c-13ba9f78.zip`, SHA256
+  `2492138b5d4e9bb1899ac0627a3730f71111c76dd52c3cda92f69d9184407240`, manifest
+  `2c2dcb273e21d66faa1e91bd30e300c572329d9fc80c26395114d80b05e6533f`.
+- Fixture7f6a029, cache20261017-061527-f4639971 и successful17 reference прежние.
+- Local `.winbridge/workflow-validation/20261024-200207-c87a1025/activation-preparation-run.json`;
+  request/meta записаны до ACK, task ID сохранён; `activationFiles=true`.
+- Shared `/mnt/hgfs/shared/WinBridge/workflow-validation/20261024-200207-c87a1025`.
+- Observer exec3891, log `.winbridge/update-preparation/activation-trace-routing-native-main.log`.
+- Debian free перед submit16,468,455,424 bytes; Windows measurement в report.
+  MSVC all-target Clippy/update-validation, Python5+9, fmt/scaffold265 passed;
+  logs `activation-trace-routing-*`. Production features/120000ms не менялись.
+
+Readonly observe **этой же task**, без нового submit:
+
+~~~bash
+python3 scripts/validate-update-activation-preparation-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261024T200106Z-17c980c-13ba9f78.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261024T103055Z-7f6a029-3e94038a.zip \
+  --cache-run 20261017-061527-f4639971 \
+  --reference-pin .winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json \
+  --activation-files --verify-run 20261024-200207-c87a1025
+~~~
+
+После terminal: actual task/report/ready proof audit, mutation checks и анализ
+`None-supervisor-stderr.log` с `WinBridge activation timing` JSON entries.
+`trace_end` не success receipt. Нужен установленный worker; desktop не нужен,
+UI-окон не будет. После проверки явно сообщить, что оставить работать.
+Ниже — история двух завершённых failed attempts; их «active runs нет» относится
+к моментам тех checkpoint, а не к текущему третьему run.
+
+## История двух failed attempts
 
 2026-10-24. **Последняя task46d57134-48fc-4188-81cd-b94f59074d15 terminal
 failed/exit1**, run20261024-162445-229e2220, producer612df2e.94 preliminary tests
