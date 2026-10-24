@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-24: [combined native95 actor21/read binding запущен](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md),
+task01d7bf76-6c53-427c-8cd9-81d8f8798962/run20261024-153856-fe2e4f76,
+producer74e8839. Наблюдать тот же task; proof ещё нет. Public install off,
+installed runtime unchanged. После audit/review продолжать launcher/receiver/state.
+
 2026-10-24: whole-set read binding library и **actor21/view13 добавлены**, пока
 без native proof. Worker/updater schemas16/18 прежние, activation/public install off.
 Workspace716/0 (16 ignored), legacy87/0 readonly recheck passed. Final checks,

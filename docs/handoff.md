@@ -1,5 +1,14 @@
 # Точка продолжения updater: native18 preparation gate закрыт — 2026-10-24
 
+**Текущий run95 запущен, не resubmit:** task
+`01d7bf76-6c53-427c-8cd9-81d8f8798962`, run `20261024-153856-fe2e4f76`,
+producer74e8839/fixture7f6a029, `--activation-files`. Первое get_task: running.
+[Exact pins, log и readonly команда](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+Ожидаются95 tests/19 групп, actual Main21 read binding и actual17→18/refusal.
+Proof ещё нет. Worker only/no UI; installed d052 unchanged. После terminal —
+audit/review, затем suspended launcher/private receiver/state handoff. Старые
+«ещё не запускался» ниже — история.
+
 **Новый source после47ba586:** whole-set ActivationFilesGuard library и internal
 actor21/view13 добавлены, source schemas18/16 прежние. Fresh nonce/monotonic window/
 Prepared/root/owner/epoch/self PID сверяются перед read binding; ошибка удерживает
