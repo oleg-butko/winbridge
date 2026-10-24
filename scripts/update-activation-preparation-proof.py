@@ -95,7 +95,7 @@ def verify(proof, source, target, root, health):
     edge = saved['rootEdge']
     need(edge['updateId'] == plan['updateId'] and edge['revision'] == plan['parentRevision']+1
          and edge['phase'] == 'verifying_local' and edge['previousPhase'] == 'replacing'
-         and edge['command']['event'] == 'files_verified'
+         and edge['command']['event'] == {'kind': 'files_verified'}
          and edge['command']['expectedRevision']+1 == edge['revision']
          and edge['ownerId'] == plan['ownerId'] and edge['ownerEpoch'] == plan['ownerEpoch']
          and edge['occurredAtMs'] == view['update']['updatedAtMs'] <= intent['admittedAtMs'], 'FilesVerified causal edge differs')
@@ -134,6 +134,8 @@ def audit(proof, source, target, root, health):
              ('cases/0/activationPreparation/record/state/phase', 'creating'),
              ('cases/0/activationPreparation/supervisor/process/processId', 1),
              ('cases/0/activationPreparation/rootEdge/command/event', 'local_health_verified'),
+             ('cases/0/activationPreparation/rootEdge/command/event', 'files_verified'),
+             ('cases/0/activationPreparation/rootEdge/command/event', {'kind': 'files_verified', 'permit': True}),
              ('cases/0/activationPreparation/lostAckSentOnce', False),
              ('cases/0/activationPreparation/workerBytesAfter', []),
              ('cases/0/activationPreparation/history', []),

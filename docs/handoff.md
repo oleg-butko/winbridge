@@ -1,22 +1,33 @@
-# Точка продолжения updater: native18 запущен — 2026-10-24
+# Точка продолжения updater: native18 preparation gate закрыт — 2026-10-24
 
-**Наблюдать ту же task, не resubmit:**
-`c1675a54-b250-4fa9-b2d3-66c653033180`, run `20261024-111115-9272d0e2`,
-producerb12ecc6, fixture7f6a029. Первое authoritative наблюдение running;
-health-supervisor-build компилирует protocol. [Exact pins, log и readonly команда](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md).
-Ожидаются87 native tests/16 групп, actual Main preparation20 и actual17→18/refusal.
-Proof ещё нет. Worker only/no UI; installed d052 unchanged. После terminal —
-independent audit/review, затем physical activation bridge. Старые «не запущен» ниже — история.
+[Actual Main18 preparation/migration87/0](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md)
+**пройден**, task `c1675a54-b250-4fa9-b2d3-66c653033180`,
+run `20261024-111115-9272d0e2`, producerb12ecc6/fixture7f6a029.
+26 ready files twice,72 Main +12 migration mutations, readonly recheck passed.
+Новых задач после terminal не отправлялось; active native/Cargo runs нет.
+Observer исправлен: FilesVerified — tagged object, не строка. Exact pins,
+диагностика, hashes и readonly команда — в linked gate report; старый task не resubmit.
 
-**Продолжение после daa88da:** review actor20/ledger18 выполнен, важных ошибок
-не найдено. Combined native18 harness добавлен: actual Main preparation20 с lost
-ACK/duplicate/cold no-custody и copy-only actual17→18/refusal. Linux/MSVC Clippy,
-Python4+9 и focused Rust28/0 прошли. Actual native run
-ещё не начат. Карта, команда с SOURCE18 placeholder и ограничения —
-[в activation plan](plans/worker-self-update/runtime-activation.md).
-Следом clean distinct producer18 export → один native gate → audit/review →
-physical file/state handoff. Installed d052 healthy/active0/unchanged.
-Старый checkpoint ниже фиксирует состояние до harness, его первые NEXT устарели.
+Текущий source updater18/worker16/supervisor20/view12. Actual original-supervisor
+capture20 сохранил Prepared0/history1 до ACK consumption; duplicate не создал
+новый attempt. Root VerifyingLocal15, replacement FilesMoved22, original custody,
+files и worker DB/WAL сохранены. Cold read не получил custody; normal serve
+по-прежнему refused до writer. Actual17→18/refusal/backup/history на новой копии
+прошли, original reference сохранён. Это подготовка metadata, **не запуск worker**.
+Public install и activation/controller_confirmation/desktop_update capabilities off.
+
+**Следующий шаг:** consuming physical file-handle bridge после FilesMoved и
+Prepared, затем suspended launcher/private receiver и original state/lock handoff.
+[Activation plan](plans/worker-self-update/runtime-activation.md) содержит порядок;
+future execution gate обязан подтверждать actual PID/Job/receipts, а не нулевые
+scope counters preparation. После review продолжать physical implementation,
+затем local/controller/lifetime, remaining U2 faults/U3/U4. Whole updater не готов.
+
+Installed d052 healthy/active0/unchanged, generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
+maintenance/recovery errors=null. Desktop можно закрыть, installed worker оставить.
+Ручное обновление сейчас не требуется. Нижние running/NEXT/ACTIVE — история.
+
+## История checkpoint daa88da (до native18 harness/gate)
 
 **Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-24-activation-preparation.md).**
 Она содержит карту кода, результаты проверок, exact task/run/source/proof pins,

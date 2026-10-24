@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-24: **[native18 preparation/migration87/0 gate пройден](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md)**,
+26 ready files twice/72 Main +12 migration mutations и readonly recheck. Actor20
+metadata preparation проверен в original supervisor; actual17→18/refusal passed.
+Observer исправлен под tagged FilesVerified. Следом physical file-handle bridge,
+launcher/private receiver/state handoff, local/controller/lifetime, remaining
+U2/U3/U4. Public install off, installed d052 unchanged; старые pending ниже — история.
+
 2026-10-24: [native18 preparation/migration task запущен](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md),
 `c1675a54-b250-4fa9-b2d3-66c653033180` / run20261024-111115-9272d0e2,
 producerb12ecc6. Наблюдать ту же task; результата пока нет. Expected87 tests/16

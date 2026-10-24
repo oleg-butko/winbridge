@@ -16,7 +16,10 @@ state/lifetime handoff и controller confirmation ещё не реализова
 Последний [actual Windows gate33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md)
 проверяет producer17/actor19/view11, production Blocked до drain и actual16→17/refusal.
 Readonly recheck пройден; он не доказывает новую schema18/actor20 preparation.
-Следом combined actual18 preparation/migration gate, затем OS activation/U2/U3/U4.
+[Actual18 preparation/migration87/0](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md)
+также пройден:26 ready files twice,72 Main +12 migration mutations. Это durable
+Prepared под original supervisor и cold no-custody, не physical activation.
+Следом file-handle bridge, launcher/receiver/state handoff и OS activation/U2/U3/U4.
 Production missing-capability blockers и public install off сохранены.
 [Новый подробный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-preparation.md)
 приоритетнее исторических статусов ниже.

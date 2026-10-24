@@ -2,7 +2,9 @@
 
 2026-10-24. **Execution driver ещё не реализован; actor20 preparation добавлен.**
 Текущий source updater18/worker16/supervisor20/view12. Actual production drain17 gate
-закрыт; combined native18 preparation/migration harness добавлен, actual run впереди.
+закрыт; [combined native18 preparation/migration87/0 gate пройден](windows-activation-preparation-gate-2026-10-24.md).
+26 ready files twice/72 Main +12 migration mutations, readonly recheck. Execution
+ещё нет; следующим реализовать physical bridge, затем launcher/private receiver/state handoff.
 [Актуальный checkpoint и проверки](resume-2026-10-24-activation-preparation.md),
 [общий U0–U4 план](README.md),
 [original custody](runtime-replacement-custody.md),
@@ -131,7 +133,8 @@ live custody задаётся только resident signal. Frozen views1–11 �
 preparation/nonce остаются в памяти supervisor; durable Prepared до ACK, lost ACK
 не освобождает guard и не запускает новую подготовку. Duplicate возвращает
 существующие данные. Ни actor, ни DTO пока не умеют create/resume/handoff;
-activation support по-прежнему=None. Actual positive Windows branch ожидает gate.
+activation support по-прежнему=None. Actual positive preparation branch проверен
+[Main18 gate87/0](windows-activation-preparation-gate-2026-10-24.md).
 
 ### Следующая вертикаль
 
@@ -155,7 +158,7 @@ activation support по-прежнему=None. Actual positive Windows branch о
    создают права продолжать после потери original owner. Все последующие пункты
    общего плана ниже остаются незавершёнными.
 
-### Combined native18 harness добавлен, gate ещё не пройден
+### Combined native18 harness и пройденный gate
 
 `apps/worker/tests/update_shutdown/activation_preparation.rs` продолжает настоящий
 Main replacement scenario: original supervisor получает20 после FilesMoved;
@@ -195,8 +198,8 @@ python3 scripts/validate-update-activation-preparation-native.py \
 ~~~
 
 При observation timeout добавить `--verify-run SAVED_RUN` и наблюдать прежний
-Task ID. Без `--verify-run` создаётся новый namespace/task. До сохранённого terminal
-proof не объявлять gate пройденным. Installed worker only, desktop не нужен,
+Task ID. Без `--verify-run` создаётся новый namespace/task. Gate87/0 теперь пройден; exact producer/read-only команда в отчёте выше.
+Installed worker only, desktop не нужен,
 тестовые UI-окна не появляются; установленный runtime не меняется.
 
 ## Ограничения фактического кода

@@ -13,8 +13,8 @@ FSM/ledger и original-custody metadata preparation подключены к acto
 execution/capability пока нет. Итоги закрывающих local/cross checks — в checkpoint.
 
 [Actual Windows17 Main/migration33/0](windows-compatible-drain-gate-2026-10-24.md)
-пройден и повторно проверен readonly. Active native runs нет. Следом **реализовать
-harness и пройти combined native18 preparation/migration gate**, затем physical
+пройден и повторно проверен readonly. Active native runs нет. [Combined native18 preparation/migration87/0 gate](windows-activation-preparation-gate-2026-10-24.md)
+также пройден,26 files twice/72+12 mutations и readonly recheck. Следом physical
 startup/state handoff по [activation plan](runtime-activation.md). Public install
 выключен, installed d052 unchanged, U2 целиком/U3/U4 не завершены.
 Нижние NEXT/ACTIVE относятся к прошлым checkpoints.

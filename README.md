@@ -62,7 +62,8 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
-Актуальная точка разработки апдейтера: [checkpoint 2026-10-24](docs/plans/worker-self-update/resume-2026-10-24-activation-preparation.md).
+Актуальная точка разработки апдейтера: [handoff](docs/handoff.md),
+[actual18 preparation/migration87/0 gate](docs/plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md).
 Реализована внутренняя подготовка activation18/20; запуск нового worker и полное
 самообновление ещё не готовы. Этот checkpoint приоритетнее истории U0–U2 ниже.
 
