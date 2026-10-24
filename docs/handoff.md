@@ -1,4 +1,17 @@
-# Текущая точка: проверки закрыты, production drain17 готов к native gate — 2026-10-23
+# Текущая точка: actual17 миграция прошла; исправляется stack overflow Main — 2026-10-24
+
+[Первый actual17 run](plans/worker-self-update/windows-compatible-drain-first-attempt-2026-10-24.md)
+20261024-003723-8bd37767 / task73081bc6-ea78-45e1-a79e-cc5f3d5a27c3
+terminal failed/1.32 preliminary tests и actual16→17/refusal прошли,
+23 ready files twice/19 migration mutations. Main упал до06-health/нового
+production entry. Readonly diagnostic task5794c6a0 подтвердила stack overflow
+главного потока isolated supervisor. Installed d052 healthy/active0/unchanged.
+Heap constructor supervisor::run/run_inner добавлен; supervisor tests8/0
+(2 ignored) и Linux/MSVC all-target Clippy update/worker passed.
+После них clean producer export и новый namespace; old run не replay.
+Проверки ниже закрывают предыдущий checkpoint, не actual Main17.
+
+## Предыдущая точка: локальные проверки закрыты — 2026-10-23
 
 **Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-23-compatible-drain.md).**
 В ней карта кода, exact source/target/report/proof pins, окружение, команды

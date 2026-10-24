@@ -1512,7 +1512,19 @@ fn authorize(r: &SupervisorRecord, token: &str, pid: u32, action: SupervisorActi
 }
 /// Gated internal entry; source preparation requires a v2 action and frozen policy.
 /// Public installation stays disabled; effects use their versioned internal drivers.
-pub async fn run(config_path: &Path, id: &str, token: &str) -> Result<()> {
+/// Allocate before polling, outside the caller's executor frame. The Windows
+/// Main thread must not retain a second large mailbox future on its stack while
+/// synchronous admission/serde calls use that same stack. Keep construction in
+/// a separate frame even in optimized builds.
+#[inline(never)]
+pub fn run<'a>(
+    config_path: &'a Path,
+    id: &'a str,
+    token: &'a str,
+) -> impl std::future::Future<Output = Result<()>> + 'a {
+    Box::pin(run_inner(config_path, id, token))
+}
+async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     if token.len() != 64 {
         return Err("Invalid supervisor startup token".into());
     }

@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-24: [первый native17 run](plans/worker-self-update/windows-compatible-drain-first-attempt-2026-10-24.md)
+прошёл32 preliminary tests и actual16→17/refusal (23 ready files twice,
+19 negative mutations), но Main завершился stack overflow до health/support.
+Heap allocation mailbox future добавлен, supervisor tests8/0 и обе all-target
+Clippy прошли; затем fresh native
+namespace с новым producer. Production Main gate не закрыт, installed d052 unchanged.
+
 2026-10-23 checkpoint по просьбе пользователя: [required production drain17/19](plans/worker-self-update/compatible-drain.md)
 реализован, workspace688/0 (16 ignored), model/SQL7/IPC1/jsonschema51,
 обе all-target Clippy/contracts/TS/UI/Python/docs passed. Immutable decision

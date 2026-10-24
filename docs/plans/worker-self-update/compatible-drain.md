@@ -1,5 +1,11 @@
 # Required production drain: schema17 / supervisor19 / view11
 
+Текущая проверка2026-10-24: [первый native run](windows-compatible-drain-first-attempt-2026-10-24.md)
+дал32 preliminary tests и actual16→17/refusal, но Main не дошёл до нового entry:
+stack overflow isolated supervisor во время health admission. Исправляется
+heap constructor mailbox future, затем нужен новый full Main run. Нижнее
+описание «не выполнен» относится к состоянию перед первой попыткой.
+
 2026-10-23. Продолжение [support actor18](candidate-support-actor.md).
 Новый маршрут DrainCompatibleCandidate/ObserveCompatibleDrain связывает допуск
 с точным завершённым support attempt. Public install и activation выключены.
