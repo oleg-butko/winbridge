@@ -1,5 +1,6 @@
 //! Synthetic evidence only: no process, writer or startup permit is created.
 use super::*;
+use winbridge_protocol::LoadedWorkerIdentity;
 fn process(pid: u32) -> SupervisorProcess {
     SupervisorProcess {
         process_id: pid,

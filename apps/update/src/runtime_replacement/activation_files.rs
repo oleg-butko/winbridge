@@ -7,6 +7,9 @@ use crate::{
 };
 use std::collections::VecDeque;
 use winbridge_platform::runtime_files::{RuntimeReadHandoffFailure, RuntimeReadPin};
+#[path = "activation_process.rs"]
+mod activation_process;
+pub use activation_process::{ActivationLaunchFailure, ActivationProcessGuard};
 
 /// Only a successful consuming factory can construct this object. Its installed
 /// set denies writers/deleters; the original exited process and state stay held.

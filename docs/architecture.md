@@ -15,10 +15,10 @@ Source: **updater18/worker16, supervisor21/view13**. [Activation preparation/rea
 original guard. Nonce/deadline/kernel handles остаются resident non-Serde
 resources; JSON/history не дают права на OS effects. Views1–12 frozen.
 
-Private receiver, process creation, state/local/controller/lifetime handoff
-ещё не реализованы. Public install выключен; activation/controller_confirmation/
-desktop_update не объявлены готовыми. Следом consuming suspended launcher и
-парный private receiver до Store writer. [Подробный актуальный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-files.md)
+[Suspended launcher/private receiver library](plans/worker-self-update/activation-receiver.md)
+добавлены в source; actual dispatch и native execution proof ещё впереди.
+State/local/controller/lifetime handoff ещё не реализованы. Public install выключен; activation/controller_confirmation/
+desktop_update не объявлены готовыми. Следом новый versioned actor action и actual Main до Store writer. [Подробный актуальный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-files.md)
 содержит pins, карту кода, правила auth/deadline/ownership и порядок продолжения.
 Все начатые проверки завершены, installed d052 healthy/unchanged. Старые
 preparation87/0 и one-file4/0 дополняются новым whole-set97/0 и actual17→18/refusal;

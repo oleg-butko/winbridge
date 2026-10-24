@@ -5,6 +5,18 @@
 правила восстановления наблюдения и последовательность реализации. Этот блок
 и инструкция приоритетнее исторических NEXT/ACTIVE ниже.
 
+## Продолжение после547a487: receiver/launcher library добавлены
+
+[Новая source-вертикаль](plans/worker-self-update/activation-receiver.md) содержит
+consuming suspended OS driver и private worker entry до Store writer. Creating/
+Created/ResumeGranted/ReadyForState связываются с actual child и authenticated
+IPC; failure сохраняет original resources и запрещает второй create.
+**Actor dispatch и actual native execution gate ещё не реализованы/не пройдены.**
+Schemas18/16, supervisor21/view13, activation/public install off прежние.
+Следом подключить новый versioned action/view и native Main с новой receiver
+fixture, затем state/controller/lifetime. Подробности и checks — в новом документе;
+старый97/0 ниже относится к read binding producer941a2e6, не к execution.
+
 ## Проверки закрыты
 
 Native actor21/read-binding gate **пройден: 97 passed / 0 failed**, task
@@ -36,8 +48,8 @@ Runtime receipts/logs не входят в Git.
 ## Что делать дальше
 
 1. Изучить lifecycle/journal/process/worker startup и actual supervisor auth;
-   реализовать consuming suspended launcher и private worker receiver **до Store
-   writer**. Сначала durable Creating, затем один CreateProcess/Job, actual
+   подключить добавленную library к новому actor action и проверить private
+   receiver **до Store writer** на actual Main. Сначала durable Creating, затем один CreateProcess/Job, actual
    PID/birth/session/host receipt до ResumeGranted/resume и ReadyForState по
    authenticated channel. JSON/history не дают нового permission.
 2. Текущий guard принимает только Prepared/revision0: не ослаблять его. Новая

@@ -67,9 +67,10 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 Native whole-set read-binding gate пройден: **97 passed / 0 failed**; проверены
 пять runtime read pins, original state lock, duplicate/cold observations и
 actual17→18/refusal. Binding43.346s укладывается в исходные120s.
-Следом suspended launcher/private worker receiver и state/controller/lifetime
-handoff; полное самообновление ещё не готово, public install выключен.
-Все проверки завершены, installed runtime не менялся. Актуальный checkpoint
+[Suspended launcher/private receiver library](docs/plans/worker-self-update/activation-receiver.md)
+добавлены; actor dispatch и настоящий Windows execution gate ещё впереди. Затем
+state/controller/lifetime handoff; полное самообновление ещё не готово, public
+install выключен. Installed runtime не менялся. Актуальный checkpoint
 приоритетнее исторических NEXT ниже.
 
 Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):

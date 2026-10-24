@@ -1092,3 +1092,6 @@ mod activation_preparation;
 pub use activation_preparation::*;
 mod activation_files;
 pub use activation_files::*;
+
+mod activation_receiver;
+pub use activation_receiver::*;

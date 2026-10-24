@@ -10,7 +10,9 @@ use winbridge_platform::{runtime_files::OwnedRuntimeFile, source_files::PinnedDi
 use winbridge_protocol::update::SupervisorRecord;
 #[path = "activation_files.rs"]
 mod activation_files;
-pub use activation_files::{ActivationFilesFailure, ActivationFilesGuard};
+pub use activation_files::{
+    ActivationFilesFailure, ActivationFilesGuard, ActivationLaunchFailure, ActivationProcessGuard,
+};
 fn exact_names(
     path: &Path,
     expected: &std::collections::HashSet<std::ffi::OsString>,

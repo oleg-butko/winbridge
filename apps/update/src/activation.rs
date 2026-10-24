@@ -11,6 +11,7 @@ use winbridge_protocol::ArtifactDescriptor;
 type Result<T> = std::result::Result<T, String>;
 mod lifecycle;
 pub use lifecycle::*;
+pub mod channel;
 #[cfg(windows)]
 mod timing;
 #[cfg(windows)]
@@ -47,7 +48,9 @@ pub enum ActivationPreparationAdmission {
     Existing(Box<ActivationRecord>),
 }
 #[cfg(windows)]
-pub use crate::runtime_replacement::{ActivationFilesFailure, ActivationFilesGuard};
+pub use crate::runtime_replacement::{
+    ActivationFilesFailure, ActivationFilesGuard, ActivationLaunchFailure, ActivationProcessGuard,
+};
 
 pub(crate) fn view(
     value: Option<&ActivationRecord>,

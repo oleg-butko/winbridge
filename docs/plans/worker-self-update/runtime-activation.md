@@ -1,6 +1,6 @@
 # Activation после проверенного replacement
 
-2026-10-24. **Whole-set library/actor21 прошли native97/0; execution ещё нет.**
+2026-10-24. **Whole-set actor21 прошёл native97/0; execution proof ещё нет.**
 Current source updater18/worker16/supervisor21/view13. [Actual Main/read binding](windows-activation-files-gate-2026-10-24.md)
 прошёл30 ready files twice/72+19+12 mutations, actual17→18/refusal. Binding43.346s,
 осталось66.407s исходного120s window. Original lock/5 strict pins и cold no-custody
@@ -10,6 +10,12 @@ Current source updater18/worker16/supervisor21/view13. [Actual Main/read binding
 private receiver до Store writer, затем state/local/controller/lifetime и U2/U3/U4.
 Public install/activation capability off; installed runtime unchanged. Исторические
 pending/failed записи ниже относятся к прежним commits, не текущим заданиям.
+
+[Suspended launcher и private worker receiver library](activation-receiver.md)
+добавлены после checkpoint547a487: actual OS driver до ReadyForState, без writer.
+Новый actor action/view и настоящий native execution gate ещё впереди;
+старый97-test gate этого кода не выполнял. Все дальнейшие исторические описания
+«будущего driver» относятся к предыдущим commits; актуальная карта — по ссылке.
 
 ## Результат, который нужно получить
 

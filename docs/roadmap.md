@@ -11,7 +11,9 @@ state lock удержаны; cold metadata не восстанавливает c
 
 **Продолжать по [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-24-activation-files.md):**
 
-1. Consuming suspended launcher/private receiver до ReadyForState, без Store writer.
+1. [Suspended launcher/private receiver library](plans/worker-self-update/activation-receiver.md)
+   добавлены; следующий блок — actor dispatch и actual native gate до ReadyForState
+   без Store writer.
 2. Original state/instance-lock handoff и actual ownership/local verification.
 3. Controller/lifetime confirmation, remaining U2 faults/management, U3 desktop, U4.
 

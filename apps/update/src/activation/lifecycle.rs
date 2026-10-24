@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use winbridge_core::update::{valid_hash, MAX_UPDATE_COUNTER};
 use winbridge_protocol::{
     update::{SupervisorProcess, WorkerShutdownState},
-    LoadedWorkerIdentity, RequestContext, WorkerRuntimeCompatibility,
+    RequestContext, WorkerRuntimeCompatibility,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -158,14 +158,7 @@ pub struct ActivationCreated {
     pub job_name: String,
     pub observed_at_ms: u64,
 }
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ActivationReady {
-    pub attempt_id: String,
-    pub identity: LoadedWorkerIdentity,
-    pub worker_config_sha256: String,
-    pub observed_at_ms: u64,
-}
+pub use winbridge_protocol::update::ActivationReady;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActivationStateOwned {

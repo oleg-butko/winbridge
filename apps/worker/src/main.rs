@@ -14,6 +14,12 @@ async fn main() -> ExitCode {
 }
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "--activate-update") {
+        if let [_, config, update, attempt] = args.as_slice() {
+            return winbridge_worker::activation::run(Path::new(config), update, attempt);
+        }
+        return Err("Use --activate-update ABSOLUTE_CONFIG UPDATE_ID ATTEMPT_ID; private parent handshake required, no normal startup".into());
+    }
     if args
         .first()
         .is_some_and(|arg| arg == "--export-update-state")

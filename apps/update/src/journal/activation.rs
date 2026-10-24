@@ -249,8 +249,8 @@ fn seed(c: &Connection, value: &ActivationRecord, r: &RuntimeReplacementRecord) 
     }
     Ok(())
 }
-// No production unbound writer. The eventual driver will use guarded callbacks.
-#[cfg(test)]
+// No public unbound writer: only the native consuming owner uses this.
+#[cfg(any(windows, test))]
 fn persist(
     c: &Connection,
     old: &ActivationRecord,
@@ -284,6 +284,41 @@ fn persist(
     Ok(())
 }
 impl UpdateJournal {
+    /// Readonly child admission. This snapshot grants no state/instance writer;
+    /// the child must still authenticate the live parent and private challenge.
+    pub fn inspect_activation_receiver(
+        directory: &Path,
+        id: &str,
+        attempt: &str,
+        actual: &winbridge_protocol::update::SupervisorProcess,
+    ) -> Result<ActivationRecord> {
+        check_files(directory)?;
+        let mut c = connection(&directory.join("updates.sqlite"), true)?;
+        schema(&c)?;
+        let tx = c.transaction().map_err(storage)?;
+        let value = read(&tx, id)?.ok_or_else(|| bad("Activation receiver record missing"))?;
+        crate::activation::channel::require_receiver(&value, actual, attempt).map_err(bad)?;
+        let source = &value.intent.source;
+        let root = record(&tx, id)?;
+        let installation = info(&tx)?;
+        let supervisor = supervisor::read(&tx, &source.launch_id)?;
+        if root.phase != UpdatePhase::VerifyingLocal
+            || root.revision != source.parent_revision
+            || installation.active_update_id.as_deref() != Some(id)
+            || installation.owner_epoch != source.owner_epoch
+            || supervisor.phase != winbridge_protocol::update::SupervisorPhase::Active
+            || supervisor.spec.update_id != id
+            || supervisor.owner_id.as_deref() != Some(source.owner_id.as_str())
+            || supervisor.owner_epoch != Some(source.owner_epoch)
+            || supervisor.process.as_ref() != Some(&value.intent.context.supervisor)
+        {
+            return Err(bad(
+                "Activation receiver has a stale owner/root/supervisor; no writer opened",
+            ));
+        }
+        tx.commit().map_err(storage)?;
+        Ok(value)
+    }
     pub fn inspect_activation(directory: &Path, id: &str) -> Result<Option<ActivationRecord>> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
@@ -374,8 +409,7 @@ impl UpdateJournal {
             },
         )))
     }
-    /// No mutation or reconstructed grant: compare the fresh in-memory object
-    /// with the complete retained graph and this exact original live actor.
+    /// Strict Prepared admission remains separate from progressed execution.
     #[cfg(windows)]
     pub(crate) fn require_activation_prepared(
         &self,
@@ -383,48 +417,112 @@ impl UpdateJournal {
         s: &SupervisorRecord,
         preparation: &ActivationPreparation,
     ) -> Result<RuntimeReplacementRecord> {
+        if preparation.record().revision != 0
+            || !matches!(preparation.record().state, ActivationState::Prepared {})
+        {
+            return Err(changed(
+                "Activation file binding requires original Prepared revision0",
+            ));
+        }
+        preparation.require_live_window().map_err(changed)?;
         let mut timing = crate::activation::ActivationTiming::new(
             "require_prepared",
             Some(preparation.deadline),
         );
-        preparation.require_live_window().map_err(changed)?;
-        self.check_directory(a)?;
-        let tx = self.connection.unchecked_transaction().map_err(storage)?;
-        check_authority(&tx, a)?;
-        runtime_baseline::current_supervisor(&tx, a, s)?;
-        let expected = preparation.record();
-        let source = &expected.intent.source;
         timing.mark("graph_before", None, None);
-        let (saved, replaced) = read_graph(&tx, &s.spec.update_id)?
-            .ok_or_else(|| changed("Activation preparation missing"))?;
+        let replaced =
+            self.require_activation_owned_current(a, s, preparation, preparation.record())?;
         timing.mark("graph_after", None, None);
-        let root = record(&tx, &s.spec.update_id)?;
-        if saved != *expected
-            || expected.revision != 0
-            || !matches!(expected.state, ActivationState::Prepared {})
-            || source.update_id != s.spec.update_id
-            || source.owner_id != a.owner_id()
-            || source.owner_epoch != a.epoch()
-            || source.launch_id != s.spec.launch_id
-            || root.phase != UpdatePhase::VerifyingLocal
-            || root.revision != source.parent_revision
-            || crate::sha256(preparation.channel_nonce.as_bytes())
-                != expected.intent.context.channel_nonce_sha256
-            || s.process.as_ref()
-                != Some(
-                    &winbridge_platform::infrastructure::stamp(std::process::id())
-                        .map_err(storage)?,
-                )
-        {
-            return Err(changed("Activation files require exact Prepared root, resident nonce and original live owner"));
-        }
-        source.validate(&replaced).map_err(changed)?;
-        tx.commit().map_err(storage)?;
-        // A slow graph read is not permission to continue after the live window.
         preparation.require_live_window().map_err(changed)?;
         timing.mark("validated", None, None);
         Ok(replaced)
     }
+    /// Comparison for a resident execution owner, not a fresh launch permit.
+    /// Fact recording remains possible after the deadline; new effects do not.
+    #[cfg(windows)]
+    pub(crate) fn require_activation_owned_current(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        preparation: &ActivationPreparation,
+        expected: &ActivationRecord,
+    ) -> Result<RuntimeReplacementRecord> {
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        let r = owned_current(&tx, a, s, preparation, expected)?;
+        tx.commit().map_err(storage)?;
+        Ok(r)
+    }
+    #[cfg(windows)]
+    pub(crate) fn append_activation_owned(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        preparation: &ActivationPreparation,
+        old: &ActivationRecord,
+        next: ActivationRecord,
+    ) -> Result<ActivationRecord> {
+        let grant = matches!(
+            next.state,
+            ActivationState::Creating {}
+                | ActivationState::ResumeGranted {}
+                | ActivationState::HandoffIssued {}
+        );
+        self.check_directory(a)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        let r = owned_current(&tx, a, s, preparation, old)?;
+        if grant {
+            preparation.require_live_window().map_err(changed)?;
+        }
+        persist(&tx, old, &next, &r)?;
+        // Slow validation may consume the remaining window. The caller also
+        // checks it again after this commit, immediately before the OS call.
+        if grant {
+            preparation.require_live_window().map_err(changed)?;
+        }
+        tx.commit().map_err(storage)?;
+        Ok(next)
+    }
+}
+
+#[cfg(windows)]
+fn owned_current(
+    c: &Connection,
+    a: &UpdateAuthority,
+    s: &SupervisorRecord,
+    preparation: &ActivationPreparation,
+    expected: &ActivationRecord,
+) -> Result<RuntimeReplacementRecord> {
+    check_authority(c, a)?;
+    runtime_baseline::current_supervisor(c, a, s)?;
+    let (saved, replaced) = read_graph(c, &s.spec.update_id)?
+        .ok_or_else(|| changed("Activation preparation missing"))?;
+    let source = &expected.intent.source;
+    let root = record(c, &s.spec.update_id)?;
+    if saved != *expected
+        || expected.intent != preparation.record().intent
+        || source.update_id != s.spec.update_id
+        || source.owner_id != a.owner_id()
+        || source.owner_epoch != a.epoch()
+        || source.launch_id != s.spec.launch_id
+        || root.phase != UpdatePhase::VerifyingLocal
+        || root.revision != source.parent_revision
+        || crate::sha256(preparation.channel_nonce.as_bytes())
+            != expected.intent.context.channel_nonce_sha256
+        || s.process.as_ref()
+            != Some(
+                &winbridge_platform::infrastructure::stamp(std::process::id()).map_err(storage)?,
+            )
+    {
+        return Err(changed(
+            "Activation requires exact current root, resident nonce and original live owner",
+        ));
+    }
+    source.validate(&replaced).map_err(changed)?;
+    Ok(replaced)
 }
 
 #[cfg(test)]

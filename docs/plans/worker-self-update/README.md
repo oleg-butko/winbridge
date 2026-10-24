@@ -15,8 +15,9 @@ Original five-file read set и state lock удержаны; cold metadata не �
 custody. Deadline120s сохранён, binding43.346s. Три прежних failed attempts
 и измеренное исправление marker search сохранены в linked gate report.
 
-Следом [execution](runtime-activation.md): suspended launcher/private receiver
-до ReadyForState без writer, state handoff/local/controller/lifetime, remaining
+[Suspended launcher/private receiver library](activation-receiver.md) добавлены,
+actor dispatch и actual native gate до ReadyForState без writer ещё впереди.
+Затем [execution](runtime-activation.md): state handoff/local/controller/lifetime, remaining
 U2 faults/management и U3/U4. Source updater18/worker16/supervisor21/view13.
 Installed worker unchanged/healthy/active0. Все проверки завершены; desktop
 можно закрыть, installed worker оставить работать. Public install/activation

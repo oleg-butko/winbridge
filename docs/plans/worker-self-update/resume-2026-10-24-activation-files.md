@@ -1,14 +1,25 @@
 # Передача контекста updater: native read binding завершён — 2026-10-24
 
-Это актуальная инструкция для новой сессии без истории чата. Пользователь
-попросил завершить текущие проверки, подробно записать сделанное и следующий
-порядок реализации, затем сделать коммит. Проверки закрыты; следующий execution
-блок в этой закрывающей задаче не начат. **Полное самообновление не готово.**
+Это инструкция для новой сессии без истории чата. Checkpoint547a487 закрыл
+тогдашние проверки по просьбе пользователя. После него активная цель продолжена:
+следующий source-блок описан отдельно ниже. Native результаты этого файла
+относятся к read binding, а не к новому launcher. **Полное самообновление не готово.**
 
 Этот документ и верх [handoff](../../handoff.md) приоритетнее исторических
 NEXT/ACTIVE в длинных документах. Предыдущие неудачные попытки сохранены в
 [отчёте Windows gate](windows-activation-files-gate-2026-10-24.md) и Git.
 Не повторять их и не начинать заново уже завершённую диагностику deadline.
+
+## Продолжение после checkpoint547a487
+
+[Добавлены suspended launcher/private receiver library](activation-receiver.md).
+Source теперь содержит OS driver Creating→Created→ResumeGranted→ReadyForState
+и worker entry до Store writer. **Actor dispatch и actual native execution gate
+ещё впереди**; native97 ниже относится только к producer941a2e6/read binding.
+Не реализовывать эти modules заново: следующий блок — versioned actor action/view,
+новая receiver fixture, distinct producer и настоящий Main до ReadyForState.
+Затем original state/local/controller/lifetime. Schemas18/16, supervisor21/view13
+и public install off прежние. Проверки новых source изменений — в linked document.
 
 ## Где остановились
 
@@ -21,8 +32,8 @@ displaced files. Новый activation worker ещё не создаётся, wr
 | Компонент | Реализовано и подтверждено | Что остаётся |
 | --- | --- | --- |
 | Updater journal | Schema18, source/intent/FSM, graph-bound current/history, CAS/readback; actual17→18 migration и отказ старого executable. | Guarded execution transitions, основанные на настоящих процессах и receipts. |
-| Worker journal | Schema16, нынешние maintenance/shutdown/ownership fencing. | Private activation receiver и подтверждение нового владельца прежнего state. |
-| Supervisor | Internal21/view13, metadata preparation20 и whole-set read binding21; один blocking slot, original guard resident. | Suspended launch, state/local/controller/lifetime handoff. |
+| Worker journal | Schema16, нынешние maintenance/shutdown/ownership fencing; новый private pre-writer receiver добавлен в source. | Native receiver proof и подтверждение нового владельца прежнего state. |
+| Supervisor | Internal21/view13, preparation20/read binding21; suspended OS library добавлена отдельно. | Actor dispatch/native launch proof, state/local/controller/lifetime handoff. |
 | Файлы | Manifest-last replacement и native-проверенные one-file и whole-set move→read transitions. | Consuming factory, разрешающая один запуск из этого live guard. |
 | Production | Missing-contract/driver решение Blocked до drain; public install выключен. | Положительный production update, management CLI/MCP/status и opt-in policy. |
 | Desktop | Существующий desktop не менялся в этом блоке. | U3 update notifications, save/exit/background/tray и обновление desktop. |
@@ -174,8 +185,8 @@ Local receipts/logs: `.winbridge/update-preparation/activation-marker-*`, вкл
    и [activation plan](runtime-activation.md). Проверить Git status/log, процессы,
    controller IPC, readonly Info и свободное место. Исторические NEXT ниже
    заголовков «История» не выполнять.
-2. **Первое новое задание — suspended launcher и парный private receiver до
-   ReadyForState, без передачи writer.** Read-binding gate уже закрыт. Изучить
+2. **Первое новое задание — actor dispatch и actual Main для добавленной launcher/
+   receiver library до ReadyForState, без передачи writer.** Read binding закрыт. Изучить
    существующие Windows process/transport/auth APIs перед проектированием channel.
 3. `ActivationFilesGuard::require_current()` сейчас строго Prepared/revision0.
    Не ослаблять его для Creating/Created: новая factory потребляет guard и
@@ -333,6 +344,7 @@ Controller оставлен работать. UI-окон этот gate не о�
 проверок. Перед каждым новым Windows run сообщить worker/desktop/windows условия,
 после terminal — что можно закрыть и что оставить.
 
-Следующая сессия начинает с consuming suspended launcher/private receiver,
-а не с повторной marker диагностики или read-binding gate. Полный updater
+Следующая сессия начинает с actor dispatch/native gate добавленной launcher/
+receiver library, а не с повторной marker диагностики или реализации уже
+добавленных modules. Полный updater
 остаётся незавершённым до actual state/controller/lifetime, U2 faults и U3/U4.
