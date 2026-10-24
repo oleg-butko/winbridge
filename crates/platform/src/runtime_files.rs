@@ -11,6 +11,8 @@ use windows_sys::Win32::Storage::FileSystem::{
     FileRenameInfo, SetFileInformationByHandle, FILE_FLAG_BACKUP_SEMANTICS, FILE_READ_ATTRIBUTES,
     FILE_RENAME_INFO, FILE_SHARE_READ, FILE_SHARE_WRITE,
 };
+mod read_handoff;
+pub use read_handoff::{RuntimeReadHandoffFailure, RuntimeReadPin};
 
 /// Non-Serde ownership of one actual file; not an installation permission.
 pub struct OwnedRuntimeFile {

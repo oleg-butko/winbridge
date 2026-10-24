@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-24: physical bridge начат с consuming one-file read handoff; Windows
+all-target Clippy passed. Готовы4 native sharing/rebind/failure tests и короткий
+`--runtime-read-handoff-only` gate, ещё не выполненный. Whole-set original-custody
+binding и launcher/state handoff впереди; schema/capability/public install не менялись.
+
 2026-10-24: **[native18 preparation/migration87/0 gate пройден](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md)**,
 26 ready files twice/72 Main +12 migration mutations и readonly recheck. Actor20
 metadata preparation проверен в original supervisor; actual17→18/refusal passed.

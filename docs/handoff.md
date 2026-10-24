@@ -1,5 +1,14 @@
 # Точка продолжения updater: native18 preparation gate закрыт — 2026-10-24
 
+**Продолжение после5741432:** начат physical file-handle bridge. Добавлен consuming
+однофайловый read handoff с удержанием denial-WRITE и exact File ID/hash; partial
+failure сохраняет оставшийся handle и не выдаётся за успешный read pin. Windows
+Clippy platform/update/worker passed (первый large Err исправлен Box). Готовы4
+native tests и отдельный `--runtime-read-handoff-only` режим существующего
+primitives runner. Native primitives ещё не запускались; после них whole-set
+original-guard/journal/actor binding. [Карта](plans/worker-self-update/runtime-activation.md).
+Schemas updater18/worker16/supervisor20/view12 прежние, public install off.
+
 [Actual Main18 preparation/migration87/0](plans/worker-self-update/windows-activation-preparation-gate-2026-10-24.md)
 **пройден**, task `c1675a54-b250-4fa9-b2d3-66c653033180`,
 run `20261024-111115-9272d0e2`, producerb12ecc6/fixture7f6a029.

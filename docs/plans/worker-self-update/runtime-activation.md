@@ -202,11 +202,42 @@ Task ID. Без `--verify-run` создаётся новый namespace/task. Gat
 Installed worker only, desktop не нужен,
 тестовые UI-окна не появляются; установленный runtime не меняется.
 
+## Начата physical bridge: однофайловый read handoff
+
+`crates/platform/src/runtime_files/read_handoff.rs` добавляет consuming
+`OwnedRuntimeFile::into_read_pin_checked` и non-Serde `RuntimeReadPin`. Переход
+сначала удерживает read handle с разрешением DELETE-sharing и запретом WRITE,
+проверяет исходные bytes/hash/File ID, освобождает только move handle и открывает
+строгий no-write/no-delete pin. После этого повторно сверяются path/File ID/hash
+обоих handles. Подмена файла с идентичными bytes не принимается. Checkpoint
+проверяется до acquisition, до release, после release и под final pin.
+
+Ошибка до release удерживает original move owner; после release — тот же
+readonly file object с запретом WRITE. Последний может разрешать rename/delete
+и намеренно **не возвращается как успешный pin или повторный move owner**.
+Caller обязан сохранять failure вместе с остальными directory/state/instance
+guards и запрещать launch. Ошибка хранит owner в Box; первый Clippy выявил
+128-byte Err, это исправлено без отключения lint.
+
+Windows all-target Clippy platform/update/worker passed. Четыре настоящих
+Windows теста подготовлены (success/before-release failure/after-release failure/
+same-bytes foreign File ID), ещё не выполнены. Для короткой проверки добавлен
+режим `validate-update-shutdown-primitives-native.py --runtime-read-handoff-only`;
+он выполняет только эти primitives в новом namespace и не повторяет полный
+87-test Main/candidate build. Schema/action/capability не меняются.
+
+Это пока однофайловая операция: consuming whole-set bridge под original updater
+guard, journal/current-owner binding и actor/launcher ещё требуется реализовать.
+После native primitives объединить пять **installed** файлов в PinnedInstalledSet,
+сохраняя старые displaced move handles и original exit/state custody. Только
+после полного exact readback разрешено приступать к отдельному create admission.
+
 ## Ограничения фактического кода
 
 - `RuntimeReplacementGuard` удерживает original exited process/state/instance
   custody, anchors и OwnedRuntimeFile handles. Новый cold reader их не получает.
   `FilesMoved` — исторический факт, а не permission на повторный запуск.
+
 - `LockedShutdownState` удерживает exclusive worker.lock. Обычный Worker::open
   не сможет получить тот же lock до явной передачи. `Worker::open` также дважды
   проверяет maintenance marker перед Store::open; эту защиту сохраняем.
