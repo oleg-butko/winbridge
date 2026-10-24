@@ -32,6 +32,39 @@ pub enum ActivationPreparationAdmission {
     Existing(Box<ActivationRecord>),
 }
 
+pub(crate) fn view(
+    value: Option<&ActivationRecord>,
+) -> winbridge_protocol::update::ActivationPreparationView {
+    use winbridge_protocol::update::{
+        ActivationPreparationPhase as Phase, ActivationPreparationView,
+    };
+    let phase = match value.map(|v| &v.state) {
+        None => Phase::NotPrepared,
+        Some(ActivationState::Prepared {}) => Phase::Prepared,
+        Some(ActivationState::Indeterminate { .. } | ActivationState::CreationFailed { .. }) => {
+            Phase::Indeterminate
+        }
+        Some(_) => Phase::Progressed,
+    };
+    let reason = value.and_then(|v| match &v.state {
+        ActivationState::Indeterminate { reason, .. }
+        | ActivationState::CreationFailed { reason } => Some(reason.clone()),
+        _ => None,
+    });
+    ActivationPreparationView {
+        phase,
+        attempt_id: value.map(|v| v.intent.attempt_id.clone()),
+        revision: value.map(|v| v.revision),
+        set_id: value.map(|v| v.intent.source.set_id.clone()),
+        replacement_sha256: value.map(|v| v.intent.source.replacement_sha256.clone()),
+        worker: value.map(|v| v.intent.source.worker.clone()),
+        worker_config_sha256: value.map(|v| v.intent.context.worker_config.sha256.clone()),
+        prepared_at_ms: value.map(|v| v.intent.admitted_at_ms),
+        physical_custody_held: false,
+        reason,
+    }
+}
+
 #[cfg(test)]
 pub(crate) use lifecycle::tests::{fixture as activation_fixture, stages as activation_stages};
 

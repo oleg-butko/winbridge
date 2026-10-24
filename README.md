@@ -62,6 +62,10 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
+Актуальная точка разработки апдейтера: [checkpoint 2026-10-24](docs/plans/worker-self-update/resume-2026-10-24-activation-preparation.md).
+Реализована внутренняя подготовка activation18/20; запуск нового worker и полное
+самообновление ещё не готовы. Этот checkpoint приоритетнее истории U0–U2 ниже.
+
 Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):
 `winbridge-update` проверяет исходники и показывает план замен, отдельный build-only
 сценарий собирает staging без остановки установленного worker. [19 native tests

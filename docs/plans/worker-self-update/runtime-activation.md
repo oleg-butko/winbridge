@@ -1,8 +1,10 @@
 # Activation после проверенного replacement
 
-2026-10-24. **Execution driver ещё не реализован; ledger18 локально проверен.**
-Текущий source updater18/supervisor19/view11. Actual production drain17 gate
-закрыт, следующий шаг — actor20 preparation и native18 gate. [Общий U0–U4 план](README.md),
+2026-10-24. **Execution driver ещё не реализован; actor20 preparation добавлен.**
+Текущий source updater18/worker16/supervisor20/view12. Actual production drain17 gate
+закрыт; combined native18 preparation/migration harness/gate ещё впереди.
+[Актуальный checkpoint и проверки](resume-2026-10-24-activation-preparation.md),
+[общий U0–U4 план](README.md),
 [original custody](runtime-replacement-custody.md),
 [resident replacement actor](runtime-replacement-actor.md).
 
@@ -88,7 +90,7 @@ all-target Clippy update/worker passed. Логи `activation-lifecycle-*.log` в
 private worker receiver и handoff. Controller/lifetime/global commit остаются
 отдельными следующими блоками; support activation пока=None.
 
-## Activation ledger18: реализация перед подключением actor
+## Activation ledger18: graph-bound preparation
 
 `apps/update/src/journal/activation.rs` добавляет intents/current/history с FK
 к runtime replacement, immutable identity/terminal triggers, causal CAS и
@@ -117,16 +119,29 @@ immutable history, cold no-repeat и synthetic17→18. Workspace709/0 (16 ignore
 final Linux/MSVC all-target Clippy update/worker passed. Логи `activation-ledger-*.log`.
 Actual17→18 migration/refusal и actual original-custody preparation **не запускались**.
 
+## Supervisor20/view12: подготовка подключена
+
+PrepareActivation/ObserveActivationPreparation принимаются только через exact
+Active bound supervisor/token/revision. Caller не передаёт record/nonce/paths;
+worker command в запросе запрещён. View12 читает graph в согласованном snapshot,
+live custody задаётся только resident signal. Frozen views1–11 не меняются.
+
+Единственный blocking slot перемещает тот же Box original replacement guard в
+`prepare_activation` и возвращает его actor при успехе и обычной ошибке. Fresh
+preparation/nonce остаются в памяти supervisor; durable Prepared до ACK, lost ACK
+не освобождает guard и не запускает новую подготовку. Duplicate возвращает
+существующие данные. Ни actor, ни DTO пока не умеют create/resume/handoff;
+activation support по-прежнему=None. Actual positive Windows branch ожидает gate.
+
 ### Следующая вертикаль
 
 1. Экспортировать clean source18 с built UI после commit
    как ограниченную fixture. Не использовать17 ZIP как candidate18.
    Выполнено для7f6a029: `winbridge-20261024T103055Z-7f6a029-3e94038a.zip`,
    pin `.winbridge/update-preparation/activation-fixture18-export.json`.
-2. Supervisor20/view12: Capture/Observe activation preparation, один blocking
-   slot, durable Prepared до ACK. Перемещать тот же Box original guard в callback
-   и возвращать actor вместе с результатом; не клонировать и не реконструировать
-   custody. Fresh nonce держать в resident object, не отправлять в DTO/report.
+2. Supervisor20/view12 реализован, local/cross результаты в checkpoint выше.
+   Перед native gate проверить вместе actor/ledger: durable Prepared до ACK,
+   тот же Box original guard, resident nonce, duplicate и cold no-adoption.
 3. Дополнить actual replacement Main fixture отдельным preparation-only mode:
    explicit internal legacy route до FilesMoved → capture20 → duplicate → cold
    read. Проверить root/files/state неизменны после capture, launch0. Ordinary

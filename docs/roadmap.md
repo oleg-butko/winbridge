@@ -1,5 +1,15 @@
 # Постепенная реализация и расширение
 
+2026-10-24, checkpoint: **supervisor20/view12 activation preparation** подключён
+к ledger18; worker schema16 прежняя. Это metadata, не launch capability.
+[Подробное продолжение](plans/worker-self-update/resume-2026-10-24-activation-preparation.md)
+содержит итоговые проверки и карту следующей работы. Native17 readonly recheck
+пройден; workspace713/0 (16 ignored), focused28/0, protocol-jsonschema53/0,
+Linux/MSVC Clippy/contracts/TypeScript/UI/fmt/scaffold262 также прошли.
+Combined actual18 preparation/migration harness/gate ещё впереди.
+Execution/state handoff/local/controller/lifetime, remaining U2/U3/U4 не готовы;
+public install off, installed d052 unchanged. Старые статусы ниже — история.
+
 2026-10-24: [activation ledger18](plans/worker-self-update/runtime-activation.md)
 добавлен: graph-bound reader, immutable history/CAS/readback и guarded metadata
 preparation с transient nonce (не create permit). SQL6/model22, workspace709/0

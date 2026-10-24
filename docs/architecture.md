@@ -2,17 +2,24 @@
 
 Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
-## Текущее состояние updater — завершение проверок 2026-10-23
+## Текущее состояние updater — checkpoint 2026-10-24
 
-В текущем source: **updater17/worker16, supervisor19/view11**.
-[Production drain17/19](plans/worker-self-update/compatible-drain.md) связывает
-immutable decision с exact support и atomic root/outbox; сохранённый Blocked
-запрещает legacy fallback. Workspace688/0 и local/cross checks завершены;
-**[actual17 Main/migration16→17 gate33/0 пройден](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md)**,
-27 ready files twice/38+19 mutations. ActivationSource model добавлена отдельно
-без permissions/OS effects; следующий блок — activation intent/FSM/ledger/driver.
-[Подробный checkpoint](plans/worker-self-update/resume-2026-10-23-compatible-drain.md)
-задаёт следующий gate и последовательность activation/U2/U3/U4.
+В текущем source: **updater18/worker16, supervisor20/view12**.
+[Activation preparation](plans/worker-self-update/runtime-activation.md) объединяет
+flat source binding, frozen startup data FSM, graph-bound ledger и guarded
+metadata preparation в original supervisor. Blocking slot возвращает тот же
+original guard; nonce остаётся только в resident non-Serde объекте. Prepared
+не предоставляет launch/state-open permission; cold read не восстанавливает custody.
+Старые views1–11 сохраняют форму. Execution driver/private worker receiver,
+state/lifetime handoff и controller confirmation ещё не реализованы.
+
+Последний [actual Windows gate33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md)
+проверяет producer17/actor19/view11, production Blocked до drain и actual16→17/refusal.
+Readonly recheck пройден; он не доказывает новую schema18/actor20 preparation.
+Следом combined actual18 preparation/migration gate, затем OS activation/U2/U3/U4.
+Production missing-capability blockers и public install off сохранены.
+[Новый подробный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-preparation.md)
+приоритетнее исторических статусов ниже.
 
 Подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
 одноразовое admission, consuming original custody, manifest-last перенос и

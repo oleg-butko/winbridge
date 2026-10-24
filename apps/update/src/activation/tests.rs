@@ -3,6 +3,54 @@ use super::*;
 use crate::runtime_replacement::tests::{completed, planned};
 
 #[test]
+fn preparation_projection_preserves_progress_and_never_restores_custody_or_nonce() {
+    use winbridge_protocol::update::ActivationPreparationPhase as Phase;
+    assert_eq!(view(None).phase, Phase::NotPrepared);
+    let (replacement, prepared) = activation_fixture();
+    for record in activation_stages(&prepared, &replacement) {
+        let projection = view(Some(&record));
+        assert_eq!(
+            projection.phase,
+            if record.revision == 0 {
+                Phase::Prepared
+            } else {
+                Phase::Progressed
+            }
+        );
+        assert_eq!(projection.revision, Some(record.revision));
+        assert_eq!(
+            projection.attempt_id.as_deref(),
+            Some(prepared.intent.attempt_id.as_str())
+        );
+        assert!(!projection.physical_custody_held);
+        let json = serde_json::to_value(projection).unwrap();
+        for field in [
+            "context",
+            "nonce",
+            "channelNonce",
+            "channelNonceSha256",
+            "permit",
+        ] {
+            assert!(json.get(field).is_none());
+        }
+    }
+    let creating = prepared.issue_create(201, &replacement).unwrap();
+    for record in [
+        creating
+            .creation_failed("No process".into(), 202, &replacement)
+            .unwrap(),
+        creating
+            .indeterminate("Unknown outcome".into(), 202, &replacement)
+            .unwrap(),
+    ] {
+        let projection = view(Some(&record));
+        assert_eq!(projection.phase, Phase::Indeterminate);
+        assert!(projection.reason.is_some());
+        assert!(!projection.physical_custody_held);
+    }
+}
+
+#[test]
 fn activation_source_names_installed_files_not_candidate_or_displaced_paths() {
     let record = completed();
     let source = ActivationSource::from_files_moved(&record).unwrap();

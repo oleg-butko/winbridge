@@ -132,6 +132,36 @@ fn compatible_view(
     Ok(view)
 }
 
+fn activation_view(
+    directory: &Path,
+    id: &str,
+    active: bool,
+    error: Option<String>,
+    preparing: bool,
+    signal: &crate::runtime_replacement::CustodySignal,
+) -> Result<UpdatePreparationView> {
+    let mut view =
+        UpdateJournal::activation_preparation_snapshot(directory, id, active, error.clone())
+            .map_err(crate::supervisor::error)?;
+    if let Some(p) = &mut view.runtime_replacement {
+        p.physical_custody_held = signal.held();
+    }
+    if let Some(p) = &mut view.activation_preparation {
+        p.physical_custody_held = signal.held();
+        if p.attempt_id.is_none() {
+            p.phase = if preparing {
+                ActivationPreparationPhase::Preparing
+            } else if error.is_some() {
+                ActivationPreparationPhase::Blocked
+            } else {
+                ActivationPreparationPhase::NotPrepared
+            };
+            p.reason = error;
+        }
+    }
+    Ok(view)
+}
+
 fn local(path: &Path) -> Result<PathBuf> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
     winbridge_platform::require_local_disk(path).map_err(error)?;
@@ -884,6 +914,53 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// V20 prepares metadata under resident custody; it cannot launch a worker.
+    pub async fn activation_preparation(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 20,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::PrepareActivation
+            } else {
+                SupervisorAction::ObserveActivationPreparation
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 20
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Activation preparation reply scope/version changed; no fallback".into());
+        }
+        if let Some(e) = response.error {
+            return Err(e);
+        }
+        let view = response
+            .preparation
+            .ok_or("Activation preparation view missing")?;
+        if view.schema_version != 12
+            || view.activation_preparation.is_none()
+            || view.runtime_replacement.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("Activation preparation view belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     /// V19 is the production prerequisite route; there is no fallback to v13.
     pub async fn compatible_drain(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -1412,6 +1489,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveCandidateSupport
                 | SupervisorAction::DrainCompatibleCandidate
                 | SupervisorAction::ObserveCompatibleDrain
+                | SupervisorAction::PrepareActivation
+                | SupervisorAction::ObserveActivationPreparation
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1591,6 +1670,11 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
         ReplacementDone(crate::runtime_replacement::ReplacementOutcome),
         SupportAdmitted(Result<crate::candidate_support::CandidateSupportAdmission>),
         CompatibleAdmitted(Result<crate::compatible_drain::CompatibleDrainAdmission>),
+        #[cfg(windows)]
+        ActivationPrepared {
+            guard: Box<crate::runtime_replacement::RuntimeReplacementGuard>,
+            result: Result<crate::activation::ActivationPreparationAdmission>,
+        },
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -1602,6 +1686,10 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut support_reply: Option<ipc::Stream> = None;
     let mut compatible_admitting = false;
     let mut compatible_reply: Option<ipc::Stream> = None;
+    let mut activation_preparing = false;
+    let mut activation_reply: Option<ipc::Stream> = None;
+    #[cfg(windows)]
+    let mut activation_preparation: Option<Box<crate::activation::ActivationPreparation>> = None;
     let mut drain_active = false;
     let mut shutdown_preparing = false;
     let shutdown_custody = crate::shutdown::Custody::default();
@@ -1625,6 +1713,14 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut driver_error: Option<String> = None;
     let ready_deadline = Instant::now() + Duration::from_secs(12);
     loop {
+        #[cfg(windows)]
+        if let Some(prepared) = &activation_preparation {
+            if prepared.record().intent.source.update_id != r.spec.update_id
+                || Some(prepared.record().intent.source.owner_epoch) != r.owner_epoch
+            {
+                return Err("Resident activation preparation changed scope; no adoption".into());
+            }
+        }
         #[cfg(windows)]
         if let Some(guard) = &replacement_guard {
             if guard.permit().intent().preparation.plan.update_id != r.spec.update_id {
@@ -1704,6 +1800,20 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     | crate::compatible_drain::CompatibleDrainAdmission::Observed(_),
                 )) => Ok(()),
                 DriverCompletion::CompatibleAdmitted(Err(e)) => Err(e),
+                #[cfg(windows)]
+                DriverCompletion::ActivationPrepared { guard, result } => {
+                    replacement_guard = Some(guard);
+                    match result {
+                        Ok(crate::activation::ActivationPreparationAdmission::Prepared(value)) => {
+                            activation_preparation = Some(value);
+                            Ok(())
+                        }
+                        Ok(crate::activation::ActivationPreparationAdmission::Existing(_)) => {
+                            Ok(())
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -1722,6 +1832,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             support_active = false;
             support_admitting = false;
             compatible_admitting = false;
+            activation_preparing = false;
             drain_active = false;
             driver_error = outcome
                 .err()
@@ -1739,6 +1850,33 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some(mut stream) = activation_reply.take() {
+                let snapshot = activation_view(
+                    &directory,
+                    &r.spec.update_id,
+                    false,
+                    driver_error.clone(),
+                    false,
+                    &replacement_signal,
+                );
+                let (preparation, error) = match snapshot {
+                    Ok(value) => (Some(value), driver_error.clone()),
+                    Err(e) => (None, Some(e)),
+                };
+                if error.is_some() {
+                    driver_error = error.clone();
+                }
+                let response = SupervisorResponse {
+                    contract_version: 20,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
+                };
+                // The committed preparation and nonce remain resident after a lost ACK.
+                let _ = ipc::write(&mut stream, &response).await;
+            }
             if let Some(mut stream) = compatible_reply.take() {
                 let snapshot = compatible_view(
                     &directory,
@@ -2427,6 +2565,97 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     error,
                     worker_control: None,
                     preparation,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::PrepareActivation | SupervisorAction::ObserveActivationPreparation
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 20
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err(
+                        "Activation preparation requires exact Active bound v20 supervisor".into(),
+                    );
+                }
+                let view = activation_view(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                    activation_preparing,
+                    &replacement_signal,
+                )?;
+                if request.action == SupervisorAction::ObserveActivationPreparation
+                    || activation_preparing
+                    || view
+                        .activation_preparation
+                        .as_ref()
+                        .is_some_and(|v| v.attempt_id.is_some())
+                {
+                    return Ok(view);
+                }
+                #[cfg(windows)]
+                let present = replacement_guard.is_some();
+                #[cfg(not(windows))]
+                let present = false;
+                if !present
+                    || work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::VerifyingLocal
+                {
+                    return Err("Activation preparation needs idle original replacement custody and VerifyingLocal root".into());
+                }
+                start = true;
+                Ok(view)
+            })();
+            if start && outcome.is_ok() {
+                #[cfg(windows)]
+                {
+                    let (mut journal, owner) =
+                        idle.take().ok_or("Activation preparation owner missing")?;
+                    let mut guard = replacement_guard
+                        .take()
+                        .ok_or("Original replacement guard missing")?;
+                    let spec = r.clone();
+                    activation_preparing = true;
+                    activation_reply = Some(stream);
+                    driver_error = None;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = journal
+                            .prepare_activation(&owner, &spec, &mut guard)
+                            .map_err(error);
+                        (
+                            journal,
+                            owner,
+                            DriverCompletion::ActivationPrepared { guard, result },
+                        )
+                    }));
+                }
+                #[cfg(not(windows))]
+                return Err("Activation preparation requires native Windows custody".into());
+            } else {
+                let (preparation, error) = match outcome {
+                    Ok(value) => (Some(value), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 20,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
                 };
                 let _ = ipc::write(&mut stream, &response).await;
             }
@@ -3483,7 +3712,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 SupervisorAction::WorkerControl | SupervisorAction::PrepareSource | SupervisorAction::ObservePreparation | SupervisorAction::BuildCandidate | SupervisorAction::AbortBeforeCutover | SupervisorAction::VerifyCandidateArtifacts | SupervisorAction::ObserveWorkerRuntime | SupervisorAction::CaptureRuntimeBaseline | SupervisorAction::ObserveRuntimeBaseline | SupervisorAction::ArchiveRuntimePreimages | SupervisorAction::ObserveRuntimePreimages | SupervisorAction::ObserveWorkerCompatibility | SupervisorAction::ValidateCandidateHealth | SupervisorAction::ObserveCandidateHealth | SupervisorAction::ObserveWorkerReceipt | SupervisorAction::ObserveWorkerDrain | SupervisorAction::DrainCandidate | SupervisorAction::ObserveCandidateDrain | SupervisorAction::ShutdownCandidate | SupervisorAction::ObserveCandidateShutdown | SupervisorAction::ShutdownCandidateForBackup | SupervisorAction::BackupWorkerState | SupervisorAction::ObserveStateBackup | SupervisorAction::PrepareRuntimeFiles | SupervisorAction::ObserveRuntimeFiles
                 | SupervisorAction::ReplaceRuntime | SupervisorAction::ObserveRuntimeReplacement
                 | SupervisorAction::CaptureCandidateSupport | SupervisorAction::ObserveCandidateSupport
-                | SupervisorAction::DrainCompatibleCandidate | SupervisorAction::ObserveCompatibleDrain => Err("Action needs its separate handler".into()),
+                | SupervisorAction::DrainCompatibleCandidate | SupervisorAction::ObserveCompatibleDrain
+                | SupervisorAction::PrepareActivation | SupervisorAction::ObserveActivationPreparation => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
@@ -3564,12 +3794,14 @@ mod tests {
             UpdateJournal::runtime_replacement_snapshot,
             UpdateJournal::candidate_support_snapshot,
             UpdateJournal::compatible_drain_snapshot,
+            UpdateJournal::activation_preparation_snapshot,
         ];
         for (index, snapshot) in snapshots.into_iter().enumerate() {
             let view = snapshot(&directory, &f.id, false, None).unwrap();
             assert_eq!(view.schema_version as usize, index + 1);
             let value = serde_json::to_value(&view).unwrap();
             assert_eq!(value.get("compatibleDrain").is_some(), index >= 10);
+            assert_eq!(value.get("activationPreparation").is_some(), index >= 11);
             if index < 9 {
                 assert!(value.get("candidateSupport").is_none());
             } else {

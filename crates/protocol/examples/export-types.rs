@@ -73,6 +73,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         CandidateSupportView::decl(&config),
         CompatibleDrainPhase::decl(&config),
         CompatibleDrainView::decl(&config),
+        ActivationPreparationPhase::decl(&config),
+        ActivationPreparationView::decl(&config),
         CandidateDrainPhase::decl(&config),
         CandidateDrainView::decl(&config),
         WorkerShutdownCommand::decl(&config),

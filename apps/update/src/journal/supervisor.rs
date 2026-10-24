@@ -199,6 +199,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 11)
     }
+    pub fn activation_preparation_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 12)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -311,6 +319,13 @@ impl UpdateJournal {
             candidate_state_backup,
             runtime_preparation,
             runtime_replacement,
+            activation_preparation: if view_schema >= 12 {
+                Some(crate::activation::view(
+                    super::activation::read(&tx, id)?.as_ref(),
+                ))
+            } else {
+                None
+            },
             compatible_drain: if view_schema >= 11 {
                 Some(crate::compatible_drain::view(
                     super::compatible_drain::read(&tx, id)?.as_ref(),

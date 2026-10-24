@@ -1361,6 +1361,71 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn activation_preparation_v20_observes_but_never_admits_without_original_custody() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_ref().unwrap();
+        let directory = Path::new(&h.record.spec.runtime_directory).join("update-state");
+        let before =
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap();
+        let observed = h.activation_preparation(false).await.unwrap();
+        assert_eq!(observed.schema_version, 12);
+        let activation = observed.activation_preparation.unwrap();
+        assert_eq!(activation.phase, ActivationPreparationPhase::NotPrepared);
+        assert!(activation.attempt_id.is_none());
+        assert!(!activation.physical_custody_held);
+        for _ in 0..2 {
+            assert!(h.activation_preparation(true).await.is_err());
+        }
+        #[cfg(feature = "update-validation")]
+        {
+            let request = h.validation_private_client().unwrap();
+            let pid = h.record.process.as_ref().unwrap().process_id;
+            for action in [
+                SupervisorAction::PrepareActivation,
+                SupervisorAction::ObserveActivationPreparation,
+            ] {
+                for invalid in 0..7 {
+                    let mut q = request.clone();
+                    q.action = action;
+                    q.contract_version = 20;
+                    match invalid {
+                        0 => q.contract_version = 1,
+                        1 => q.contract_version = 19,
+                        2 => q.contract_version = 21,
+                        3 => q.launch_id = uuid::Uuid::new_v4().to_string(),
+                        4 => q.expected_revision += 1,
+                        5 => q.worker_command = Some(WorkerUpdateControlCommand::BeginSource),
+                        _ => q.token = "0".repeat(64),
+                    }
+                    let reply: SupervisorResponse =
+                        winbridge_transport::supervisor::call(&h.record.spec.endpoint, pid, &q)
+                            .await
+                            .unwrap();
+                    assert_eq!(reply.contract_version, 20);
+                    assert!(reply.error.is_some());
+                    assert!(reply.preparation.is_none());
+                }
+            }
+        }
+        let legacy = h.compatible_drain(false).await.unwrap();
+        assert_eq!(legacy.schema_version, 11);
+        assert!(serde_json::to_value(legacy)
+            .unwrap()
+            .get("activationPreparation")
+            .is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap(),
+            before
+        );
+        assert!(
+            UpdateJournal::inspect_activation(&directory, &h.record.spec.update_id)
+                .unwrap()
+                .is_none()
+        );
+        f.stop().await;
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn production_drain_v19_observes_and_rejects_missing_support_without_effects() {
         let mut f = Fixture::new(None).await;
         f.launch().await;

@@ -1,45 +1,43 @@
-# Текущая точка: activation ledger18 готов к actor/native интеграции — 2026-10-24
+# Точка продолжения updater: activation preparation — 2026-10-24
 
-**Продолжение после model299f312:** source updater schema18, добавлен activation
-ledger/current/history, graph reader и Windows-only preparation с original guard.
-Actor/launch не подключены, schemas/actions worker16/supervisor19/view11 прежние.
-Подготовка сохраняет metadata +nonce digest; transient nonce только в свежем
-non-Serde объекте, это не create permit. SQL6/model22 прошли; workspace709/0
-(16 ignored), final Linux/MSVC all-target Clippy passed. Первый compile исправлен
-(mutable journal в test/cfg import). Actual17→18 migration и actual owned
-preparation ещё впереди. Не объявлять18 gate
-пройденным; ниже immutable native17 success. Active native runs нет.
+**Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-24-activation-preparation.md).**
+Она содержит карту кода, результаты проверок, exact task/run/source/proof pins,
+окружение, ограничения и последовательность продолжения. Пользователь поручил
+закрыть текущие проверки и сохранить checkpoint. Updater целиком не завершён.
+Нижние NEXT/ACTIVE, running/«ещё нет proof» — исторические записи; этот блок и
+новая инструкция имеют приоритет.
 
-Fixture18 уже экспортирована из commit7f6a029 (clean, built UI):
-`winbridge-20261024T103055Z-7f6a029-3e94038a.zip`, SHA256
-`4f17e0e0c5f4be899a3e4456b53240c0a9bd9b02b5a5aad2dee458ba29e7a788`.
-Export pin `.winbridge/update-preparation/activation-fixture18-export.json`.
-Не просить пользователя устанавливать этот ZIP: это ограниченная candidate
-fixture для будущего combined18 gate. Далее actor20/view12, distinct producer18.
+Текущий source: **updater18/worker16, supervisor20/view12**. Flat source binding,
+frozen startup FSM, graph-bound activation ledger и original-custody metadata
+preparation подключены к внутреннему actor. Guard возвращается из единственного
+blocking slot; plaintext nonce остаётся в resident non-Serde объекте. Duplicate
+не создаёт новый nonce; cold read не восстанавливает custody. Старые views1–11
+не получают поле activationPreparation. **Это подготовка, execution driver нет.**
+Public install выключен; activation/controller_confirmation/desktop_update
+support по-прежнему не объявлены реализованными.
 
-[Actual gate33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md):
-taska4f17a0d-4eea-4af2-8f2c-78bc6235c0af/run20261024-085627-3a106020,
-producer628c0f6, terminal succeeded/0.27 ready files twice,38 Main +19 migration
-mutations, readonly recheck passed. **Не resubmit, активных native runs нет.**
-Actual production request сохранён Blocked, root CandidateVerified10 без
-drain outbox/BeginDrain/shutdown; duplicate и legacy rejection проверены.
-Actual16→17/refusal/backup/history также прошли. Exact pins и readonly команда
-в отчёте. Dedicated owner thread8MiB прошёл реальный Main после двух stack failures.
+Закрывающие проверки: workspace713/0 (16 ignored), focused28/0,
+protocol-jsonschema53/0, Linux/MSVC all-target Clippy, generated contracts,
+TypeScript/UI build, fmt/diff/scaffold262 прошли. Cargo/native runs завершены.
+Подробности и логи — в новой инструкции. Debian осталось около15.4GiB, cleanup не было.
+Последний настоящий Windows gate относится к **producer17/actor19/view11**:
+[actual Main/migration33/0](plans/worker-self-update/windows-compatible-drain-gate-2026-10-24.md),
+run `20261024-085627-3a106020`, task `a4f17a0d-4eea-4af2-8f2c-78bc6235c0af`.
+Terminal succeeded/0,27 ready files twice,38 Main +19 migration mutations.
+При закрытии выполнен новый readonly recheck, **без submit**. Этот gate не
+проверяет последующие source/intent/FSM/ledger18/actor20. Старые tasks не resubmit.
 
-Native producer628c0f6: updater17/worker16/supervisor19/view11; current source
-updater18 (см. верх), остальные версии прежние. Public install off.
-Следующий [activation block](plans/worker-self-update/runtime-activation.md):
-ActivationSource model уже в cae9a45,5 новых model tests +1 projection/обе Clippy.
-Она не в immutable native producer628c0f6. Intent/FSM startup data также
-добавлены:10 новых lifecycle tests, workspace703/0 (16 ignored), обе Clippy passed.
-Prepared→Creating→Created→ResumeGranted→Ready→Handoff→StateOwned→LocalVerified,
-отдельные no-process/unknown outcomes. Поздние факты сохраняются, поздние новые
-grants запрещены. Это metadata, не разрешение запуска. Reader18 уже связывает
-context с authoritative shutdown/health/supervisor rows. Теперь actor20/view12
-и native18 preparation/migration gates, затем physical handoff/driver/local/
-controller. Новых RPC/capabilities пока нет.
-U3/U4 ещё впереди. Installed d052 healthy/active0/unchanged, ручное обновление
-не требуется; desktop можно закрыть, worker оставить. Старые ACTIVE/NEXT ниже — история.
+**Следующий шаг:** реализовать combined native18 preparation/migration gate:
+actual Main replacement fixture → capture20/duplicate/cold/read-only startup
+refusal и actual17→18/refusal на consistent копии successful17 history. Нового
+режима runner пока нет. Есть clean ограниченная fixture18 из7f6a029;
+нужен distinct producer18 после harness commit. Дальше physical file/state
+handoff, suspended launcher/private worker receiver, local/controller/lifetime
+confirmation, remaining U2 faults, U3/U4. [Activation plan](plans/worker-self-update/runtime-activation.md).
+
+Installed d052 подключён, active0, maintenance/recovery errors=null; runtime
+не менялся. Active native tasks нет. Desktop можно закрыть, installed worker
+оставить работать. Ручное обновление сейчас не требуется.
 
 ## История третьего native run: теперь terminal succeeded
 

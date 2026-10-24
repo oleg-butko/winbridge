@@ -5,40 +5,19 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий статус 2026-10-23
+## Текущий статус 2026-10-24
 
-Текущий source2026-10-24: updater18/worker16/supervisor19/view11. Activation
-source/intent/FSM и ledger/graph reader/guarded metadata preparation реализованы;
-workspace709/0 (16 ignored)/обе Clippy passed. Execution/capability пока нет.
-Следом actor20/view12 и combined native18 preparation/migration gate, затем
-physical startup/state handoff по [activation plan](runtime-activation.md).
+Начать с [подробного checkpoint следующей сессии](resume-2026-10-24-activation-preparation.md).
+Текущий source: updater18/worker16/supervisor20/view12. Activation source/intent/
+FSM/ledger и original-custody metadata preparation подключены к actor;
+execution/capability пока нет. Итоги закрывающих local/cross checks — в checkpoint.
 
-Актуально2026-10-24: [production drain17 actual Main33/0](windows-compatible-drain-gate-2026-10-24.md)
-прошёл,27 ready files twice/38+19 mutations, taska4f17a0d terminal succeeded/0.
-Активных native runs нет. Следом [activation intent/FSM/ledger/driver](runtime-activation.md).
-ActivationSource model уже local-tested отдельно; installed runtime не менялся.
-Нижние статусы — история предыдущих попыток.
-
-Actual17 третья попытка2026-10-24: taska4f17a0d/run20261024-085627-3a106020
-запущена с producer628c0f6/dedicated owner stack8MiB. Наблюдать тот же task;
-точная команда/recovery в [handoff](../../handoff.md). Полного proof ещё нет.
-
-Продолжение2026-10-24: [две native17 попытки](windows-compatible-drain-first-attempt-2026-10-24.md)
-terminal failed из-за supervisor main stack overflow; actual16→17/refusal
-прошёл в обеих. Heap boxing недостаточен; dedicated owner stack8MiB прошёл
-package244/0 и обе Clippy перед fresh run. Точная точка в [handoff](../../handoff.md),
-старые tasks не resubmit.
-Следующий [activation driver](runtime-activation.md) спланирован, не реализован.
-Записи ниже сохраняют прежнюю контрольную точку.
-
-Начать с [подробной инструкции продолжения](resume-2026-10-23-compatible-drain.md).
-[Required production drain17/actor19](compatible-drain.md) реализован,
-workspace688/0 (16 ignored), обе all-target Clippy/contracts/TS/UI и остальные
-локальные проверки прошли. Combined33-test actual Main17 + actual16→17/refusal
-подготовлен, **не запускался**. Следом этот gate, затем activation/U2 faults/U3/U4.
-[Actor18 actual Main23/0](windows-candidate-support-actor-gate-2026-10-23.md)
-пройден отдельно; он не запрашивал drain. Public install off, installed d052
-не менялся. Проверки закрыты по просьбе пользователя, активных runs нет.
+[Actual Windows17 Main/migration33/0](windows-compatible-drain-gate-2026-10-24.md)
+пройден и повторно проверен readonly. Active native runs нет. Следом **реализовать
+harness и пройти combined native18 preparation/migration gate**, затем physical
+startup/state handoff по [activation plan](runtime-activation.md). Public install
+выключен, installed d052 unchanged, U2 целиком/U3/U4 не завершены.
+Нижние NEXT/ACTIVE относятся к прошлым checkpoints.
 
 ### История предыдущих checkpoints
 

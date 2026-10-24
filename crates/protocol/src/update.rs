@@ -596,6 +596,9 @@ pub enum SupervisorAction {
     /// Internal v19: immutable prerequisite and atomic production drain admission.
     DrainCompatibleCandidate,
     ObserveCompatibleDrain,
+    /// Internal v20: original-custody preparation only; no process/state effect.
+    PrepareActivation,
+    ObserveActivationPreparation,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -669,6 +672,9 @@ pub struct UpdatePreparationView {
     /// V19/view11 only. A blocked decision never emits BeginDrain.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compatible_drain: Option<CompatibleDrainView>,
+    /// V20/view12 only. No nonce or execution permission is exposed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_preparation: Option<ActivationPreparationView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1076,3 +1082,6 @@ pub use candidate_support::*;
 
 mod compatible_drain;
 pub use compatible_drain::*;
+
+mod activation_preparation;
+pub use activation_preparation::*;
