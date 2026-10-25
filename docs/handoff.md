@@ -11,7 +11,8 @@ journal2/0/mailbox1, local/MSVC Clippy/generated contracts/TS/UI/fmt passed. Act
 Review исправил exact schema/accepted shutdown scope; stale local mailbox binary
 пересобран. Следом clean receiver fixture с marker2 и distinct harness producer/
 actual Main. Harness/verifier нового state mode ещё не добавлены. Pins/receipt
-следующего export — в linked document. Public install off; installed worker не менять.
+clean export1370d6b — в linked document. Receiver fixture2 готова:
+`winbridge-20261025T092432Z-1370d6b-257867fc.zip`. Public install off; installed worker не менять.
 
 ## Новейший результат: Main22 receiver gate пройден
 

@@ -152,3 +152,34 @@ connected/active0. Clean receiver fixture export receipt следующего ш
 Её ZIP/commit использовать как target нового distinct harness producer; старые
 terminal tasks112/0 и7/0 не replay. Нужен новый Rust Main case, PS state mode и
 independent Python verifier: они ещё не добавлены в этом source-блоке.
+
+## Готовая receiver2 fixture и точка продолжения
+
+Source commit `1370d6b030e18a22266be1b02d24e4371eee01ac` экспортирован clean:
+790 files,5,750,619 bytes, built UI. Shared sources ZIP
+`winbridge-20261025T092432Z-1370d6b-257867fc.zip`, SHA256
+`579728e29124e3bc914e22f070e3ab5634f68b17d0a0072d74a4387685230656`,
+manifest SHA256 `2dc515ce88cb981a633c9b4acd4a1504d4fc2368d088fb73f3373068d3772f16`.
+Receipts `.winbridge/update-preparation/activation-state-v2-fixture-{export,pin}.json`.
+Это source fixture, не положительный Windows execution proof.
+
+Следующий distinct producer должен добавить actual Main StateOwned scenario,
+PowerShell mode и independent verifier. Target — **1370d6b**, не прежняя1c23d48.
+Cache20261017-061527-f4639971, schema17 reference
+`.winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json`.
+Schemas18/16 совпадают; actual17→18/refusal проверки сохранить в combined gate.
+Новый state task/run ещё не существует; предыдущие112/0 и7/0 terminal.
+
+Ранее measured Ready был91.397s после admission (saved93.571s), окно120s.
+Для следующего positive state gate сразу вызывать23 после Ready; не помещать
+тяжёлые set/history/duplicate audits перед handoff. Если для boundary proof
+понадобятся validation hooks, source fixture их иметь не обязана: они нужны в
+frozen producer validation updater. Не увеличивать timeout ради success и не
+выдавать исторические data rows за нынешние OS permissions. После source/harness
+checks — один isolated run с сохранёнными metadata до ACK и same-run recovery.
+
+Last fresh installed observation: d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
+connected/active0, maintenanceError=null/journalRecoveryRequired=null,
+recoveryCoverage.complete=true. Controller PID3922/ws192.168.44.203:1143 работает.
+Desktop не нужен, installed worker оставить. Перед новым run снова Info/disk.
+Никаких Windows задач для нового state mode пока не отправлялось.
