@@ -31,8 +31,12 @@ def verify_runtime_replacement_faults_proof(proof, source, target):
     faults_proof.verify(proof, source, target, verify_runtime_preparation_proof, preimages_receipt_bytes, replacement_proof.expected_batch)
 
 
-def verify_runtime_replacement_proof(proof, source, target, activation_expected=False):
-    replacement_proof.verify(proof, source, target, verify_runtime_preparation_proof, preimages_receipt_bytes, activation_expected)
+def verify_runtime_replacement_proof(proof, source, target, activation_expected=False, *, worker_schema=16):
+    if type(worker_schema) is not int or worker_schema not in (16, 17):
+        raise ValueError('Unsupported explicit worker schema')
+    def preparation(component, old, new):
+        verify_runtime_preparation_proof(component, old, new, worker_schema=worker_schema)
+    replacement_proof.verify(proof, source, target, preparation, preimages_receipt_bytes, activation_expected)
 
 
 def archive_pin(path):
@@ -234,7 +238,7 @@ def verify_shutdown_main_proof(proof, source, target):
         _verify_shutdown_main_case(case, build, target)
 
 
-def _verify_shutdown_main_case(case, build, target):
+def _verify_shutdown_main_case(case, build, target, *, worker_schema=16):
     before, shutdown, root, cold = (case[k] for k in ('beforeMainExit', 'shutdown', 'root', 'coldAfterMain'))
     intent, delivery = shutdown['intent'], shutdown['delivery']
     binding = intent['binding']
@@ -254,7 +258,7 @@ def _verify_shutdown_main_case(case, build, target):
             or cold['state'] != binding['workerState'] or cold['helperImage'] != binding['loadedWorker']['image']
             or cold['descriptor'] != binding['loadedWorker']['descriptor']
             or cold['workerConfig']['sha256'] != binding['worker']['configSha256']
-            or cold['workerJournalSchema'] != 16):
+            or cold['workerJournalSchema'] != worker_schema):
         raise ValueError('Actual Main cold reader changed state or belongs to another scope')
     if denied:
         if cold['receipt'] is not None or before.get('receiptDeniedFixtureStop') is not True:
@@ -274,7 +278,7 @@ def _verify_shutdown_main_case(case, build, target):
         raise ValueError('Live Main duplicate fabricated exit/custody')
 
 
-def verify_state_backup_proof(proof, source, target):
+def verify_state_backup_proof(proof, source, target, *, worker_schema=16):
     build = proof.get('build', {})
     if (proof.get('kind') != 'state_backup_main_native_proof' or proof.get('passed') is not True
             or proof.get('platform') != 'windows' or proof.get('target') != target
@@ -285,7 +289,7 @@ def verify_state_backup_proof(proof, source, target):
             or len(proof.get('cases', [])) != 1 or proof['cases'][0].get('fault') != 'none'):
         raise ValueError('Final backup Main/source/target/isolation proof differs')
     case = proof['cases'][0]
-    _verify_shutdown_main_case(case, build, target)
+    _verify_shutdown_main_case(case, build, target, worker_schema=worker_schema)
     backup = case['finalStateBackup']
     r = backup['record']
     intent, report, cleanup = r['intent'], r['report'], r['cleanup']
@@ -294,7 +298,7 @@ def verify_state_backup_proof(proof, source, target):
     canonical = json.dumps([binding, intent['attemptId']], sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
     if (intent.get('schemaVersion') != 1
             or hashlib.sha256(b'winbridge.final-state-backup.intent.v1\n'+canonical).hexdigest() != intent['bindingSha256']
-            or binding['shutdown'] != case['shutdown'] or binding['workerJournalSchema'] != 16
+            or binding['shutdown'] != case['shutdown'] or binding['workerJournalSchema'] != worker_schema
             or PureWindowsPath(binding['parentDirectory']) != PureWindowsPath(old['loadedWorker']['image']['path']).parent/'update'/old['updateId']
             or case['root']['revision'] != old['parentRevision']+2
             or r.get('phase') != 'verified' or r.get('revision') != 5
@@ -305,7 +309,7 @@ def verify_state_backup_proof(proof, source, target):
             or report.get('helperDescriptor') != old['loadedWorker']['descriptor']
             or report.get('helperImage') != old['loadedWorker']['image']
             or report.get('workerConfig') != binding['workerConfig']
-            or report.get('state') != old['workerState'] or report.get('workerJournalSchema') != 16
+            or report.get('state') != old['workerState'] or report.get('workerJournalSchema') != worker_schema
             or report.get('shutdownReceipt') != case['shutdown']['delivery']['receipt']
             or report.get('inputSha256') != r['inputFile']['sha256']
             or report['sourceAuthority'] != report['backupAuthority']
@@ -361,11 +365,11 @@ def prepared_manifest_bytes(manifest):
     return json.dumps(result, ensure_ascii=False, separators=(',', ':')).encode()
 
 
-def verify_runtime_preparation_proof(proof, source, target):
+def verify_runtime_preparation_proof(proof, source, target, *, worker_schema=16):
     if proof.get('kind') != 'runtime_preparation_main_native_proof':
         raise ValueError('Runtime preparation proof kind differs')
     component = dict(proof, kind='state_backup_main_native_proof')
-    verify_state_backup_proof(component, source, target)
+    verify_state_backup_proof(component, source, target, worker_schema=worker_schema)
     case = proof['cases'][0]
     p = case['runtimePreparation']
     r, v = p['record'], p['view']

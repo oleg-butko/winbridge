@@ -5,26 +5,30 @@
 Продолжать по [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
 и [writer actor](plans/worker-self-update/journal-writer-actor.md).
 
-Текущие проверки завершены, новый Windows writer run не запускался. Checkpoint
-содержит актуальную карту кода, source/physical доказательства, pins, safe resume
-и подробный первый следующий сценарий; новых незавершённых harness edits нет.
+После checkpoint36f9895 добавлены Rust Main24 и independent verifier; source/
+cross/local checks прошли. PS mode/observer и реальные migration fixtures ещё
+нужны. Новый Windows writer run не запускался.
 
 - Source **updater19/worker17/supervisor24/view16/private physical2+writer3**.
   Worker atomic header/receipt/opening и graph-bound updater intent/history,
   consuming native private driver/worker handler и actor24/view16 реализованы.
-  **Native writer harness/proof ещё впереди**. Public install/capabilities off.
+  Rust Main24/verifier готовы в source; **combined native gate/proof ещё впереди**.
+  Public install/capabilities off.
 - Source checks **workspace781/0 (16 ignored), focused19/mailbox24 1/0**,
   обе Clippy/fmt/contracts/TS/UI/scaffold passed; summary `actor24-checks.json`.
 - [Physical132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   относится к18/16/private2. Terminal run20261025-100933-d8a50807 не replay.
   Installed d052 unchanged/healthy; closing readonly recheck прошёл, новых native
   runs нет, desktop не нужен. Receiver source ZIP также повторно проверена.
+- Main24 source checks: portable hooks4/0, Python19/0, обе all-target validation
+  Clippy passed; old132 readonly verifier regression прошёл. Это не writer native proof.
 
 Следующая последовательность:
 
 1. Receiver19/17/private3/actor24 clean **1a2149f уже экспортирована**;
    [hashes/pin](plans/worker-self-update/journal-writer-actor.md#готовая-clean-receiver-fixture).
-   Следом actual Main/PS writer mode/verifier (пока отсутствуют), distinct producer.
+   Rust Main/verifier добавлены. Следом actual migration fixtures и PS mode/
+   observer, затем distinct producer.
 2. Combined native writer/actual updater18→19 и worker16→17/refusal; correct
    None ACK/busy, immediate24 after StateOwned, original120s сохранить.
 3. Normal local service/reconciliation, actual controller session, owned

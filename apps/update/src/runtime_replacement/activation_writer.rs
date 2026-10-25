@@ -104,6 +104,8 @@ impl ActivationProcessGuard {
             .map_err(|e| e.to_string())?;
         self.require_fixed_custody(true)?;
         live.require_live().map_err(|e| e.to_string())?;
+        #[cfg(feature = "update-validation")]
+        validation::writer_before_send(&self.record, &permit.record().command)?;
         let remaining = self
             .files
             .preparation

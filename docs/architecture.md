@@ -28,6 +28,10 @@ volatile ACK/busy без full audit до private grant, saved confirmation от�
 от actual residency/liveness. Старые views1–15 frozen; source781/0 и Linux/MSVC
 Clippy/TS/UI passed. Обычный activated
 service/reconciliation/local/controller/lifetime и U2 faults/U3/U4 впереди.
+Source Main24 и independent writer verifier добавлены: same-child fast path,
+два связанных SQL journals/receipts, fencing и отдельное cold наблюдение.
+Hooks4/Python19/обе validation Clippy passed; PS/observer/migration wiring и
+actual native writer proof ещё впереди. Старый physical132 readonly принят снова.
 Original120s сохраняется. Public install off, advertised activation/controller/
 desktop=None. Serialized data не восстанавливают kernel custody или permissions.
 Installed runtime не менялся; source/cross checks не подменяют actual Windows gate.

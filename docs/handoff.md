@@ -4,11 +4,10 @@
 и [actor24/view16](plans/worker-self-update/journal-writer-actor.md).**
 Общая цель updater продолжается; полное самообновление ещё не готово.
 
-**Проверки закрыты по просьбе пользователя.** Подробный checkpoint сверен с HEAD.
-В нём есть
-история commits, актуальный код, результаты/логи, exact ZIP/proof pins, команды
-readonly восстановления и критерии следующего combined native gate. Ожидающих
-Cargo/native/observer runs и незаконченных изменений harness нет.
+После checkpoint36f9895 продолжена подготовка combined native writer gate:
+Rust Main24 и independent verifier добавлены, source/cross/local checks прошли.
+PS mode/observer и реальные migration fixtures ещё нужно подключить.
+Ожидающих Cargo/native/observer runs нет; native writer proof пока отсутствует.
 
 ## Авторитетное состояние
 
@@ -20,11 +19,17 @@ Cargo/native/observer runs и незаконченных изменений harn
   one-shot send, atomic worker header+receipt, authenticated confirmation/uncertainty;
   maintenance сохранена. **Actor24/view16 подключены:** original Owned → один
   blocking slot, one key, exact confirmation и retained failures. Fast ACK/busy
-  без full snapshot. **Native writer gate ещё не реализован/не выполнен.**
+  без full snapshot. Main24/verifier source добавлен; **combined native writer
+  gate ещё не подключён/не выполнен**.
 - Final source checks: **workspace781/0 (16 ignored), focused writer19/0,
   actual local mailbox24 1/0**, Linux/MSVC validation all-target Clippy,
   contracts/generation/TS/UI/fmt/scaffold passed; summary `actor24-checks.json`.
   Native19/17/private3 proof ещё нет. Не выдавать source/cross за Windows execution.
+- Новые Main24 checks: portable hooks4/0, Python19/0, обе workspace all-target
+  validation Clippy passed; legacy132/0 readonly recheck принят. Workspace781/0
+  выше относится к1a2149f; полный workspace после test-only изменений не повторялся.
+  Native test-only create-new marker перед send связан с worker receipt/updater
+  history, отдельно проверяются epoch/old-owner fencing и сохранность прочих tables.
 - [Actual physical Main23](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   **132/0**, run20261025-100933-d8a50807,
   task6bc1623a-c5c4-49ce-8511-cb46b43c7ece, producer7b270c6/target1370d6b.
@@ -39,8 +44,9 @@ Cargo/native/observer runs и незаконченных изменений harn
 1. Clean receiver **1a2149f / 19/17/private3/actor24 уже готова**:
    `winbridge-20261025T163918Z-1a2149f-8b8c082c.zip`; hashes/pin в
    [actor24](plans/worker-self-update/journal-writer-actor.md#готовая-clean-receiver-fixture).
-   Следом actual Main harness/PS writer mode/independent verifier (пока нет)
-   и distinct producer после harness commit. Старый target1370d6b не подходит.
+   Rust Main/verifier есть. Следом actual18→19/worker16→17 fixtures, PS writer
+   mode/observer и distinct producer после clean commit. Target1370d6b подходит
+   только как old16 migration reference, не как same-schema writer target.
 2. Combined native writer + actual updater18→19/refusal и worker16→17/refusal.
    None от24 start/observe — только ACK/busy. Сразу start после StateOwned,
    audits после receipt/Job cleanup; original120s не продлевать.
@@ -54,6 +60,9 @@ physical132/0 (45 files twice,44+40+12 mutations), receiver ZIP и source test l
 Fresh Info2026-10-25T16:52:47Z: тот же d052/generation, connected/active0,
 maintenance/recovery errors=null, coverage.complete=true. Generated closing
 summary `.winbridge/update-preparation/checkpoint-20261025-close.json`.
+После Main24 checks fresh Info19:30:01Z: тот же worker connected/active0,
+errors=null; `writer-main24-post-info.json`. Source checks summary
+`writer-main24-source-checks.json`, новые native writer tasks не отправлялись.
 Desktop можно закрыть, **installed worker оставить**. Controller PID3922/
 ws://192.168.44.203:1143 оставлен работать; после reboot перепроверить Info/listener,
 не запускать второй. Перед heavy build оба диска≥6GiB, CARGO_INCREMENTAL=0,

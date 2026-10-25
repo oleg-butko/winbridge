@@ -72,10 +72,28 @@ pub(super) fn execute(
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
 ) -> serde_json::Value {
+    execute_inner(root, sup, replacement, false)
+}
+pub(super) fn execute_writer(
+    root: &Path,
+    sup: &SupervisorRecord,
+    replacement: &serde_json::Value,
+) -> serde_json::Value {
+    execute_inner(root, sup, replacement, true)
+}
+fn execute_inner(
+    root: &Path,
+    sup: &SupervisorRecord,
+    replacement: &serde_json::Value,
+    writer: bool,
+) -> serde_json::Value {
     let timer = Instant::now();
     let directory = root.join("runtime/update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
+    // All baseline observations precede preparation admission. Do not spend
+    // the remaining original window on them after StateOwned.
+    let baseline = writer.then(|| super::activation_writer::Baseline::capture(root, id));
     let rt = tokio::runtime::Runtime::new().unwrap();
     let mut q: SupervisorRequest =
         serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
@@ -134,6 +152,19 @@ pub(super) fn execute(
     });
     let owned_elapsed_ms = timer.elapsed().as_millis();
     println!("Activation state timing: Ready at {ready_elapsed_ms}ms; StateOwned at {owned_elapsed_ms}ms");
+
+    if let Some(baseline) = baseline {
+        return super::activation_writer::execute(
+            root,
+            sup,
+            &rt,
+            q,
+            baseline,
+            json!({"before":before,"preparing":preparing,"preparedView":prepared_view,
+                "prepared":prepared,"binding":binding,"bound":bound,"launching":launching,
+                "ready":ready,"owned":owned,"workerBytesBefore":bytes}),
+        );
+    }
 
     let record = UpdateJournal::inspect_activation(&directory, id)
         .unwrap()

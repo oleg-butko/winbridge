@@ -35,18 +35,10 @@ def strict(value, preparation):
     visit(value)
 
 
-def verify(proof, source, target, root, preparation, health):
-    strict(proof, preparation)
-    need(proof['kind'] == 'activation_state_main_native_proof', 'Wrong physical state proof kind')
-    health.verify_runtime_replacement_proof(dict(proof, kind='runtime_replacement_main_native_proof'), source, target, True)
-    case, = proof['cases']
-    before, replaced = case['beforeReplacement'], case['replacement']
-    p, cold = case['activationState'], case['coldActivationState']
-    need('activationProcess' not in case and 'coldActivationProcess' not in case,
-         'StateOwned may not masquerade as an old Ready-only process proof')
+def verify_owned_prefix(p, cold, before, replaced, root, preparation, *, source, worker_schema=16, updater_schema=18):
     prepared, record, history = p['prepared'], p['record'], p['history']
     intent = prepared['intent']
-    pin, ctx = preparation.verify_scope(prepared, p, before, replaced, root)
+    pin, ctx = preparation.verify_scope(prepared, p, before, replaced, root, worker_schema=worker_schema, updater_schema=updater_schema)
     root_record = replaced['view']['update']
     need(root_record['updatedAtMs'] <= intent['admittedAtMs'], 'State preparation predates FilesVerified')
     empty = dict(schemaVersion=1, intent=intent, revision=0, updatedAtMs=intent['admittedAtMs'],
@@ -119,6 +111,22 @@ def verify(proof, source, target, root, preparation, health):
                         images=replaced['actualInstalledFiles'][:4])
     need(p['actualSet'] == expected_set and p['sharing'] == [dict(image=image, writeDenied=True, deleteDenied=True)
          for image in expected_set['images'] + [expected_set['manifestFile']]], 'Five-file identities/sharing evidence differs')
+    return pin, ctx, intent, record, history, process, owned, identity
+
+
+def verify(proof, source, target, root, preparation, health):
+    strict(proof, preparation)
+    need(proof['kind'] == 'activation_state_main_native_proof', 'Wrong physical state proof kind')
+    health.verify_runtime_replacement_proof(dict(proof, kind='runtime_replacement_main_native_proof'), source, target, True)
+    case, = proof['cases']
+    before, replaced = case['beforeReplacement'], case['replacement']
+    p, cold = case['activationState'], case['coldActivationState']
+    need('activationProcess' not in case and 'coldActivationProcess' not in case,
+         'StateOwned may not masquerade as an old Ready-only process proof')
+    prepared, record, history = p['prepared'], p['record'], p['history']
+    pin, ctx, intent, record, history, process, owned, identity = verify_owned_prefix(
+        p, cold, before, replaced, root, preparation, source=source)
+    root_record = replaced['view']['update']
     files = dict(phase='bound', attemptId=intent['attemptId'], setId=pin['setId'], heldFiles=5, worker=pin['worker'],
                  manifestSha256=pin['manifest']['sha256'], originalStateHeld=False, reason=None)
     physical = dict(phase='state_owned', attemptId=intent['attemptId'], revision=6, durablePhase='state_owned',

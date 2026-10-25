@@ -3,7 +3,10 @@
 2026-10-25 America/New_York. Продолжение
 [ledger19/private writer3](journal-writer-runtime.md). **Actor24 и view16
 реализованы и прошли source/local IPC/cross проверки. Настоящего native writer
-gate ещё нет.** Updater19/worker17 и private physical2/writer3 прежние.
+gate ещё нет.** После checkpoint36f9895 добавлены Rust Main24 и independent
+verifier; PS/observer/actual migration wiring ещё нужно. Подробности в
+[текущем checkpoint](resume-2026-10-25-journal-activation.md).
+Updater19/worker17 и private physical2/writer3 прежние.
 Public install и advertised activation/controller/desktop drivers=None.
 
 ## Владение и запуск
@@ -120,8 +123,9 @@ old18 image с retained verified pins, не менять поле schema у пр
 
 ## Следующий шаг: один combined native gate
 
-1. Новая **receiver19/17/private3/actor24 готова выше**. Добавить harness/verifier
-   и экспортировать distinct producer после clean harness commit. Старый
+1. Новая **receiver19/17/private3/actor24 готова выше**. Rust Main24 и независимый
+   writer verifier добавлены, actual execution ещё нет. Закончить реальные
+   migration fixtures и PS/observer, затем экспортировать distinct producer. Старый
    receiver1370d6b/18/16/private2 не подходит. Writer flags/mode в существующих
    PS/Python сценариях пока **не добавлены**; не считать их уже доступными.
 2. Main: обычные shutdown/backup/preparation/replacement/Ready/state handoff,
@@ -145,3 +149,26 @@ old18 image с retained verified pins, не менять поле schema у пр
 Перед новым Windows run fresh Info/оба диска≥6GiB, один cache lease, объявить
 worker-only/no UI. Не replay terminal/unknown task. При неожиданном поведении
 installed worker либо требовании ручного обновления остановить зависимые действия.
+
+## Подготовленный Main24 source
+
+`apps/worker/tests/update_shutdown/activation_writer.rs` вызывается из быстрой
+ветки StateOwned до старых physical-only audits. Baseline берётся до admission
+и требует Exited старого worker. Нативный helper проверяет actual header/receipt,
+cached owner fencing, Quiesced lease/accepted stop и digest всех остальных таблиц,
+duplicate/legacy views и cold actual exit/освобождение lock. Для нового эффекта
+post-crash refusal сравнивает bytes после writer; прежний physical режим по-прежнему
+требует неизменённый worker journal с начала сценария.
+
+Validation-only create-new before-send marker не перезаписывается второй попыткой.
+Он не является delivery receipt. Новый `scripts/update-activation-writer-proof.py`
+связывает его с physical prefix, обоими SQL observations и Confirmed history,
+отделяет saved facts от residency/liveness/service. Schema pair19/17 задаётся
+явно; legacy defaults18/16 и CLI modes не расширялись.
+
+Checks: portable hooks4/0, Python19/0 (writer component6 и25 отдельных tamper cases,
+coordinated epoch rewrite, counter/privacy/schema boundaries), обе workspace
+all-target validation Clippy passed. Old132/45-files/44+40+12-mutations readonly
+recheck принят. Logs `writer-main24-*.log`, summary `writer-main24-source-checks.json`.
+Это source/cross и synthetic verifier evidence; Windows Main24 ещё не запускался,
+PS/observer writer flag отсутствует. Installed d052 healthy/idle, runtime прежний.

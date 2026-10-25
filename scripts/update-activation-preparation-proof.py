@@ -42,7 +42,9 @@ def windows_path(value):
     return PureWindowsPath(value[4:] if value.startswith('\\\\?\\') else value)
 
 
-def verify_scope(r, saved, before, replaced, root):
+def verify_scope(r, saved, before, replaced, root, *, worker_schema=16, updater_schema=18):
+    need(type(worker_schema) is int and type(updater_schema) is int
+         and (worker_schema, updater_schema) in ((16, 18), (17, 19)), 'Unsupported explicit activation schema pair')
     sup, h = saved['supervisor'], saved['health']
     intent, ctx, binding = r['intent'], r['intent']['context'], before['shutdown']['intent']['binding']
     replacement = replaced['record']
@@ -74,8 +76,8 @@ def verify_scope(r, saved, before, replaced, root):
     expected_context = dict(supervisor=sup['process'], previousWorker=binding['worker']['process'],
                             previousGeneration=binding['worker']['generation'], workerContext=binding['worker']['context'],
                             workerState=binding['workerState'], workerConfig=h['context']['workerConfig'],
-                            workerConfigSchema=rehearsal['workerConfigSchema'], workerJournalSchema=16,
-                            updaterJournalSchema=18, protocolVersion=rehearsal['protocolVersion'], startupTimeoutMs=120000,
+                            workerConfigSchema=rehearsal['workerConfigSchema'], workerJournalSchema=worker_schema,
+                            updaterJournalSchema=updater_schema, protocolVersion=rehearsal['protocolVersion'], startupTimeoutMs=120000,
                             channelNonceSha256=ctx['channelNonceSha256'])
     need(ctx == expected_context and re.fullmatch(r'[0-9a-f]{64}', ctx['channelNonceSha256'])
          and str(uuid.UUID(intent['attemptId'])) == intent['attemptId']

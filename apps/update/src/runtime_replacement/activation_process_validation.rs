@@ -260,9 +260,61 @@ pub(super) fn state_boundary(
     fence()
 }
 
+/// A create-new marker bounds the native fixture to one attempted private send.
+/// Its existence alone is not delivery: the worker's committed receipt and the
+/// updater's confirmation must independently agree with it.
+pub(super) fn writer_before_send(
+    record: &ActivationRecord,
+    command: &winbridge_protocol::update::WorkerJournalActivationCommand,
+) -> Result<()> {
+    let Some(ValidationInput {
+        root,
+        pin,
+        raw,
+        input,
+    }) = capture(record)?
+    else {
+        return Ok(());
+    };
+    if !input.state_trace_only {
+        return Err("Writer trace requires the explicit nonblocking state fixture".into());
+    }
+    crate::activation::writer::validate_command(
+        command,
+        record,
+        &command.binding.expected_authority,
+    )?;
+    let marker = serde_json::json!({"schemaVersion":1,"kind":"activation_writer_before_send",
+        "processId":std::process::id(),"build":winbridge_protocol::build_identity(),
+        "input":input,"inputEncoded":String::from_utf8(raw).map_err(|_|"Validation input UTF-8 rejected")?,
+        "inputSha256":pin.evidence.sha256,"record":record,"recordSha256":record_sha(record)?,
+        "commandId":command.command_id,"commandSha256":crate::activation::writer::command_sha256(command)?,
+        "observedAtMs":crate::journal::now_ms().map_err(|e|e.to_string())?});
+    write_marker(&root, "activation-writer-before-send.json", &marker)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn writer_trace_is_create_new_and_cannot_overwrite_an_earlier_send_attempt() {
+        let root = tempfile::tempdir().unwrap();
+        let first = serde_json::json!({"commandId":"first"});
+        write_marker(root.path(), "activation-writer-before-send.json", &first).unwrap();
+        assert!(write_marker(
+            root.path(),
+            "activation-writer-before-send.json",
+            &serde_json::json!({"commandId":"second"})
+        )
+        .is_err());
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(
+                &fs::read(root.path().join("activation-writer-before-send.json")).unwrap()
+            )
+            .unwrap(),
+            first
+        );
+    }
     fn fixture() -> (tempfile::TempDir, WorkerShutdownState) {
         let temp = tempfile::tempdir().unwrap();
         fs::write(temp.path().join("journal.sqlite"), b"not opened as SQLite").unwrap();

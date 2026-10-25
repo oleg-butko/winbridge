@@ -374,6 +374,35 @@ pub(super) fn after_owned_exit(
     id: &str,
     proof: &serde_json::Value,
 ) -> serde_json::Value {
+    after_exit(
+        root,
+        config,
+        worker,
+        id,
+        proof,
+        &proof["workerBytesBefore"],
+        false,
+    )
+}
+pub(super) fn after_writer_exit(
+    root: &Path,
+    config: &Path,
+    worker: &Path,
+    id: &str,
+    proof: &serde_json::Value,
+    writer_bytes: &serde_json::Value,
+) -> serde_json::Value {
+    after_exit(root, config, worker, id, proof, writer_bytes, true)
+}
+fn after_exit(
+    root: &Path,
+    config: &Path,
+    worker: &Path,
+    id: &str,
+    proof: &serde_json::Value,
+    expected_bytes: &serde_json::Value,
+    activation_started: bool,
+) -> serde_json::Value {
     let directory = root.join("runtime/update-state");
     let (r, _) =
         observe_after_owned_exit(|| UpdateJournal::inspect_runtime_replacement(&directory, id))
@@ -405,6 +434,8 @@ pub(super) fn after_owned_exit(
     let bytes = journal_bytes(root);
     restart_refused(worker, config, root, id);
     assert_eq!(journal_bytes(root), bytes);
-    assert_eq!(bytes, proof["workerBytesBefore"]);
-    json!({"record":r,"view":view,"normalStartupRefused":true,"workerBytesUnchanged":true,"ownedJobEmpty":true,"activationStarted":false})
+    assert_eq!(&bytes, expected_bytes);
+    json!({"record":r,"view":view,"normalStartupRefused":true,"workerBytesUnchanged":true,
+        "workerBytesBeforeStartup":bytes,"workerBytesAfterStartup":journal_bytes(root),
+        "ownedJobEmpty":true,"activationStarted":activation_started})
 }

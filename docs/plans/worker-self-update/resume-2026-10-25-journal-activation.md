@@ -5,14 +5,15 @@
 [checkpoint до Main23](resume-2026-10-25-state-handoff.md). Пользователь поручил
 закончить текущие проверки, описать точную границу реализации и сделать коммит.
 
-**Проверки завершены; ожидающих Cargo/native/observer runs нет.** Код последней
-функциональности — `1a2149f`, receiver pin — `7fd8135`. В закрывающем изменении
-меняется документация; нового writer harness и нового Windows writer-прогона нет.
+**После checkpoint36f9895 добавлены Rust Main24 и независимый writer verifier.**
+Они прошли source/cross/local проверки; нового Windows writer-прогона нет.
+PS mode/observer wiring и реальные миграционные fixtures ещё нужны. Ожидающих
+Cargo/native/observer runs нет. Receiver pin остаётся `7fd8135`/target `1a2149f`.
 Самообновление целиком **не готово**, public install остаётся выключенным.
 
-Первое следующее действие: реализовать **combined native writer gate** для уже
-готового receiver `1a2149f`, закоммитить harness, экспортировать отдельный producer
-и выполнить один автоматический прогон. Обновлять установленный worker для этого
+Первое следующее действие: закончить **combined native writer gate** для уже
+готового receiver `1a2149f`: actual updater18→19 и worker16→17/refusal fixtures,
+PS/observer mode, затем clean distinct producer и один автоматический прогон. Обновлять установленный worker для этого
 сейчас не требуется. Подробности, ограничения и критерии ниже.
 
 ## 1. Что реализовано и что ещё не доказано
@@ -28,7 +29,7 @@ command/receipt имеют schema1. Номер private contract не равен 
 | U2.2 physical | Preparation/replacement, один private child, Ready и передача ему прежнего instance lock подтверждены на Windows для updater18/worker16/private2. |
 | Worker journal activation | Реализованы exact old-header CAS + immutable receipt в одной транзакции, schema17 и обычная inactive16→17 migration с backup. Source/local/cross checks прошли. |
 | Existing-state opening | `ActivationJournal` удерживает Store и тот же acquired lock; opening без CREATE/migration/обычного begin_authority, одноразовая попытка и retained failure custody реализованы. |
-| Writer pipeline | Updater19 intent/history, consuming native driver, worker private3 handler и supervisor24/view16 реализованы. **Настоящего Windows writer proof ещё нет.** |
+| Writer pipeline | Updater19 intent/history, consuming native driver, worker private3 handler и supervisor24/view16 реализованы. Rust Main24/independent verifier добавлены; PS/observer/migration wiring ещё нужно. **Настоящего Windows writer proof ещё нет.** |
 | Activated normal service | Reconciliation, normal local IPC, новая controller session и передача lifetime ещё не реализованы. |
 | Завершение обновления | Commit/scoped release, оставшиеся U2 faults/management, U3 desktop и U4 installed self-update впереди. |
 
@@ -97,6 +98,27 @@ Cold view — NotResident, liveness unknown. Views1–15 остаются frozen
 
 ## 3. Законченные проверки и evidence
 
+После36f9895 добавлен source Main24: original child/lock, один writer command,
+actual worker receipt/header observations, stale cached owner refusal, все прочие
+worker tables сохранены, duplicate/legacy/cold/actual Job exit. Fast branch сразу
+передаёт24 после StateOwned; тяжёлый physical-only audit до него не выполняется.
+Отдельный create-new trace перед private send существует только в explicit clean
+validation fixture. Marker сам не доказывает delivery; он связан с обеими receipts.
+
+Новые проверки: portable validation hooks **4/0**, Python preparation/process/
+state/writer **5+3+5+6=19/0**, Linux/MSVC workspace all-target validation Clippy,
+fmt/scaffold/diff passed. Shared physical prefix verifier выделен без ослабления
+legacy16/18; старый actual132/0 снова прошёл readonly recheck (45 files twice,
+44+40+12 mutations). Latest logs `writer-main24-*.log`, summary
+`writer-main24-source-checks.json`. Default workspace781/0 ниже — baseline1a2149f,
+после test-only изменений полный workspace повторно не запускался.
+
+Review исправил новую fixture: baseline требует **Exited**, а не только ACK
+старого worker. Python fixtures проходят JSON roundtrip, чтобы независимые
+наблюдения не менялись вместе через object aliasing. Validation marker связывается
+с build того же sender/lock-boundary, source pins совпадают с Main; buildId разных
+сборок не обязан совпадать. Новых wire contracts/публичных действий не добавлено.
+
 Для функционального source `1a2149f` pipeline уже завершён. При закрытии заново
 сверены machine summary, существование логов и суммарные Rust test results;
 полные неизменившиеся сборки повторно не запускались.
@@ -164,11 +186,12 @@ Rust во время Cargo; не запускать конкурирующие f
 | `apps/update/src/supervisor/activation_files.rs`, `supervisor.rs` | Actor24, fast dispatch/busy, one slot/key, completion и resident projection. |
 | `apps/update/src/journal/supervisor.rs` | Consistent snapshot16, graph-bound writer view. |
 | `apps/worker/src/update_control.rs` | Actual local mailbox24 regression. |
-| `apps/worker/tests/update_shutdown.rs`, `update_shutdown/activation_state.rs` | Existing actual physical Main23; writer mode ещё не добавлен. |
+| `apps/worker/tests/update_shutdown.rs`, `update_shutdown/activation_state.rs`, `update_shutdown/activation_writer.rs` | Main24 source: fast same-child dispatch, SQL/header/fencing checks и cold actual exit; ignored native test ещё не выполнен. |
 | `apps/update/tests/activation_migration.rs` | Existing actual updater17→current migration fixture; нужен новый actual18 reference. |
 | `scripts/test-update-health-actor.ps1` | Реальный Main PS runner с physical flags; writer flag отсутствует. |
 | `scripts/validate-update-activation-preparation-native.py` | Debian observer/submit/verify-run; старые exact18/16 assumptions. |
-| `scripts/update-activation-preparation-proof.py`, `update-activation-state-proof.py`, `update-replacement-proof.py` | Независимые validators прежнего proof; новый writer verifier ещё нужен. |
+| `scripts/update-activation-preparation-proof.py`, `update-activation-state-proof.py`, `update-replacement-proof.py` | Shared strict scope/physical/replacement checks; explicit19/17 path, legacy defaults прежние. |
+| `scripts/update-activation-writer-proof.py`, `test-update-activation-writer-native.py` | Новый writer verifier и synthetic component regressions; top-level actual proof пока отсутствует. |
 
 Более подробные component contracts: [opening](activation-journal-opening.md),
 [ledger/private3](journal-writer-runtime.md), [actor24](journal-writer-actor.md).
@@ -202,20 +225,23 @@ schema: `require_runtime_schemas` пока намеренно требует wor
 
 ### Main24: продолжить тот же child, а не создать новый
 
-1. Добавить writer input/mode/result kind в Rust Main harness, PS runner и Python
-   observer. Existing modes23/22/21 оставить доступными; пока writer flag **не существует**.
+1. Rust input `activationWriter`, writer result kind и ignored test
+   `actual_main_activates_one_journal_writer_without_service_or_replay` **добавлены**.
+   Подключить PS runner и Python observer; PS/CLI writer flag пока **не существует**.
+   Existing modes23/22/21 оставить доступными. Новый Rust test принимает только
+   согласованные writer/state/process/files/preparation flags; install не включает.
 2. Обычный путь: старый worker shutdown → final backup → preparation/replacement
    → Prepare20 → Bind21 → Launch22/Ready → Handoff23/StateOwned.
 3. **Сразу после StateOwned отправить24**, без промежуточных тяжёлых audits.
-   Нельзя сначала вызвать весь `activation_state::execute`: после Owned он делает
-   многочисленные inspections/sharing/legacy/duplicate checks и тратит окно.
-   Выделить общий быстрый путь либо новую ветку, сохранив physical assertions
-   для аудита после receipt/завершения тестового Job.
+   `activation_state::execute_writer` уже использует общий быстрый путь и новую
+   ветку до многочисленных physical-only audits; старый `execute` сохранён.
+   Проверить реальное время в native run; assertions не заменяют actual proof.
 4. `SupervisorChild::activation_writer(start)` возвращает
    `Result<Option<UpdatePreparationView>>`. **None — только volatile dispatch ACK
    или busy**, не durable Issued и не success. Stable observe после retirement
    возвращает Some16. Старый `activation_process::call` требует Some и без нового
-   helper для24 непригоден. Потерянный ACK/duplicate не должны создавать key/send/child.
+   helper для24 непригоден. Новый writer helper None принимает; потерянный ACK и
+   duplicate source assertions добавлены, native proof ещё нужен.
 5. Original startup window **120000ms не продлевать**. В physical132 Saved
    StateOwned был109925ms после admission, observed107679ms: оставалось около10s.
    Helper wall timings имеют другой origin. Если нужно ускорить validation probes,
@@ -243,8 +269,9 @@ schema: `require_runtime_schemas` пока намеренно требует wor
 
 ### Acceptance нового независимого verifier
 
-Связать оба SQLite journals, immutable command/hash/receipt и причинные prefixes,
-а не принять самодостаточный JSON со словами passed=true. Проверить:
+Новый verifier связывает actual SQL observations обоих journals, immutable
+command/hash/receipt и prefixes. Synthetic tests проверяют delivery component,
+а не actual Main graph. В combined run вызвать top-level verify/audit; проверить:
 
 - Тот же child PID/birth/host/session/generation, state lock, loaded file IDs,
   runtime/config/owner/attempt; один launch, один private send и один epoch increment.
@@ -259,8 +286,8 @@ schema: `require_runtime_schemas` пока намеренно требует wor
   invalid bool/nullable observations и FILETIME отвергаются. Secret/nonce/token/
   serialized permissions не допускаются в отчёт. Сохранить прежние physical checks.
 
-После source review/checks — clean harness commit/export, fresh Info/disk/cache
-checks и **один combined Windows run**, включая реальные migration/refusal cases.
+После завершения PS/observer/migration wiring и их source review/checks — clean
+producer commit/export, fresh Info/disk/cache checks и **один combined Windows run**, включая реальные migration/refusal cases.
 Сохранить request/key/taskId до наблюдения; при потере сессии сверять тот же task,
 не запускать второй «на всякий случай».
 
@@ -308,6 +335,16 @@ Reference здесь — successful production17 task
 retained shared reports и terminal task; отсутствие evidence не повод reexecute.
 
 ## 8. Окружение и состояние при закрытии
+
+После source Main24 fresh Info **2026-10-25T19:30:01Z** подтверждает тот же
+installed d052/build/generation/session, connected/active0, maintenance/recovery
+errors=null, coverage.complete=true. Evidence `writer-main24-post-info.json`.
+Disk query task `27610f43-0022-45cd-9ae8-b16ef30513bc` succeeded/0:
+Windows13764911104 / Debian25153089536 bytes перед source checks; receipt
+`writer-gate-disk-20261025T191227Z-6fe5b46f.json`. Debian после checks25141014528.
+Cleanup не выполнялся, нового native writer task нет. Desktop можно закрыть,
+installed worker оставить. Следующие пункты также сохраняют исходный closing36f
+и environment pins; historical disk measurements не заменяют fresh admission.
 
 - Debian repo `/home/user1/winbridge`; shared `/mnt/hgfs/shared` соответствует
   `K:/VMs/shared` на Windows. Source/build `K:/_proj-26/winbridge/src`, stable
