@@ -47,8 +47,8 @@ Failure owner не Clone/Serde и не превращается в новую re
   journal/lock names при успехе и при failure после release.
 
 Local focused6 и package280/0 (6 ignored) passed. Linux/MSVC validation all-target
-Clippy, fmt, Python runner9 и scaffold270 passed. Настоящий Windows release gate
-пока **не запускался**.
+Clippy, fmt, Python runner9 и scaffold270 passed. **Windows release gate7/0
+пройден**, task7799e394-45bc-4f20-82ce-2dc065a27345/run20261025-024054-42fcdb0c.
 Logs/measurements `.winbridge/update-preparation/activation-state-release-*`.
 
 ## Короткий Windows gate
@@ -89,3 +89,30 @@ acquisition того же file ID и отдельная атомарная activ
 [в review state handoff](runtime-activation.md#review-следующего-state-handoff-после-actor22-2026-10-24).
 Ни существующий Prepared-only checker, ни обычные startup/write barriers не
 ослаблять. Local/controller/lifetime/commit и U2/U3/U4 остаются впереди.
+
+## Положительный Windows gate
+
+- Task `7799e394-45bc-4f20-82ce-2dc065a27345`, run `20261025-024054-42fcdb0c`,
+  succeeded/exit0,5 release +2 original-pin tests.6 ready files checked twice;
+  counts независимо подтверждены native logs, observer exit0.
+- Clean producer `da1c7b6bdd1c5c1edfaae7c6e3619b4a4a15e54e`, ZIP
+  `winbridge-20261025T024051Z-da1c7b6-cf81690d.zip`, SHA
+  `dfa77c771219226374e8e1d1109348731756e185ea32007a058d64a42e606eb1`, manifest
+  `266e8bc306fa159b7e197a2d1b943c58438a23c595071e05d108528b2a855bab`.
+- Report SHA `668720de2be7f1da3c61b45c63d9e220e5e5121eaa1c47d54b5e826bf9e6f4b5`,
+  ready SHA `9187a26bb416b35a07e0d0fc15d4b7d54b38cf1951729dbb1a2b016e41cef46f`.
+- Local pin `.winbridge/workflow-validation/20261025-024054-42fcdb0c/state-lock-handoff-verified.json`,
+  observer log `.winbridge/update-preparation/activation-state-release-native.log`.
+- Shared report `/mnt/hgfs/shared/WinBridge/workflow-validation/20261025-024054-42fcdb0c`.
+- Windows free13,133,565,952→13,134,938,112 bytes; Debian26,317,541,376 after.
+  Перед новым build измерить заново; Windows cleanup не выполнялся.
+- Fresh installed Info: прежний d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
+  connected/active0/maintenanceError=null/journalRecoveryRequired=null,
+  recoveryCoverage.complete=true. Desktop можно закрыть, installed worker оставить.
+
+Review не выявил важных ошибок: успешный released object и каждая failure ветвь
+сохраняют именно original pins; unknown не имеет conversion в held/released
+success; Drop старых pins не снимает чужой новый lock. Это real physical adapter,
+не проверка межпроцессной передачи writer. Следующий native gate должен использовать
+того же authenticated child/original supervisor и проверить HandoffIssued→StateOwned,
+сохраняя явную границу между physical state ownership и Store authority/local health.

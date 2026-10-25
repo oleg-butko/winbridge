@@ -21,8 +21,10 @@ Source updater18/worker16/supervisor22/view14, public install off. Полный 
 [Selective lock-release primitive](plans/worker-self-update/state-lock-handoff.md)
 добавлен в source: consuming Locked→Released, exact pins и failure custody для
 before/unconfirmed/after unlock. Focused Linux6/package280/0, Linux/MSVC Clippy,
-fmt/Python9/scaffold270 passed. Пока не подключён к actor/worker writer. Следом clean
-producer/short Windows7 gate, затем actual state ownership/authority.
+fmt/Python9/scaffold270 passed. **Windows7/0 пройден**: task7799e394-45bc-4f20-82ce-2dc065a27345/
+run20261025-024054-42fcdb0c, producer da1c7b6,6 files twice; pins в linked report.
+Installed worker unchanged/healthy/active0. Пока не подключён к actor/worker writer.
+Следом actual HandoffIssued→StateOwned того же child, затем authority/local health.
 
 **Начать с [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-24-activation-process.md).**
 Она содержит точную границу готовности, карту кода, checks/logs, source/target/

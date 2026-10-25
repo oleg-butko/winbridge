@@ -11,7 +11,8 @@ local/controller/lifetime, remaining U2/U3/U4. Public install off, installed run
 unchanged/healthy/active0. Старый terminal run не replay. Ниже — история до gate.
 
 [State-lock release library](plans/worker-self-update/state-lock-handoff.md)
-добавлена, Linux6/package280/0 и local/MSVC checks passed; короткий Windows7 gate впереди.
+добавлена, Linux6/package280/0 и local/MSVC checks passed; **Windows7/0 пройден**
+(run20261025-024054-42fcdb0c, producer da1c7b6). Следом actual same-child HandoffIssued→StateOwned.
 Actual writer handoff ещё не реализован; далее interprocess authority/local/
 controller/lifetime. Public install off.
 
