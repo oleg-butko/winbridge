@@ -21,7 +21,7 @@ custody; cold view сохраняет историю отдельно от ны�
 
 Workspace741/0 (16 ignored), protocol59/0 и local/MSVC checks passed.
 [Actual Main23 state harness/verifier](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-добавлены; **нового actual Windows state gate ещё не было**.
+добавлены; **первый actual Windows state gate идёт, результата ещё нет**.
 Writable Store/новая JournalAuthority, local/controller service и lifetime
 transfer ещё впереди. Views1–14 frozen, исходный startup deadline120s сохранён.
 Public install off; advertised activation/controller_confirmation/desktop_update

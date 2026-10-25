@@ -2,9 +2,46 @@
 
 2026-10-25 America/New_York. Продолжение [source actor23](activation-state-handoff.md)
 и [закрывающего checkpoint](resume-2026-10-25-state-handoff.md). **Harness и
-independent verifier добавлены; actual Windows state gate пока не отправлен.**
+independent verifier добавлены; первый actual Windows state gate запущен,
+результата ещё нет.**
 Source updater18/worker16, supervisor23/view15/private handoff2 прежние.
 Public install и advertised activation/controller/desktop drivers выключены.
+
+## ACTIVE: наблюдать этот же run
+
+- Task **`6bc1623a-c5c4-49ce-8511-cb46b43c7ece`**, run **`20261025-100933-d8a50807`**.
+  Последнее прямое наблюдение: running, идёт `health-supervisor-build`.
+  **Не отправлять второй запуск из-за потери observer.**
+- Producer commit `7b270c63e4db9e5195902fba026475c2768f58e1`, clean ZIP
+  `winbridge-20261025T100857Z-7b270c6-9699c8da.zip` (795 files,5,780,735 bytes).
+  ZIP SHA `ab507939bb9f220eff71da1ec6dfbf49b00318a16069e838a5c14e7149022ccf`,
+  manifest SHA `0c2c1bfc6b878125ae609e0d7a07bde7fbd08ac03857ac89c209c73257317c43`.
+- Target1370d6b/receiver2, cache20261017-061527-f4639971, production17 reference
+  из инструкции ниже. Local metadata/request сохранены **до ACK**:
+  `.winbridge/workflow-validation/20261025-100933-d8a50807/activation-preparation-run.json`.
+- Observer log `.winbridge/update-preparation/state23-native-main.log`,
+  exec session48059; shared report
+  `/mnt/hgfs/shared/WinBridge/workflow-validation/20261025-100933-d8a50807`.
+  После потери exec-сессии проверить task напрямую и восстановить observer
+  командой ниже с exact producer и `--verify-run 20261025-100933-d8a50807`.
+- Final source checks passed: portable3, Python5+3+5, Linux validation Clippy,
+  MSVC worker validation/production all-target Clippy, fmt/scaffold273.
+  Current observer readonly принял retained Main22 112/0. Summary
+  `.winbridge/update-preparation/state23-native-source-verified.json`.
+- Installed d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e не менялся;
+  использован только для dispatch. Нужен worker, desktop не нужен, окон нет.
+  После terminal сообщить пользователю, что desktop можно закрыть, worker оставить.
+
+Безопасное восстановление наблюдения **этого же** запуска:
+
+~~~bash
+python3 scripts/validate-update-activation-preparation-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261025T100857Z-7b270c6-9699c8da.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261025T092432Z-1370d6b-257867fc.zip \
+  --cache-run 20261017-061527-f4639971 \
+  --reference-pin .winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json \
+  --activation-state --verify-run 20261025-100933-d8a50807
+~~~
 
 ## Что добавлено
 
@@ -55,7 +92,7 @@ MSVC compilation не доказывает Windows execution.
 Диски выше6GiB, cleanup не было. Перед actual gate Windows preflight измеряет
 их снова. Installed d052 подключён/active0, runtime не менялся.
 
-## Следующий запуск
+## Исходный план запуска: уже отправлен, не повторять
 
 После final checks/review и clean commit экспортировать distinct **producer**.
 Готовый target receiver2 — commit1370d6b, ZIP

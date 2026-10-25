@@ -11,7 +11,8 @@
 Все текущие проверки завершены. [Actor23/private handoff2/view15](activation-state-handoff.md)
 реализованы в source, updater18/worker16 прежние. Workspace741/0 (16 ignored),
 protocol59/0, journal2/0/mailbox1 и local/MSVC Clippy/contracts/TS/UI passed.
-Новый actual interprocess StateOwned gate **ещё не выполнялся**.
+Новый actual interprocess StateOwned gate **идёт**, task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/
+run20261025-100933-d8a50807; результата пока нет, повторно не отправлять.
 [Harness/verifier/state flags](windows-activation-state-gate-2026-10-25.md) уже
 добавлены; следом final checks/review/clean producer/один actual run. Writable Store/local/controller/lifetime впереди,
 public install off; updater целиком не готов.

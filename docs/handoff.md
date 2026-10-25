@@ -3,8 +3,11 @@
 **Продолжение после closing commit2925d07:** [Main23 harness/verifier](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
 добавлены, включая неблокирующие OS probes, PS `-ActivationStateGate`, observer
 `--activation-state`/same-run recovery и independent state audit. Portable3/Python5
-и source/cross checks пройдены; final review/clean producer/actual Windows run
-впереди. Новый state task/run **ещё не отправлен**. Installed runtime не менялся.
+и final source/cross checks пройдены. **Actual state run уже отправлен**:
+task `6bc1623a-c5c4-49ce-8511-cb46b43c7ece`, run `20261025-100933-d8a50807`,
+producer7b270c6/target1370d6b; direct status running, health-supervisor-build.
+Observer session48059/log `state23-native-main.log`; metadata/точная same-run
+команда в новом gate document. **Не resubmit, результата ещё нет.** Installed runtime не менялся.
 Ниже checkpoint до этого продолжения: его «harness/flags не существуют» теперь
 история; ZIP target1370d6b/cache/reference и оставшиеся U2–U4 остаются актуальны.
 
