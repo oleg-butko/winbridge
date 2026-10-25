@@ -1,5 +1,13 @@
 # Постепенная реализация и расширение
 
+## Продолжение: Main22 в исполнении
+
+[Actual receiver gate](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
+запущен: taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
+producer a9860f4/target1c23d48. Наблюдать тот же run, actual proof ещё нет.
+После terminal audit/review продолжать state/local/controller/lifetime handoff;
+public install off, installed runtime unchanged. Ниже — checkpoint до submit.
+
 ## Текущий checkpoint updater — 2026-10-24, закрытие перед Main22
 
 **Продолжать по [новой подробной инструкции](plans/worker-self-update/resume-2026-10-24-activation-process.md).**

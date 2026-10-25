@@ -1,5 +1,15 @@
 # Точка продолжения updater — 2026-10-24, closing Main22 checkpoint
 
+## Продолжение: actual Main22 запущен, наблюдать эту task
+
+[Main22 receiver gate](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
+running: task `f5d9bf8d-983e-4c7b-8bbb-c6147da5e33b`, run
+`20261025-021054-05388d1d`, clean producer a9860f4, target fixture1c23d48.
+Fresh installed Info healthy/active0 до submit; изолированный Windows build
+начат. Proof пока нет. Observer `activation-main-native.log`; exact pins и
+same-run `--verify-run` recovery — в linked report. Не replay неизвестный исход.
+Следующий closing checkpoint ниже фиксирует предшествующий момент до submit.
+
 **Начать с [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-24-activation-process.md).**
 Она содержит точную границу готовности, карту кода, checks/logs, source/target/
 reference pins, окружение, команды запуска/observe и последующие U2–U4. Этот

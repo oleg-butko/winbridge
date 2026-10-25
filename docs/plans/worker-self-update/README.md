@@ -7,6 +7,11 @@
 
 ## Текущий статус 2026-10-24
 
+[Actual Main22 gate](windows-activation-process-gate-2026-10-24.md) запущен после
+closing checkpoint: taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
+producer a9860f4/target1c23d48. Наблюдать эту task/run, не resubmit. Proof пока нет;
+ниже сохранён предшествующий closing статус.
+
 **Начать с [подробной инструкции новой сессии](resume-2026-10-24-activation-process.md).**
 [Read-binding97/0](windows-activation-files-gate-2026-10-24.md) и actual17→18/refusal
 проверены. [Launcher/receiver](activation-receiver.md), [actor22/view14](activation-process-actor.md)

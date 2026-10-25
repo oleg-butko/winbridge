@@ -1,5 +1,10 @@
 # Передача контекста: private receiver и подготовленный Main22 gate
 
+**Позднее продолжение:** [actual Main22 gate уже запущен](windows-activation-process-gate-2026-10-24.md),
+taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
+producer a9860f4/target1c23d48. Сначала наблюдать этот run; новый submit не делать.
+Ниже — closing checkpoint перед запуском, сохранённый как история.
+
 2026-10-24, America/New_York (закрывающие логи могут иметь UTC дату2026-10-25).
 Пользователь поручил закончить текущие проверки, сохранить подробный checkpoint
 и сделать коммит. **Новый Windows process gate в этой сессии не отправлен.**

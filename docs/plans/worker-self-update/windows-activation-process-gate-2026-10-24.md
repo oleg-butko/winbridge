@@ -1,9 +1,30 @@
 # Actual Main22: один private receiver до state writer
 
-2026-10-24. **Harness/verifier подготовлены; actual run ещё не отправлен.**
+2026-10-24 America/New_York, запуск02:10UTC2026-10-25.
+**Actual run отправлен, задача running; положительный proof ещё не получен.**
 [Actor22/view14](activation-process-actor.md), [library/target fixture](activation-receiver.md).
 Updater18/worker16 прежние; activation/public install off. Это изолированная
 проверка, не замена установленного runtime и не полное самообновление.
+
+## Активный запуск после closing checkpoint
+
+- Task `f5d9bf8d-983e-4c7b-8bbb-c6147da5e33b`, run `20261025-021054-05388d1d`.
+- Clean producer `a9860f4f4033f5fc400f4c6c9de648ff5e83e9a0`, ZIP
+  `winbridge-20261025T021042Z-a9860f4-677c4a65.zip`, SHA
+  `c3702ccc454dcb1effca858664f4f2794c7fbe18f05b379b65e15ca9e8e49d02`, manifest
+  `828dec1647c3558885007b3ced54639ca797495fa4e0ca32b1902746bfe4edad`.
+- Target fixture1c23d48 и reference/cache ниже не менялись.
+- Observer log `.winbridge/update-preparation/activation-main-native.log`;
+  run metadata `.winbridge/workflow-validation/20261025-021054-05388d1d/activation-preparation-run.json`.
+- Shared report `/mnt/hgfs/shared/WinBridge/workflow-validation/20261025-021054-05388d1d`.
+- Наблюдать именно эту task. После потери observer — та же команда ниже с
+  `--archive .../winbridge-20261025T021042Z-a9860f4-677c4a65.zip` и
+  `--verify-run 20261025-021054-05388d1d`. **Не новый submit.**
+
+Initial fresh Info: installed d052 connected/healthy/active0, Debian free
+26,836,901,888 bytes. Windows preflight6GiB пройден, native build начат.
+Installed runtime/state не меняются; desktop не нужен, UI-окон не будет.
+Closing/local-results section ниже описывает момент до submit, а не итог gate.
 
 ## Что исполняется
 
@@ -63,7 +84,7 @@ base replacement и migration audits остаются отдельными. Read
   `winbridge-20261024T215731Z-1c23d48-0490a451.zip`, ZIP SHA
   `08003571809f0733dfa9dedd75d9f86f13de68c96c9affec0dec615a7a811575`, manifest
   `249205a0d2d9d54ad6254dd260987d639996649a92acd2b7adac3d4e844df2d6`.
-- Producer будет отдельным clean commit после local checks; export receipt
+- Producer — отдельный clean commit a9860f4; export receipt
   `.winbridge/update-preparation/activation-process-producer-export.json`.
 - Actual17 reference:
   `.winbridge/workflow-validation/20261024-085627-3a106020/support-actor-verified.json`.
@@ -96,7 +117,7 @@ terminal: get_task, затем та же команда с `--verify-run RUN`; �
 ## Local checks перед publish
 
 Закрывающий checkpoint2026-10-24: **все перечисленные проверки завершены**.
-Новый actual Windows process gate не отправлен, producer ZIP ещё не экспортирован.
+Это результаты до submit; активный run и producer теперь указаны сверху.
 [Подробная передача контекста](resume-2026-10-24-activation-process.md) — точка старта
 новой сессии; она содержит карту кода, окружение, pins, recovery и следующие U2–U4.
 
