@@ -148,12 +148,12 @@ fn schema_seventeen_migration_preserves_history_backup_and_fences_old_owner() {
         },
     };
     let saved = old.accept(&owner, &request, &request.expected).unwrap();
-    old.connection.execute_batch("DROP TABLE activation_history;DROP TABLE activation_records;DROP TABLE activation_intents;PRAGMA user_version=17;").unwrap();
+    old.connection.execute_batch("DROP TABLE activation_writer_history;DROP TABLE activation_writer_records;DROP TABLE activation_writer_intents;DROP TABLE activation_history;DROP TABLE activation_records;DROP TABLE activation_intents;PRAGMA user_version=17;").unwrap();
     let before = old.info().unwrap();
     fs2::FileExt::unlock(&owner.lock).unwrap();
     let mut new = UpdateJournal::open(directory.path(), &scope).unwrap();
     let after = new.info().unwrap();
-    assert_eq!(after.schema_version, 18);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.last_sequence, before.last_sequence);

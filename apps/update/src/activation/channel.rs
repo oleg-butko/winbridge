@@ -9,11 +9,48 @@ use winbridge_protocol::update::SupervisorProcess;
 pub use winbridge_protocol::update::{
     ActivationReceiverChallenge as Challenge, ActivationReceiverReady as Ready,
     ActivationReceiverStateHandoff as StateHandoff, ActivationReceiverStateOwned as StateOwned,
-    ACTIVATION_RECEIVER_CONTRACT as CONTRACT, ACTIVATION_RECEIVER_MARKER as RECEIVER_MARKER,
+    ActivationReceiverWriterCommand as WriterCommand,
+    ActivationReceiverWriterReceipt as WriterReceipt, ACTIVATION_RECEIVER_CONTRACT as CONTRACT,
+    ACTIVATION_RECEIVER_MARKER as RECEIVER_MARKER,
     ACTIVATION_STATE_HANDOFF_CONTRACT as HANDOFF_CONTRACT,
     ACTIVATION_STATE_HANDOFF_MARKER as HANDOFF_MARKER,
+    ACTIVATION_WRITER_CONTRACT as WRITER_CONTRACT, ACTIVATION_WRITER_MARKER as WRITER_MARKER,
 };
 const MAX_BYTES: usize = 32768;
+
+pub fn require_writer_receiver(
+    record: &ActivationRecord,
+    actual: &SupervisorProcess,
+    attempt: &str,
+) -> Result<()> {
+    if !matches!(record.state, ActivationState::StateOwned {})
+        || record.revision != 6
+        || record.intent.attempt_id != attempt
+        || record.created.as_ref().map(|r| &r.process) != Some(actual)
+        || record.state_owned.as_ref().map(|r| &r.process) != Some(actual)
+    {
+        return Err("Writer requires the same current StateOwned child".into());
+    }
+    Ok(())
+}
+pub fn validate_writer_command(
+    message: &WriterCommand,
+    expected: &winbridge_protocol::update::WorkerJournalActivationCommand,
+) -> Result<()> {
+    if message.contract_version != WRITER_CONTRACT || &message.command != expected {
+        return Err("Private writer command differs from the durable intent".into());
+    }
+    super::writer::validate_command_envelope(&message.command)
+}
+pub fn validate_writer_receipt(
+    message: &WriterReceipt,
+    command: &winbridge_protocol::update::WorkerJournalActivationCommand,
+) -> Result<()> {
+    if message.contract_version != WRITER_CONTRACT {
+        return Err("Private writer receipt contract differs".into());
+    }
+    super::writer::validate_receipt(&message.receipt, command)
+}
 
 /// The caller also authenticates the OS pipe peer before using any message.
 pub fn validate_challenge(challenge: &Challenge, record: &ActivationRecord) -> Result<()> {
@@ -191,6 +228,99 @@ pub async fn write<S: AsyncWrite + Unpin, T: Serialize>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn writer_fixture() -> (ActivationRecord, WriterCommand, WriterReceipt) {
+        let (r, initial) = crate::activation::activation_fixture();
+        let owned = crate::activation::activation_stages(&initial, &r)[6].clone();
+        let authority = winbridge_protocol::update::StateBackupAuthority {
+            incarnation: owned
+                .intent
+                .context
+                .worker_context
+                .journal_incarnation
+                .clone(),
+            epoch: 7,
+            fingerprint_sha256: "a".repeat(64),
+        };
+        let command = super::super::writer::prepare_command(
+            &owned,
+            &authority,
+            &uuid::Uuid::new_v4().to_string(),
+            owned.updated_at_ms + 1,
+        )
+        .unwrap();
+        let receipt = WriterReceipt {
+            contract_version: WRITER_CONTRACT,
+            receipt: winbridge_protocol::update::WorkerJournalActivationReceipt {
+                schema_version: 1,
+                command_id: command.command_id.clone(),
+                update_id: command.binding.update_id.clone(),
+                attempt_id: command.binding.attempt_id.clone(),
+                command_sha256: super::super::writer::command_sha256(&command).unwrap(),
+                authority: winbridge_protocol::update::StateBackupAuthority {
+                    incarnation: authority.incarnation,
+                    epoch: 8,
+                    fingerprint_sha256: "b".repeat(64),
+                },
+                committed_at_ms: command.issued_at_ms + 1,
+            },
+        };
+        (
+            owned,
+            WriterCommand {
+                contract_version: WRITER_CONTRACT,
+                command,
+            },
+            receipt,
+        )
+    }
+    #[test]
+    fn writer_v3_rejects_physical_v2_and_any_changed_command_or_receipt_scope() {
+        let (owned, request, receipt) = writer_fixture();
+        require_writer_receiver(
+            &owned,
+            &request.command.binding.physical.process,
+            &owned.intent.attempt_id,
+        )
+        .unwrap();
+        validate_writer_command(&request, &request.command).unwrap();
+        validate_writer_receipt(&receipt, &request.command).unwrap();
+        let mut changed = request.clone();
+        changed.contract_version = HANDOFF_CONTRACT;
+        assert!(validate_writer_command(&changed, &request.command).is_err());
+        let mut changed = request.clone();
+        changed.command.binding.backup_record_sha256 = "c".repeat(64);
+        assert!(validate_writer_command(&changed, &request.command).is_err());
+        let mut changed = receipt.clone();
+        changed.contract_version = HANDOFF_CONTRACT;
+        assert!(validate_writer_receipt(&changed, &request.command).is_err());
+        let mut changed = receipt.clone();
+        changed.receipt.authority.epoch += 1;
+        assert!(validate_writer_receipt(&changed, &request.command).is_err());
+        assert!(require_writer_receiver(
+            &owned,
+            &request.command.binding.physical.process,
+            &uuid::Uuid::new_v4().to_string()
+        )
+        .is_err());
+    }
+    #[test]
+    fn writer_private_frames_deny_unknown_fields_and_a_ready_prefix() {
+        let (mut owned, request, receipt) = writer_fixture();
+        owned.revision = 4;
+        owned.state = ActivationState::ReadyForState {};
+        assert!(require_writer_receiver(
+            &owned,
+            &request.command.binding.physical.process,
+            &owned.intent.attempt_id
+        )
+        .is_err());
+        let mut value = serde_json::to_value(request).unwrap();
+        value["force"] = serde_json::Value::Bool(true);
+        assert!(serde_json::from_value::<WriterCommand>(value).is_err());
+        let mut value = serde_json::to_value(receipt).unwrap();
+        value["receipt"]["startupPermit"] = serde_json::Value::Bool(true);
+        assert!(serde_json::from_value::<WriterReceipt>(value).is_err());
+    }
     fn fixture() -> (ActivationRecord, Challenge, Ready) {
         let (r, initial) = crate::activation::activation_fixture();
         let mut record = crate::activation::activation_stages(&initial, &r)[3].clone();

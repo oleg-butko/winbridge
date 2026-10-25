@@ -5,6 +5,8 @@ pub const ACTIVATION_RECEIVER_CONTRACT: u16 = 1;
 /// A separate capability; V1 Ready alone never authorizes state release.
 pub const ACTIVATION_STATE_HANDOFF_CONTRACT: u16 = 2;
 pub const ACTIVATION_STATE_HANDOFF_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_STATE_HANDOFF_V2";
+pub const ACTIVATION_WRITER_CONTRACT: u16 = 3;
+pub const ACTIVATION_WRITER_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_JOURNAL_WRITER_V3";
 
 // No Debug: the transient nonce must never appear in diagnostics.
 #[derive(Serialize, Deserialize)]
@@ -58,4 +60,18 @@ pub struct ActivationReceiverStateHandoff {
 pub struct ActivationReceiverStateOwned {
     pub contract_version: u16,
     pub state_owned: ActivationStateOwned,
+}
+
+/// Separate private capability. Physical V2 remains frozen and grants no writer.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverWriterCommand {
+    pub contract_version: u16,
+    pub command: super::WorkerJournalActivationCommand,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverWriterReceipt {
+    pub contract_version: u16,
+    pub receipt: super::WorkerJournalActivationReceipt,
 }

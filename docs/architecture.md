@@ -4,28 +4,30 @@
 
 ## Текущее состояние updater — checkpoint 2026-10-25
 
-Source **updater18/worker17, supervisor23/view15, private physical handoff2**.
-[Подробная инструкция продолжения](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
-приоритетнее исторических статусов ниже. [Main23 physical StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-проверил exact same child/lock/state и causal history0–6 на worker16.
+Source **updater19/worker17, supervisor23/view15, private physical2 + writer3**.
+[Checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md) и
+[writer runtime](plans/worker-self-update/journal-writer-runtime.md) приоритетнее
+исторических статусов ниже. [Physical Main23 StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+доказан на18/16/private2; нового native writer proof пока нет.
 
-Worker17 добавляет trusted **слой данных**: атомарный CAS прежнего header на
-новый authority ID/следующую epoch и immutable command/receipt в той же SQLite
-transaction. Fresh data permit отличается от Observed receipt; maintenance
-сохранена, обычный writer/release запрещены. Cold read проверяет accepted shutdown
-и history, но не восстанавливает physical ownership. Ordinary inactive16→17
-migration сохраняет verified backup с удерживаемым FileID; active update блокирует
-миграцию. Это не поддержка cross-schema activation16→17.
+Worker17 атомарно сохраняет header CAS+immutable receipt, stale owners fenced,
+maintenance остаётся Quiesced. [Opening owner](plans/worker-self-update/activation-journal-opening.md)
+механически удерживает Store и тот же acquired state lock, запрещает CREATE/
+migration/повтор попытки и close-time checkpoint до grant. Ordinary inactive16→17
+migration имеет backup, active cross-schema takeover16→17 не поддерживается.
 
-Latest workspace768/0 (16 ignored), opening8/0 и Linux/MSVC Clippy passed.
-Добавлена [existing-state connection library](plans/worker-self-update/activation-journal-opening.md)
-с retained actual lock, одноразовой активацией и no-close-checkpoint policy.
-Runtime private writer/updater ledger ещё не подключены;
-native writer17/actual old16→17 gate, local/controller/lifetime, U2 faults и U3/U4
-впереди. Views1–14 frozen, исходный startup deadline120s сохранён. Public install
-off; advertised activation/controller_confirmation/desktop_update остаются None.
-Installed runtime не менялся. Nonces/handles/deadlines — resident resources,
-сериализованный command/digest/receipt сам по себе permissions не создаёт.
+Updater19 добавляет immutable writer intent/causal history. Factory связывает
+StateOwned6 и old authority из verified final backup в одном snapshot. Trusted
+original guard проверяет capability3, сохраняет Issued до одной private send;
+worker V3 сверяет graph/parent/window и делает fresh atomic CAS. Authenticated
+receipt сохраняется как факт, timeout/partial/EOF — uncertainty без replay.
+Поздние факты связываются с frozen6 после последующего local/uncertainty progress.
+
+Actor24/view16 ещё не подключены; текущие views1–14 frozen. Обычный activated
+service/reconciliation/local/controller/lifetime и U2 faults/U3/U4 впереди.
+Original120s сохраняется. Public install off, advertised activation/controller/
+desktop=None. Serialized data не восстанавливают kernel custody или permissions.
+Installed runtime не менялся; source/cross checks не подменяют actual Windows gate.
 
 ## История реализации updater
 

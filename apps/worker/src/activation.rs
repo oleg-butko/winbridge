@@ -35,6 +35,7 @@ pub fn run(config: &Path, update_id: &str, attempt_id: &str) -> Result<()> {
 pub async fn receive(config: &Path, update_id: &str, attempt_id: &str) -> Result<()> {
     std::hint::black_box(winbridge_update::activation::channel::RECEIVER_MARKER);
     std::hint::black_box(winbridge_update::activation::channel::HANDOFF_MARKER);
+    std::hint::black_box(winbridge_update::activation::channel::WRITER_MARKER);
     #[cfg(not(windows))]
     {
         let _ = (config, update_id, attempt_id);
@@ -257,14 +258,72 @@ mod native {
         };
         channel::validate_state_owned(&owned, issued)?;
         channel::write(&mut stream, &owned, timeout).await?;
-        // Retain the exact acquired lock, config/runtime pins and channel. No
-        // writable Store, scheduler, local service or authority activation yet.
+        // V3 is a separate private command, not permission inferred from V2.
+        let request: channel::WriterCommand = tokio::select! {
+            value=channel::read(&mut stream,timeout)=>value?,
+            outcome=parent_alive(&parent,timeout)=>return outcome,
+        };
+        let writer_snapshot = UpdateJournal::inspect_activation_writer_receiver(
+            &directory,
+            update_id,
+            attempt_id,
+            &ready.ready.identity.process,
+        )
+        .map_err(|e| e.to_string())?;
+        channel::validate_writer_command(&request, &writer_snapshot.writer.command)?;
+        if writer_snapshot.activation.intent != record.intent
+            || writer_snapshot.activation.state_owned.as_ref() != Some(&owned.state_owned)
+            || request.command.binding.physical != owned.state_owned
+        {
+            return Err("Writer changed the original same-child physical ownership".into());
+        }
+        let checkpoint = || {
+            parent.require_live().map_err(|e| e.to_string())?;
+            guard.revalidate()?;
+            require_handoff_window(&writer_snapshot.activation, handoff_deadline)?;
+            let current = UpdateJournal::inspect_activation_writer_receiver(
+                &directory,
+                update_id,
+                attempt_id,
+                &ready.ready.identity.process,
+            )
+            .map_err(|e| e.to_string())?;
+            if current != writer_snapshot {
+                return Err(
+                    "Writer admission changed during existing-state preparation/commit".into(),
+                );
+            }
+            require_handoff_window(&writer_snapshot.activation, handoff_deadline)
+        };
+        let mut journal = crate::store::ActivationJournal::open(
+            state,
+            request.command.clone(),
+            writer_snapshot.shutdown_receipt.clone(),
+            checkpoint,
+        )
+        .map_err(|e| e.to_string())?;
+        let crate::store::JournalActivationAcceptance::Fresh(fresh) =
+            journal.activate(checkpoint)?
+        else {
+            return Err(
+                "Observed journal receipt grants no fresh private runtime ownership".into(),
+            );
+        };
+        let response = channel::WriterReceipt {
+            contract_version: channel::WRITER_CONTRACT,
+            receipt: fresh.receipt().clone(),
+        };
+        channel::validate_writer_receipt(&response, &request.command)?;
+        channel::write(&mut stream, &response, timeout).await?;
+        // Hold the accepted authority, same lock and fresh data permit. Local
+        // service/scheduler/lifetime handoff need their own later contracts.
         let result = tokio::select! {
             _=channel::read::<_,serde::de::IgnoredAny>(&mut stream,timeout) =>
-                Err("Writable activation unavailable or parent channel closed; physical lock released on exit".into()),
+                Err("Local service activation unavailable or parent channel closed; retained writer closes on exit".into()),
             outcome=parent_alive(&parent,timeout) => outcome,
         };
-        drop(state);
+        drop(fresh);
+        drop(journal);
         result
     }
     fn now() -> Result<u64> {
@@ -308,9 +367,9 @@ mod native {
             tokio::time::sleep(Duration::from_millis(250)).await;
             parent
                 .require_live()
-                .map_err(|_| "Activation parent exited; no writer opened")?;
+                .map_err(|_| "Activation parent exited; no further startup action")?;
             if Instant::now() >= until {
-                return Err("Pre-writer activation hold expired; no writer opened".into());
+                return Err("Private activation hold expired; no further startup action".into());
             }
         }
     }

@@ -1,53 +1,49 @@
-# Продолжение updater — 2026-10-25, worker journal17
+# Продолжение updater — 2026-10-25, ledger19/private writer3
 
-**Начинать с [подробного checkpoint без контекста чата](plans/worker-self-update/resume-2026-10-25-journal-activation.md).**
-Он заменяет прежние NEXT/ACTIVE и checkpoint до Main23. Пользователь поручил
-завершить проверки и сохранить состояние; полное самообновление ещё не готово.
+**Начинать с [подробного checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
+и [нового writer runtime](plans/worker-self-update/journal-writer-runtime.md).**
+Общая цель updater продолжается; полное самообновление ещё не готово.
 
 ## Авторитетное состояние
 
-- Source **updater18 / worker17 / supervisor23 / view15 / private physical2**.
-  [Worker SQLite activation](plans/worker-self-update/resume-2026-10-25-journal-activation.md#2-что-сделано-в-текущем-блоке)
-  реализована как trusted data library: old-header CAS+immutable receipt в одной
-  транзакции, dedup/cold read, active maintenance сохранена, ordinary16→17
-  migration с consistent backup. [Existing-state connection library](plans/worker-self-update/activation-journal-opening.md)
-  добавлена: Store и actual acquired lock в одном owner, failure custody,
-  одноразовая попытка, no-close-checkpoint до grant. **Updater writer ledger,
-  private runtime driver и actor ещё не подключены.**
-- Latest source checks: **workspace768/0 (16 ignored), opening8/0**;
-  исходные SQLite12/0, writer model7/0 также сохранены в checkpoint.
-  Linux/MSVC all-target validation Clippy, fmt и scaffold passed. Последний
-  backup hardening и last-connection WAL fix включены в latest workspace.
-  Старый DTO commit отдельно прошёл
-  contracts/TS/UI/protocol59. Новых native writer17/actual old16→17 gates нет.
+- Source **updater19 / worker17 / supervisor23 / view15 / private physical2 + writer3**.
+  [Atomic worker SQLite activation](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
+  и [retained-lock opening](plans/worker-self-update/activation-journal-opening.md)
+  реализованы. Добавлены graph-bound updater intent/history, same-schema policy,
+  trusted consuming native writer driver и worker private3 handler. Issued до
+  one-shot send, atomic worker header+receipt, authenticated confirmation/uncertainty;
+  maintenance сохранена. **Actor24/view16 и native writer gate ещё не подключены.**
+- Final source checks: **workspace776/0 (16 ignored), ledger6/0, channel8/0**,
+  Linux/MSVC all-target validation Clippy/fmt/contracts passed. Historical-prefix
+  regression включён в final; summary `.winbridge/update-preparation/writer-v3-final.json`.
+  Новых native19/17/private3 proofs нет; scaffold/diff проверены перед commit.
 - [Actual physical Main23](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   **132/0**, run20261025-100933-d8a50807,
   task6bc1623a-c5c4-49ce-8511-cb46b43c7ece, producer7b270c6/target1370d6b.
-  Closing readonly recheck принят; terminal task **не resubmit**. Этот proof
-  использует worker16 и подтверждает physical StateOwned, без writer/epoch change.
-- Public install off; advertised activation/controller_confirmation/desktop_update
-  остаются None. Local/controller/lifetime, remaining U2 faults/management и U3/U4
-  впереди. Installed d052/runtime не менялся, ручное обновление пока не требуется.
+  Closing readonly recheck принят; terminal **не resubmit**. Это updater18/worker16/
+  physical2, без writer/epoch change. Новых native19/17/private3 proofs пока нет.
+- Public install off, advertised activation/controller_confirmation/desktop_update
+  остаются None. Normal activated service/local/controller/lifetime, remaining
+  U2 faults/management и U3/U4 впереди. Installed d052/runtime не менялся.
 
 ## Откуда продолжать
 
-1. Graph-bound writer admission/ledger, private command и successor actor/view,
-   которые вызовут уже добавленный guarded existing-state constructor под
-   **тем же** child-held lock. Original120s deadline не продлевать.
-2. Source review/checks и clean **новая worker17 receiver fixture**, distinct
-   producer; combined native writer gate и actual old16→17/refusal. Старый
-   target1370d6b/worker16 не подходит новому same-schema writer gate.
+1. Supervisor successor24 + view16: start/observe writer, original Owned guard,
+   один blocking slot, responsive status, safe duplicates/cold/failure projections.
+   Старые views frozen; никакого старта из caller JSON или cold intent.
+2. Clean receiver **19/17/private3** и distinct producer; combined native writer
+   gate, actual updater18→19/refusal и worker16→17/refusal. Target1370d6b/18/16
+   не подходит. Original120s не продлевать; StateOwned ранее saved109.925s.
 3. Local service/reconciliation → actual controller session → owned Job lifetime/
-   commit/scoped release → U2 faults/recovery/CLI/MCP → U3 desktop → U4 actual
-   stable-runtime self-update; затем вернуться к A4.3.
+   commit/scoped release → U2 faults/recovery/CLI/MCP → U3 desktop → U4 installed
+   self-update; затем возврат к A4.3.
 
-Карта кода, invariants, exact ZIP/task/proof pins, команды checks/readonly recovery,
-cache/reference, disk evidence и подробные acceptance criteria — в новом checkpoint.
-Новых Windows native runs при закрытии не запускали, только terminal disk query;
-Cargo/observer завершены. Desktop можно закрыть, **installed worker оставить**.
-Controller PID3922/ws://192.168.44.203:1143 оставлен работать; после reboot
-перепроверить listener/Info, не запускать второй. Минимум6GiB на обоих дисках
-перед новой сборкой, CARGO_INCREMENTAL=0, Windows каталоги не очищать.
+Карта кода, invariants, old proof/ZIP pins и readonly recovery — в checkpoint.
+Новых native Windows runs не отправляли, только terminal disk queries.
+Desktop можно закрыть, **installed worker оставить**. Controller PID3922/
+ws://192.168.44.203:1143 оставлен работать; после reboot перепроверить Info/listener,
+не запускать второй. Перед heavy build оба диска≥6GiB, CARGO_INCREMENTAL=0,
+один cache lease. Windows validation directories не очищать.
 
 ## История checkpoints
 

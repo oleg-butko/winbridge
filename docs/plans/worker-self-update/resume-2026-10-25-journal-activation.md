@@ -1,4 +1,4 @@
-# Продолжение updater: worker journal17 и атомарная активация
+# Продолжение updater: journal19/17 и private writer3
 
 Дата сессии: 2026-10-25, America/New_York. Этот checkpoint заменяет прежние
 NEXT/ACTIVE и [инструкцию до Main23](resume-2026-10-25-state-handoff.md).
@@ -6,13 +6,11 @@ NEXT/ACTIVE и [инструкцию до Main23](resume-2026-10-25-state-handof
 текущие проверки и закоммитить подробное состояние. Общая цель самообновления
 остаётся незавершённой; public install включать пока нельзя.
 
-**Продолжение после исходного checkpoint:**
-[existing-state connection library](activation-journal-opening.md) реализована,
-но private receiver её ещё не вызывает. **Первый следующий шаг:** связать
-атомарную активацию с updater writer admission/ledger и private runtime driver.
-Не начинать
-заново уже пройденный physical Main23 и не считать JSON receipt разрешением
-на запуск или владение состоянием.
+**Продолжение после e3a4a3d/f5dcec1:** [opening library](activation-journal-opening.md)
+и [ledger19/native writer driver/private3 handler](journal-writer-runtime.md)
+реализованы. **Первый следующий шаг — supervisor actor24/view16**, затем combined
+native19/17 writer gate. Нового native proof пока нет. Старый physical Main23
+terminal и не resubmit; JSON receipt не разрешает обычный запуск или новое владение.
 
 ## 1. Реальная граница готовности
 
@@ -24,13 +22,13 @@ NEXT/ACTIVE и [инструкцию до Main23](resume-2026-10-25-state-handof
 | U2.2 physical | Preparation/replacement, один private receiver, Ready и передача прежнего instance lock тому же child проверены на Windows. |
 | Worker SQLite activation | **Реализован слой данных:** old-header CAS + immutable receipt в одной транзакции, worker schema17, миграция16→17 с backup. |
 | Existing-state connection | `ActivationJournal` владеет тем же acquired lock и Store, отказывает без CREATE/migration, сохраняет failure custody и не повторяет попытку. Trusted library, без runtime entry. |
-| Activated receiver writer | **Не подключён:** нет следующего private command/handler и updater writer admission/ledger. |
+| Private writer | Graph-bound ledger19, consuming native driver и worker V3 handler реализованы. Supervisor actor24/view16 и native gate ещё не подключены. |
 | Local IPC / controller / lifetime | Для activated receiver ещё не реализованы и не подтверждены. |
 | U3 / U4 | Desktop update/notifications и настоящее installed self-update впереди. |
 
-Номера независимы: **updater journal18 / worker journal17 / supervisor23 /
-consistent view15 / private physical handoff2**. DTO writer command/receipt
-имеют schema1; это пока данные, не новый доступный private opcode или capability.
+Номера независимы: **updater journal19 / worker journal17 / supervisor23 /
+consistent view15 / private physical handoff2 + writer3**. DTO writer command/receipt
+имеют schema1; private3 связывает их с authenticated channel; public RPC/capability не объявлены.
 Старые wire/view shapes сохранены. Advertised `activation`,
 `controller_confirmation`, `desktop_update` остаются `None`; public install off.
 
@@ -142,13 +140,21 @@ final backup `sourceAuthority`. SHA старого полного private header
 
 ## 4. Завершённые и оставшиеся проверки
 
+После следующего продолжения source теперь **updater19/worker17/private3**.
+[Ledger/native driver/worker handler](journal-writer-runtime.md): **workspace776/0
+(16 ignored), ledger6/channel8**, Linux/MSVC validation Clippy, fmt/contracts/
+scaffold/diff passed. Final summary `writer-v3-final.json`, logs `writer-v3-*-final.log`
+в `.winbridge/update-preparation/`. Actor24/view16 и actual native writer proof
+пока отсутствуют. Окончательные проверки включают frozen-prefix late-fact fix.
+Ниже сохранена история предыдущих component checkpoints.
+
 После checkpoint e3a4a3d реализована [existing-state connection library](activation-journal-opening.md):
 **focused8/0, workspace768/0 (16 ignored)**, Linux/MSVC validation all-target
 Clippy, fmt/scaffold/diff passed. Last-connection WAL regression сначала
 воспроизведена, затем исправлена и прошла. Логи `activation-open-*-checked.log`,
 summary `activation-open-checked.json` в `.winbridge/update-preparation/`.
 Для focused проверки: `cargo test -p winbridge-worker --lib store::activation_open::tests --locked`.
-Runtime private writer и native writer17 proof всё ещё отсутствуют.
+Это результаты f5dcec1; после него добавлены private writer3/ledger19. Native proof ещё нет.
 
 Ниже результаты **исходного checkpoint e3a4a3d**, до opening component.
 Его closing pipeline завершён без ошибок. Сырые логи локальные, в Git не включаются:
@@ -254,13 +260,13 @@ Helper wall timings имеют другой origin; не смешивать их
    [opening/retained-lock tests и last-connection WAL fix](activation-journal-opening.md).
    Live callback ещё предстоит привязать к настоящему private child/graph;
    constructor сам не является authenticated runtime permission.
-2. **Trusted writer admission/ledger.** Взять old stamp из graph-bound backup,
+2. **Trusted writer admission/ledger — source реализован, schema19.** Взять old stamp из graph-bound backup,
    закрепить весь StateOwned6/config/schema/owner/attempt. Durable one-shot
    intent перед private command; retained immutable result/readback после.
-   Новую updater schema (ожидаемый следующий номер19) и её18→19 backup/refusal
-   ввести явно; не изменять смысл существующих schema18 rows.
-3. **Private command и actor.** Новый отдельный contract/marker (ожидаемый3),
-   capability check до отправки, frozen physical2. Actor successor (ожидаемый24/
+   Updater19/backup/fencing migration добавлены; actual18→19/refusal впереди.
+   Значение существующих schema18 rows не меняется.
+3. **Private command реализован; actor следующий.** Добавлены contract/marker3,
+   capability check до отправки, frozen physical2. Actor successor (следующий24/
    view16) потребляет original Owned guard через тот же blocking slot. Child
    проверяет actual lock, parent, loaded runtime и original monotonic deadline;
    вызывает atomic Store method с повторными live checks. Duplicate/cold —
@@ -271,7 +277,7 @@ Helper wall timings имеют другой origin; не смешивать их
    Main должен показать exact same child/lock, один epoch increment+receipt,
    lease всё ещё active, stale old writer fenced, lost ACK/dedup/cold read,
    late/foreign/tampered scope refusal, no replay after uncertain outcome.
-   Добавить независимый verifier и actual worker16→17/refusal, не только synthetic
+   Добавить независимый verifier и actual updater18→19/worker16→17/refusal, не только synthetic
    downgrade. Existing physical/updater migration assertions сохранить.
 5. **Local service/reconciliation.** Настоящий новый worker должен обслужить
    normal IPC с точными build/process/generation/context/schema и сохранить

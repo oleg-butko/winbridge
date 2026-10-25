@@ -1,4 +1,4 @@
-//! Actual retained17 support/blocked decision ->18 on a consistent copy, never adoption.
+//! Actual retained17 history -> current schema on a consistent copy, never adoption.
 #![cfg(windows)]
 use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde::Deserialize;
@@ -15,7 +15,7 @@ use winbridge_protocol::{
 use winbridge_update::{
     artifact,
     installed_set::{InstalledSetManifest, MANIFEST_NAME},
-    journal::{UpdateJournal, UpdateJournalInfo},
+    journal::{UpdateJournal, UpdateJournalInfo, UPDATE_SCHEMA_VERSION},
     sha256,
 };
 #[derive(Deserialize)]
@@ -215,7 +215,7 @@ fn actual_seventeen_history_survives_eighteen_and_old_seventeen_refuses() {
     }
     let mut journal = UpdateJournal::open(&copy, &before.scope_sha256).unwrap();
     let after = journal.info().unwrap();
-    assert_eq!(after.schema_version, 18);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.scope_sha256, before.scope_sha256);

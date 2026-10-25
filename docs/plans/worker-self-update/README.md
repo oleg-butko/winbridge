@@ -5,25 +5,25 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий checkpoint — 2026-10-25, worker journal17
+## Текущий checkpoint — 2026-10-25, ledger19/private writer3
 
-**Начать с [подробной инструкции без контекста чата](resume-2026-10-25-journal-activation.md).**
-Source updater18/worker17/supervisor23/view15/private physical2. [Main23 physical
-StateOwned132/0](windows-activation-state-gate-2026-10-25.md) пройден на worker16;
-closing readonly recheck принят. Terminal run20261025-100933-d8a50807 не replay.
+**Начать с [checkpoint](resume-2026-10-25-journal-activation.md) и
+[writer runtime](journal-writer-runtime.md).** Source updater19/worker17,
+supervisor23/view15, physical2+writer3. Worker CAS/receipt/retained-lock opening и
+graph-bound updater intent/history, trusted consuming driver/worker handler
+реализованы. **Actor24/view16 и native19/17 writer proof ещё впереди.**
 
-Добавлены atomic worker header CAS+immutable receipt/dedup и ordinary inactive16→17
-migration с consistent/pinned backup. Latest workspace768/0 (16 ignored), opening8/0,
-Linux/MSVC validation Clippy/fmt/scaffold passed. **Runtime writer ещё
-не подключён**, новых native writer17/actual old16→17 gates нет. Public install off.
-Installed d052/runtime не менялся; desktop можно закрыть, worker оставить.
+[Physical132/0](windows-activation-state-gate-2026-10-25.md) относится к18/16/
+physical2; closing readonly recheck принят. Terminal run20261025-100933-d8a50807
+не replay. Installed d052/runtime не менялся; desktop можно закрыть, worker оставить.
+Public install/capabilities off, полное самообновление не готово.
+Final source workspace776/0 (16 ignored), ledger6/channel8 и обе Clippy/fmt/contracts/scaffold passed.
 
-Добавлен [existing-state connection/lock owner](activation-journal-opening.md),
-ещё без private runtime wiring. Следом graph-bound updater writer ledger/private
-command/actor → новая receiver17 fixture/combined native gate → local/controller/
+Следом actor24/view16 → новая receiver19/17/private3 + distinct producer/combined
+native writer с actual updater18→19/worker16→17/refusal → local/controller/
 lifetime/commit → remaining U2 faults/management → U3 desktop → U4 actual installed
-self-update. Потом вернуться к A4.3. Exact pins/cache/recovery/commands и acceptance
-criteria — в новом checkpoint; прежние NEXT ниже исторические.
+self-update → возврат к A4.3. Original120s не продлевать. Exact pins/cache/recovery
+и acceptance criteria — в checkpoint; прежние NEXT ниже исторические.
 
 ### История предыдущих checkpoints
 

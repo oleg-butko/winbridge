@@ -1,36 +1,33 @@
 # Постепенная реализация и расширение
 
-## Текущий checkpoint — 2026-10-25, worker journal17
+## Текущий checkpoint — 2026-10-25, ledger19/private writer3
 
-Продолжать по [подробной инструкции без контекста чата](plans/worker-self-update/resume-2026-10-25-journal-activation.md).
-Текущие проверки завершены, цель полного updater остаётся незавершённой.
+Продолжать по [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
+и [writer runtime](plans/worker-self-update/journal-writer-runtime.md).
 
-- **updater18/worker17/supervisor23/view15/private physical2**. Worker metadata
-  activation реализована: atomic header CAS+immutable receipt/dedup, ordinary
-  inactive16→17 migration с verified/pinned backup.
-  [Existing-state connection/lock owner](plans/worker-self-update/activation-journal-opening.md)
-  реализован как trusted library; runtime writer не подключён.
-- Source checks **workspace768/0 (16 ignored), opening8/0**, Linux/MSVC
-  validation Clippy/fmt/scaffold passed. Native writer17/actual old16→17 впереди.
-- [Physical Main23 StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-  пройден на worker16; closing readonly recheck принят. Run20261025-100933-d8a50807
-  terminal, не replay. Target1370d6b не подходит будущему same-schema17 writer gate.
-- Public install off; installed d052 healthy/unchanged. Desktop не нужен,
-  worker оставить. Active Cargo/native observer нет.
+- Source **updater19/worker17/supervisor23/view15/private physical2+writer3**.
+  Worker atomic header/receipt/opening и graph-bound updater intent/history,
+  consuming native private driver/worker handler реализованы. **Actor24/view16
+  и native writer proof ещё впереди**. Public install/capabilities off.
+- Final source checks **workspace776/0 (16 ignored), ledger6/channel8**, обе
+  Clippy/fmt/contracts/scaffold passed; summary `writer-v3-final.json`.
+- [Physical132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+  относится к18/16/private2. Terminal run20261025-100933-d8a50807 не replay.
+  Installed d052 unchanged/healthy; новых native runs нет, desktop не нужен.
 
 Следующая последовательность:
 
-1. Graph-bound writer admission/ledger/private command и successor actor;
-   связать их с guarded existing-state constructor и actual child/parent/graph.
-2. Clean receiver17 + distinct producer, combined native writer и actual
-   worker16→17/refusal. Original120s window сохранить; physical receipt не grant.
-3. Local IPC/reconciliation, actual controller session, owned lifetime/commit/
-   scoped maintenance release; затем remaining U2 faults/management.
+1. Actor24/view16 с original Owned guard, одним blocking slot, safe duplicates,
+   responsive status и cold/failure projections; старые views frozen.
+2. Clean receiver19/17/private3 + distinct producer; combined native writer и
+   actual updater18→19/worker16→17/refusal. Original120s сохранить.
+3. Normal local service/reconciliation, actual controller session, owned
+   lifetime/commit/scoped release; remaining U2 faults/management.
 4. U3 desktop notifications/update, U4 installed self-update, возврат к A4.3.
 
-Новых native Windows runs при закрытии не запускали. Перед следующим run fresh
-Info/оба диска≥6GiB и объявление worker/desktop/окон. При неожиданном поведении
-installed worker остановить зависимые действия. Исторические NEXT ниже не текущие.
+Перед новым Windows gate fresh Info/оба диска≥6GiB и объявление нужных окон/
+worker/desktop. Desktop можно закрыть, installed worker оставить. Непредвиденное
+поведение installed worker останавливает зависимые действия. История ниже.
 
 ## История предыдущих checkpoints: не текущие задания
 

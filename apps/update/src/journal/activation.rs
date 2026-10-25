@@ -155,7 +155,7 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationRecord>>
 }
 /// Return the very same validated replacement used by the context/ledger read.
 /// Re-reading its entire history in the same transaction adds no fresh evidence.
-fn read_graph(
+pub(super) fn read_graph(
     c: &Connection,
     id: &str,
 ) -> Result<Option<(ActivationRecord, RuntimeReplacementRecord)>> {
@@ -549,7 +549,7 @@ impl UpdateJournal {
 }
 
 #[cfg(windows)]
-fn owned_current(
+pub(super) fn owned_current(
     c: &Connection,
     a: &UpdateAuthority,
     s: &SupervisorRecord,

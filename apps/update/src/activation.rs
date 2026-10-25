@@ -14,8 +14,10 @@ pub use lifecycle::*;
 pub mod channel;
 mod process_view;
 pub mod writer;
+mod writer_record;
 pub(crate) use process_view::state_view;
 pub(crate) use process_view::view as process_view;
+pub use writer_record::{ActivationWriterRecord, ActivationWriterState};
 #[cfg(any(windows, test))]
 mod owner_stack;
 #[cfg(windows)]
@@ -60,6 +62,24 @@ pub enum ActivationPreparationAdmission {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ActivationStateSnapshot {
     pub record: ActivationRecord,
+    pub shutdown_receipt: winbridge_protocol::update::WorkerShutdownReceipt,
+}
+pub struct ActivationWriterPermit {
+    pub(crate) record: ActivationWriterRecord,
+}
+impl ActivationWriterPermit {
+    pub fn record(&self) -> &ActivationWriterRecord {
+        &self.record
+    }
+}
+pub enum ActivationWriterAdmission {
+    Issued(Box<ActivationWriterPermit>),
+    Existing(Box<ActivationWriterRecord>),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivationWriterSnapshot {
+    pub activation: ActivationRecord,
+    pub writer: ActivationWriterRecord,
     pub shutdown_receipt: winbridge_protocol::update::WorkerShutdownReceipt,
 }
 #[cfg(windows)]

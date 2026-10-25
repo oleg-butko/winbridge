@@ -12,6 +12,8 @@ use winbridge_transport::supervisor as ipc;
 #[cfg(feature = "update-validation")]
 #[path = "activation_process_validation.rs"]
 mod validation;
+#[path = "activation_writer.rs"]
+mod writer;
 
 #[derive(Default)]
 struct Capture {
@@ -247,7 +249,7 @@ impl ActivationProcessGuard {
             .map_err(|e| e.to_string())
     }
     fn require_custody(
-        &mut self,
+        &self,
         j: &UpdateJournal,
         a: &UpdateAuthority,
         s: &SupervisorRecord,
@@ -256,6 +258,10 @@ impl ActivationProcessGuard {
         let r = j
             .require_activation_owned_current(a, s, &self.files.preparation, &self.record)
             .map_err(|e| e.to_string())?;
+        self.require_fixed_custody(grant)?;
+        Ok(r)
+    }
+    fn require_fixed_custody(&self, grant: bool) -> Result<()> {
         match &self.released {
             Some(custody) => {
                 custody.require_released(self.files.original.permit.shutdown_intent())?
@@ -279,7 +285,7 @@ impl ActivationProcessGuard {
         if grant {
             self.files.preparation.require_live_window()?;
         }
-        Ok(r)
+        Ok(())
     }
     async fn handoff_state(
         &mut self,

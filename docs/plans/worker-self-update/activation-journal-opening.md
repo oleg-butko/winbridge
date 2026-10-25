@@ -1,5 +1,9 @@
 # Existing-state connection для StateOwned receiver
 
+Актуальное продолжение: [ledger19/private writer3](journal-writer-runtime.md)
+уже вызывает эту library из worker private handler. Actor24 и actual native
+writer gate ещё впереди. Остальной текст фиксирует component checkpoint f5dcec1.
+
 2026-10-25 America/New_York. Продолжение worker schema17
 [atomic journal activation](resume-2026-10-25-journal-activation.md).
 **Trusted library реализована; private receiver/actor пока её не вызывают.**
