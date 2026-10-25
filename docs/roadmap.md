@@ -6,8 +6,8 @@
 и [writer actor](plans/worker-self-update/journal-writer-actor.md).
 
 После checkpoint36f9895 добавлены Rust Main24 и independent verifier; source/
-cross/local checks прошли. PS mode/observer и реальные migration fixtures ещё
-нужны. Новый Windows writer run не запускался.
+cross/local checks прошли. PS mode/observer и реальные migration fixtures теперь
+добавлены; Python24/Linux/MSVC passed. Windows syntax/native run ещё впереди.
 
 - Source **updater19/worker17/supervisor24/view16/private physical2+writer3**.
   Worker atomic header/receipt/opening и graph-bound updater intent/history,
@@ -27,8 +27,8 @@ cross/local checks прошли. PS mode/observer и реальные migration 
 
 1. Receiver19/17/private3/actor24 clean **1a2149f уже экспортирована**;
    [hashes/pin](plans/worker-self-update/journal-writer-actor.md#готовая-clean-receiver-fixture).
-   Rust Main/verifier добавлены. Следом actual migration fixtures и PS mode/
-   observer, затем distinct producer.
+   Rust Main/verifier, actual migration fixtures и PS mode/observer добавлены.
+   Следом clean distinct producer, syntax preflight и combined run.
 2. Combined native writer/actual updater18→19 и worker16→17/refusal; correct
    None ACK/busy, immediate24 after StateOwned, original120s сохранить.
 3. Normal local service/reconciliation, actual controller session, owned

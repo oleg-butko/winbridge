@@ -4,7 +4,7 @@
 [ledger19/private writer3](journal-writer-runtime.md). **Actor24 и view16
 реализованы и прошли source/local IPC/cross проверки. Настоящего native writer
 gate ещё нет.** После checkpoint36f9895 добавлены Rust Main24 и independent
-verifier; PS/observer/actual migration wiring ещё нужно. Подробности в
+verifier; PS/observer/actual migration fixtures теперь подключены в source. Подробности в
 [текущем checkpoint](resume-2026-10-25-journal-activation.md).
 Updater19/worker17 и private physical2/writer3 прежние.
 Public install и advertised activation/controller/desktop drivers=None.
@@ -124,8 +124,9 @@ old18 image с retained verified pins, не менять поле schema у пр
 ## Следующий шаг: один combined native gate
 
 1. Новая **receiver19/17/private3/actor24 готова выше**. Rust Main24 и независимый
-   writer verifier добавлены, actual execution ещё нет. Закончить реальные
-   migration fixtures и PS/observer, затем экспортировать distinct producer. Старый
+   writer verifier добавлены, actual execution ещё нет. После
+   source review/checks, затем экспортировать distinct producer. Migration
+   fixtures и PS/observer уже подключены. Старый
    receiver1370d6b/18/16/private2 не подходит. Writer flags/mode в существующих
    PS/Python сценариях пока **не добавлены**; не считать их уже доступными.
 2. Main: обычные shutdown/backup/preparation/replacement/Ready/state handoff,
@@ -171,4 +172,26 @@ coordinated epoch rewrite, counter/privacy/schema boundaries), обе workspace
 all-target validation Clippy passed. Old132/45-files/44+40+12-mutations readonly
 recheck принят. Logs `writer-main24-*.log`, summary `writer-main24-source-checks.json`.
 Это source/cross и synthetic verifier evidence; Windows Main24 ещё не запускался,
-PS/observer writer flag отсутствует. Installed d052 healthy/idle, runtime прежний.
+PS/observer writer mode подключён следующим блоком ниже. Installed d052
+healthy/idle, runtime прежний; native execution ещё не подтверждён.
+
+
+## Подключение combined gate
+
+PS/observer mode и actual migration fixtures добавлены. Новый composite reference
+создаётся из successful Main23 pin: updater18 image/manifest и worker16/fixture
+берутся из установленного target1370d6b, а не из его producer7b270c6. Independent
+reference verifier повторно проверяет old physical proof и ready bytes.
+
+Updater fixture копирует SQLite через backup API, сохраняет physical18 history,
+проверяет19 backup/fencing/old18 refusal. Повтор replacement даёт Existing data,
+не fresh permit. Worker fixture запускает actual old16 CLI в отдельном instance,
+сверяет task/output/dedup с SQL, затем проверяет inactive16→17 backup/preservation/
+old16 refusal и active16 отказ до schema writes/backup. Копии PE удерживаются read
+pins; прежние runtime/state не меняются. Новые source tests не доказывают execution.
+
+Checks: Python24/0, Linux/MSVC all-target validation Clippy, legacy132 readonly
+regression passed. Independent migration audit содержит18 tamper cases. Pwsh в
+Debian нет; следующим шагом clean producer export и Windows syntax preflight,
+затем один combined run с `--activation-writer`. Receiver1a2149f прежний;
+нужен только installed worker, desktop/UI windows не требуются.

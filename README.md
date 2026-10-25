@@ -69,7 +69,8 @@ Source **updater19/worker17/supervisor24/view16**, physical handoff2 + private w
 Worker atomic header/receipt/opening и graph-bound updater intent/history,
 consuming native driver/worker handler и actor24/view16 реализованы.
 Rust Main24 и independent verifier добавлены (hooks4/Python19/cross checks passed).
-**PS/observer/migration wiring и native writer proof, обычный сервис нового worker/local/controller/
+PS/observer writer mode и actual migration fixtures добавлены (source/cross checks).
+**Native writer proof, обычный сервис нового worker/local/controller/
 lifetime и U3/U4 впереди.**
 [Physical132/0](docs/plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
 относится к прежним18/16/private2. Public install выключен, полное самообновление

@@ -7,13 +7,14 @@
 
 **После checkpoint36f9895 добавлены Rust Main24 и независимый writer verifier.**
 Они прошли source/cross/local проверки; нового Windows writer-прогона нет.
-PS mode/observer wiring и реальные миграционные fixtures ещё нужны. Ожидающих
+После Main24 добавлены PS/observer writer mode и реальные миграционные fixtures.
+Они прошли source/local/cross проверки; Windows execution/PS parse ещё впереди. Ожидающих
 Cargo/native/observer runs нет. Receiver pin остаётся `7fd8135`/target `1a2149f`.
 Самообновление целиком **не готово**, public install остаётся выключенным.
 
 Первое следующее действие: закончить **combined native writer gate** для уже
-готового receiver `1a2149f`: actual updater18→19 и worker16→17/refusal fixtures,
-PS/observer mode, затем clean distinct producer и один автоматический прогон. Обновлять установленный worker для этого
+готового receiver `1a2149f`: clean distinct producer/export, Windows PS syntax
+preflight и один автоматический прогон с actual updater18→19/worker16→17/refusal. Обновлять установленный worker для этого
 сейчас не требуется. Подробности, ограничения и критерии ниже.
 
 ## 1. Что реализовано и что ещё не доказано
@@ -29,7 +30,7 @@ command/receipt имеют schema1. Номер private contract не равен 
 | U2.2 physical | Preparation/replacement, один private child, Ready и передача ему прежнего instance lock подтверждены на Windows для updater18/worker16/private2. |
 | Worker journal activation | Реализованы exact old-header CAS + immutable receipt в одной транзакции, schema17 и обычная inactive16→17 migration с backup. Source/local/cross checks прошли. |
 | Existing-state opening | `ActivationJournal` удерживает Store и тот же acquired lock; opening без CREATE/migration/обычного begin_authority, одноразовая попытка и retained failure custody реализованы. |
-| Writer pipeline | Updater19 intent/history, consuming native driver, worker private3 handler и supervisor24/view16 реализованы. Rust Main24/independent verifier добавлены; PS/observer/migration wiring ещё нужно. **Настоящего Windows writer proof ещё нет.** |
+| Writer pipeline | Updater19 intent/history, consuming native driver, worker private3 handler и supervisor24/view16 реализованы. Rust Main24, independent verifier, PS/observer mode и migration fixtures добавлены; actual gate ещё не выполнен. **Настоящего Windows writer proof ещё нет.** |
 | Activated normal service | Reconciliation, normal local IPC, новая controller session и передача lifetime ещё не реализованы. |
 | Завершение обновления | Commit/scoped release, оставшиеся U2 faults/management, U3 desktop и U4 installed self-update впереди. |
 
@@ -105,7 +106,19 @@ worker tables сохранены, duplicate/legacy/cold/actual Job exit. Fast br
 Отдельный create-new trace перед private send существует только в explicit clean
 validation fixture. Marker сам не доказывает delivery; он связан с обеими receipts.
 
-Новые проверки: portable validation hooks **4/0**, Python preparation/process/
+Дальше source wiring завершено: `--activation-writer` / `-ActivationWriterGate`,
+strict19/17 archives и private3, отдельный reference из actual physical132,
+actual18→19/refusal и worker inactive16→17/active16 refusal fixtures. Updater
+migration сохраняет всю physical history и возвращает Existing data без fresh
+permit; это не обязано быть ошибкой. Worker fixture запускает actual old16 CLI
+в отдельном instance, связывает task/output/dedup с DB, сохраняет read pins копий
+PE и проверяет consistent backup/старый16 refusal. Весь installed runtime прежний.
+Source checks: Python24/0, Linux/MSVC all-target validation Clippy и legacy132
+readonly regression passed. PS в Debian отсутствует, syntax preflight выполнить
+на Windows до heavy build. Latest logs `writer-migrations-*-final.log`,
+`writer-migrations-legacy-recheck.log`. Эти проверки не native migration proof.
+
+Предыдущие Main24 проверки: portable validation hooks **4/0**, Python preparation/process/
 state/writer **5+3+5+6=19/0**, Linux/MSVC workspace all-target validation Clippy,
 fmt/scaffold/diff passed. Shared physical prefix verifier выделен без ослабления
 legacy16/18; старый actual132/0 снова прошёл readonly recheck (45 files twice,
@@ -188,7 +201,9 @@ Rust во время Cargo; не запускать конкурирующие f
 | `apps/worker/src/update_control.rs` | Actual local mailbox24 regression. |
 | `apps/worker/tests/update_shutdown.rs`, `update_shutdown/activation_state.rs`, `update_shutdown/activation_writer.rs` | Main24 source: fast same-child dispatch, SQL/header/fencing checks и cold actual exit; ignored native test ещё не выполнен. |
 | `apps/update/tests/activation_migration.rs` | Existing actual updater17→current migration fixture; нужен новый actual18 reference. |
-| `scripts/test-update-health-actor.ps1` | Реальный Main PS runner с physical flags; writer flag отсутствует. |
+| `scripts/test-update-health-actor.ps1` | Writer flag, explicit18/16 references, exact ignored Main24/migration tests, inline minimum selection checks, restored test env. |
+| `apps/update/tests/activation_writer_migration.rs`, `apps/worker/tests/journal_activation_migration.rs` | Новые actual old executable migration/refusal fixtures; пока cross-only. |
+| `scripts/update-activation-writer-reference.py`, `update-activation-writer-migration-proof.py` | Verified old132→18/16 references и independent migration audit18 mutations. |
 | `scripts/validate-update-activation-preparation-native.py` | Debian observer/submit/verify-run; старые exact18/16 assumptions. |
 | `scripts/update-activation-preparation-proof.py`, `update-activation-state-proof.py`, `update-replacement-proof.py` | Shared strict scope/physical/replacement checks; explicit19/17 path, legacy defaults прежние. |
 | `scripts/update-activation-writer-proof.py`, `test-update-activation-writer-native.py` | Новый writer verifier и synthetic component regressions; top-level actual proof пока отсутствует. |
@@ -227,7 +242,8 @@ schema: `require_runtime_schemas` пока намеренно требует wor
 
 1. Rust input `activationWriter`, writer result kind и ignored test
    `actual_main_activates_one_journal_writer_without_service_or_replay` **добавлены**.
-   Подключить PS runner и Python observer; PS/CLI writer flag пока **не существует**.
+   PS runner/observer **подключены**: `-ActivationWriterGate` / `--activation-writer`.
+   Их настоящего Windows результата пока нет.
    Existing modes23/22/21 оставить доступными. Новый Rust test принимает только
    согласованные writer/state/process/files/preparation flags; install не включает.
 2. Обычный путь: старый worker shutdown → final backup → preparation/replacement
@@ -255,7 +271,13 @@ schema: `require_runtime_schemas` пока намеренно требует wor
 - **Updater18→19/refusal.** Взять consistent copy successful18 history из
   physical132 run `20261025-100933-d8a50807`. Новый reference должен связать exact
   old18 image/descriptor/source/ready/report/history hashes и terminal task.
-  Reference ещё **не подготовлен**. Старый `activation_schema17_reference` нужен
+  Reference **подготовлен из проверенного Main23**, helper:
+  `scripts/update-activation-writer-reference.py`. Composite kind
+  `journal_writer_migration_reference`, отдельные inner refs18/16. Old image
+  source1370d6b — target старого report, не его producer7b270c6. Local file
+  `.winbridge/update-preparation/writer-migration-reference18-16.json`, SHA256
+  `bd1e71f1181236e4b8e3c4f140e8b716abe3c8908c10d11651132252c25f3772`.
+  Старый `activation_schema17_reference` нужен
   legacy17→18 и не становится18 сменой поля schema. После19 старый executable18
   должен отказать без writable изменений; проверить backup, историю и fencing.
 - **Worker inactive16→17/refusal.** На actual old16 executable получить журнал с
@@ -286,10 +308,32 @@ command/hash/receipt и prefixes. Synthetic tests проверяют delivery co
   invalid bool/nullable observations и FILETIME отвергаются. Secret/nonce/token/
   serialized permissions не допускаются в отчёт. Сохранить прежние physical checks.
 
-После завершения PS/observer/migration wiring и их source review/checks — clean
-producer commit/export, fresh Info/disk/cache checks и **один combined Windows run**, включая реальные migration/refusal cases.
+После source review/checks — clean producer commit/export, fresh Info/disk/cache checks и **один combined Windows run**, включая реальные migration/refusal cases.
 Сохранить request/key/taskId до наблюдения; при потере сессии сверять тот же task,
 не запускать второй «на всякий случай».
+
+### Команда нового combined gate после clean producer export
+
+Сначала проверить PS syntax на Windows без исполнения script; здесь pwsh нет.
+Сам gate требует только installed worker, не открывает desktop. Target receiver
+остаётся1a2149f; old reference pin теперь **Main23**, не прежний compatible-drain17.
+
+~~~bash
+python3 scripts/validate-update-activation-preparation-native.py \
+  --archive /mnt/hgfs/shared/WinBridge/sources/NEW-CLEAN-PRODUCER.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261025T163918Z-1a2149f-8b8c082c.zip \
+  --cache-run 20261017-061527-f4639971 \
+  --reference-pin .winbridge/workflow-validation/20261025-100933-d8a50807/activation-preparation-verified.json \
+  --activation-writer
+~~~
+
+`NEW-CLEAN-PRODUCER.zip` — placeholder, пакет ещё не экспортирован. Сохранить
+returned run/taskId. Для восстановления тот же argv плюс `--verify-run RUN`;
+не повторять submit. Metadata по-прежнему `activation-preparation-run.json`,
+но key prefix `native-activation-writer-`. Independent observer проверит Main24,
+обе migration proofs, exact commands/test counts, hashes/ready files twice и
+negative mutations. Ожидается39 test groups/42 commands; actual counts взять
+из результата, не выдавать minimum за выполненные tests. Native proof ещё нет.
 
 ## 7. Прежний Windows physical proof: только читать, не resubmit
 

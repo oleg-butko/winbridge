@@ -12,7 +12,7 @@
 supervisor24/view16, physical2+writer3. Worker CAS/receipt/retained-lock opening и
 graph-bound updater intent/history, trusted consuming driver/worker handler
 и actor24/view16 реализованы. Rust Main24 и independent verifier добавлены;
-**PS/observer/migration wiring и native19/17 proof ещё впереди.**
+PS/observer/migration fixtures подключены; **native19/17 proof ещё впереди.**
 
 [Physical132/0](windows-activation-state-gate-2026-10-25.md) относится к18/16/
 physical2; closing readonly recheck принят. Terminal run20261025-100933-d8a50807
@@ -27,8 +27,9 @@ receiver ZIP и source test evidence повторно сверены; pending ru
 
 Main24 source checks: hooks4/0, Python19/0, обе all-target validation Clippy passed;
 legacy132/0 повторно принят readonly. Workspace781/0 выше — baseline1a2149f.
-Receiver19/17/private3/actor24 **1a2149f уже экспортирована**. Следом actual
-migration fixtures и PS mode/observer
+Migration fixtures и PS/observer теперь добавлены; Python24/Linux/MSVC passed.
+Receiver19/17/private3/actor24 **1a2149f уже экспортирована**. Следом clean producer
+export и Windows syntax preflight
 → distinct producer/combined
 native writer с actual updater18→19/worker16→17/refusal → local/controller/
 lifetime/commit → remaining U2 faults/management → U3 desktop → U4 actual installed

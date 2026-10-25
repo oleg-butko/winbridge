@@ -3,6 +3,8 @@
 import copy
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 import unittest
 import uuid
@@ -161,6 +163,14 @@ class WriterEvidenceTests(unittest.TestCase):
 
     def test_public_authority_accepts_the_maximum_bounded_receipt_epoch(self):
         gate.authority(dict(incarnation=uid(10), epoch=9007199254740991, fingerprintSha256='1'*64))
+
+    def test_cli_rejects_mixed_writer_modes_before_reading_or_submitting(self):
+        script = str(Path(__file__).with_name('validate-update-activation-preparation-native.py'))
+        for other in ('--activation-state','--activation-process','--activation-files'):
+            result = subprocess.run([sys.executable,script,'--archive','absent.zip','--target-archive','absent-target.zip',
+                '--cache-run','absent','--reference-pin','absent.json','--activation-writer',other],capture_output=True,text=True)
+            self.assertEqual(result.returncode,2)
+            self.assertIn('not allowed with argument',result.stderr)
 
     def test_unknown_schema_pairs_do_not_extend_legacy_scope(self):
         for worker, updater in ((16, 19), (17, 18), (18, 20), (True, 18)):

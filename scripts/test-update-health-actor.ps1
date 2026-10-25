@@ -22,12 +22,14 @@ param(
   [switch]$ActivationFilesGate,
   [switch]$ActivationProcessGate,
   [switch]$ActivationStateGate,
+  [switch]$ActivationWriterGate,
   [string]$MigrationReferenceFile,
   [string]$MigrationReferenceSha256,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ActivationWriterGate){if($ActivationStateGate -or $ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationStateGate=$true}
 if($ActivationStateGate){if($ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationProcessGate=$true}
 if($ActivationProcessGate){if($ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationFilesGate=$true}
 if($ActivationFilesGate){if($ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationPreparationGate=$true}
@@ -55,6 +57,7 @@ New-Item -ItemType Directory -Path $ReportDirectory -Force | Out-Null
 $report=[ordered]@{schemaVersion=1;kind='candidate_health_native_gate';platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;commands=@();runtimeApplied=$(if($RuntimeReplacementGate){$null}else{$false});installedRuntimeApplied=$false;windowsOpened=$false;error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 $oldShutdownInput=$env:WINBRIDGE_SHUTDOWN_GATE_INPUT
 $oldActivationInput=$env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT
+$oldWorkerMigrationInput=$env:WINBRIDGE_WRITER_WORKER_MIGRATION_INPUT
 $oldPreviousUpdater=$env:WINBRIDGE_PREVIOUS_UPDATER10
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_HEALTH_GATE_INPUT;$oldProof=$env:WINBRIDGE_HEALTH_GATE_PROOF
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
@@ -77,11 +80,20 @@ try {
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
   if($ActivationPreparationGate){
     Assert-SessionFile $MigrationReferenceFile
-    if($MigrationReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $MigrationReferenceFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $MigrationReferenceSha256){throw 'Pinned actual17 migration reference required'}
+    if($MigrationReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $MigrationReferenceFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $MigrationReferenceSha256){throw 'Pinned migration reference SHA required'}
     $reference=Get-Content -LiteralPath $MigrationReferenceFile -Raw|ConvertFrom-Json
-    if($reference.kind -cne 'activation_schema17_reference' -or $reference.schemaVersion -ne 1){throw 'Unexpected activation migration reference'}
+    if($ActivationWriterGate){
+      if($reference.kind -cne 'journal_writer_migration_reference' -or $reference.schemaVersion -ne 1 -or $reference.updater.kind -cne 'activation_schema18_reference' -or $reference.worker.kind -cne 'journal_schema16_reference'){throw 'Actual18 updater and actual16 worker references required'}
+      $updaterReference=$reference.updater
+      $workerMigrationInput=Join-Path (Split-Path $source -Parent) 'worker-journal-migration-input.json'
+      Write-NewJson $workerMigrationInput @{root=(Join-Path (Split-Path $source -Parent) 'worker-journal-migration-case');reference=$reference.worker;proof=(Join-Path $ReportDirectory 'worker-journal-activation-migration-proof.json')}
+      $env:WINBRIDGE_WRITER_WORKER_MIGRATION_INPUT=$workerMigrationInput
+    } else {
+      if($reference.kind -cne 'activation_schema17_reference' -or $reference.schemaVersion -ne 1){throw 'Unexpected activation migration reference'}
+      $updaterReference=$reference
+    }
     $migrationInput=Join-Path (Split-Path $source -Parent) 'activation-migration-input.json'
-    Write-NewJson $migrationInput @{root=(Join-Path (Split-Path $source -Parent) 'activation-migration-case');reference=$reference;proof=(Join-Path $ReportDirectory 'activation-migration-proof.json')}
+    Write-NewJson $migrationInput @{root=(Join-Path (Split-Path $source -Parent) 'activation-migration-case');reference=$updaterReference;proof=(Join-Path $ReportDirectory 'activation-migration-proof.json')}
     $env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT=$migrationInput
     $report.migrationReferenceSha256=$MigrationReferenceSha256
   }
@@ -141,6 +153,7 @@ try {
     if($RuntimePreparationFaults){$shutdownArguments.preparationFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     if($ActivationProcessGate){$shutdownArguments.activationProcess=$true;$report.kind='activation_process_main_native_gate'}
     if($ActivationStateGate){$shutdownArguments.activationState=$true;$report.kind='activation_state_main_native_gate'}
+    if($ActivationWriterGate){$shutdownArguments.activationWriter=$true;$report.kind='activation_writer_main_native_gate'}
     Write-NewJson $shutdownInput $shutdownArguments
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
@@ -148,6 +161,7 @@ try {
     if($ActivationFilesGate){$mainTest='actual_main_binds_activation_files_without_launch_or_cold_adoption'}
     if($ActivationProcessGate){$mainTest='actual_main_launches_one_private_receiver_before_state_handoff'}
     if($ActivationStateGate){$mainTest='actual_main_hands_the_existing_state_to_the_same_private_receiver'}
+    if($ActivationWriterGate){$mainTest='actual_main_activates_one_journal_writer_without_service_or_replay'}
     # The Main fixture copies its supervisor from validationUpdater. Building a
     # validation test harness alone does not enable diagnostics in that process.
     $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
@@ -183,11 +197,12 @@ try {
   # Worker IPC fixtures launch this executable. Reused caches may still hold an
   # older updater that correctly refuses the freshly migrated journal.
   if($ActivationPreparationGate){
+    $migrationTest=if($ActivationWriterGate){'activation_writer_migration'}else{'activation_migration'}
     $commands=@(
       @{name='activation-data-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','activation','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='activation-contract';arguments=@('test','-p','winbridge-protocol','--test','update_activation_preparation','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='activation-mailbox';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','activation_preparation_v20','--locked','--offline','--','--test-threads=1','--nocapture')},
-      @{name='activation-actual-migration';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test','activation_migration','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
+      @{name='activation-actual-migration';minimum=1;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--test',$migrationTest,'--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
     )+$commands
   }
   if($ActivationFilesGate){
@@ -219,6 +234,17 @@ try {
       @{name='activation-state-original-pins';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','shutdown::state::tests','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($ActivationWriterGate){
+    $commands=@(
+      @{name='writer-model-and-ledger';minimum=19;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','writer','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='writer-worker-sql';minimum=11;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::activation::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='writer-existing-open';minimum=7;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::activation_open::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='writer-view-contract';minimum=2;arguments=@('test','-p','winbridge-protocol','--test','update_activation_writer_view','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='writer-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','activation_writer_v24','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='writer-send-trace';minimum=1;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','writer_trace_is_create_new','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='writer-actual-worker-migration';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','journal_activation_migration','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
+    )+$commands
+  }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
@@ -230,6 +256,11 @@ try {
     & $executable @arguments 2>&1 | Tee-Object -FilePath (Join-Path $ReportDirectory $log)
     $code=$LASTEXITCODE;$report.commands+=@{name=$command.name;arguments=$arguments;exitCode=$code;log=$log}
     if($code -ne 0){throw "Health native command failed: $($command.name); see $log"}
+    if($command.ContainsKey('minimum')){
+      $counts=[regex]::Matches((Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')
+      $selected=0;foreach($count in $counts){$selected+=[int]$count.Groups[1].Value}
+      if($selected -lt $command.minimum){throw "Required native tests were not selected: $($command.name)"}
+    }
     if($ActivationFilesGate -and $command.name -ceq 'health-supervisor-build'){
       # Other cargo feature variants may replace debug/winbridge-update.exe.
       # Freeze this exact validation build before running those commands.
@@ -258,6 +289,7 @@ try {
   if($ActivationFilesGate){$expectedKind='activation_files_main_native_proof'}
   if($ActivationProcessGate){$expectedKind='activation_process_main_native_proof'}
   if($ActivationStateGate){$expectedKind='activation_state_main_native_proof'}
+  if($ActivationWriterGate){$expectedKind='activation_writer_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
@@ -267,7 +299,7 @@ try {
   try { if($ShutdownMainGate -and (Get-Variable caseRoot -ErrorAction SilentlyContinue)){
     foreach($caseName in @('None','LostAck','DelayedReply','ReceiptWriteDenied','DelayedInstanceLock','SupervisorCrashBeforeExit','None-ExistingDestination','None-ExitAfterCopy','None-WrongInputReport','None-HoldBeforeCopy','None-PreparationExistingDirectory','None-PreparationChangedCandidate','None-PreparationHoldBeforeReceipt','None-ReplacementExistingDirectory','None-ReplacementLockedOldFile','None-ReplacementReceiptWriteDenied','None-ReplacementHoldBeforeReceipt')){
       $caseDirectory=Join-Path $caseRoot $caseName
-      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json','activation-state-before_release.json','activation-state-after_release.json')){
+      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json','activation-state-before_release.json','activation-state-after_release.json','activation-writer-before-send.json')){
         $path=Join-Path $caseDirectory $logName
         if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-'+$logName)),$false)}
       }
@@ -282,11 +314,18 @@ try {
       }
     }
   }
+  if($ActivationWriterGate){
+    foreach($name in @('old16-worker-stdout.log','old16-worker-stderr.log')){
+      $path=Join-Path (Split-Path $source -Parent) ('worker-journal-migration-case/'+$name)
+      if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ('migration-'+$name)),$false)}
+    }
+  }
   } catch {Write-Output ('Optional case diagnostic export failed: '+$_.Exception.Message)}
   $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
   if($lease){$lease.Dispose()}
   $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$oldShutdownInput
   $env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT=$oldActivationInput
+  $env:WINBRIDGE_WRITER_WORKER_MIGRATION_INPUT=$oldWorkerMigrationInput
   $env:WINBRIDGE_PREVIOUS_UPDATER10=$oldPreviousUpdater;$env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_HEALTH_GATE_INPUT=$oldInput;$env:WINBRIDGE_HEALTH_GATE_PROOF=$oldProof;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
   [Console]::OutputEncoding=$oldConsoleEncoding;$OutputEncoding=$oldPipelineEncoding
   Set-Location -LiteralPath $oldLocation

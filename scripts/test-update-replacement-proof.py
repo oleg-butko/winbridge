@@ -65,10 +65,10 @@ def audit_faults(proof, source, target):
     return rejected
 
 
-def audit(proof, source, target, activation_expected=False):
+def audit(proof, source, target, activation_expected=False, *, worker_schema=16):
     if proof.get('kind') == 'runtime_replacement_faults_native_proof':
         return audit_faults(proof, source, target)
-    health.verify_runtime_replacement_proof(proof, source, target, activation_expected)
+    health.verify_runtime_replacement_proof(proof, source, target, activation_expected, worker_schema=worker_schema)
     prefix = 'cases/0/replacement/'
     paths = [
         ('kind', 'wrong-proof'), ('schemaVersion', True), ('runtimeApplied', False),
@@ -116,7 +116,7 @@ def audit(proof, source, target, activation_expected=False):
         bad = copy.deepcopy(proof)
         change(bad)
         try:
-            health.verify_runtime_replacement_proof(bad, source, target, activation_expected)
+            health.verify_runtime_replacement_proof(bad, source, target, activation_expected, worker_schema=worker_schema)
         except (ValueError, KeyError, TypeError, IndexError):
             rejected.append(name)
         else:

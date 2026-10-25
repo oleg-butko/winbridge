@@ -6,7 +6,8 @@
 
 После checkpoint36f9895 продолжена подготовка combined native writer gate:
 Rust Main24 и independent verifier добавлены, source/cross/local checks прошли.
-PS mode/observer и реальные migration fixtures ещё нужно подключить.
+PS mode/observer и реальные18→19/worker16→17/refusal fixtures подключены.
+Следом clean producer export, Windows PS syntax preflight и один combined run.
 Ожидающих Cargo/native/observer runs нет; native writer proof пока отсутствует.
 
 ## Авторитетное состояние
@@ -20,7 +21,7 @@ PS mode/observer и реальные migration fixtures ещё нужно под
   maintenance сохранена. **Actor24/view16 подключены:** original Owned → один
   blocking slot, one key, exact confirmation и retained failures. Fast ACK/busy
   без full snapshot. Main24/verifier source добавлен; **combined native writer
-  gate ещё не подключён/не выполнен**.
+  gate подключён в source, ещё не выполнен**.
 - Final source checks: **workspace781/0 (16 ignored), focused writer19/0,
   actual local mailbox24 1/0**, Linux/MSVC validation all-target Clippy,
   contracts/generation/TS/UI/fmt/scaffold passed; summary `actor24-checks.json`.
@@ -39,13 +40,20 @@ PS mode/observer и реальные migration fixtures ещё нужно под
   остаются None. Normal activated service/local/controller/lifetime, remaining
   U2 faults/management и U3/U4 впереди. Installed d052/runtime не менялся.
 
+Новый combined mode: `--activation-writer` / `-ActivationWriterGate`, strict19/17
+и private3. Новые refs получены из terminal physical132/0 (old images1370d6b);
+legacy17 pin не переписывался. Actual migration fixtures прошли cross-check,
+их реального Windows результата ещё нет. Python24/0, обе all-target validation
+Clippy и legacy132 readonly passed. Pwsh в Debian отсутствует: parse на Windows
+до heavy build. Подробная команда и scope в checkpoint; installed runtime прежний.
+
 ## Откуда продолжать
 
 1. Clean receiver **1a2149f / 19/17/private3/actor24 уже готова**:
    `winbridge-20261025T163918Z-1a2149f-8b8c082c.zip`; hashes/pin в
    [actor24](plans/worker-self-update/journal-writer-actor.md#готовая-clean-receiver-fixture).
-   Rust Main/verifier есть. Следом actual18→19/worker16→17 fixtures, PS writer
-   mode/observer и distinct producer после clean commit. Target1370d6b подходит
+   Rust Main/verifier, PS mode/observer и actual migration fixtures есть. Следом
+   distinct clean producer/export, syntax preflight и combined native run. Target1370d6b подходит
    только как old16 migration reference, не как same-schema writer target.
 2. Combined native writer + actual updater18→19/refusal и worker16→17/refusal.
    None от24 start/observe — только ACK/busy. Сразу start после StateOwned,

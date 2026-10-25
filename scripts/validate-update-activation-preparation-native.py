@@ -10,6 +10,7 @@ from pathlib import Path, PureWindowsPath
 import re
 import shutil
 import time
+import types
 import uuid
 import zipfile
 
@@ -29,6 +30,9 @@ replacement_audit = load('replacement_audit', 'test-update-replacement-proof.py'
 file_checks = load('activation_file_checks', 'update-activation-files-proof.py')
 process_checks = load('activation_process_checks', 'update-activation-process-proof.py')
 state_checks = load('activation_state_checks', 'update-activation-state-proof.py')
+writer_checks = load('activation_writer_checks', 'update-activation-writer-proof.py')
+writer_references = load('writer_references', 'update-activation-writer-reference.py')
+writer_migrations = load('writer_migrations', 'update-activation-writer-migration-proof.py')
 support, health, native, need = actor.support, actor.health, actor.native, checks.need
 PREFIX = 'native-activation-preparation-'
 
@@ -67,19 +71,31 @@ def main():
     mode.add_argument('--activation-files',action='store_true',help='Explicit actor21 whole-set read binding; no worker launch')
     mode.add_argument('--activation-process',action='store_true',help='Explicit actor22 private receiver; no worker state writer')
     mode.add_argument('--activation-state',action='store_true',help='Explicit actor23 same-child physical lock handoff; no worker state writer')
+    mode.add_argument('--activation-writer',action='store_true',help='Explicit actor24 same-child journal writer, actual18/16 migrations; no normal service or install')
     args = parser.parse_args()
-    process_mode = args.activation_process or args.activation_state
+    state_mode = args.activation_state or args.activation_writer
+    process_mode = args.activation_process or state_mode
     files_mode = args.activation_files or process_mode
-    prefix = 'native-activation-state-' if args.activation_state else 'native-activation-process-' if process_mode else 'native-activation-files-' if files_mode else PREFIX
+    prefix = 'native-activation-writer-' if args.activation_writer else 'native-activation-state-' if args.activation_state else 'native-activation-process-' if process_mode else 'native-activation-files-' if files_mode else PREFIX
     source, target = (health.archive_pin(p) for p in (args.archive, args.target_archive))
-    health.require_runtime_schemas([args.archive, args.target_archive], 18)
-    if args.activation_state:
+    if args.activation_writer:
+        for archive in (args.archive, args.target_archive):
+            with zipfile.ZipFile(archive) as package:
+                need(native.updater_schema_from_source(package.read('winbridge/apps/update/src/journal.rs')) == 19
+                     and native.worker_schema_from_source(package.read('winbridge/apps/worker/src/store.rs')) == 17,
+                     'Writer mode requires exact19/17 in both clean archives')
+                wire = package.read('winbridge/crates/protocol/src/update/activation_receiver.rs')
+                need(b'WINBRIDGE_PRIVATE_JOURNAL_WRITER_V3' in wire
+                     and re.search(rb'(?m)^pub const ACTIVATION_WRITER_CONTRACT: u16 = 3;\r?$', wire), 'Private writer3 required in both archives')
+    else:
+        health.require_runtime_schemas([args.archive, args.target_archive], 18)
+    if state_mode:
         for archive in (args.archive, args.target_archive):
             with zipfile.ZipFile(archive) as package:
                 data = package.read('winbridge/crates/protocol/src/update/activation_receiver.rs')
             need(re.search(rb'(?m)^pub const ACTIVATION_STATE_HANDOFF_CONTRACT: u16 = 2;\r?$', data),
                  'State handoff needs V2 in both clean source archives')
-    need(source['sourceCommit'] != target['sourceCommit'], 'Distinct producer18 and fixture18 required')
+    need(source['sourceCommit'] != target['sourceCommit'], 'Distinct clean producer and receiver required')
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run), 'Invalid cache run')
     cfg = json.loads(args.controller_config.read_text())
     shared = Path(cfg['delivery']['root'])/cfg['delivery']['namespace']
@@ -92,11 +108,15 @@ def main():
     if not args.verify_run:
         need(info['activeTaskCount'] == 0 and shutil.disk_usage(ROOT).free >= 6*1024**3, 'Idle worker and 6 GiB Debian required')
     prior_pin = json.loads(args.reference_pin.read_text())
-    reference = reference_from_pin(prior_pin, shared/'workflow-validation', project['workspaceRoot'])
+    if args.activation_writer:
+        reference = writer_references.from_pin(prior_pin, shared/'workflow-validation', project['workspaceRoot'],
+            types.SimpleNamespace(support=support,state_checks=state_checks,checks=checks,health=health))
+    else:
+        reference = reference_from_pin(prior_pin, shared/'workflow-validation', project['workspaceRoot'])
     prior = native.call(endpoint, {'method': 'get_task', 'taskId': prior_pin['taskId']})['task']
     need(prior['status'] == 'succeeded' and prior['exitCode'] == 0
          and prior['submission']['projectId'] == 'snapshot-fixture'
-         and prior['submission']['idempotencyKey'] == 'native-compatible-drain-'+reference['referenceRun'], 'Reference task differs')
+         and prior['submission']['idempotencyKey'] == ('native-activation-state-' if args.activation_writer else 'native-compatible-drain-')+reference['referenceRun'], 'Reference task differs')
     run = args.verify_run or time.strftime('%Y%m%d-%H%M%S', time.gmtime())+'-'+uuid.uuid4().hex[:8]
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', run), 'Invalid run')
     local, report = ROOT/'.winbridge/workflow-validation'/run, shared/'workflow-validation'/run
@@ -108,7 +128,8 @@ def main():
              and meta['cacheRun'] == args.cache_run and meta['run'] == run
              and meta.get('activationFiles',False) is files_mode
              and meta.get('activationProcess',False) is process_mode
-             and meta.get('activationState',False) is args.activation_state, 'Saved scope changed')
+             and meta.get('activationState',False) is state_mode
+             and meta.get('activationWriter',False) is args.activation_writer, 'Saved scope changed')
         if meta['taskId'] is None:
             raw = (local/'request.json').read_bytes()
             need(hashlib.sha256(raw).hexdigest() == meta['requestSha256'], 'Saved request changed')
@@ -125,7 +146,7 @@ def main():
         (report/'reference.json').write_bytes(raw_reference)
         reference_sha = hashlib.sha256(raw_reference).hexdigest()
         ps = native.ps_string
-        mode = '-ActivationStateGate' if args.activation_state else '-ActivationProcessGate' if process_mode else '-ActivationFilesGate' if files_mode else '-ActivationPreparationGate'
+        mode = '-ActivationWriterGate' if args.activation_writer else '-ActivationStateGate' if args.activation_state else '-ActivationProcessGate' if process_mode else '-ActivationFilesGate' if files_mode else '-ActivationPreparationGate'
         script = f"""$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $root={ps(root)}
@@ -151,8 +172,10 @@ exit $LASTEXITCODE
             os.fsync(f.fileno())
         meta = dict(taskId=None, run=run, source=source, target=target, reference=reference, cacheRun=args.cache_run, activationFiles=files_mode, activationProcess=process_mode,
                     requestSha256=hashlib.sha256(raw).hexdigest(), debianFreeBytesBefore=shutil.disk_usage(ROOT).free)
-        if args.activation_state:
+        if state_mode:
             meta['activationState'] = True
+        if args.activation_writer:
+            meta['activationWriter'] = True
         support.save_meta(meta_file, meta)
         print(json.dumps(dict(taskId=None, run=run, recovery='--verify-run '+run)), flush=True)
         meta['taskId'] = native.call(endpoint, {'method': 'submit', 'request': request})['task']['taskId']
@@ -171,7 +194,7 @@ exit $LASTEXITCODE
     need(support.ready_files(report) == files, 'Ready files changed')
     result = json.loads(files['report.json'].decode('utf-8-sig'))
     need(task['status'] == 'succeeded' and task['exitCode'] == 0 and result['passed'] is True
-         and result['kind'] == ('activation_state_main_native_gate' if args.activation_state else 'activation_process_main_native_gate' if process_mode else 'activation_files_main_native_gate' if files_mode else 'activation_preparation_main_native_gate') and result['error'] is None
+         and result['kind'] == ('activation_writer_main_native_gate' if args.activation_writer else 'activation_state_main_native_gate' if args.activation_state else 'activation_process_main_native_gate' if process_mode else 'activation_files_main_native_gate' if files_mode else 'activation_preparation_main_native_gate') and result['error'] is None
          and result['sourceCommit'] == source['sourceCommit'] and result['sourceArchiveSha256'] == source['archiveSha256']
          and result['target'] == target and result['runtimeApplied'] is True
          and result['installedRuntimeApplied'] is False and result['windowsOpened'] is False,
@@ -186,17 +209,25 @@ exit $LASTEXITCODE
         groups=[('activation-files-primitives',4),('activation-marker-search',2),('activation-files-contract',2),('activation-files-mailbox',1)]+groups
     if process_mode:
         groups=[('activation-process-atomic-create',1),('activation-process-contract',2),('activation-process-mailbox',1),('activation-process-owner-io',2),('activation-process-owner-state',1)]+groups
-    if args.activation_state:
+    if state_mode:
         groups=[('activation-state-boundary-probes',3),('activation-state-contract',2),('activation-state-mailbox',1),
                 ('activation-state-owner',1),('activation-state-journal',2),('activation-state-release',5),
                 ('activation-state-original-pins',2)]+groups
+    if args.activation_writer:
+        groups=[('writer-model-and-ledger',19),('writer-worker-sql',11),('writer-existing-open',7),
+                ('writer-view-contract',2),('writer-mailbox',1),('writer-send-trace',1),('writer-actual-worker-migration',1)]+groups
     need([c['name'] for c in result['commands']] == ['health-supervisor-build']+(['activation-process-fixture-build'] if process_mode else [])+[n for n,_ in groups[:-1]]+['shutdown-old-real-set',groups[-1][0]]
          and all(c['exitCode'] == 0 for c in result['commands']), 'Selected native commands changed')
     counts = {name: sum(int(m[1]) for m in re.finditer(r'test result: ok\. ([0-9]+) passed; 0 failed;',files[name+'.log'].decode('utf-8-sig'))) for name,_ in groups}
     need(all(counts[n] >= minimum for n,minimum in groups), 'Expected native tests were not selected')
     proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
     state_rejected = 0
-    if args.activation_state:
+    writer_rejected = 0
+    if args.activation_writer:
+        writer_rejected=writer_checks.audit(proof,source,target,root,checks,state_checks,health)
+        rejected=len(replacement_audit.audit(dict(proof,kind='runtime_replacement_main_native_proof'),source,target,True,worker_schema=17))
+        file_rejected=process_rejected=0
+    elif args.activation_state:
         state_rejected=state_checks.audit(proof,source,target,root,checks,health)
         rejected=len(replacement_audit.audit(dict(proof,kind='runtime_replacement_main_native_proof'),source,target,True))
         file_rejected=process_rejected=0
@@ -212,7 +243,11 @@ exit $LASTEXITCODE
         process_rejected=0
     need(hashlib.sha256(files['reference.json']).hexdigest() == result['migrationReferenceSha256'], 'Migration reference changed')
     migration = json.loads(files['activation-migration-proof.json'].decode('utf-8-sig'))
-    migration_rejected = checks.audit_migration(migration, source, reference)
+    if args.activation_writer:
+        worker_migration = json.loads(files['worker-journal-activation-migration-proof.json'].decode('utf-8-sig'))
+        migration_rejected = writer_migrations.audit(migration,worker_migration,source,reference,checks,state_checks,root)
+    else:
+        migration_rejected = checks.audit_migration(migration, source, reference)
     verified = dict(meta, passed=True, filesVerifiedTwice=len(files), nativeTestsPassed=sum(counts.values()), testCounts=counts,
                     negativeMutationsRejected=rejected, activationFilesMutationsRejected=file_rejected, migrationMutationsRejected=migration_rejected, processMutationsRejected=process_rejected,
                     proofSha256=hashlib.sha256(files['candidate-health-actor-proof.json']).hexdigest(),
@@ -220,6 +255,9 @@ exit $LASTEXITCODE
                     reportSha256=hashlib.sha256(files['report.json']).hexdigest(), storage=result['storage'], debianFreeBytesAfter=shutil.disk_usage(ROOT).free)
     if args.activation_state:
         verified['stateMutationsRejected'] = state_rejected
+    if args.activation_writer:
+        verified['writerMutationsRejected'] = writer_rejected
+        verified['workerMigrationProofSha256'] = hashlib.sha256(files['worker-journal-activation-migration-proof.json']).hexdigest()
     (local/'activation-preparation-verified.json').write_text(json.dumps(verified, indent=2))
     print(json.dumps(verified), flush=True)
 
