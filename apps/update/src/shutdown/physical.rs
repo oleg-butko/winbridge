@@ -167,6 +167,46 @@ impl ExitedStateCustody {
         }
         self.state.revalidate().map_err(|e| e.to_string())
     }
+    /// Only the original owner can consume this resource. Failure keeps the
+    /// very same old-process pin and residual state handles, never new custody.
+    pub(crate) fn release(
+        self,
+        checkpoint: impl FnMut() -> std::io::Result<()>,
+    ) -> ReleasedExitCustody {
+        let state = self.state.release_for_handoff_checked(checkpoint);
+        ReleasedExitCustody {
+            intent: self.intent,
+            process: self.process,
+            state,
+        }
+    }
+}
+#[cfg(windows)]
+pub(crate) struct ReleasedExitCustody {
+    intent: ShutdownIntent,
+    process: PinnedProcess,
+    state: std::result::Result<super::ReleasedShutdownState, super::ShutdownStateReleaseFailure>,
+}
+#[cfg(windows)]
+impl ReleasedExitCustody {
+    pub(crate) fn original_lock_held(&self) -> Option<bool> {
+        match &self.state {
+            Ok(_) => Some(false),
+            Err(e) => e.original_lock_held(),
+        }
+    }
+    pub(crate) fn require_released(&self, intent: &ShutdownIntent) -> Result<(), String> {
+        intent.validate()?;
+        let state = self.state.as_ref().map_err(|e| e.to_string())?;
+        if self.intent != *intent
+            || self.process.identity() != &intent.binding.worker.process
+            || !self.process.exited().map_err(|e| e.to_string())?
+            || state.observation() != &intent.binding.worker_state
+        {
+            return Err("Released original state/exit scope changed".into());
+        }
+        state.revalidate().map_err(|e| e.to_string())
+    }
 }
 #[cfg(test)]
 mod custody_tests {

@@ -605,6 +605,9 @@ pub enum SupervisorAction {
     /// Internal22: one suspended receiver launch, stopping before state ownership.
     LaunchActivationReceiver,
     ObserveActivationProcess,
+    /// Internal23: same Ready child acquires exact state; no writable Store yet.
+    HandoffActivationState,
+    ObserveActivationState,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -686,6 +689,9 @@ pub struct UpdatePreparationView {
     /// Internal22/view14. Saved receipts and live resources are separate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_process: Option<ActivationProcessView>,
+    /// Internal23/view15 only. Old views omit this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_state: Option<ActivationStateView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1103,3 +1109,5 @@ mod activation_receiver;
 pub use activation_receiver::*;
 mod activation_process;
 pub use activation_process::*;
+mod activation_state;
+pub use activation_state::*;

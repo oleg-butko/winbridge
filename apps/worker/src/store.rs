@@ -25,6 +25,8 @@ mod operation_pages;
 mod queue_control;
 mod resource_scheduling;
 mod shutdown;
+#[cfg(test)]
+pub(crate) use shutdown::tests::ready as shutdown_metadata_fixture;
 pub use shutdown::{ShutdownAcceptance, ShutdownAcceptancePermit};
 mod task_records;
 mod update;

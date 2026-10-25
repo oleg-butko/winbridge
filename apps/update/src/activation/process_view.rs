@@ -49,6 +49,27 @@ pub(crate) fn view(record: Option<&ActivationRecord>) -> ActivationProcessView {
         }),
     }
 }
+pub(crate) fn state_view(
+    record: Option<&ActivationRecord>,
+) -> winbridge_protocol::update::ActivationStateView {
+    use winbridge_protocol::update::{ActivationStatePhase, ActivationStateView};
+    let process = view(record);
+    ActivationStateView {
+        phase: if record.is_some_and(|r| r.handoff_issued_at_ms.is_some()) {
+            ActivationStatePhase::NotResident
+        } else {
+            ActivationStatePhase::NotStarted
+        },
+        attempt_id: process.attempt_id,
+        revision: process.revision,
+        durable_phase: process.durable_phase,
+        saved_ownership: record.and_then(|r| r.state_owned.clone()),
+        original_lock_held: Some(false),
+        resident_process: None,
+        process_alive: None,
+        reason: process.reason,
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,6 +100,20 @@ mod tests {
             if record.ready.is_some() {
                 assert!(saved.saved_ready.is_some());
             }
+        }
+    }
+    #[test]
+    fn cold_state_owned_keeps_physical_receipt_without_restoring_owner_handles() {
+        let (r, initial) = crate::activation::activation_fixture();
+        for record in crate::activation::activation_stages(&initial, &r) {
+            let v = state_view(Some(&record));
+            assert_eq!(v.original_lock_held, Some(false));
+            assert!(v.resident_process.is_none() && v.process_alive.is_none());
+            assert_eq!(v.saved_ownership, record.state_owned);
+            assert_ne!(
+                v.phase,
+                winbridge_protocol::update::ActivationStatePhase::StateOwned
+            );
         }
     }
 }

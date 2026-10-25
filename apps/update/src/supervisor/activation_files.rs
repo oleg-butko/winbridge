@@ -14,6 +14,12 @@ enum State {
     Ready(Box<crate::activation::ActivationProcessGuard>),
     #[cfg(windows)]
     LaunchFailed(Box<crate::activation::ActivationLaunchFailure>),
+    #[cfg(windows)]
+    HandingOff(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
+    Owned(Box<crate::activation::ActivationProcessGuard>),
+    #[cfg(windows)]
+    HandoffFailed(Box<crate::activation::ActivationLaunchFailure>),
 }
 pub(super) struct FilesActor {
     state: State,
@@ -80,6 +86,12 @@ impl FilesActor {
             State::Ready(g) => Some(g.record()),
             #[cfg(windows)]
             State::LaunchFailed(e) => Some(e.record()),
+            #[cfg(windows)]
+            State::HandingOff(r) => Some(r),
+            #[cfg(windows)]
+            State::Owned(g) => Some(g.record()),
+            #[cfg(windows)]
+            State::HandoffFailed(e) => Some(e.record()),
         };
         if let Some(record) = record {
             if record.intent.source.update_id != _s.spec.update_id
@@ -108,7 +120,12 @@ impl FilesActor {
         {
             matches!(
                 self.state,
-                State::Launching(_) | State::Ready(_) | State::LaunchFailed(_)
+                State::Launching(_)
+                    | State::Ready(_)
+                    | State::LaunchFailed(_)
+                    | State::HandingOff(_)
+                    | State::Owned(_)
+                    | State::HandoffFailed(_)
             )
         }
         #[cfg(not(windows))]
@@ -125,6 +142,78 @@ impl FilesActor {
         {
             false
         }
+    }
+    pub(super) fn handoff_started(&self) -> bool {
+        #[cfg(windows)]
+        {
+            matches!(
+                self.state,
+                State::HandingOff(_) | State::Owned(_) | State::HandoffFailed(_)
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    pub(super) fn can_handoff(&self) -> bool {
+        #[cfg(windows)]
+        {
+            matches!(self.state, State::Ready(_))
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    #[cfg(windows)]
+    pub(super) fn take_for_handoff(
+        &mut self,
+    ) -> Result<Box<crate::activation::ActivationProcessGuard>> {
+        let record = match &self.state {
+            State::Ready(g) => Box::new(g.record().clone()),
+            _ => return Err("State handoff needs the same resident Ready owner; no replay".into()),
+        };
+        let State::Ready(guard) = std::mem::replace(&mut self.state, State::HandingOff(record))
+        else {
+            unreachable!()
+        };
+        Ok(guard)
+    }
+    #[cfg(windows)]
+    pub(super) fn complete_handoff(
+        &mut self,
+        result: std::result::Result<
+            Box<crate::activation::ActivationProcessGuard>,
+            crate::activation::ActivationLaunchFailure,
+        >,
+    ) -> Result<()> {
+        let expected = match &self.state {
+            State::HandingOff(r) => &r.intent,
+            _ => return Err("Unexpected state handoff completion; no state reset".into()),
+        };
+        let (state, same, error) = match result {
+            Ok(guard) => {
+                let same = &guard.record().intent == expected
+                    && matches!(
+                        guard.record().state,
+                        crate::activation::ActivationState::StateOwned {}
+                    );
+                (State::Owned(guard), same, None)
+            }
+            Err(failure) => {
+                let same = &failure.record().intent == expected;
+                let error = failure.reason.clone();
+                (State::HandoffFailed(Box::new(failure)), same, Some(error))
+            }
+        };
+        self.state = state;
+        if !same {
+            return Err(
+                "State handoff completion changed original scope; resources retained".into(),
+            );
+        }
+        error.map_or(Ok(()), Err)
     }
     #[cfg(windows)]
     pub(super) fn take_for_launch(
@@ -186,6 +275,14 @@ impl FilesActor {
         let mut view = UpdateJournal::activation_process_snapshot(directory, id, active, error)
             .map_err(super::error)?;
         self.patch_files(&mut view, signal)?;
+        self.patch_process(&mut view, signal)?;
+        Ok(view)
+    }
+    fn patch_process(
+        &self,
+        view: &mut UpdatePreparationView,
+        signal: &crate::runtime_replacement::CustodySignal,
+    ) -> Result<()> {
         let process = view
             .activation_process
             .as_mut()
@@ -219,6 +316,78 @@ impl FilesActor {
                 process.process_custody_held = Some(process.resident_process.is_some());
                 process.process_alive = failure.process_alive();
                 process.reason = Some(failure.reason.chars().take(1000).collect());
+            }
+            State::HandingOff(_) => {
+                process.phase = ActivationProcessPhase::Indeterminate;
+                process.process_custody_held = None;
+                process.reason = Some("State handoff in progress; inspect internal23".into());
+            }
+            State::Owned(guard) => {
+                diagnostics(process, guard.diagnostics());
+                process.resident_process = guard.resident_process();
+                process.process_alive = guard.process_alive();
+                process.process_custody_held = Some(process.resident_process.is_some());
+                process.phase = ActivationProcessPhase::Indeterminate;
+                process.reason =
+                    Some("Physical state handoff progressed; inspect internal23".into());
+            }
+            State::HandoffFailed(failure) => {
+                diagnostics(process, failure.diagnostics());
+                process.resident_process = failure.resident_process();
+                process.process_alive = failure.process_alive();
+                process.process_custody_held = Some(process.resident_process.is_some());
+                process.phase = ActivationProcessPhase::Indeterminate;
+                process.reason = Some(failure.reason.chars().take(1000).collect());
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    pub(super) fn state_view(
+        &self,
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+        signal: &crate::runtime_replacement::CustodySignal,
+    ) -> Result<UpdatePreparationView> {
+        let mut view = UpdateJournal::activation_state_snapshot(directory, id, active, error)
+            .map_err(super::error)?;
+        self.patch_files(&mut view, signal)?;
+        self.patch_process(&mut view, signal)?;
+        let state = view
+            .activation_state
+            .as_mut()
+            .ok_or("State handoff view missing")?;
+        state.original_lock_held = Some(signal.held());
+        #[cfg(windows)]
+        match &self.state {
+            State::HandingOff(_) => {
+                state.phase = ActivationStatePhase::HandingOff;
+                state.original_lock_held = None;
+            }
+            State::Ready(guard) | State::Owned(guard) => {
+                state.resident_process = guard.resident_process();
+                state.process_alive = guard.process_alive();
+                state.original_lock_held = guard.original_lock_held();
+                if matches!(self.state, State::Owned(_)) {
+                    if state.process_alive == Some(true) && view.driver_error.is_none() {
+                        state.phase = ActivationStatePhase::StateOwned;
+                    } else {
+                        state.phase = ActivationStatePhase::Indeterminate;
+                        state.reason = Some(
+                            "Physical StateOwned retained; current child liveness unavailable"
+                                .into(),
+                        );
+                    }
+                }
+            }
+            State::HandoffFailed(failure) => {
+                state.phase = ActivationStatePhase::Indeterminate;
+                state.original_lock_held = failure.original_lock_held();
+                state.resident_process = failure.resident_process();
+                state.process_alive = failure.process_alive();
+                state.reason = Some(failure.reason.chars().take(1000).collect());
             }
             _ => {}
         }
@@ -261,6 +430,12 @@ impl FilesActor {
             #[cfg(windows)]
             State::LaunchFailed(failure) => held_source(files, failure.record()),
             #[cfg(windows)]
+            State::HandingOff(record) => held_source(files, record),
+            #[cfg(windows)]
+            State::Owned(guard) => held_source(files, guard.record()),
+            #[cfg(windows)]
+            State::HandoffFailed(failure) => held_source(files, failure.record()),
+            #[cfg(windows)]
             State::Failed(failure) => {
                 files.phase = ActivationFilesPhase::Indeterminate;
                 files.held_files = failure.held_files();
@@ -300,5 +475,18 @@ mod tests {
         actor.state = State::Launching(Box::new(record));
         assert!(actor.process_started() && !actor.can_launch());
         assert!(actor.take_for_launch().is_err());
+    }
+    #[test]
+    fn state_actor_never_reconstructs_a_ready_owner_or_retries_a_pending_handoff() {
+        let (r, initial) = crate::activation::activation_fixture();
+        let mut actor = FilesActor::default();
+        assert!(!actor.can_handoff() && !actor.handoff_started());
+        assert!(actor.take_for_handoff().is_err());
+        actor.state = State::HandingOff(Box::new(
+            crate::activation::activation_stages(&initial, &r)[4].clone(),
+        ));
+        assert!(actor.handoff_started() && !actor.can_handoff());
+        assert!(actor.take_for_handoff().is_err());
+        assert!(!actor.can_launch() && actor.process_started());
     }
 }

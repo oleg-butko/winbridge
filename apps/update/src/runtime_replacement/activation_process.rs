@@ -52,6 +52,7 @@ pub struct ActivationProcessGuard {
     channel: Option<ipc::Stream>,
     captures: [Arc<Mutex<Capture>>; 2],
     readers: Vec<thread::JoinHandle<()>>,
+    released: Option<crate::shutdown::ReleasedExitCustody>,
 }
 /// Retain the same OS resources after error, including an uncertain live child.
 /// No method converts this object into a second creation attempt.
@@ -87,6 +88,9 @@ impl ActivationLaunchFailure {
     }
     pub(crate) fn diagnostics(&self) -> (String, String, bool, bool) {
         self.custody.diagnostics()
+    }
+    pub(crate) fn original_lock_held(&self) -> Option<bool> {
+        self.custody.original_lock_held()
     }
 }
 impl Drop for ActivationProcessGuard {
@@ -147,6 +151,7 @@ impl ActivationProcessGuard {
                 Arc::new(Mutex::new(Capture::default())),
             ],
             readers: Vec::new(),
+            released: None,
         })
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {
@@ -173,6 +178,39 @@ impl ActivationProcessGuard {
     }
     pub fn process_id(&self) -> Option<u32> {
         self.child.as_ref().map(ManagedChild::id)
+    }
+    pub(crate) fn original_lock_held(&self) -> Option<bool> {
+        self.released.as_ref().map_or_else(
+            || Some(self.files.original.signal.held()),
+            crate::shutdown::ReleasedExitCustody::original_lock_held,
+        )
+    }
+    /// Consume the same Ready owner once. There is no path from a failure or
+    /// cold record back to this factory. StateOwned still grants no Store writer.
+    pub fn handoff_state_blocking(
+        self: Box<Self>,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+    ) -> std::result::Result<Box<Self>, ActivationLaunchFailure> {
+        match crate::activation::on_original_io(self, move |mut owner| async move {
+            match owner.handoff_state(j, a, s).await {
+                Ok(()) => Ok(owner),
+                Err(reason) => {
+                    owner.record_uncertainty(j, a, s);
+                    Err(ActivationLaunchFailure {
+                        reason,
+                        custody: owner,
+                    })
+                }
+            }
+        }) {
+            Ok(result) => result,
+            Err((owner, reason)) => Err(ActivationLaunchFailure {
+                reason: reason.into(),
+                custody: owner,
+            }),
+        }
     }
     /// Bounded diagnostics. The private challenge is never written to stdout.
     pub fn output(&self) -> (Vec<u8>, Vec<u8>, bool) {
@@ -218,7 +256,12 @@ impl ActivationProcessGuard {
         let r = j
             .require_activation_owned_current(a, s, &self.files.preparation, &self.record)
             .map_err(|e| e.to_string())?;
-        self.files.original.require_exit_custody()?;
+        match &self.released {
+            Some(custody) => {
+                custody.require_released(self.files.original.permit.shutdown_intent())?
+            }
+            None => self.files.original.require_exit_custody()?,
+        }
         self.files
             .original
             .anchors
@@ -237,6 +280,91 @@ impl ActivationProcessGuard {
             self.files.preparation.require_live_window()?;
         }
         Ok(r)
+    }
+    async fn handoff_state(
+        &mut self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+    ) -> Result<()> {
+        if self.released.is_some()
+            || !matches!(self.record.state, ActivationState::ReadyForState {})
+            || self.record.revision != 4
+            || self.channel.is_none()
+            || self.resident_process().as_ref() != self.record.created.as_ref().map(|c| &c.process)
+        {
+            return Err(
+                "State handoff needs the original live Ready process/channel; no replay".into(),
+            );
+        }
+        // This is still a readonly capability query. Full physical validation
+        // follows it immediately before HandoffIssued, and again before unlock.
+        let r = j
+            .require_activation_owned_current(a, s, &self.files.preparation, &self.record)
+            .map_err(|e| e.to_string())?;
+        let process = &self
+            .record
+            .created
+            .as_ref()
+            .ok_or("Created child missing")?
+            .process;
+        let live = infrastructure::PinnedProcess::live(process).map_err(|e| e.to_string())?;
+        let worker = crate::artifact::pin(Path::new(&self.record.intent.source.worker.path))?;
+        if worker.evidence != self.record.intent.source.worker
+            || !crate::worker_rehearsal::supports(&worker, channel::HANDOFF_MARKER)?
+        {
+            return Err(
+                "Ready worker lacks private state handoff V2; original lock retained".into(),
+            );
+        }
+        self.require_custody(j, a, s, true)?;
+        let next = self.record.issue_handoff(self.at()?, &r)?;
+        self.save(j, a, s, next)?; // Commit/readback before relinquishing ownership.
+        let request = channel::state_handoff(&self.record)?;
+        self.require_custody(j, a, s, true)?;
+        let exited = self
+            .files
+            .original
+            .exited
+            .take()
+            .ok_or("Original exited-state owner missing")?;
+        let released = exited.release(|| {
+            j.require_activation_owned_current(a, s, &self.files.preparation, &self.record)
+                .map_err(std::io::Error::other)?;
+            live.require_live()?;
+            self.files
+                .preparation
+                .require_live_window()
+                .map_err(std::io::Error::other)
+        });
+        self.files.original.signal.0.store(
+            released.original_lock_held() == Some(true),
+            std::sync::atomic::Ordering::Release,
+        );
+        self.released = Some(released); // Retain residual handles even on unlock error.
+        self.require_custody(j, a, s, false)?;
+        live.require_live().map_err(|e| e.to_string())?;
+        self.files.preparation.require_live_window()?;
+        let remaining = self
+            .files
+            .preparation
+            .deadline
+            .saturating_duration_since(std::time::Instant::now());
+        let timeout = Duration::from_millis(self.record.intent.context.startup_timeout_ms);
+        let stream = self
+            .channel
+            .as_mut()
+            .ok_or("Original state handoff channel missing")?;
+        channel::write(stream, &request, remaining).await?;
+        let message: channel::StateOwned = channel::read(stream, timeout).await?;
+        live.require_live().map_err(|e| e.to_string())?;
+        channel::validate_state_owned(&message, &self.record)?;
+        self.require_custody(j, a, s, false)?;
+        let next = self
+            .record
+            .state_owned(message.state_owned, self.at()?, &r)?;
+        self.save(j, a, s, next)?;
+        Ok(())
     }
     fn save(
         &mut self,

@@ -5,7 +5,15 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий статус 2026-10-24
+## Текущий source статус 2026-10-25
+
+[Actor23/private state handoff2/view15](activation-state-handoff.md) реализованы;
+workspace741/0, protocol59/0, readonly journal2/0, mailbox1, local/MSVC Clippy/TS/UI
+passed. Нового actual native gate ещё нет. Следом clean receiver fixture2,
+distinct harness producer и Main HandoffIssued→StateOwned. Writable Store/local/
+controller/lifetime и remaining U2/U3/U4 впереди; public install off.
+
+## Предшествующий статус 2026-10-24
 
 [Actual Main22 gate112/0](windows-activation-process-gate-2026-10-24.md) пройден:
 taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,

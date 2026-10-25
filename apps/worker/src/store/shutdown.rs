@@ -209,11 +209,11 @@ PRAGMA user_version=16;").map_err(sql)
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::{fs, path::Path};
     // Store-only metadata fixture: no physical exit or updater authority claimed.
-    fn ready(path: &Path) -> (Store, WorkerShutdownReceipt, WorkerUpdateCommand) {
+    pub(crate) fn ready(path: &Path) -> (Store, WorkerShutdownReceipt, WorkerUpdateCommand) {
         let mut s = Store::open(path).unwrap();
         s.begin_authority().unwrap();
         let spec = WorkerUpdateSpec {

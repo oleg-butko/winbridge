@@ -292,12 +292,46 @@ impl UpdateJournal {
         attempt: &str,
         actual: &winbridge_protocol::update::SupervisorProcess,
     ) -> Result<ActivationRecord> {
+        Self::inspect_activation_child(directory, id, attempt, actual, false)
+            .map(|(record, _)| record)
+    }
+    /// Readonly HandoffIssued snapshot for an already authenticated Ready child.
+    /// This does not acquire state, open a writer, or recreate a startup permit.
+    pub fn inspect_activation_state_handoff(
+        directory: &Path,
+        id: &str,
+        attempt: &str,
+        actual: &winbridge_protocol::update::SupervisorProcess,
+    ) -> Result<ActivationStateSnapshot> {
+        let (record, receipt) =
+            Self::inspect_activation_child(directory, id, attempt, actual, true)?;
+        Ok(ActivationStateSnapshot {
+            record,
+            shutdown_receipt: receipt
+                .ok_or_else(|| bad("State handoff shutdown receipt missing"))?,
+        })
+    }
+    fn inspect_activation_child(
+        directory: &Path,
+        id: &str,
+        attempt: &str,
+        actual: &winbridge_protocol::update::SupervisorProcess,
+        handoff: bool,
+    ) -> Result<(
+        ActivationRecord,
+        Option<winbridge_protocol::update::WorkerShutdownReceipt>,
+    )> {
         check_files(directory)?;
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
         schema(&c)?;
         let tx = c.transaction().map_err(storage)?;
         let value = read(&tx, id)?.ok_or_else(|| bad("Activation receiver record missing"))?;
-        crate::activation::channel::require_receiver(&value, actual, attempt).map_err(bad)?;
+        if handoff {
+            crate::activation::channel::require_state_receiver(&value, actual, attempt)
+                .map_err(bad)?;
+        } else {
+            crate::activation::channel::require_receiver(&value, actual, attempt).map_err(bad)?;
+        }
         let source = &value.intent.source;
         let root = record(&tx, id)?;
         let installation = info(&tx)?;
@@ -316,8 +350,34 @@ impl UpdateJournal {
                 "Activation receiver has a stale owner/root/supervisor; no writer opened",
             ));
         }
+        let receipt = if handoff {
+            let shutdown = shutdown::read(&tx, id)?
+                .ok_or_else(|| bad("State handoff shutdown history missing"))?;
+            let crate::shutdown::ShutdownDeliveryState::Exited { receipt, .. } = shutdown.delivery
+            else {
+                return Err(bad(
+                    "State handoff requires the original exited shutdown receipt",
+                ));
+            };
+            let ctx = &value.intent.context;
+            if receipt.update_id != source.update_id
+                || receipt.launch_id != source.launch_id
+                || receipt.updater_owner_id != source.owner_id
+                || receipt.updater_epoch != source.owner_epoch
+                || receipt.process != ctx.previous_worker
+                || receipt.state != ctx.worker_state
+                || receipt.lease.spec.instance_id != ctx.worker_context.instance_id
+                || receipt.lease.spec.journal_incarnation != ctx.worker_context.journal_incarnation
+                || receipt.lease.spec.worker_generation != ctx.previous_generation
+            {
+                return Err(bad("State handoff shutdown/physical/logical scope changed"));
+            }
+            Some(*receipt)
+        } else {
+            None
+        };
         tx.commit().map_err(storage)?;
-        Ok(value)
+        Ok((value, receipt))
     }
     pub fn inspect_activation(directory: &Path, id: &str) -> Result<Option<ActivationRecord>> {
         check_files(directory)?;

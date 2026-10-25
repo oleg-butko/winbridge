@@ -62,7 +62,7 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
-Актуальная точка разработки апдейтера: [подробная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-24-activation-process.md),
+Актуальная точка разработки апдейтера: [actor23/private state handoff](docs/plans/worker-self-update/activation-state-handoff.md),
 [handoff](docs/handoff.md) и [Windows отчёт](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
 Native whole-set read-binding gate пройден: **97 passed / 0 failed**; проверены
 пять runtime read pins, original state lock, duplicate/cold observations и

@@ -13,6 +13,7 @@ mod lifecycle;
 pub use lifecycle::*;
 pub mod channel;
 mod process_view;
+pub(crate) use process_view::state_view;
 pub(crate) use process_view::view as process_view;
 #[cfg(any(windows, test))]
 mod owner_stack;
@@ -52,6 +53,13 @@ impl ActivationPreparation {
 pub enum ActivationPreparationAdmission {
     Prepared(Box<ActivationPreparation>),
     Existing(Box<ActivationRecord>),
+}
+/// A single readonly updater snapshot. The receipt is the frozen expected
+/// worker-journal data, not a permission to acquire state or start a writer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivationStateSnapshot {
+    pub record: ActivationRecord,
+    pub shutdown_receipt: winbridge_protocol::update::WorkerShutdownReceipt,
 }
 #[cfg(windows)]
 pub use crate::runtime_replacement::{

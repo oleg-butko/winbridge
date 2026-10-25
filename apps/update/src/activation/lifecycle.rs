@@ -158,17 +158,7 @@ pub struct ActivationCreated {
     pub job_name: String,
     pub observed_at_ms: u64,
 }
-pub use winbridge_protocol::update::ActivationReady;
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ActivationStateOwned {
-    pub attempt_id: String,
-    pub process: SupervisorProcess,
-    pub context: RequestContext,
-    pub generation: String,
-    pub state: WorkerShutdownState,
-    pub observed_at_ms: u64,
-}
+pub use winbridge_protocol::update::{ActivationReady, ActivationStateOwned};
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "phase",

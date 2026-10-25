@@ -1057,6 +1057,52 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// Internal23 transfers the exact physical state lock. No writable Store.
+    pub async fn activation_state(&self, start: bool) -> Result<UpdatePreparationView> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 23,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::HandoffActivationState
+            } else {
+                SupervisorAction::ObserveActivationState
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 23
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("State handoff reply scope/version changed; no fallback".into());
+        }
+        if let Some(error) = response.error {
+            return Err(error);
+        }
+        let view = response.preparation.ok_or("State handoff view missing")?;
+        if view.schema_version != 15
+            || view.activation_state.is_none()
+            || view.activation_process.is_none()
+            || view.activation_files.is_none()
+            || view.update.update_id != self.record.spec.update_id
+        {
+            return Err("State handoff view belongs to another contract/update".into());
+        }
+        Ok(view)
+    }
     /// V19 is the production prerequisite route; there is no fallback to v13.
     pub async fn compatible_drain(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -1591,6 +1637,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveActivationFiles
                 | SupervisorAction::LaunchActivationReceiver
                 | SupervisorAction::ObserveActivationProcess
+                | SupervisorAction::HandoffActivationState
+                | SupervisorAction::ObserveActivationState
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1789,6 +1837,13 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 crate::activation::ActivationLaunchFailure,
             >,
         ),
+        #[cfg(windows)]
+        ActivationState(
+            std::result::Result<
+                Box<crate::activation::ActivationProcessGuard>,
+                crate::activation::ActivationLaunchFailure,
+            >,
+        ),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -1936,6 +1991,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 DriverCompletion::ActivationFiles(result) => files_actor.complete(result),
                 #[cfg(windows)]
                 DriverCompletion::ActivationProcess(result) => files_actor.complete_launch(result),
+                #[cfg(windows)]
+                DriverCompletion::ActivationState(result) => files_actor.complete_handoff(result),
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -2767,6 +2824,90 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             };
             let response = SupervisorResponse {
                 contract_version: 22,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                worker_control: None,
+                preparation,
+                error,
+            };
+            let _ = ipc::write(&mut stream, &response).await;
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::HandoffActivationState | SupervisorAction::ObserveActivationState
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<UpdatePreparationView> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 23
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("State handoff requires exact Active bound v23 supervisor".into());
+                }
+                let view = files_actor.state_view(
+                    &directory,
+                    &r.spec.update_id,
+                    work.is_some(),
+                    driver_error.clone(),
+                    &replacement_signal,
+                )?;
+                if request.action == SupervisorAction::ObserveActivationState
+                    || files_actor.handoff_started()
+                {
+                    return Ok(view);
+                }
+                if !files_actor.can_handoff()
+                    || work.is_some()
+                    || driver_error.is_some()
+                    || view.update.phase != UpdatePhase::VerifyingLocal
+                {
+                    return Err(
+                        "State handoff needs the idle original Ready guard; no replay/adoption"
+                            .into(),
+                    );
+                }
+                start = true;
+                Ok(view)
+            })();
+            let outcome = if start && outcome.is_ok() {
+                #[cfg(windows)]
+                {
+                    let (mut journal, owner) = idle.take().ok_or("State handoff owner missing")?;
+                    let guard = files_actor.take_for_handoff()?;
+                    let spec = r.clone();
+                    driver_error = None;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = guard.handoff_state_blocking(&mut journal, &owner, &spec);
+                        (journal, owner, DriverCompletion::ActivationState(result))
+                    }));
+                    // Volatile dispatch ACK, never an assertion of lock transfer.
+                    // HandoffIssued precedes the single native release effect.
+                    files_actor.state_view(
+                        &directory,
+                        &r.spec.update_id,
+                        true,
+                        None,
+                        &replacement_signal,
+                    )
+                }
+                #[cfg(not(windows))]
+                {
+                    Err("State handoff requires native original custody".into())
+                }
+            } else {
+                outcome
+            };
+            let (preparation, error) = match outcome {
+                Ok(v) => (Some(v), None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 23,
                 launch_id: r.spec.launch_id.clone(),
                 record: None,
                 worker_control: None,
@@ -4013,7 +4154,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 | SupervisorAction::DrainCompatibleCandidate | SupervisorAction::ObserveCompatibleDrain
                 | SupervisorAction::PrepareActivation | SupervisorAction::ObserveActivationPreparation
                 | SupervisorAction::BindActivationFiles | SupervisorAction::ObserveActivationFiles
-                | SupervisorAction::LaunchActivationReceiver | SupervisorAction::ObserveActivationProcess => Err("Action needs its separate handler".into()),
+                | SupervisorAction::LaunchActivationReceiver | SupervisorAction::ObserveActivationProcess
+                | SupervisorAction::HandoffActivationState | SupervisorAction::ObserveActivationState => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
@@ -4097,6 +4239,7 @@ mod tests {
             UpdateJournal::activation_preparation_snapshot,
             UpdateJournal::activation_files_snapshot,
             UpdateJournal::activation_process_snapshot,
+            UpdateJournal::activation_state_snapshot,
         ];
         for (index, snapshot) in snapshots.into_iter().enumerate() {
             let view = snapshot(&directory, &f.id, false, None).unwrap();
@@ -4106,6 +4249,7 @@ mod tests {
             assert_eq!(value.get("activationPreparation").is_some(), index >= 11);
             assert_eq!(value.get("activationFiles").is_some(), index >= 12);
             assert_eq!(value.get("activationProcess").is_some(), index >= 13);
+            assert_eq!(value.get("activationState").is_some(), index >= 14);
             if index < 9 {
                 assert!(value.get("candidateSupport").is_none());
             } else {

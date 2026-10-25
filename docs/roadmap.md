@@ -1,5 +1,13 @@
 # Постепенная реализация и расширение
 
+## Продолжение source: physical StateOwned23
+
+[Actor23/private handoff2/view15](plans/worker-self-update/activation-state-handoff.md)
+добавлены. Workspace741/0/protocol59/0/focused33/journal2/mailbox1, Clippy/TS/UI passed;
+новый actual native gate ещё впереди. Следом clean receiver fixture2/distinct
+harness producer/Main до StateOwned, затем writable authority/local/controller/
+lifetime и remaining U2/U3/U4. Public install off, worker16/updater18 прежние.
+
 ## Продолжение: Main22 пройден, следующий state handoff
 
 [Actual receiver gate112/0](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md),

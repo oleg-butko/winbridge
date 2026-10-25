@@ -1,4 +1,17 @@
-# Точка продолжения updater — 2026-10-24, closing Main22 checkpoint
+# Точка продолжения updater — 2026-10-25, physical StateOwned23
+
+## Продолжение source: actor23/private state handoff
+
+[Same-child physical StateOwned](plans/worker-self-update/activation-state-handoff.md)
+реализован в source: private contract2, parent consuming release и child exact
+lock acquisition/exact readonly journal/accepted receipt; internal23/view15,
+frozen1–14 сохранены. Workspace741/0 (16 ignored), protocol59/0, focused33/0,
+journal2/0/mailbox1, local/MSVC Clippy/generated contracts/TS/UI/fmt passed. Actual native gate
+для нового handoff ещё не был. Writable Store/authority/local service не запущены.
+Review исправил exact schema/accepted shutdown scope; stale local mailbox binary
+пересобран. Следом clean receiver fixture с marker2 и distinct harness producer/
+actual Main. Harness/verifier нового state mode ещё не добавлены. Pins/receipt
+следующего export — в linked document. Public install off; installed worker не менять.
 
 ## Новейший результат: Main22 receiver gate пройден
 

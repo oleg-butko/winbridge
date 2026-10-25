@@ -12,9 +12,9 @@ mod inspection;
 pub use inspection::{inspect_saved_receipt, ShutdownInspectionRequest};
 mod physical;
 pub use physical::Custody;
-#[cfg(windows)]
-pub(crate) use physical::ExitedStateCustody;
 pub use physical::ShutdownExitGuard;
+#[cfg(windows)]
+pub(crate) use physical::{ExitedStateCustody, ReleasedExitCustody};
 mod driver;
 pub(crate) use driver::{execute, prepare, prepare_for_backup, Prepared};
 pub(crate) fn view(
