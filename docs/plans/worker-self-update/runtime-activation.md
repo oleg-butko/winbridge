@@ -367,6 +367,49 @@ validation directories не очищались. Следом clean producer/new 
 
 ## Ограничения фактического кода
 
+### Review следующего state handoff после actor22 (2026-10-24)
+
+Main22 receiver gate выполняется отдельно; следующие пункты — findings по коду,
+а не утверждение о готовом writer handoff.
+
+- `shutdown/state.rs` хранит directory/journal/instance pins внутри
+  `LockedShutdownState`; `shutdown/physical.rs::ExitedStateCustody` всегда
+  предполагает удержанный exclusive lock. Нельзя просто unlock и продолжить
+  выдавать прежний тип за locked custody. Нужен consuming переход в отдельное
+  released-state представление с сохранением exact directory/journal/lock FileID
+  и failure owner, различающим ошибку до release и неопределённость после него.
+- `Worker::open` создаёт state/lock при отсутствии, затем открывает Store,
+  активирует authority и выполняет recovery. Для handoff требуется другой
+  trusted constructor: только существующий exact state, уже приобретённый тот
+  же instance lock и private handshake; обычный startup path не расширять флагом.
+- `Store::begin_authority` и `require_update_activation` запрещают любой active
+  update. `require_update_writes` блокирует Quiesced, а
+  `require_no_accepted_shutdown` не позволяет обычный release после accepted stop.
+  Эти запреты корректны. Нужна отдельная атомарная activation-транзакция с CAS
+  прежней authority, exact quiesced lease/immutable shutdown receipt и записью
+  нового владельца. Lease остаётся active до последующих local/controller proofs;
+  early release ради записи/запуска scheduler недопустим.
+- `RequestContext` содержит instance/journal incarnation, **не owner epoch**.
+  Это сохраняет логический scope/idempotency после restart. Worker epoch и
+  authority ID нужно проверять отдельно; не привязывать каждый обычный retry
+  к новому process generation. Нынешний `ActivationStateOwned` receipt не
+  содержит authority epoch: новая durable worker receipt должна явно связывать
+  новую authority с тем же attempt/process/state и прежним журналом.
+- Если потребуется worker schema17 для новой receipt/history, добавить явный
+  migration/compatibility contract и actual16→17/refusal gate. Нынешний
+  same-schema policy/rehearsal нельзя молча трактовать как migration support.
+  Existing shutdown16 history должна оставаться читаемой и immutable.
+- Первый physical-release primitive не даёт writer permission и не снимает
+  maintenance marker. Затем последовательно: authenticated handoff command,
+  lock acquisition/atomic authority receipt, local service в закрытом dispatch,
+  controller confirmation, lifetime/commit и только свой coordinated release.
+
+Проверки: failure до/после unlock, чужой FileID при тех же bytes, занятый lock,
+stale parent/epoch/attempt, повтор команды после lost ACK, ignored SQL write/
+CAS/readback rollback, сохранение tasks/keys/settings/user pause, crash между
+каждыми двумя journals. Неизвестный acquisition/commit не допускает второго
+writer или нового activation child.
+
 - `RuntimeReplacementGuard` удерживает original exited process/state/instance
   custody, anchors и OwnedRuntimeFile handles. Новый cold reader их не получает.
   `FilesMoved` — исторический факт, а не permission на повторный запуск.
