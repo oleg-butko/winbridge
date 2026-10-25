@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use winbridge_core::update::{valid_hash, validate_update_key, MAX_UPDATE_COUNTER};
 use winbridge_protocol::{update::*, ArtifactRole, LoadedWorkerIdentity};
 mod state;
-pub use state::{LockedShutdownState, ShutdownStateObservation, ShutdownStatePins};
+pub use state::{
+    LockedShutdownState, ReleasedShutdownState, ShutdownStateObservation, ShutdownStatePins,
+    ShutdownStateReleaseFailure, ShutdownStateReleasePhase,
+};
 mod inspection;
 pub use inspection::{inspect_saved_receipt, ShutdownInspectionRequest};
 mod physical;

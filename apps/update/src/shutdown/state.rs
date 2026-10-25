@@ -5,6 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 use winbridge_protocol::update::WorkerShutdownState;
+#[path = "state_handoff.rs"]
+mod handoff;
+pub use handoff::{ReleasedShutdownState, ShutdownStateReleaseFailure, ShutdownStateReleasePhase};
 
 pub struct ShutdownStatePins {
     path: PathBuf,

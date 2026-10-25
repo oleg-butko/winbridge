@@ -18,6 +18,12 @@ Source updater18/worker16/supervisor22/view14, public install off. Полный 
 не готов. Ниже сохранён checkpoint **до** положительного execution; его старые
 «не отправлен» и команды первого submit не являются текущим заданием.
 
+[Selective lock-release primitive](plans/worker-self-update/state-lock-handoff.md)
+добавлен в source: consuming Locked→Released, exact pins и failure custody для
+before/unconfirmed/after unlock. Focused Linux6/package280/0, Linux/MSVC Clippy,
+fmt/Python9/scaffold270 passed. Пока не подключён к actor/worker writer. Следом clean
+producer/short Windows7 gate, затем actual state ownership/authority.
+
 **Начать с [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-24-activation-process.md).**
 Она содержит точную границу готовности, карту кода, checks/logs, source/target/
 reference pins, окружение, команды запуска/observe и последующие U2–U4. Этот

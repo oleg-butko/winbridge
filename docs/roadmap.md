@@ -10,6 +10,11 @@ Original state held, один Ready receiver и actual cold exit провере�
 local/controller/lifetime, remaining U2/U3/U4. Public install off, installed runtime
 unchanged/healthy/active0. Старый terminal run не replay. Ниже — история до gate.
 
+[State-lock release library](plans/worker-self-update/state-lock-handoff.md)
+добавлена, Linux6/package280/0 и local/MSVC checks passed; короткий Windows7 gate впереди.
+Actual writer handoff ещё не реализован; далее interprocess authority/local/
+controller/lifetime. Public install off.
+
 ## Текущий checkpoint updater — 2026-10-24, закрытие перед Main22
 
 **Продолжать по [новой подробной инструкции](plans/worker-self-update/resume-2026-10-24-activation-process.md).**

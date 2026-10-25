@@ -5,6 +5,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import re
 import time
@@ -16,6 +17,9 @@ spec = importlib.util.spec_from_file_location('health', ROOT / 'scripts/validate
 health = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(health)
 native = health.native
+spec = importlib.util.spec_from_file_location('support', ROOT / 'scripts/validate-update-support-native.py')
+support = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(support)
 GROUPS = {'shutdown-process-pin': 1, 'shutdown-data-state-journal': 12,
           'shutdown-worker-acceptance': 4, 'shutdown-worker15-refuses16': 1,
           'shutdown-updater11-refuses12': 1}
@@ -119,6 +123,7 @@ def main():
     modes.add_argument('--backup-migration-only', action='store_true')
     modes.add_argument('--runtime-file-moves-only', action='store_true')
     modes.add_argument('--runtime-read-handoff-only', action='store_true')
+    modes.add_argument('--state-lock-handoff-only', action='store_true')
     modes.add_argument('--runtime-preparation-only', action='store_true')
     modes.add_argument('--runtime-replacement-only', action='store_true')
     modes.add_argument('--runtime-replacement-ledger-only', action='store_true')
@@ -127,13 +132,16 @@ def main():
     parser.add_argument('--reference-receipt', type=Path)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     args = parser.parse_args()
-    generated_fixtures = args.runtime_read_handoff_only or args.runtime_file_moves_only or args.runtime_preparation_only or args.runtime_replacement_only or args.runtime_replacement_ledger_only
+    generated_fixtures = args.state_lock_handoff_only or args.runtime_read_handoff_only or args.runtime_file_moves_only or args.runtime_preparation_only or args.runtime_replacement_only or args.runtime_replacement_ledger_only
     groups = {'runtime-file-exchange-data': 6, 'runtime-replacement-transaction-data': 6} if args.runtime_replacement_only else {'preparation-schema13-history-migration': 1} if args.preparation_migration_only else {'runtime-preparation-data-ledger': 10} if args.runtime_preparation_only else {'runtime-owned-file-moves': 3, 'runtime-file-exchange-data': 6} if args.runtime_file_moves_only else {'backup-schema12-history-migration': 1} if args.backup_migration_only else COLD_GROUPS if args.cold_reader_only else GROUPS
     kind = 'runtime_replacement_model_native_gate' if args.runtime_replacement_only else 'runtime_preparation_migration_native_gate' if args.preparation_migration_only else 'runtime_preparation_native_gate' if args.runtime_preparation_only else 'runtime_file_moves_native_gate' if args.runtime_file_moves_only else 'state_backup_migration_native_gate' if args.backup_migration_only else 'shutdown_reader_native_gate' if args.cold_reader_only else 'shutdown_primitives_native_gate'
     mode_switch = ' -RuntimeReplacementOnly' if args.runtime_replacement_only else ' -PreparationMigrationOnly' if args.preparation_migration_only else ' -RuntimePreparationOnly' if args.runtime_preparation_only else ' -RuntimeFileMovesOnly' if args.runtime_file_moves_only else ' -BackupMigrationOnly' if args.backup_migration_only else ' -ColdReaderOnly' if args.cold_reader_only else ''
     if args.runtime_read_handoff_only:
         groups = {'runtime-read-handoff': 4}
         kind, mode_switch = 'runtime_read_handoff_native_gate', ' -RuntimeReadHandoffOnly'
+    if args.state_lock_handoff_only:
+        groups = {'state-lock-handoff': 5, 'state-original-pins': 2}
+        kind, mode_switch = 'state_lock_handoff_native_gate', ' -StateLockHandoffOnly'
     if args.runtime_replacement_ledger_only:
         groups = {'runtime-replacement-transaction-data': 6, 'runtime-replacement-ledger': 5}
         kind, mode_switch = 'runtime_replacement_ledger_native_gate', ' -RuntimeReplacementLedgerOnly'
@@ -142,6 +150,11 @@ def main():
         kind, mode_switch = 'runtime_replacement_migration_native_gate', ' -ReplacementMigrationOnly'
     pin = health.archive_pin(args.archive)
     with zipfile.ZipFile(args.archive) as source:
+        if args.state_lock_handoff_only and (
+                'winbridge/apps/update/src/shutdown/state_handoff.rs' not in source.namelist()
+                or native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 18
+                or native.worker_schema_from_source(source.read('winbridge/apps/worker/src/store.rs')) != 16):
+            raise ValueError('State-lock handoff source with updater18/worker16 required')
         if args.runtime_read_handoff_only and 'winbridge/crates/platform/src/runtime_files/read_handoff.rs' not in source.namelist():
             raise ValueError('Read-handoff source implementation required')
         if args.replacement_migration_only and native.updater_schema_from_source(source.read('winbridge/apps/update/src/journal.rs')) != 15:
@@ -165,6 +178,8 @@ def main():
         reference = {'kind': 'runtime_replacement_ledger_validation' if args.runtime_replacement_ledger_only else 'runtime_replacement_validation' if args.runtime_replacement_only else 'runtime_preparation_validation' if args.runtime_preparation_only else 'runtime_file_move_validation', 'runtimeApplied': False, 'windowsOpened': False}
         if args.runtime_read_handoff_only:
             reference['kind'] = 'runtime_read_handoff_validation'
+        if args.state_lock_handoff_only:
+            reference['kind'] = 'state_lock_handoff_validation'
     else:
         if not args.reference_receipt:
             parser.error('--reference-receipt is required for shutdown/migration gates')
@@ -246,8 +261,19 @@ exit $LASTEXITCODE
                'idempotencyKey': 'shutdown-primitives-' + run, 'timeoutMs': 1200000,
                'command': {'kind': 'direct', 'executable': 'pwsh.exe', 'workingDirectory': '.',
                            'arguments': ['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()]}}
-    (local_report / 'request.json').write_text(json.dumps(request, indent=2))
+    raw_request = json.dumps(request, indent=2).encode()
+    with (local_report / 'request.json').open('xb') as saved:
+        saved.write(raw_request)
+        saved.flush()
+        os.fsync(saved.fileno())
+    meta_file = local_report / 'primitives-run.json'
+    meta = dict(run=run, taskId=None, source=pin, cacheRun=args.cache_run, kind=kind,
+                requestSha256=hashlib.sha256(raw_request).hexdigest())
+    support.save_meta(meta_file, meta)
+    print(json.dumps({'runId': run, 'taskId': None, 'recovery': str(meta_file)}), flush=True)
     task = native.call(endpoint, {'method': 'submit', 'request': request})['task']
+    meta['taskId'] = task['taskId']
+    support.save_meta(meta_file, meta)
     print(json.dumps({'runId': run, 'taskId': task['taskId'], 'reportDirectory': str(report)}), flush=True)
     chunks, sequence = [], 0
     deadline = time.monotonic() + 1250
@@ -286,6 +312,18 @@ exit $LASTEXITCODE
         raise RuntimeError({'taskId': task['taskId'], 'error': result.get('error'), 'reportDirectory': str(report), 'filesVerified': len(names)})
     if not {g + '.log' for g in groups} <= names:
         raise ValueError('Successful report is missing test logs')
+    if args.state_lock_handoff_only:
+        for name, minimum in groups.items():
+            actual = sum(int(n) for n in re.findall(r'test result: ok\. (\d+) passed; 0 failed;',
+                (report / (name + '.log')).read_text(encoding='utf-8-sig')))
+            if actual != minimum or next(c['passed'] for c in result['commands'] if c['name'] == name) != actual:
+                raise ValueError('Native state-lock tests were not selected: ' + name)
+        for item in ready['files']:
+            data = (report / item['path']).read_bytes()
+            if len(data) != item['bytes'] or hashlib.sha256(data).hexdigest() != item['sha256']:
+                raise ValueError('State-lock report changed during verification')
+        if json.loads((report / 'report.ready.json').read_text(encoding='utf-8-sig')) != ready:
+            raise ValueError('State-lock ready manifest changed')
     if (task['status'] != 'succeeded' or task['exitCode'] != 0 or result.get('passed') is not True
             or result.get('runtimeApplied') is not False or result.get('windowsOpened') is not False
             or result.get('kind') != kind

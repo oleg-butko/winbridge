@@ -12,6 +12,7 @@ param(
   [switch]$BackupMigrationOnly,
   [switch]$RuntimeFileMovesOnly,
   [switch]$RuntimeReadHandoffOnly,
+  [switch]$StateLockHandoffOnly,
   [switch]$RuntimePreparationOnly,
   [switch]$RuntimeReplacementOnly,
   [switch]$RuntimeReplacementLedgerOnly,
@@ -19,7 +20,7 @@ param(
   [switch]$ReplacementMigrationOnly
 )
 $ErrorActionPreference='Stop'
-if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly,$RuntimeReadHandoffOnly,$RuntimePreparationOnly,$RuntimeReplacementOnly,$RuntimeReplacementLedgerOnly,$PreparationMigrationOnly,$ReplacementMigrationOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
+if(@($ColdReaderOnly,$BackupMigrationOnly,$RuntimeFileMovesOnly,$RuntimeReadHandoffOnly,$StateLockHandoffOnly,$RuntimePreparationOnly,$RuntimeReplacementOnly,$RuntimeReplacementLedgerOnly,$PreparationMigrationOnly,$ReplacementMigrationOnly).Where({[bool]$_}).Count -gt 1){throw 'Select one gate mode'}
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
@@ -35,6 +36,7 @@ $manifest=Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest
 if($manifest.dirty){throw 'Clean exported source required'}
 $kind=if($ReplacementMigrationOnly){'runtime_replacement_migration_native_gate'}elseif($RuntimeReplacementLedgerOnly){'runtime_replacement_ledger_native_gate'}elseif($RuntimeReplacementOnly){'runtime_replacement_model_native_gate'}elseif($PreparationMigrationOnly){'runtime_preparation_migration_native_gate'}elseif($RuntimePreparationOnly){'runtime_preparation_native_gate'}elseif($RuntimeFileMovesOnly){'runtime_file_moves_native_gate'}elseif($BackupMigrationOnly){'state_backup_migration_native_gate'}elseif($ColdReaderOnly){'shutdown_reader_native_gate'}else{'shutdown_primitives_native_gate'}
 if($RuntimeReadHandoffOnly){$kind='runtime_read_handoff_native_gate'}
+if($StateLockHandoffOnly){$kind='state_lock_handoff_native_gate'}
 $report=[ordered]@{schemaVersion=1;kind=$kind;platform='windows';passed=$false;sourceCommit=$manifest.sourceCommit;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;windowsOpened=$false;commands=@();error=$null;storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 $variables=@('CARGO_TARGET_DIR','CARGO_INCREMENTAL','TEMP','TMP','WINBRIDGE_SHUTDOWN_REFERENCE_WORKER','WINBRIDGE_UPDATE_REFERENCE_UPDATER','WINBRIDGE_STATE_BACKUP_MIGRATION_INPUT','WINBRIDGE_RUNTIME_PREPARATION_MIGRATION_INPUT','WINBRIDGE_RUNTIME_REPLACEMENT_MIGRATION_INPUT')
 $old=@{};foreach($name in $variables){$old[$name]=[Environment]::GetEnvironmentVariable($name,'Process')}
@@ -83,6 +85,8 @@ try {
     if($refs.kind -cne 'runtime_replacement_validation'){throw 'Fixed replacement model fixture declaration required'}
   } elseif($RuntimePreparationOnly){
     if($refs.kind -cne 'runtime_preparation_validation'){throw 'Fixed preparation fixture declaration required'}
+  } elseif($StateLockHandoffOnly){
+    if($refs.kind -cne 'state_lock_handoff_validation'){throw 'Fixed state-lock handoff fixture declaration required'}
   } elseif($RuntimeReadHandoffOnly){
     if($refs.kind -cne 'runtime_read_handoff_validation'){throw 'Fixed read-handoff fixture declaration required'}
   } elseif($RuntimeFileMovesOnly){
@@ -147,6 +151,12 @@ try {
   }
   if($RuntimeReadHandoffOnly){
     $groups=@(@{name='runtime-read-handoff';minimum=4;args=@('test','-p','winbridge-platform','--lib','runtime_files::read_handoff::tests','--locked','--offline')})
+  }
+  if($StateLockHandoffOnly){
+    $groups=@(
+      @{name='state-lock-handoff';minimum=5;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','shutdown::state::handoff::tests','--locked','--offline')},
+      @{name='state-original-pins';minimum=2;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','shutdown::state::tests','--locked','--offline')}
+    )
   }
   if($RuntimePreparationOnly){
     $groups=@(@{name='runtime-preparation-data-ledger';minimum=10;args=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','runtime_preparation','--locked','--offline')})
