@@ -17,8 +17,9 @@
 
 Следующая последовательность:
 
-1. Clean receiver19/17/private3/actor24 → actual Main/PS writer mode/verifier
-   (пока отсутствуют), distinct clean producer после harness commit.
+1. Receiver19/17/private3/actor24 clean **1a2149f уже экспортирована**;
+   [hashes/pin](plans/worker-self-update/journal-writer-actor.md#готовая-clean-receiver-fixture).
+   Следом actual Main/PS writer mode/verifier (пока отсутствуют), distinct producer.
 2. Combined native writer/actual updater18→19 и worker16→17/refusal; correct
    None ACK/busy, immediate24 after StateOwned, original120s сохранить.
 3. Normal local service/reconciliation, actual controller session, owned

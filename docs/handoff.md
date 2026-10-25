@@ -30,9 +30,11 @@
 
 ## Откуда продолжать
 
-1. Clean commit → экспорт новой receiver **19/17/private3/actor24**, затем
-   actual Main harness, PS writer mode и independent verifier; их пока нет.
-   Distinct producer после harness commit. Старый target1370d6b не подходит.
+1. Clean receiver **1a2149f / 19/17/private3/actor24 уже готова**:
+   `winbridge-20261025T163918Z-1a2149f-8b8c082c.zip`; hashes/pin в
+   [actor24](plans/worker-self-update/journal-writer-actor.md#готовая-clean-receiver-fixture).
+   Следом actual Main harness/PS writer mode/independent verifier (пока нет)
+   и distinct producer после harness commit. Старый target1370d6b не подходит.
 2. Combined native writer + actual updater18→19/refusal и worker16→17/refusal.
    None от24 start/observe — только ACK/busy. Сразу start после StateOwned,
    audits после receipt/Job cleanup; original120s не продлевать.

@@ -11,6 +11,10 @@ NEXT/ACTIVE и [инструкцию до Main23](resume-2026-10-25-state-handof
 TS/UI passed. **Следом clean receiver19/17/private3/actor24 и actual Main/PS mode/
 independent verifier**, которых пока нет; затем distinct producer и native gate.
 Старый physical Main23 terminal, не resubmit. Полное self-update не готово.
+Clean receiver fixture **1a2149f уже экспортирована**:
+`winbridge-20261025T163918Z-1a2149f-8b8c082c.zip`, source/manifest hashes и pin
+[в actor24 report](journal-writer-actor.md#готовая-clean-receiver-fixture).
+Именно она — target будущего distinct producer. Source fixture не native proof.
 
 ## 1. Реальная граница готовности
 

@@ -98,10 +98,30 @@ maintenance/recovery errors=null, coverage.complete=true. Evidence
 `actor24-post-info.json` в том же local directory. Debian free25153507328 bytes,
 Cargo terminal/exit0. Ручное обновление установленного worker не требуется.
 
+## Готовая clean receiver fixture
+
+Source commit `1a2149f88407fd9c33d101e12d07d7c4b64599d3` экспортирован clean,
+с built UI: **813 files / 13011755 payload bytes**. Shared ZIP:
+
+`/mnt/hgfs/shared/WinBridge/sources/winbridge-20261025T163918Z-1a2149f-8b8c082c.zip`
+
+- ZIP SHA256 `abc74d43ee4e43f0b60a86f0cd3bc9dd35679fcf8b6f010cb1ca3c5c72573c1b`.
+- Manifest SHA256 `b27808d7f52abd9fdbb4c5fe01e078493950d22e5f5a46c8b59b992bb453bed1`.
+- Updater19 / worker17 / actor24 / view16 / physical2 / writer3.
+- Independently rechecked every manifest path/size/SHA and archive/source/role
+  markers. Это source fixture, **windowsExecutionVerified=false**.
+
+Local export/pin `.winbridge/update-preparation/actor24-receiver-{export,pin}.json`.
+Использовать её как **target** будущего distinct harness producer; вручную
+обновлять installed runtime ради этого fixture не требуется. Старый target1370d6b
+и старый schema17 reference не подменяют новые19/17 target и18 migration reference.
+Для actual18→19 reference сначала связать successful physical132 source/history/
+old18 image с retained verified pins, не менять поле schema у прежнего17 pin.
+
 ## Следующий шаг: один combined native gate
 
-1. После clean commit экспортировать новую **receiver19/17/private3/actor24**,
-   затем добавить harness/verifier и экспортировать distinct producer. Старый
+1. Новая **receiver19/17/private3/actor24 готова выше**. Добавить harness/verifier
+   и экспортировать distinct producer после clean harness commit. Старый
    receiver1370d6b/18/16/private2 не подходит. Writer flags/mode в существующих
    PS/Python сценариях пока **не добавлены**; не считать их уже доступными.
 2. Main: обычные shutdown/backup/preparation/replacement/Ready/state handoff,
