@@ -2,16 +2,16 @@
 
 2026-10-25 America/New_York. Продолжение [source actor23](activation-state-handoff.md)
 и [закрывающего checkpoint](resume-2026-10-25-state-handoff.md). **Harness и
-independent verifier добавлены; первый actual Windows state gate запущен,
-результата ещё нет.**
+independent verifier прошли первый actual Windows state gate:
+132 passed / 0 failed,32 groups/35 commands.**
 Source updater18/worker16, supervisor23/view15/private handoff2 прежние.
 Public install и advertised activation/controller/desktop drivers выключены.
 
-## ACTIVE: наблюдать этот же run
+## Положительный actual run: terminal, не resubmit
 
 - Task **`6bc1623a-c5c4-49ce-8511-cb46b43c7ece`**, run **`20261025-100933-d8a50807`**.
-  Последнее прямое наблюдение: running, идёт `health-supervisor-build`.
-  **Не отправлять второй запуск из-за потери observer.**
+  Terminal **succeeded/exit0**, observer exit0; actual Main717.51s.
+  **Не отправлять terminal run повторно.**
 - Producer commit `7b270c63e4db9e5195902fba026475c2768f58e1`, clean ZIP
   `winbridge-20261025T100857Z-7b270c6-9699c8da.zip` (795 files,5,780,735 bytes).
   ZIP SHA `ab507939bb9f220eff71da1ec6dfbf49b00318a16069e838a5c14e7149022ccf`,
@@ -22,15 +22,57 @@ Public install и advertised activation/controller/desktop drivers выключ�
 - Observer log `.winbridge/update-preparation/state23-native-main.log`,
   exec session48059; shared report
   `/mnt/hgfs/shared/WinBridge/workflow-validation/20261025-100933-d8a50807`.
-  После потери exec-сессии проверить task напрямую и восстановить observer
-  командой ниже с exact producer и `--verify-run 20261025-100933-d8a50807`.
+  Exec session48059 завершена. Повторное чтение — команда ниже с exact
+  producer и `--verify-run 20261025-100933-d8a50807`, без нового execution.
 - Final source checks passed: portable3, Python5+3+5, Linux validation Clippy,
   MSVC worker validation/production all-target Clippy, fmt/scaffold273.
   Current observer readonly принял retained Main22 112/0. Summary
   `.winbridge/update-preparation/state23-native-source-verified.json`.
 - Installed d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e не менялся;
   использован только для dispatch. Нужен worker, desktop не нужен, окон нет.
-  После terminal сообщить пользователю, что desktop можно закрыть, worker оставить.
+  Fresh post-terminal Info healthy/connected/active0, maintenance/recovery errors=null,
+  coverage.complete=true. Desktop можно закрыть, installed worker оставить.
+
+Independent observer проверил **45 ready files дважды**, отверг44 replacement,
+**40 state** и12 migration mutations; actual17→18/refusal passed. State audit
+включает coordinated old-generation reuse во всех receipt copies.
+
+- Report SHA `0a4df0af94b601e3ce94f9c0f03ee20ca0ff73a8edd05cd7853a3fc739c80cd9`.
+- State proof SHA `1b10d8d31b17b563cb37052a8178336ca1cbe80be6919fa467b8592f867bde13`.
+- Migration SHA `b68ebc494c19222778f429bbf3db52d739df1de20208199bb20bbca4d7862087`.
+- Local pin `.winbridge/workflow-validation/20261025-100933-d8a50807/activation-preparation-verified.json`.
+
+Actual receiver PID15840 / FILETIME134373978757168857, attempt
+`79bfaf23-6a10-432e-8fa4-74bb5e3098d5`, new generation
+`7d8cf87b-4161-471f-9076-6d09c20d6a63`. HandoffIssued5/StateOwned6 сохранены
+в той же seven-row causal history; rootVerifyingLocal/revision15 unchanged.
+Actual old lock busy до release, доступен после release до command, занят под
+child; после owned Job stop тот же lock вновь доступен, retained process handle
+signalled/Job empty. Duplicate не повторил эффект, legacy/cold views не
+восстановили live resources. Worker DB/WAL и epoch не изменились; writer0.
+
+Время **после original admission**, исходный120000ms не продлевался:
+
+| Факт | ms |
+| --- | ---: |
+| Creating grant | 64,388 |
+| Resume grant | 71,295 |
+| Ready observed | 77,897 |
+| HandoffIssued | 89,508 |
+| Before-release busy probe | 94,678 |
+| After-release available probe | 102,620 |
+| StateOwned observed | 107,679 |
+| Saved StateOwned6 | 109,925 |
+
+Helper wall timings от начала helper **до admission**: Ready88,573ms,
+StateOwned118,090ms. Это другой origin; не смешивать эти значения с таблицей.
+Windows free12,523,622,400→11,316,977,664 bytes; Debian перед dispatch25,498,288,128 /
+после25,492,619,264 bytes. Cleanup не выполнялся, installed runtime не менялся.
+
+Review actual proof не обнаружил важной ошибки physical handoff. Следом
+atomic writable activation/receipt и schema policy по
+[review следующего writer](activation-state-handoff.md#review-следующего-writer-опора-на-существующий-backup-authority),
+затем local/controller/lifetime и remaining U2/U3/U4. Public install off.
 
 Безопасное восстановление наблюдения **этого же** запуска:
 

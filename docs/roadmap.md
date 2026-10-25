@@ -1,11 +1,13 @@
 # Постепенная реализация и расширение
 
-2026-10-25, продолжение: [Main23 state harness/verifier](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-реализованы; **actual native run20261025-100933-d8a50807 идёт**,
-task6bc1623a-c5c4-49ce-8511-cb46b43c7ece, producer7b270c6/target1370d6b.
-Final source checks passed, результата Windows ещё нет; наблюдать тот же run.
-Checkpoint ниже сохраняет прежние inputs/границы; его «flags отсутствуют» устарело.
-Public install off, installed runtime не менялся.
+2026-10-25: [actual Main23 physical StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+пройден, task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/run20261025-100933-d8a50807,
+producer7b270c6/target1370d6b.45 files twice,44+40+12 mutations, actual17→18/refusal.
+Seven causal prefixes, same child/lock, duplicate и actual cold exit проверены;
+DB/WAL/epoch unchanged, writer0. Следом atomic writable activation/CAS/receipt и
+explicit schema policy, local/controller/lifetime, U2 faults/U3/U4. Public install
+выключен, installed d052 healthy/unchanged/active0. Terminal run не replay.
+Ниже checkpoint до этого gate; старые «ещё не выполнялся» — история.
 
 ## Текущий checkpoint — 2026-10-25, завершение проверок StateOwned23
 

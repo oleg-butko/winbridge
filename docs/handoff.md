@@ -1,13 +1,16 @@
 # Точка продолжения updater — 2026-10-25, StateOwned23
 
-**Продолжение после closing commit2925d07:** [Main23 harness/verifier](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-добавлены, включая неблокирующие OS probes, PS `-ActivationStateGate`, observer
-`--activation-state`/same-run recovery и independent state audit. Portable3/Python5
-и final source/cross checks пройдены. **Actual state run уже отправлен**:
-task `6bc1623a-c5c4-49ce-8511-cb46b43c7ece`, run `20261025-100933-d8a50807`,
-producer7b270c6/target1370d6b; direct status running, health-supervisor-build.
-Observer session48059/log `state23-native-main.log`; metadata/точная same-run
-команда в новом gate document. **Не resubmit, результата ещё нет.** Installed runtime не менялся.
+**Main23 physical StateOwned gate пройден:** [132/0,32 groups/35 commands](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md),
+task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/run20261025-100933-d8a50807,
+producer7b270c6/target1370d6b. Observer exit0:45 files twice,44+40+12 mutations,
+actual17→18/refusal. Same child получил exact lock; после owned exit lock снова
+доступен, history0–6/DB/WAL сохранены. Original120s не увеличен; StateOwned
+saved109.925s после admission. Worker writer/authority не активировались.
+Все Windows/observer задачи завершены; terminal run **не resubmit**.
+Installed d052 healthy/connected/active0, runtime unchanged. Desktop можно закрыть,
+worker оставить. Следом atomic writable activation/CAS/receipt и explicit schema
+policy, local/controller/lifetime и remaining U2/U3/U4. Public install off.
+[Review следующего writer](plans/worker-self-update/activation-state-handoff.md#review-следующего-writer-опора-на-существующий-backup-authority).
 Ниже checkpoint до этого продолжения: его «harness/flags не существуют» теперь
 история; ZIP target1370d6b/cache/reference и оставшиеся U2–U4 остаются актуальны.
 

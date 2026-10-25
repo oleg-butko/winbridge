@@ -68,7 +68,7 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 и [selective lock-release7/0](docs/plans/worker-self-update/state-lock-handoff.md)
 пройдены. [Actor23/private state handoff2/view15](docs/plans/worker-self-update/activation-state-handoff.md)
 реализованы и прошли source/cross checks; [новый StateOwned harness/verifier](docs/plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-добавлен, actual Windows gate ещё впереди. Receiver2 target fixture уже готова. Затем writable authority,
+прошёл actual Windows gate132/0. Receiver2 target fixture уже готова. Затем writable authority,
 local/controller/lifetime и remaining U2/U3/U4. Public install выключен,
 полное самообновление ещё не готово. Installed runtime не менялся.
 Новый checkpoint приоритетнее исторических NEXT ниже.

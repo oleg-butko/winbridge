@@ -11,10 +11,10 @@
 Все текущие проверки завершены. [Actor23/private handoff2/view15](activation-state-handoff.md)
 реализованы в source, updater18/worker16 прежние. Workspace741/0 (16 ignored),
 protocol59/0, journal2/0/mailbox1 и local/MSVC Clippy/contracts/TS/UI passed.
-Новый actual interprocess StateOwned gate **идёт**, task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/
-run20261025-100933-d8a50807; результата пока нет, повторно не отправлять.
+Новый actual interprocess StateOwned gate **пройден132/0**, task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/
+run20261025-100933-d8a50807;45 files twice/44+40+12 mutations. Terminal не replay.
 [Harness/verifier/state flags](windows-activation-state-gate-2026-10-25.md) уже
-добавлены; следом final checks/review/clean producer/один actual run. Writable Store/local/controller/lifetime впереди,
+проверены; следом atomic writable activation/receipt и schema policy. Writable Store/local/controller/lifetime впереди,
 public install off; updater целиком не готов.
 
 [Main22 receiver112/0](windows-activation-process-gate-2026-10-24.md) и
@@ -22,8 +22,7 @@ public install off; updater целиком не готов.
 Main22 принят, report/ZIP pins целы. Terminal tasks не replay. Installed d052
 healthy/connected/active0 и не менялся; desktop можно закрыть, worker оставить.
 
-Следом проверить добавленный state harness/boundary probes/verifier, затем distinct clean
-producer и один isolated Windows run с **готовым target receiver2 commit1370d6b**.
+State harness/boundary probes/verifier проверены с **target receiver2 commit1370d6b**.
 Pins/cache/schema17 reference и original120s budget описаны в новой инструкции.
 После native StateOwned: writable authority/CAS/epoch → local/controller →
 lifetime/commit → remaining U2 faults/management → U3 desktop → U4 installed
