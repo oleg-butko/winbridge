@@ -1,11 +1,11 @@
 # Suspended launcher и private receiver до writer
 
 2026-10-24, продолжение после checkpoint547a487. **Library и private worker entry
-добавлены; actor dispatch и настоящий execution gate ещё впереди.** Прежний
+добавлены; [actor22/view14](activation-process-actor.md) подключён,
+настоящий execution gate ещё впереди.** Прежний
 [native97/0](windows-activation-files-gate-2026-10-24.md) относится к producer941a2e6
 и доказывает read binding, а не этот запуск. Public install остаётся выключенным,
-activation/controller_confirmation/desktop_update=None. Schemas18/16 и frozen
-supervisor21/view13 не менялись.
+activation/controller_confirmation/desktop_update=None. Schemas18/16 не менялись; новый actor22/view14 описан отдельно, views1–13 frozen.
 
 ## Зачем отдельный путь
 
@@ -122,7 +122,7 @@ commit/UI, source receiver marker/CLI и schema18. **Это source fixture, не
 2. Использовать clean receiver fixture1c23d48 с built UI выше. Старый target7f6a029
    не содержит receiver и обязан быть отклонён до CreateProcess. Подготовить distinct producer
    с actor dispatch/harness. [Export и окружение](resume-2026-10-24-activation-files.md).
-3. В supervisor добавить новый versioned action/view, не расширять frozen21/13.
+3. [Actor22/view14](activation-process-actor.md) добавлен, frozen21/13 не расширен.
    Move единственного Bound guard в blocking owner; duplicates только observe.
    После success/failure вернуть native owner actor. Older files views должны
    отражать удерживаемые ресурсы, а не исчезать из-за перемещения между owners.

@@ -10,15 +10,16 @@
 восстанавливает custody. Exact marker search ускорен с сохранением full SHA,
 FileID/path/fencing checks; deadline120s сохранён, binding43.346s.
 
-Source: **updater18/worker16, supervisor21/view13**. [Activation preparation/read binding](plans/worker-self-update/runtime-activation.md)
+Source: **updater18/worker16, supervisor22/view14**. [Activation preparation/read binding](plans/worker-self-update/runtime-activation.md)
 объединяют source binding, typed startup FSM, graph-bound ledger и consuming
 original guard. Nonce/deadline/kernel handles остаются resident non-Serde
-resources; JSON/history не дают права на OS effects. Views1–12 frozen.
+resources; JSON/history не дают права на OS effects. Views1–13 frozen.
 
 [Suspended launcher/private receiver library](plans/worker-self-update/activation-receiver.md)
-добавлены в source; actual dispatch и native execution proof ещё впереди.
+добавлены в source; [actor22/view14](plans/worker-self-update/activation-process-actor.md)
+подключён, actual native execution proof ещё впереди.
 State/local/controller/lifetime handoff ещё не реализованы. Public install выключен; activation/controller_confirmation/
-desktop_update не объявлены готовыми. Следом новый versioned actor action и actual Main до Store writer. [Подробный актуальный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-files.md)
+desktop_update не объявлены готовыми. Следом actual Main22 до Store writer и independent verifier. [Подробный актуальный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-files.md)
 содержит pins, карту кода, правила auth/deadline/ownership и порядок продолжения.
 Все начатые проверки завершены, installed d052 healthy/unchanged. Старые
 preparation87/0 и one-file4/0 дополняются новым whole-set97/0 и actual17→18/refusal;

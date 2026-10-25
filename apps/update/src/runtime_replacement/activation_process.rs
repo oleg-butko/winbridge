@@ -76,6 +76,15 @@ impl ActivationLaunchFailure {
     pub fn process_id(&self) -> Option<u32> {
         self.custody.child.as_ref().map(ManagedChild::id)
     }
+    pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {
+        self.custody.resident_process()
+    }
+    pub(crate) fn process_alive(&self) -> Option<bool> {
+        self.custody.process_alive()
+    }
+    pub(crate) fn diagnostics(&self) -> (String, String, bool, bool) {
+        self.custody.diagnostics()
+    }
 }
 impl Drop for ActivationProcessGuard {
     fn drop(&mut self) {
@@ -87,23 +96,30 @@ impl Drop for ActivationProcessGuard {
     }
 }
 impl ActivationFilesGuard {
+    /// Poll on a dedicated stack using the ORIGINAL supervisor IO driver. A
+    /// temporary Runtime would strand the retained named pipe on its shutdown.
+    pub fn launch_receiver_blocking(
+        self: Box<Self>,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+    ) -> std::result::Result<Box<ActivationProcessGuard>, ActivationLaunchFailure> {
+        match crate::activation::on_original_io(self, move |files| files.launch_receiver(j, a, s)) {
+            Ok(result) => result,
+            Err((files, reason)) => Err(ActivationLaunchFailure {
+                reason: reason.into(),
+                custody: ActivationProcessGuard::new(files),
+            }),
+        }
+    }
+
     pub async fn launch_receiver(
         self: Box<Self>,
         j: &mut UpdateJournal,
         a: &UpdateAuthority,
         s: &SupervisorRecord,
     ) -> std::result::Result<Box<ActivationProcessGuard>, ActivationLaunchFailure> {
-        let mut owner = Box::new(ActivationProcessGuard {
-            record: self.preparation().clone(),
-            files: self,
-            child: None,
-            channel: None,
-            captures: [
-                Arc::new(Mutex::new(Capture::default())),
-                Arc::new(Mutex::new(Capture::default())),
-            ],
-            readers: Vec::new(),
-        });
+        let mut owner = ActivationProcessGuard::new(self);
         match owner.launch(j, a, s).await {
             Ok(()) => Ok(owner),
             Err(reason) => {
@@ -117,6 +133,38 @@ impl ActivationFilesGuard {
     }
 }
 impl ActivationProcessGuard {
+    fn new(files: Box<ActivationFilesGuard>) -> Box<Self> {
+        Box::new(Self {
+            record: files.preparation().clone(),
+            files,
+            child: None,
+            channel: None,
+            captures: [
+                Arc::new(Mutex::new(Capture::default())),
+                Arc::new(Mutex::new(Capture::default())),
+            ],
+            readers: Vec::new(),
+        })
+    }
+    pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {
+        let identity = self.child.as_ref()?.identity()?;
+        Some(winbridge_protocol::update::SupervisorProcess {
+            process_id: identity.process_id,
+            birth: identity.creation_time.to_string(),
+            host_id: identity.host_id.clone(),
+            session_id: identity.session_id,
+        })
+    }
+    /// Readonly liveness of an actually retained child; never reconstructs an
+    /// owner from a PID. A denied/inconclusive observation remains unknown.
+    pub(crate) fn process_alive(&self) -> Option<bool> {
+        let actual = self.resident_process()?;
+        match infrastructure::PinnedProcess::live(&actual) {
+            Ok(_) => Some(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(false),
+            Err(_) => None,
+        }
+    }
     pub fn record(&self) -> &ActivationRecord {
         &self.record
     }
@@ -131,6 +179,25 @@ impl ActivationProcessGuard {
             stdout.bytes.clone(),
             stderr.bytes.clone(),
             stdout.incomplete || stderr.incomplete,
+        )
+    }
+    pub(crate) fn diagnostics(&self) -> (String, String, bool, bool) {
+        fn tail(bytes: &[u8]) -> (String, bool) {
+            let text = String::from_utf8_lossy(bytes);
+            let count = text.chars().count();
+            (
+                text.chars().skip(count.saturating_sub(512)).collect(),
+                count > 512,
+            )
+        }
+        let (stdout, stderr, incomplete) = self.output();
+        let (stdout, cut_out) = tail(&stdout);
+        let (stderr, cut_err) = tail(&stderr);
+        (
+            stdout,
+            stderr,
+            incomplete || cut_out || cut_err,
+            self.readers.len() == 2 && self.readers.iter().all(|r| r.is_finished()),
         )
     }
     fn at(&self) -> Result<u64> {

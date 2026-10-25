@@ -602,6 +602,9 @@ pub enum SupervisorAction {
     /// Internal21: consume original file custody into a strict readable set.
     BindActivationFiles,
     ObserveActivationFiles,
+    /// Internal22: one suspended receiver launch, stopping before state ownership.
+    LaunchActivationReceiver,
+    ObserveActivationProcess,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -680,6 +683,9 @@ pub struct UpdatePreparationView {
     pub activation_preparation: Option<ActivationPreparationView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_files: Option<ActivationFilesView>,
+    /// Internal22/view14. Saved receipts and live resources are separate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_process: Option<ActivationProcessView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1095,3 +1101,5 @@ pub use activation_files::*;
 
 mod activation_receiver;
 pub use activation_receiver::*;
+mod activation_process;
+pub use activation_process::*;

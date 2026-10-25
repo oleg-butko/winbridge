@@ -10,11 +10,21 @@ NEXT/ACTIVE в длинных документах. Предыдущие неу�
 [отчёте Windows gate](windows-activation-files-gate-2026-10-24.md) и Git.
 Не повторять их и не начинать заново уже завершённую диагностику deadline.
 
+## Новейшее продолжение: actor22/view14
+
+[Actor/source checks и следующий gate](activation-process-actor.md) приоритетнее
+старых NEXT ниже. Launcher подключён к единственному blocking slot, duplicate
+не создаёт process, original IO driver сохраняется после retirement owner thread.
+Source updater18/worker16, supervisor22/view14. Workspace727/0/protocol57/0/
+local+cross+TS/UI passed. **Native Main/harness/verifier process mode ещё впереди**,
+прежний97/0 доказывает только read binding. Clean receiver fixture1c23d48 готова;
+нужен distinct clean producer с actor и новым harness. Полный updater не готов.
+
 ## Продолжение после checkpoint547a487
 
 [Добавлены suspended launcher/private receiver library](activation-receiver.md).
 Source теперь содержит OS driver Creating→Created→ResumeGranted→ReadyForState
-и worker entry до Store writer. **Actor dispatch и actual native execution gate
+и worker entry до Store writer. **Actor dispatch добавлен позднее (ссылка выше); actual native execution gate
 ещё впереди**; native97 ниже относится только к producer941a2e6/read binding.
 Не реализовывать эти modules заново: следующий блок — versioned actor action/view,
 новая receiver fixture, distinct producer и настоящий Main до ReadyForState.

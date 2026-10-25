@@ -16,9 +16,10 @@ custody. Deadline120s сохранён, binding43.346s. Три прежних fa
 и измеренное исправление marker search сохранены в linked gate report.
 
 [Suspended launcher/private receiver library](activation-receiver.md) добавлены,
-actor dispatch и actual native gate до ReadyForState без writer ещё впереди.
+[actor22/view14](activation-process-actor.md) подключён. Actual native Main до
+ReadyForState без writer и independent verifier ещё впереди.
 Затем [execution](runtime-activation.md): state handoff/local/controller/lifetime, remaining
-U2 faults/management и U3/U4. Source updater18/worker16/supervisor21/view13.
+U2 faults/management и U3/U4. Source updater18/worker16/supervisor22/view14.
 Installed worker unchanged/healthy/active0. Все проверки завершены; desktop
 можно закрыть, installed worker оставить работать. Public install/activation
 выключены, вся цель не готова. Нижние checkpoints — история.

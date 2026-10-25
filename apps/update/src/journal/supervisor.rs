@@ -215,6 +215,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 13)
     }
+    pub fn activation_process_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 14)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -319,6 +327,11 @@ impl UpdateJournal {
             None
         };
         let view = UpdatePreparationView {
+            activation_process: if view_schema >= 14 {
+                Some(crate::activation::process_view(activation.as_ref()))
+            } else {
+                None
+            },
             schema_version: view_schema,
             observed_at_ms: now_ms()?,
             update,

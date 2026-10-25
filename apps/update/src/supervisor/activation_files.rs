@@ -8,6 +8,12 @@ enum State {
     Bound(Box<crate::activation::ActivationFilesGuard>),
     #[cfg(windows)]
     Failed(Box<crate::activation::ActivationFilesFailure>),
+    #[cfg(windows)]
+    Launching(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
+    Ready(Box<crate::activation::ActivationProcessGuard>),
+    #[cfg(windows)]
+    LaunchFailed(Box<crate::activation::ActivationLaunchFailure>),
 }
 pub(super) struct FilesActor {
     state: State,
@@ -68,6 +74,12 @@ impl FilesActor {
             State::Bound(g) => Some(g.preparation()),
             #[cfg(windows)]
             State::Failed(e) => Some(e.preparation()),
+            #[cfg(windows)]
+            State::Launching(r) => Some(r),
+            #[cfg(windows)]
+            State::Ready(g) => Some(g.record()),
+            #[cfg(windows)]
+            State::LaunchFailed(e) => Some(e.record()),
         };
         if let Some(record) = record {
             if record.intent.source.update_id != _s.spec.update_id
@@ -88,6 +100,135 @@ impl FilesActor {
     ) -> Result<UpdatePreparationView> {
         let mut view = UpdateJournal::activation_files_snapshot(directory, id, active, error)
             .map_err(super::error)?;
+        self.patch_files(&mut view, signal)?;
+        Ok(view)
+    }
+    pub(super) fn process_started(&self) -> bool {
+        #[cfg(windows)]
+        {
+            matches!(
+                self.state,
+                State::Launching(_) | State::Ready(_) | State::LaunchFailed(_)
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    pub(super) fn can_launch(&self) -> bool {
+        #[cfg(windows)]
+        {
+            matches!(self.state, State::Bound(_))
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    #[cfg(windows)]
+    pub(super) fn take_for_launch(
+        &mut self,
+    ) -> Result<Box<crate::activation::ActivationFilesGuard>> {
+        let record =
+            match &self.state {
+                State::Bound(g) => Box::new(g.preparation().clone()),
+                _ => return Err(
+                    "Activation receiver needs the one resident Bound guard; no adoption/replay"
+                        .into(),
+                ),
+            };
+        let State::Bound(guard) = std::mem::replace(&mut self.state, State::Launching(record))
+        else {
+            unreachable!()
+        };
+        Ok(guard)
+    }
+    #[cfg(windows)]
+    pub(super) fn complete_launch(
+        &mut self,
+        result: std::result::Result<
+            Box<crate::activation::ActivationProcessGuard>,
+            crate::activation::ActivationLaunchFailure,
+        >,
+    ) -> Result<()> {
+        let expected = match &self.state {
+            State::Launching(r) => &r.intent,
+            _ => return Err("Unexpected activation process completion; no state reset".into()),
+        };
+        let (state, same, error) = match result {
+            Ok(guard) => {
+                let same = &guard.record().intent == expected;
+                (State::Ready(guard), same, None)
+            }
+            Err(failure) => {
+                let same = &failure.record().intent == expected;
+                let error = failure.reason.clone();
+                (State::LaunchFailed(Box::new(failure)), same, Some(error))
+            }
+        };
+        self.state = state;
+        if !same {
+            return Err(
+                "Activation process completion changed frozen scope; resources retained".into(),
+            );
+        }
+        error.map_or(Ok(()), Err)
+    }
+    pub(super) fn process_view(
+        &self,
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+        signal: &crate::runtime_replacement::CustodySignal,
+    ) -> Result<UpdatePreparationView> {
+        let mut view = UpdateJournal::activation_process_snapshot(directory, id, active, error)
+            .map_err(super::error)?;
+        self.patch_files(&mut view, signal)?;
+        let process = view
+            .activation_process
+            .as_mut()
+            .ok_or("Activation process view missing")?;
+        process.original_state_held = signal.held();
+        #[cfg(windows)]
+        match &self.state {
+            State::Launching(_) => {
+                process.phase = ActivationProcessPhase::Launching;
+                process.process_custody_held = None;
+            }
+            State::Ready(guard) => {
+                diagnostics(process, guard.diagnostics());
+                process.resident_process = guard.resident_process();
+                process.process_custody_held = Some(process.resident_process.is_some());
+                process.process_alive = guard.process_alive();
+                if process.process_alive == Some(true)
+                    && signal.held()
+                    && view.driver_error.is_none()
+                {
+                    process.phase = ActivationProcessPhase::ReadyForState;
+                } else {
+                    process.phase = ActivationProcessPhase::Indeterminate;
+                    process.reason=Some("Saved Ready retained, but live process/original custody is unavailable; no state handoff".into());
+                }
+            }
+            State::LaunchFailed(failure) => {
+                diagnostics(process, failure.diagnostics());
+                process.phase = ActivationProcessPhase::Indeterminate;
+                process.resident_process = failure.resident_process();
+                process.process_custody_held = Some(process.resident_process.is_some());
+                process.process_alive = failure.process_alive();
+                process.reason = Some(failure.reason.chars().take(1000).collect());
+            }
+            _ => {}
+        }
+        Ok(view)
+    }
+    fn patch_files(
+        &self,
+        view: &mut UpdatePreparationView,
+        signal: &crate::runtime_replacement::CustodySignal,
+    ) -> Result<()> {
         if let Some(replacement) = &mut view.runtime_replacement {
             replacement.physical_custody_held = signal.held();
         }
@@ -114,12 +255,50 @@ impl FilesActor {
                 files.manifest_sha256 = Some(observed.manifest_file.sha256.clone());
             }
             #[cfg(windows)]
+            State::Launching(record) => held_source(files, record),
+            #[cfg(windows)]
+            State::Ready(guard) => held_source(files, guard.record()),
+            #[cfg(windows)]
+            State::LaunchFailed(failure) => held_source(files, failure.record()),
+            #[cfg(windows)]
             State::Failed(failure) => {
                 files.phase = ActivationFilesPhase::Indeterminate;
                 files.held_files = failure.held_files();
                 files.reason = Some(failure.reason.chars().take(1000).collect());
             }
         }
-        Ok(view)
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+fn held_source(files: &mut ActivationFilesView, record: &crate::activation::ActivationRecord) {
+    files.phase = ActivationFilesPhase::Bound;
+    files.held_files = 5;
+    files.worker = Some(record.intent.source.worker.clone());
+    files.manifest_sha256 = Some(record.intent.source.manifest.sha256.clone());
+}
+#[cfg(windows)]
+fn diagnostics(
+    view: &mut ActivationProcessView,
+    (stdout, stderr, incomplete, complete): (String, String, bool, bool),
+) {
+    view.stdout_tail = Some(stdout);
+    view.stderr_tail = Some(stderr);
+    view.output_incomplete = Some(incomplete);
+    view.capture_complete = Some(complete);
+}
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    #[test]
+    fn launch_actor_never_recreates_bound_custody_from_saved_or_pending_data() {
+        let (_, record) = crate::activation::activation_fixture();
+        let mut actor = FilesActor::default();
+        assert!(!actor.can_launch() && !actor.process_started());
+        assert!(actor.take_for_launch().is_err());
+        actor.state = State::Launching(Box::new(record));
+        assert!(actor.process_started() && !actor.can_launch());
+        assert!(actor.take_for_launch().is_err());
     }
 }

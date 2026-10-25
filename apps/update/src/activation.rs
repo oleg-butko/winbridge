@@ -12,6 +12,12 @@ type Result<T> = std::result::Result<T, String>;
 mod lifecycle;
 pub use lifecycle::*;
 pub mod channel;
+mod process_view;
+pub(crate) use process_view::view as process_view;
+#[cfg(any(windows, test))]
+mod owner_stack;
+#[cfg(windows)]
+pub(crate) use owner_stack::on_original_io;
 #[cfg(windows)]
 mod timing;
 #[cfg(windows)]

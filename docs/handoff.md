@@ -5,21 +5,31 @@
 правила восстановления наблюдения и последовательность реализации. Этот блок
 и инструкция приоритетнее исторических NEXT/ACTIVE ниже.
 
-## Продолжение после547a487: receiver/launcher library добавлены
+## Текущий source: supervisor22/view14, native execution ещё не проверен
 
-[Новая source-вертикаль](plans/worker-self-update/activation-receiver.md) содержит
-consuming suspended OS driver и private worker entry до Store writer. Creating/
-Created/ResumeGranted/ReadyForState связываются с actual child и authenticated
-IPC; failure сохраняет original resources и запрещает второй create.
-**Actor dispatch и actual native execution gate ещё не реализованы/не пройдены.**
-Schemas18/16, supervisor21/view13, activation/public install off прежние.
-Clean receiver fixture1c23d48 уже экспортирована:
-`winbridge-20261024T215731Z-1c23d48-0490a451.zip`; exact pins — в новом документе.
-Следом подключить новый versioned action/view и native Main с этой fixture и
-distinct producer, затем state/controller/lifetime. Подробности и checks — в новом документе;
-старый97/0 ниже относится к read binding producer941a2e6, не к execution.
+[Actor22 и проверка I/O lifetime](plans/worker-self-update/activation-process-actor.md)
+подключают [launcher/private receiver library](plans/worker-self-update/activation-receiver.md)
+к единственному blocking slot. Bound guard перемещается один раз; duplicates
+только observe, failure возвращает те же resources. Saved Ready и живое process/
+state custody различаются; frozen views1–13 не получают новое поле.
+Review исправил I/O lifetime: launcher thread8MiB использует original supervisor
+IO driver, чтобы retained pipe не зависел от временного Runtime. IPC regression
+доказывает обмен после retirement thread. State writer пока не передаётся.
 
-## Проверки закрыты
+Source updater18/worker16, supervisor22/view14; activation/public install off.
+Workspace727/0 (16 ignored), focused29/0/IPC2/0, protocol57/0, обе validation и
+MSVC production Clippy, generated contracts/TS/UI/fmt passed. **Actual native
+Main22/harness/verifier ещё впереди.** Следом explicit process mode и validation
+barriers Creating-before-OS/Created-before-resume, actual Ready/duplicates/cold,
+independent proof/mutations. Не считать прежний97/0 execution proof.
+
+Clean receiver target fixture1c23d48 уже есть:
+`winbridge-20261024T215731Z-1c23d48-0490a451.zip`; exact pins — в receiver document.
+Нужен distinct clean producer с новым actor и ещё не добавленным harness. Старую
+fixture7f6a029 не запускать как receiver. После native gate/review — original
+state/local/controller/lifetime и оставшиеся U2/U3/U4. Installed d052 не обновлялся.
+
+## Прежний read-binding gate закрыт: producer941a2e6
 
 Native actor21/read-binding gate **пройден: 97 passed / 0 failed**, task
 `60d8285c-3fbe-45dd-8feb-ef63fe75486b`, run `20261024-205117-2da937b6`,
