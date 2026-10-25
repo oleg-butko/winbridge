@@ -1,5 +1,9 @@
 # Journal writer: ledger19 и private contract3
 
+Актуальное продолжение: [actor24/view16](journal-writer-actor.md) подключены и
+прошли source/local/cross checks. Native harness/proof ещё впереди. Текст ниже
+фиксирует checkpoint768422d до actor wiring.
+
 2026-10-25 America/New_York. Продолжение
 [existing-state connection](activation-journal-opening.md).
 В source добавлены updater schema19, delivery FSM/ledger и trusted native

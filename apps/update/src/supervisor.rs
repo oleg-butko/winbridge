@@ -1103,6 +1103,54 @@ impl SupervisorHandle {
         }
         Ok(view)
     }
+    /// Internal24: None is only volatile dispatch ACK / driver busy. It never
+    /// asserts durable admission or completion; observe again after retirement.
+    pub async fn activation_writer(&self, start: bool) -> Result<Option<UpdatePreparationView>> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 24,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::ActivateJournalWriter
+            } else {
+                SupervisorAction::ObserveJournalWriter
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 24
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Journal writer reply scope/version changed; no fallback".into());
+        }
+        if let Some(error) = response.error {
+            return Err(error);
+        }
+        if let Some(view) = response.preparation {
+            if view.schema_version != 16
+                || view.activation_writer.is_none()
+                || view.update.update_id != self.record.spec.update_id
+            {
+                return Err("Journal writer view belongs to another contract/update".into());
+            }
+            Ok(Some(view))
+        } else {
+            Ok(None)
+        }
+    }
     /// V19 is the production prerequisite route; there is no fallback to v13.
     pub async fn compatible_drain(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -1639,6 +1687,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveActivationProcess
                 | SupervisorAction::HandoffActivationState
                 | SupervisorAction::ObserveActivationState
+                | SupervisorAction::ActivateJournalWriter
+                | SupervisorAction::ObserveJournalWriter
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -1844,6 +1894,13 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 crate::activation::ActivationLaunchFailure,
             >,
         ),
+        #[cfg(windows)]
+        ActivationWriter(
+            std::result::Result<
+                Box<crate::activation::ActivationProcessGuard>,
+                crate::activation::ActivationLaunchFailure,
+            >,
+        ),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -1993,6 +2050,13 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 DriverCompletion::ActivationProcess(result) => files_actor.complete_launch(result),
                 #[cfg(windows)]
                 DriverCompletion::ActivationState(result) => files_actor.complete_handoff(result),
+                #[cfg(windows)]
+                DriverCompletion::ActivationWriter(result) => {
+                    let saved =
+                        UpdateJournal::inspect_activation_writer(&directory, &r.spec.update_id)
+                            .map_err(error);
+                    files_actor.complete_writer(result, saved)
+                }
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -2824,6 +2888,80 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             };
             let response = SupervisorResponse {
                 contract_version: 22,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                worker_control: None,
+                preparation,
+                error,
+            };
+            let _ = ipc::write(&mut stream, &response).await;
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::ActivateJournalWriter | SupervisorAction::ObserveJournalWriter
+        ) {
+            let mut start = false;
+            let outcome = (|| -> Result<Option<UpdatePreparationView>> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 24
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Journal writer requires exact Active bound v24 supervisor".into());
+                }
+                if request.action == SupervisorAction::ObserveJournalWriter
+                    || files_actor.writer_started()
+                {
+                    if work.is_some() {
+                        return Ok(None);
+                    }
+                    return files_actor
+                        .writer_view(
+                            &directory,
+                            &r.spec.update_id,
+                            false,
+                            driver_error.clone(),
+                            &replacement_signal,
+                        )
+                        .map(Some);
+                }
+                if !files_actor.can_activate_writer() || work.is_some() || driver_error.is_some() {
+                    return Err("Journal writer needs the idle original StateOwned guard; no replay/adoption".into());
+                }
+                start = true;
+                Ok(None) // Do not spend the remaining original window on a status audit.
+            })();
+            let outcome = if start && outcome.is_ok() {
+                #[cfg(windows)]
+                {
+                    let (mut journal, owner) = idle.take().ok_or("Journal writer owner missing")?;
+                    let (guard, key) = files_actor.take_for_writer()?;
+                    let spec = r.clone();
+                    driver_error = None;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result =
+                            guard.activate_journal_blocking(&mut journal, &owner, &spec, &key);
+                        (journal, owner, DriverCompletion::ActivationWriter(result))
+                    }));
+                    Ok(None)
+                }
+                #[cfg(not(windows))]
+                {
+                    Err("Journal writer requires native original custody".into())
+                }
+            } else {
+                outcome
+            };
+            let (preparation, error) = match outcome {
+                Ok(v) => (v, None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 24,
                 launch_id: r.spec.launch_id.clone(),
                 record: None,
                 worker_control: None,
@@ -4155,7 +4293,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 | SupervisorAction::PrepareActivation | SupervisorAction::ObserveActivationPreparation
                 | SupervisorAction::BindActivationFiles | SupervisorAction::ObserveActivationFiles
                 | SupervisorAction::LaunchActivationReceiver | SupervisorAction::ObserveActivationProcess
-                | SupervisorAction::HandoffActivationState | SupervisorAction::ObserveActivationState => Err("Action needs its separate handler".into()),
+                | SupervisorAction::HandoffActivationState | SupervisorAction::ObserveActivationState
+                | SupervisorAction::ActivateJournalWriter | SupervisorAction::ObserveJournalWriter => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
@@ -4240,6 +4379,7 @@ mod tests {
             UpdateJournal::activation_files_snapshot,
             UpdateJournal::activation_process_snapshot,
             UpdateJournal::activation_state_snapshot,
+            UpdateJournal::activation_writer_snapshot,
         ];
         for (index, snapshot) in snapshots.into_iter().enumerate() {
             let view = snapshot(&directory, &f.id, false, None).unwrap();
@@ -4250,6 +4390,7 @@ mod tests {
             assert_eq!(value.get("activationFiles").is_some(), index >= 12);
             assert_eq!(value.get("activationProcess").is_some(), index >= 13);
             assert_eq!(value.get("activationState").is_some(), index >= 14);
+            assert_eq!(value.get("activationWriter").is_some(), index >= 15);
             if index < 9 {
                 assert!(value.get("candidateSupport").is_none());
             } else {

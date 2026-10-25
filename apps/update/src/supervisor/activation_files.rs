@@ -20,13 +20,25 @@ enum State {
     Owned(Box<crate::activation::ActivationProcessGuard>),
     #[cfg(windows)]
     HandoffFailed(Box<crate::activation::ActivationLaunchFailure>),
+    #[cfg(windows)]
+    Writing(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
+    Written(Box<crate::activation::ActivationProcessGuard>),
+    #[cfg(windows)]
+    WriterUnconfirmed(Box<crate::activation::ActivationProcessGuard>),
+    #[cfg(windows)]
+    WriterFailed(Box<crate::activation::ActivationLaunchFailure>),
 }
 pub(super) struct FilesActor {
     state: State,
+    writer_key: Option<String>,
 }
 impl Default for FilesActor {
     fn default() -> Self {
-        Self { state: State::Idle }
+        Self {
+            state: State::Idle,
+            writer_key: None,
+        }
     }
 }
 impl FilesActor {
@@ -92,6 +104,12 @@ impl FilesActor {
             State::Owned(g) => Some(g.record()),
             #[cfg(windows)]
             State::HandoffFailed(e) => Some(e.record()),
+            #[cfg(windows)]
+            State::Writing(r) => Some(r),
+            #[cfg(windows)]
+            State::Written(g) | State::WriterUnconfirmed(g) => Some(g.record()),
+            #[cfg(windows)]
+            State::WriterFailed(e) => Some(e.record()),
         };
         if let Some(record) = record {
             if record.intent.source.update_id != _s.spec.update_id
@@ -126,6 +144,10 @@ impl FilesActor {
                     | State::HandingOff(_)
                     | State::Owned(_)
                     | State::HandoffFailed(_)
+                    | State::Writing(_)
+                    | State::Written(_)
+                    | State::WriterUnconfirmed(_)
+                    | State::WriterFailed(_)
             )
         }
         #[cfg(not(windows))]
@@ -148,7 +170,13 @@ impl FilesActor {
         {
             matches!(
                 self.state,
-                State::HandingOff(_) | State::Owned(_) | State::HandoffFailed(_)
+                State::HandingOff(_)
+                    | State::Owned(_)
+                    | State::HandoffFailed(_)
+                    | State::Writing(_)
+                    | State::Written(_)
+                    | State::WriterUnconfirmed(_)
+                    | State::WriterFailed(_)
             )
         }
         #[cfg(not(windows))]
@@ -165,6 +193,92 @@ impl FilesActor {
         {
             false
         }
+    }
+    pub(super) fn writer_started(&self) -> bool {
+        #[cfg(windows)]
+        {
+            matches!(
+                self.state,
+                State::Writing(_)
+                    | State::Written(_)
+                    | State::WriterUnconfirmed(_)
+                    | State::WriterFailed(_)
+            )
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    pub(super) fn can_activate_writer(&self) -> bool {
+        #[cfg(windows)]
+        {
+            matches!(self.state, State::Owned(_))
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    }
+    #[cfg(windows)]
+    pub(super) fn take_for_writer(
+        &mut self,
+    ) -> Result<(Box<crate::activation::ActivationProcessGuard>, String)> {
+        let record = match &self.state {
+            State::Owned(g) => Box::new(g.record().clone()),
+            _ => {
+                return Err("Writer requires the one original StateOwned owner; no adoption".into())
+            }
+        };
+        let key = uuid::Uuid::new_v4().to_string();
+        let State::Owned(guard) = std::mem::replace(&mut self.state, State::Writing(record)) else {
+            unreachable!()
+        };
+        self.writer_key = Some(key.clone());
+        Ok((guard, key))
+    }
+    #[cfg(windows)]
+    pub(super) fn complete_writer(
+        &mut self,
+        result: std::result::Result<
+            Box<crate::activation::ActivationProcessGuard>,
+            crate::activation::ActivationLaunchFailure,
+        >,
+        saved: Result<Option<crate::activation::ActivationWriterRecord>>,
+    ) -> Result<()> {
+        let expected = match &self.state {
+            State::Writing(r) => Some(r.intent.clone()),
+            _ => None,
+        };
+        let (state, outcome) = match result {
+            Ok(guard) => {
+                let check = (|| {
+                    if expected.as_ref() != Some(&guard.record().intent) {
+                        return Err("Writer completion changed scope or was not pending; resources retained".into());
+                    }
+                    let saved = saved?.ok_or("Writer returned without a durable confirmation")?;
+                    validate_saved_writer(
+                        &saved,
+                        guard.record(),
+                        self.writer_key
+                            .as_deref()
+                            .ok_or("Resident writer key missing")?,
+                    )?;
+                    Ok(())
+                })();
+                if check.is_ok() {
+                    (State::Written(guard), check)
+                } else {
+                    (State::WriterUnconfirmed(guard), check)
+                }
+            }
+            Err(failure) => {
+                let reason = failure.reason.clone();
+                (State::WriterFailed(Box::new(failure)), Err(reason))
+            }
+        };
+        self.state = state; // Retain every outcome, including unexpected completion.
+        outcome
     }
     #[cfg(windows)]
     pub(super) fn take_for_handoff(
@@ -339,6 +453,27 @@ impl FilesActor {
                 process.phase = ActivationProcessPhase::Indeterminate;
                 process.reason = Some(failure.reason.chars().take(1000).collect());
             }
+            State::Writing(_) => {
+                process.phase = ActivationProcessPhase::Indeterminate;
+                process.process_custody_held = None;
+                process.reason = Some("Journal activation in progress; inspect internal24".into());
+            }
+            State::Written(g) | State::WriterUnconfirmed(g) => {
+                diagnostics(process, g.diagnostics());
+                process.resident_process = g.resident_process();
+                process.process_alive = g.process_alive();
+                process.process_custody_held = Some(process.resident_process.is_some());
+                process.phase = ActivationProcessPhase::Indeterminate;
+                process.reason = Some("Journal activation progressed; inspect internal24".into());
+            }
+            State::WriterFailed(f) => {
+                diagnostics(process, f.diagnostics());
+                process.resident_process = f.resident_process();
+                process.process_alive = f.process_alive();
+                process.process_custody_held = Some(process.resident_process.is_some());
+                process.phase = ActivationProcessPhase::Indeterminate;
+                process.reason = Some(f.reason.chars().take(1000).collect());
+            }
             _ => {}
         }
         Ok(())
@@ -355,6 +490,14 @@ impl FilesActor {
             .map_err(super::error)?;
         self.patch_files(&mut view, signal)?;
         self.patch_process(&mut view, signal)?;
+        self.patch_state(&mut view, signal)?;
+        Ok(view)
+    }
+    fn patch_state(
+        &self,
+        view: &mut UpdatePreparationView,
+        signal: &crate::runtime_replacement::CustodySignal,
+    ) -> Result<()> {
         let state = view
             .activation_state
             .as_mut()
@@ -389,7 +532,104 @@ impl FilesActor {
                 state.process_alive = failure.process_alive();
                 state.reason = Some(failure.reason.chars().take(1000).collect());
             }
+            State::Writing(_) => {
+                state.phase = ActivationStatePhase::Indeterminate;
+                state.original_lock_held = None;
+                state.reason = Some("Journal activation in progress; inspect internal24".into());
+            }
+            State::Written(g) | State::WriterUnconfirmed(g) => {
+                state.phase = ActivationStatePhase::Indeterminate;
+                state.original_lock_held = g.original_lock_held();
+                state.resident_process = g.resident_process();
+                state.process_alive = g.process_alive();
+                state.reason = Some("Journal activation progressed; inspect internal24".into());
+            }
+            State::WriterFailed(f) => {
+                state.phase = ActivationStatePhase::Indeterminate;
+                state.original_lock_held = f.original_lock_held();
+                state.resident_process = f.resident_process();
+                state.process_alive = f.process_alive();
+                state.reason = Some(f.reason.chars().take(1000).collect());
+            }
             _ => {}
+        }
+        Ok(())
+    }
+    pub(super) fn writer_view(
+        &self,
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+        signal: &crate::runtime_replacement::CustodySignal,
+    ) -> Result<UpdatePreparationView> {
+        let mut view = UpdateJournal::activation_writer_snapshot(directory, id, active, error)
+            .map_err(super::error)?;
+        self.patch_files(&mut view, signal)?;
+        self.patch_process(&mut view, signal)?;
+        self.patch_state(&mut view, signal)?;
+        let writer = view
+            .activation_writer
+            .as_mut()
+            .ok_or("Writer view missing")?;
+        if writer.command_id.is_none() {
+            writer.command_id = self.writer_key.clone();
+        }
+        #[cfg(windows)]
+        match &self.state {
+            State::Owned(g) => {
+                writer.resident_process = g.resident_process();
+                writer.process_alive = g.process_alive();
+                if writer.durable_phase.is_some()
+                    || writer.process_alive != Some(true)
+                    || view.driver_error.is_some()
+                {
+                    writer.phase = ActivationWriterPhase::Indeterminate;
+                    writer.reason = Some(
+                        "Original physical owner is not a confirmed writer; no adoption".into(),
+                    );
+                }
+            }
+            State::Writing(_) => {
+                writer.phase = if active && view.driver_error.is_none() {
+                    ActivationWriterPhase::Activating
+                } else {
+                    ActivationWriterPhase::Indeterminate
+                };
+                writer.reason = Some(
+                    "Original writer dispatch staged; durable admission/commit not inferred".into(),
+                );
+            }
+            State::Written(g) | State::WriterUnconfirmed(g) => {
+                writer.resident_process = g.resident_process();
+                writer.process_alive = g.process_alive();
+                if matches!(self.state, State::Written(_))
+                    && writer.durable_phase == Some(ActivationWriterDurablePhase::Confirmed)
+                    && writer.process_alive == Some(true)
+                    && view.driver_error.is_none()
+                {
+                    writer.phase = ActivationWriterPhase::Confirmed;
+                    writer.reason=Some("Journal commit confirmed; normal worker service/controller/lifetime are not verified".into());
+                } else {
+                    writer.phase = ActivationWriterPhase::Indeterminate;
+                    writer.reason=view.driver_error.clone().or_else(||Some("Saved commit is history; current writer residency/liveness unconfirmed".into()));
+                }
+            }
+            State::WriterFailed(f) => {
+                writer.phase = ActivationWriterPhase::Indeterminate;
+                writer.resident_process = f.resident_process();
+                writer.process_alive = f.process_alive();
+                writer.reason = Some(f.reason.chars().take(1000).collect());
+            }
+            _ => {}
+        }
+        if writer.phase == ActivationWriterPhase::Confirmed {
+            if let Some(state) = &mut view.activation_state {
+                state.phase = ActivationStatePhase::StateOwned;
+                state.reason = Some(
+                    "Same physical state retained by the confirmed resident journal writer".into(),
+                );
+            }
         }
         Ok(view)
     }
@@ -436,6 +676,12 @@ impl FilesActor {
             #[cfg(windows)]
             State::HandoffFailed(failure) => held_source(files, failure.record()),
             #[cfg(windows)]
+            State::Writing(record) => held_source(files, record),
+            #[cfg(windows)]
+            State::Written(g) | State::WriterUnconfirmed(g) => held_source(files, g.record()),
+            #[cfg(windows)]
+            State::WriterFailed(f) => held_source(files, f.record()),
+            #[cfg(windows)]
             State::Failed(failure) => {
                 files.phase = ActivationFilesPhase::Indeterminate;
                 files.held_files = failure.held_files();
@@ -443,6 +689,63 @@ impl FilesActor {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(any(windows, test))]
+fn validate_saved_writer(
+    saved: &crate::activation::ActivationWriterRecord,
+    record: &crate::activation::ActivationRecord,
+    key: &str,
+) -> Result<()> {
+    saved.validate()?;
+    if saved.command.command_id != key
+        || !matches!(
+            saved.state,
+            crate::activation::ActivationWriterState::Confirmed { .. }
+        )
+        || saved.command.binding.physical
+            != *record
+                .state_owned
+                .as_ref()
+                .ok_or("StateOwned receipt missing")?
+    {
+        return Err("Writer completion lacks exact confirmed command/physical receipt".into());
+    }
+    crate::activation::writer::validate_command(
+        &saved.command,
+        record,
+        &saved.command.binding.expected_authority,
+    )
+}
+
+#[cfg(test)]
+mod writer_tests {
+    use super::*;
+    #[test]
+    fn completion_checks_resident_key_physical_scope_and_confirmed_fact() {
+        let (physical, saved) = crate::activation::writer_view_fixture();
+        validate_saved_writer(&saved, &physical, &saved.command.command_id).unwrap();
+        assert!(
+            validate_saved_writer(&saved, &physical, &uuid::Uuid::new_v4().to_string()).is_err()
+        );
+        let issued =
+            crate::activation::ActivationWriterRecord::issued(saved.command.clone()).unwrap();
+        assert!(validate_saved_writer(&issued, &physical, &saved.command.command_id).is_err());
+        let mut foreign = physical.clone();
+        foreign
+            .state_owned
+            .as_mut()
+            .unwrap()
+            .process
+            .birth
+            .push('0');
+        assert!(validate_saved_writer(&saved, &foreign, &saved.command.command_id).is_err());
+        let mut bad = saved.clone();
+        if let crate::activation::ActivationWriterState::Confirmed { receipt } = &mut bad.state {
+            receipt.authority.epoch += 1;
+        }
+        assert!(validate_saved_writer(&bad, &physical, &saved.command.command_id).is_err());
     }
 }
 

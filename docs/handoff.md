@@ -1,22 +1,24 @@
-# Продолжение updater — 2026-10-25, ledger19/private writer3
+# Продолжение updater — 2026-10-25, actor24/view16
 
 **Начинать с [подробного checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
-и [нового writer runtime](plans/worker-self-update/journal-writer-runtime.md).**
+и [actor24/view16](plans/worker-self-update/journal-writer-actor.md).**
 Общая цель updater продолжается; полное самообновление ещё не готово.
 
 ## Авторитетное состояние
 
-- Source **updater19 / worker17 / supervisor23 / view15 / private physical2 + writer3**.
+- Source **updater19 / worker17 / supervisor24 / view16 / private physical2 + writer3**.
   [Atomic worker SQLite activation](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
   и [retained-lock opening](plans/worker-self-update/activation-journal-opening.md)
   реализованы. Добавлены graph-bound updater intent/history, same-schema policy,
   trusted consuming native writer driver и worker private3 handler. Issued до
   one-shot send, atomic worker header+receipt, authenticated confirmation/uncertainty;
-  maintenance сохранена. **Actor24/view16 и native writer gate ещё не подключены.**
-- Final source checks: **workspace776/0 (16 ignored), ledger6/0, channel8/0**,
-  Linux/MSVC all-target validation Clippy/fmt/contracts passed. Historical-prefix
-  regression включён в final; summary `.winbridge/update-preparation/writer-v3-final.json`.
-  Новых native19/17/private3 proofs нет; scaffold/diff проверены перед commit.
+  maintenance сохранена. **Actor24/view16 подключены:** original Owned → один
+  blocking slot, one key, exact confirmation и retained failures. Fast ACK/busy
+  без full snapshot. **Native writer gate ещё не реализован/не выполнен.**
+- Final source checks: **workspace781/0 (16 ignored), focused writer19/0,
+  actual local mailbox24 1/0**, Linux/MSVC validation all-target Clippy,
+  contracts/generation/TS/UI/fmt/scaffold passed; summary `actor24-checks.json`.
+  Native19/17/private3 proof ещё нет. Не выдавать source/cross за Windows execution.
 - [Actual physical Main23](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   **132/0**, run20261025-100933-d8a50807,
   task6bc1623a-c5c4-49ce-8511-cb46b43c7ece, producer7b270c6/target1370d6b.
@@ -28,12 +30,12 @@
 
 ## Откуда продолжать
 
-1. Supervisor successor24 + view16: start/observe writer, original Owned guard,
-   один blocking slot, responsive status, safe duplicates/cold/failure projections.
-   Старые views frozen; никакого старта из caller JSON или cold intent.
-2. Clean receiver **19/17/private3** и distinct producer; combined native writer
-   gate, actual updater18→19/refusal и worker16→17/refusal. Target1370d6b/18/16
-   не подходит. Original120s не продлевать; StateOwned ранее saved109.925s.
+1. Clean commit → экспорт новой receiver **19/17/private3/actor24**, затем
+   actual Main harness, PS writer mode и independent verifier; их пока нет.
+   Distinct producer после harness commit. Старый target1370d6b не подходит.
+2. Combined native writer + actual updater18→19/refusal и worker16→17/refusal.
+   None от24 start/observe — только ACK/busy. Сразу start после StateOwned,
+   audits после receipt/Job cleanup; original120s не продлевать.
 3. Local service/reconciliation → actual controller session → owned Job lifetime/
    commit/scoped release → U2 faults/recovery/CLI/MCP → U3 desktop → U4 installed
    self-update; затем возврат к A4.3.

@@ -23,7 +23,7 @@ consistency guards, очередь нескольких проектов, actors
 | [Структура кода](structure.md) | Границы packages/modules и правила расширения. |
 | [Roadmap](roadmap.md) | Результаты этапов 0–7 и новый цикл архитектурного перехода A0–A9. |
 | [Handoff](handoff.md) | Готовность проекта, последние проверки и сведения для следующей сессии. |
-| [Продолжение updater: journal19/17, 2026-10-25](plans/worker-self-update/resume-2026-10-25-journal-activation.md) | Source776/0, private writer3, old physical132/0, карта кода/pins, среда и оставшиеся actor/native/runtime/U2–U4. |
+| [Продолжение updater: journal19/17, 2026-10-25](plans/worker-self-update/resume-2026-10-25-journal-activation.md) | Source781/0, actor24/private writer3, old physical132/0, карта кода/pins, среда и оставшиеся actor/native/runtime/U2–U4. |
 
 ## Руководства — `guides/`
 

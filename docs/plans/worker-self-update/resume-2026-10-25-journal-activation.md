@@ -6,11 +6,11 @@ NEXT/ACTIVE и [инструкцию до Main23](resume-2026-10-25-state-handof
 текущие проверки и закоммитить подробное состояние. Общая цель самообновления
 остаётся незавершённой; public install включать пока нельзя.
 
-**Продолжение после e3a4a3d/f5dcec1:** [opening library](activation-journal-opening.md)
-и [ledger19/native writer driver/private3 handler](journal-writer-runtime.md)
-реализованы. **Первый следующий шаг — supervisor actor24/view16**, затем combined
-native19/17 writer gate. Нового native proof пока нет. Старый physical Main23
-terminal и не resubmit; JSON receipt не разрешает обычный запуск или новое владение.
+**Продолжение после e3a4a3d/f5dcec1/768422d:** [actor24/view16](journal-writer-actor.md)
+подключён к ledger19/private3 handler. Source781/0/focused19/mailbox1 и обе Clippy/
+TS/UI passed. **Следом clean receiver19/17/private3/actor24 и actual Main/PS mode/
+independent verifier**, которых пока нет; затем distinct producer и native gate.
+Старый physical Main23 terminal, не resubmit. Полное self-update не готово.
 
 ## 1. Реальная граница готовности
 
@@ -22,12 +22,12 @@ terminal и не resubmit; JSON receipt не разрешает обычный �
 | U2.2 physical | Preparation/replacement, один private receiver, Ready и передача прежнего instance lock тому же child проверены на Windows. |
 | Worker SQLite activation | **Реализован слой данных:** old-header CAS + immutable receipt в одной транзакции, worker schema17, миграция16→17 с backup. |
 | Existing-state connection | `ActivationJournal` владеет тем же acquired lock и Store, отказывает без CREATE/migration, сохраняет failure custody и не повторяет попытку. Trusted library, без runtime entry. |
-| Private writer | Graph-bound ledger19, consuming native driver и worker V3 handler реализованы. Supervisor actor24/view16 и native gate ещё не подключены. |
+| Private writer | Graph-bound ledger19, consuming native driver и worker V3 handler реализованы. Supervisor24/view16 подключены; native writer harness/proof ещё не реализованы. |
 | Local IPC / controller / lifetime | Для activated receiver ещё не реализованы и не подтверждены. |
 | U3 / U4 | Desktop update/notifications и настоящее installed self-update впереди. |
 
-Номера независимы: **updater journal19 / worker journal17 / supervisor23 /
-consistent view15 / private physical handoff2 + writer3**. DTO writer command/receipt
+Номера независимы: **updater journal19 / worker journal17 / supervisor24 /
+consistent view16 / private physical handoff2 + writer3**. DTO writer command/receipt
 имеют schema1; private3 связывает их с authenticated channel; public RPC/capability не объявлены.
 Старые wire/view shapes сохранены. Advertised `activation`,
 `controller_confirmation`, `desktop_update` остаются `None`; public install off.
@@ -140,12 +140,17 @@ final backup `sourceAuthority`. SHA старого полного private header
 
 ## 4. Завершённые и оставшиеся проверки
 
+После actor24/view16: **workspace781/0 (16 ignored), focused writer19/0, actual
+local mailbox24 1/0**, Linux/MSVC all-target validation Clippy, contracts/TS/UI/fmt/
+scaffold passed. Summary `actor24-checks.json`, logs `actor24-*.log`. Native proof
+не заменён этими проверками. Ниже история предыдущих component checkpoints.
+
 После следующего продолжения source теперь **updater19/worker17/private3**.
 [Ledger/native driver/worker handler](journal-writer-runtime.md): **workspace776/0
 (16 ignored), ledger6/channel8**, Linux/MSVC validation Clippy, fmt/contracts/
 scaffold/diff passed. Final summary `writer-v3-final.json`, logs `writer-v3-*-final.log`
-в `.winbridge/update-preparation/`. Actor24/view16 и actual native writer proof
-пока отсутствуют. Окончательные проверки включают frozen-prefix late-fact fix.
+в `.winbridge/update-preparation/`. Это результаты 768422d; после него actor24/view16 подключены, actual native
+writer harness/proof пока отсутствует. Окончательные проверки включают frozen-prefix late-fact fix.
 Ниже сохранена история предыдущих component checkpoints.
 
 После checkpoint e3a4a3d реализована [existing-state connection library](activation-journal-opening.md):
@@ -265,9 +270,8 @@ Helper wall timings имеют другой origin; не смешивать их
    intent перед private command; retained immutable result/readback после.
    Updater19/backup/fencing migration добавлены; actual18→19/refusal впереди.
    Значение существующих schema18 rows не меняется.
-3. **Private command реализован; actor следующий.** Добавлены contract/marker3,
-   capability check до отправки, frozen physical2. Actor successor (следующий24/
-   view16) потребляет original Owned guard через тот же blocking slot. Child
+3. **Private command и actor24/view16 реализованы в source.** Добавлены contract/marker3,
+   capability check до отправки, frozen physical2. Actor24/view16 потребляет original Owned guard через тот же blocking slot. Child
    проверяет actual lock, parent, loaded runtime и original monotonic deadline;
    вызывает atomic Store method с повторными live checks. Duplicate/cold —
    observation, не повтор send/CAS. Форма старых views остаётся прежней.

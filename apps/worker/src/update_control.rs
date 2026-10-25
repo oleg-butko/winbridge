@@ -1361,6 +1361,76 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn activation_writer_v24_observes_but_never_adopts_a_cold_intent() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_ref().unwrap();
+        let directory = Path::new(&h.record.spec.runtime_directory).join("update-state");
+        let before =
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap();
+        let view = h
+            .activation_writer(false)
+            .await
+            .unwrap()
+            .expect("Idle writer view");
+        assert_eq!(view.schema_version, 16);
+        let writer = view.activation_writer.unwrap();
+        assert_eq!(writer.phase, ActivationWriterPhase::NotStarted);
+        assert!(
+            writer.saved_receipt.is_none()
+                && writer.resident_process.is_none()
+                && writer.process_alive.is_none()
+        );
+        for _ in 0..2 {
+            assert!(h.activation_writer(true).await.is_err());
+        }
+        #[cfg(feature = "update-validation")]
+        {
+            let base = h.validation_private_client().unwrap();
+            let pid = h.record.process.as_ref().unwrap().process_id;
+            for action in [
+                SupervisorAction::ActivateJournalWriter,
+                SupervisorAction::ObserveJournalWriter,
+            ] {
+                for invalid in 0..7 {
+                    let mut q = base.clone();
+                    q.action = action;
+                    q.contract_version = 24;
+                    match invalid {
+                        0 => q.contract_version = 1,
+                        1 => q.contract_version = 23,
+                        2 => q.contract_version = 25,
+                        3 => q.launch_id = uuid::Uuid::new_v4().to_string(),
+                        4 => q.expected_revision += 1,
+                        5 => q.worker_command = Some(WorkerUpdateControlCommand::BeginSource),
+                        _ => q.token = "0".repeat(64),
+                    }
+                    let response: SupervisorResponse =
+                        winbridge_transport::supervisor::call(&h.record.spec.endpoint, pid, &q)
+                            .await
+                            .unwrap();
+                    assert_eq!(response.contract_version, 24);
+                    assert!(response.error.is_some() && response.preparation.is_none());
+                }
+            }
+        }
+        let old = h.activation_state(false).await.unwrap();
+        assert_eq!(old.schema_version, 15);
+        assert!(serde_json::to_value(old)
+            .unwrap()
+            .get("activationWriter")
+            .is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap(),
+            before
+        );
+        assert!(
+            UpdateJournal::inspect_activation_writer(&directory, &h.record.spec.update_id)
+                .unwrap()
+                .is_none()
+        );
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn activation_state_v23_observes_but_never_releases_from_saved_data() {
         let mut f = Fixture::new(None).await;
         f.launch().await;

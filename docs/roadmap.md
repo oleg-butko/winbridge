@@ -1,26 +1,26 @@
 # Постепенная реализация и расширение
 
-## Текущий checkpoint — 2026-10-25, ledger19/private writer3
+## Текущий checkpoint — 2026-10-25, actor24/view16
 
 Продолжать по [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
-и [writer runtime](plans/worker-self-update/journal-writer-runtime.md).
+и [writer actor](plans/worker-self-update/journal-writer-actor.md).
 
-- Source **updater19/worker17/supervisor23/view15/private physical2+writer3**.
+- Source **updater19/worker17/supervisor24/view16/private physical2+writer3**.
   Worker atomic header/receipt/opening и graph-bound updater intent/history,
-  consuming native private driver/worker handler реализованы. **Actor24/view16
-  и native writer proof ещё впереди**. Public install/capabilities off.
-- Final source checks **workspace776/0 (16 ignored), ledger6/channel8**, обе
-  Clippy/fmt/contracts/scaffold passed; summary `writer-v3-final.json`.
+  consuming native private driver/worker handler и actor24/view16 реализованы.
+  **Native writer harness/proof ещё впереди**. Public install/capabilities off.
+- Source checks **workspace781/0 (16 ignored), focused19/mailbox24 1/0**,
+  обе Clippy/fmt/contracts/TS/UI/scaffold passed; summary `actor24-checks.json`.
 - [Physical132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   относится к18/16/private2. Terminal run20261025-100933-d8a50807 не replay.
   Installed d052 unchanged/healthy; новых native runs нет, desktop не нужен.
 
 Следующая последовательность:
 
-1. Actor24/view16 с original Owned guard, одним blocking slot, safe duplicates,
-   responsive status и cold/failure projections; старые views frozen.
-2. Clean receiver19/17/private3 + distinct producer; combined native writer и
-   actual updater18→19/worker16→17/refusal. Original120s сохранить.
+1. Clean receiver19/17/private3/actor24 → actual Main/PS writer mode/verifier
+   (пока отсутствуют), distinct clean producer после harness commit.
+2. Combined native writer/actual updater18→19 и worker16→17/refusal; correct
+   None ACK/busy, immediate24 after StateOwned, original120s сохранить.
 3. Normal local service/reconciliation, actual controller session, owned
    lifetime/commit/scoped release; remaining U2 faults/management.
 4. U3 desktop notifications/update, U4 installed self-update, возврат к A4.3.

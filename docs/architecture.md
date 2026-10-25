@@ -4,9 +4,9 @@
 
 ## Текущее состояние updater — checkpoint 2026-10-25
 
-Source **updater19/worker17, supervisor23/view15, private physical2 + writer3**.
+Source **updater19/worker17, supervisor24/view16, private physical2 + writer3**.
 [Checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md) и
-[writer runtime](plans/worker-self-update/journal-writer-runtime.md) приоритетнее
+[writer actor](plans/worker-self-update/journal-writer-actor.md) приоритетнее
 исторических статусов ниже. [Physical Main23 StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
 доказан на18/16/private2; нового native writer proof пока нет.
 
@@ -23,7 +23,10 @@ worker V3 сверяет graph/parent/window и делает fresh atomic CAS. A
 receipt сохраняется как факт, timeout/partial/EOF — uncertainty без replay.
 Поздние факты связываются с frozen6 после последующего local/uncertainty progress.
 
-Actor24/view16 ещё не подключены; текущие views1–14 frozen. Обычный activated
+Actor24/view16 подключены: one resident Owned guard, один blocking slot,
+volatile ACK/busy без full audit до private grant, saved confirmation отдельно
+от actual residency/liveness. Старые views1–15 frozen; source781/0 и Linux/MSVC
+Clippy/TS/UI passed. Обычный activated
 service/reconciliation/local/controller/lifetime и U2 faults/U3/U4 впереди.
 Original120s сохраняется. Public install off, advertised activation/controller/
 desktop=None. Serialized data не восстанавливают kernel custody или permissions.

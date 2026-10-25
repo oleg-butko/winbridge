@@ -608,6 +608,9 @@ pub enum SupervisorAction {
     /// Internal23: same Ready child acquires exact state; no writable Store yet.
     HandoffActivationState,
     ObserveActivationState,
+    /// Internal24: one private writer command; ACK/busy carries no saved result.
+    ActivateJournalWriter,
+    ObserveJournalWriter,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -692,6 +695,9 @@ pub struct UpdatePreparationView {
     /// Internal23/view15 only. Old views omit this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_state: Option<ActivationStateView>,
+    /// Internal24/view16 only. Saved commit and current resident owner differ.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_writer: Option<ActivationWriterView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1111,5 +1117,7 @@ mod activation_process;
 pub use activation_process::*;
 mod activation_state;
 pub use activation_state::*;
+mod activation_writer_view;
+pub use activation_writer_view::*;
 mod activation_writer;
 pub use activation_writer::*;

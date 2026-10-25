@@ -15,9 +15,13 @@ pub mod channel;
 mod process_view;
 pub mod writer;
 mod writer_record;
+mod writer_view;
 pub(crate) use process_view::state_view;
 pub(crate) use process_view::view as process_view;
 pub use writer_record::{ActivationWriterRecord, ActivationWriterState};
+#[cfg(test)]
+pub(crate) use writer_view::fixture as writer_view_fixture;
+pub(crate) use writer_view::view as writer_view;
 #[cfg(any(windows, test))]
 mod owner_stack;
 #[cfg(windows)]

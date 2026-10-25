@@ -63,16 +63,17 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 ## Проверка и запуск
 
 Актуальная точка разработки апдейтера: [checkpoint следующей сессии](docs/plans/worker-self-update/resume-2026-10-25-journal-activation.md),
-[ledger19/private writer3](docs/plans/worker-self-update/journal-writer-runtime.md)
+[actor24/view16](docs/plans/worker-self-update/journal-writer-actor.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source **updater19/worker17/supervisor23/view15**, physical handoff2 + private writer3.
+Source **updater19/worker17/supervisor24/view16**, physical handoff2 + private writer3.
 Worker atomic header/receipt/opening и graph-bound updater intent/history,
-consuming native driver/worker handler реализованы. **Actor24/view16, native writer
-proof, обычный сервис нового worker/local/controller/lifetime и U3/U4 впереди.**
+consuming native driver/worker handler и actor24/view16 реализованы.
+**Native writer harness/proof, обычный сервис нового worker/local/controller/
+lifetime и U3/U4 впереди.**
 [Physical132/0](docs/plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
 относится к прежним18/16/private2. Public install выключен, полное самообновление
 не готово. Installed runtime не менялся. Исторические отчёты не заменяют checkpoint.
-Final source workspace776/0 (16 ignored), ledger6/channel8 и Linux/MSVC Clippy passed.
+Source workspace781/0 (16 ignored), focused19/mailbox24 1/0 и Linux/MSVC Clippy/TS/UI passed.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.
