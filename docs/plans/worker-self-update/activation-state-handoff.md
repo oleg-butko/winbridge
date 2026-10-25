@@ -187,3 +187,49 @@ connected/active0, maintenanceError=null/journalRecoveryRequired=null,
 recoveryCoverage.complete=true. Controller PID3922/ws192.168.44.203:1143 работает.
 Desktop не нужен, installed worker оставить. Перед новым run снова Info/disk.
 Никаких Windows задач для нового state mode пока не отправлялось.
+
+## Review следующего writer: опора на существующий backup authority
+
+2026-10-25, во время первого Main23 run; это **план следующей реализации**, не
+утверждение о готовом writable handoff. Actual state proof ещё ожидается в
+[gate report](windows-activation-state-gate-2026-10-25.md).
+
+- `WorkerStateBackupReport.sourceAuthority` уже содержит incarnation, epoch и
+  fingerprint **полного** authority header; backup driver связывает его с
+  exact shutdown/state и consistent backup. `state_backup_export.rs` вычисляет
+  hash от domain prefix и `(incarnation,epoch,authority_id)`. Новый writer intent
+  может зафиксировать этот проверенный expected header без экспорта приватного
+  authority ID и без дополнительного RPC между Ready и handoff.
+- Обычные `Store::begin_authority`, `require_update_activation`, frozen writes
+  и accepted-shutdown guards правильны. Нужен отдельный trusted existing-state
+  constructor/transaction, не flag обхода обычного startup. Exact schema,
+  уже приобретённый instance lock, same child/attempt/state и accepted receipt
+  обязательны. CAS old header→next epoch/new identity и immutable activation
+  receipt/key должны фиксироваться **одной SQLite транзакцией** с readback.
+- После этой транзакции lease всё ещё active/quiesced, обычные mutation/
+  administration/scheduler остаются закрыты. Journal incarnation и logical
+  RequestContext сохраняются; новые worker generation и authority/epoch
+  показываются отдельными фактами. Duplicate key с иным payload отклоняется;
+  сохранённая receipt не создаёт live Store/owner после crash.
+- Physical contract2 остаётся frozen и не получает writer permission задним
+  числом. Новому writer driver нужны собственные durable intent/receipt,
+  explicit private contract/marker и проверенный grant до OS/DB effect.
+  Нельзя выдавать поздний StateOwned за новый grant или продлевать original120s
+  новым сообщением. При необходимости изменения activation ledger/record нужен
+  явный updater schema/compatibility переход, а не скрытые поля в schema18.
+- Для новой worker receipt/history предпочтительна отдельная immutable таблица
+  и worker schema17. Реализация должна включить consistent16→17 backup,
+  preservation/old16 refusal и запрет ordinary migration при active update.
+  Это не объявляет поддержку **in-update**16→17: U2 writer gate может иметь
+  same-schema17 baseline/target, а cross-schema обновление остаётся отдельным
+  migration/rehearsal контрактом U3. Пока ни schema17, ни этот constructor не
+  реализованы; текущая пара по-прежнему18/16.
+- Перед включением нужны tests: ignored header/receipt writes с полным rollback,
+  stale authority/parent/attempt, exhausted epoch, lost ACK/duplicate payload,
+  crash между worker commit и updater receipt. Новый epoch даже без application
+  effects запрещает слепой rollback к прежнему worker journal. Cold reconciliation
+  читает оба журнала и не запускает второй writer автоматически.
+
+Порядок: закончить actual physical gate/review → typed writer contract/ledger
+и атомарный Store adapter → private receiver/actor → actual same-schema writer
+gate → local/controller/lifetime/commit. Public activation до этого не включать.
