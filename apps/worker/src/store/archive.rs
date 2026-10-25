@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-fn require_destination(path: &Path, held: &File, identity: &str) -> Result<()> {
+pub(super) fn require_destination(path: &Path, held: &File, identity: &str) -> Result<()> {
     winbridge_platform::require_safe_path(path).map_err(|e| e.to_string())?;
     if winbridge_platform::file_identity(held).map_err(|e| e.to_string())? != identity
         || winbridge_platform::file_identity(&File::open(path).map_err(|e| e.to_string())?)

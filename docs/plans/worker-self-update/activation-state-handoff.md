@@ -1,5 +1,14 @@
 # Actor23/view15: physical StateOwned того же receiver
 
+Актуальный checkpoint: [worker journal17 / atomic activation](resume-2026-10-25-journal-activation.md).
+Physical Main23 **пройден132/0 на worker16**; closing readonly audit принят.
+В source теперь updater18/worker17/supervisor23/view15/private physical2:
+worker SQLite CAS+receipt и ordinary inactive16→17 migration реализованы,
+но runtime writer/private handler/updater writer ledger ещё не подключены.
+Workspace760/0 (16 ignored), SQLite12/0/model7/0 и Linux/MSVC Clippy passed.
+Ниже source/history checkpoints до этих результатов; их «ещё не выполнялся»
+и «schema17 не реализована» описывают прежние commits, не текущий HEAD.
+
 2026-10-25 America/New_York. Продолжение после [Main22 receiver112/0](windows-activation-process-gate-2026-10-24.md)
 и [lock-release adapter7/0](state-lock-handoff.md). **Source реализован;
 новый actual state-transfer gate ещё не выполнялся.** Старые результаты не
@@ -234,7 +243,7 @@ Desktop не нужен, installed worker оставить. Перед новы�
 и атомарный Store adapter → private receiver/actor → actual same-schema writer
 gate → local/controller/lifetime/commit. Public activation до этого не включать.
 
-## Начат writer data contract после native132/0
+## История: writer data contract после native132/0, commit f8cf372
 
 Physical gate пройден; [actual proof и exact pins](windows-activation-state-gate-2026-10-25.md)
 сохранены. Следующий source-блок добавляет **только metadata proposal/validation**:

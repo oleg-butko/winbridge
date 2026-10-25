@@ -1,5 +1,10 @@
 # Продолжение апдейтера: checkpoint StateOwned23, 2026-10-25
 
+**Исторический checkpoint до actual Main23 и worker17.** Для продолжения читать
+[новую инструкцию journal activation](resume-2026-10-25-journal-activation.md).
+Physical132/0 уже пройден, atomic SQLite layer добавлен; утверждения ниже об
+отсутствующих state harness/flags и schema16 относятся к прежнему source.
+
 Дата сессии: 2026-10-25, America/New_York. Пользователь попросил завершить
 текущие проверки и сохранить подробную инструкцию для следующей сессии.
 **Начинать с этого файла, а не с исторических NEXT/ACTIVE в прежних отчётах.**

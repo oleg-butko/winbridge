@@ -724,7 +724,7 @@ mod tests {
         drop(s);
         // A reproducible schema-12 fixture, not a user journal or backup.
         let c = Connection::open(&path).unwrap();
-        c.execute_batch("DROP TABLE queue_roots;DROP TABLE queue_commands;DROP TABLE queue_control;DROP INDEX queue_pending_tasks;DROP INDEX queue_pending_imports;DROP INDEX queue_pending_workflows;DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=12;").unwrap();
+        c.execute_batch("DROP TABLE queue_roots;DROP TABLE queue_commands;DROP TABLE queue_control;DROP INDEX queue_pending_tasks;DROP INDEX queue_pending_imports;DROP INDEX queue_pending_workflows;DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=12;").unwrap();
         drop(c);
         let s = Store::open(&path).unwrap();
         assert_eq!(view(&s).pending_roots, 2);

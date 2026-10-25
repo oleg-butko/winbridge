@@ -372,7 +372,7 @@ fn schema_eleven_migration_preserves_authority_and_history_with_a_consistent_bac
     let path = cfg.state_directory.join("journal.sqlite");
     let db = rusqlite::Connection::open(&path).unwrap();
     db.execute_batch(
-        "DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; PRAGMA user_version=11; PRAGMA wal_checkpoint(TRUNCATE);",
+        "DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; PRAGMA user_version=11; PRAGMA wal_checkpoint(TRUNCATE);",
     )
     .unwrap();
     let raw: String = db

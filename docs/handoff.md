@@ -1,93 +1,54 @@
-# Точка продолжения updater — 2026-10-25, StateOwned23
+# Продолжение updater — 2026-10-25, worker journal17
 
-**Writer metadata contract начат после native132/0:**
-[три DTO и pure validators](plans/worker-self-update/activation-state-handoff.md#начат-writer-data-contract-после-native1320)
-добавлены, focused6/workspace747/0 (16 ignored)/protocol59/0 и Linux/MSVC/
-contracts/TS/UI checks passed. Это data, не writer: schema17/SQLite transaction,
-updater writer ledger/private handler/actor ещё не реализованы; новые capabilities
-не объявлены. Следом атомарный worker header CAS+immutable receipt и schema
-policy, затем driver/actor/combined native gate. Отдельный Windows run ради DTO
-не нужен. Updater18/worker16/supervisor23/view15 прежние, public install off.
-
-**Main23 physical StateOwned gate пройден:** [132/0,32 groups/35 commands](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md),
-task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/run20261025-100933-d8a50807,
-producer7b270c6/target1370d6b. Observer exit0:45 files twice,44+40+12 mutations,
-actual17→18/refusal. Same child получил exact lock; после owned exit lock снова
-доступен, history0–6/DB/WAL сохранены. Original120s не увеличен; StateOwned
-saved109.925s после admission. Worker writer/authority не активировались.
-Все Windows/observer задачи завершены; terminal run **не resubmit**.
-Installed d052 healthy/connected/active0, runtime unchanged. Desktop можно закрыть,
-worker оставить. Следом atomic writable activation/CAS/receipt и explicit schema
-policy, local/controller/lifetime и remaining U2/U3/U4. Public install off.
-[Review следующего writer](plans/worker-self-update/activation-state-handoff.md#review-следующего-writer-опора-на-существующий-backup-authority).
-Ниже checkpoint до этого продолжения: его «harness/flags не существуют» теперь
-история; ZIP target1370d6b/cache/reference и оставшиеся U2–U4 остаются актуальны.
-
-**Начать с [подробного checkpoint для новой сессии](plans/worker-self-update/resume-2026-10-25-state-handoff.md).**
-Он содержит границу готовности, source/test evidence, exact retained task/run/
-ZIP pins, карту кода, отсутствующие части harness, команды readonly recovery,
-окружение и порядок оставшихся U2–U4. Пользователь поручил закрыть текущие
-проверки и сохранить контекст. Новых Windows state-transfer task/run пока нет;
-active Cargo/observer нет. Исторические NEXT/ACTIVE ниже не текущие задания.
+**Начинать с [подробного checkpoint без контекста чата](plans/worker-self-update/resume-2026-10-25-journal-activation.md).**
+Он заменяет прежние NEXT/ACTIVE и checkpoint до Main23. Пользователь поручил
+завершить проверки и сохранить состояние; полное самообновление ещё не готово.
 
 ## Авторитетное состояние
 
-- Source **updater18/worker16, supervisor23/view15, private state handoff2**.
-  [Actor23](plans/worker-self-update/activation-state-handoff.md) реализован:
-  тот же authenticated Ready receiver получает прежний instance lock и
-  подтверждает identities/new generation. Exact readonly schema и полный
-  accepted shutdown receipt обязательны. **Writable Store/JournalAuthority,
-  local/controller service и lifetime transfer ещё не реализованы.**
-- Source checks: workspace **741/0 (16 ignored)**, protocol59/0, focused33/0,
-  readonly journal2/0, actual local mailbox23 1/0; Linux/MSVC validation и
-  MSVC production Clippy, contracts/TS/UI/fmt прошли. Native proof actor23
-  **ещё нет**. Public install off; advertised activation/controller/desktop
-  drivers остаются None. Полное самообновление не готово.
-- [Actual Main22](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-  **112/0**, task `f5d9bf8d-983e-4c7b-8bbb-c6147da5e33b`,
-  run `20261025-021054-05388d1d`: один receiver до Ready4, original lock held.
-  [Lock-release primitive](plans/worker-self-update/state-lock-handoff.md)
-  **7/0**, task `7799e394-45bc-4f20-82ce-2dc065a27345`,
-  run `20261025-024054-42fcdb0c`. Оба terminal, **не resubmit**.
-- При закрытии повторный readonly audit Main22 прошёл: 38 files twice,
-  44+28+12 mutations rejected, actual17→18/refusal. Primitive report/6 ready
-  files и receiver2 ZIP pins целы. Python3+5/fmt/scaffold прошли; новые
-  Windows команды не запускались. Логи `close-state23-20261025-*`.
+- Source **updater18 / worker17 / supervisor23 / view15 / private physical2**.
+  [Worker SQLite activation](plans/worker-self-update/resume-2026-10-25-journal-activation.md#2-что-сделано-в-текущем-блоке)
+  реализована как trusted data library: old-header CAS+immutable receipt в одной
+  транзакции, dedup/cold read, active maintenance сохранена, ordinary16→17
+  migration с consistent backup. **Existing-state constructor, updater writer
+  ledger/private runtime driver и actor ещё не подключены.**
+- Closing source checks: **workspace760/0 (16 ignored), SQLite12/0, writer model7/0**;
+  Linux/MSVC all-target validation Clippy, fmt и scaffold passed. Последний
+  backup hardening включён в этот прогон. Старый DTO commit отдельно прошёл
+  contracts/TS/UI/protocol59. Новых native writer17/actual old16→17 gates нет.
+- [Actual physical Main23](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+  **132/0**, run20261025-100933-d8a50807,
+  task6bc1623a-c5c4-49ce-8511-cb46b43c7ece, producer7b270c6/target1370d6b.
+  Closing readonly recheck принят; terminal task **не resubmit**. Этот proof
+  использует worker16 и подтверждает physical StateOwned, без writer/epoch change.
+- Public install off; advertised activation/controller_confirmation/desktop_update
+  остаются None. Local/controller/lifetime, remaining U2 faults/management и U3/U4
+  впереди. Installed d052/runtime не менялся, ручное обновление пока не требуется.
 
-## Следующая работа
+## Откуда продолжать
 
-1. Реализовать **отсутствующий** actual Main23 state scenario, неблокирующие
-   validation boundary probes, PS state mode и independent Python verifier/
-   same-run observer. Сейчас `--activation-state` и `-ActivationStateGate`
-   не существуют. Source/review/cross checks не заменяют actual Windows proof.
-2. Готовый target — clean receiver2 **1370d6b**:
-   `winbridge-20261025T092432Z-1370d6b-257867fc.zip`. Pins/reference/cache в новом
-   checkpoint. Нужен distinct clean producer после harness commit. Прежняя
-   receiver1 fixture1c23d48 для state gate не подходит.
-3. Сразу после Ready вызвать23 в original120s; тяжёлые audits делать после
-   receipt. Проверить actual lock до/после release/под child/после Job stop,
-   identities/generation/history0–6 и неизменные DB/WAL/epoch. Затем writable
-   authority → local/controller → lifetime/commit → U2 faults → U3/U4.
+1. Безопасный existing-state constructor под **тем же** child-held lock, без
+   CREATE/migration/begin_authority; затем graph-bound writer admission/ledger,
+   private command и successor actor/view. Original120s deadline не продлевать.
+2. Source review/checks и clean **новая worker17 receiver fixture**, distinct
+   producer; combined native writer gate и actual old16→17/refusal. Старый
+   target1370d6b/worker16 не подходит новому same-schema writer gate.
+3. Local service/reconciliation → actual controller session → owned Job lifetime/
+   commit/scoped release → U2 faults/recovery/CLI/MCP → U3 desktop → U4 actual
+   stable-runtime self-update; затем вернуться к A4.3.
 
-## Окружение при закрытии
+Карта кода, invariants, exact ZIP/task/proof pins, команды checks/readonly recovery,
+cache/reference, disk evidence и подробные acceptance criteria — в новом checkpoint.
+Новых Windows native runs при закрытии не запускали, только terminal disk query;
+Cargo/observer завершены. Desktop можно закрыть, **installed worker оставить**.
+Controller PID3922/ws://192.168.44.203:1143 оставлен работать; после reboot
+перепроверить listener/Info, не запускать второй. Минимум6GiB на обоих дисках
+перед новой сборкой, CARGO_INCREMENTAL=0, Windows каталоги не очищать.
 
-Fresh Info 2026-10-25T09:38:08Z: installed **d052**, generation
-`8f8d1fb9-e5b1-4984-a17e-d067db46268e`, connected/active0,
-maintenanceError=null, journalRecoveryRequired=null, coverage.complete=true.
-Installed runtime не менялся; ручное обновление сейчас не требуется.
-Controller PID3922 на `ws://192.168.44.203:1143` оставлен работать. После reboot
-перепроверить listener/Info, не запускать второй controller.
+## История checkpoints
 
-Debian free25,672,343,552 bytes; последнее **историческое** Windows measurement
-13,133,565,952→13,134,938,112 bytes. Перед heavy build снова измерить оба диска,
-минимум6GiB; `CARGO_INCREMENTAL=0`, один cache lease. Windows каталоги не чистить.
-Desktop можно закрыть, **installed worker оставить работать**; новых UI-окон нет.
-
-## История checkpoints: статусы ниже относятся к прежним source/gates
-
-Любые «начать с», Current/Active/NEXT и заявления о приоритете далее относятся
-к дате исторической записи. Для новой сессии действует только checkpoint
-StateOwned23 в начале этого файла и его подробная инструкция.
+Записи ниже фиксируют прошлые source/gates. Их NEXT/ACTIVE и «ещё не реализовано»
+не заменяют авторитетное состояние выше и новую подробную инструкцию.
 
 ## История checkpoint daa88da (до native18 harness/gate)
 

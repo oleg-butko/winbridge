@@ -172,3 +172,27 @@ fn writer_data_cannot_smuggle_an_authority_id_token_or_permission() {
         prepare_command(&r, &expected, "private-never-echo", command.issued_at_ms).unwrap_err();
     assert!(!error.contains("private-never-echo"));
 }
+
+#[test]
+fn persisted_writer_receipt_never_certifies_a_self_consistent_invalid_command() {
+    let (_, _, command, receipt) = fixture();
+    for index in 0..6 {
+        let mut bad = command.clone();
+        match index {
+            0 => {
+                bad.binding.physical.context.journal_incarnation = uuid::Uuid::new_v4().to_string()
+            }
+            1 => bad.binding.physical.attempt_id = uuid::Uuid::new_v4().to_string(),
+            2 => bad.binding.physical.process.birth = "0001".into(),
+            3 => bad.binding.activation_record_sha256 = "not a hash".into(),
+            4 => bad.deadline_at_ms = bad.issued_at_ms - 1,
+            _ => {
+                bad.binding.physical.state.lock_identity =
+                    bad.binding.physical.state.journal_identity.clone()
+            }
+        }
+        let mut forged = receipt.clone();
+        forged.command_sha256 = command_sha256(&bad).unwrap();
+        assert!(validate_receipt(&forged, &bad).is_err());
+    }
+}

@@ -524,7 +524,7 @@ fn schema_seven_migration_preserves_all_records_and_creates_exact_backup() {
         .unwrap();
     }
     db.execute_batch(
-        "DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
+        "DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
     )
     .unwrap();
     db.pragma_update(None, "user_version", 7).unwrap();
@@ -676,7 +676,7 @@ fn domain_migration_failure_rolls_back_every_added_column_and_schema() {
         .unwrap();
     }
     db.execute_batch(
-        "DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
+        "DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority;",
     )
     .unwrap();
     db.pragma_update(None, "user_version", 7).unwrap();

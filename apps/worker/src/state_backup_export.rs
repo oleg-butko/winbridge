@@ -3,19 +3,8 @@ use crate::{store::Store, Result};
 use std::path::Path;
 use winbridge_protocol::update::*;
 use winbridge_update::state_backup::{pin_backup_file, prepare_export};
-fn error(e: impl std::fmt::Display) -> String {
-    e.to_string()
-}
 fn authority(store: &Store) -> Result<StateBackupAuthority> {
-    store.check_authority()?;
-    let a = store.journal_authority();
-    let mut raw = b"winbridge.worker-state-authority.v1\n".to_vec();
-    raw.extend(serde_json::to_vec(&(&a.incarnation, a.epoch, &a.authority_id)).map_err(error)?);
-    Ok(StateBackupAuthority {
-        incarnation: a.incarnation.clone(),
-        epoch: a.epoch,
-        fingerprint_sha256: winbridge_update::sha256(&raw),
-    })
+    store.state_backup_authority()
 }
 pub fn export(input_path: &Path, expected_sha256: &str) -> Result<WorkerStateBackupReport> {
     std::hint::black_box(WORKER_STATE_BACKUP_MARKER);

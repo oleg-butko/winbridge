@@ -10,7 +10,9 @@ use winbridge_protocol::{
     TaskSubmission,
 };
 
+mod activation;
 mod admission;
+pub use activation::{JournalActivationAcceptance, JournalActivationPermit};
 mod archive;
 mod inspection;
 mod leases;
@@ -32,7 +34,7 @@ mod task_records;
 mod update;
 mod work_scheduling;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 16;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 17;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -55,6 +57,7 @@ pub struct Store {
 
 impl Store {
     pub fn open(path: &Path) -> Result<Self> {
+        Self::preflight_activation_migration(path)?;
         let mut connection = Connection::open(path).map_err(sql)?;
         connection
             .busy_timeout(std::time::Duration::from_secs(2))
@@ -65,11 +68,18 @@ impl Store {
         if version > JOURNAL_SCHEMA_VERSION {
             return Err(format!("journal schema {version} is unsupported; expected {JOURNAL_SCHEMA_VERSION}; keep the database and use a compatible worker"));
         }
-        if version == 15 {
+        if (15..JOURNAL_SCHEMA_VERSION).contains(&version) {
             // An accepted update is owned by the old worker/updater pair. A
             // generic open must not migrate underneath that handoff.
             Self::reject_pending_update_start(path)?;
         }
+        // Keep a verified create-new backup pinned until the schema transaction
+        // commits, before journal-mode/schema writes on an existing v16 source.
+        let activation_backup = if version == 16 {
+            Some(Self::backup_activation_migration(path, &connection)?)
+        } else {
+            None
+        };
         if version == 0 {
             let tables: u32 = connection.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], |r| r.get(0)).map_err(sql)?;
             if tables != 0 {
@@ -415,6 +425,25 @@ impl Store {
                 .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
                 .map_err(sql)?;
             Self::migrate_shutdown(&migration)?;
+            migration.commit().map_err(sql)?;
+        }
+        if version <= 16 {
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            Self::require_update_activation(&migration)?;
+            if let Some(backup) = &activation_backup {
+                backup.revalidate()?;
+                if Self::read_authority(&migration)? != backup.authority {
+                    return Err(
+                        "Activation migration source authority changed; no migration".into(),
+                    );
+                }
+            }
+            Self::migrate_activation(&migration)?;
+            if let Some(backup) = &activation_backup {
+                backup.revalidate()?;
+            }
             migration.commit().map_err(sql)?;
         }
         let authority = Self::read_authority(&connection)?;

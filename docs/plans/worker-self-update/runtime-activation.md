@@ -486,9 +486,12 @@ handle. Значит, «parent завершился успешно» и «child 
    Потерянный ACK сверяется тем же command ID. Раздельно показывать install
    outcome, текущую доступность процесса и доставку уведомления/отчёта.
 
-Updater schema18 уже реализована; worker17 остаётся возможным будущим изменением
-при добавлении durable receipt, не объявленной capability. Уточнять номера и
-compatibility policy при имплементации по фактическому HEAD.
+Updater schema18 реализована. На checkpoint 2026-10-25 добавлена **worker17
+metadata activation**: immutable receipt/atomic header CAS и ordinary16→17
+migration с backup; runtime/private driver ещё впереди. Текущее состояние,
+границы native доказательств и следующий порядок — в
+[инструкции продолжения](resume-2026-10-25-journal-activation.md).
+Уточнять номера и compatibility policy при имплементации по фактическому HEAD.
 Supervisor остаётся владельцем одного blocking slot. Heap boundary после
 stack overflow сохраняется; тяжёлые physical preflights не переносить в mailbox.
 

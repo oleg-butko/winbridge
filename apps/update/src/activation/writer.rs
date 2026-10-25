@@ -21,6 +21,83 @@ fn digest(domain: &[u8], value: &impl serde::Serialize) -> Result<String> {
     );
     Ok(crate::sha256(&bytes))
 }
+/// Intrinsic data checks for persisted commands/readback. The caller still
+/// needs `validate_command` against the current graph and live physical scope.
+pub fn validate_command_envelope(command: &WorkerJournalActivationCommand) -> Result<()> {
+    let b = &command.binding;
+    let p = &b.physical;
+    let old = &b.expected_authority;
+    let text = |value: &str, limit: usize| {
+        !value.is_empty() && value.len() <= limit && !value.chars().any(char::is_control)
+    };
+    if command.schema_version != 1
+        || ![
+            &command.command_id,
+            &b.update_id,
+            &b.attempt_id,
+            &b.launch_id,
+            &b.updater_owner_id,
+            &p.generation,
+            &old.incarnation,
+        ]
+        .into_iter()
+        .all(|id| uuid(id))
+        || [
+            &b.update_id,
+            &b.attempt_id,
+            &b.launch_id,
+            &b.updater_owner_id,
+            &p.generation,
+        ]
+        .contains(&&command.command_id)
+        || b.updater_epoch == 0
+        || b.updater_epoch > MAX_UPDATE_COUNTER
+        || b.activation_revision != 6
+        || b.worker_journal_schema == 0
+        || b.updater_journal_schema == 0
+        || ![
+            &b.activation_record_sha256,
+            &b.backup_record_sha256,
+            &b.worker_config_sha256,
+            &old.fingerprint_sha256,
+        ]
+        .into_iter()
+        .all(|hash| valid_hash(hash, &[64]))
+        || old.incarnation != p.context.journal_incarnation
+        || old.epoch == 0
+        || old.epoch >= MAX_UPDATE_COUNTER
+        || !winbridge_core::config::valid_id(&p.context.instance_id)
+        || p.attempt_id != b.attempt_id
+        || p.process.process_id == 0
+        || !valid_hash(&p.process.host_id, &[64])
+        || p.process
+            .birth
+            .parse::<u64>()
+            .ok()
+            .filter(|at| *at > 0)
+            .is_none_or(|at| at.to_string() != p.process.birth)
+        || !text(&p.state.state_directory, 4096)
+        || ![
+            &p.state.directory_identity,
+            &p.state.journal_identity,
+            &p.state.lock_identity,
+        ]
+        .into_iter()
+        .all(|id| text(id, 128))
+        || p.state.directory_identity == p.state.journal_identity
+        || p.state.directory_identity == p.state.lock_identity
+        || p.state.journal_identity == p.state.lock_identity
+        || p.observed_at_ms == 0
+        || p.observed_at_ms > command.issued_at_ms
+        || command.issued_at_ms == 0
+        || command.issued_at_ms > command.deadline_at_ms
+        || command.deadline_at_ms > MAX_UPDATE_COUNTER
+        || command.deadline_at_ms - command.issued_at_ms > 300000
+    {
+        return Err("Writer command envelope scope/header/counters/window invalid".into());
+    }
+    Ok(())
+}
 /// The future trusted factory must fetch `expected` from the graph-bound final
 /// backup in the same updater snapshot. This pure function cannot prove that
 /// association, original custody or current owner liveness and gives no permit.
@@ -90,7 +167,7 @@ pub fn prepare_command(
     {
         return Err("Writer proposal physical scope/old authority/key/window differs".into());
     }
-    Ok(WorkerJournalActivationCommand {
+    let command = WorkerJournalActivationCommand {
         schema_version: 1,
         command_id: command_id.into(),
         binding: WorkerJournalActivationBinding {
@@ -110,7 +187,9 @@ pub fn prepare_command(
         },
         issued_at_ms,
         deadline_at_ms: deadline,
-    })
+    };
+    validate_command_envelope(&command)?;
+    Ok(command)
 }
 pub fn validate_command(
     command: &WorkerJournalActivationCommand,
@@ -131,6 +210,7 @@ pub fn validate_receipt(
     receipt: &WorkerJournalActivationReceipt,
     command: &WorkerJournalActivationCommand,
 ) -> Result<()> {
+    validate_command_envelope(command)?;
     let old = &command.binding.expected_authority;
     if command.schema_version != 1
         || !uuid(&command.command_id)

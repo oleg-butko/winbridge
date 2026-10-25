@@ -62,96 +62,15 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
-Актуальная точка разработки апдейтера: [подробный checkpoint новой сессии](docs/plans/worker-self-update/resume-2026-10-25-state-handoff.md),
+Актуальная точка разработки апдейтера: [подробная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-25-journal-activation.md),
 [handoff](docs/handoff.md) и [план U0–U4](docs/plans/worker-self-update/README.md).
-[Main22 receiver112/0](docs/plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-и [selective lock-release7/0](docs/plans/worker-self-update/state-lock-handoff.md)
-пройдены. [Actor23/private state handoff2/view15](docs/plans/worker-self-update/activation-state-handoff.md)
-реализованы и прошли source/cross checks; [новый StateOwned harness/verifier](docs/plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-прошёл actual Windows gate132/0. Receiver2 target fixture уже готова. Затем writable authority,
-local/controller/lifetime и remaining U2/U3/U4. Public install выключен,
-полное самообновление ещё не готово. Installed runtime не менялся.
-Новый checkpoint приоритетнее исторических NEXT ниже.
-
-Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):
-`winbridge-update` проверяет исходники и показывает план замен, отдельный build-only
-сценарий собирает staging без остановки установленного worker. [19 native tests
-и полная Windows сборка](docs/plans/worker-self-update/windows-preparation-gate-2026-10-17.md)
-прошли. Автоматическая установка относится к следующим U1–U4.
-В U1 добавлены [independent journal/CAS/ownership и проверка source ZIP](docs/plans/worker-self-update/durable-preparation.md).
-В trusted library реализована [source transaction](docs/plans/worker-self-update/source-transaction.md):
-preimages, intent/receipt, применение без перезаписи локальных правок и readonly
-crash inspection. [65 native tests и полный candidate build](docs/plans/worker-self-update/windows-source-transaction-gate-2026-10-17.md)
-прошли. CLI меняет только update metadata и читает диагностику; внешние source-write
-commands, exe replacement и shutdown ещё не подключены.
-Добавлена trusted library [supervisor handoff](docs/plans/worker-self-update/supervisor.md):
-отдельный процесс, durable intent/PID/epoch и authenticated IPC; 413 local tests и
-[76 native tests / полный candidate build](docs/plans/worker-self-update/windows-supervisor-gate-2026-10-17.md)
-прошли. [Worker launcher и supervisor-only lease IPC](docs/plans/worker-self-update/worker-control.md)
-добавлены как trusted API; 417 local tests и
-[80 native tests / полный candidate build](docs/plans/worker-self-update/windows-worker-control-gate-2026-10-17.md) прошли. Source apply/shutdown/install через IPC и публичное включение
-ещё не подключены.
-[Managed compiler](docs/plans/worker-self-update/compiler-driver.md) добавляет
-trusted library intent/PID/Job/resume и verified cleanup, updater schema 4.
-429 local tests, 10 итоговых compiler tests и
-[95 native tests / полный candidate build](docs/plans/worker-self-update/windows-compiler-gate-2026-10-18.md) passed.
-[Atomic compiler launch](docs/plans/worker-self-update/atomic-executable.md) прошёл
-[102 native tests / candidate build](docs/plans/worker-self-update/windows-atomic-launch-gate-2026-10-18.md).
-[Source preparation actor](docs/plans/worker-self-update/source-actor.md) добавляет
-internal v2 mailbox и ZIP/grant/apply; 438 workspace tests и Linux/Windows Clippy
-и [109 native tests / candidate build](docs/plans/worker-self-update/windows-source-actor-gate-2026-10-18.md)
-passed. [Compiler actor и coordinated abort](docs/plans/worker-self-update/compiler-actor-abort.md)
-добавляют internal v3/v4, config 3 и updater schema 5: intent до ACK, responsive
-status и release только после source/Job/output proof. Добавлен [bounded compiler output](docs/plans/worker-self-update/compiler-output.md),
-включая File ID cursor и проверку terminal SHA, и [artifact identity](docs/plans/worker-self-update/artifact-identity.md).
-[133 native tests / полная сборка / четыре exe queries](docs/plans/worker-self-update/windows-artifact-identity-gate-2026-10-18.md)
-прошли; PowerShell paths и независимые payload copies проверены. Затем
-[artifact actor и durable receipt/FSM](docs/plans/worker-self-update/artifact-actor.md)
-прошли [156 native tests / полный build](docs/plans/worker-self-update/windows-artifact-actor-gate-2026-10-18.md).
-[Ранняя проверка известного runtime](docs/plans/worker-self-update/runtime-startup.md)
-подключена до открытия worker journal; [159 native tests / actual Main и pins](docs/plans/worker-self-update/windows-runtime-startup-gate-2026-10-18.md) passed.
-[Authenticated live identity/control](docs/plans/worker-self-update/windows-runtime-control-gate-2026-10-18.md)
-прошёл 165 native tests/full build/Main/pins. [Durable baseline и supervisor v7](docs/plans/worker-self-update/runtime-baseline.md)
-прошли [175 native tests / полный build / actual Main](docs/plans/worker-self-update/windows-runtime-baseline-gate-2026-10-19.md).
-[Preimages library](docs/plans/worker-self-update/runtime-preimages.md), schema 9,
-прошёл [189 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-gate-2026-10-19.md).
-[Actor v8 / отмена копирования](docs/plans/worker-self-update/runtime-preimages-actor.md)
-прошёл [193 native tests / full build](docs/plans/worker-self-update/windows-runtime-preimages-actor-gate-2026-10-19.md).
-[Fresh-state rehearsal](docs/plans/worker-self-update/worker-rehearsal.md) запускает worker
-с новым пустым журналом и проверяет IPC/остановку;
-[210 native tests / полный build](docs/plans/worker-self-update/windows-probe-lifecycle-gate-2026-10-20.md) passed.
-[Health journal / supervisor v10](docs/plans/worker-self-update/candidate-health.md)
-добавляет durable helpers и atomic approval; сквозной Windows gate пройден.
-[Drain/quiesce](docs/plans/worker-self-update/drain-quiesce.md) добавляет updater schema11,
-сохранённые команды/квитанции и внутренний actor v13; сквозной native gate пройден.
-[Exact shutdown](docs/plans/worker-self-update/exact-shutdown.md) прошёл actual Main
-и supplemental gates; внутренний U1 завершён. [Final backup и migration12→13](docs/plans/worker-self-update/windows-state-backup-gate-2026-10-21.md)
-также прошли Windows gate (updater13/worker16, supervisor v15/view7).
-[Four-case fault gate](docs/plans/worker-self-update/windows-state-backup-faults-gate-2026-10-22.md)
-закрыл U2.1; дальнейший прогресс U2.2 описан ниже. Install/public update отключены.
-[Актуальный handoff завершения проверок 2026-10-23](docs/plans/worker-self-update/resume-2026-10-23-replacement.md)
-содержит результаты, карту кода и порядок продолжения U2.2 без контекста чата.
-В продолжении добавлена [preparation library schema14](docs/plans/worker-self-update/runtime-preparation.md):
-модель пяти копий и durable ledger. [Copy driver/actor v16](docs/plans/worker-self-update/runtime-preparation-actor.md)
-добавлены и прошли [actual Main40/0 gate](docs/plans/worker-self-update/windows-runtime-preparation-main-gate-2026-10-22.md).
-[Actual13→14 migration/refusal](docs/plans/worker-self-update/windows-preparation-migration-gate-2026-10-23.md)
-также проверен. [Три actual preparation faults](docs/plans/worker-self-update/windows-runtime-preparation-faults-gate-2026-10-23.md)
-прошли40 native tests; [replacement data model](docs/plans/worker-self-update/windows-runtime-replacement-model-gate-2026-10-23.md)
-прошла12 native tests. Затем добавлены schema15 ledger, consuming custody и
-[replacement driver/actor v17/view9](docs/plans/worker-self-update/runtime-replacement-actor.md).
-[Actual Main15 replacement60/0 gate](docs/plans/worker-self-update/windows-runtime-replacement-main-gate-2026-10-23.md)
-и [четыре actual replacement faults60/0](docs/plans/worker-self-update/windows-runtime-replacement-faults-gate-2026-10-23.md)
-пройдены. [Readonly updater support8/0 gate](docs/plans/worker-self-update/windows-updater-support-gate-2026-10-23.md)
-также пройден; typed compatibility policy добавлена как pure foundation.
-Следом durable compatibility до drain, activation и U3/U4. Public install выключен.
-Добавлена [candidate support schema16 foundation](docs/plans/worker-self-update/candidate-support.md)
-и пройден [Windows25/0 metadata/query/migration gate](docs/plans/worker-self-update/windows-candidate-support-gate-2026-10-23.md).
-[Actor v18/view10](docs/plans/worker-self-update/candidate-support-actor.md)
-добавлен и прошёл [actual Main23/0 gate](docs/plans/worker-self-update/windows-candidate-support-actor-gate-2026-10-23.md);
-обязательный production pre-drain binding и activation впереди.
-[Актуальная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-23-candidate-support.md)
-заменяет прежние NEXT/ACTIVE. Проверки завершены, installed runtime не менялся.
-Прежние U2.1 native gates относятся к schema13.
+[Physical StateOwned132/0](docs/plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+пройден на worker16. В source теперь **updater18/worker17/supervisor23/view15**:
+добавлены atomic worker authority CAS+immutable receipt и ordinary16→17 migration
+с backup. Closing workspace760/0 (16 ignored), SQLite12/0/model7/0 и Linux/MSVC
+Clippy passed. Runtime writer, local/controller/lifetime и U3/U4 ещё впереди.
+Public install выключен; полное самообновление не готово. Installed runtime
+не менялся. Новый checkpoint приоритетнее исторических отчётов.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

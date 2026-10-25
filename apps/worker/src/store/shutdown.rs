@@ -64,7 +64,7 @@ fn valid(r: &WorkerShutdownReceipt) -> Result<()> {
     }
     Ok(())
 }
-fn read(
+pub(super) fn read(
     c: &Connection,
     id: &str,
     command: &WorkerShutdownCommand,
@@ -404,7 +404,7 @@ pub(crate) mod tests {
         let mut s = Store::open(&path).unwrap();
         s.begin_authority().unwrap();
         let authority = s.journal_authority().clone();
-        s.connection.execute_batch("DROP TABLE worker_shutdown_receipts;PRAGMA user_version=15;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        s.connection.execute_batch("DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts;PRAGMA user_version=15;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
         drop(s);
         let s = Store::open(&path).unwrap();
         assert_eq!(s.journal_authority(), &authority);
@@ -443,7 +443,7 @@ pub(crate) mod tests {
         let active_root = tempfile::tempdir().unwrap();
         let active_path = active_root.path().join("journal.sqlite");
         let (s, _, _) = ready(&active_path);
-        s.connection.execute_batch("DROP TABLE worker_shutdown_receipts;PRAGMA user_version=15;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        s.connection.execute_batch("DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts;PRAGMA user_version=15;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
         drop(s);
         let before = fs::read(&active_path).unwrap();
         assert!(Store::open(&active_path)

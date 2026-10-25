@@ -1,55 +1,34 @@
 # Постепенная реализация и расширение
 
-2026-10-25: после native132/0 начат [writer metadata contract](plans/worker-self-update/activation-state-handoff.md#начат-writer-data-contract-после-native1320).
-Три DTO/pure validators, focused6/workspace747/0/protocol59/0 и Clippy/TS/UI
-passed. Schema18/16 и actor23/view15 прежние; runtime writer не подключён.
-Следом immutable worker receipt+atomic authority CAS/schema policy, затем
-updater ledger/private driver/actor и combined native writer gate. Public off.
+## Текущий checkpoint — 2026-10-25, worker journal17
 
-2026-10-25: [actual Main23 physical StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-пройден, task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/run20261025-100933-d8a50807,
-producer7b270c6/target1370d6b.45 files twice,44+40+12 mutations, actual17→18/refusal.
-Seven causal prefixes, same child/lock, duplicate и actual cold exit проверены;
-DB/WAL/epoch unchanged, writer0. Следом atomic writable activation/CAS/receipt и
-explicit schema policy, local/controller/lifetime, U2 faults/U3/U4. Public install
-выключен, installed d052 healthy/unchanged/active0. Terminal run не replay.
-Ниже checkpoint до этого gate; старые «ещё не выполнялся» — история.
+Продолжать по [подробной инструкции без контекста чата](plans/worker-self-update/resume-2026-10-25-journal-activation.md).
+Текущие проверки завершены, цель полного updater остаётся незавершённой.
 
-## Текущий checkpoint — 2026-10-25, завершение проверок StateOwned23
-
-**Продолжать по [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-25-state-handoff.md).**
-Пользователь попросил завершить проверки и сохранить контекст. Active Cargo/
-observer нет; новый Windows state-transfer task/run не отправлен.
-
-- [Actor23/private handoff2/view15](plans/worker-self-update/activation-state-handoff.md)
-  реализованы в source; updater18/worker16 прежние. Workspace741/0 (16 ignored),
-  protocol59/0, readonly journal2/0, mailbox1 и Clippy/contracts/TS/UI passed.
-  **Сквозного native proof передачи lock тому же child ещё нет.**
-- [Main22 receiver112/0](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-  и [selective release7/0](plans/worker-self-update/state-lock-handoff.md)
-  завершены. Closing readonly recheck Main22 принят, primitive report/receiver2
-  pins целы; Python3+5/fmt/scaffold прошли. Terminal tasks не replay.
-- Public install off; writable Store/authority, local/controller/lifetime и
-  remaining U2/U3/U4 впереди. Installed d052 healthy/connected/active0 и не менялся.
+- **updater18/worker17/supervisor23/view15/private physical2**. Worker metadata
+  activation реализована: atomic header CAS+immutable receipt/dedup, ordinary
+  inactive16→17 migration с verified/pinned backup. Runtime writer не подключён.
+- Source checks **workspace760/0 (16 ignored), SQLite12/0, model7/0**, Linux/MSVC
+  validation Clippy/fmt/scaffold passed. Native writer17/actual old16→17 впереди.
+- [Physical Main23 StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+  пройден на worker16; closing readonly recheck принят. Run20261025-100933-d8a50807
+  terminal, не replay. Target1370d6b не подходит будущему same-schema17 writer gate.
+- Public install off; installed d052 healthy/unchanged. Desktop не нужен,
+  worker оставить. Active Cargo/native observer нет.
 
 Следующая последовательность:
 
-1. Добавить отсутствующие actual Main23 state harness, validation probes,
-   PS state mode и independent verifier/observer. Исходный120s не увеличивать:
-   Ready → немедленный handoff, тяжёлые audits после receipt. Старые views и
-   Main22 gate сохранить; physical receipt не означает writer authority.
-2. После checks/review/clean commit экспортировать distinct producer и выполнить
-   один isolated Windows gate с **готовым target1370d6b/receiver2**. ZIP/pins,
-   cache/reference/recovery rules — в новой инструкции. Новых state flags пока нет.
-3. Writable activation transaction/CAS/epoch и explicit schema policy;
-   затем local IPC/controller confirmation и owned lifetime/commit.
-4. Remaining U2 fault/crash/recovery/management/opt-in, U3 desktop notifications/
-   update и U4 реальное installed self-update. Затем вернуться к A4.3.
+1. Existing-state constructor под actual child lock, без CREATE/migration;
+   graph-bound writer admission/ledger/private command и successor actor.
+2. Clean receiver17 + distinct producer, combined native writer и actual
+   worker16→17/refusal. Original120s window сохранить; physical receipt не grant.
+3. Local IPC/reconciliation, actual controller session, owned lifetime/commit/
+   scoped maintenance release; затем remaining U2 faults/management.
+4. U3 desktop notifications/update, U4 installed self-update, возврат к A4.3.
 
-Перед новым Windows run fresh Info/оба диска≥6GiB и объявление необходимых
-worker/desktop/окон. При установленном worker с неожиданным поведением —
-остановить зависимые действия. Desktop можно закрыть, installed worker оставить.
-Ниже история; её NEXT/ACTIVE не текущие задания.
+Новых native Windows runs при закрытии не запускали. Перед следующим run fresh
+Info/оба диска≥6GiB и объявление worker/desktop/окон. При неожиданном поведении
+installed worker остановить зависимые действия. Исторические NEXT ниже не текущие.
 
 ## История предыдущих checkpoints: не текущие задания
 

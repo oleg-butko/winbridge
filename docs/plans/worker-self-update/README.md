@@ -5,28 +5,24 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий checkpoint — 2026-10-25, StateOwned23
+## Текущий checkpoint — 2026-10-25, worker journal17
 
-**Начать с [подробной инструкции продолжения без контекста чата](resume-2026-10-25-state-handoff.md).**
-Все текущие проверки завершены. [Actor23/private handoff2/view15](activation-state-handoff.md)
-реализованы в source, updater18/worker16 прежние. Workspace741/0 (16 ignored),
-protocol59/0, journal2/0/mailbox1 и local/MSVC Clippy/contracts/TS/UI passed.
-Новый actual interprocess StateOwned gate **пройден132/0**, task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/
-run20261025-100933-d8a50807;45 files twice/44+40+12 mutations. Terminal не replay.
-[Harness/verifier/state flags](windows-activation-state-gate-2026-10-25.md) уже
-проверены; следом atomic writable activation/receipt и schema policy. Writable Store/local/controller/lifetime впереди,
-public install off; updater целиком не готов.
+**Начать с [подробной инструкции без контекста чата](resume-2026-10-25-journal-activation.md).**
+Source updater18/worker17/supervisor23/view15/private physical2. [Main23 physical
+StateOwned132/0](windows-activation-state-gate-2026-10-25.md) пройден на worker16;
+closing readonly recheck принят. Terminal run20261025-100933-d8a50807 не replay.
 
-[Main22 receiver112/0](windows-activation-process-gate-2026-10-24.md) и
-[selective release7/0](state-lock-handoff.md) пройдены. Closing readonly audit
-Main22 принят, report/ZIP pins целы. Terminal tasks не replay. Installed d052
-healthy/connected/active0 и не менялся; desktop можно закрыть, worker оставить.
+Добавлены atomic worker header CAS+immutable receipt/dedup и ordinary inactive16→17
+migration с consistent/pinned backup. Closing workspace760/0 (16 ignored), SQLite12/0,
+model7/0, Linux/MSVC validation Clippy/fmt/scaffold passed. **Runtime writer ещё
+не подключён**, новых native writer17/actual old16→17 gates нет. Public install off.
+Installed d052/runtime не менялся; desktop можно закрыть, worker оставить.
 
-State harness/boundary probes/verifier проверены с **target receiver2 commit1370d6b**.
-Pins/cache/schema17 reference и original120s budget описаны в новой инструкции.
-После native StateOwned: writable authority/CAS/epoch → local/controller →
-lifetime/commit → remaining U2 faults/management → U3 desktop → U4 installed
-self-update. Затем вернуться к A4.3. Исторические NEXT ниже не текущие задания.
+Следом existing-state constructor → graph-bound updater writer ledger/private
+command/actor → новая receiver17 fixture/combined native gate → local/controller/
+lifetime/commit → remaining U2 faults/management → U3 desktop → U4 actual installed
+self-update. Потом вернуться к A4.3. Exact pins/cache/recovery/commands и acceptance
+criteria — в новом checkpoint; прежние NEXT ниже исторические.
 
 ### История предыдущих checkpoints
 

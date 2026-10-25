@@ -781,8 +781,21 @@ fn incarnation_change_rejects_equal_revision_observations_and_tokens() {
     let (_, token) = store.claim_task(&task.task_id).unwrap();
     let observed = store.task_snapshot(&task.task_id).unwrap();
     let db = Connection::open(&path).unwrap();
-    // Controlled fixture only: production restore policy is the remaining A2 package.
+    // Controlled foreign-journal fixture, not a permitted live activation.
     let replacement = uuid::Uuid::new_v4().to_string();
+    assert!(db
+        .execute(
+            "UPDATE journal_authority SET incarnation=?1,epoch=epoch+1,authority=?2",
+            rusqlite::params![replacement, uuid::Uuid::new_v4().to_string()],
+        )
+        .is_err());
+    let authority_guard: String = db
+        .query_row(
+            "SELECT sql FROM sqlite_master WHERE name='authority_epoch_guard'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
     let guard: String = db
         .query_row(
             "SELECT sql FROM sqlite_master WHERE name='admission_update_guard'",
@@ -790,8 +803,10 @@ fn incarnation_change_rejects_equal_revision_observations_and_tokens() {
             |r| r.get(0),
         )
         .unwrap();
-    db.execute_batch("BEGIN IMMEDIATE; DROP TRIGGER admission_update_guard;")
-        .unwrap();
+    db.execute_batch(
+        "BEGIN IMMEDIATE; DROP TRIGGER admission_update_guard; DROP TRIGGER authority_epoch_guard;",
+    )
+    .unwrap();
     db.execute(
         "UPDATE journal_authority SET incarnation=?1,epoch=epoch+1,authority=?2",
         rusqlite::params![replacement, uuid::Uuid::new_v4().to_string()],
@@ -805,6 +820,7 @@ fn incarnation_change_rejects_equal_revision_observations_and_tokens() {
     )
     .unwrap();
     db.execute_batch(&guard).unwrap();
+    db.execute_batch(&authority_guard).unwrap();
     db.execute_batch("COMMIT;").unwrap();
     let mut next = Store::open(&path).unwrap();
     assert_eq!(
@@ -828,7 +844,7 @@ fn schema_eight_migration_keeps_legacy_bytes_backup_and_keys_without_fabricating
     drop(store);
     let db = Connection::open(&path).unwrap();
     db.execute_batch(
-        "DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; PRAGMA user_version=8;",
+        "DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; PRAGMA user_version=8;",
     )
     .unwrap();
     let raw: (String, String) = db
@@ -915,7 +931,7 @@ fn failed_metadata_migration_rolls_back_tables_and_schema() {
     let path = root.path().join("journal.sqlite");
     drop(Store::open(&path).unwrap());
     let db = Connection::open(&path).unwrap();
-    db.execute_batch("DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; CREATE TABLE execution_attempts(dummy); PRAGMA user_version=8;").unwrap();
+    db.execute_batch("DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; CREATE TABLE execution_attempts(dummy); PRAGMA user_version=8;").unwrap();
     assert!(Store::open(&path).is_err());
     assert_eq!(
         db.query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))
