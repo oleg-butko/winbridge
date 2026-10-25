@@ -62,23 +62,16 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
-Актуальная точка разработки апдейтера: [actor23/private state handoff](docs/plans/worker-self-update/activation-state-handoff.md),
-[handoff](docs/handoff.md) и [Windows отчёт](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-Native whole-set read-binding gate пройден: **97 passed / 0 failed**; проверены
-пять runtime read pins, original state lock, duplicate/cold observations и
-actual17→18/refusal. Binding43.346s укладывается в исходные120s.
-[Suspended launcher/private receiver library](docs/plans/worker-self-update/activation-receiver.md)
-добавлены; [actor22/view14](docs/plans/worker-self-update/activation-process-actor.md) подключён,
-[Main22 harness/verifier](docs/plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-[прошли actual Windows gate112/0](docs/plans/worker-self-update/windows-activation-process-gate-2026-10-24.md). Затем
-state/controller/lifetime handoff; полное самообновление ещё не готово, public
-install выключен. Installed runtime не менялся. Актуальный checkpoint
-приоритетнее исторических NEXT ниже.
-
-[Selective instance-lock release](docs/plans/worker-self-update/state-lock-handoff.md)
-также прошёл Windows7/0. Следом передача physical state тому же authenticated
-receiver, затем writable authority/local/controller/lifetime. Для state-transfer
-нужна новая receiver fixture; уже пройденные gates не повторять как новые задачи.
+Актуальная точка разработки апдейтера: [подробный checkpoint новой сессии](docs/plans/worker-self-update/resume-2026-10-25-state-handoff.md),
+[handoff](docs/handoff.md) и [план U0–U4](docs/plans/worker-self-update/README.md).
+[Main22 receiver112/0](docs/plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
+и [selective lock-release7/0](docs/plans/worker-self-update/state-lock-handoff.md)
+пройдены. [Actor23/private state handoff2/view15](docs/plans/worker-self-update/activation-state-handoff.md)
+реализованы и прошли source/cross checks; новый actual StateOwned harness/gate
+ещё впереди. Receiver2 target fixture уже готова. Затем writable authority,
+local/controller/lifetime и remaining U2/U3/U4. Public install выключен,
+полное самообновление ещё не готово. Installed runtime не менялся.
+Новый checkpoint приоритетнее исторических NEXT ниже.
 
 Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):
 `winbridge-update` проверяет исходники и показывает план замен, отдельный build-only

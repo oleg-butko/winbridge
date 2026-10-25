@@ -1,53 +1,40 @@
 # Постепенная реализация и расширение
 
-## Продолжение source: physical StateOwned23
+## Текущий checkpoint — 2026-10-25, завершение проверок StateOwned23
 
-[Actor23/private handoff2/view15](plans/worker-self-update/activation-state-handoff.md)
-добавлены. Workspace741/0/protocol59/0/focused33/journal2/mailbox1, Clippy/TS/UI passed;
-новый actual native gate ещё впереди. Следом clean receiver fixture2/distinct
-harness producer/Main до StateOwned, затем writable authority/local/controller/
-lifetime и remaining U2/U3/U4. Public install off, worker16/updater18 прежние.
+**Продолжать по [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-25-state-handoff.md).**
+Пользователь попросил завершить проверки и сохранить контекст. Active Cargo/
+observer нет; новый Windows state-transfer task/run не отправлен.
 
-## Продолжение: Main22 пройден, следующий state handoff
+- [Actor23/private handoff2/view15](plans/worker-self-update/activation-state-handoff.md)
+  реализованы в source; updater18/worker16 прежние. Workspace741/0 (16 ignored),
+  protocol59/0, readonly journal2/0, mailbox1 и Clippy/contracts/TS/UI passed.
+  **Сквозного native proof передачи lock тому же child ещё нет.**
+- [Main22 receiver112/0](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
+  и [selective release7/0](plans/worker-self-update/state-lock-handoff.md)
+  завершены. Closing readonly recheck Main22 принят, primitive report/receiver2
+  pins целы; Python3+5/fmt/scaffold прошли. Terminal tasks не replay.
+- Public install off; writable Store/authority, local/controller/lifetime и
+  remaining U2/U3/U4 впереди. Installed d052 healthy/connected/active0 и не менялся.
 
-[Actual receiver gate112/0](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md),
-taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
-producer a9860f4/target1c23d48.38 files twice,44+28+12 mutations, actual17→18/refusal.
-Original state held, один Ready receiver и actual cold exit проверены; writer0.
-Следом physical selective lock release и authenticated state/authority receipt,
-local/controller/lifetime, remaining U2/U3/U4. Public install off, installed runtime
-unchanged/healthy/active0. Старый terminal run не replay. Ниже — история до gate.
+Следующая последовательность:
 
-[State-lock release library](plans/worker-self-update/state-lock-handoff.md)
-добавлена, Linux6/package280/0 и local/MSVC checks passed; **Windows7/0 пройден**
-(run20261025-024054-42fcdb0c, producer da1c7b6). Следом actual same-child HandoffIssued→StateOwned.
-Actual writer handoff ещё не реализован; далее interprocess authority/local/
-controller/lifetime. Public install off.
+1. Добавить отсутствующие actual Main23 state harness, validation probes,
+   PS state mode и independent verifier/observer. Исходный120s не увеличивать:
+   Ready → немедленный handoff, тяжёлые audits после receipt. Старые views и
+   Main22 gate сохранить; physical receipt не означает writer authority.
+2. После checks/review/clean commit экспортировать distinct producer и выполнить
+   один isolated Windows gate с **готовым target1370d6b/receiver2**. ZIP/pins,
+   cache/reference/recovery rules — в новой инструкции. Новых state flags пока нет.
+3. Writable activation transaction/CAS/epoch и explicit schema policy;
+   затем local IPC/controller confirmation и owned lifetime/commit.
+4. Remaining U2 fault/crash/recovery/management/opt-in, U3 desktop notifications/
+   update и U4 реальное installed self-update. Затем вернуться к A4.3.
 
-## Текущий checkpoint updater — 2026-10-24, закрытие перед Main22
-
-**Продолжать по [новой подробной инструкции](plans/worker-self-update/resume-2026-10-24-activation-process.md).**
-[Actor21/read-binding97/0](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
-пройден; current helpers приняли retained proof readonly. [Launcher/receiver](plans/worker-self-update/activation-receiver.md),
-[actor22/view14](plans/worker-self-update/activation-process-actor.md) и
-[Main22 harness/verifier](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-реализованы. **Новый Windows process execution ещё не отправлен.**
-Source updater18/worker16; activation/public install off, полный updater не готов.
-
-1. Из clean closing commit экспортировать distinct producer; готовый target —
-   fixture1c23d48. Запустить один isolated `--activation-process` до Ready без
-   writer; сохранить task/run и observe тот же запуск. Pins/commands/recovery —
-   в новой инструкции. Source/cross checks не равны actual Windows proof.
-2. После положительного gate/review — original state/instance-lock handoff,
-   StateOwned, journal authority/recovery и local/controller confirmation.
-3. Lifetime handoff/commit, remaining U2 fault matrix/management/opt-in policy.
-4. U3 desktop notifications/update, U4 реальное installed self-update;
-   затем вернуться к отложенному A4.3.
-
-Closing checks и ограничения описаны в Main22 document. Installed d052 healthy/
-connected/active0, без изменений. Controller оставлен работать; desktop можно
-закрыть, installed worker оставить. Перед новым run заново Info/disk, минимум6GiB;
-Windows directories не очищать. Исторические NEXT ниже не текущие задания.
+Перед новым Windows run fresh Info/оба диска≥6GiB и объявление необходимых
+worker/desktop/окон. При установленном worker с неожиданным поведением —
+остановить зависимые действия. Desktop можно закрыть, installed worker оставить.
+Ниже история; её NEXT/ACTIVE не текущие задания.
 
 ## История предыдущих checkpoints: не текущие задания
 

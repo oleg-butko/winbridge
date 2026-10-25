@@ -5,39 +5,27 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий source статус 2026-10-25
+## Текущий checkpoint — 2026-10-25, StateOwned23
 
-[Actor23/private state handoff2/view15](activation-state-handoff.md) реализованы;
-workspace741/0, protocol59/0, readonly journal2/0, mailbox1, local/MSVC Clippy/TS/UI
-passed. Нового actual native gate ещё нет. Следом clean receiver fixture2,
-distinct harness producer и Main HandoffIssued→StateOwned. Writable Store/local/
-controller/lifetime и remaining U2/U3/U4 впереди; public install off.
+**Начать с [подробной инструкции продолжения без контекста чата](resume-2026-10-25-state-handoff.md).**
+Все текущие проверки завершены. [Actor23/private handoff2/view15](activation-state-handoff.md)
+реализованы в source, updater18/worker16 прежние. Workspace741/0 (16 ignored),
+protocol59/0, journal2/0/mailbox1 и local/MSVC Clippy/contracts/TS/UI passed.
+Новый actual interprocess StateOwned gate **ещё не выполнялся**; harness/verifier/
+state flags пока отсутствуют. Writable Store/local/controller/lifetime впереди,
+public install off; updater целиком не готов.
 
-## Предшествующий статус 2026-10-24
+[Main22 receiver112/0](windows-activation-process-gate-2026-10-24.md) и
+[selective release7/0](state-lock-handoff.md) пройдены. Closing readonly audit
+Main22 принят, report/ZIP pins целы. Terminal tasks не replay. Installed d052
+healthy/connected/active0 и не менялся; desktop можно закрыть, worker оставить.
 
-[Actual Main22 gate112/0](windows-activation-process-gate-2026-10-24.md) пройден:
-taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
-producer a9860f4/target1c23d48. Observer accepted38 files twice/44+28+12 mutations,
-actual17→18/refusal. Следом state-lock release/authority/local/controller/lifetime.
-Terminal task не replay; public install off, installed runtime unchanged/healthy.
-Следующий [selective lock-release primitive](state-lock-handoff.md) также прошёл
-Windows7/0 (run20261025-024054-42fcdb0c, producer da1c7b6). Следом authenticated
-same-child HandoffIssued→StateOwned; Store authority/local health ещё впереди.
-Ниже сохранён предшествующий closing статус; его NEXT сначала проверить по этому
-положительному gate.
-
-**Начать с [подробной инструкции новой сессии](resume-2026-10-24-activation-process.md).**
-[Read-binding97/0](windows-activation-files-gate-2026-10-24.md) и actual17→18/refusal
-проверены. [Launcher/receiver](activation-receiver.md), [actor22/view14](activation-process-actor.md)
-и [Main22 harness/verifier](windows-activation-process-gate-2026-10-24.md) добавлены.
-Local/cross checks пройдены; новый actual Windows process gate **не отправлен**.
-
-Следом clean producer export и один `--activation-process` с готовой receiver
-fixture1c23d48; затем state/local/controller/lifetime, remaining U2 и U3/U4.
-Source updater18/worker16/supervisor22/view14, public install off. Полная цель
-не готова. Installed runtime unchanged/healthy/active0, controller оставлен.
-Desktop можно закрыть, installed worker оставить. Команды, pins, результаты,
-recovery rules и карта кода находятся в новой инструкции; нижние записи — история.
+Следом добавить state harness/boundary probes/verifier, затем distinct clean
+producer и один isolated Windows run с **готовым target receiver2 commit1370d6b**.
+Pins/cache/schema17 reference и original120s budget описаны в новой инструкции.
+После native StateOwned: writable authority/CAS/epoch → local/controller →
+lifetime/commit → remaining U2 faults/management → U3 desktop → U4 installed
+self-update. Затем вернуться к A4.3. Исторические NEXT ниже не текущие задания.
 
 ### История предыдущих checkpoints
 

@@ -2,28 +2,36 @@
 
 Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
-## Текущее состояние updater — checkpoint 2026-10-24
+## Текущее состояние updater — checkpoint 2026-10-25
 
-[Actual Main actor21/read-binding gate пройден: 97/0](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
-После manifest-last replacement тот же original supervisor держит весь новый
-набор пятью strict read pins и прежний state/instance lock. Cold metadata не
-восстанавливает custody. Exact marker search ускорен с сохранением full SHA,
-FileID/path/fencing checks; deadline120s сохранён, binding43.346s.
+Source **updater18/worker16, supervisor23/view15, private state handoff2**.
+[Подробная инструкция продолжения](plans/worker-self-update/resume-2026-10-25-state-handoff.md)
+приоритетнее исторических статусов ниже. [Main22 receiver112/0](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
+и [selective lock-release7/0](plans/worker-self-update/state-lock-handoff.md)
+прошли настоящую Windows проверку; их результаты не доказывают новую передачу
+состояния между этими процессами.
 
-Source: **updater18/worker16, supervisor22/view14**. [Activation preparation/read binding](plans/worker-self-update/runtime-activation.md)
-объединяют source binding, typed startup FSM, graph-bound ledger и consuming
-original guard. Nonce/deadline/kernel handles остаются resident non-Serde
-resources; JSON/history не дают права на OS effects. Views1–13 frozen.
+[Actor23](plans/worker-self-update/activation-state-handoff.md) в source потребляет
+original Ready owner, сохраняет HandoffIssued до unlock и отдаёт тот же instance
+lock тому же OS-authenticated receiver. Child проверяет exact readonly journal/
+accepted shutdown receipt и возвращает physical StateOwned с прежними FileID/
+incarnation и новым generation. Partial/unconfirmed исход удерживает residual
+handles, без автоматического retry/relock. Saved rows не восстанавливают kernel
+custody; cold view сохраняет историю отдельно от нынешних ресурсов/liveness.
 
-[Suspended launcher/private receiver library](plans/worker-self-update/activation-receiver.md)
-добавлены в source; [actor22/view14](plans/worker-self-update/activation-process-actor.md)
-подключён, actual native execution proof ещё впереди.
-State/local/controller/lifetime handoff ещё не реализованы. Public install выключен; activation/controller_confirmation/
-desktop_update не объявлены готовыми. Следом actual Main22 до Store writer и independent verifier. [Подробный актуальный checkpoint](plans/worker-self-update/resume-2026-10-24-activation-files.md)
-содержит pins, карту кода, правила auth/deadline/ownership и порядок продолжения.
-Все начатые проверки завершены, installed d052 healthy/unchanged. Старые
-preparation87/0 и one-file4/0 дополняются новым whole-set97/0 и actual17→18/refusal;
-история трёх failed attempts сохранена в gate report. Далее — история.
+Workspace741/0 (16 ignored), protocol59/0 и local/MSVC checks passed.
+**Actual Main23 state harness/verifier/gate ещё не добавлены/не выполнены.**
+Writable Store/новая JournalAuthority, local/controller service и lifetime
+transfer ещё впереди. Views1–14 frozen, исходный startup deadline120s сохранён.
+Public install off; advertised activation/controller_confirmation/desktop_update
+остаются None. Полное самообновление не готово; installed runtime не менялся.
+Следом native StateOwned, затем writable authority/local/controller/lifetime и
+remaining U2/U3/U4. Nonces/handles/deadlines остаются resident resources и
+не сериализуются в permissions.
+
+## История реализации updater
+
+Ниже статусы конкретных прежних source/gates, не текущие задания.
 
 Подключены [replacement driver/actor v17/view9](plans/worker-self-update/runtime-replacement-actor.md):
 одноразовое admission, consuming original custody, manifest-last перенос и
