@@ -12,6 +12,9 @@ taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
 producer a9860f4/target1c23d48. Observer accepted38 files twice/44+28+12 mutations,
 actual17→18/refusal. Следом state-lock release/authority/local/controller/lifetime.
 Terminal task не replay; public install off, installed runtime unchanged/healthy.
+Следующий [selective lock-release primitive](state-lock-handoff.md) также прошёл
+Windows7/0 (run20261025-024054-42fcdb0c, producer da1c7b6). Следом authenticated
+same-child HandoffIssued→StateOwned; Store authority/local health ещё впереди.
 Ниже сохранён предшествующий closing статус; его NEXT сначала проверить по этому
 положительному gate.
 

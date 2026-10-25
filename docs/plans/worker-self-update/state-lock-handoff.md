@@ -116,3 +116,26 @@ success; Drop старых pins не снимает чужой новый lock. 
 не проверка межпроцессной передачи writer. Следующий native gate должен использовать
 того же authenticated child/original supervisor и проверить HandoffIssued→StateOwned,
 сохраняя явную границу между physical state ownership и Store authority/local health.
+
+## Следующий implementation checkpoint
+
+Существующая ledger18 `StateOwned` receipt подтверждает actual process, прежние
+directory/journal/lock IDs и новый generation. Её следует получать после
+настоящего acquisition в том же child. Она не доказывает новую JournalAuthority
+epoch или writable Store; это отдельная следующая транзакция/local verification.
+Не добавлять epoch/permission в frozen receipt задним числом.
+
+Порядок: новый private state-handoff contract рядом с frozen Challenge/Ready1;
+проверка его поддержки до unlock; HandoffIssued до освобождения original lock;
+exact child acquires тот же lock и возвращает physical StateOwned; parent
+сохраняет факт, сохраняя released pins/old process/runtime resources. Отдельный
+typed owner обязан заменить прежнее предположение «original state held».
+Failure/unknown никогда не возвращают Ready guard для повторной передачи.
+Обычный serve по-прежнему заблокирован, Store writer/dispatch не запускаются.
+
+Для actual state-transfer gate потребуется **новая clean receiver fixture**:
+fixture1c23d48 имеет только Ready1 и для следующей команды не подходит.
+После receiver/library source checks экспортировать fixture, затем distinct
+actor/harness producer и новый isolated Main gate. Пройденные112/0 и7/0 не replay.
+Далее writable authority receipt/worker schema policy, local/controller/lifetime,
+remaining U2 и U3/U4. Installed worker сейчас обновлять не требуется.

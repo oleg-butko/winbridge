@@ -75,6 +75,11 @@ state/controller/lifetime handoff; полное самообновление е�
 install выключен. Installed runtime не менялся. Актуальный checkpoint
 приоритетнее исторических NEXT ниже.
 
+[Selective instance-lock release](docs/plans/worker-self-update/state-lock-handoff.md)
+также прошёл Windows7/0. Следом передача physical state тому же authenticated
+receiver, затем writable authority/local/controller/lifetime. Для state-transfer
+нужна новая receiver fixture; уже пройденные gates не повторять как новые задачи.
+
 Начата [подготовка самообновления U0](docs/guides/worker-update-preparation.md):
 `winbridge-update` проверяет исходники и показывает план замен, отдельный build-only
 сценарий собирает staging без остановки установленного worker. [19 native tests
