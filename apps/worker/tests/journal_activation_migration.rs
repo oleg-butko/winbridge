@@ -16,6 +16,8 @@ use winbridge_protocol::{
 };
 use winbridge_update::{artifact, sha256};
 use winbridge_worker::store::Store;
+#[path = "support/journal_migration_queries.rs"]
+mod queries;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -279,19 +281,16 @@ fn actual_sixteen_cli_history_migrates_to_seventeen_and_active_sixteen_stays_blo
     fs::create_dir(&input.root).unwrap();
     let source_dir = Path::new(&r.state.state_directory);
     let source_file = source_dir.join("journal.sqlite");
+    let source_pins = winbridge_update::shutdown::ShutdownStatePins::capture(source_dir).unwrap();
+    assert_eq!(source_pins.observation(), &r.state);
     assert_eq!(bytes(source_dir), r.worker_bytes);
     let source = connect(&source_file);
     assert_eq!(version(&source), 16);
-    let stop: String = source
-        .query_row(
-            "SELECT receipt FROM worker_shutdown_receipts WHERE update_id=?1",
-            [&r.accepted_shutdown.update_id],
-            |q| q.get(0),
-        )
-        .unwrap();
     assert_eq!(
-        serde_json::from_str::<WorkerShutdownReceipt>(&stop).unwrap(),
-        r.accepted_shutdown
+        queries::shutdown(&source, &r.accepted_shutdown.update_id)
+            .unwrap()
+            .as_ref(),
+        Some(&r.accepted_shutdown)
     );
     assert_eq!(r.accepted_shutdown.state, r.state);
     assert_eq!(r.accepted_shutdown.lease.phase, WorkerUpdatePhase::Quiesced);
@@ -317,14 +316,9 @@ fn actual_sixteen_cli_history_migrates_to_seventeen_and_active_sixteen_stays_blo
     assert_eq!(version(&active_check), 16);
     assert_eq!(rows(&active_check), active_rows);
     assert_eq!(authority(&active_check), active_authority);
-    let copied_stop: String = active_check
-        .query_row(
-            "SELECT receipt FROM worker_shutdown_receipts WHERE update_id=?1",
-            [&r.accepted_shutdown.update_id],
-            |q| q.get(0),
-        )
+    let copied_stop = queries::shutdown(&active_check, &r.accepted_shutdown.update_id)
+        .unwrap()
         .unwrap();
-    let copied_stop: WorkerShutdownReceipt = serde_json::from_str(&copied_stop).unwrap();
     assert_eq!(copied_stop, r.accepted_shutdown);
     // Readonly SQLite coordination files may appear. No frames, main DB
     // changes or new migration/backup artifacts are permitted.
@@ -517,6 +511,7 @@ fn actual_sixteen_cli_history_migrates_to_seventeen_and_active_sixteen_stays_blo
     drop(old_db);
     assert_eq!(bytes(source_dir), r.worker_bytes);
     assert_eq!(rows(&source), active_rows);
+    source_pins.revalidate().unwrap();
     drop(source);
     assert_eq!(
         artifact::inspect_image(Path::new(&r.image.path)).unwrap(),

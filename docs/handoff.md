@@ -10,6 +10,13 @@ PS mode/observer и реальные18→19/worker16→17/refusal fixtures по�
 Следом clean producer export, Windows PS syntax preflight и один combined run.
 Ожидающих Cargo/native/observer runs нет; native writer proof пока отсутствует.
 
+**Первый actual writer run terminal failed**: [отчёт/безопасный повтор](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md),
+run20261025-203011-cffafea9/taskabf1250f-9876-435c-83ea-672c0462d8b0.
+41 preliminary passed; native migration/Main24 не достигнуты из-за неверного SQL
+column в новой fixture. Исправлено на frozen command/record projection, portable
+real-Store regression1/0/MSVC passed. Нужен clean fixed producer и новый run,
+первый namespace не replay. Installed d052 healthy/idle, ручное обновление не нужно.
+
 ## Авторитетное состояние
 
 - Source **updater19 / worker17 / supervisor24 / view16 / private physical2 + writer3**.

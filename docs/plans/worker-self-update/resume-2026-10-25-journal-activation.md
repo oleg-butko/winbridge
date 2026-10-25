@@ -17,6 +17,13 @@ Cargo/native/observer runs нет. Receiver pin остаётся `7fd8135`/targe
 preflight и один автоматический прогон с actual updater18→19/worker16→17/refusal. Обновлять установленный worker для этого
 сейчас не требуется. Подробности, ограничения и критерии ниже.
 
+**Native update:** [первый actual run](windows-journal-writer-gate-2026-10-25.md)
+terminal failed (run203011-cffafea9/taskabf1250f). Preliminary41 passed, actual
+migration/Main24 не достигнуты: неверный SQL column в fixture. Исправлена projection
+command/record, portable real-Store regression1/0 и MSVC passed. Нужен новый clean
+fixed producer/export/run; первый не replay. Подробный отчёт содержит ZIP/proof
+pins, parse-only success и cache lineage. Installed worker исправен/idle.
+
 ## 1. Что реализовано и что ещё не доказано
 
 Независимые версии текущего source: **updater journal19 / worker journal17 /

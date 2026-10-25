@@ -23,6 +23,11 @@ cross/local checks прошли. PS mode/observer и реальные migration 
 - Main24 source checks: portable hooks4/0, Python19/0, обе all-target validation
   Clippy passed; old132 readonly verifier regression прошёл. Это не writer native proof.
 
+Первый native writer run завершён failed на SQL projection новой migration
+fixture до миграции/Main24. Preliminary41 passed; fixed query/regression1/MSVC
+готовы. [Точные pins/причина/retry](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md).
+Следом clean fixed producer/export и новый combined run; public install off.
+
 Следующая последовательность:
 
 1. Receiver19/17/private3/actor24 clean **1a2149f уже экспортирована**;
