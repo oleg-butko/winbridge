@@ -65,6 +65,28 @@ Clean receiver commit `24136539e0b1c542c48c90bace4bf975bed6c69c`:
 `563efa9a7380da00c8d89a3bf15faac9d45ea18958ee63029fb5cb9222e97613`.
 Archive-derived startup default240000ms проверен. Следующий docs-only commit
 даёт отдельный producer; оба содержат reviewed code19/17/private3.
+
+## Активный native retry
+
+Run `20261025-232746-26bad6d7`, task `a49ade1f-4e35-4eff-84ac-3b8d21c0a9ea`
+принят и наблюдается; **не resubmit**. Producer
+`acf712313405c0e6be04b91893f8ed927772f1ed`, ZIP
+`winbridge-20261025T232727Z-acf7123-7d95795d.zip`, SHA
+`7e8ccc681c030f72194c9359cf646111dd7720bce58652d105c263fbdcc26008`.
+Target2413653 выше. Cache `20261017-061527-f4639971`; reference old Main23
+`.winbridge/workflow-validation/20261025-100933-d8a50807/activation-preparation-verified.json`.
+Observer log `.winbridge/update-preparation/review-writer24-native.log`.
+Метаданные task/request/cursor сохранены локально; Windows runtime не меняется.
+
+Для retained terminal report доступна readonly сводка:
+
+```bash
+python3 scripts/summarize-update-timings.py /mnt/hgfs/shared/WinBridge/workflow-validation/RUN
+```
+
+Она дважды проверяет ready bytes/SHA и выводит command durations и самые долгие
+timing edges. Для старых logs отсутствующие hash counters равны null, не0.
+Разные операции вложены: их суммы не являются временем всего run.
 Следом — clean distinct producer/receiver, actual Main24 + обе migrations,
 independent audit. После полного success: normal service/reconciliation в том же
 child/Store/lock → новая controller session → durable Job lifetime/commit/scoped

@@ -3,6 +3,8 @@
 Продолжение2026-10-25: [review/latency и новое окно240s](plans/worker-self-update/review-2026-10-25-latency.md)
 по явному поручению пользователя. Старые120s intent не переписываются; новый Main24
 нужен до normal service/controller/lifetime. Ниже исходный checkpoint.
+Retry20261025-232746-26bad6d7/taska49ade1f-4e35-4eff-84ac-3b8d21c0a9ea выполняется,
+produceracf7123/target2413653; наблюдать, не resubmit.
 
 ## Текущий checkpoint — закрытие проверок 2026-10-25
 
