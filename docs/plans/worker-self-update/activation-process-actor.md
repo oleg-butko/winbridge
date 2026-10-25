@@ -1,9 +1,9 @@
 # Supervisor22/view14: один pre-writer receiver
 
 2026-10-24. Actor dispatch добавлен к [launcher/receiver library](activation-receiver.md).
-**Actual native execution gate ещё не выполнен.**
+**[Actual native gate112/0 пройден](windows-activation-process-gate-2026-10-24.md).**
 [Closing checkpoint и инструкция новой сессии](resume-2026-10-24-activation-process.md):
-Main22 harness/verifier уже добавлены, следующий шаг — clean producer и запуск. Updater18/worker16 прежние;
+Main22 harness/verifier добавлены и прошли actual run; следующий шаг — state handoff. Updater18/worker16 прежние;
 activation/controller_confirmation/desktop_update=None, public install off.
 Новые поля есть только у view14; frozen views1–13 не меняются.
 

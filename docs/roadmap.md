@@ -1,12 +1,14 @@
 # Постепенная реализация и расширение
 
-## Продолжение: Main22 в исполнении
+## Продолжение: Main22 пройден, следующий state handoff
 
-[Actual receiver gate](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-запущен: taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
-producer a9860f4/target1c23d48. Наблюдать тот же run, actual proof ещё нет.
-После terminal audit/review продолжать state/local/controller/lifetime handoff;
-public install off, installed runtime unchanged. Ниже — checkpoint до submit.
+[Actual receiver gate112/0](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md),
+taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
+producer a9860f4/target1c23d48.38 files twice,44+28+12 mutations, actual17→18/refusal.
+Original state held, один Ready receiver и actual cold exit проверены; writer0.
+Следом physical selective lock release и authenticated state/authority receipt,
+local/controller/lifetime, remaining U2/U3/U4. Public install off, installed runtime
+unchanged/healthy/active0. Старый terminal run не replay. Ниже — история до gate.
 
 ## Текущий checkpoint updater — 2026-10-24, закрытие перед Main22
 

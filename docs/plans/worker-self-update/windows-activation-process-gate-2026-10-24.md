@@ -1,30 +1,55 @@
 # Actual Main22: один private receiver до state writer
 
 2026-10-24 America/New_York, запуск02:10UTC2026-10-25.
-**Actual run отправлен, задача running; положительный proof ещё не получен.**
+**Gate пройден:112 passed /0 failed,25 groups/28 commands; observer exit0.**
 [Actor22/view14](activation-process-actor.md), [library/target fixture](activation-receiver.md).
 Updater18/worker16 прежние; activation/public install off. Это изолированная
 проверка, не замена установленного runtime и не полное самообновление.
 
-## Активный запуск после closing checkpoint
+## Положительный actual run
 
-- Task `f5d9bf8d-983e-4c7b-8bbb-c6147da5e33b`, run `20261025-021054-05388d1d`.
+- Task `f5d9bf8d-983e-4c7b-8bbb-c6147da5e33b`, run `20261025-021054-05388d1d`,
+  terminal succeeded/exit0.112 tests/25 groups/28 commands, actual Main701.20s.
 - Clean producer `a9860f4f4033f5fc400f4c6c9de648ff5e83e9a0`, ZIP
   `winbridge-20261025T021042Z-a9860f4-677c4a65.zip`, SHA
   `c3702ccc454dcb1effca858664f4f2794c7fbe18f05b379b65e15ca9e8e49d02`, manifest
   `828dec1647c3558885007b3ced54639ca797495fa4e0ca32b1902746bfe4edad`.
 - Target fixture1c23d48 и reference/cache ниже не менялись.
+- Observer проверил38 ready files дважды, отверг44 replacement +28 process +12
+  migration mutations. Actual17→18/refusal passed. Отдельный old files audit
+  не запускался: новый process verifier проверяет actual bound set в этом scope.
+- Report SHA `8f155ff1b368cedc27daa0b68681094d0814754cec52f9db9fbb651ce407a61b`.
+- Main proof SHA `be5c15afbf4031d43bcc7892f85ffb6ff3998508cf839712d837971ca4662401`.
+- Migration SHA `48ebf3539d8400a536b00950efc8bf72c6f25e86d7938eb92d58370fea68026e`.
 - Observer log `.winbridge/update-preparation/activation-main-native.log`;
-  run metadata `.winbridge/workflow-validation/20261025-021054-05388d1d/activation-preparation-run.json`.
+  local pin `.winbridge/workflow-validation/20261025-021054-05388d1d/activation-preparation-verified.json`.
 - Shared report `/mnt/hgfs/shared/WinBridge/workflow-validation/20261025-021054-05388d1d`.
-- Наблюдать именно эту task. После потери observer — та же команда ниже с
-  `--archive .../winbridge-20261025T021042Z-a9860f4-677c4a65.zip` и
-  `--verify-run 20261025-021054-05388d1d`. **Не новый submit.**
 
-Initial fresh Info: installed d052 connected/healthy/active0, Debian free
-26,836,901,888 bytes. Windows preflight6GiB пройден, native build начат.
-Installed runtime/state не меняются; desktop не нужен, UI-окон не будет.
-Closing/local-results section ниже описывает момент до submit, а не итог gate.
+Actual activation attempt `0830fd67-c6ef-4495-9a6e-aa8ae3e58d27`, receiver PID4744 /
+FILETIME134373690472836061, original supervisor PID25192. Один live child/Job,
+Prepared0→Creating1→Created2→ResumeGranted3→Ready4, original instance lock/DB/WAL
+сохранены. RootVerifyingLocal/revision15 не изменён. stdout/stderr пусты, state
+handoff0. Lost ACK и duplicates не создали второй процесс. После owned Job exit
+retained actual process handle signalled, Job empty; cold view NotResident,
+custody/state=false, saved Ready retained, automatic cold launch0.
+
+Measured after activation admission: Creating63,777ms, Created74,155ms,
+ResumeGranted85,101ms, Ready91,397ms, persisted Ready93,571ms. Original120,000ms
+window не продлевалось. Main wall timings от начала helper (до admission):
+Bound59,638ms, Ready102,459ms. Это разные точки отсчёта.
+
+Windows free14,689,849,344→13,645,647,872 bytes, Debian до dispatch26,836,901,888 /
+после26,838,966,272 bytes. Cleanup не выполнялся. Fresh installed Info после
+terminal: прежний d052/generation8f8d1fb9-e5b1-4984-a17e-d067db46268e,
+connected/active0, maintenanceError=null/journalRecoveryRequired=null,
+recoveryCoverage.complete=true. Desktop можно закрыть, installed worker оставить.
+Installed runtime/state не заменялись, UI-окон не было.
+
+Review actual proof не выявил необходимости менять launcher. Следом physical
+state-lock release с retained identities/failure custody, затем authenticated
+writer handoff/local/controller/lifetime и оставшиеся U2/U3/U4. Public install off.
+Не replay terminal task. Readonly recheck — та же команда ниже с exact producer
+ZIP и `--verify-run 20261025-021054-05388d1d`.
 
 ## Что исполняется
 

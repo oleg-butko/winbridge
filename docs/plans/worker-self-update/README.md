@@ -7,10 +7,13 @@
 
 ## Текущий статус 2026-10-24
 
-[Actual Main22 gate](windows-activation-process-gate-2026-10-24.md) запущен после
-closing checkpoint: taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
-producer a9860f4/target1c23d48. Наблюдать эту task/run, не resubmit. Proof пока нет;
-ниже сохранён предшествующий closing статус.
+[Actual Main22 gate112/0](windows-activation-process-gate-2026-10-24.md) пройден:
+taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b/run20261025-021054-05388d1d,
+producer a9860f4/target1c23d48. Observer accepted38 files twice/44+28+12 mutations,
+actual17→18/refusal. Следом state-lock release/authority/local/controller/lifetime.
+Terminal task не replay; public install off, installed runtime unchanged/healthy.
+Ниже сохранён предшествующий closing статус; его NEXT сначала проверить по этому
+положительному gate.
 
 **Начать с [подробной инструкции новой сессии](resume-2026-10-24-activation-process.md).**
 [Read-binding97/0](windows-activation-files-gate-2026-10-24.md) и actual17→18/refusal

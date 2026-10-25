@@ -1,14 +1,22 @@
 # Точка продолжения updater — 2026-10-24, closing Main22 checkpoint
 
-## Продолжение: actual Main22 запущен, наблюдать эту task
+## Новейший результат: Main22 receiver gate пройден
 
-[Main22 receiver gate](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-running: task `f5d9bf8d-983e-4c7b-8bbb-c6147da5e33b`, run
-`20261025-021054-05388d1d`, clean producer a9860f4, target fixture1c23d48.
-Fresh installed Info healthy/active0 до submit; изолированный Windows build
-начат. Proof пока нет. Observer `activation-main-native.log`; exact pins и
-same-run `--verify-run` recovery — в linked report. Не replay неизвестный исход.
-Следующий closing checkpoint ниже фиксирует предшествующий момент до submit.
+[Actual Main22](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md):
+**112 passed /0 failed**, taskf5d9bf8d-983e-4c7b-8bbb-c6147da5e33b,
+run20261025-021054-05388d1d, producer a9860f4/target1c23d48. Observer exit0:
+38 files twice,44 replacement+28 process+12 migration mutations rejected,
+actual17→18/refusal passed. Один actual receiver Ready4, original state held,
+lost ACK/duplicates/cold exit проверены; writer не открывался. Ready91.397s
+после admission, original120s не увеличен. Pins/hashes/timings — в отчёте.
+
+Installed d052 unchanged/healthy/connected/active0. Все Windows/observer runs
+завершены; desktop можно закрыть, installed worker оставить. Следом physical
+state-lock release/failure custody и authenticated state/local/controller/lifetime,
+remaining U2/U3/U4. [Review границ](plans/worker-self-update/runtime-activation.md#review-следующего-state-handoff-после-actor22-2026-10-24).
+Source updater18/worker16/supervisor22/view14, public install off. Полный updater
+не готов. Ниже сохранён checkpoint **до** положительного execution; его старые
+«не отправлен» и команды первого submit не являются текущим заданием.
 
 **Начать с [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-24-activation-process.md).**
 Она содержит точную границу готовности, карту кода, checks/logs, source/target/

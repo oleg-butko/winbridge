@@ -2,7 +2,7 @@
 
 2026-10-24, продолжение после checkpoint547a487. **Library и private worker entry
 добавлены; [actor22/view14](activation-process-actor.md) подключён,
-настоящий execution gate ещё впереди.** Прежний
+[actual Main22 gate112/0 пройден](windows-activation-process-gate-2026-10-24.md).** Прежний
 [native97/0](windows-activation-files-gate-2026-10-24.md) относится к producer941a2e6
 и доказывает read binding, а не этот запуск. Public install остаётся выключенным,
 activation/controller_confirmation/desktop_update=None. Schemas18/16 не менялись; новый actor22/view14 описан отдельно, views1–13 frozen.

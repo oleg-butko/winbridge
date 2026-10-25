@@ -70,7 +70,7 @@ actual17→18/refusal. Binding43.346s укладывается в исходны
 [Suspended launcher/private receiver library](docs/plans/worker-self-update/activation-receiver.md)
 добавлены; [actor22/view14](docs/plans/worker-self-update/activation-process-actor.md) подключён,
 [Main22 harness/verifier](docs/plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
-подготовлены, настоящий Windows execution gate ещё не отправлен. Затем
+[прошли actual Windows gate112/0](docs/plans/worker-self-update/windows-activation-process-gate-2026-10-24.md). Затем
 state/controller/lifetime handoff; полное самообновление ещё не готово, public
 install выключен. Installed runtime не менялся. Актуальный checkpoint
 приоритетнее исторических NEXT ниже.
