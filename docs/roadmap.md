@@ -5,6 +5,10 @@
 Продолжать по [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
 и [writer actor](plans/worker-self-update/journal-writer-actor.md).
 
+Текущие проверки завершены, новый Windows writer run не запускался. Checkpoint
+содержит актуальную карту кода, source/physical доказательства, pins, safe resume
+и подробный первый следующий сценарий; новых незавершённых harness edits нет.
+
 - Source **updater19/worker17/supervisor24/view16/private physical2+writer3**.
   Worker atomic header/receipt/opening и graph-bound updater intent/history,
   consuming native private driver/worker handler и actor24/view16 реализованы.
@@ -13,7 +17,8 @@
   обе Clippy/fmt/contracts/TS/UI/scaffold passed; summary `actor24-checks.json`.
 - [Physical132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   относится к18/16/private2. Terminal run20261025-100933-d8a50807 не replay.
-  Installed d052 unchanged/healthy; новых native runs нет, desktop не нужен.
+  Installed d052 unchanged/healthy; closing readonly recheck прошёл, новых native
+  runs нет, desktop не нужен. Receiver source ZIP также повторно проверена.
 
 Следующая последовательность:
 

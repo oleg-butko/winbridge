@@ -4,6 +4,12 @@
 и [actor24/view16](plans/worker-self-update/journal-writer-actor.md).**
 Общая цель updater продолжается; полное самообновление ещё не готово.
 
+**Проверки закрыты по просьбе пользователя.** Подробный checkpoint сверен с HEAD.
+В нём есть
+история commits, актуальный код, результаты/логи, exact ZIP/proof pins, команды
+readonly восстановления и критерии следующего combined native gate. Ожидающих
+Cargo/native/observer runs и незаконченных изменений harness нет.
+
 ## Авторитетное состояние
 
 - Source **updater19 / worker17 / supervisor24 / view16 / private physical2 + writer3**.
@@ -43,7 +49,11 @@
    self-update; затем возврат к A4.3.
 
 Карта кода, invariants, old proof/ZIP pins и readonly recovery — в checkpoint.
-Новых native Windows runs не отправляли, только terminal disk queries.
+При закрытии новых Windows tasks не отправляли: повторно сверены прежний
+physical132/0 (45 files twice,44+40+12 mutations), receiver ZIP и source test logs.
+Fresh Info2026-10-25T16:52:47Z: тот же d052/generation, connected/active0,
+maintenance/recovery errors=null, coverage.complete=true. Generated closing
+summary `.winbridge/update-preparation/checkpoint-20261025-close.json`.
 Desktop можно закрыть, **installed worker оставить**. Controller PID3922/
 ws://192.168.44.203:1143 оставлен работать; после reboot перепроверить Info/listener,
 не запускать второй. Перед heavy build оба диска≥6GiB, CARGO_INCREMENTAL=0,

@@ -19,7 +19,12 @@ physical2; closing readonly recheck принят. Terminal run20261025-100933-d8
 Public install/capabilities off, полное самообновление не готово.
 Source workspace781/0 (16 ignored), focused19/mailbox24 1/0 и обе Clippy/fmt/contracts/TS/UI/scaffold passed.
 
-Следом новая receiver19/17/private3/actor24 → harness/PS mode/verifier (пока нет)
+Проверки закрыты по просьбе пользователя. Closing readonly physical132/0,
+receiver ZIP и source test evidence повторно сверены; pending runs нет.
+[Checkpoint](resume-2026-10-25-journal-activation.md) содержит актуальную карту
+реализации, review fixes, pins/команды и acceptance criteria без контекста чата.
+
+Receiver19/17/private3/actor24 **1a2149f уже экспортирована**. Следом harness/PS mode/verifier (пока нет)
 → distinct producer/combined
 native writer с actual updater18→19/worker16→17/refusal → local/controller/
 lifetime/commit → remaining U2 faults/management → U3 desktop → U4 actual installed
