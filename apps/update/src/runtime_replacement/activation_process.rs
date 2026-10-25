@@ -255,10 +255,16 @@ impl ActivationProcessGuard {
         s: &SupervisorRecord,
         grant: bool,
     ) -> Result<RuntimeReplacementRecord> {
+        let mut timing = crate::activation::ActivationTiming::new(
+            "process_custody",
+            Some(self.files.preparation.deadline),
+        );
         let r = j
             .require_activation_owned_current(a, s, &self.files.preparation, &self.record)
             .map_err(|e| e.to_string())?;
+        timing.mark("graph_checked", None, None);
         self.require_fixed_custody(grant)?;
+        timing.mark("physical_checked", None, None);
         Ok(r)
     }
     fn require_fixed_custody(&self, grant: bool) -> Result<()> {
@@ -293,6 +299,10 @@ impl ActivationProcessGuard {
         a: &UpdateAuthority,
         s: &SupervisorRecord,
     ) -> Result<()> {
+        let mut timing = crate::activation::ActivationTiming::new(
+            "handoff",
+            Some(self.files.preparation.deadline),
+        );
         if self.released.is_some()
             || !matches!(self.record.state, ActivationState::ReadyForState {})
             || self.record.revision != 4
@@ -323,9 +333,11 @@ impl ActivationProcessGuard {
                 "Ready worker lacks private state handoff V2; original lock retained".into(),
             );
         }
+        timing.mark("capability_checked", None, None);
         self.require_custody(j, a, s, true)?;
         let next = self.record.issue_handoff(self.at()?, &r)?;
         self.save(j, a, s, next)?; // Commit/readback before relinquishing ownership.
+        timing.mark("handoff_intent_saved", None, None);
         let request = channel::state_handoff(&self.record)?;
         self.require_custody(j, a, s, true)?;
         #[cfg(feature = "update-validation")]
@@ -355,6 +367,7 @@ impl ActivationProcessGuard {
             std::sync::atomic::Ordering::Release,
         );
         self.released = Some(released); // Retain residual handles even on unlock error.
+        timing.mark("original_lock_released", None, None);
         self.require_custody(j, a, s, false)?;
         #[cfg(feature = "update-validation")]
         validation::state_boundary(&self.record, validation::StateBoundary::Released, || {
@@ -376,7 +389,9 @@ impl ActivationProcessGuard {
             .as_mut()
             .ok_or("Original state handoff channel missing")?;
         channel::write(stream, &request, remaining).await?;
+        timing.mark("handoff_sent", None, None);
         let message: channel::StateOwned = channel::read(stream, timeout).await?;
+        timing.mark("state_owned_received", None, None);
         live.require_live().map_err(|e| e.to_string())?;
         channel::validate_state_owned(&message, &self.record)?;
         self.require_custody(j, a, s, false)?;
@@ -384,6 +399,7 @@ impl ActivationProcessGuard {
             .record
             .state_owned(message.state_owned, self.at()?, &r)?;
         self.save(j, a, s, next)?;
+        timing.mark("state_owned_saved", None, None);
         Ok(())
     }
     fn save(
@@ -404,8 +420,13 @@ impl ActivationProcessGuard {
         a: &UpdateAuthority,
         s: &SupervisorRecord,
     ) -> Result<()> {
+        let mut timing = crate::activation::ActivationTiming::new(
+            "launch",
+            Some(self.files.preparation.deadline),
+        );
         // No progressed/cold record may enter this one-shot factory.
         self.files.require_current(j, a, s)?;
+        timing.mark("files_current", None, None);
         let pin = crate::artifact::pin(Path::new(&self.record.intent.source.worker.path))?;
         if pin.evidence != self.record.intent.source.worker
             || !crate::worker_rehearsal::supports(&pin, channel::RECEIVER_MARKER)?
@@ -415,6 +436,7 @@ impl ActivationProcessGuard {
                     .into(),
             );
         }
+        timing.mark("capability_checked", None, None);
         let source = &self.record.intent.source;
         let address = channel::endpoint(
             &Path::new(&source.runtime_directory).join("update-state"),
@@ -435,6 +457,7 @@ impl ActivationProcessGuard {
         let r = self.require_custody(j, a, s, true)?;
         let next = self.record.issue_create(self.at()?, &r)?;
         self.save(j, a, s, next)?; // Durable Creating before any CreateProcess.
+        timing.mark("creating_saved", None, None);
         #[cfg(feature = "update-validation")]
         validation::hold(&self.record, "creating", || {
             self.files.preparation.require_live_window()?;
@@ -460,6 +483,7 @@ impl ActivationProcessGuard {
             }
         };
         self.child = Some(child); // Retain ownership before any fallible receipt.
+        timing.mark("child_created_suspended", None, None);
         let identity = self
             .child
             .as_ref()
@@ -481,6 +505,7 @@ impl ActivationProcessGuard {
         // Actual PID/Job fact may arrive late.
         self.save(j, a, s, next)?;
         // Still suspended: output cannot block it yet. Persist the real PID/Job
+        timing.mark("created_saved", None, None);
         // before a fallible allocation of either output reader thread.
         #[cfg(feature = "update-validation")]
         validation::hold(&self.record, "created", || {
@@ -498,6 +523,7 @@ impl ActivationProcessGuard {
             return Err("Suspended activation child exited; no resume".into());
         }
         child.resume().map_err(|e| e.to_string())?;
+        timing.mark("child_resumed", None, None);
         let process = self.record.created.as_ref().unwrap().process.clone();
         let pinned = infrastructure::PinnedProcess::live(&process).map_err(|e| e.to_string())?;
         let timeout = Duration::from_millis(self.record.intent.context.startup_timeout_ms);
@@ -521,6 +547,7 @@ impl ActivationProcessGuard {
             attempt_id: self.record.intent.attempt_id.clone(),
             nonce: self.files.preparation.channel_nonce.clone(),
         };
+        timing.mark("child_connected", None, None);
         let remaining = until.saturating_duration_since(tokio::time::Instant::now());
         channel::write(&mut stream, &challenge, remaining).await?;
         let ready: channel::Ready = channel::read(
@@ -528,12 +555,14 @@ impl ActivationProcessGuard {
             until.saturating_duration_since(tokio::time::Instant::now()),
         )
         .await?;
+        timing.mark("ready_received", None, None);
         pinned.require_live().map_err(|e| e.to_string())?;
         channel::validate_ready(&ready, &self.record)?;
         self.require_custody(j, a, s, false)?;
         let next = self.record.ready(ready.ready, self.at()?, &r)?;
         self.save(j, a, s, next)?;
         self.channel = Some(stream);
+        timing.mark("ready_saved", None, None);
         Ok(())
     }
     fn record_uncertainty(

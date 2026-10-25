@@ -1068,6 +1068,7 @@ name = "winbridge-worker"
 version = "0.1.0"
 dependencies = [
  "fs2",
+ "memchr",
  "rusqlite",
  "serde",
  "serde_json",

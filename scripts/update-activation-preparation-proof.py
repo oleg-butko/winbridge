@@ -42,9 +42,11 @@ def windows_path(value):
     return PureWindowsPath(value[4:] if value.startswith('\\\\?\\') else value)
 
 
-def verify_scope(r, saved, before, replaced, root, *, worker_schema=16, updater_schema=18):
+def verify_scope(r, saved, before, replaced, root, *, worker_schema=16, updater_schema=18, startup_timeout_ms=120000):
     need(type(worker_schema) is int and type(updater_schema) is int
          and (worker_schema, updater_schema) in ((16, 18), (17, 19)), 'Unsupported explicit activation schema pair')
+    need(type(startup_timeout_ms) is int and startup_timeout_ms in (120000, 240000),
+         'Unsupported explicitly pinned startup budget')
     sup, h = saved['supervisor'], saved['health']
     intent, ctx, binding = r['intent'], r['intent']['context'], before['shutdown']['intent']['binding']
     replacement = replaced['record']
@@ -77,7 +79,7 @@ def verify_scope(r, saved, before, replaced, root, *, worker_schema=16, updater_
                             previousGeneration=binding['worker']['generation'], workerContext=binding['worker']['context'],
                             workerState=binding['workerState'], workerConfig=h['context']['workerConfig'],
                             workerConfigSchema=rehearsal['workerConfigSchema'], workerJournalSchema=worker_schema,
-                            updaterJournalSchema=updater_schema, protocolVersion=rehearsal['protocolVersion'], startupTimeoutMs=120000,
+                            updaterJournalSchema=updater_schema, protocolVersion=rehearsal['protocolVersion'], startupTimeoutMs=startup_timeout_ms,
                             channelNonceSha256=ctx['channelNonceSha256'])
     need(ctx == expected_context and re.fullmatch(r'[0-9a-f]{64}', ctx['channelNonceSha256'])
          and str(uuid.UUID(intent['attemptId'])) == intent['attemptId']

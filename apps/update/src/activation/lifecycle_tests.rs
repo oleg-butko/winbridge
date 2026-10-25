@@ -61,6 +61,23 @@ fn created(v: &ActivationRecord, at: u64) -> ActivationCreated {
         observed_at_ms: at,
     }
 }
+#[test]
+fn new_startup_budget_allows_slow_activation_but_never_renews_a_saved_attempt() {
+    let (r, legacy) = fixture();
+    let mut intent = legacy.intent.clone();
+    intent.context.startup_timeout_ms = crate::activation::STARTUP_TIMEOUT_MS;
+    let fresh = ActivationRecord::prepared(intent, &r).unwrap();
+    let after_old_deadline = legacy.intent.admitted_at_ms + 120_001;
+    assert!(legacy.issue_create(after_old_deadline, &r).is_err());
+    assert!(fresh.issue_create(after_old_deadline, &r).is_ok());
+    assert!(fresh
+        .issue_create(
+            fresh.intent.admitted_at_ms + crate::activation::STARTUP_TIMEOUT_MS + 1,
+            &r
+        )
+        .is_err());
+    assert_eq!(legacy.intent.context.startup_timeout_ms, 120_000);
+}
 pub(crate) fn stages(
     initial: &ActivationRecord,
     r: &RuntimeReplacementRecord,

@@ -92,6 +92,7 @@ mod native {
     };
 
     pub(super) async fn receive(config: &Path, update_id: &str, attempt_id: &str) -> Result<()> {
+        let mut timing = winbridge_update::activation::ActivationTiming::new("receiver", None);
         for id in [update_id, attempt_id] {
             if uuid::Uuid::parse_str(id)
                 .ok()
@@ -115,6 +116,7 @@ mod native {
         let guard = crate::runtime_guard::prepare_runtime_guard(&config)?
             .ok_or("Private activation requires a known installed set; no journal opened")?;
         let identity = guard.identity().clone();
+        timing.mark("runtime_pinned", None, None);
         let directory = Path::new(&identity.image.path)
             .parent()
             .ok_or("Loaded worker has no runtime")?
@@ -129,6 +131,8 @@ mod native {
         // Freeze the child's remaining original window once. Receiving another
         // message or a wall-clock rollback must not start another timeout.
         let handoff_deadline = original_handoff_deadline(&record)?;
+        timing.observe_deadline(handoff_deadline);
+        timing.mark("initial_graph_checked", None, None);
         let check = crate::compatibility::check_config(
             &config,
             &record.intent.context.worker_config.sha256,
@@ -153,8 +157,10 @@ mod native {
         let timeout = Duration::from_millis(record.intent.context.startup_timeout_ms);
         let challenge: channel::Challenge = channel::read(&mut stream, timeout).await?;
         channel::validate_challenge(&challenge, &record)?;
+        timing.mark("challenge_received", None, None);
         // Expensive verification precedes Ready. Never reopen the worker Store.
         guard.revalidate()?;
+        timing.mark("runtime_revalidated_for_ready", None, None);
         parent.require_live().map_err(|e| e.to_string())?;
         if UpdateJournal::inspect_activation_receiver(
             &directory,
@@ -183,12 +189,14 @@ mod native {
         };
         channel::validate_ready(&ready, &record)?;
         channel::write(&mut stream, &ready, timeout).await?;
+        timing.mark("ready_sent", None, None);
         // One bounded read remains live while checking the original parent.
         // V1 Ready is unchanged; V2 is a separate typed handoff, never a writer.
         let request: channel::StateHandoff = tokio::select! {
             value=channel::read(&mut stream,timeout) => value?,
             outcome=parent_alive(&parent, timeout) => return outcome,
         };
+        timing.mark("handoff_received", None, None);
         let snapshot = UpdateJournal::inspect_activation_state_handoff(
             &directory,
             update_id,
@@ -197,6 +205,7 @@ mod native {
         )
         .map_err(|e| e.to_string())?;
         let issued = &snapshot.record;
+        timing.mark("handoff_graph_checked", None, None);
         channel::validate_state_handoff(&request, issued)?;
         if issued.intent != record.intent || issued.ready.as_ref() != Some(&ready.ready) {
             return Err("State handoff changed the authenticated Ready attempt".into());
@@ -210,6 +219,7 @@ mod native {
             return Err("State handoff directory/journal/lock identities changed".into());
         }
         guard.revalidate()?;
+        timing.mark("runtime_revalidated_for_handoff", None, None);
         parent.require_live().map_err(|e| e.to_string())?;
         if UpdateJournal::inspect_activation_state_handoff(
             &directory,
@@ -226,6 +236,7 @@ mod native {
         let state = pins
             .try_lock()
             .map_err(|e| format!("Exact state acquisition failed; no retry: {e}"))?;
+        timing.mark("instance_lock_acquired", None, None);
         super::inspect_state_journal(
             &cfg.state_directory.join("journal.sqlite"),
             &issued.intent.context.worker_context,
@@ -258,11 +269,13 @@ mod native {
         };
         channel::validate_state_owned(&owned, issued)?;
         channel::write(&mut stream, &owned, timeout).await?;
+        timing.mark("state_owned_sent", None, None);
         // V3 is a separate private command, not permission inferred from V2.
         let request: channel::WriterCommand = tokio::select! {
             value=channel::read(&mut stream,timeout)=>value?,
             outcome=parent_alive(&parent,timeout)=>return outcome,
         };
+        timing.mark("writer_received", None, None);
         let writer_snapshot = UpdateJournal::inspect_activation_writer_receiver(
             &directory,
             update_id,
@@ -270,6 +283,7 @@ mod native {
             &ready.ready.identity.process,
         )
         .map_err(|e| e.to_string())?;
+        timing.mark("writer_graph_checked", None, None);
         channel::validate_writer_command(&request, &writer_snapshot.writer.command)?;
         if writer_snapshot.activation.intent != record.intent
             || writer_snapshot.activation.state_owned.as_ref() != Some(&owned.state_owned)
@@ -277,9 +291,14 @@ mod native {
         {
             return Err("Writer changed the original same-child physical ownership".into());
         }
-        let checkpoint = || {
+        let mut checkpoint_timing = winbridge_update::activation::ActivationTiming::new(
+            "receiver_writer_checkpoint",
+            Some(handoff_deadline),
+        );
+        let mut checkpoint = || {
             parent.require_live().map_err(|e| e.to_string())?;
             guard.revalidate()?;
+            checkpoint_timing.mark("runtime_checked", None, None);
             require_handoff_window(&writer_snapshot.activation, handoff_deadline)?;
             let current = UpdateJournal::inspect_activation_writer_receiver(
                 &directory,
@@ -293,22 +312,25 @@ mod native {
                     "Writer admission changed during existing-state preparation/commit".into(),
                 );
             }
+            checkpoint_timing.mark("graph_checked", None, None);
             require_handoff_window(&writer_snapshot.activation, handoff_deadline)
         };
         let mut journal = crate::store::ActivationJournal::open(
             state,
             request.command.clone(),
             writer_snapshot.shutdown_receipt.clone(),
-            checkpoint,
+            &mut checkpoint,
         )
         .map_err(|e| e.to_string())?;
+        timing.mark("existing_journal_opened", None, None);
         let crate::store::JournalActivationAcceptance::Fresh(fresh) =
-            journal.activate(checkpoint)?
+            journal.activate(&mut checkpoint)?
         else {
             return Err(
                 "Observed journal receipt grants no fresh private runtime ownership".into(),
             );
         };
+        timing.mark("authority_committed", None, None);
         let response = channel::WriterReceipt {
             contract_version: channel::WRITER_CONTRACT,
             receipt: fresh.receipt().clone(),

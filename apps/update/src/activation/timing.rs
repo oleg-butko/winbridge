@@ -1,69 +1,58 @@
-//! Explicit native validation diagnostics; never part of a grant or wire view.
-use std::time::Instant;
+//! Bounded activation diagnostics; never part of a grant or wire view.
+use std::{io::Write, time::Instant};
 
-pub(crate) struct ActivationTiming {
-    #[cfg(feature = "update-validation")]
+pub struct ActivationTiming {
     operation: &'static str,
-    #[cfg(feature = "update-validation")]
     started: Instant,
-    #[cfg(feature = "update-validation")]
     previous: Instant,
-    #[cfg(feature = "update-validation")]
     deadline: Option<Instant>,
-    #[cfg(feature = "update-validation")]
     phase: &'static str,
+    hashes: [u64; 3],
 }
 impl ActivationTiming {
-    pub(crate) fn new(operation: &'static str, deadline: Option<Instant>) -> Self {
-        let _ = (operation, deadline);
+    pub fn new(operation: &'static str, deadline: Option<Instant>) -> Self {
         Self {
-            #[cfg(feature = "update-validation")]
             operation,
-            #[cfg(feature = "update-validation")]
             started: Instant::now(),
-            #[cfg(feature = "update-validation")]
             previous: Instant::now(),
-            #[cfg(feature = "update-validation")]
             deadline,
-            #[cfg(feature = "update-validation")]
             phase: "begin",
+            hashes: crate::artifact::hash_counters(),
         }
     }
     /// Observe a copy for diagnostics only; never replace the preparation window.
-    pub(crate) fn observe_deadline(&mut self, deadline: Instant) {
-        let _ = deadline;
-        #[cfg(feature = "update-validation")]
-        {
-            self.deadline = Some(deadline);
-        }
+    pub fn observe_deadline(&mut self, deadline: Instant) {
+        self.deadline = Some(deadline);
     }
-    pub(crate) fn mark(
+    pub fn mark(
         &mut self,
         phase: &'static str,
         file_index: Option<usize>,
         checkpoint: Option<usize>,
     ) {
-        let _ = (phase, file_index, checkpoint);
-        #[cfg(feature = "update-validation")]
-        {
-            let now = Instant::now();
-            eprintln!(
-                "WinBridge activation timing {}",
-                serde_json::json!({
-                    "schemaVersion": 1, "event": "checkpoint", "operation": self.operation,
-                    "phase": phase, "previousPhase": self.phase,
-                    "elapsedMs": now.duration_since(self.started).as_millis(),
-                    "stepMs": now.duration_since(self.previous).as_millis(),
-                    "remainingMs": self.deadline.map(|d| d.saturating_duration_since(now).as_millis()),
-                    "fileIndex": file_index, "checkpoint": checkpoint
-                })
-            );
-            self.previous = now;
-            self.phase = phase;
-        }
+        let now = Instant::now();
+        let hashes = crate::artifact::hash_counters();
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "WinBridge activation timing {}",
+            serde_json::json!({
+                "schemaVersion": 1, "event": "checkpoint", "operation": self.operation,
+                "phase": phase, "previousPhase": self.phase,
+                "elapsedMs": now.duration_since(self.started).as_millis(),
+                "stepMs": now.duration_since(self.previous).as_millis(),
+                "remainingMs": self.deadline.map(|d| d.saturating_duration_since(now).as_millis()),
+                "processId": std::process::id(),
+                "processArtifactHashCallsDelta": hashes[0].saturating_sub(self.hashes[0]),
+                "processArtifactHashBytesDelta": hashes[1].saturating_sub(self.hashes[1]),
+                "processArtifactHashMsDelta": hashes[2].saturating_sub(self.hashes[2]) / 1_000_000,
+                "fileIndex": file_index, "checkpoint": checkpoint
+            })
+        );
+        self.previous = now;
+        self.phase = phase;
+        self.hashes = hashes;
     }
 }
-#[cfg(feature = "update-validation")]
 impl Drop for ActivationTiming {
     fn drop(&mut self) {
         // This is a timing endpoint on success OR failure, never a success receipt.

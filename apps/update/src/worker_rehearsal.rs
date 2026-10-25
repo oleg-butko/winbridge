@@ -23,6 +23,9 @@ pub struct WorkerRehearsalInspection {
     pub runtime_applied: bool,
 }
 pub(crate) fn supports(pin: &Pinned, marker: &[u8]) -> Result<bool> {
+    if marker.is_empty() {
+        return Err("Capability marker must not be empty".into());
+    }
     // Inspect the retained handle, with bounded memory, before executing any
     // switch that an older binary might interpret as a normal start.
     let mut file = pin.file.try_clone().map_err(|e| e.to_string())?;
@@ -30,6 +33,7 @@ pub(crate) fn supports(pin: &Pinned, marker: &[u8]) -> Result<bool> {
     let mut tail = Vec::new();
     let mut buffer = [0; 65536];
     let mut total = 0;
+    let finder = memchr::memmem::Finder::new(marker);
     loop {
         let n = file.read(&mut buffer).map_err(|e| e.to_string())?;
         if n == 0 {
@@ -40,7 +44,7 @@ pub(crate) fn supports(pin: &Pinned, marker: &[u8]) -> Result<bool> {
             return Err("Rehearsal image grew".into());
         }
         tail.extend_from_slice(&buffer[..n]);
-        if tail.windows(marker.len()).any(|w| w == marker) {
+        if finder.find(&tail).is_some() {
             return Ok(true);
         }
         let retain = marker.len() - 1;
@@ -49,6 +53,7 @@ pub(crate) fn supports(pin: &Pinned, marker: &[u8]) -> Result<bool> {
         }
     }
 }
+
 /// The expected image SHA must come from the trusted candidate artifact set.
 /// Explicit schema numbers are diagnostic expectations, not live-worker evidence.
 /// This function cannot save a health receipt or advance an update FSM.
@@ -162,4 +167,24 @@ pub fn inspect(
         candidate_verified: false,
         runtime_applied: false,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn marker_detection_rehearsal_covers_boundaries_absence_and_empty_input() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("image");
+        let marker = crate::activation::channel::WRITER_MARKER;
+        for offset in [0, 65536 - marker.len() / 2, 3 * 65536 - marker.len()] {
+            let mut bytes = vec![0x5a; 3 * 65536];
+            bytes[offset..offset + marker.len()].copy_from_slice(marker);
+            std::fs::write(&path, bytes).unwrap();
+            let pin = artifact::pin(&path).unwrap();
+            assert!(supports(&pin, marker).unwrap());
+            assert!(!supports(&pin, b"absent private capability").unwrap());
+            assert!(supports(&pin, b"").is_err());
+        }
+    }
 }

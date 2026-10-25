@@ -26,10 +26,13 @@ pub(crate) use writer_view::view as writer_view;
 mod owner_stack;
 #[cfg(windows)]
 pub(crate) use owner_stack::on_original_io;
-#[cfg(windows)]
 mod timing;
-#[cfg(windows)]
-pub(crate) use timing::ActivationTiming;
+#[doc(hidden)]
+pub use timing::ActivationTiming;
+
+/// Default for newly admitted attempts. A persisted attempt keeps its original
+/// deadline across all phases and observations; this never renews an old grant.
+pub const STARTUP_TIMEOUT_MS: u64 = 240_000;
 
 /// Fresh metadata preparation retains authentication material only in memory.
 /// It grants no launch or instance-lock transfer; there is no JSON constructor.

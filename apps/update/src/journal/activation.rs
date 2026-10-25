@@ -433,7 +433,12 @@ impl UpdateJournal {
             health::read(&tx, &s.spec.update_id)?.ok_or_else(|| changed("Health missing"))?;
         crate::health::validate_fresh_success(&health).map_err(changed)?;
         let nonce = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
-        let context = context(&tx, &r, &crate::sha256(nonce.as_bytes()), 120000)?;
+        let context = context(
+            &tx,
+            &r,
+            &crate::sha256(nonce.as_bytes()),
+            STARTUP_TIMEOUT_MS,
+        )?;
         let deadline = std::time::Instant::now()
             .checked_add(std::time::Duration::from_millis(context.startup_timeout_ms))
             .ok_or_else(|| changed("Activation monotonic deadline exhausted"))?;

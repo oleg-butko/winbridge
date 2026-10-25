@@ -28,6 +28,7 @@ pub(super) fn observe_owned_file(path: &Path) -> ImageEvidence {
     let mut tail = Vec::new();
     let mut supported = false;
     let marker = winbridge_protocol::ARTIFACT_QUERY_MARKER;
+    let finder = memchr::memmem::Finder::new(marker);
     loop {
         let n = file.read(&mut buffer).unwrap();
         if n == 0 {
@@ -38,7 +39,7 @@ pub(super) fn observe_owned_file(path: &Path) -> ImageEvidence {
         digest.update(&buffer[..n]);
         if !supported {
             tail.extend_from_slice(&buffer[..n]);
-            supported = tail.windows(marker.len()).any(|w| w == marker);
+            supported = finder.find(&tail).is_some();
             if tail.len() >= marker.len() {
                 tail.drain(..tail.len() - (marker.len() - 1));
             }

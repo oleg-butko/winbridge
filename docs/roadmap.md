@@ -1,5 +1,9 @@
 # Постепенная реализация и расширение
 
+Продолжение2026-10-25: [review/latency и новое окно240s](plans/worker-self-update/review-2026-10-25-latency.md)
+по явному поручению пользователя. Старые120s intent не переписываются; новый Main24
+нужен до normal service/controller/lifetime. Ниже исходный checkpoint.
+
 ## Текущий checkpoint — закрытие проверок 2026-10-25
 
 Начать с [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)

@@ -1,5 +1,9 @@
 # Продолжение updater — закрытие проверок 2026-10-25
 
+**Продолжение с новым поручением пользователя:** [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).
+Новые startup admissions240s разрешены явно; запрет увеличивать120s ниже исторический.
+Review/diagnostics source в работе; нового positive Main24 пока нет.
+
 **Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
 и [отчёта writer-прогонов](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md).**
 Пользователь поручил закончить текущие проверки и сохранить контекст коммитом.

@@ -136,7 +136,7 @@ def verify_delivery(p, cold, before, pin, ctx, record, source_build, preparation
          and cold['observedState'] == physical['state'], 'One-shot effect, actual exit/lock or isolation evidence differs')
 
 
-def verify(proof, source, target, root, preparation, physical, health):
+def verify(proof, source, target, root, preparation, physical, health, *, startup_timeout_ms=120000):
     strict(proof, preparation, physical)
     need(proof['kind'] == 'activation_writer_main_native_proof', 'Wrong writer proof kind')
     health.verify_runtime_replacement_proof(dict(proof, kind='runtime_replacement_main_native_proof'),
@@ -147,7 +147,7 @@ def verify(proof, source, target, root, preparation, physical, health):
     before, replaced = case['beforeReplacement'], case['replacement']
     p, cold = case['activationWriter'], case['coldActivationWriter']
     pin, ctx, intent, record, history, process, owned, identity = physical.verify_owned_prefix(
-        p, cold, before, replaced, root, preparation, source=source, worker_schema=17, updater_schema=19)
+        p, cold, before, replaced, root, preparation, source=source, worker_schema=17, updater_schema=19, startup_timeout_ms=startup_timeout_ms)
     root_record = replaced['view']['update']
     expected_files = dict(phase='bound', attemptId=intent['attemptId'], setId=pin['setId'], heldFiles=5, worker=pin['worker'],
                           manifestSha256=pin['manifest']['sha256'], originalStateHeld=False, reason=None)
@@ -163,8 +163,8 @@ def verify(proof, source, target, root, preparation, physical, health):
     verify_delivery(p, cold, before, pin, ctx, record, proof['build'], preparation)
 
 
-def audit(proof, source, target, root, preparation, physical, health):
-    verify(proof, source, target, root, preparation, physical, health)
+def audit(proof, source, target, root, preparation, physical, health, *, startup_timeout_ms=120000):
+    verify(proof, source, target, root, preparation, physical, health, startup_timeout_ms=startup_timeout_ms)
     paths = [
         ('cases/0/activationWriter/writerRecord/command/deadlineAtMs', 1),
         ('cases/0/activationWriter/workerAuthorityAfter/epoch', 1),
@@ -194,7 +194,7 @@ def audit(proof, source, target, root, preparation, physical, health):
              'Writer mutation is a no-op: ' + path)
         node[key] = replacement
         try:
-            verify(bad, source, target, root, preparation, physical, health)
+            verify(bad, source, target, root, preparation, physical, health, startup_timeout_ms=startup_timeout_ms)
         except (ValueError, KeyError, TypeError, IndexError, OverflowError):
             continue
         raise ValueError('Writer proof mutation accepted: ' + path)

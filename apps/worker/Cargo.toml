@@ -28,5 +28,6 @@ fs2 = "0.4"
 sha2 = "0.10.9"
 
 [dev-dependencies]
+memchr = "2"
 tempfile = "3"
 zip = { version = "8.6", default-features = false, features = ["deflate-flate2"] }

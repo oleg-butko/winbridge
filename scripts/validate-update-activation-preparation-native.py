@@ -37,6 +37,21 @@ support, health, native, need = actor.support, actor.health, actor.native, check
 PREFIX = 'native-activation-preparation-'
 
 
+def startup_budget(archive):
+    """Derive the admission default from checksum-verified source, never a proof."""
+    with zipfile.ZipFile(archive) as package:
+        source = package.read('winbridge/apps/update/src/activation.rs')
+        factory = package.read('winbridge/apps/update/src/journal/activation.rs')
+    values = re.findall(rb'(?m)^pub const STARTUP_TIMEOUT_MS: u64 = ([0-9_]+);\r?$', source)
+    if not values:
+        need(re.search(rb'crate::sha256\(nonce.as_bytes\(\)\),\s*120000\s*,?\s*\)', factory), 'Unknown legacy admission budget')
+        return 120000
+    need(len(values) == 1 and re.search(rb'crate::sha256\(nonce.as_bytes\(\)\),\s*STARTUP_TIMEOUT_MS\s*,?\s*\)', factory), 'Ambiguous startup admission budget')
+    budget = int(values[0].replace(b'_', b''))
+    need(budget in (120000, 240000), 'Unreviewed startup admission budget')
+    return budget
+
+
 def reference_from_pin(pin, reports, workspace):
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', pin['run']) and pin['passed'] is True, 'Invalid reference pin')
     files = support.ready_files(reports/pin['run'])
@@ -78,6 +93,7 @@ def main():
     files_mode = args.activation_files or process_mode
     prefix = 'native-activation-writer-' if args.activation_writer else 'native-activation-state-' if args.activation_state else 'native-activation-process-' if process_mode else 'native-activation-files-' if files_mode else PREFIX
     source, target = (health.archive_pin(p) for p in (args.archive, args.target_archive))
+    writer_budget = startup_budget(args.archive) if args.activation_writer else 120000
     if args.activation_writer:
         for archive in (args.archive, args.target_archive):
             with zipfile.ZipFile(archive) as package:
@@ -224,7 +240,7 @@ exit $LASTEXITCODE
     state_rejected = 0
     writer_rejected = 0
     if args.activation_writer:
-        writer_rejected=writer_checks.audit(proof,source,target,root,checks,state_checks,health)
+        writer_rejected=writer_checks.audit(proof,source,target,root,checks,state_checks,health,startup_timeout_ms=writer_budget)
         rejected=len(replacement_audit.audit(dict(proof,kind='runtime_replacement_main_native_proof'),source,target,True,worker_schema=17))
         file_rejected=process_rejected=0
     elif args.activation_state:

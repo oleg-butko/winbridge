@@ -63,6 +63,7 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 ## Проверка и запуск
 
 Актуальная точка разработки апдейтера: [checkpoint следующей сессии](docs/plans/worker-self-update/resume-2026-10-25-journal-activation.md),
+[текущий review/latency и разрешённые240s](docs/plans/worker-self-update/review-2026-10-25-latency.md),
 [actor24/view16](docs/plans/worker-self-update/journal-writer-actor.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
 Source **updater19/worker17/supervisor24/view16**, physical handoff2 + private writer3.

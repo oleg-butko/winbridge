@@ -35,10 +35,10 @@ def strict(value, preparation):
     visit(value)
 
 
-def verify_owned_prefix(p, cold, before, replaced, root, preparation, *, source, worker_schema=16, updater_schema=18):
+def verify_owned_prefix(p, cold, before, replaced, root, preparation, *, source, worker_schema=16, updater_schema=18, startup_timeout_ms=120000):
     prepared, record, history = p['prepared'], p['record'], p['history']
     intent = prepared['intent']
-    pin, ctx = preparation.verify_scope(prepared, p, before, replaced, root, worker_schema=worker_schema, updater_schema=updater_schema)
+    pin, ctx = preparation.verify_scope(prepared, p, before, replaced, root, worker_schema=worker_schema, updater_schema=updater_schema, startup_timeout_ms=startup_timeout_ms)
     root_record = replaced['view']['update']
     need(root_record['updatedAtMs'] <= intent['admittedAtMs'], 'State preparation predates FilesVerified')
     empty = dict(schemaVersion=1, intent=intent, revision=0, updatedAtMs=intent['admittedAtMs'],

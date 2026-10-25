@@ -251,10 +251,23 @@ try {
   }
   foreach($command in $commands){
     $log=$command.name+'.log';$arguments=$command.arguments
-    Write-Output "Health native gate: $($command.name); installed runtime remains active"
+    $commandStarted=[DateTime]::UtcNow
+    $commandTimer=[Diagnostics.Stopwatch]::StartNew()
+    Write-Output "Health native gate: $($command.name); started $($commandStarted.ToString('o')); installed runtime remains active"
     $executable=if($command.ContainsKey('executable')){$command.executable}else{'cargo.exe'}
     & $executable @arguments 2>&1 | Tee-Object -FilePath (Join-Path $ReportDirectory $log)
-    $code=$LASTEXITCODE;$report.commands+=@{name=$command.name;arguments=$arguments;exitCode=$code;log=$log}
+    $code=$LASTEXITCODE
+    $commandTimer.Stop()
+    $text=Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw
+    $cargoBuildMs=0.0;$testExecutionMs=0.0
+    foreach($match in [regex]::Matches($text,'Finished [^\r\n]*? in (?:(\d+)m )?([0-9.]+)s')){
+      $cargoBuildMs+=1000*(60*[double]::Parse(('0'+$match.Groups[1].Value),[Globalization.CultureInfo]::InvariantCulture)+[double]::Parse($match.Groups[2].Value,[Globalization.CultureInfo]::InvariantCulture))
+    }
+    foreach($match in [regex]::Matches($text,'test result: [^\r\n]*?finished in ([0-9.]+)s')){
+      $testExecutionMs+=1000*[double]::Parse($match.Groups[1].Value,[Globalization.CultureInfo]::InvariantCulture)
+    }
+    $report.commands+=@{name=$command.name;arguments=$arguments;exitCode=$code;log=$log;startedAt=$commandStarted.ToString('o');elapsedMs=$commandTimer.ElapsedMilliseconds;cargoBuildMs=[long]$cargoBuildMs;testExecutionMs=[long]$testExecutionMs}
+    Write-Output "Health native timing: $($command.name); total $($commandTimer.ElapsedMilliseconds)ms; Cargo build $([long]$cargoBuildMs)ms; test bodies $([long]$testExecutionMs)ms; exit $code"
     if($code -ne 0){throw "Health native command failed: $($command.name); see $log"}
     if($command.ContainsKey('minimum')){
       $counts=[regex]::Matches((Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')

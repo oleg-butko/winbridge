@@ -1283,6 +1283,7 @@ fn case(
     preparation_fault: PreparationFault,
     replacement_fault: replacement::ReplacementFault,
 ) -> serde_json::Value {
+    let mut timing = winbridge_update::activation::ActivationTiming::new("main_fixture", None);
     let (root, config, manifest) = setup(
         input,
         fault,
@@ -1291,6 +1292,7 @@ fn case(
         preparation_fault,
         replacement_fault,
     );
+    timing.mark("setup_complete", None, None);
     let replacement_requested = input.runtime_replacement;
     let activation_requested = input.activation_preparation;
     let bind_files = input.activation_files;
@@ -1378,6 +1380,7 @@ fn case(
     };
     let directory = root.join("runtime/update-state");
     // Keep cleanup unconditional on assertions below; killing this validation
+    timing.mark("old_worker_exited", None, None);
     // Job owns only the copied worker/supervisor descendants, never installed ones.
     let mut activation_child = None;
     let proof = || {
@@ -1497,9 +1500,11 @@ fn case(
         let final_state_backup = input
             .final_backup
             .then(|| final_backup(&root, &sup, backup_fault));
+        timing.mark("final_backup_complete", None, None);
         let runtime_preparation = input
             .runtime_preparation
             .then(|| prepare_runtime(&root, &sup, preparation_fault));
+        timing.mark("runtime_preparation_complete", None, None);
         let input = ShutdownInspectionRequest {
             schema_version: 1,
             intent: shutdown.intent.clone(),
@@ -1541,6 +1546,7 @@ fn case(
             );
         }
         let mut proof = json!({"fault":fault,"finalStateBackup":final_state_backup,"runtimePreparation":runtime_preparation,"beforeMainExit":before,"shutdown":shutdown,"root":root_state,"coldAfterMain":cold,"supervisorOutlivedMain":true,"physicalCustodyAfterExit":fault!=Fault::ReceiptWriteDenied,"startupStillBlocked":true,"oldRuntimeUnchanged":true});
+        timing.mark("shutdown_audits_complete", None, None);
         if replacement_requested {
             proof["runtimeReplacement"] =
                 if replacement_fault == replacement::ReplacementFault::None {
@@ -1548,6 +1554,7 @@ fn case(
                 } else {
                     replacement::execute_fault(&root, &sup, &proof, replacement_fault)
                 };
+            timing.mark("replacement_complete", None, None);
             if launch_process {
                 let result = if activate_writer {
                     activation_state::execute_writer(&root, &sup, &proof["runtimeReplacement"])

@@ -3,6 +3,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import tempfile
+import zipfile
 
 spec = importlib.util.spec_from_file_location('preparation', Path(__file__).with_name('validate-update-activation-preparation-native.py'))
 gate = importlib.util.module_from_spec(spec)
@@ -10,6 +12,27 @@ spec.loader.exec_module(gate)
 
 
 class EvidenceChecks(unittest.TestCase):
+    def test_startup_budget_is_pinned_to_source_instead_of_untrusted_proof_or_new_default(self):
+        cases = [
+            (b'', b'context(&tx, &r, &crate::sha256(nonce.as_bytes()), 120000)?;', 120000),
+            (b'pub const STARTUP_TIMEOUT_MS: u64 = 240_000;\n',
+             b'context(&tx, &r, &crate::sha256(nonce.as_bytes()),\nSTARTUP_TIMEOUT_MS,\n)?;', 240000),
+            (b'pub const STARTUP_TIMEOUT_MS: u64 = 300_000;\n',
+             b'context(&tx, &r, &crate::sha256(nonce.as_bytes()), STARTUP_TIMEOUT_MS)?;', None),
+            (b'pub const STARTUP_TIMEOUT_MS: u64 = 240_000;\n', b'context(other_timeout)', None),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory)/'fixture.zip'
+            for source, factory, expected in cases:
+                with zipfile.ZipFile(archive, 'w') as package:
+                    package.writestr('winbridge/apps/update/src/activation.rs', source)
+                    package.writestr('winbridge/apps/update/src/journal/activation.rs', factory)
+                if expected is None:
+                    with self.assertRaises(ValueError):
+                        gate.startup_budget(archive)
+                else:
+                    self.assertEqual(gate.startup_budget(archive), expected)
+
     def test_preparation_counters_do_not_accept_boolean_or_fractional_success(self):
         for key in ('workerLaunchCount', 'stateHandoffCount', 'workerConfigSchema', 'workerJournalSchema',
                     'updaterJournalSchema', 'protocolVersion', 'startupTimeoutMs', 'gateRows', 'ownerEpoch', 'heldFiles'):

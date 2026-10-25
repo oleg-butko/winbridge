@@ -19,6 +19,28 @@ use winbridge_protocol::{
 type Result<T> = std::result::Result<T, String>;
 const MAX_IMAGE_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_QUERY_BYTES: usize = 64 * 1024;
+// Process-wide work counters for validation traces, including failed reads.
+// They are diagnostics only and never replace file verification or live pins.
+static HASH_WORK: [std::sync::atomic::AtomicU64; 3] =
+    [const { std::sync::atomic::AtomicU64::new(0) }; 3];
+pub(crate) fn hash_counters() -> [u64; 3] {
+    HASH_WORK.each_ref().map(|v| v.load(Ordering::Relaxed))
+}
+struct HashWork {
+    started: Instant,
+    bytes: u64,
+}
+impl Drop for HashWork {
+    fn drop(&mut self) {
+        for (counter, amount) in HASH_WORK.iter().zip([
+            1,
+            self.bytes,
+            self.started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+        ]) {
+            counter.fetch_add(amount, Ordering::Relaxed);
+        }
+    }
+}
 fn error(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -130,6 +152,10 @@ pub(crate) fn pin(path: &Path) -> Result<Pinned> {
     let mut digest = Sha256::new();
     let mut total = 0;
     let mut buffer = [0u8; 65536];
+    let mut work = HashWork {
+        started: Instant::now(),
+        bytes: 0,
+    };
     let mut tail = vec![];
     let mut supported = false;
     let marker = memchr::memmem::Finder::new(ARTIFACT_QUERY_MARKER);
@@ -139,6 +165,7 @@ pub(crate) fn pin(path: &Path) -> Result<Pinned> {
             break;
         }
         total += n as u64;
+        work.bytes += n as u64;
         if total > MAX_IMAGE_BYTES {
             return Err("Artifact grew beyond the byte limit".into());
         }
