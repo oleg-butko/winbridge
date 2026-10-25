@@ -63,7 +63,10 @@ fn stamp(authority: &JournalAuthority) -> Result<StateBackupAuthority> {
         fingerprint_sha256: winbridge_update::sha256(&raw),
     })
 }
-fn scope(command: &WorkerJournalActivationCommand, expected: &WorkerShutdownReceipt) -> Result<()> {
+pub(super) fn scope(
+    command: &WorkerJournalActivationCommand,
+    expected: &WorkerShutdownReceipt,
+) -> Result<()> {
     validate_command_envelope(command)?;
     let b = &command.binding;
     let p = &b.physical;
@@ -88,7 +91,7 @@ fn scope(command: &WorkerJournalActivationCommand, expected: &WorkerShutdownRece
     }
     Ok(())
 }
-fn window(command: &WorkerJournalActivationCommand) -> Result<()> {
+pub(super) fn window(command: &WorkerJournalActivationCommand) -> Result<()> {
     let at = now_ms();
     if at < command.issued_at_ms || at >= command.deadline_at_ms {
         Err("Original journal activation window expired or clock moved backwards".into())

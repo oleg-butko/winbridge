@@ -17,8 +17,10 @@ transaction. Fresh data permit отличается от Observed receipt; maint
 migration сохраняет verified backup с удерживаемым FileID; active update блокирует
 миграцию. Это не поддержка cross-schema activation16→17.
 
-Closing workspace760/0 (16 ignored), SQLite12/0/model7/0 и Linux/MSVC Clippy passed.
-Existing-state constructor/runtime private writer/updater ledger ещё не подключены;
+Latest workspace768/0 (16 ignored), opening8/0 и Linux/MSVC Clippy passed.
+Добавлена [existing-state connection library](plans/worker-self-update/activation-journal-opening.md)
+с retained actual lock, одноразовой активацией и no-close-checkpoint policy.
+Runtime private writer/updater ledger ещё не подключены;
 native writer17/actual old16→17 gate, local/controller/lifetime, U2 faults и U3/U4
 впереди. Views1–14 frozen, исходный startup deadline120s сохранён. Public install
 off; advertised activation/controller_confirmation/desktop_update остаются None.

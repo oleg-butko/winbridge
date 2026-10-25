@@ -13,12 +13,13 @@ StateOwned132/0](windows-activation-state-gate-2026-10-25.md) пройден н�
 closing readonly recheck принят. Terminal run20261025-100933-d8a50807 не replay.
 
 Добавлены atomic worker header CAS+immutable receipt/dedup и ordinary inactive16→17
-migration с consistent/pinned backup. Closing workspace760/0 (16 ignored), SQLite12/0,
-model7/0, Linux/MSVC validation Clippy/fmt/scaffold passed. **Runtime writer ещё
+migration с consistent/pinned backup. Latest workspace768/0 (16 ignored), opening8/0,
+Linux/MSVC validation Clippy/fmt/scaffold passed. **Runtime writer ещё
 не подключён**, новых native writer17/actual old16→17 gates нет. Public install off.
 Installed d052/runtime не менялся; desktop можно закрыть, worker оставить.
 
-Следом existing-state constructor → graph-bound updater writer ledger/private
+Добавлен [existing-state connection/lock owner](activation-journal-opening.md),
+ещё без private runtime wiring. Следом graph-bound updater writer ledger/private
 command/actor → новая receiver17 fixture/combined native gate → local/controller/
 lifetime/commit → remaining U2 faults/management → U3 desktop → U4 actual installed
 self-update. Потом вернуться к A4.3. Exact pins/cache/recovery/commands и acceptance

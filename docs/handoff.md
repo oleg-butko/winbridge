@@ -10,11 +10,15 @@
   [Worker SQLite activation](plans/worker-self-update/resume-2026-10-25-journal-activation.md#2-что-сделано-в-текущем-блоке)
   реализована как trusted data library: old-header CAS+immutable receipt в одной
   транзакции, dedup/cold read, active maintenance сохранена, ordinary16→17
-  migration с consistent backup. **Existing-state constructor, updater writer
-  ledger/private runtime driver и actor ещё не подключены.**
-- Closing source checks: **workspace760/0 (16 ignored), SQLite12/0, writer model7/0**;
+  migration с consistent backup. [Existing-state connection library](plans/worker-self-update/activation-journal-opening.md)
+  добавлена: Store и actual acquired lock в одном owner, failure custody,
+  одноразовая попытка, no-close-checkpoint до grant. **Updater writer ledger,
+  private runtime driver и actor ещё не подключены.**
+- Latest source checks: **workspace768/0 (16 ignored), opening8/0**;
+  исходные SQLite12/0, writer model7/0 также сохранены в checkpoint.
   Linux/MSVC all-target validation Clippy, fmt и scaffold passed. Последний
-  backup hardening включён в этот прогон. Старый DTO commit отдельно прошёл
+  backup hardening и last-connection WAL fix включены в latest workspace.
+  Старый DTO commit отдельно прошёл
   contracts/TS/UI/protocol59. Новых native writer17/actual old16→17 gates нет.
 - [Actual physical Main23](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   **132/0**, run20261025-100933-d8a50807,
@@ -27,9 +31,9 @@
 
 ## Откуда продолжать
 
-1. Безопасный existing-state constructor под **тем же** child-held lock, без
-   CREATE/migration/begin_authority; затем graph-bound writer admission/ledger,
-   private command и successor actor/view. Original120s deadline не продлевать.
+1. Graph-bound writer admission/ledger, private command и successor actor/view,
+   которые вызовут уже добавленный guarded existing-state constructor под
+   **тем же** child-held lock. Original120s deadline не продлевать.
 2. Source review/checks и clean **новая worker17 receiver fixture**, distinct
    producer; combined native writer gate и actual old16→17/refusal. Старый
    target1370d6b/worker16 не подходит новому same-schema writer gate.

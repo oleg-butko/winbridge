@@ -6,9 +6,11 @@ NEXT/ACTIVE и [инструкцию до Main23](resume-2026-10-25-state-handof
 текущие проверки и закоммитить подробное состояние. Общая цель самообновления
 остаётся незавершённой; public install включать пока нельзя.
 
-**Первый следующий шаг:** реализовать безопасное открытие существующего
-worker journal для того же authenticated StateOwned receiver, затем связать
-атомарную активацию с updater ledger и private runtime driver. Не начинать
+**Продолжение после исходного checkpoint:**
+[existing-state connection library](activation-journal-opening.md) реализована,
+но private receiver её ещё не вызывает. **Первый следующий шаг:** связать
+атомарную активацию с updater writer admission/ledger и private runtime driver.
+Не начинать
 заново уже пройденный physical Main23 и не считать JSON receipt разрешением
 на запуск или владение состоянием.
 
@@ -21,7 +23,8 @@ worker journal для того же authenticated StateOwned receiver, зате�
 | U2.1 | Final consistent backup и fault gates пройдены. |
 | U2.2 physical | Preparation/replacement, один private receiver, Ready и передача прежнего instance lock тому же child проверены на Windows. |
 | Worker SQLite activation | **Реализован слой данных:** old-header CAS + immutable receipt в одной транзакции, worker schema17, миграция16→17 с backup. |
-| Activated receiver writer | **Не подключён:** нет безопасного existing-state constructor, следующего private command/handler и updater writer admission/ledger. |
+| Existing-state connection | `ActivationJournal` владеет тем же acquired lock и Store, отказывает без CREATE/migration, сохраняет failure custody и не повторяет попытку. Trusted library, без runtime entry. |
+| Activated receiver writer | **Не подключён:** нет следующего private command/handler и updater writer admission/ledger. |
 | Local IPC / controller / lifetime | Для activated receiver ещё не реализованы и не подтверждены. |
 | U3 / U4 | Desktop update/notifications и настоящее installed self-update впереди. |
 
@@ -119,6 +122,7 @@ Maintenance lease и сохранённая остановка не снимаю
 | `crates/protocol/src/update/activation_writer.rs` | Три strict DTO: binding, command, receipt; Rust/JSON Schema/TS. |
 | `apps/update/src/activation/writer.rs`, `writer_tests.rs` | Pure prepare/validate/hash, intrinsic envelope и receipt checks. |
 | `apps/worker/src/store/activation.rs`, `activation_tests.rs` | Новый SQLite CAS/receipt, migration preflight/backup и реальные DB tests. |
+| `apps/worker/src/store/activation_open.rs`, `activation_open_tests.rs` | Existing-state connection + actual lock в одном owner, одноразовый CAS и retained failures; no-close-checkpoint policy. |
 | `apps/worker/src/store.rs` | Schema17 и порядок обычной миграции. |
 | `apps/worker/src/state_backup_export.rs` | Публичный old-authority stamp через общий helper. |
 | `apps/worker/src/store/archive.rs`, `shutdown.rs` | Existing backup FileID checks и strict accepted shutdown readback. |
@@ -138,7 +142,16 @@ final backup `sourceAuthority`. SHA старого полного private header
 
 ## 4. Завершённые и оставшиеся проверки
 
-Closing pipeline завершён без ошибок. Сырые логи локальные, в Git не включаются:
+После checkpoint e3a4a3d реализована [existing-state connection library](activation-journal-opening.md):
+**focused8/0, workspace768/0 (16 ignored)**, Linux/MSVC validation all-target
+Clippy, fmt/scaffold/diff passed. Last-connection WAL regression сначала
+воспроизведена, затем исправлена и прошла. Логи `activation-open-*-checked.log`,
+summary `activation-open-checked.json` в `.winbridge/update-preparation/`.
+Для focused проверки: `cargo test -p winbridge-worker --lib store::activation_open::tests --locked`.
+Runtime private writer и native writer17 proof всё ещё отсутствуют.
+
+Ниже результаты **исходного checkpoint e3a4a3d**, до opening component.
+Его closing pipeline завершён без ошибок. Сырые логи локальные, в Git не включаются:
 `.winbridge/update-preparation/close-writer-20261025-*.log`,
 machine summary `close-writer-20261025-checks.json`.
 
@@ -237,7 +250,10 @@ Helper wall timings имеют другой origin; не смешивать их
    journal под уже удерживаемым тем же child lock; без CREATE, миграции,
    обычного `begin_authority` или повторного acquisition. Retain state/config/
    runtime pins и actual parent/channel. Failure не теряет custody и не выдаёт
-   второй owner. Проверить отсутствие writable open без живого permit.
+   второй owner. **Trusted library реализована после исходного checkpoint:**
+   [opening/retained-lock tests и last-connection WAL fix](activation-journal-opening.md).
+   Live callback ещё предстоит привязать к настоящему private child/graph;
+   constructor сам не является authenticated runtime permission.
 2. **Trusted writer admission/ledger.** Взять old stamp из graph-bound backup,
    закрепить весь StateOwned6/config/schema/owner/attempt. Durable one-shot
    intent перед private command; retained immutable result/readback после.
@@ -296,7 +312,7 @@ journalRecoveryRequired=null, recoveryCoverage.complete=true. Session
 `0d55d6c6-ad2e-4423-b2d8-53326ab7d14a`, controller generation
 `cf0d5370-6cd0-463f-b671-974879aa6299`. Выборочная запись:
 `.winbridge/update-preparation/close-writer-20261025-post-info.json`.
-Debian free после checks25226305536 bytes; cleanup не выполнялся.
+Debian free после исходных checks25226305536 bytes; cleanup не выполнялся.
 Closing Cargo pipeline и readonly observer terminal/exit0; ожидающих проверок
 нет. Новых native writer runs не отправляли. Desktop и тестовые UI-окна для
 этого блока не запускались: desktop можно закрыть, установленный worker оставить.
@@ -325,6 +341,12 @@ PID/адрес и listener перепроверить; второй controller �
 пользователю; после terminal явно разрешить закрыть тестовые окна и оставить
 worker. Исходный unknown/live task никогда не replay: сохранить request/ID и
 сначала сверить terminal status через `get_task`/тот же observer `--verify-run`.
+
+После opening library новое readonly Info2026-10-25T14:51:03Z подтвердило тот же
+installed generation/build/session, connected/active0 и отсутствие maintenance/
+recovery errors. Evidence `activation-open-post-info.json`; disk task
+`04d9b81a-35be-4ff0-80b2-b4c0c83ac1bf` succeeded/0, Windows13791174656 bytes,
+Debian после checks25223417856 bytes. Новых native runs не было, Cargo terminal.
 
 Перед heavy build измерять оба диска и записывать в отчёт, минимум6GiB. Использовать
 `CARGO_INCREMENTAL=0`, основной target и **один exclusive cache lease**.

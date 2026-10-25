@@ -67,8 +67,9 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 [Physical StateOwned132/0](docs/plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
 пройден на worker16. В source теперь **updater18/worker17/supervisor23/view15**:
 добавлены atomic worker authority CAS+immutable receipt и ordinary16→17 migration
-с backup. Closing workspace760/0 (16 ignored), SQLite12/0/model7/0 и Linux/MSVC
-Clippy passed. Runtime writer, local/controller/lifetime и U3/U4 ещё впереди.
+с backup. Latest workspace768/0 (16 ignored), opening8/0 и Linux/MSVC
+Clippy passed. Добавлен [guarded existing-state opening](docs/plans/worker-self-update/activation-journal-opening.md)
+как trusted library; runtime writer, local/controller/lifetime и U3/U4 ещё впереди.
 Public install выключен; полное самообновление не готово. Installed runtime
 не менялся. Новый checkpoint приоритетнее исторических отчётов.
 

@@ -7,8 +7,10 @@
 
 - **updater18/worker17/supervisor23/view15/private physical2**. Worker metadata
   activation реализована: atomic header CAS+immutable receipt/dedup, ordinary
-  inactive16→17 migration с verified/pinned backup. Runtime writer не подключён.
-- Source checks **workspace760/0 (16 ignored), SQLite12/0, model7/0**, Linux/MSVC
+  inactive16→17 migration с verified/pinned backup.
+  [Existing-state connection/lock owner](plans/worker-self-update/activation-journal-opening.md)
+  реализован как trusted library; runtime writer не подключён.
+- Source checks **workspace768/0 (16 ignored), opening8/0**, Linux/MSVC
   validation Clippy/fmt/scaffold passed. Native writer17/actual old16→17 впереди.
 - [Physical Main23 StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
   пройден на worker16; closing readonly recheck принят. Run20261025-100933-d8a50807
@@ -18,8 +20,8 @@
 
 Следующая последовательность:
 
-1. Existing-state constructor под actual child lock, без CREATE/migration;
-   graph-bound writer admission/ledger/private command и successor actor.
+1. Graph-bound writer admission/ledger/private command и successor actor;
+   связать их с guarded existing-state constructor и actual child/parent/graph.
 2. Clean receiver17 + distinct producer, combined native writer и actual
    worker16→17/refusal. Original120s window сохранить; physical receipt не grant.
 3. Local IPC/reconciliation, actual controller session, owned lifetime/commit/
