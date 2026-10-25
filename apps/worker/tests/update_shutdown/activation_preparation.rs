@@ -2,7 +2,7 @@
 use super::*;
 use winbridge_update::activation::{ActivationRecord, ActivationState};
 
-fn history(directory: &Path, id: &str) -> Vec<ActivationRecord> {
+pub(super) fn history(directory: &Path, id: &str) -> Vec<ActivationRecord> {
     let c = rusqlite::Connection::open_with_flags(
         directory.join("updates.sqlite"),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,

@@ -65,10 +65,10 @@ def audit_faults(proof, source, target):
     return rejected
 
 
-def audit(proof, source, target):
+def audit(proof, source, target, activation_expected=False):
     if proof.get('kind') == 'runtime_replacement_faults_native_proof':
         return audit_faults(proof, source, target)
-    health.verify_runtime_replacement_proof(proof, source, target)
+    health.verify_runtime_replacement_proof(proof, source, target, activation_expected)
     prefix = 'cases/0/replacement/'
     paths = [
         ('kind', 'wrong-proof'), ('schemaVersion', True), ('runtimeApplied', False),
@@ -99,7 +99,7 @@ def audit(proof, source, target):
         ('cases/0/afterOwnedExit/normalStartupRefused', False),
         ('cases/0/afterOwnedExit/workerBytesUnchanged', False),
         ('cases/0/afterOwnedExit/ownedJobEmpty', False),
-        ('cases/0/afterOwnedExit/activationStarted', True),
+        ('cases/0/afterOwnedExit/activationStarted', not activation_expected),
         ('cases/0/beforeReplacement/runtimePreparation/record/plan/proofs/preimagesSha256', '0'*64),
     ]
     changes = [(path, lambda p, path=path, value=value: set_value(p, path, value)) for path, value in paths]
@@ -116,7 +116,7 @@ def audit(proof, source, target):
         bad = copy.deepcopy(proof)
         change(bad)
         try:
-            health.verify_runtime_replacement_proof(bad, source, target)
+            health.verify_runtime_replacement_proof(bad, source, target, activation_expected)
         except (ValueError, KeyError, TypeError, IndexError):
             rejected.append(name)
         else:

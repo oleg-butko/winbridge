@@ -21,7 +21,7 @@ def strict(value):
         counters = {'schemaVersion', 'contractVersion', 'queryContract', 'revision', 'ownerEpoch',
                     'parentRevision', 'expectedRevision', 'processId', 'sessionId', 'bytes',
                     'workerConfigSchema', 'workerJournalSchema', 'updaterJournalSchema', 'protocolVersion',
-                    'startupTimeoutMs', 'workerLaunchCount', 'stateHandoffCount', 'gateRows', 'lastSequence','heldFiles'}
+                    'startupTimeoutMs', 'workerLaunchCount', 'stateHandoffCount', 'gateRows', 'lastSequence','heldFiles','automaticColdLaunchCount'}
         for key, item in value.items():
             need(key not in ('nonce', 'channelNonce', 'token', 'permit', 'canSpawn', 'canInstall'),
                  'Private material or fabricated permission: '+key)
@@ -42,14 +42,8 @@ def windows_path(value):
     return PureWindowsPath(value[4:] if value.startswith('\\\\?\\') else value)
 
 
-def verify(proof, source, target, root, health):
-    strict(proof)
-    need(proof['kind'] == 'activation_preparation_main_native_proof', 'Wrong preparation kind')
-    health.verify_runtime_replacement_proof(dict(proof, kind='runtime_replacement_main_native_proof'), source, target)
-    case, = proof['cases']
-    before, replaced = case['beforeReplacement'], case['replacement']
-    saved, cold = case['activationPreparation'], case['coldActivationPreparation']
-    r, sup, h = saved['record'], saved['supervisor'], saved['health']
+def verify_scope(r, saved, before, replaced, root):
+    sup, h = saved['supervisor'], saved['health']
     intent, ctx, binding = r['intent'], r['intent']['context'], before['shutdown']['intent']['binding']
     replacement = replaced['record']
     plan = replacement['intent']['preparation']['plan']
@@ -88,6 +82,19 @@ def verify(proof, source, target, root, health):
          and intent['attemptId'] not in [plan[k] for k in ('updateId', 'attemptId', 'ownerId', 'launchId')]
          and set(intent) == {'schemaVersion', 'attemptId', 'admittedAtMs', 'source', 'context'}
          and intent['schemaVersion'] == 1, 'Frozen preparation context/attempt differs')
+    return expected_source, expected_context
+
+
+def verify(proof, source, target, root, health):
+    strict(proof)
+    need(proof['kind'] == 'activation_preparation_main_native_proof', 'Wrong preparation kind')
+    health.verify_runtime_replacement_proof(dict(proof, kind='runtime_replacement_main_native_proof'), source, target)
+    case, = proof['cases']
+    before, replaced = case['beforeReplacement'], case['replacement']
+    saved, cold = case['activationPreparation'], case['coldActivationPreparation']
+    r=saved['record']
+    expected_source,ctx=verify_scope(r,saved,before,replaced,root)
+    intent=r['intent'];replacement=replaced['record'];plan=replacement['intent']['preparation']['plan']
     expected_record = dict(schemaVersion=1, intent=intent, revision=0, updatedAtMs=intent['admittedAtMs'],
                            state={'phase': 'prepared'}, createIssuedAtMs=None, created=None, resumeGrantedAtMs=None,
                            ready=None, handoffIssuedAtMs=None, stateOwned=None, local=None)

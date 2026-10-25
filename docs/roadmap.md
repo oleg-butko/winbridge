@@ -1,30 +1,29 @@
 # Постепенная реализация и расширение
 
-## Текущий checkpoint updater — 2026-10-24
+## Текущий checkpoint updater — 2026-10-24, закрытие перед Main22
 
-**Native actor21/read-binding gate пройден: 97 passed / 0 failed.**
-Run `20261024-205117-2da937b6`, task `60d8285c-3fbe-45dd-8feb-ef63fe75486b`,
-producer941a2e6.30 ready files проверены дважды; отвергнуты72 Main +19 files +12
-migration мутаций. Actual17→18/refusal пройден. Original five-file read set и
-state lock удержаны; cold metadata не восстанавливает custody. Binding43.346s,
-осталось66.407s исходного120s window. [Доказательства и история трёх failed attempts](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
+**Продолжать по [новой подробной инструкции](plans/worker-self-update/resume-2026-10-24-activation-process.md).**
+[Actor21/read-binding97/0](plans/worker-self-update/windows-activation-files-gate-2026-10-24.md)
+пройден; current helpers приняли retained proof readonly. [Launcher/receiver](plans/worker-self-update/activation-receiver.md),
+[actor22/view14](plans/worker-self-update/activation-process-actor.md) и
+[Main22 harness/verifier](plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
+реализованы. **Новый Windows process execution ещё не отправлен.**
+Source updater18/worker16; activation/public install off, полный updater не готов.
 
-**Продолжать по [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-24-activation-files.md):**
+1. Из clean closing commit экспортировать distinct producer; готовый target —
+   fixture1c23d48. Запустить один isolated `--activation-process` до Ready без
+   writer; сохранить task/run и observe тот же запуск. Pins/commands/recovery —
+   в новой инструкции. Source/cross checks не равны actual Windows proof.
+2. После положительного gate/review — original state/instance-lock handoff,
+   StateOwned, journal authority/recovery и local/controller confirmation.
+3. Lifetime handoff/commit, remaining U2 fault matrix/management/opt-in policy.
+4. U3 desktop notifications/update, U4 реальное installed self-update;
+   затем вернуться к отложенному A4.3.
 
-1. [Suspended launcher/private receiver library](plans/worker-self-update/activation-receiver.md)
-   добавлены; [actor22/view14](plans/worker-self-update/activation-process-actor.md) подключён.
-   Следующий блок — actual native Main/harness/verifier до ReadyForState без writer.
-2. Original state/instance-lock handoff и actual ownership/local verification.
-3. Controller/lifetime confirmation, remaining U2 faults/management, U3 desktop, U4.
-
-Fixture7f6a029 не содержит receiver: после реализации entry нужна новая clean
-fixture1c23d48 уже экспортирована, затем distinct actor/harness producer.
-Source updater18/worker16/supervisor22/view14;
-public install/activation выключены. Полное самообновление ещё не готово.
-Все проверки завершены, installed d052 unchanged/healthy/active0; controller
-оставлен работать. Desktop можно закрыть, installed worker оставить.
-Перед следующей сборкой заново проверить Info/disk. Исторические NEXT ниже
-не являются текущими заданиями.
+Closing checks и ограничения описаны в Main22 document. Installed d052 healthy/
+connected/active0, без изменений. Controller оставлен работать; desktop можно
+закрыть, installed worker оставить. Перед новым run заново Info/disk, минимум6GiB;
+Windows directories не очищать. Исторические NEXT ниже не текущие задания.
 
 ## История предыдущих checkpoints: не текущие задания
 

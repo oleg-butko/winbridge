@@ -31,8 +31,8 @@ def verify_runtime_replacement_faults_proof(proof, source, target):
     faults_proof.verify(proof, source, target, verify_runtime_preparation_proof, preimages_receipt_bytes, replacement_proof.expected_batch)
 
 
-def verify_runtime_replacement_proof(proof, source, target):
-    replacement_proof.verify(proof, source, target, verify_runtime_preparation_proof, preimages_receipt_bytes)
+def verify_runtime_replacement_proof(proof, source, target, activation_expected=False):
+    replacement_proof.verify(proof, source, target, verify_runtime_preparation_proof, preimages_receipt_bytes, activation_expected)
 
 
 def archive_pin(path):

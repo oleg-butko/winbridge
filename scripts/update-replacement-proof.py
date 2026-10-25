@@ -30,7 +30,7 @@ def expected_batch(preparation, revision):
     return {'schemaVersion': 1, 'files': files}
 
 
-def verify(proof, source, target, verify_preparation, preimages_bytes):
+def verify(proof, source, target, verify_preparation, preimages_bytes, activation_expected=False):
     require(type(proof.get('schemaVersion')) is int and proof.get('schemaVersion') == 1 and proof.get('kind') == 'runtime_replacement_main_native_proof'
             and proof.get('passed') is True and proof.get('platform') == 'windows'
             and proof.get('runtimeApplied') is True and proof.get('installedRuntimeApplied') is False
@@ -141,5 +141,5 @@ def verify(proof, source, target, verify_preparation, preimages_bytes):
             and after['view']['update'] == done['update']
             and after['view']['driverActive'] is False and after['view']['driverError'] is None
             and all(after.get(k) is True for k in ('normalStartupRefused', 'workerBytesUnchanged', 'ownedJobEmpty'))
-            and after.get('activationStarted') is False,
+            and after.get('activationStarted') is activation_expected,
             'Cold history adopted custody/replayed effects or started ordinary worker')

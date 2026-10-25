@@ -9,6 +9,9 @@ use std::{
 };
 use winbridge_platform::{infrastructure, ManagedChild, OutputReader};
 use winbridge_transport::supervisor as ipc;
+#[cfg(feature = "update-validation")]
+#[path = "activation_process_validation.rs"]
+mod validation;
 
 #[derive(Default)]
 struct Capture {
@@ -284,6 +287,11 @@ impl ActivationProcessGuard {
         let r = self.require_custody(j, a, s, true)?;
         let next = self.record.issue_create(self.at()?, &r)?;
         self.save(j, a, s, next)?; // Durable Creating before any CreateProcess.
+        #[cfg(feature = "update-validation")]
+        validation::hold(&self.record, "creating", || {
+            self.files.preparation.require_live_window()?;
+            j.check_source_authority(a).map_err(|e| e.to_string())
+        })?;
         self.require_custody(j, a, s, true)?;
         let name = self.record.intent.job_name()?;
         // The platform creates the suspended process and Job together. There
@@ -326,6 +334,11 @@ impl ActivationProcessGuard {
         self.save(j, a, s, next)?;
         // Still suspended: output cannot block it yet. Persist the real PID/Job
         // before a fallible allocation of either output reader thread.
+        #[cfg(feature = "update-validation")]
+        validation::hold(&self.record, "created", || {
+            self.files.preparation.require_live_window()?;
+            j.check_source_authority(a).map_err(|e| e.to_string())
+        })?;
         self.readers.push(drain(stdout, self.captures[0].clone())?);
         self.readers.push(drain(stderr, self.captures[1].clone())?);
         self.require_custody(j, a, s, true)?;

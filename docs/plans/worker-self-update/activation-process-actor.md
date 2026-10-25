@@ -1,7 +1,9 @@
 # Supervisor22/view14: один pre-writer receiver
 
 2026-10-24. Actor dispatch добавлен к [launcher/receiver library](activation-receiver.md).
-**Actual native execution gate ещё не выполнен.** Updater18/worker16 прежние;
+**Actual native execution gate ещё не выполнен.**
+[Closing checkpoint и инструкция новой сессии](resume-2026-10-24-activation-process.md):
+Main22 harness/verifier уже добавлены, следующий шаг — clean producer и запуск. Updater18/worker16 прежние;
 activation/controller_confirmation/desktop_update=None, public install off.
 Новые поля есть только у view14; frozen views1–13 не меняются.
 
@@ -83,8 +85,9 @@ Installed d052 используется только для запуска из�
 runtime/state и desktop не заменять. Перед heavy build обновить обе disk measures,
 один cache lease; Windows directories не очищать.
 
-1. Добавить explicit process mode в Main/PowerShell/Python; сохранить старые
-   preparation/files `--verify-run`. Не replay terminal runs.
+1. [Explicit Main/PowerShell/Python process mode](windows-activation-process-gate-2026-10-24.md)
+   и verifier добавлены. Следом clean producer export и actual run; старые
+   preparation/files `--verify-run` сохранены. Не replay terminal runs.
 2. В original supervisor: Prepare → Bind → Launch без тяжёлых history/duplicate
    audits между этими grants. Они выполняются после Ready. Original120000ms
    deadline не продлевать; late fact не превращается в новый grant.

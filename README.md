@@ -62,14 +62,15 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
-Актуальная точка разработки апдейтера: [подробная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-24-activation-files.md),
+Актуальная точка разработки апдейтера: [подробная инструкция следующей сессии](docs/plans/worker-self-update/resume-2026-10-24-activation-process.md),
 [handoff](docs/handoff.md) и [Windows отчёт](docs/plans/worker-self-update/windows-activation-files-gate-2026-10-24.md).
 Native whole-set read-binding gate пройден: **97 passed / 0 failed**; проверены
 пять runtime read pins, original state lock, duplicate/cold observations и
 actual17→18/refusal. Binding43.346s укладывается в исходные120s.
 [Suspended launcher/private receiver library](docs/plans/worker-self-update/activation-receiver.md)
 добавлены; [actor22/view14](docs/plans/worker-self-update/activation-process-actor.md) подключён,
-настоящий Windows execution gate ещё впереди. Затем
+[Main22 harness/verifier](docs/plans/worker-self-update/windows-activation-process-gate-2026-10-24.md)
+подготовлены, настоящий Windows execution gate ещё не отправлен. Затем
 state/controller/lifetime handoff; полное самообновление ещё не готово, public
 install выключен. Installed runtime не менялся. Актуальный checkpoint
 приоритетнее исторических NEXT ниже.

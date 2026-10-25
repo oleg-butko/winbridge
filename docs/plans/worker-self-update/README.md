@@ -7,22 +7,18 @@
 
 ## Текущий статус 2026-10-24
 
-**Начать с [подробной инструкции новой сессии](resume-2026-10-24-activation-files.md).**
-[Whole-set read-binding gate пройден: 97/0](windows-activation-files-gate-2026-10-24.md),
-run `20261024-205117-2da937b6`, producer941a2e6.30 files проверены дважды,
-72 Main +19 files +12 migration мутаций отвергнуты, actual17→18/refusal пройден.
-Original five-file read set и state lock удержаны; cold metadata не создаёт
-custody. Deadline120s сохранён, binding43.346s. Три прежних failed attempts
-и измеренное исправление marker search сохранены в linked gate report.
+**Начать с [подробной инструкции новой сессии](resume-2026-10-24-activation-process.md).**
+[Read-binding97/0](windows-activation-files-gate-2026-10-24.md) и actual17→18/refusal
+проверены. [Launcher/receiver](activation-receiver.md), [actor22/view14](activation-process-actor.md)
+и [Main22 harness/verifier](windows-activation-process-gate-2026-10-24.md) добавлены.
+Local/cross checks пройдены; новый actual Windows process gate **не отправлен**.
 
-[Suspended launcher/private receiver library](activation-receiver.md) добавлены,
-[actor22/view14](activation-process-actor.md) подключён. Actual native Main до
-ReadyForState без writer и independent verifier ещё впереди.
-Затем [execution](runtime-activation.md): state handoff/local/controller/lifetime, remaining
-U2 faults/management и U3/U4. Source updater18/worker16/supervisor22/view14.
-Installed worker unchanged/healthy/active0. Все проверки завершены; desktop
-можно закрыть, installed worker оставить работать. Public install/activation
-выключены, вся цель не готова. Нижние checkpoints — история.
+Следом clean producer export и один `--activation-process` с готовой receiver
+fixture1c23d48; затем state/local/controller/lifetime, remaining U2 и U3/U4.
+Source updater18/worker16/supervisor22/view14, public install off. Полная цель
+не готова. Installed runtime unchanged/healthy/active0, controller оставлен.
+Desktop можно закрыть, installed worker оставить. Команды, pins, результаты,
+recovery rules и карта кода находятся в новой инструкции; нижние записи — история.
 
 ### История предыдущих checkpoints
 
