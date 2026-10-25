@@ -58,6 +58,13 @@ Cache owner report5 files twice, SHA `22c40d278d595a82038d027184d3d706383d6ebf62
 Disk admission task `ec6006f3-5cb5-4cfa-aa25-004b8d0eed19`: Windows13527228416 /
 Debian24930435072 bytes, оба≥6GiB. Installed worker connected/idle/errors=null.
 Новый native run впереди; positive Main24 не заявлен.
+
+Clean receiver commit `24136539e0b1c542c48c90bace4bf975bed6c69c`:
+`winbridge-20261025T232657Z-2413653-bf3f5db3.zip`,825 files, ZIP SHA
+`0ed054c007a0c2b6ee035a71471c97176b15cee0043192ef09b701fcbb694c9f`, manifest
+`563efa9a7380da00c8d89a3bf15faac9d45ea18958ee63029fb5cb9222e97613`.
+Archive-derived startup default240000ms проверен. Следующий docs-only commit
+даёт отдельный producer; оба содержат reviewed code19/17/private3.
 Следом — clean distinct producer/receiver, actual Main24 + обе migrations,
 independent audit. После полного success: normal service/reconciliation в том же
 child/Store/lock → новая controller session → durable Job lifetime/commit/scoped
