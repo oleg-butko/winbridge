@@ -13,6 +13,7 @@ mod lifecycle;
 pub use lifecycle::*;
 pub mod channel;
 mod process_view;
+pub mod writer;
 pub(crate) use process_view::state_view;
 pub(crate) use process_view::view as process_view;
 #[cfg(any(windows, test))]

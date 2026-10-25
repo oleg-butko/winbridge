@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-25: после native132/0 начат [writer metadata contract](plans/worker-self-update/activation-state-handoff.md#начат-writer-data-contract-после-native1320).
+Три DTO/pure validators, focused6/workspace747/0/protocol59/0 и Clippy/TS/UI
+passed. Schema18/16 и actor23/view15 прежние; runtime writer не подключён.
+Следом immutable worker receipt+atomic authority CAS/schema policy, затем
+updater ledger/private driver/actor и combined native writer gate. Public off.
+
 2026-10-25: [actual Main23 physical StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
 пройден, task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/run20261025-100933-d8a50807,
 producer7b270c6/target1370d6b.45 files twice,44+40+12 mutations, actual17→18/refusal.

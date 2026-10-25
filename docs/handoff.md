@@ -1,5 +1,14 @@
 # Точка продолжения updater — 2026-10-25, StateOwned23
 
+**Writer metadata contract начат после native132/0:**
+[три DTO и pure validators](plans/worker-self-update/activation-state-handoff.md#начат-writer-data-contract-после-native1320)
+добавлены, focused6/workspace747/0 (16 ignored)/protocol59/0 и Linux/MSVC/
+contracts/TS/UI checks passed. Это data, не writer: schema17/SQLite transaction,
+updater writer ledger/private handler/actor ещё не реализованы; новые capabilities
+не объявлены. Следом атомарный worker header CAS+immutable receipt и schema
+policy, затем driver/actor/combined native gate. Отдельный Windows run ради DTO
+не нужен. Updater18/worker16/supervisor23/view15 прежние, public install off.
+
 **Main23 physical StateOwned gate пройден:** [132/0,32 groups/35 commands](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md),
 task6bc1623a-c5c4-49ce-8511-cb46b43c7ece/run20261025-100933-d8a50807,
 producer7b270c6/target1370d6b. Observer exit0:45 files twice,44+40+12 mutations,

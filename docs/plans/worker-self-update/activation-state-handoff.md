@@ -233,3 +233,41 @@ Desktop не нужен, installed worker оставить. Перед новы�
 Порядок: закончить actual physical gate/review → typed writer contract/ledger
 и атомарный Store adapter → private receiver/actor → actual same-schema writer
 gate → local/controller/lifetime/commit. Public activation до этого не включать.
+
+## Начат writer data contract после native132/0
+
+Physical gate пройден; [actual proof и exact pins](windows-activation-state-gate-2026-10-25.md)
+сохранены. Следующий source-блок добавляет **только metadata proposal/validation**:
+
+- `crates/protocol/src/update/activation_writer.rs`: отдельные
+  `WorkerJournalActivationBinding`, `WorkerJournalActivationCommand` и
+  `WorkerJournalActivationReceipt`, strict serde/JSON Schema/TypeScript.
+  Physical contract2/StateOwned receipt и existing wire/view shapes не меняются.
+- `apps/update/src/activation/writer.rs`: command связывает полный StateOwned6
+  record digest, backup-record digest из source, exact physical receipt,
+  старую authority incarnation/epoch/fingerprint, config/schemas и updater scope.
+  Стабильный UUID command ID служит correlation/dedup key в update scope.
+- Proposal допускается только после StateOwned, до original startup deadline;
+  новый command ID не обновляет окно. Receipt требует ровно следующую epoch,
+  новый fingerprint в прежнем incarnation и SHA полного command. Поздняя
+  committed receipt остаётся фактом; это не новый grant. Иной payload с прежним
+  key не может повторно использовать receipt.
+- Factory/validator **не доказывают** current owner/OS custody или соответствие
+  переданного old-header fingerprint проверенному backup. Следующий journal/
+  driver обязан получить эти данные в одном graph-bound snapshot и проверить
+  живой original owner/deadline. `validate_receipt` применяется к предварительно
+  проверенной команде; прочитанная JSON receipt не создаёт writable Store.
+
+Focused6/0, workspace747/0 (16 ignored), protocol-jsonschema59/0, Linux/MSVC
+validation all-target Clippy, generated contracts/check, TS/UI/fmt/scaffold273
+passed. Raw logs `.winbridge/update-preparation/writer-contract-*`.
+Debian free25,484,222,464 bytes после checks, latest native Windows free
+11,316,977,664 bytes; cleanup не было. Schema18/16, supervisor23/view15 прежние.
+Новый private contract/marker, writer ledger, schema17/SQLite receipt/transaction
+и runtime handler **не реализованы и не объявляются поддержанными**.
+
+Следующий шаг — отдельные immutable worker receipts и атомарный CAS header+
+receipt, existing-state constructor и явная migration/compatibility policy.
+Затем updater writer ledger/private handler/actor и **combined** native writer
+gate. Не отправлять отдельный Windows run ради одних DTO; physical132 terminal
+не replay. Installed d052 healthy/unchanged; desktop не нужен, worker оставить.
