@@ -5,36 +5,36 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий checkpoint — 2026-10-25, actor24/view16
+## Текущий checkpoint — закрытие проверок 2026-10-25
 
-**Начать с [checkpoint](resume-2026-10-25-journal-activation.md) и
-[writer actor](journal-writer-actor.md).** Source updater19/worker17,
-supervisor24/view16, physical2+writer3. Worker CAS/receipt/retained-lock opening и
-graph-bound updater intent/history, trusted consuming driver/worker handler
-и actor24/view16 реализованы. Rust Main24 и independent verifier добавлены;
-PS/observer/migration fixtures подключены; **native19/17 proof ещё впереди.**
+**Начать с [инструкции следующей сессии](resume-2026-10-25-journal-activation.md)
+и [native writer отчёта](windows-journal-writer-gate-2026-10-25.md).**
+Они содержат точные версии, результаты, task/run/ZIP/proof pins, карту кода,
+readonly recovery и порядок продолжения без истории чата.
 
-[Physical132/0](windows-activation-state-gate-2026-10-25.md) относится к18/16/
-physical2; closing readonly recheck принят. Terminal run20261025-100933-d8a50807
-не replay. Installed d052/runtime не менялся; desktop можно закрыть, worker оставить.
-Public install/capabilities off, полное самообновление не готово.
-Source workspace781/0 (16 ignored), focused19/mailbox24 1/0 и обе Clippy/fmt/contracts/TS/UI/scaffold passed.
+Combined Windows run **20261025-205856-79e1b7c0** завершён **failed/exit1**:
+**190 тестов прошли в 38 группах; Main24 — 1 failed**. Обе actual migrations
+(updater18→19/refusal, worker16→17/active16 refusal) прошли; independent audit
+отверг18 подмен. Final writer observe получил `Activation preparation deadline
+expired; no new execution or adoption`. **Положительного Main24/writer proof нет.**
+Все проверки/observer завершены; после terminal повтор не запускался. Первый следующий шаг —
+разобрать задержки activation и исправить путь, сохранив original120s и fences,
+затем повторить combined gate из нового clean producer. Только после полного
+success переходить к normal service/controller/lifetime.
 
-Проверки закрыты по просьбе пользователя. Closing readonly physical132/0,
-receiver ZIP и source test evidence повторно сверены; pending runs нет.
-[Checkpoint](resume-2026-10-25-journal-activation.md) содержит актуальную карту
-реализации, review fixes, pins/команды и acceptance criteria без контекста чата.
+Source **updater19/worker17/supervisor24/view16/physical2+writer3**.
+Atomic worker header/receipt, retained-lock opening, updater intent/history,
+one-shot driver/private receiver, actor24 и combined test harness реализованы.
+Public install off; normal activated service/local/controller/lifetime и U3/U4
+ещё впереди. Installed d052/runtime/config/journal не менялись.
 
-Main24 source checks: hooks4/0, Python19/0, обе all-target validation Clippy passed;
-legacy132/0 повторно принят readonly. Workspace781/0 выше — baseline1a2149f.
-Migration fixtures и PS/observer теперь добавлены; Python24/Linux/MSVC passed.
-Receiver19/17/private3/actor24 **1a2149f уже экспортирована**. Следом clean producer
-export и Windows syntax preflight
-→ distinct producer/combined
-native writer с actual updater18→19/worker16→17/refusal → local/controller/
-lifetime/commit → remaining U2 faults/management → U3 desktop → U4 actual installed
-self-update → возврат к A4.3. Original120s не продлевать. Exact pins/cache/recovery
-и acceptance criteria — в checkpoint; прежние NEXT ниже исторические.
+После полного положительного writer gate/review: normal local service/reconciliation
+в том же child/Store/lock → новая controller session → durable Job lifetime transfer
+и commit/scoped release → remaining U2 faults/management/opt-in → U3 desktop →
+U4 actual stable-runtime self-update → возврат к A4.3. Если последний gate failed,
+сначала устранить его причину; source/partial migration checks не заменяют его успех.
+Original120s не продлевать. Desktop можно закрыть, installed worker оставить.
+Проверки закрываются по просьбе пользователя; новые этапы сейчас не начинались.
 
 ### История предыдущих checkpoints
 

@@ -68,14 +68,16 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 Source **updater19/worker17/supervisor24/view16**, physical handoff2 + private writer3.
 Worker atomic header/receipt/opening и graph-bound updater intent/history,
 consuming native driver/worker handler и actor24/view16 реализованы.
-Rust Main24 и independent verifier добавлены (hooks4/Python19/cross checks passed).
-PS/observer writer mode и actual migration fixtures добавлены (source/cross checks).
-**Native writer proof, обычный сервис нового worker/local/controller/
-lifetime и U3/U4 впереди.**
-[Physical132/0](docs/plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-относится к прежним18/16/private2. Public install выключен, полное самообновление
-не готово. Installed runtime не менялся. Исторические отчёты не заменяют checkpoint.
-Source workspace781/0 (16 ignored), focused19/mailbox24 1/0 и Linux/MSVC Clippy/TS/UI passed.
+Rust Main24, independent verifier, PS/observer и actual migration fixtures добавлены.
+[Закрытие native проверок](docs/plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md):
+обе миграции прошли, 190 тестов прошли; Main24 завершился ошибкой исходного
+окна активации120s. Полного writer proof нет. Следом — диагностика/исправление
+задержек и новый isolated gate.
+**Обычный сервис нового worker/local/controller/lifetime и U3/U4 впереди.**
+Public install выключен, самообновление целиком не готово. Installed runtime не менялся.
+Подробные результаты, exact pins/команды и план продолжения — в checkpoint;
+исторические отчёты не заменяют его. Source baseline781/0 (1a2149f), Python24,
+Linux/MSVC Clippy и SQL regression1 passed; документация/scaffold проверены.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

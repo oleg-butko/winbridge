@@ -1,7 +1,7 @@
 # Native writer24: прогоны и восстановление
 
 2026-10-25 America/New_York. Source19/17, actor24/view16, physical2/private writer3.
-**Положительного native writer/migration proof пока нет.** Public install off;
+**Обе actual migration проверки пройдены; полного native writer proof нет.** Public install off;
 installed d052/runtime/config/journal не менялись. [План продолжения](resume-2026-10-25-journal-activation.md).
 
 ## Первый run: terminal failed, не replay
@@ -85,18 +85,114 @@ Windows validation directories не чистить. Source script fixes и по�
 terminal разрешены; unexpected installed worker/manual update останавливают
 зависимые Windows действия. Нельзя retry неизвестный/live task по новому key.
 
-## Новый run и безопасное продолжение
+## Повтор после исправления: exact producer и результат
 
-После clean fixed producer export использовать команду из checkpoint с
-`--activation-writer`, receiver1a2149f, cache above и old Main23 reference pin.
-Fresh Info/диски≥6GiB и объявление worker-only/no UI обязательны.
-Записать новый task/run до ожидания результата. Observer сохраняет request и scope
-до dispatch; после потери Debian context сначала get_task, затем тот же argv с
-`--verify-run RUN`. Не resubmit по observation timeout и не relaunch старый run.
+**Terminal failed/exit1; observer exit1.** Из39 test groups прошли38:
+**190 tests passed, Main24 — 1 failed**. Из42 commands41 завершилась exit0,
+Main Cargo — exit101. Overall report passed=false; 53 ready files twice verified.
+Report SHA256 `d6b7ba81af899bc2de6480f8297b5e13c9c6e9f5a0021f5efdb3c78dcf0b9437`.
+Полного writer proof нет, verified-success pin не создан. Прогон не replay.
 
-Success требует actual39 groups/42 commands, independent Main24, updater18→19
-и worker16→17/active16 refusal, both SQL observations/epoch/receipt/old-owner fencing,
-retained immutable history, actual child/Job exit, no cold replay, ready hashes twice
-и negative mutation audits. Не выдавать source checks или partial41 за этот success.
-После positive gate/review — normal local service/reconciliation/controller/lifetime,
-remaining U2 faults/management, U3 desktop и U4 actual stable-runtime update.
+- Run `20261025-205856-79e1b7c0`.
+- Task `f762c5a2-0cf8-474a-8582-45d4bd6c74c1`.
+- Producer `772b00ac8a5f4b5a0081cd1014bfc6c65b5b2e5b`, ZIP
+  `winbridge-20261025T205458Z-772b00a-e7ad6653.zip`.
+- ZIP SHA256 `e780292bde894f437c69c810a9e8a9307596c338923af4d515aa75e8918e25a1`;
+  manifest SHA256 `9bb24397934eae13c2a25a8fca3835ae4acc3172be3303b03efd8974071faba3`.
+- Target receiver1a2149f, reference Main23 и exclusive cache — как выше.
+- Перед admission disk taskac04264e-6e15-45f9-a238-4803ff9e1326 succeeded/0:
+  Windows13311016960 / Debian25047293952 bytes; оба≥6GiB.
+- Локальный observer log `.winbridge/update-preparation/writer24-native-retry.log`;
+  metadata `.winbridge/workflow-validation/20261025-205856-79e1b7c0/activation-preparation-run.json`.
+- Shared `/mnt/hgfs/shared/WinBridge/workflow-validation/20261025-205856-79e1b7c0/`.
+
+### Реальные миграционные проверки: обе прошли
+
+Worker fixture **1 passed/0 failed** (7.31s): actual old16 executable в отдельном
+instance без controller создал succeeded task с stdout/stderr и dedup key.
+CLI task/output сверены с SQLite. Inactive16 consistent copy перешла в17;
+rows/authority/backup сохранены, old16 отказывает на17 без новых writes.
+Отдельная copy настоящего unfinished Quiesced16 отказала normal17 open **до**
+миграции/writes/backup; schema16/authority/accepted shutdown/rows неизменны.
+Old fixture process/Job завершены; original reference и installed runtime сохранены.
+
+Updater fixture **1 passed/0 failed** (7.24s): actual old18 physical history из
+прежнего успешного Main23 скопирована через SQLite backup API, migrated19 с
+fencing epoch и verified backup18. Physical/root/all prior rows сохранены,
+writer gate rows0. Terminal replacement остаётся Existing data без fresh permit;
+old18 init/status refuse19, DB/WAL bytes и original reference unchanged.
+
+Independent migration verifier **18 negative mutations rejected**; exact source,
+reference/history/authority/output связаны, оба proof-файла read twice byte-equal.
+Это подтверждение двух компонентов, не весь Main24/install success.
+
+| Artifact | SHA256 |
+| --- | --- |
+| activation-migration-proof.json | fcd405a037af304534d6f29d017e6783155c77fb0379a806a402dde8356d1616 |
+| worker-journal-activation-migration-proof.json | b7348c541d0490730f6f3458df9e253c182ecd2cc097e13ac9c8cf68aa1549a5 |
+
+### Итог Main24 и закрытие
+
+Тест дошёл до replacement FilesMoved5/5, Ready и StateOwned observation, затем
+actor writer вернул:
+
+```text
+Corrupt: Activation preparation deadline expired; no new execution or adoption
+```
+
+Panic: `apps/worker/tests/update_shutdown/activation_writer.rs:212`;
+Main test runtime715.65s. Harness сообщает Ready90237ms /StateOwned120352ms от
+собственного origin, который начинается **до** baseline/preparation admission.
+Это не тот же origin, что original deadline; ошибка подтверждает expiry на writer
+пути, а не точный момент expiry относительно saved StateOwned.
+
+Structured `None-supervisor-stderr.log`: bind_files43883ms, remaining после
+bound66324ms. Actual before/after-release traces: revision5/HandoffIssued,
+тот же state directory/journal/lock, lockAvailable false→true,
+observedAt−admittedAt95691ms/102882ms. Hashes:
+
+| Artifact | SHA256 |
+| --- | --- |
+| None-activation-state-before_release.json | e12bea8995f84ab6b84dd38f210de267a05f89e9fd9a0658663cb334a59425cb |
+| None-activation-state-after_release.json | bf558713c1c9004c4cf89a22aa38515c6b93ad5229062951b269601830c4f102 |
+
+Ready set не содержит full Main proof или writer-before-send marker. Успешные
+writer CAS/receipt/epoch change не доказаны; отсутствие marker не заменяет final
+SQL readback и не доказывает отсутствие эффекта. Source control flow проверяет
+custody/window до writer admission, но это отдельный аргумент review, не artifact.
+
+**Следующее действие:** разобрать launch/handoff/observe/admission latency,
+убрать только доказанно избыточные slow audits/validation work из original window;
+mandatory graph/file/process/lock/fencing/live checks сохранить, original120s
+не продлевать. Детальная последовательность и карта кода — в checkpoint.
+Изменение кода и новый run оставлены следующей сессии по просьбе пользователя.
+
+Closing process task `b871ac45-a58f-4e8a-8e2b-19ebbd7dd24f` succeeded/0:
+по PID+creation FILETIME old worker17920/supervisor17048/new worker22864 уже
+отсутствуют. Это process-exit observation, не full native Job-empty proof.
+Fresh Info21:25:12Z: тот же installed d052/generation, connected/active0,
+maintenance/recovery errors=null, recoveryCoverage.complete=true.
+Native report storage Windows13228408832→12158017536 bytes;
+Debian closing25040994304 bytes. Cleanup не выполнялся.
+
+Local final receipt `.winbridge/update-preparation/writer24-session-close-20261025.json`.
+Observer/native checks завершены; controller оставлен. **Desktop можно закрыть,
+installed worker оставить.** UI окна не появлялись. Runtime/config/journal
+рабочей установки не менялись; public install выключен.
+
+## Продолжение без повторного эффекта
+
+Exact readonly `--verify-run 20261025-205856-79e1b7c0` команда — в
+[checkpoint](resume-2026-10-25-journal-activation.md). Она наблюдает тот же task,
+не запускает Windows работу заново. Failed run не превращать в successful reference.
+Если task живой/unknown после перезапуска Debian, сначала reconcile его; observation
+timeout не даёт права отправить новый key. Новый gate — только после terminal,
+исправления source/необходимых checks, clean commit/export и fresh Info/disks.
+
+Full success требует actual39 groups/42 commands, independent Main24,
+updater18→19 и worker16→17/active16 refusal, both SQL observations/epoch/receipt,
+old-owner fencing, immutable history, actual child/Job exit, no cold replay,
+ready hashes twice и negative audits. Source/partial tests этого не заменяют.
+После positive gate/review: normal local service/reconciliation → new controller
+session → durable Job lifetime/commit/scoped release → remaining U2 faults/
+management/opt-in → U3 desktop → U4 actual stable-runtime self-update → A4.3.

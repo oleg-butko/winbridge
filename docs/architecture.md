@@ -8,7 +8,8 @@ Source **updater19/worker17, supervisor24/view16, private physical2 + writer3**.
 [Checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md) и
 [writer actor](plans/worker-self-update/journal-writer-actor.md) приоритетнее
 исторических статусов ниже. [Physical Main23 StateOwned132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-доказан на18/16/private2; нового native writer proof пока нет.
+доказан на18/16/private2. Последний writer результат и его границы — в
+[native отчёте](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md).
 
 Worker17 атомарно сохраняет header CAS+immutable receipt, stale owners fenced,
 maintenance остаётся Quiesced. [Opening owner](plans/worker-self-update/activation-journal-opening.md)
@@ -32,7 +33,13 @@ Source Main24 и independent writer verifier добавлены: same-child fast
 два связанных SQL journals/receipts, fencing и отдельное cold наблюдение.
 Hooks4/Python19 и обе validation Clippy passed. PS/observer и actual18→19/
 worker16→17/refusal fixtures добавлены, Python24/MSVC/Linux passed. PowerShell
-syntax и actual native writer/migration proof ещё впереди. Старый physical132 readonly принят снова.
+syntax preflight прошёл на Windows; actual worker16→17/active16 refusal и updater18→19/old18 refusal
+подтверждены в повторном gate. Independent migration audit отверг18 подмен.
+Combined run190 passed/1 failed: Main24 writer observe отклонён после expiry
+original120s. Полного writer proof нет; сначала latency review/fix и новый isolated
+native gate, затем normal service/controller/lifetime. Все проверки завершены;
+installed d052 healthy/idle, обновление working runtime не выполнялось.
+Старый physical132 readonly принят снова.
 Original120s сохраняется. Public install off, advertised activation/controller/
 desktop=None. Serialized data не восстанавливают kernel custody или permissions.
 Installed runtime не менялся; source/cross checks не подменяют actual Windows gate.

@@ -1,48 +1,43 @@
 # Постепенная реализация и расширение
 
-## Текущий checkpoint — 2026-10-25, actor24/view16
+## Текущий checkpoint — закрытие проверок 2026-10-25
 
-Продолжать по [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
-и [writer actor](plans/worker-self-update/journal-writer-actor.md).
+Начать с [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
+и [native отчёта](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md).
 
-После checkpoint36f9895 добавлены Rust Main24 и independent verifier; source/
-cross/local checks прошли. PS mode/observer и реальные migration fixtures теперь
-добавлены; Python24/Linux/MSVC passed. Windows syntax/native run ещё впереди.
+Combined Windows run **20261025-205856-79e1b7c0** завершён **failed/exit1**:
+**190 тестов прошли в 38 группах; Main24 — 1 failed**. Обе actual migrations
+(updater18→19/refusal, worker16→17/active16 refusal) прошли; independent audit
+отверг18 подмен. Final writer observe получил `Activation preparation deadline
+expired; no new execution or adoption`. **Положительного Main24/writer proof нет.**
+Все проверки/observer завершены; после terminal повтор не запускался. Первый следующий шаг —
+разобрать задержки activation и исправить путь, сохранив original120s и fences,
+затем повторить combined gate из нового clean producer. Только после полного
+success переходить к normal service/controller/lifetime.
 
 - Source **updater19/worker17/supervisor24/view16/private physical2+writer3**.
-  Worker atomic header/receipt/opening и graph-bound updater intent/history,
-  consuming native private driver/worker handler и actor24/view16 реализованы.
-  Rust Main24/verifier готовы в source; **combined native gate/proof ещё впереди**.
-  Public install/capabilities off.
-- Source checks **workspace781/0 (16 ignored), focused19/mailbox24 1/0**,
-  обе Clippy/fmt/contracts/TS/UI/scaffold passed; summary `actor24-checks.json`.
-- [Physical132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-  относится к18/16/private2. Terminal run20261025-100933-d8a50807 не replay.
-  Installed d052 unchanged/healthy; closing readonly recheck прошёл, новых native
-  runs нет, desktop не нужен. Receiver source ZIP также повторно проверена.
-- Main24 source checks: portable hooks4/0, Python19/0, обе all-target validation
-  Clippy passed; old132 readonly verifier regression прошёл. Это не writer native proof.
+  Atomic CAS/receipt/opening, graph-bound writer intent/history, consuming driver,
+  actor24 и полный test harness реализованы. Writer receipt не означает normal service.
+- Public install/capabilities off; installed d052/runtime/config/journal unchanged.
+- Проверки source: baseline781/0 (1a2149f), hooks4, Python24, Linux/MSVC Clippy;
+  fix772 real-Store regression1/MSVC. При закрытии Python24 и scaffold278 passed.
+- Старый [physical132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+  на18/16/private2 сохранён как actual migration reference, не writer success.
 
-Первый native writer run завершён failed на SQL projection новой migration
-fixture до миграции/Main24. Preliminary41 passed; fixed query/regression1/MSVC
-готовы. [Точные pins/причина/retry](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md).
-Следом clean fixed producer/export и новый combined run; public install off.
+Последовательность продолжения:
 
-Следующая последовательность:
+1. Сверить terminal result/evidence последнего combined writer gate. Если failed,
+   исправить причину и получить полный isolated positive proof; не replay старый run.
+2. Normal local service/reconciliation в том же activated child/Store/lock.
+3. Настоящая новая controller session/build/generation → owned Job lifetime transfer
+   с durable intent/readback → commit/scoped maintenance release.
+4. Remaining U2 faults/recovery/CLI/MCP/opt-in → U3 desktop notifications/save/exit/
+   update/tray → U4 stable installed self-update → возврат к A4.3.
 
-1. Receiver19/17/private3/actor24 clean **1a2149f уже экспортирована**;
-   [hashes/pin](plans/worker-self-update/journal-writer-actor.md#готовая-clean-receiver-fixture).
-   Rust Main/verifier, actual migration fixtures и PS mode/observer добавлены.
-   Следом clean distinct producer, syntax preflight и combined run.
-2. Combined native writer/actual updater18→19 и worker16→17/refusal; correct
-   None ACK/busy, immediate24 after StateOwned, original120s сохранить.
-3. Normal local service/reconciliation, actual controller session, owned
-   lifetime/commit/scoped release; remaining U2 faults/management.
-4. U3 desktop notifications/update, U4 installed self-update, возврат к A4.3.
-
-Перед новым Windows gate fresh Info/оба диска≥6GiB и объявление нужных окон/
-worker/desktop. Desktop можно закрыть, installed worker оставить. Непредвиденное
-поведение installed worker останавливает зависимые действия. История ниже.
+Original120s не продлевать. Перед новым native gate fresh Info/оба диска≥6GiB и
+объявление необходимых окон/worker. Desktop можно закрыть, installed worker оставить.
+Windows validation directories не чистить. Новые этапы по просьбе пользователя при
+закрытии не начинались; самостоятельный installed update ещё не включён.
 
 ## История предыдущих checkpoints: не текущие задания
 
