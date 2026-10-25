@@ -5,7 +5,7 @@ use winbridge_platform::{
     process_identity::{self, ProcessIdentity, ProcessObservation},
 };
 use winbridge_update::activation::{ActivationRecord, ActivationState};
-fn call(
+pub(super) fn call(
     rt: &tokio::runtime::Runtime,
     sup: &SupervisorRecord,
     q: &SupervisorRequest,
@@ -22,7 +22,7 @@ fn call(
     assert!(response.error.is_none(), "{:?}", response.error);
     response.preparation.unwrap()
 }
-fn job(record: &ActivationRecord) -> ProcessIdentity {
+pub(super) fn job(record: &ActivationRecord) -> ProcessIdentity {
     let actual = record.created.as_ref().map(|v| &v.process);
     ProcessIdentity {
         job_name: record.intent.job_name().unwrap(),

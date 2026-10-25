@@ -20,7 +20,8 @@ handles, без автоматического retry/relock. Saved rows не в�
 custody; cold view сохраняет историю отдельно от нынешних ресурсов/liveness.
 
 Workspace741/0 (16 ignored), protocol59/0 и local/MSVC checks passed.
-**Actual Main23 state harness/verifier/gate ещё не добавлены/не выполнены.**
+[Actual Main23 state harness/verifier](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+добавлены; **нового actual Windows state gate ещё не было**.
 Writable Store/новая JournalAuthority, local/controller service и lifetime
 transfer ещё впереди. Views1–14 frozen, исходный startup deadline120s сохранён.
 Public install off; advertised activation/controller_confirmation/desktop_update

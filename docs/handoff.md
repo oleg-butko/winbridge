@@ -1,5 +1,13 @@
 # Точка продолжения updater — 2026-10-25, StateOwned23
 
+**Продолжение после closing commit2925d07:** [Main23 harness/verifier](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+добавлены, включая неблокирующие OS probes, PS `-ActivationStateGate`, observer
+`--activation-state`/same-run recovery и independent state audit. Portable3/Python5
+и source/cross checks пройдены; final review/clean producer/actual Windows run
+впереди. Новый state task/run **ещё не отправлен**. Installed runtime не менялся.
+Ниже checkpoint до этого продолжения: его «harness/flags не существуют» теперь
+история; ZIP target1370d6b/cache/reference и оставшиеся U2–U4 остаются актуальны.
+
 **Начать с [подробного checkpoint для новой сессии](plans/worker-self-update/resume-2026-10-25-state-handoff.md).**
 Он содержит границу готовности, source/test evidence, exact retained task/run/
 ZIP pins, карту кода, отсутствующие части harness, команды readonly recovery,

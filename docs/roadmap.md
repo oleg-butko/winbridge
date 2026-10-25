@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-25, продолжение: [Main23 state harness/verifier](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
+реализованы; native gate ещё не отправлен. Portable3/Python5 и validation cross
+checks passed, final checks/review/clean producer/один actual run впереди.
+Checkpoint ниже сохраняет прежние inputs/границы; его «flags отсутствуют» устарело.
+Public install off, installed runtime не менялся.
+
 ## Текущий checkpoint — 2026-10-25, завершение проверок StateOwned23
 
 **Продолжать по [подробной инструкции новой сессии](plans/worker-self-update/resume-2026-10-25-state-handoff.md).**

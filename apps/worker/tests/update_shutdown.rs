@@ -23,6 +23,8 @@ mod activation_files;
 mod activation_preparation;
 #[path = "update_shutdown/activation_process.rs"]
 mod activation_process;
+#[path = "update_shutdown/activation_state.rs"]
+mod activation_state;
 #[path = "update_shutdown/candidate_support.rs"]
 mod candidate_support;
 #[path = "update_shutdown/replacement.rs"]
@@ -62,6 +64,8 @@ struct GateInput {
     activation_files: bool,
     #[serde(default)]
     activation_process: bool,
+    #[serde(default)]
+    activation_state: bool,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -1287,6 +1291,7 @@ fn case(
     let activation_requested = input.activation_preparation;
     let bind_files = input.activation_files;
     let launch_process = input.activation_process;
+    let handoff_state = input.activation_state;
     let worker = root.join("runtime/winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -1539,12 +1544,20 @@ fn case(
                     replacement::execute_fault(&root, &sup, &proof, replacement_fault)
                 };
             if launch_process {
-                let result = activation_process::execute(&root, &sup, &proof["runtimeReplacement"]);
+                let result = if handoff_state {
+                    activation_state::execute(&root, &sup, &proof["runtimeReplacement"])
+                } else {
+                    activation_process::execute(&root, &sup, &proof["runtimeReplacement"])
+                };
                 let actual: SupervisorProcess =
                     serde_json::from_value(result["record"]["created"]["process"].clone()).unwrap();
                 activation_child =
                     Some(winbridge_platform::infrastructure::PinnedProcess::live(&actual).unwrap());
-                proof["activationProcess"] = result;
+                proof[if handoff_state {
+                    "activationState"
+                } else {
+                    "activationProcess"
+                }] = result;
             } else if activation_requested {
                 proof["activationPreparation"] = activation_preparation::execute(
                     &root,
@@ -1789,8 +1802,12 @@ fn case(
         let cold_process = process.as_ref().map(|p| {
             activation_process::after_owned_exit(&root, id, p, activation_child.as_ref().unwrap())
         });
+        let state = proof.as_object_mut().unwrap().remove("activationState");
+        let cold_state = state.as_ref().map(|p| {
+            activation_state::after_owned_exit(&root, id, p, activation_child.as_ref().unwrap())
+        });
         let mut after = after;
-        if process.is_some() {
+        if process.is_some() || state.is_some() {
             after["activationStarted"] = json!(true);
         }
         let mut result =
@@ -1798,6 +1815,10 @@ fn case(
         if let Some(process) = process {
             result["activationProcess"] = process;
             result["coldActivationProcess"] = cold_process.unwrap();
+        }
+        if let Some(state) = state {
+            result["activationState"] = state;
+            result["coldActivationState"] = cold_state.unwrap();
         }
         if let Some(activation) = activation {
             result["activationPreparation"] = activation;
@@ -1815,32 +1836,37 @@ fn case(
 #[test]
 #[ignore = "Explicit clean native Main shutdown gate; builds a real candidate and retains case directories"]
 fn actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement() {
-    run_gate(false, false, false, false, false);
+    run_gate(false, false, false, false, false, false);
 }
 #[test]
 #[ignore = "Explicit clean native Main15 replacement gate; preserves isolated runtime/history"]
 fn actual_main_and_supervisor_replace_runtime_without_activation() {
-    run_gate(true, false, false, false, false);
+    run_gate(true, false, false, false, false, false);
 }
 #[test]
 #[ignore = "Explicit clean Main18 original-custody preparation, no activation launch"]
 fn actual_main_prepares_activation_without_launch_or_cold_adoption() {
-    run_gate(true, false, true, false, false);
+    run_gate(true, false, true, false, false, false);
 }
 #[test]
 #[ignore = "Explicit clean Main15 replacement fault matrix; preserves all isolated cases"]
 fn actual_main_preserves_replacement_faults_without_retry() {
-    run_gate(true, true, false, false, false);
+    run_gate(true, true, false, false, false, false);
 }
 #[test]
 #[ignore = "Explicit clean Main21 file binding; preserves original state without worker launch"]
 fn actual_main_binds_activation_files_without_launch_or_cold_adoption() {
-    run_gate(true, false, true, true, false);
+    run_gate(true, false, true, true, false, false);
 }
 #[test]
 #[ignore = "Explicit clean Main22 suspended receiver; no state writer or installed update"]
 fn actual_main_launches_one_private_receiver_before_state_handoff() {
-    run_gate(true, false, true, true, true);
+    run_gate(true, false, true, true, true, false);
+}
+#[test]
+#[ignore = "Explicit clean Main23 physical same-child state handoff; no state writer or installed update"]
+fn actual_main_hands_the_existing_state_to_the_same_private_receiver() {
+    run_gate(true, false, true, true, true, true);
 }
 fn run_gate(
     replacement_requested: bool,
@@ -1848,6 +1874,7 @@ fn run_gate(
     activation_requested: bool,
     files_requested: bool,
     process_requested: bool,
+    state_requested: bool,
 ) {
     let path = PathBuf::from(
         std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
@@ -1857,6 +1884,8 @@ fn run_gate(
     assert_eq!(input.activation_preparation, activation_requested);
     assert_eq!(input.activation_files, files_requested);
     assert_eq!(input.activation_process, process_requested);
+    assert_eq!(input.activation_state, state_requested);
+    assert!(!state_requested || process_requested);
     assert!(!process_requested || files_requested);
     assert!(!files_requested || activation_requested);
     assert!(!files_requested || input.validation_updater.is_some());
@@ -1975,6 +2004,6 @@ fn run_gate(
             }
         }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

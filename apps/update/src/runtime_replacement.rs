@@ -7,6 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 type Result<T> = std::result::Result<T, String>;
 mod driver;
+// Execute the portable kernel-probe regressions from the same native-hook
+// source on Unix. Only the Windows driver calls the remaining hook functions.
+#[cfg(all(test, not(windows), feature = "update-validation"))]
+#[path = "runtime_replacement/activation_process_validation.rs"]
+#[allow(dead_code)]
+mod activation_process_validation_tests;
 #[cfg(all(windows, feature = "update-validation"))]
 mod validation;
 pub(crate) use driver::{execute, ReplacementOutcome};

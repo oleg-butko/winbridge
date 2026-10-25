@@ -6,6 +6,10 @@
 доказывают этот межпроцессный handoff. Updater18/worker16 прежние;
 activation/controller_confirmation/desktop_update=None, public install off.
 
+Продолжение: [Main23 harness, boundary probes и independent verifier](windows-activation-state-gate-2026-10-25.md)
+добавлены. Новый `--activation-state` готовится к первому actual run; state gate
+ещё не отправлен. Ниже сохранён source checkpoint до добавления harness.
+
 ## Подтверждаемый результат и границы
 
 Тот же private receiver, который уже подтвердил Ready, приобретает прежний

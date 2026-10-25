@@ -11,6 +11,7 @@ import re
 import shutil
 import time
 import uuid
+import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -27,6 +28,7 @@ checks = load('activation_checks', 'update-activation-preparation-proof.py')
 replacement_audit = load('replacement_audit', 'test-update-replacement-proof.py')
 file_checks = load('activation_file_checks', 'update-activation-files-proof.py')
 process_checks = load('activation_process_checks', 'update-activation-process-proof.py')
+state_checks = load('activation_state_checks', 'update-activation-state-proof.py')
 support, health, native, need = actor.support, actor.health, actor.native, checks.need
 PREFIX = 'native-activation-preparation-'
 
@@ -64,11 +66,19 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--activation-files',action='store_true',help='Explicit actor21 whole-set read binding; no worker launch')
     mode.add_argument('--activation-process',action='store_true',help='Explicit actor22 private receiver; no worker state writer')
+    mode.add_argument('--activation-state',action='store_true',help='Explicit actor23 same-child physical lock handoff; no worker state writer')
     args = parser.parse_args()
-    files_mode = args.activation_files or args.activation_process
-    prefix = 'native-activation-process-' if args.activation_process else 'native-activation-files-' if files_mode else PREFIX
+    process_mode = args.activation_process or args.activation_state
+    files_mode = args.activation_files or process_mode
+    prefix = 'native-activation-state-' if args.activation_state else 'native-activation-process-' if process_mode else 'native-activation-files-' if files_mode else PREFIX
     source, target = (health.archive_pin(p) for p in (args.archive, args.target_archive))
     health.require_runtime_schemas([args.archive, args.target_archive], 18)
+    if args.activation_state:
+        for archive in (args.archive, args.target_archive):
+            with zipfile.ZipFile(archive) as package:
+                data = package.read('winbridge/crates/protocol/src/update/activation_receiver.rs')
+            need(re.search(rb'(?m)^pub const ACTIVATION_STATE_HANDOFF_CONTRACT: u16 = 2;\r?$', data),
+                 'State handoff needs V2 in both clean source archives')
     need(source['sourceCommit'] != target['sourceCommit'], 'Distinct producer18 and fixture18 required')
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run), 'Invalid cache run')
     cfg = json.loads(args.controller_config.read_text())
@@ -97,7 +107,8 @@ def main():
         need(meta['source'] == source and meta['target'] == target and meta['reference'] == reference
              and meta['cacheRun'] == args.cache_run and meta['run'] == run
              and meta.get('activationFiles',False) is files_mode
-             and meta.get('activationProcess',False) is args.activation_process, 'Saved scope changed')
+             and meta.get('activationProcess',False) is process_mode
+             and meta.get('activationState',False) is args.activation_state, 'Saved scope changed')
         if meta['taskId'] is None:
             raw = (local/'request.json').read_bytes()
             need(hashlib.sha256(raw).hexdigest() == meta['requestSha256'], 'Saved request changed')
@@ -114,7 +125,7 @@ def main():
         (report/'reference.json').write_bytes(raw_reference)
         reference_sha = hashlib.sha256(raw_reference).hexdigest()
         ps = native.ps_string
-        mode = '-ActivationProcessGate' if args.activation_process else '-ActivationFilesGate' if files_mode else '-ActivationPreparationGate'
+        mode = '-ActivationStateGate' if args.activation_state else '-ActivationProcessGate' if process_mode else '-ActivationFilesGate' if files_mode else '-ActivationPreparationGate'
         script = f"""$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $root={ps(root)}
@@ -138,8 +149,10 @@ exit $LASTEXITCODE
             f.write(raw)
             f.flush()
             os.fsync(f.fileno())
-        meta = dict(taskId=None, run=run, source=source, target=target, reference=reference, cacheRun=args.cache_run, activationFiles=files_mode, activationProcess=args.activation_process,
+        meta = dict(taskId=None, run=run, source=source, target=target, reference=reference, cacheRun=args.cache_run, activationFiles=files_mode, activationProcess=process_mode,
                     requestSha256=hashlib.sha256(raw).hexdigest(), debianFreeBytesBefore=shutil.disk_usage(ROOT).free)
+        if args.activation_state:
+            meta['activationState'] = True
         support.save_meta(meta_file, meta)
         print(json.dumps(dict(taskId=None, run=run, recovery='--verify-run '+run)), flush=True)
         meta['taskId'] = native.call(endpoint, {'method': 'submit', 'request': request})['task']['taskId']
@@ -158,7 +171,7 @@ exit $LASTEXITCODE
     need(support.ready_files(report) == files, 'Ready files changed')
     result = json.loads(files['report.json'].decode('utf-8-sig'))
     need(task['status'] == 'succeeded' and task['exitCode'] == 0 and result['passed'] is True
-         and result['kind'] == ('activation_process_main_native_gate' if args.activation_process else 'activation_files_main_native_gate' if files_mode else 'activation_preparation_main_native_gate') and result['error'] is None
+         and result['kind'] == ('activation_state_main_native_gate' if args.activation_state else 'activation_process_main_native_gate' if process_mode else 'activation_files_main_native_gate' if files_mode else 'activation_preparation_main_native_gate') and result['error'] is None
          and result['sourceCommit'] == source['sourceCommit'] and result['sourceArchiveSha256'] == source['archiveSha256']
          and result['target'] == target and result['runtimeApplied'] is True
          and result['installedRuntimeApplied'] is False and result['windowsOpened'] is False,
@@ -171,14 +184,23 @@ exit $LASTEXITCODE
               ('backup-sqlite-wal-and-pins', 3), ('backup-exact-entry', 2), ('shutdown-main-pipeline', 1)]
     if files_mode:
         groups=[('activation-files-primitives',4),('activation-marker-search',2),('activation-files-contract',2),('activation-files-mailbox',1)]+groups
-    if args.activation_process:
+    if process_mode:
         groups=[('activation-process-atomic-create',1),('activation-process-contract',2),('activation-process-mailbox',1),('activation-process-owner-io',2),('activation-process-owner-state',1)]+groups
-    need([c['name'] for c in result['commands']] == ['health-supervisor-build']+(['activation-process-fixture-build'] if args.activation_process else [])+[n for n,_ in groups[:-1]]+['shutdown-old-real-set',groups[-1][0]]
+    if args.activation_state:
+        groups=[('activation-state-boundary-probes',3),('activation-state-contract',2),('activation-state-mailbox',1),
+                ('activation-state-owner',1),('activation-state-journal',2),('activation-state-release',5),
+                ('activation-state-original-pins',2)]+groups
+    need([c['name'] for c in result['commands']] == ['health-supervisor-build']+(['activation-process-fixture-build'] if process_mode else [])+[n for n,_ in groups[:-1]]+['shutdown-old-real-set',groups[-1][0]]
          and all(c['exitCode'] == 0 for c in result['commands']), 'Selected native commands changed')
     counts = {name: sum(int(m[1]) for m in re.finditer(r'test result: ok\. ([0-9]+) passed; 0 failed;',files[name+'.log'].decode('utf-8-sig'))) for name,_ in groups}
     need(all(counts[n] >= minimum for n,minimum in groups), 'Expected native tests were not selected')
     proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
-    if args.activation_process:
+    state_rejected = 0
+    if args.activation_state:
+        state_rejected=state_checks.audit(proof,source,target,root,checks,health)
+        rejected=len(replacement_audit.audit(dict(proof,kind='runtime_replacement_main_native_proof'),source,target,True))
+        file_rejected=process_rejected=0
+    elif process_mode:
         process_rejected=process_checks.audit(proof,source,target,root,checks,health)
         rejected=len(replacement_audit.audit(dict(proof,kind='runtime_replacement_main_native_proof'),source,target,True))
         file_rejected=0
@@ -196,6 +218,8 @@ exit $LASTEXITCODE
                     proofSha256=hashlib.sha256(files['candidate-health-actor-proof.json']).hexdigest(),
                     migrationProofSha256=hashlib.sha256(files['activation-migration-proof.json']).hexdigest(),
                     reportSha256=hashlib.sha256(files['report.json']).hexdigest(), storage=result['storage'], debianFreeBytesAfter=shutil.disk_usage(ROOT).free)
+    if args.activation_state:
+        verified['stateMutationsRejected'] = state_rejected
     (local/'activation-preparation-verified.json').write_text(json.dumps(verified, indent=2))
     print(json.dumps(verified), flush=True)
 

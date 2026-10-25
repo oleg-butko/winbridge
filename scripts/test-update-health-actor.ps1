@@ -21,12 +21,14 @@ param(
   [switch]$ActivationPreparationGate,
   [switch]$ActivationFilesGate,
   [switch]$ActivationProcessGate,
+  [switch]$ActivationStateGate,
   [string]$MigrationReferenceFile,
   [string]$MigrationReferenceSha256,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ActivationStateGate){if($ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationProcessGate=$true}
 if($ActivationProcessGate){if($ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationFilesGate=$true}
 if($ActivationFilesGate){if($ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationPreparationGate=$true}
 if($ActivationPreparationGate){if($RuntimeReplacementGate -or $RuntimeReplacementFaults){throw 'Select one native gate mode'};$RuntimeReplacementGate=$true}
@@ -138,12 +140,14 @@ try {
     if($RuntimeReplacementFaults){$shutdownArguments.replacementFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     if($RuntimePreparationFaults){$shutdownArguments.preparationFaults=$true;$shutdownArguments.validationUpdater=(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe')}
     if($ActivationProcessGate){$shutdownArguments.activationProcess=$true;$report.kind='activation_process_main_native_gate'}
+    if($ActivationStateGate){$shutdownArguments.activationState=$true;$report.kind='activation_state_main_native_gate'}
     Write-NewJson $shutdownInput $shutdownArguments
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
     if($ActivationPreparationGate){$mainTest='actual_main_prepares_activation_without_launch_or_cold_adoption'}
     if($ActivationFilesGate){$mainTest='actual_main_binds_activation_files_without_launch_or_cold_adoption'}
     if($ActivationProcessGate){$mainTest='actual_main_launches_one_private_receiver_before_state_handoff'}
+    if($ActivationStateGate){$mainTest='actual_main_hands_the_existing_state_to_the_same_private_receiver'}
     # The Main fixture copies its supervisor from validationUpdater. Building a
     # validation test harness alone does not enable diagnostics in that process.
     $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
@@ -204,7 +208,18 @@ try {
       @{name='activation-process-owner-state';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','launch_actor_never_recreates','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
-  $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build'})
+  if($ActivationStateGate){
+    $commands=@(
+      @{name='activation-state-boundary-probes';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','validation::tests::state_','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-state-contract';arguments=@('test','-p','winbridge-protocol','--test','update_activation_state','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-state-mailbox';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','activation_state_v23','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-state-owner';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','state_actor_never_reconstructs','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-state-journal';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','physical_journal_readonly','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-state-release';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','shutdown::state::handoff::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='activation-state-original-pins';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','shutdown::state::tests','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
+  $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
   }
@@ -242,6 +257,7 @@ try {
   if($ActivationPreparationGate){$expectedKind='activation_preparation_main_native_proof'}
   if($ActivationFilesGate){$expectedKind='activation_files_main_native_proof'}
   if($ActivationProcessGate){$expectedKind='activation_process_main_native_proof'}
+  if($ActivationStateGate){$expectedKind='activation_state_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
@@ -251,7 +267,7 @@ try {
   try { if($ShutdownMainGate -and (Get-Variable caseRoot -ErrorAction SilentlyContinue)){
     foreach($caseName in @('None','LostAck','DelayedReply','ReceiptWriteDenied','DelayedInstanceLock','SupervisorCrashBeforeExit','None-ExistingDestination','None-ExitAfterCopy','None-WrongInputReport','None-HoldBeforeCopy','None-PreparationExistingDirectory','None-PreparationChangedCandidate','None-PreparationHoldBeforeReceipt','None-ReplacementExistingDirectory','None-ReplacementLockedOldFile','None-ReplacementReceiptWriteDenied','None-ReplacementHoldBeforeReceipt')){
       $caseDirectory=Join-Path $caseRoot $caseName
-      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json')){
+      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json','activation-state-before_release.json','activation-state-after_release.json')){
         $path=Join-Path $caseDirectory $logName
         if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-'+$logName)),$false)}
       }

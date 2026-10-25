@@ -322,6 +322,13 @@ impl ActivationProcessGuard {
         self.save(j, a, s, next)?; // Commit/readback before relinquishing ownership.
         let request = channel::state_handoff(&self.record)?;
         self.require_custody(j, a, s, true)?;
+        #[cfg(feature = "update-validation")]
+        validation::state_boundary(&self.record, validation::StateBoundary::Held, || {
+            j.require_activation_owned_current(a, s, &self.files.preparation, &self.record)
+                .map_err(|e| e.to_string())?;
+            live.require_live().map_err(|e| e.to_string())?;
+            self.files.preparation.require_live_window()
+        })?;
         let exited = self
             .files
             .original
@@ -343,6 +350,13 @@ impl ActivationProcessGuard {
         );
         self.released = Some(released); // Retain residual handles even on unlock error.
         self.require_custody(j, a, s, false)?;
+        #[cfg(feature = "update-validation")]
+        validation::state_boundary(&self.record, validation::StateBoundary::Released, || {
+            j.require_activation_owned_current(a, s, &self.files.preparation, &self.record)
+                .map_err(|e| e.to_string())?;
+            live.require_live().map_err(|e| e.to_string())?;
+            self.files.preparation.require_live_window()
+        })?;
         live.require_live().map_err(|e| e.to_string())?;
         self.files.preparation.require_live_window()?;
         let remaining = self

@@ -11,8 +11,9 @@
 Все текущие проверки завершены. [Actor23/private handoff2/view15](activation-state-handoff.md)
 реализованы в source, updater18/worker16 прежние. Workspace741/0 (16 ignored),
 protocol59/0, journal2/0/mailbox1 и local/MSVC Clippy/contracts/TS/UI passed.
-Новый actual interprocess StateOwned gate **ещё не выполнялся**; harness/verifier/
-state flags пока отсутствуют. Writable Store/local/controller/lifetime впереди,
+Новый actual interprocess StateOwned gate **ещё не выполнялся**.
+[Harness/verifier/state flags](windows-activation-state-gate-2026-10-25.md) уже
+добавлены; следом final checks/review/clean producer/один actual run. Writable Store/local/controller/lifetime впереди,
 public install off; updater целиком не готов.
 
 [Main22 receiver112/0](windows-activation-process-gate-2026-10-24.md) и
@@ -20,7 +21,7 @@ public install off; updater целиком не готов.
 Main22 принят, report/ZIP pins целы. Terminal tasks не replay. Installed d052
 healthy/connected/active0 и не менялся; desktop можно закрыть, worker оставить.
 
-Следом добавить state harness/boundary probes/verifier, затем distinct clean
+Следом проверить добавленный state harness/boundary probes/verifier, затем distinct clean
 producer и один isolated Windows run с **готовым target receiver2 commit1370d6b**.
 Pins/cache/schema17 reference и original120s budget описаны в новой инструкции.
 После native StateOwned: writable authority/CAS/epoch → local/controller →
