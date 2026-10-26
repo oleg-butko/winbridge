@@ -1,9 +1,26 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
-**Задача пользователя2026-10-26:** [review/merge performance-ветки и worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
-Runtime CPU fix принят после review; release harness исправлен. Ветка слита
-в main с сохранением её commits; новый чистый Windows пакет готовится. Branch-only запреты ниже исторические; пользователь
-явно поручил merge в main. Installed d052 пока не обновлён.
+**Задача пользователя2026-10-26:** performance-ветка слита в main,
+merge50ceb0d, review fixes2b3734c. [Review](plans/run-speed/review-merge-2026-10-26.md).
+Source workspace794/0/17ignored, Linux/MSVC Clippy, TS/UI/contracts, safety probe1,
+Python profile5/desktop3/publication3 passed. Runtime CPU fix принят.
+
+**Worker0.1.1 ещё не выпущен:** [release status](releases/worker-0.1.1.md).
+Native run20261026-133349-ec2d99c5/taska6a111f7-8350-4d95-b28d-959ef697881d
+прошёл стадии regressions/CPU, сообщил network connection failure и не завершил
+cleanup. At13:52:30Z running/cancelRequested=true; это не terminal. Повтор не
+отправлять; сначала reconcile тот же task. Root pwsh23220/test worker17496
+наблюдались живыми, работающий installed worker12740/d052 connected/generation
+301be6ea прежняя; active1 — этот gate. Запрошено наблюдение пользователя о
+специальном файерволе, причина пока не доказана. До выяснения зависимые Windows
+действия остановлены. Installed runtime/config/journal не заменялись, firewall
+не менялся. Новый source ограничивает cleanup waits/пишет connection diagnostic,
+но это исправление ещё не проверено на Windows и не действует на текущий task.
+Current controller .203:1143/PID5103, actual old0.1.0 copy для isolated controller
+сохранена в .winbridge/releases/review-0.1.1. Observer session72424/log и metadata
+указаны в release note. Не объявлять ZIP published и не продолжать updater service
+до разрешения неожиданного Windows поведения. Старые branch-only запреты ниже
+исторические, пользователь явно поручил merge.
 
 **Текущая задача2026-10-26:** [worker0.1.1](releases/worker-0.1.1.md), source
 version/startup diagnostics подготовлены; Linux checks passed. Windows build и

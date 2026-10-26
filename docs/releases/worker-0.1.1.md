@@ -1,7 +1,29 @@
 # Локальный Windows worker0.1.1
 
-Текущая задача: [review/merge и повторная подготовка выпуска](../plans/run-speed/review-merge-2026-10-26.md).
-Исправлены release harness и проверка публикации; новый native release ещё не завершён.
+Ветка слита в main: merge50ceb0d, review fixes2b3734c.
+[Результаты ревью](../plans/run-speed/review-merge-2026-10-26.md).
+Новый native release run20261026-133349-ec2d99c5/taska6a111f7-8350-4d95-b28d-959ef697881d
+прошёл стадии regressions/CPU, но network handshake не завершён. Сценарий сообщил
+ошибку соединения и завис на cleanup. **ZIP выпуска не опубликован.**
+13:52:30Z task всё ещё running/cancelRequested=true; отмена запрошена ровно один
+раз. Это не terminal failed и не разрешение повторить build. Worker d052 остаётся
+connected/maintenanceError=null/recoveryError=null, generation прежняя; active1
+относится к этой незавершённой проверке. Controller .203:1143 и observer оставлены.
+
+Readonly process diagnostic task8a85df70-3caa-4ae3-a132-8b82168586d9 succeeded/0:
+root pwsh23220 и тестовый worker17496 оставались живыми. Тестовый путь:
+`K:\_proj-26\winbridge\workspaces\snapshot-fixture\releases\worker-0.1.1-20261026-133349-ec2d99c5\winbridge-worker.exe`.
+Запрошено наблюдение пользователя о специальном файерволе; причина пока
+**не подтверждена**. Системные/firewall настройки не менялись. Новых Windows
+сборок/прогонов до выяснения и подтверждения terminal состояния не запускать.
+
+Source50ceb0d чистый. Metadata
+`.winbridge/releases/20261026-133349-ec2d99c5/submission.json`, observer session72424,
+log `.winbridge/releases/review-0.1.1/native-build.log`; pending info/process/cancel
+receipts в той же review-0.1.1 папке. После перезапуска сначала get_task по ID.
+В новом source исправлены unbounded WaitForExit/EOF waits и добавлен вывод последнего
+controller connection до cleanup. Это изменение ещё **не выполнено на Windows**;
+оно не меняет уже работающий старый task и не доказывает остановку PID17496.
 Старые записи о perf-ветке ниже — история подготовки, не инструкция запрещать merge.
 
 Подготовка2026-10-26 в `perf/run-speed-2026-10-25`. Собирается worker-only пакет;

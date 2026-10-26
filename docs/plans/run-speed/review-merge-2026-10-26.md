@@ -74,3 +74,15 @@ Debian до compile24653250560 bytes. Controller снова запущен на 
 копией прежнего controller. Runtime пользователя не заменяется managed task.
 Native результат и пакет фиксируются в [release note](../../releases/worker-0.1.1.md).
 Автоматический updater и multi-controller этим выпуском не включаются.
+
+## Неожиданное поведение нового native release
+
+Run20261026-133349-ec2d99c5 из merge50ceb0d прошёл стадии regressions/CPU,
+не подтвердил old-controller connection и завис на остановке нового worker.
+Cancel запрошен; actual task всё ещё running/cancelRequested=true13:52:30Z.
+Никакой release ZIP не опубликован; повтор до terminal запрещён. Запрошено
+наблюдение пользователя о специальном файерволе, причина не доказана.
+Новый source заменяет unbounded WaitForExit и ожидания EOF на ограниченные
+ожидания с unconfirmed cleanup/error, выводит last connection перед teardown.
+На текущий frozen script исправление не влияет, native recheck ещё не выполнен.
+Все exact IDs/paths/handles и следующий порядок — в release note.

@@ -46,7 +46,17 @@ $report=[ordered]@{schemaVersion=1;kind='worker_patch_release';passed=$false;ver
  manifestSha256=$ManifestSha256;archiveSha256=$ArchiveSha256;installedRuntimeChanged=$false;windowsOpened=$false;
  profile='dev; existing package optimizations; debug assertions and overflow checks enabled';commands=@();artifacts=@();cpu=@();error=$null}
 $saved=@{};foreach($name in @('CARGO_INCREMENTAL','CARGO_TERM_COLOR','TEMP','TMP','WINBRIDGE_IDLE_BASELINE_WORKER')){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
-$location=Get-Location;$childStarted=$false;$child=$null;$out=$null;$err=$null
+$location=Get-Location;$childStarted=$false;$childStopAttempted=$false;$child=$null;$out=$null;$err=$null
+function Save-ProcessCapture($Capture,[string]$Path){
+ # EOF is not guaranteed after termination is requested (inherited handles or
+ # pending OS I/O). A failed gate must still publish its diagnostic report.
+ try{
+  if($null -ne $Capture -and $Capture.Wait(5000)){
+   [IO.File]::WriteAllText($Path,$Capture.GetAwaiter().GetResult());return
+  }
+ }catch{}
+ [IO.File]::WriteAllText($Path,'Capture incomplete after bounded wait; preserve the task/process identity; no successful cleanup claimed.')
+}
 function Invoke-Check([string]$Name,[string[]]$Arguments){
  $free=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($cache)).AvailableFreeSpace
  if($free -lt 6GB){throw 'Less than 6GiB free; no build started'}
@@ -65,7 +75,7 @@ function Invoke-WorkerJson([string[]]$Arguments){
  $p=[Diagnostics.Process]::new();$p.StartInfo=$si
  try{
   [void]$p.Start();$stdout=$p.StandardOutput.ReadToEndAsync();$stderr=$p.StandardError.ReadToEndAsync()
-  if(-not $p.WaitForExit(15000)){$p.Kill();$p.WaitForExit();throw 'Worker client timeout; do not retry mutations'}
+  if(-not $p.WaitForExit(15000)){$p.Kill();[void]$p.WaitForExit(5000);throw 'Worker client timeout; exit may be unconfirmed; do not retry mutations'}
   $text=$stdout.GetAwaiter().GetResult();$errorText=$stderr.GetAwaiter().GetResult()
   if($p.ExitCode -ne 0){throw "Worker client error: $errorText"}
   return ($text|ConvertFrom-Json -Depth 60)
@@ -135,7 +145,13 @@ try{
   if($info.controllerConnection.state -ceq 'connected'){break}
   Start-Sleep -Milliseconds 200
  }while([DateTime]::UtcNow -lt $deadline)
- if($null -eq $info -or $info.controllerConnection.state -cne 'connected'){throw 'Old controller connection failed; see isolated worker stderr; no firewall changes attempted'}
+ if($null -eq $info -or $info.controllerConnection.state -cne 'connected'){
+  if($null -ne $info){
+   Write-NewJson (Join-Path $SharedReportDirectory 'network-last-connection.json') $info.controllerConnection
+   Write-Host ("Isolated worker connection: "+($info.controllerConnection|ConvertTo-Json -Compress))
+  }
+  throw 'Old controller connection failed; see isolated worker stderr; no firewall changes attempted'
+ }
  Write-NewJson (Join-Path $SharedReportDirectory 'network-ready.json') @{version='0.1.1';sourceCommit=$SourceCommit;instanceId=$InstanceId;context=$info.fencedRequests.context}
  $donePath=Join-Path $SharedReportDirectory 'network-complete.json'
  while(-not (Test-Path -LiteralPath $donePath)){
@@ -146,8 +162,11 @@ try{
  if($done.passed -isnot [bool] -or -not $done.passed -or $done.context.journalIncarnation -cne $info.fencedRequests.context.journalIncarnation){throw 'Cross-version RPC proof differs'}
  $report.network=$done
  $last=Invoke-WorkerJson @('--config',$configPath,'info');if($last.info.activeTaskCount -ne 0){throw 'Isolated tasks still active'}
- $child.Kill();$child.WaitForExit();$report.isolatedWorkerExitConfirmed=$true
- [IO.File]::WriteAllText((Join-Path $work 'network-worker-stdout.log'),$out.GetAwaiter().GetResult());[IO.File]::WriteAllText((Join-Path $work 'network-worker-stderr.log'),$err.GetAwaiter().GetResult())
+ $childStopAttempted=$true;$child.Kill()
+ if(-not $child.WaitForExit(15000)){throw 'Isolated worker exit unconfirmed; preserve process identity, no retry'}
+ $report.isolatedWorkerExitConfirmed=$true
+ Save-ProcessCapture $out (Join-Path $work 'network-worker-stdout.log')
+ Save-ProcessCapture $err (Join-Path $work 'network-worker-stderr.log')
  $child.Dispose();$child=$null;$childStarted=$false
  $readback=@(& $VerifierExecutable verify-source $source $ManifestSha256);if($LASTEXITCODE -ne 0){throw 'Source changed after build'}
  if(Test-Path -LiteralPath $installedManifest){throw 'Installed runtime now requires a coordinated release'}
@@ -158,7 +177,16 @@ try{
  $report.passed=$true
 }catch{$report.error=$_.Exception.Message;Write-Host "Worker release failed: $($report.error)"}
 finally{
- if($null -ne $child -and $childStarted){if(-not $child.HasExited){$child.Kill();$child.WaitForExit()};[IO.File]::WriteAllText((Join-Path $work 'network-worker-stderr.log'),$err.GetAwaiter().GetResult());$child.Dispose()}
+ if($null -ne $child -and $childStarted){
+  try{
+   if(-not $child.HasExited -and -not $childStopAttempted){$childStopAttempted=$true;$child.Kill()}
+   if(-not $child.WaitForExit(15000)){$report.error+='; isolated process exit unconfirmed';$report.passed=$false}
+   else{$report.isolatedWorkerExitConfirmed=$true}
+  }catch{$report.error+='; isolated process cleanup unconfirmed';$report.passed=$false}
+  Save-ProcessCapture $out (Join-Path $work 'network-worker-stdout.log')
+  Save-ProcessCapture $err (Join-Path $work 'network-worker-stderr.log')
+  $child.Dispose()
+ }
  Set-Location $location;foreach($name in $saved.Keys){[Environment]::SetEnvironmentVariable($name,$saved[$name])};$lease.Dispose()
  if(Test-Path -LiteralPath $work){
   $report.freeBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($cache)).AvailableFreeSpace

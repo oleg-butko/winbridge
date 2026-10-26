@@ -3,7 +3,10 @@
 2026-10-26: по новой задаче пользователя выполняются
 [review/merge performance-ветки и выпуск worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
 Ветка слита в main: CPU fix и build profiles проверены, release harness исправлен. Новый пакет
-проходит отдельный native gate; public updater/multi-controller не включаются.
+пока не опубликован: network gate сообщил connection failure и завис на cleanup.
+Taska6a111f7 running/cancelRequested=true, не replay; требуется наблюдение Windows
+и подтверждение terminal. Подробнее в release note. Public updater/multi-controller
+не включаются.
 
 ## Сейчас в этой ветке: ускорение прогонов
 
