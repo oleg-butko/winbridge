@@ -188,6 +188,62 @@ fn prepare(
 }
 
 impl ActivationJournal {
+    pub(super) fn revalidate_state(&self) -> Result<()> {
+        filesystem(&self.state)
+    }
+
+    /// Same held connection, header, immutable receipt and Quiesced lease.
+    /// No CREATE/open/migration/begin_authority/checkpoint-mode change.
+    pub(super) fn check_service_transfer(
+        &self,
+        fresh: &super::JournalActivationPermit,
+        command: &winbridge_protocol::update::WorkerServiceActivationCommand,
+        checkpoint: &mut impl FnMut() -> Result<()>,
+    ) -> Result<()> {
+        winbridge_update::activation::service::validate_command_envelope(command)?;
+        if !self.attempted
+            || command.binding.writer_command != self.command
+            || &command.binding.writer_receipt != fresh.receipt()
+        {
+            return Err(
+                "Service transfer requires the same fresh activation command/receipt".into(),
+            );
+        }
+        filesystem(&self.state)?;
+        checkpoint()?;
+        activation::window(&self.command)?;
+        if super::now_ms() < command.issued_at_ms {
+            return Err("Service transfer clock precedes the admitted service command".into());
+        }
+        self.check_service_writer(fresh)?;
+        filesystem(&self.state)?;
+        checkpoint()?;
+        activation::window(&self.command)?;
+        if super::now_ms() < command.issued_at_ms {
+            return Err("Service transfer clock moved before admission".into());
+        }
+        // The external checkpoint may observe a concurrent owner/root change.
+        // Recheck the worker header/receipt after it, not just before it.
+        self.check_service_writer(fresh)?;
+        filesystem(&self.state)
+    }
+
+    fn check_service_writer(&self, fresh: &super::JournalActivationPermit) -> Result<()> {
+        let tx = self.store.connection.unchecked_transaction().map_err(sql)?;
+        if self.store.state_backup_authority()? != fresh.receipt().authority
+            || activation::read(&tx, &self.command)?.as_ref() != Some(fresh.receipt())
+            || super::update::read(&tx, &self.shutdown.update_id)? != self.shutdown.lease
+            || super::shutdown::read(&tx, &self.shutdown.update_id, &self.shutdown.command)?
+                .as_ref()
+                != Some(&self.shutdown)
+        {
+            return Err(
+                "Service transfer authority/receipt/quiesced lease/shutdown changed".into(),
+            );
+        }
+        tx.commit().map_err(sql)
+    }
+
     /// Consumes the actual already held lock. The checkpoint must reject stale
     /// graph/parent/runtime/child or expired original monotonic custody. This
     /// constructor alone is not an authenticated runtime startup permission.
@@ -244,4 +300,4 @@ impl ActivationJournal {
 
 #[cfg(test)]
 #[path = "activation_open_tests.rs"]
-mod tests;
+pub(super) mod tests;

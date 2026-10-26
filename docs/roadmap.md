@@ -2,9 +2,10 @@
 
 2026-10-26: performance-ветка слита в main, worker0.1.1 выпущен и **установлен
 пользователем, actual build/hash/history проверены**. [Проверка и продолжение](plans/worker-self-update/service-ledger-2026-10-26.md).
-Source updater20 добавляет формат service intent/history и readonly graph checks;
-runtime admission/receiver/normal IPC ещё отсутствуют. Следом original Written
-guard → тот же Worker/Store/lock → actual local IPC → новый Main25/actual19→20.
+Source updater20 содержит intent/history, original-guard admission и sealed
+connection/state transfer preparation. Service4 receiver/normal Worker/IPC ещё
+отсутствуют. Следом receiver → общая инициализация Worker → actual local IPC →
+новый Main25/actual19→20. [Checkpoint](plans/worker-self-update/service-admission-2026-10-26.md).
 Public updater/multi-controller не включаются. Установленная0.1.1 не заменяется.
 
 ## Завершено: ускорение прогонов и выпуск 0.1.1
@@ -63,7 +64,8 @@ Same-child journal writer19/17/actor24/view16/private3 проверен, обе 
 U2 faults/CLI/MCP/opt-in → U3 desktop → U4 actual installed update → возврат к A4.3.
 Schema20 format/readback добавлены; private4/actor25/view17 ещё не реализованы.
 Source data foundation для service включает strict DTO/binding, pure FSM и
-журнал; durable original-guard admission/driver/receiver/actual IPC впереди.
+журнал и consuming admission/connection transfer preparation. Service4 driver/
+receiver/normal Worker/actual IPC впереди.
 Public install выключен; worker0.1.1 применён вручную, новый updater20 не установлен.
 Старые NEXT/ACTIVE ниже исторические. Точные source/task/proof pins и окружение
 192.168.44.204 — историческое окружение writer gate; текущее .203 в новом checkpoint.

@@ -99,7 +99,7 @@ pub(super) fn window(command: &WorkerJournalActivationCommand) -> Result<()> {
         Ok(())
     }
 }
-fn read(
+pub(super) fn read(
     c: &Connection,
     command: &WorkerJournalActivationCommand,
 ) -> Result<Option<WorkerJournalActivationReceipt>> {

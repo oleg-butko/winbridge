@@ -8,6 +8,20 @@ use winbridge_protocol::{update::*, ArtifactRole};
 mod record;
 pub use record::{ActivationServiceRecord, ActivationServiceState};
 
+/// Fresh durable admission only. Never deserialized or reconstructed by readback.
+pub struct ActivationServicePermit {
+    pub(crate) record: ActivationServiceRecord,
+}
+impl ActivationServicePermit {
+    pub fn record(&self) -> &ActivationServiceRecord {
+        &self.record
+    }
+}
+pub enum ActivationServiceAdmission {
+    Issued(Box<ActivationServicePermit>),
+    Existing(Box<ActivationServiceRecord>),
+}
+
 fn uuid(value: &str) -> bool {
     uuid::Uuid::parse_str(value)
         .ok()

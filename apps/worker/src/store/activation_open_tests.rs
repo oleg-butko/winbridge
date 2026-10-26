@@ -8,7 +8,7 @@ use winbridge_protocol::{
 };
 use winbridge_update::shutdown::ShutdownStatePins;
 
-fn fixture(
+pub(crate) fn fixture(
     root: &Path,
 ) -> (
     Store,
@@ -62,13 +62,13 @@ fn fixture(
     };
     (store, pins.try_lock().unwrap(), command, shutdown)
 }
-fn bytes(root: &Path) -> (Vec<u8>, Option<Vec<u8>>) {
+pub(crate) fn bytes(root: &Path) -> (Vec<u8>, Option<Vec<u8>>) {
     (
         fs::read(root.join("journal.sqlite")).unwrap(),
         fs::read(root.join("journal.sqlite-wal")).ok(),
     )
 }
-fn lock_available(root: &Path) -> bool {
+pub(crate) fn lock_available(root: &Path) -> bool {
     let file = OpenOptions::new()
         .read(true)
         .write(true)

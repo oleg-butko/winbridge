@@ -1,5 +1,13 @@
 # Автоматические Windows проверки workflow
 
+Для подготовки updater service есть узкий автоматический режим
+`--service-admission-only` / `-ServiceAdmissionOnly`: SQL history и передача
+существующего connection/state lock на отдельных fixtures. Он не запускает normal
+service, сетевой worker или desktop, не обновляет установленный runtime.
+[Назначение, команда и границы доказательства](../plans/worker-self-update/service-admission-2026-10-26.md).
+Compiler cache можно переиспользовать через `--update-preparation-reuse-run`;
+его результат не наследуется, тесты выполняются заново.
+
 Архитектурный A2.1: `--task-cas-only` / `-TaskCasOnly` проверяет
 [task revisions/CAS](../plans/architecture-transition/durable-transitions.md),
 schema migration, stale writes, atomic output/cleanup и process/workflow regressions.

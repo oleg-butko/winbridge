@@ -422,3 +422,88 @@ fn failed_service_migration_keeps_prior_schema_owner_and_foreign_table() {
     let partial: i64 = old.connection.query_row("SELECT count(*) FROM sqlite_master WHERE name IN ('activation_service_intents','activation_service_records','activation_service_intent_immutable')", [], |r| r.get(0)).unwrap();
     assert_eq!(partial, 0);
 }
+
+#[test]
+fn service_admission_checkpoint_failure_rolls_back_all_new_rows() {
+    eprintln!(
+        "SERVICE_ADMISSION_BUILD {}",
+        serde_json::to_string(&winbridge_protocol::build_identity()).unwrap()
+    );
+    for rejected_check in [1, 2] {
+        let (mut c, p, w, v) = fixture();
+        let mut checks = 0;
+        {
+            let tx = c.transaction().unwrap();
+            assert!(seed_checked(&tx, &v, &p, &w, || {
+                checks += 1;
+                if checks == rejected_check {
+                    Err(bad("Original custody/window lost"))
+                } else {
+                    Ok(())
+                }
+            })
+            .is_err());
+        }
+        assert_eq!(checks, rejected_check);
+        for table in [
+            "activation_service_intents",
+            "activation_service_records",
+            "activation_service_history",
+        ] {
+            assert_eq!(
+                c.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+        }
+    }
+}
+
+#[test]
+fn service_admission_commit_failure_keeps_no_partial_intent_or_history() {
+    let (mut c, p, w, v) = fixture();
+    c.execute_batch("CREATE TABLE commit_parent(id TEXT PRIMARY KEY);CREATE TABLE commit_child(id TEXT REFERENCES commit_parent(id) DEFERRABLE INITIALLY DEFERRED);CREATE TRIGGER reject_commit AFTER INSERT ON activation_service_history BEGIN INSERT INTO commit_child VALUES('missing-parent');END;").unwrap();
+    let tx = c.transaction().unwrap();
+    seed_checked(&tx, &v, &p, &w, || Ok(())).unwrap();
+    // Runtime creates its permit only after this boundary succeeds.
+    assert!(tx.commit().is_err());
+    for table in [
+        "activation_service_intents",
+        "activation_service_records",
+        "activation_service_history",
+        "commit_child",
+    ] {
+        assert_eq!(
+            c.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+    }
+}
+
+#[test]
+fn service_duplicate_admission_returns_only_history_in_every_delivery_phase() {
+    let (_, _, _, issued) = fixture();
+    let unknown = issued
+        .indeterminate("Unknown delivery".into(), issued.updated_at_ms + 1)
+        .unwrap();
+    let confirmed = unknown
+        .confirmed(receipt(&issued), unknown.updated_at_ms + 1)
+        .unwrap();
+    for saved in [issued, unknown, confirmed] {
+        let observed = existing_for_key(saved.clone(), &saved.command.command_id).unwrap();
+        let service::ActivationServiceAdmission::Existing(value) = observed else {
+            panic!("Cold data cannot mint a fresh permit");
+        };
+        assert_eq!(*value, saved);
+        assert_eq!(
+            existing_for_key(saved, &Uuid::new_v4().to_string())
+                .err()
+                .unwrap()
+                .code,
+            JournalErrorCode::KeyConflict
+        );
+    }
+}

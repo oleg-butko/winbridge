@@ -1,6 +1,6 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-2026-10-26. Начать с [нового checkpoint](plans/worker-self-update/service-ledger-2026-10-26.md)
+2026-10-26. Начать с [admission/transfer checkpoint](plans/worker-self-update/service-admission-2026-10-26.md)
 и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
 Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
@@ -21,15 +21,19 @@ slot `runtime-test/winbridge-worker.exe`, wait900s, отдельный controlle
 state/config/instance/report каждого run изолированы. Firewall rules не менять.
 
 **Source updater20/worker17, supervisor24/view16, private2+writer3.** Добавлены
-service intent/current/history и согласованное readonly чтение под schema20;
-запись пока только в тестах, native admission/driver/receiver4 не подключены.
+service intent/current/history и согласованное чтение под schema20. Native consuming
+admission от original process guard подключён как trusted Rust API; duplicate
+даёт только историю, свежий permit появляется после commit. Parent удерживает
+ActivationServicePreparation, child может передать тот же connection/full state
+в PreparedServiceJournal. Это подготовка: send/receiver4/Worker constructor/IPC
+и actor25 ещё не подключены.
 Schema19→20 имеет verified consistent backup и fencing updater owner; это не
 новая worker authority. Сохранённые факты не дают разрешения открыть Store или
 повторить send. Public install/advertised activation/controller/desktop выключены.
 
-Следующий шаг: consuming service admission от original Written guard → private
-receiver4 и тот же ActivationJournal/Fresh permit/полный LockedShutdownState в
-Worker → reconciliation и настоящий normal IPC → actor25/view17 → новый Main25
+Следующий шаг: private service4 receiver → Worker из sealed PreparedServiceJournal
+с общим constructor/reconciliation → настоящий normal IPC → подтверждение
+parent driver → actor25/view17 → новый Main25
 и actual19→20/refusal. Нельзя заново открывать Store, получать второй lock,
 прибавлять epoch или обновлять original startup deadline. Maintenance/user pause
 сохраняются, local-only service не подключается к controller. Затем controller
@@ -37,10 +41,14 @@ session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат �
 
 Прежний Main24 writer proof и release140+6 остаются действительны для своих
 исторических source pins, не доказывают normal service/schema20. Native service
-пока не проверялся; runtime реализации ещё нет. Source checks: **workspace804/0,
-17 ignored**, включая10 новых SQL/migration tests; Linux/MSVC all-target validation
-Clippy, fmt/scaffold290/diff-check прошли. Логи и команды в checkpoint.
-Последний working Windows probe завершён; worker оставить работать.
+пока не проверялся; runtime реализации ещё нет. Source checks: **workspace813/0,
+17 ignored**; Linux/MSVC all-target validation Clippy, fmt/scaffold291/diff-check
+и Python verifier5 прошли. Первый event_log rotation failure с WouldBlock
+не воспроизвёлся отдельно и в полном повторе; logger не менялся. Логи и команды в checkpoint.
+Новый focused `--service-admission-only` готовит19 Windows fixture checks;
+это не Main25 и не positive original-guard runtime/service proof. Результаты будут
+внесены после окончания проверки. Последний preflight25d7d666 succeeded/0,
+working worker прежний; desktop не нужен. Worker оставить работать.
 
 ## История подготовки и прежние checkpoints
 

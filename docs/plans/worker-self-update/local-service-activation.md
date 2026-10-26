@@ -12,10 +12,12 @@ receipt DTO, binding к confirmed writer/физическому6 и pure FSM Iss
 Дополнительный epoch, чужие PID/build/config/generation, refresh deadline и reissue
 отклоняются. Late receipt — сохранённый факт, не новый grant.
 **Journal20 format/readback добавлен**: [подробный checkpoint](service-ledger-2026-10-26.md).
-Original-guard admission/native driver/receiver4/actor25/view17/actual service пока нет.
+Original-guard admission и closed connection/state transfer реализованы в
+[следующем checkpoint](service-admission-2026-10-26.md). Service4 send/receiver,
+normal Worker/IPC и actor25/view17 пока отсутствуют.
 Ни Store, ни IPC этот код не открывает; private capability marker не добавлен.
-Следующий source шаг — consuming durable admission под original Written guard;
-примитивы записи journal20 пока доступны только тестам.
+Следующий source шаг — service4 receiver и Worker из sealed PreparedServiceJournal;
+admission пишет journal20 только под consuming original guard, не из JSON.
 Проверки первоначальной data foundation2026-10-25: workspace791/0 (16 ignored), focused service7/0,
 Linux/MSVC workspace all-target validation Clippy, TypeScript feature и generated
 UI contracts/fmt/scaffold281 passed. После journal20: workspace804/0 (17 ignored),

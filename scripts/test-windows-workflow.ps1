@@ -45,6 +45,9 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 .PARAMETER IdentityOnly
 Проверяет build identity на настоящей Windows/Git: parent checkout, Unicode paths
 и скрытые index flags. Запускает только protocol tests, без desktop/test worker.
+.PARAMETER ServiceAdmissionOnly
+Проверяет service intent/history и consuming передачу того же SQLite connection/lock.
+Не запускает normal service, controller session, desktop или рабочее обновление.
 .PARAMETER UpdatePreparationOnly
 Проверяет updater journal/ZIP, source apply/crash/migration, drain/quiesce и startup guard
 на отдельных worker/journal. Собирает четыре candidate exe без установки и UI-окон.
@@ -115,6 +118,7 @@ param(
     [switch]$ProjectsOnly,
     [switch]$IdentityOnly,
     [switch]$UpdatePreparationOnly,
+    [switch]$ServiceAdmissionOnly,
     [string]$UpdatePreparationArchivePath = '',
     [string]$UpdatePreparationCacheRunId = '',
     [string]$UpdatePreparationCacheSha256 = '',
@@ -168,7 +172,7 @@ if ($env:OS -ne 'Windows_NT') { throw 'This scenario requires actual Windows' }
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
 $manifest = Get-Content -LiteralPath (Join-Path $source 'winbridge-source-manifest.json') -Raw | ConvertFrom-Json
 $report = [ordered]@{ schemaVersion = 1; platform = 'windows'; passed = $false; sourceArchiveSha256 = $SourceArchiveSha256;
-    sourceCommit = $manifest.sourceCommit; sourceDirty = $manifest.dirty; diagnosticOnly = [bool]$TaskCasRuntimeDiagnostic; readinessOnly = [bool]$ReadinessOnly; startedAt = [DateTime]::UtcNow.ToString('o'); commands = @(); error = $null }
+    sourceCommit = $manifest.sourceCommit; sourceDirty = $manifest.dirty; diagnosticOnly = [bool]$TaskCasRuntimeDiagnostic; readinessOnly = [bool]$ReadinessOnly; serviceAdmissionOnly = [bool]$ServiceAdmissionOnly; startedAt = [DateTime]::UtcNow.ToString('o'); commands = @(); error = $null }
 New-Item -ItemType Directory -Path $ReportDirectory -ErrorAction Stop | Out-Null
 $reportPath = Join-Path $ReportDirectory 'report.json'
 $oldWorkflowConsoleEncoding = [Console]::OutputEncoding
@@ -227,7 +231,7 @@ try {
     $env:CARGO_TARGET_DIR = Join-Path (Split-Path $source -Parent) 'test-build-cache'
     $previousCache = ''
     if ($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) {
-        if (-not $UpdatePreparationOnly -or $BuildCacheRunId -or $BuildCacheReportSha256 -or $UpdatePreparationCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $UpdatePreparationCacheSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid update preparation cache receipt' }
+        if ((-not $UpdatePreparationOnly -and -not $ServiceAdmissionOnly) -or $BuildCacheRunId -or $BuildCacheReportSha256 -or $UpdatePreparationCacheRunId -notmatch '^\d{8}-\d{6}-[0-9a-f]{8}$' -or $UpdatePreparationCacheSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Invalid update preparation cache receipt' }
         $updatePriorRun = Join-Path (Split-Path (Split-Path $source -Parent) -Parent) $UpdatePreparationCacheRunId
         $priorReportPath = Join-Path (Join-Path (Split-Path $ReportDirectory -Parent) $UpdatePreparationCacheRunId) 'report.json'
         if ((Get-FileHash -LiteralPath $priorReportPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $UpdatePreparationCacheSha256) { throw 'Update preparation cache receipt changed' }
@@ -285,7 +289,7 @@ try {
     Set-Location -LiteralPath $source
     $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
     if ($TaskCasRuntimeDiagnostic -and -not $TaskCasOnly) { throw 'TaskCasRuntimeDiagnostic requires TaskCasOnly' }
-    if (($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) -and -not $UpdatePreparationOnly) { throw 'Update cache reuse requires UpdatePreparationOnly' }
+    if (($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) -and -not ($UpdatePreparationOnly -or $ServiceAdmissionOnly)) { throw 'Update cache reuse requires UpdatePreparationOnly or ServiceAdmissionOnly' }
     if ($UpdateReferenceWorker -and -not $UpdatePreparationOnly) { throw 'UpdateReferenceWorker requires UpdatePreparationOnly' }
     $groups = @(
         @{ name = 'core-and-log-reader'; arguments = @('test', '-p', 'winbridge-core', '-p', 'winbridge-log-reader', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
@@ -293,8 +297,8 @@ try {
         @{ name = 'worker-runtime-snapshots-workflows'; arguments = @('test', '-p', 'winbridge-worker', '--features', 'bundled-sqlite', '--test', 'runtime', '--test', 'snapshots', '--test', 'workflows', '--test', 'attention', '--locked', '--offline', '--', '--test-threads=1', '--nocapture') },
         @{ name = 'desktop-native-check'; arguments = @('check', '--manifest-path', 'apps/desktop/src-tauri/Cargo.toml', '--locked', '--offline') }
     )
-    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly,$ReadinessOnly,$UpdatePreparationOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
-    if ($TaskCasOnly -or $ReadinessOnly -or $UpdatePreparationOnly) {
+    if (@($AttentionOnly,$CompanionOnly,$WorkflowAttentionOnly,$HistoryDiagnosticsOnly,$SettingsRetentionOnly,$DeltaOnly,$OutputOnly,$ResumeOnly,$ProfilesOnly,$ProjectsOnly,$IdentityOnly,$TaskFsmOnly,$TaskCasOnly,$ReadinessOnly,$UpdatePreparationOnly,$ServiceAdmissionOnly).Where({ $_ }).Count -gt 1) { throw 'Choose exactly one isolated scenario' }
+    if ($TaskCasOnly -or $ReadinessOnly -or $UpdatePreparationOnly -or $ServiceAdmissionOnly) {
         $drive = [System.IO.DriveInfo]::new([System.IO.Path]::GetPathRoot($source))
         $report.storage = [ordered]@{ volume = $drive.Name; availableBytesBefore = $drive.AvailableFreeSpace }
         if ($drive.AvailableFreeSpace -lt 8GB) { throw 'Less than 8 GiB free for an isolated build; no existing run is deleted' }
@@ -372,6 +376,13 @@ try {
             @{ name='task-fsm-pure-transitions'; arguments=@('test','-p','winbridge-core','--test','task_fsm','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-fsm-frozen-wire-and-journal'; arguments=@('test','-p','winbridge-protocol','-p','winbridge-worker','--features','winbridge-worker/bundled-sqlite','--test','legacy_baseline','--locked','--offline','--','--test-threads=1','--nocapture') },
             @{ name='task-fsm-native-faults-and-lifecycle'; arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','task_fsm','--test','runtime','--test','attention','--test','workflows','--locked','--offline','--','--test-threads=1','--nocapture') }
+        )
+    }
+    if ($ServiceAdmissionOnly) {
+        if ($NetwatchProfile) { throw 'ServiceAdmissionOnly requires an isolated scenario' }
+        $groups = @(
+            @{name='service-history-native';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','--locked','--offline','journal::activation_service','--','--test-threads=1','--nocapture')},
+            @{name='service-transfer-native';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','--locked','--offline','store::activation_service_open','--','--test-threads=1','--nocapture')}
         )
     }
     if ($IdentityOnly) {
@@ -712,7 +723,7 @@ try {
     $env:WINBRIDGE_RESUME_GATE_SHARED = $oldResumeShared
     $env:WINBRIDGE_RESUME_GATE_DELIVERY = $oldResumeDelivery
     $env:WINBRIDGE_RESUME_GATE_PUBLICATION = $oldResumePublication
-    if (($TaskCasOnly -or $ReadinessOnly -or $UpdatePreparationOnly) -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
+    if (($TaskCasOnly -or $ReadinessOnly -or $UpdatePreparationOnly -or $ServiceAdmissionOnly) -and $report.storage) { $report.storage.availableBytesAfter = $drive.AvailableFreeSpace }
     $report.finishedAt = [DateTime]::UtcNow.ToString('o')
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $reportPath -Encoding utf8
     $artifacts = @(Get-ChildItem -LiteralPath $ReportDirectory -File | ForEach-Object {

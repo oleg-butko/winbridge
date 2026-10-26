@@ -75,7 +75,9 @@ Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в 
 и [план U0–U4](docs/plans/worker-self-update/README.md).
 Source updater20/worker17/supervisor24/view16/private2+writer3.
 [Journal20](docs/plans/worker-self-update/service-ledger-2026-10-26.md) добавляет формат
-service intent/history и readonly проверки; runtime service admission пока отсутствует.
+service intent/history и readonly проверки. [Admission и consuming transfer](docs/plans/worker-self-update/service-admission-2026-10-26.md)
+подключены как trusted library; отправка команды, Worker constructor и normal IPC
+ещё не подключены.
 **Main24 на updater19 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
 Both actual migrations, same-child epoch+1/receipt/fencing и actual Job exit
 подтверждены. Verifier исправлен и тот же terminal report проверен readonly.
@@ -84,8 +86,9 @@ Both actual migrations, same-child epoch+1/receipt/fencing и actual Job exit
 отделяют сборку target, replacement, hashing, graph checks и writer delivery.
 **Normal service/reconciliation/local/controller/lifetime, remaining U2 и U3/U4
 впереди. Public install выключен; самообновление целиком ещё не готово.**
-Service strict DTO, pure binding/FSM и журнал добавлены как foundation; runtime
-admission, Store/lock transfer и normal IPC пока не подключены.
+Service strict DTO, pure binding/FSM, журнал и consuming preparation добавлены;
+они удерживают original guard и тот же connection/state lock. Запуск normal
+Worker/IPC и последующие фазы пока не подключены.
 Installed worker 0.1.1/source59249e6 проверен; новый source updater20 не установлен.
 Текущий controller слушает 192.168.44.203:1143.
 

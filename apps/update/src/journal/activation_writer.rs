@@ -115,6 +115,21 @@ fn backup_binding(
     }
     Ok(backup)
 }
+/// The caller already checked the full physical graph in this transaction.
+/// Do not repeat its recursive backup/replacement audit for each service edge.
+#[cfg(windows)]
+pub(super) fn bound_record(
+    c: &Connection,
+    physical: &ActivationRecord,
+) -> Result<ActivationWriterRecord> {
+    let backup = backup_binding(c, physical)?;
+    let authority = &backup
+        .report
+        .as_ref()
+        .ok_or_else(|| bad("Writer report missing"))?
+        .source_authority;
+    ledger(c, &physical.intent.source.update_id, physical, authority)
+}
 pub(super) fn physical_prefix(
     c: &Connection,
     current: &ActivationRecord,

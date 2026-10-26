@@ -12,9 +12,11 @@ use winbridge_protocol::{
 
 mod activation;
 mod activation_open;
+mod activation_service_open;
 mod admission;
 pub use activation::{JournalActivationAcceptance, JournalActivationPermit};
 pub use activation_open::{ActivationJournal, ActivationJournalOpenFailure};
+pub use activation_service_open::{PreparedServiceJournal, ServiceJournalPreparationFailure};
 mod archive;
 mod inspection;
 mod leases;

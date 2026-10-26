@@ -1,5 +1,5 @@
 //! Schema20: retained local-service intent and causal history, not a launch grant.
-//! Runtime admission/send remain unavailable until the original guard driver exists.
+//! Fresh admission additionally requires the resident original process guard.
 use super::*;
 use crate::activation::{
     service::{self, ActivationServiceRecord},
@@ -107,9 +107,8 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationServiceR
     ledger(c, id, &physical, &writer).map(Some)
 }
 
-// Exercise transactional storage without exposing a caller-JSON write route.
-// A future native admission must prove original custody and persist before send.
-#[cfg(test)]
+// No caller-JSON write route. Native admission proves original custody first.
+#[cfg(any(windows, test))]
 fn seed(
     c: &Connection,
     value: &ActivationServiceRecord,
@@ -146,7 +145,36 @@ fn seed(
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(any(windows, test))]
+fn seed_checked(
+    c: &Connection,
+    value: &ActivationServiceRecord,
+    physical: &ActivationRecord,
+    writer: &ActivationWriterRecord,
+    mut checkpoint: impl FnMut() -> Result<()>,
+) -> Result<()> {
+    checkpoint()?;
+    seed(c, value, physical, writer)?;
+    checkpoint()
+}
+
+#[cfg(any(windows, test))]
+fn existing_for_key(
+    value: ActivationServiceRecord,
+    key: &str,
+) -> Result<service::ActivationServiceAdmission> {
+    if value.command.command_id != key {
+        return Err(fail(
+            JournalErrorCode::KeyConflict,
+            "Service update already has another command; no second admission",
+        ));
+    }
+    Ok(service::ActivationServiceAdmission::Existing(Box::new(
+        value,
+    )))
+}
+
+#[cfg(any(windows, test))]
 fn persist(
     c: &Connection,
     old: &ActivationServiceRecord,
@@ -177,6 +205,118 @@ fn persist(
 }
 
 impl UpdateJournal {
+    #[cfg(windows)]
+    pub(crate) fn admit_activation_service(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &winbridge_protocol::update::SupervisorRecord,
+        preparation: &crate::activation::ActivationPreparation,
+        physical: &ActivationRecord,
+        key: &str,
+        mut checkpoint: impl FnMut() -> std::result::Result<(), String>,
+    ) -> Result<service::ActivationServiceAdmission> {
+        self.check_directory(a)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        check_authority(&tx, a)?;
+        if let Some(value) = read(&tx, &s.spec.update_id)? {
+            return existing_for_key(value, key);
+        }
+        activation::owned_current(&tx, a, s, preparation, physical)?;
+        if physical.revision != 6
+            || physical.state != (crate::activation::ActivationState::StateOwned {})
+            || physical.intent.context.updater_journal_schema != UPDATE_SCHEMA_VERSION
+        {
+            return Err(bad(
+                "Service admission requires original StateOwned6 and current updater schema",
+            ));
+        }
+        let writer = activation_writer::bound_record(&tx, physical)?;
+        let command = service::prepare_command(
+            physical,
+            &writer,
+            key,
+            now_ms()?
+                .max(physical.updated_at_ms)
+                .max(writer.updated_at_ms),
+        )
+        .map_err(bad)?;
+        let value = ActivationServiceRecord::issued(command).map_err(bad)?;
+        seed_checked(&tx, &value, physical, &writer, || {
+            checkpoint().map_err(bad)?;
+            preparation.require_live_window().map_err(bad)
+        })?;
+        tx.commit().map_err(|e| {
+            storage(format!(
+                "Service admission commit unconfirmed; inspect same command, no send/replay: {e}"
+            ))
+        })?;
+        // A permission is minted only AFTER confirmed commit. Cold/duplicate
+        // readback, including an Issued row, never returns this variant.
+        Ok(service::ActivationServiceAdmission::Issued(Box::new(
+            service::ActivationServicePermit { record: value },
+        )))
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn require_activation_service_issued(
+        &self,
+        a: &UpdateAuthority,
+        s: &winbridge_protocol::update::SupervisorRecord,
+        preparation: &crate::activation::ActivationPreparation,
+        physical: &ActivationRecord,
+        permit: &service::ActivationServicePermit,
+    ) -> Result<()> {
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        activation::owned_current(&tx, a, s, preparation, physical)?;
+        let writer = activation_writer::bound_record(&tx, physical)?;
+        if ledger(&tx, &s.spec.update_id, physical, &writer)? != permit.record
+            || !matches!(
+                permit.record.state,
+                service::ActivationServiceState::Issued {}
+            )
+        {
+            return Err(bad(
+                "Service intent is no longer the original Issued record; no send",
+            ));
+        }
+        preparation.require_live_window().map_err(bad)?;
+        tx.commit().map_err(storage)
+    }
+
+    #[cfg(windows)]
+    pub(crate) fn append_activation_service_owned(
+        &mut self,
+        a: &UpdateAuthority,
+        s: &winbridge_protocol::update::SupervisorRecord,
+        preparation: &crate::activation::ActivationPreparation,
+        current: &ActivationRecord,
+        next: &ActivationServiceRecord,
+    ) -> Result<ActivationServiceRecord> {
+        self.check_directory(a)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        activation::owned_current(&tx, a, s, preparation, current)?;
+        let physical = activation_writer::physical_prefix(&tx, current)?;
+        let writer = activation_writer::bound_record(&tx, &physical)?;
+        let old = ledger(&tx, &s.spec.update_id, &physical, &writer)?;
+        if old == *next {
+            return Ok(old);
+        }
+        persist(&tx, &old, next, &physical, &writer)?;
+        tx.commit().map_err(|e| {
+            storage(format!(
+                "Service result commit unconfirmed; inspect same command, no replay: {e}"
+            ))
+        })?;
+        Ok(next.clone())
+    }
+
     /// Data only: saved service history never authorizes a send, Store opening,
     /// controller connection, maintenance release or child adoption.
     pub fn activation_service(&mut self, id: &str) -> Result<Option<ActivationServiceRecord>> {
