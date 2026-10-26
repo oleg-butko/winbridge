@@ -60,3 +60,12 @@ runtime с installed-set manifest заменять один exe нельзя: т
 `K:\_proj-26\winbridge\runtime\winbridge-worker.snapshot.local_204.json`.
 Замена работающего exe/остановка через его же managed build task не выполняется.
 В этом сценарии финальный перезапуск требует действия в Windows консоли.
+
+Первый Windows run20261026-123551-7d4c9904/task1bd56ac8-3d7e-43c2-884c-b916681b5c0b
+terminal failed:79 library tests passed,2 network timing tests failed при параллельном
+прогоне. Не является релизным proof. На **том же** test executable (SHA256
+03d72a938c47d9952e496aaa2459cf4bc09e76823edef501a56c4692df2a08b3)
+все3 network tests serial passed12.85s; taskfb4d0d35-198e-41b7-aaf3-940439acecc9.
+Release harness переведён на `--test-threads=1`, как основной Windows harness.
+Production deadlines не увеличиваются, проверки не исключаются. Новый run имеет
+новый source/key/state; старый failed task не replay и не становится passed.

@@ -80,7 +80,9 @@ try{
  $env:TEMP=Join-Path $work 'tmp-build/tmp-test-temp';$env:TMP=$env:TEMP;New-Item -ItemType Directory -Path $env:TEMP|Out-Null
  Set-Location $source
  $common=@('test','-p','winbridge-worker','--locked','--offline','--features','bundled-sqlite','--target-dir',$cache)
- Invoke-Check 'worker-regressions' ($common+@('--lib','--test','idle_scheduler','--test','runtime','--test','leases','--test','queue_control','--test','resource_scheduling','--test','task_fsm','--test','work_scheduling','--test','workflows'))
+ # Network timing fixtures and real process ownership are validated serially,
+ # matching the established native workflow harness; do not saturate their clocks.
+ Invoke-Check 'worker-regressions' ($common+@('--lib','--test','idle_scheduler','--test','runtime','--test','leases','--test','queue_control','--test','resource_scheduling','--test','task_fsm','--test','work_scheduling','--test','workflows','--','--test-threads=1'))
  $env:WINBRIDGE_IDLE_BASELINE_WORKER=$BaselineWorker
  Invoke-Check 'idle-cpu' ($common+@('--test','idle_scheduler','native_idle_cpu_baseline_and_candidate','--','--ignored','--nocapture'))
  $report.cpu=@(Get-Content -LiteralPath (Join-Path $work 'idle-cpu.log')|Where-Object {$_.StartsWith('IDLE_CPU ')}|ForEach-Object {$_.Substring(9)|ConvertFrom-Json})
