@@ -1,75 +1,42 @@
-# Продолжение updater — закрытие проверок 2026-10-25
+# Продолжение updater — writer24 подтверждён 2026-10-25
 
-**Продолжение с новым поручением пользователя:** [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).
-Новые startup admissions240s разрешены явно; запрет увеличивать120s ниже исторический.
-Review/diagnostics source2413653 проверен Linux/MSVC. Main24 retry
-run20261025-232746-26bad6d7/taska49ade1f-4e35-4eff-84ac-3b8d21c0a9ea выполняется;
-не resubmit, наблюдать ту же task. Produceracf7123/target2413653. Positive proof пока нет.
+**Начать с [актуального checkpoint](plans/worker-self-update/resume-2026-10-25-writer-verified.md)**
+и [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).
+Они приоритетнее исторических NEXT/ACTIVE ниже.
 
-**Начать с [подробной инструкции следующей сессии](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
-и [отчёта writer-прогонов](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md).**
-Пользователь поручил закончить текущие проверки и сохранить контекст коммитом.
-Новые этапы реализации при закрытии не начинались. Старые NEXT/ACTIVE ниже — история.
+Run `20261025-232746-26bad6d7`, task `a49ade1f-4e35-4eff-84ac-3b8d21c0a9ea`:
+**succeeded/0,193 Windows tests,39 groups/42 commands,56 ready files twice**.
+Independent audits:44 replacement +16 writer +18 migration mutations rejected.
+Original observer выявил ошибки verifier: reason expectations и Python1==True.
+После исправлений тот же terminal run проверен readonly, без resubmit/replay.
+Полный Main24 доказывает epoch+1/immutable receipt/fencing/same child+lock,
+сохранность истории/Quiesced lease, actual child/Job exit и cold non-replay.
 
-Combined Windows run **20261025-205856-79e1b7c0** завершён **failed/exit1**:
-**190 тестов прошли в 38 группах; Main24 — 1 failed**. Обе actual migrations
-(updater18→19/refusal, worker16→17/active16 refusal) прошли; independent audit
-отверг18 подмен. Final writer observe получил `Activation preparation deadline
-expired; no new execution or adoption`. **Положительного Main24/writer proof нет.**
-Все проверки/observer завершены; после terminal повтор не запускался. Первый следующий шаг —
-разобрать задержки activation и исправить путь, сохранив original120s и fences,
-затем повторить combined gate из нового clean producer. Только после полного
-success переходить к normal service/controller/lifetime.
+Source **updater19/worker17/supervisor24/view16/physical2+writer3**.
+Новые startup admissions240s разрешены пользователем; старые120s intents неизменны.
+Writer confirmed примерно через131.7s original startup age, remaining108.3s.
+Source2413653, produceracf7123/target2413653. Code/proof pins и точная readonly
+команда — в checkpoint. Старые failed runs не replay и не превращать в reference.
 
-## Авторитетное состояние
+**Normal local service/reconciliation/controller/lifetime ещё не реализованы.**
+Следом [normal local service](plans/worker-self-update/local-service-activation.md)
+в том же child/Store/lock, без нового epoch → новая controller session → durable
+Job lifetime transfer → commit/scoped release → remaining U2 → U3/U4 → A4.3.
+Проектируемые20/private4/actor25/view17 не являются существующими capabilities.
+Public install/advertised activation/controller/desktop остаются выключенными.
 
-- Source **updater19 / worker17 / supervisor24 / view16 / private physical2 + writer3**.
-  Atomic worker CAS/receipt, retained-lock opening, graph-bound updater intent/history,
-  one-shot native driver/private receiver и actor24 реализованы. Source Main24,
-  независимые verifiers, PS/observer и actual migration fixtures подключены.
-- Actor24 None — ACK/busy, не успех. Original startup window120s не продлевать.
-  Сохранённая receipt не означает живое владение, service readiness или install success.
-- **Normal activated service/reconciliation/local IPC/controller confirmation и
-  lifetime transfer ещё не реализованы.** Commit/scoped release, остальные U2
-  faults/CLI/MCP, U3 desktop и U4 actual installed self-update впереди.
-- Public install off; advertised activation/controller_confirmation/desktop_update=None.
-  Installed d052/runtime/config/journal не менялись. Ручное обновление сейчас не требуется.
-- Source baseline1a2149f workspace781/0 (16 ignored), focused19/mailbox24 1;
-  Main24 hooks4, Python24 и Linux/MSVC all-target validation Clippy passed.
-  SQL projection fix772: real-Store regression1/MSVC worker Clippy passed.
-  При закрытии отдельно повторены Python24/0 и scaffold278/local links.
-  Полный workspace после test-only изменений не повторялся.
-- [Прежний actual physical Main23](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-  132/0 — updater18/worker16/private2, run20261025-100933-d8a50807.
-  Он даёт exact old18/16 migration references, не доказательство writer24.
+Измерены основные затраты: Main730s включает target compiler216s; старый Main до
+exit374s, backup13s, file preparation39s, replacement132s; binding44s включает
+повторные SHA примерно2.23GB и graph validation. Надёжность важнее дальнейшей
+оптимизации; guards сохранены. Readonly timing summary доступна в scripts.
 
-## Как продолжить
-
-1. Прочитать checkpoint, get_task/сверить retained evidence последнего run;
-   живой/unknown task не повторять новым ключом. Команда --verify-run и exact
-   source/target/reference/cache pins есть в checkpoint. Если последний gate failed,
-   сначала исправить его причину и получить полный positive isolated writer proof.
-2. После полного writer proof/review: normal local service/reconciliation в том же
-   child/Store/lock без повторного epoch → настоящая новая controller session →
-   durable Job lifetime transfer → commit/scoped release.
-3. Затем remaining U2 recovery/faults/management/opt-in → U3 desktop save/exit ACK,
-   tray/popup/sound/update → U4 stable installed-runtime self-update → возврат к A4.3.
-   Это будущие контракты, не существующие команды public install.
-
-## Окружение и границы
-
-Controller PID3922/ws://192.168.44.203:1143 оставлен работать. После reboot проверить
-listener/Info; не запускать второй. Config .winbridge/controller-snapshot.local.json;
-команда запуска, IPC socket и safe readonly snippets — в checkpoint.
-Installed worker d052 generation8f8d1fb9-e5b1-4984-a17e-d067db46268e;
-перед следующим gate сверить fresh build/generation/health.
-**Desktop можно закрыть, installed worker оставить.** Тестовых UI окон не было.
-
-Перед heavy build оба диска≥6GiB, CARGO_INCREMENTAL=0, один Cargo/cache lease.
-Windows validation directories не очищать; installed runtime/config/journal/reports
-не трогать. Cleanup при закрытии не выполнялся. При unexpected installed worker/
-manual update остановить зависимые Windows действия. Обычные isolated build/test
-fixes и повтор после terminal разрешены без нового вопроса. Подробности в checkpoint.
+Controller PID5312, ws://192.168.44.204:1143. Installed d052 generation
+66c20413-63a9-4725-b4c1-f5d97cbfac51 connected/active0/errors=null. Config Windows
+пользователь выбрал winbridge-worker.snapshot.local_204.json. Runtime не заменялся.
+Native/Cargo/observer runs завершены. **Desktop можно закрыть; worker оставить.**
+Перед heavy build fresh оба диска≥6GiB, CARGO_INCREMENTAL=0, один cache lease;
+Windows directories/runtime/config/journal/reports не чистить. Пользовательские
+настройки/паузы и границы компонентов сохраняются.
 
 ## История checkpoints
 

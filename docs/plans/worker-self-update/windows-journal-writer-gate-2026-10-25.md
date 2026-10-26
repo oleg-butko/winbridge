@@ -1,4 +1,8 @@
-# Native writer24: прогоны и восстановление
+# Native writer24: история первых прогонов
+
+**Новый run232746 подтверждён:193/0,56 files twice,44+16+18 audits.**
+[Актуальные pins, диагностика и продолжение](resume-2026-10-25-writer-verified.md).
+Ниже сохранены первые failed runs; их отсутствие writer proof — исторический статус.
 
 2026-10-25 America/New_York. Source19/17, actor24/view16, physical2/private writer3.
 **Обе actual migration проверки пройдены; полного native writer proof нет.** Public install off;

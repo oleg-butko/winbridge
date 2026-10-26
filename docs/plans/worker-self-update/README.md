@@ -5,36 +5,24 @@
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий checkpoint — закрытие проверок 2026-10-25
+## Текущий checkpoint — writer24 подтверждён 2026-10-25
 
-**Начать с [инструкции следующей сессии](resume-2026-10-25-journal-activation.md)
-и [native writer отчёта](windows-journal-writer-gate-2026-10-25.md).**
-Они содержат точные версии, результаты, task/run/ZIP/proof pins, карту кода,
-readonly recovery и порядок продолжения без истории чата.
+Начать с [актуального checkpoint](resume-2026-10-25-writer-verified.md)
+и [review/latency](review-2026-10-25-latency.md).
+Main24 run20261025-232746-26bad6d7/task a49ade1f-4e35-4eff-84ac-3b8d21c0a9ea
+завершён succeeded/0:193 tests,39 groups/42 commands,56 ready files twice,
+44 replacement +16 writer +18 migration mutations rejected. Исправленный verifier
+проверил тот же terminal report readonly; Windows gate повторно не запускался.
+Source updater19/worker17/supervisor24/view16/physical2+writer3.
+Новые startup admissions240s разрешены пользователем; старые120s intents неизменны.
 
-Combined Windows run **20261025-205856-79e1b7c0** завершён **failed/exit1**:
-**190 тестов прошли в 38 группах; Main24 — 1 failed**. Обе actual migrations
-(updater18→19/refusal, worker16→17/active16 refusal) прошли; independent audit
-отверг18 подмен. Final writer observe получил `Activation preparation deadline
-expired; no new execution or adoption`. **Положительного Main24/writer proof нет.**
-Все проверки/observer завершены; после terminal повтор не запускался. Первый следующий шаг —
-разобрать задержки activation и исправить путь, сохранив original120s и fences,
-затем повторить combined gate из нового clean producer. Только после полного
-success переходить к normal service/controller/lifetime.
-
-Source **updater19/worker17/supervisor24/view16/physical2+writer3**.
-Atomic worker header/receipt, retained-lock opening, updater intent/history,
-one-shot driver/private receiver, actor24 и combined test harness реализованы.
-Public install off; normal activated service/local/controller/lifetime и U3/U4
-ещё впереди. Installed d052/runtime/config/journal не менялись.
-
-После полного положительного writer gate/review: normal local service/reconciliation
-в том же child/Store/lock → новая controller session → durable Job lifetime transfer
-и commit/scoped release → remaining U2 faults/management/opt-in → U3 desktop →
-U4 actual stable-runtime self-update → возврат к A4.3. Если последний gate failed,
-сначала устранить его причину; source/partial migration checks не заменяют его успех.
-Original120s не продлевать. Desktop можно закрыть, installed worker оставить.
-Проверки закрываются по просьбе пользователя; новые этапы сейчас не начинались.
+Следом [normal local service/reconciliation](local-service-activation.md) в том же
+child/Store/lock → новая controller session → durable activation Job lifetime
+transfer → commit/scoped release → remaining U2 faults/management/opt-in → U3
+→ U4 actual stable-runtime self-update → A4.3. Schema20/private4/actor25/view17
+пока проект, не capability. Public install off. Installed d052 runtime не менялся;
+controller теперь192.168.44.204. Desktop можно закрыть; installed worker оставить.
+Все проверки terminal; старые NEXT/ACTIVE ниже не задают текущее действие.
 
 ### История предыдущих checkpoints
 

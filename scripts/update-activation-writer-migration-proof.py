@@ -131,7 +131,7 @@ def audit(updater, worker, source, reference, checks, physical, root):
         for key in parts[:-1]:
             node = node[int(key)] if isinstance(node, list) else node[key]
         key = int(parts[-1]) if isinstance(node, list) else parts[-1]
-        need(node[key] != value, 'Migration mutation is a no-op: '+path)
+        need(checks.canonical(node[key]) != checks.canonical(value), 'Migration mutation is a no-op: '+path)
         node[key] = value
         try:
             verify(objects['updater'], objects['worker'])

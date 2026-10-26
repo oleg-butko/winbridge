@@ -47,12 +47,13 @@ def fixture():
     issued = dict(schemaVersion=1, revision=0, command=command, state=dict(phase='issued'), updatedAtMs=14000)
     saved = dict(issued, revision=1, state=dict(phase='confirmed', receipt=receipt), updatedAtMs=16000)
     root = dict(updateId=uid(1), phase='verifying_local')
-    physical_view = dict(phase='state_owned', savedOwnership=owned, residentProcess=owned['process'], processAlive=True)
+    physical_view = dict(phase='state_owned', savedOwnership=owned, residentProcess=owned['process'], processAlive=True, reason=None)
     projection = dict(phase='confirmed', attemptId=uid(3), commandId=uid(6), revision=1, durablePhase='confirmed',
-                      savedReceipt=receipt, residentProcess=owned['process'], processAlive=True, reason=None)
+                      savedReceipt=receipt, residentProcess=owned['process'], processAlive=True,
+                      reason='Journal commit confirmed; normal worker service/controller/lifetime are not verified')
     files = dict(phase='bound', heldFiles=5, worker={'sha256':'7'*64}, manifestSha256='8'*64)
     view = dict(activationFiles=files, schemaVersion=16, update=root, driverActive=False, driverError=None, activationWriter=projection,
-                activationState=physical_view)
+                activationState=dict(physical_view, reason='Same physical state retained by the confirmed resident journal writer'))
     boundary = dict(input={}, inputEncoded='{}', inputSha256='5'*64)
     build = dict(sourceCommit='fixture-only-not-a-native-build', sourceManifestSha256='9'*64, sourceDirty=False)
     boundary['build'] = build
@@ -73,7 +74,8 @@ def fixture():
     for name, version, field in (('legacyState', 15, 'activationState'), ('legacyProcess', 14, 'activationProcess')):
         p[name] = dict(schemaVersion=version, update=root, driverActive=False, driverError=None,
                        **{field: dict(phase='indeterminate', reason='Use internal24', residentProcess=owned['process'], processAlive=True)})
-    cold_view = dict(view, activationWriter=dict(projection, phase='not_resident', residentProcess=None, processAlive=None),
+    cold_view = dict(view, activationWriter=dict(projection, phase='not_resident', residentProcess=None, processAlive=None,
+                                               reason='Saved writer delivery is history; no resident owner or normal-service readiness is inferred'),
                      activationState=dict(physical_view, phase='not_resident', residentProcess=None, processAlive=None),
                      activationFiles=dict(files, heldFiles=0, phase='not_bound', worker=None, manifestSha256=None))
     cold = dict(writerRecord=saved, writerHistory=[issued, saved], actualWorkerReceipt=receipt, workerAuthority=new,
@@ -88,6 +90,11 @@ def fixture():
 
 
 class WriterEvidenceTests(unittest.TestCase):
+    def test_mutation_comparison_preserves_json_boolean_counter_distinctions(self):
+        for previous, replacement in [(1, True), (0, False), (None, False), ({'count': 1}, {'count': True})]:
+            self.assertTrue(gate.changed_value(previous, replacement, prep))
+        self.assertFalse(gate.changed_value({'count': 1}, {'count': 1}, prep))
+
     def check(self, f):
         p, cold, before, pin, ctx, record, build = f
         gate.strict(dict(warm=p, cold=cold, before=before), prep, physical)
@@ -95,6 +102,17 @@ class WriterEvidenceTests(unittest.TestCase):
 
     def test_correlated_synthetic_rows_pass_only_the_delivery_component(self):
         self.check(fixture())
+
+    def test_real_projection_explanations_are_required_without_claiming_service_success(self):
+        for path in [('confirmed', 'activationWriter'), ('duplicate', 'activationState')]:
+            f = fixture()
+            f[0][path[0]][path[1]]['reason'] = None
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                self.check(f)
+        f = fixture()
+        f[1]['view']['activationWriter']['reason'] = f[0]['confirmed']['activationWriter']['reason']
+        with self.assertRaises(ValueError):
+            self.check(f)
 
     def test_mutations_cannot_claim_receipt_service_or_replay(self):
         edits = [

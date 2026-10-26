@@ -1,13 +1,17 @@
 # Архитектура WinBridge
 
-Дополнение2026-10-25: пользователь разрешил увеличить новое startup window120→240s.
-[Review/diagnostics](plans/worker-self-update/review-2026-10-25-latency.md) сохраняет
-immutable старые attempts и все live custody/fencing checks; положительный Main24
-с новым окном пока не заявлен. Прежние запреты расширять120s ниже исторические.
+Дополнение2026-10-25: [Main24 writer gate подтверждён](plans/worker-self-update/resume-2026-10-25-writer-verified.md)
+на19/17/actor24/view16/private3:193 tests,56 files twice,44+16+18 negative audits.
+Новые startup admissions240s разрешены пользователем, старые intents не меняются.
+[Диагностика](plans/worker-self-update/review-2026-10-25-latency.md) и
+[следующий normal local service](plans/worker-self-update/local-service-activation.md).
+Ниже сохранён предшествующий статус, включая историческую ошибку120s; актуальное
+состояние и точные pins — в новом checkpoint. Normal service/controller/lifetime
+и U3/U4 не реализованы, public install off, installed runtime не менялся.
 
 Статус 2026-10-10: этапы 1–7 завершены; Windows runtime/IPC, WebSocket, snapshot delivery и изолированный Netwatch workflow проверены на настоящей Windows. Этап 6: [baseline и Git batch capture](done/stage0-7/stage6/performance-capture-gate-2026-10-09.md) измерены и проверены автоматически, [delta от verified generation](done/stage0-7/stage6/windows-delta-gate-2026-10-09.md) прошла отдельные native и Debian → Windows gates; [output batching](done/stage0-7/stage6/windows-output-gate-2026-10-10.md) и [pinned chunk resume](done/stage0-7/stage6/windows-resume-gate-2026-10-10.md) также прошли automatic gates. [Журнал внимания этапа 5](guides/attention.md) и [settings/output retention](guides/settings-retention.md) реализованы и проверены. Windows regression запускается [автоматически](validation/windows-workflow-validation.md). Tray/popup/sound прошли native gate; workflow/application attention также [прошли автоматический native gate](done/stage0-7/stage5/windows-workflow-attention-gate-2026-10-08.md).
 
-## Текущее состояние updater — checkpoint 2026-10-25
+## История состояния updater до положительного writer gate
 
 Source **updater19/worker17, supervisor24/view16, private physical2 + writer3**.
 [Checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md) и

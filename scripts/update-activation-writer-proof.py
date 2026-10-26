@@ -14,6 +14,11 @@ def digest(domain, value, preparation):
     return hashlib.sha256(domain + preparation.canonical(value)).hexdigest()
 
 
+def changed_value(previous, replacement, preparation):
+    # Python equates True with 1. Typed JSON evidence and mutations must not.
+    return preparation.canonical(previous) != preparation.canonical(replacement)
+
+
 def strict(proof, preparation, physical):
     physical.strict(proof, preparation)
     booleans = {'lostWriterAckSentOnce', 'oldCachedAuthorityRefused', 'normalServiceStarted'}
@@ -103,21 +108,24 @@ def verify_delivery(p, cold, before, pin, ctx, record, source_build, preparation
          and rows == p['preservedRowsAfter'] == cold['preservedRowsAfter'],
          'Worker tables outside authority/activation changed, or history fixture is empty')
     projection = dict(phase='confirmed', attemptId=intent['attemptId'], commandId=key, revision=1,
-                      durablePhase='confirmed', savedReceipt=receipt, residentProcess=physical['process'], processAlive=True, reason=None)
+                      durablePhase='confirmed', savedReceipt=receipt, residentProcess=physical['process'], processAlive=True,
+                      reason='Journal commit confirmed; normal worker service/controller/lifetime are not verified')
+    physical_projection = dict(p['owned']['activationState'],
+                               reason='Same physical state retained by the confirmed resident journal writer')
     root = p['owned']['update']
     for name in ('confirmed', 'duplicate'):
         v = p[name]
         need(v['schemaVersion'] == 16 and v['update'] == root and root['phase'] == 'verifying_local'
              and v['driverActive'] is False and v['driverError'] is None and v['activationWriter'] == projection
-             and v['activationState'] == p['owned']['activationState']
+             and v['activationState'] == physical_projection
              and v['activationFiles'] == p['owned']['activationFiles'],
              'Warm/duplicate view changed physical scope or confuses receipt with whole update success')
     cv = cold['view']
     need(cv['schemaVersion'] == 16 and cv['update'] == root and cv['driverActive'] is False and cv['driverError'] is None
-         and cv['activationWriter'] == dict(projection, phase='not_resident', residentProcess=None, processAlive=None)
-         and cv['activationState']['phase'] == 'not_resident'
-         and cv['activationState']['savedOwnership'] == physical
-         and cv['activationState']['residentProcess'] is None and cv['activationState']['processAlive'] is None
+         and cv['activationWriter'] == dict(projection, phase='not_resident', residentProcess=None, processAlive=None,
+                                            reason='Saved writer delivery is history; no resident owner or normal-service readiness is inferred')
+         and cv['activationState'] == dict(p['owned']['activationState'], phase='not_resident',
+                                          residentProcess=None, processAlive=None, reason=None)
          and cv['activationFiles'] == dict(p['owned']['activationFiles'], phase='not_bound', heldFiles=0, worker=None, manifestSha256=None),
          'Cold writer receipt invented live process/files/service custody')
     for name, version, field in (('legacyState', 15, 'activationState'), ('legacyProcess', 14, 'activationProcess')):
@@ -190,7 +198,7 @@ def audit(proof, source, target, root, preparation, physical, health, *, startup
         for key in pieces[:-1]:
             node = node[int(key)] if isinstance(node, list) else node[key]
         key = int(pieces[-1]) if isinstance(node, list) else pieces[-1]
-        need(node.get(key) != replacement if isinstance(node, dict) else node[key] != replacement,
+        need(changed_value(node.get(key) if isinstance(node, dict) else node[key], replacement, preparation),
              'Writer mutation is a no-op: ' + path)
         node[key] = replacement
         try:

@@ -1,5 +1,8 @@
 # Review и диагностика задержек — 2026-10-25
 
+**Итог: Main24 подтверждён,193/0. [Актуальный checkpoint](resume-2026-10-25-writer-verified.md).**
+Следующий сценарий — [normal local service](local-service-activation.md); ещё не реализован.
+
 Пользователь поручил review последних изменений, исправления и продолжение updater.
 Надёжность важнее скорости. Он явно разрешил увеличить startup window вдвое:
 **новые admissions используют 240000ms**. Прежнее требование сохранять120s
@@ -57,7 +60,7 @@ Cache owner report5 files twice, SHA `22c40d278d595a82038d027184d3d706383d6ebf62
 его task failed, четыре compiler commands exit0. Это только compiler cache.
 Disk admission task `ec6006f3-5cb5-4cfa-aa25-004b8d0eed19`: Windows13527228416 /
 Debian24930435072 bytes, оба≥6GiB. Installed worker connected/idle/errors=null.
-Новый native run впереди; positive Main24 не заявлен.
+Новый native run впоследствии прошёл193/0; окончательные pins и verifier fixes — в новом checkpoint.
 
 Clean receiver commit `24136539e0b1c542c48c90bace4bf975bed6c69c`:
 `winbridge-20261025T232657Z-2413653-bf3f5db3.zip`,825 files, ZIP SHA
@@ -66,10 +69,10 @@ Clean receiver commit `24136539e0b1c542c48c90bace4bf975bed6c69c`:
 Archive-derived startup default240000ms проверен. Следующий docs-only commit
 даёт отдельный producer; оба содержат reviewed code19/17/private3.
 
-## Активный native retry
+## Native retry — завершён
 
 Run `20261025-232746-26bad6d7`, task `a49ade1f-4e35-4eff-84ac-3b8d21c0a9ea`
-принят и наблюдается; **не resubmit**. Producer
+завершён **succeeded/0**,193 tests; **не resubmit**. Producer
 `acf712313405c0e6be04b91893f8ed927772f1ed`, ZIP
 `winbridge-20261025T232727Z-acf7123-7d95795d.zip`, SHA
 `7e8ccc681c030f72194c9359cf646111dd7720bce58652d105c263fbdcc26008`.
@@ -98,3 +101,20 @@ release → remaining U2 → U3/U4 → A4.3.
 Windows config пользователь выбрал `winbridge-worker.snapshot.local_204.json`.
 Runtime/config/journal Windows не заменялись. Изменён только Debian local listen
 с verified backup, путь и restore уже сообщены пользователю.
+
+## Результат review
+
+Полный Main24 прошёл,56 ready files twice. Fixed readonly verifier принял тот же
+report с44+16+18 rejected mutations. Найдены ошибки старого verifier: ожидания
+reason=None вместо реальных warm/cold пояснений и Python1==True в проверке
+мутации. Исправления не меняют artifact bytes, epoch rules или native execution.
+Все Python suites после исправления:27/0. Native/Cargo/observer процессов нет.
+
+Новая сводка выделяет вложенный target compiler216.16s, replacement131.90s и
+binding44.22s. На20 custody checkpoints повторно хешируется около2.23GB;
+hash time14.49s, остальные graph/physical checks тоже заметны. Confirmed writer
+оставляет108.3s от240s: увеличение окна устранило исходный blocker. Общего speedup
+не заявляем: прежний run был failed и не выполнял весь successful postflight.
+
+Source/schema private service ещё не добавлены. Next contract и invariants
+зафиксированы в local-service-activation.md; current public install off.

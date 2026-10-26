@@ -1,49 +1,23 @@
 # Постепенная реализация и расширение
 
-Продолжение2026-10-25: [review/latency и новое окно240s](plans/worker-self-update/review-2026-10-25-latency.md)
-по явному поручению пользователя. Старые120s intent не переписываются; новый Main24
-нужен до normal service/controller/lifetime. Ниже исходный checkpoint.
-Retry20261025-232746-26bad6d7/taska49ade1f-4e35-4eff-84ac-3b8d21c0a9ea выполняется,
-produceracf7123/target2413653; наблюдать, не resubmit.
+## Текущий checkpoint — writer24 подтверждён 2026-10-25
 
-## Текущий checkpoint — закрытие проверок 2026-10-25
+[Актуальное продолжение](plans/worker-self-update/resume-2026-10-25-writer-verified.md)
+и [review/диагностика](plans/worker-self-update/review-2026-10-25-latency.md).
+Run20261025-232746-26bad6d7/taska49ade1f-4e35-4eff-84ac-3b8d21c0a9ea
+**succeeded/0:193 tests,56 ready files twice,44+16+18 negative audits**.
+Same-child journal writer19/17/actor24/view16/private3 проверен, обе actual migrations
+прошли. Verifier исправлен и тот же report проверен readonly; replay не было.
+Новые admissions240s разрешены пользователем; старые120s intent не меняются.
 
-Начать с [checkpoint](plans/worker-self-update/resume-2026-10-25-journal-activation.md)
-и [native отчёта](plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md).
-
-Combined Windows run **20261025-205856-79e1b7c0** завершён **failed/exit1**:
-**190 тестов прошли в 38 группах; Main24 — 1 failed**. Обе actual migrations
-(updater18→19/refusal, worker16→17/active16 refusal) прошли; independent audit
-отверг18 подмен. Final writer observe получил `Activation preparation deadline
-expired; no new execution or adoption`. **Положительного Main24/writer proof нет.**
-Все проверки/observer завершены; после terminal повтор не запускался. Первый следующий шаг —
-разобрать задержки activation и исправить путь, сохранив original120s и fences,
-затем повторить combined gate из нового clean producer. Только после полного
-success переходить к normal service/controller/lifetime.
-
-- Source **updater19/worker17/supervisor24/view16/private physical2+writer3**.
-  Atomic CAS/receipt/opening, graph-bound writer intent/history, consuming driver,
-  actor24 и полный test harness реализованы. Writer receipt не означает normal service.
-- Public install/capabilities off; installed d052/runtime/config/journal unchanged.
-- Проверки source: baseline781/0 (1a2149f), hooks4, Python24, Linux/MSVC Clippy;
-  fix772 real-Store regression1/MSVC. При закрытии Python24 и scaffold278 passed.
-- Старый [physical132/0](plans/worker-self-update/windows-activation-state-gate-2026-10-25.md)
-  на18/16/private2 сохранён как actual migration reference, не writer success.
-
-Последовательность продолжения:
-
-1. Сверить terminal result/evidence последнего combined writer gate. Если failed,
-   исправить причину и получить полный isolated positive proof; не replay старый run.
-2. Normal local service/reconciliation в том же activated child/Store/lock.
-3. Настоящая новая controller session/build/generation → owned Job lifetime transfer
-   с durable intent/readback → commit/scoped maintenance release.
-4. Remaining U2 faults/recovery/CLI/MCP/opt-in → U3 desktop notifications/save/exit/
-   update/tray → U4 stable installed self-update → возврат к A4.3.
-
-Original120s не продлевать. Перед новым native gate fresh Info/оба диска≥6GiB и
-объявление необходимых окон/worker. Desktop можно закрыть, installed worker оставить.
-Windows validation directories не чистить. Новые этапы по просьбе пользователя при
-закрытии не начинались; самостоятельный installed update ещё не включён.
+Первый незавершённый сценарий — [normal local service/reconciliation](plans/worker-self-update/local-service-activation.md)
+в том же child/Store/lock без повторного owner epoch. Затем новая controller session
+→ durable Job lifetime transfer → commit/scoped maintenance release → remaining
+U2 faults/CLI/MCP/opt-in → U3 desktop → U4 actual installed update → возврат к A4.3.
+Проектируемые schema20/private4/actor25/view17 пока не реализованы.
+Public install выключен; working runtime/config/journal не менялись.
+Старые NEXT/ACTIVE ниже исторические. Точные source/task/proof pins и окружение
+192.168.44.204 — в новом checkpoint; gate не повторять без новой причины.
 
 ## История предыдущих checkpoints: не текущие задания
 

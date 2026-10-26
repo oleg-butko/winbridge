@@ -1,0 +1,77 @@
+# Следующий сценарий: normal local service после writer
+
+2026-10-25. **Проектирование, не реализованная возможность.** Начинать source
+реализацию только после полного положительного Main24 и независимого review.
+[Текущий run и результаты](review-2026-10-25-latency.md).
+
+## Граница сценария
+
+Тот же private child после fresh worker17 CAS/receipt начинает reconciliation и
+обычный local IPC. Его incarnation, epoch и state-owned generation остаются
+прежними; project roots/dispatch закрыты существующей maintenance lease.
+Новая controller session и передача Job lifetime остаются отдельными шагами.
+LocalVerified не означает Committed или готовое самообновление.
+
+Для этого выбран отдельный service intent/history в **updater20**, private
+service4, actor25/view17. Это проектируемые номера, не текущие CLI actions или
+advertised capabilities. Worker journal остаётся17: локальный service не требует
+новой authority или миграции active worker state. Существующие views1–16 и
+private1/2/3 сохраняют формы и семантику.
+
+## Владение и admission
+
+1. Factory связывает confirmed writer receipt и immutable physical StateOwned6,
+   final backup, old accepted shutdown и текущий root/owner/supervisor в одной
+   SQLite read transaction. Холодная строка даёт только read model.
+2. Только resident Written guard с тем же child/Job/channel получает consuming
+   service dispatch. Intent сохраняется до одной private send. Новый command ID
+   не превращает уже начатую попытку в новую.
+3. Private child сверяет command/graph, config/runtime pins, PID/birth, generation,
+   schema/protocol, parent liveness и remaining original startup deadline.
+   Новая фаза не обновляет admittedAt и не начинает новые240s.
+4. Worker constructor принимает **сам ActivationJournal вместе с Fresh permit**.
+   Он не вызывает Store::open, begin_authority, миграцию или повторный try_lock.
+   Нужен crate-private consuming transfer с exact receipt/header/state проверками;
+   нельзя открывать public способ извлечь Store/lock из serialized receipts.
+5. Worker удерживает полный LockedShutdownState, включая pinned anchors, весь
+   срок службы. Одного скопированного File handle недостаточно для прежней custody.
+   Ошибка подготовки не возвращает reusable permit и сохраняет ownership до exit.
+
+## Сервис и фактическая готовность
+
+- Переиспользовать recovery/reconciliation существующего Worker; выделить общий
+  constructor из open_inner, отделив получение state/authority от initialization.
+  Не копировать scheduler, task service или IPC handler во второй implementation.
+- Config/path/domain/witness проверки и прежние user pause/settings сохраняются.
+  Recover/import/application observations выполняются до первой IPC ready receipt.
+  Maintenance Quiesced продолжает блокировать roots/dispatch; восстановление
+  queued tasks не запускает их. Не отключать её через изменение user queue pause.
+- Local-only startup не запускает network::connect. Наличие controllerUrl в
+  frozen config не является разрешением открыть controller session. Info должен
+  объяснять ожидание следующей фазы, а не показывать вымышленную свежую связь.
+- Вынести фактический IPC bind/readiness из serve_inner: Ready посылается после
+  успешного bind, reconciliation и доступного обычного readonly handler.
+- Родитель проверяет **настоящий normal IPC**, PID сервера pipe, loaded
+  build/manifest/config/context/generation/schema и прежние tasks/output. Частный
+  Ready frame или тестовый controllerUrl=None не заменяют эту проверку.
+- Только подтверждённая immutable service receipt разрешает trusted LocalVerified
+  в activation7/root LocalVerified. Lost ACK/timeout/partial write сохраняют
+  неопределённый исход; late факт допустим, повтор send или новый child запрещены.
+
+## Обязательные проверки
+
+Portable DTO/FSM/ledger tests: duplicate/conflicting keys; owner/root/schema drift;
+unknown outcomes; historical prefix/late receipt; legacy view JSON; cold observe
+не получает grant. Constructor tests: тот же Store/header epoch+1, retained lock,
+отсутствие normal open/migration; user pause и Quiesced lease сохраняются.
+
+Новый isolated Main25: Main shutdown → backup → replacement → same child/lock →
+writer → normal IPC/reconciliation → old task/output reads и blocked new roots →
+duplicate/lost ACK/cold observe → actual child/Job exit. Тяжёлые аудиты после
+startup receipt; timings обязательны. Actual updater19→20/refusal проверять на
+consistent copies retained writer journal, сохраняя original history/evidence.
+
+Public install и advertised activation/controller/desktop остаются выключенными.
+После positive service gate: новая реальная controller session → durable scoped
+activation Job lifetime transfer → commit/scoped maintenance release → remaining
+U2 faults/management → U3 desktop → U4 installed update → возврат к A4.3.

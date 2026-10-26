@@ -62,23 +62,19 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
-Актуальная точка разработки апдейтера: [checkpoint следующей сессии](docs/plans/worker-self-update/resume-2026-10-25-journal-activation.md),
-[текущий review/latency и разрешённые240s](docs/plans/worker-self-update/review-2026-10-25-latency.md),
-[actor24/view16](docs/plans/worker-self-update/journal-writer-actor.md)
+Актуальная точка updater: [checkpoint](docs/plans/worker-self-update/resume-2026-10-25-writer-verified.md),
+[review/latency](docs/plans/worker-self-update/review-2026-10-25-latency.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source **updater19/worker17/supervisor24/view16**, physical handoff2 + private writer3.
-Worker atomic header/receipt/opening и graph-bound updater intent/history,
-consuming native driver/worker handler и actor24/view16 реализованы.
-Rust Main24, independent verifier, PS/observer и actual migration fixtures добавлены.
-[Закрытие native проверок](docs/plans/worker-self-update/windows-journal-writer-gate-2026-10-25.md):
-обе миграции прошли, 190 тестов прошли; Main24 завершился ошибкой исходного
-окна активации120s. Полного writer proof нет. Следом — диагностика/исправление
-задержек и новый isolated gate.
-**Обычный сервис нового worker/local/controller/lifetime и U3/U4 впереди.**
-Public install выключен, самообновление целиком не готово. Installed runtime не менялся.
-Подробные результаты, exact pins/команды и план продолжения — в checkpoint;
-исторические отчёты не заменяют его. Source baseline781/0 (1a2149f), Python24,
-Linux/MSVC Clippy и SQL regression1 passed; документация/scaffold проверены.
+Source updater19/worker17/supervisor24/view16/private2+writer3.
+**Main24 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
+Both actual migrations, same-child epoch+1/receipt/fencing и actual Job exit
+подтверждены. Verifier исправлен и тот же terminal report проверен readonly.
+Новые startup admissions240s разрешены пользователем; старые120s intents неизменны.
+[Подробные замеры](docs/plans/worker-self-update/review-2026-10-25-latency.md)
+отделяют сборку target, replacement, hashing, graph checks и writer delivery.
+**Normal service/reconciliation/local/controller/lifetime, remaining U2 и U3/U4
+впереди. Public install выключен; самообновление целиком ещё не готово.**
+Installed runtime не менялся. Controller теперь слушает192.168.44.204:1143.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

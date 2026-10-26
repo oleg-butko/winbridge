@@ -69,12 +69,26 @@ def summarize(directory):
                                   elapsedMs=value['elapsedMs'], remainingMs=value['remainingMs']))
     ranked = [dict(log=k[0], processId=k[1], operation=k[2], previousPhase=k[3], phase=k[4], **v)
               for k, v in sorted(edges.items(), key=lambda item: item[1]['totalStepMs'], reverse=True)]
+    nested_builds = []
+    proof_bytes = files.get('candidate-health-actor-proof.json')
+    if proof_bytes:
+        proof = json.loads(proof_bytes.decode('utf-8-sig'))
+        for case in proof.get('cases', []):
+            build = case.get('beforeReplacement', {}).get('beforeMainExit', {}).get('duplicate', {}).get('build')
+            if build:
+                accepted, completed = build['spec']['acceptedAtMs'], build['updatedAtMs']
+                if any(type(v) is not int or v < 0 for v in (accepted, completed)) or completed < accepted:
+                    raise ValueError('Invalid durable compiler interval')
+                nested_builds.append(dict(attemptId=build['spec']['attemptId'], phase=build['phase'],
+                                          outcome=build['outcome'], acceptedToLastUpdateMs=completed-accepted))
     return dict(run=directory.name, passed=report['passed'], filesVerifiedTwice=len(files),
                 reportSha256=hashlib.sha256(files['report.json']).hexdigest(), commands=commands,
-                completedSpans=spans, slowestEdges=ranked[:25],
+                completedSpans=spans, slowestEdges=ranked[:25], nestedCompilerIntervals=nested_builds,
                 interpretation='Command elapsed is wall time; reported build/test times and nested spans overlap. '
                                'Do not add different timing operations or build and test-body totals as disjoint time. '
-                               'Artifact counters cover artifact::pin in that process, not every platform hash.')
+                               'Artifact counters cover artifact::pin in that process, not every platform hash. '
+                               'Nested compiler intervals are durable wall-clock admission-to-completion observations, '
+                               'including coordination/cleanup; they are inside the Main test body.')
 
 
 if __name__ == '__main__':
