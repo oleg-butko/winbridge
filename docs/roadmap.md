@@ -2,17 +2,18 @@
 
 2026-10-26: по новой задаче пользователя выполняются
 [review/merge performance-ветки и выпуск worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
-Ветка слита в main: CPU fix и build profiles проверены, release harness исправлен. Новый пакет
-пока не опубликован. Старый network gate cancelled после подтверждённого firewall
-block временного exe. Новый source даёт permanent runtime-test path, test port1144,
-900s connection wait и отдельный RPC budget; production/updater startup не меняет.
-Новый native gate/policy6 ещё нужны. Подробнее в release note. Public updater и
-multi-controller не включаются.
+Ветка слита в main: CPU fix и build profiles проверены, release harness исправлен. Worker0.1.1
+выпущен: run20261026-182213-6cd81f3e succeeded,140 Rust +6 native policy,
+actual old-controller RPC и source final readback passed. Постоянный runtime-test
+path/port1144/900s approval budget проверены; ZIP готов к ручному применению.
+Installed d052 ещё не заменён; дальше actual installed verification после ответа
+пользователя, затем normal-service updater plan. Public updater/multi-controller
+не включаются.
 
-## Сейчас в этой ветке: ускорение прогонов
+## Завершено: ускорение прогонов и выпуск 0.1.1
 
 2026-10-26: [локальный worker0.1.1](releases/worker-0.1.1.md) с idle CPU fix и
-startup/version diagnostics, Windows release/compatibility gate готовится.
+startup/version diagnostics: Windows release/compatibility gate пройден, ZIP опубликован.
 [Несколько Debian controller](plans/multiple-debian-controllers.md) — отдельная
 будущая фича; конфигурацией0.1.1 один worker к двум controller не подключается.
 
@@ -34,7 +35,8 @@ unchanged. Full gate с новым builder:201 tests/56 files twice/78 negative 
 passed. Command sum21.409→20.266min observational. Warm feature matrix не требует
 перекомпиляции; дальнейшие варианты — dev/test codegen/symbols и точный SDK target set.
 
-Пользователь 2026-10-25 поручил продолжать эксперименты до существенных
+Исторический контекст отдельной perf-ветки до слияния: пользователь 2026-10-25
+поручил продолжать эксперименты до существенных
 результатов в отдельной ветке; другой агент продолжает updater в `main`.
 [План оптимизации и E1 A/B эксперимент](plans/run-speed/README.md): сначала
 opt-level1 при сохранённых safety checks; затем полный native gate и build
@@ -44,7 +46,7 @@ Updater эта ветка не развивает.
 
 2026-10-26 итог: v2(core/protocol/serde_json opt1, updater0) ускоряет paired65-test
 suite45.65%; full E2 **201 Windows tests/56 files twice/78 negative audits passed**.
-Ветка содержит профили и инструменты эксперимента; `main` чистый. Полные команды
+Ветка содержала профили и инструменты эксперимента; теперь они слиты в `main`. Полные команды
 заняли21.41min против прежних24.10min, это observational сравнение. Следующий
 кандидат E3 — стоимость feature variants/rebuild по Cargo fingerprint/timings.
 

@@ -1,34 +1,49 @@
-# Продолжение updater — writer24 подтверждён 2026-10-25
+# Продолжение работы — worker 0.1.1 выпущен 2026-10-26
 
 **Задача пользователя2026-10-26:** performance-ветка слита в main,
 merge50ceb0d, review fixes2b3734c. [Review](plans/run-speed/review-merge-2026-10-26.md).
 Source workspace794/0/17ignored, Linux/MSVC Clippy, TS/UI/contracts, safety probe1,
-Python profile5/desktop3/publication3 passed. Runtime CPU fix принят.
+Python profile5/desktop3/publication4 passed. Runtime CPU fix принят.
 
-**Worker0.1.1 ещё не выпущен:** [release status](releases/worker-0.1.1.md).
-Пользователь подтвердил firewall block временного exe. Старый taska6a111f7/run
-20261026-133349-ec2d99c5 теперь terminal cancelled, не replay и не passed.
-Installed d052/generation301be6ea connected/active0/errors=null17:38Z.
+**Worker0.1.1 выпущен:** [пакет, proof и установка](releases/worker-0.1.1.md).
+Run20261026-182213-6cd81f3e/taskbf07a5ed-aa0d-4d94-b780-e524e66d269e
+**succeeded/0,140 Rust +6 Windows policy checks**,10 ready files twice;
+old-controller0.1.0/new-worker0.1.1 RPC/dedup/stale/Unicode и source-final-readback
+passed. CPU matched history98.8823→1.9404% одного ядра. ZIP worker0.1.1-59249e6
+опубликован в K:/VMs/shared/WinBridge/releases/20261026-182213-6cd81f3e.
+Source59249e6/manifestf7497e8..., ZIP2356cef5..., worker536d8637... — полные pins
+в release note. Metadata/verified.json/source archive указаны там; не replay.
 
-Новый source использует постоянный network test exe
-`K:\_proj-26\winbridge\runtime-test\winbridge-worker.exe`, isolated controller
-.203:1144 и default900s на разрешение/соединение; RPC имеет отдельные120s.
-CLI overrides/budgets/lease/pin/ownership/live-process guards — в release note.
-State/config/instance/report свежие per-run, production runtime не меняется.
-Python publication4 passed. Fixed-path taskeb06c919/run20261026-180118-1321e697
-terminal failed после140 Rust/6 policy/RPC success: fixture cwd оставил runs.log
-в source; final guard отказал. Исправлен scratch cwd и добавлен final readback log/
-verifier. Нужен новый clean producer/full release gate с тем же постоянным exe.
-Old failed run не replay; native component proof и exact hashes в release note.
-Updater startup240s и прежние120s intents не менялись. Нужен установленный worker;
-desktop не нужен. Новый путь требует первого пользовательского firewall allow,
-затем его имя не меняется. Source/commit/export перед новым native gate обязательны.
+Постоянный network exe `K:\_proj-26\winbridge\runtime-test\winbridge-worker.exe`,
+порт1144, default900s на firewall/connection, RPC120s отдельно. Повтор использовал
+тот же executable path и подтвердил reuse; lease/ownership/read pin/live-process/
+production overlap guards пройдены. В AGENTS.md закреплено это требование.
+State/config/instance/report per-run, рабочий runtime отдельно. Updater startup240s
+и старые120s intents не менялись; автоматические firewall rules не создавались.
 
-Current controller .203:1143/PID5103 оставлен; actual old0.1.0 controller copy,
-reference и fresh preflight находятся в .winbridge/releases/review-0.1.1.
-Продолжить release gate с новым clean producer и fixed test runtime, подтвердить
-cleanup/ready hashes/independent verifier, затем опубликовать worker-only ZIP.
-Не продолжать updater service как будто пакет уже установлен. История ниже.
+**Следующее внешнее действие — ручное применение ZIP пользователем.** Working
+worker оставлен d052/0.1.0/generation301be6ea connected/active0/errors=null;
+application stopped, workflow succeeded. Desktop не нужен. Его exe/config/state
+не заменялись. Пользователь останавливает старый worker, заменяет exe в runtime
+и запускает с прежним winbridge-worker.snapshot.local_203.json; полная команда
+и migration16→17/rollback ограничения в release note. До сообщения об обновлении
+не выполнять зависимые Windows updater gates/не останавливать working worker.
+После ответа сверить actual0.1.1/source59249e6/manifestf749..., новый generation/
+session, health и прежнюю историю. Затем продолжить normal local-service plan
+в том же activated child/Store/lock; DTO/FSM foundation есть, journal20/driver/
+receiver/local IPC ещё не реализованы. Public update/U3/U4 off.
+
+Current controller .203:1143/PID5103 оставлен. Native observer50035, isolated
+controller и тестовые child завершены. Source checks794/0/17ignored, Linux/MSVC,
+TS/UI/contracts, safety probe1 прежнего review и Python publication4 актуальны;
+эта итерация меняла PS/Python/docs, Rust не менялся. Native test140 добавлен выше.
+История старых failed/cancelled прогонов ниже и в release note; они не passed.
+
+## История подготовки и прежние checkpoints
+
+Записи ниже сохранены для трассировки. Их слова «текущий», «впереди» и ограничения
+отдельной perf-ветки относятся к моменту записи. Актуальный статус выпуска и
+следующее действие приведены выше.
 
 **Текущая задача2026-10-26:** [worker0.1.1](releases/worker-0.1.1.md), source
 version/startup diagnostics подготовлены; Linux checks passed. Windows build и

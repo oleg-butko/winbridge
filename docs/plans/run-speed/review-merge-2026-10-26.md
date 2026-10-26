@@ -103,3 +103,13 @@ actual RPC/dedup/stale-scope/Unicode и cleanup. Финальный guard ост
 readiness проверяет log там, source final validation сохраняется и независимо
 сверяется. Старый failed snapshot не чистится; повтор новым clean producer и
 namespace, network executable path тот же.
+
+## Итог исправления и выпуска
+
+Run20261026-182213-6cd81f3e/source59249e6 полностью succeeded/0:
+140 Rust tests,6 native policy checks, old-controller/new-worker RPC и strict
+source final readback;10 ready files twice, ZIP/все checksum entries сверены.
+CPU98.8823→1.9404% одного ядра. Тот же runtime-test executable path повторно
+использован после первого firewall allow. Snapshot сохранён неизменным870 files.
+Готовый worker-only ZIP, полные pins, evidence paths и ручная установка — в release
+note. Installed d052 не заменялся, все test processes/observer завершены.

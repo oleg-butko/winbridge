@@ -66,6 +66,11 @@ docs/               Архитектура, UX, roadmap, ADR и handoff
 
 ## Проверка и запуск
 
+Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в простое, добавлена
+диагностика версии, запуска и планировщика. [ZIP, проверки и установка](docs/releases/worker-0.1.1.md).
+Сетевые тесты используют постоянный каталог `runtime-test` и ждут разрешения
+файервола до 15 минут; рабочая версия устанавливается отдельно в `runtime`.
+
 Актуальная точка updater: [checkpoint](docs/plans/worker-self-update/resume-2026-10-25-writer-verified.md),
 [review/latency](docs/plans/worker-self-update/review-2026-10-25-latency.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).

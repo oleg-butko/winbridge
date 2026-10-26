@@ -1,9 +1,96 @@
 # Локальный Windows worker0.1.1
 
+## Готовый выпуск — 2026-10-26
+
+**Worker0.1.1 выпущен.** Пакет:
+
+```text
+K:\VMs\shared\WinBridge\releases\20261026-182213-6cd81f3e\winbridge-worker-0.1.1-59249e6.zip
+```
+
+Worker собран из clean **59249e6e5341fe13542a7768cec9107e19aad222**.
+Merge performance-ветки —50ceb0d; review fixes2b3734c; постоянный test runtime —
+f3d6be8; scratch-cwd/readback correction —59249e6.
+[Результаты ревью](../plans/run-speed/review-merge-2026-10-26.md).
+
+Native run **20261026-182213-6cd81f3e**, task
+**bf07a5ed-aa0d-4d94-b780-e524e66d269e**: succeeded/0.
+**140 Rust tests +6 Windows slot policy checks**, actual old-controller0.1.0 /
+new-worker0.1.1 RPC, dedup, stale scope refusal и Unicode passed. Повторный запуск
+использовал тот же `runtime-test\winbridge-worker.exe` и порт1144. Оба verifier
+readbacks подтвердили870 source files;10 ready files проверены дважды. Cleanup
+подтвердил завершение тестового worker, observer/isolated controller завершены.
+
+| Pin | SHA256 |
+| --- | --- |
+| ZIP | 2356cef54952e8b9e4adb0bc02193ddff5f9f972e5328326cb3754e44653920a |
+| winbridge-worker.exe | 536d86378b5c5adfc98b135c404e322d1dc9cc7dd19fb20941ca9b3f6686a712 |
+| report.json | 8e91c8fe7fb2bb1dd5e9c0c2bd292cf7e35af17fdd3085d3c4b813e22d2b3a38 |
+| Source manifest | f7497e8deb6f05f5b45e7863577c99d3a511491315348baaa78625a7f4aacb69 |
+
+Изолированный matched-history CPU probe: **98.8823→1.9404% одного ядра**
+(256 terminal records,32768 argument bytes/record,33s samples). Это измерение
+тестового candidate; установленный worker ещё d052/0.1.0. ZIP содержит exe,
+build-identity.json, README.txt и SHA256SUMS.txt; CRC, содержимое и все суммы
+повторно сверены в Debian независимым verifier.
+
+### Установка пользователем
+
+Рабочий exe/config/state не заменялись автоматически. Текущий worker оставлен
+connected/active0; сохранённое приложение stopped, workflow succeeded.
+Desktop не нужен. Для рабочей установки используйте ZIP и каталог `runtime`;
+`runtime-test` остаётся слотом автоматических проверок.
+
+1. Распакуйте ZIP в отдельную папку, например
+   `K:\_proj-26\winbridge\runtime\update\worker-0.1.1-59249e6`.
+2. В окне работающего worker нажмите Ctrl+C после завершения текущих работ.
+3. В PowerShell выполните проверку и замену:
+
+```powershell
+$runtime = 'K:\_proj-26\winbridge\runtime'
+$newWorker = Join-Path $runtime 'update\worker-0.1.1-59249e6\winbridge-worker.exe'
+$target = Join-Path $runtime 'winbridge-worker.exe'
+if ((Get-FileHash -LiteralPath $newWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne '536d86378b5c5adfc98b135c404e322d1dc9cc7dd19fb20941ca9b3f6686a712') { throw 'Пакет не совпал с проверенной сборкой' }
+if (Test-Path -LiteralPath (Join-Path $runtime 'winbridge-installed-set.json')) { throw 'Нужен coordinated installed-set update' }
+if (@(Get-CimInstance Win32_Process -Filter "Name='winbridge-worker.exe'" | Where-Object { $_.ExecutablePath -ieq $target }).Count) { throw 'Рабочий worker ещё запущен' }
+$backup = Join-Path $runtime ('winbridge-worker.before-0.1.1-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.exe')
+Copy-Item -LiteralPath $target -Destination $backup -ErrorAction Stop
+Copy-Item -LiteralPath $newWorker -Destination $target -Force -ErrorAction Stop
+& $target --version
+& $target --config (Join-Path $runtime 'winbridge-worker.snapshot.local_203.json') serve
+```
+
+Ожидается startup/version0.1.1, source59249e6, dirty=false. Прежний конфиг остаётся
+по тому же пути; controller0.1.0 на .203:1143 продолжает работать. Сборка проекта
+для применения этого binary package не требуется.
+
+При первом открытии inactive journal16 автоматически создаётся consistent backup
+и выполняется migration17. Старый worker16 не открывает17: сохранённый exe сам по
+себе не обеспечивает rollback. После новых задач не восстанавливать старую БД
+автоматически; сохранять состояние и разбирать recovery. Auto-updater/U3/U4 и
+multi-controller не включены этим patch release. После сообщения пользователя
+об обновлении агент сверяет actual build/generation/connection, затем продолжает
+normal-service updater plan.
+
+### Evidence и восстановление наблюдения
+
+Local `.winbridge/releases/20261026-182213-6cd81f3e/` содержит submission.json,
+network-proof.json, terminal.json, verified.json и controller log. Observer
+`.winbridge/releases/review-0.1.1/native-stable-repeat.log`, session50035 terminal0.
+Shared report и release.ready.json лежат рядом с ZIP. Source package:
+`winbridge-20261026T181739Z-59249e6-691299cb.zip`, SHA
+`71cad135926b70779a74cccda34d3c1f6fe1296d925a589dd48f98caadc4caf6`.
+Для повторной проверки читать terminal task/ready files/ZIP, не submit новый run.
+Native report Windows free bytes before/after и Debian storage сохранены;
+Windows validation directories не удалялись. Новый test runtime намеренно остаётся
+по постоянному пути для следующего запуска.
+
+## Устройство постоянного тестового слота
+
 Ветка слита в main: merge50ceb0d, review fixes2b3734c.
 [Результаты ревью](../plans/run-speed/review-merge-2026-10-26.md).
 
-## Постоянный сетевой test runtime — 2026-10-26
+### Постоянный сетевой test runtime — 2026-10-26
 
 Пользователь подтвердил блокировку exe из каталога с run ID. Для сетевой проверки
 теперь используется **`K:\_proj-26\winbridge\runtime-test\winbridge-worker.exe`**.
@@ -29,15 +116,16 @@
 - Native policy test проверяет6 свойств: защита production, чужих файлов, lease,
   write pin, hash mismatch и live process; также проверяет reuse того же пути.
   Independent publication verifier связывает эти проверки, stable path/hash/budget
-  с actual worker payload и новым RPC. Python4 passed; новый native check выполняется.
+  с actual worker payload и новым RPC. Python4 и native6 прошли в итоговом выпуске.
 
 Старый run20261026-133349-ec2d99c5/taska6a111f7-8350-4d95-b28d-959ef697881d
 теперь **terminal cancelled** (`Managed process tree cancelled`), не passed.
 Рабочий d052/generation301be6ea снова connected/active0/errors=null17:38Z.
 Старый observer завершился; его namespace не replay. Новый gate допускается только
-после fresh Info/space/source pins. ZIP0.1.1 пока не опубликован.
+после fresh Info/space/source pins. На момент этого отменённого прогона ZIP ещё
+не был опубликован; итог успешного повтора указан в начале документа.
 
-## Новый прогон из clean fixed-path source
+## История: первый fixed-path прогон
 
 Run **20261026-180118-1321e697**, task **eb06c919-2870-48f7-b9eb-0216a468a801**
 terminal failed/exit1; не replay. Source **f3d6be8c1025ac1409d15610857c94b81970b124**,
@@ -99,7 +187,7 @@ Public install остаётся выключенным, validation feature в п
 debug assertions/overflow checks. [Два controller](../plans/multiple-debian-controllers.md)
 — план, не capability0.1.1.
 
-## Проверка и применение
+## История первоначальной проверки и ограничения применения
 
 Linux worker lib и выбранные runtime/scheduler/lease/workflow/FSM regressions
 прошли с0.1.1, включая no-config version/clean artifact JSON test.
@@ -107,9 +195,10 @@ Linux worker lib и выбранные runtime/scheduler/lease/workflow/FSM regr
 
 `scripts/build-worker-release-native.py` берёт clean exported ZIP, проверенный
 original compiler cache и retained updater verifier/baseline worker. Он не
-компилирует или заменяет installed controller. Из `/proc/5312/exe` сохранён именно
-фактически работающий controller0.1.0 (его source identity dirty/2aac553, это
-существующий binary, а не утверждение clean source). Его копия работает с новой
+компилирует или заменяет installed controller. В итоговом gate из `/proc/5103/exe` сохранён именно
+фактически работающий controller0.1.0 (source identity dirty/768422d, это
+существующий binary, а не утверждение clean source). В старом прогоне использовался
+controller PID5312/source2aac553. Копия controller работает с новой
 отдельной config/state/instance/port. Windows кандидат проходит regressions/CPU
 и реальный RPC этого controller: submit, same-key duplicate, stale scope refusal,
 terminal success и Unicode output. Все команды и оригинальные requests сохраняются.
