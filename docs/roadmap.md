@@ -15,6 +15,8 @@ Same-child journal writer19/17/actor24/view16/private3 проверен, обе 
 → durable Job lifetime transfer → commit/scoped maintenance release → remaining
 U2 faults/CLI/MCP/opt-in → U3 desktop → U4 actual installed update → возврат к A4.3.
 Проектируемые schema20/private4/actor25/view17 пока не реализованы.
+Source data foundation для service уже добавлена: strict DTO/binding и pure FSM,
+7 portable regressions; durable admission/driver/receiver/actual IPC впереди.
 Public install выключен; working runtime/config/journal не менялись.
 Старые NEXT/ACTIVE ниже исторические. Точные source/task/proof pins и окружение
 192.168.44.204 — в новом checkpoint; gate не повторять без новой причины.

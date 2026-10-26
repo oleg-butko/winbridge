@@ -23,6 +23,8 @@ transfer → commit/scoped release → remaining U2 faults/management/opt-in →
 пока проект, не capability. Public install off. Installed d052 runtime не менялся;
 controller теперь192.168.44.204. Desktop можно закрыть; installed worker оставить.
 Все проверки terminal; старые NEXT/ACTIVE ниже не задают текущее действие.
+После gate добавлены service DTO/binding/pure FSM (7 focused/791 full workspace,
+Linux/MSVC Clippy/TS/contracts passed); journal20/driver/normal service ещё впереди.
 
 ### История предыдущих checkpoints
 

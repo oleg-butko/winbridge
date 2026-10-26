@@ -13,6 +13,7 @@ mod lifecycle;
 pub use lifecycle::*;
 pub mod channel;
 mod process_view;
+pub mod service;
 pub mod writer;
 mod writer_record;
 mod writer_view;

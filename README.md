@@ -74,6 +74,8 @@ Both actual migrations, same-child epoch+1/receipt/fencing и actual Job exit
 отделяют сборку target, replacement, hashing, graph checks и writer delivery.
 **Normal service/reconciliation/local/controller/lifetime, remaining U2 и U3/U4
 впереди. Public install выключен; самообновление целиком ещё не готово.**
+Service strict DTO и pure binding/FSM добавлены как foundation; runtime admission,
+Store/lock transfer и normal IPC пока не подключены.
 Installed runtime не менялся. Controller теперь слушает192.168.44.204:1143.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker

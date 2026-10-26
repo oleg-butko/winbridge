@@ -1,8 +1,22 @@
 # Следующий сценарий: normal local service после writer
 
-2026-10-25. **Проектирование, не реализованная возможность.** Начинать source
-реализацию только после полного положительного Main24 и независимого review.
+2026-10-25. **Data foundation реализована; runtime service ещё отсутствует.**
+Реализация начата после полного положительного Main24 и независимого review.
 [Текущий run и результаты](review-2026-10-25-latency.md).
+
+После positive Main24 добавлена **только data foundation**:
+`crates/protocol/src/update/activation_service.rs` и
+`apps/update/src/activation/service{.rs,/record.rs,/tests.rs}`. Strict command/
+receipt DTO, binding к confirmed writer/физическому6 и pure FSM Issued→Confirmed
+либо Issued→Indeterminate→Confirmed реализованы;7 portable regressions passed.
+Дополнительный epoch, чужие PID/build/config/generation, refresh deadline и reissue
+отклоняются. Late receipt — сохранённый факт, не новый grant.
+**Journal20/admission/native driver/receiver4/actor25/view17/actual service пока нет.**
+Ни Store, ни IPC этот код не открывает; private capability marker не добавлен.
+Следующий source шаг — durable service intent/history/readback под original guard.
+Финальные source checks: workspace791/0 (16 ignored), focused service7/0,
+Linux/MSVC workspace all-target validation Clippy, TypeScript feature и generated
+UI contracts/fmt/scaffold281 passed. Native Main25 не запускался: runtime не добавлен.
 
 ## Граница сценария
 

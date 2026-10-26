@@ -105,9 +105,20 @@ pins разрешением кешировать mutable owner/root/epoch вне
 
 ## Следующий вертикальный сценарий
 
+После gate продолжена source реализация: strict service DTO и pure binding/FSM
+добавлены в protocol `update/activation_service.rs` и updater
+`activation/service.rs`, `activation/service/{record,tests}.rs`.7 portable tests
+passed. Это metadata, не runtime activation: schema остаётся19/17, новых private
+markers/CLI actions/views нет. Next — journal20 intent/history/readback, затем
+consuming original-guard driver и тот же Store/lock в Worker constructor.
+После data foundation выполнен **полный workspace791/0 (16 ignored)**,
+focused service7/0, Linux/MSVC all-target validation Clippy, TypeScript feature,
+generated UI contracts/fmt/scaffold281 passed. Native Main24 выше относится к
+source2413653/acf7123; отдельного native service proof пока нет.
+
 [Проект normal local service](local-service-activation.md): отдельный typed
 contract/intent/history; планируемые updater20/private4/actor25/view17, worker17.
-Эти версии **ещё не реализованы**. Реализовать normal IPC/reconciliation в том же
+Эти runtime версии **ещё не реализованы**. Реализовать normal IPC/reconciliation в том же
 новом child, передавая ActivationJournal + Fresh permit + полный LockedShutdownState
 consuming factory, без normal Store::open/begin_authority/нового epoch/второго lock.
 Maintenance/user pause/settings сохраняются; roots/dispatch закрыты.

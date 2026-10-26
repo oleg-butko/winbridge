@@ -116,5 +116,7 @@ hash time14.49s, остальные graph/physical checks тоже заметн�
 оставляет108.3s от240s: увеличение окна устранило исходный blocker. Общего speedup
 не заявляем: прежний run был failed и не выполнял весь successful postflight.
 
-Source/schema private service ещё не добавлены. Next contract и invariants
+После review добавлены service strict DTO/binding/pure FSM:7 focused и791 full
+workspace tests passed, Linux/MSVC Clippy/TS/contracts passed. Journal20/admission/
+driver/private4/normal service ещё отсутствуют. Next contract и invariants
 зафиксированы в local-service-activation.md; current public install off.

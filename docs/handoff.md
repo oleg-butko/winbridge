@@ -23,6 +23,11 @@ Source2413653, produceracf7123/target2413653. Code/proof pins и точная re
 в том же child/Store/lock, без нового epoch → новая controller session → durable
 Job lifetime transfer → commit/scoped release → remaining U2 → U3/U4 → A4.3.
 Проектируемые20/private4/actor25/view17 не являются существующими capabilities.
+Продолжение source после gate: service strict DTO/binding/pure FSM добавлены,
+7 portable regressions passed. Journal20/admission/driver/receiver/normal IPC
+ещё отсутствуют; код не создаёт fresh permits и не открывает Store/lock.
+После foundation полный workspace791/0 (16 ignored), Linux/MSVC Clippy,
+TypeScript feature/generated contracts/fmt/scaffold281 passed.
 Public install/advertised activation/controller/desktop остаются выключенными.
 
 Измерены основные затраты: Main730s включает target compiler216s; старый Main до
