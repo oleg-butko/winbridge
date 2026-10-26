@@ -1,5 +1,14 @@
 # Продолжение работы — worker 0.1.1 выпущен 2026-10-26
 
+**Ветка .204:** `feat/multi-controller`, base9b47a9c;
+[прямые multi-controller sessions](plans/multi-controller-runtime.md).
+Git coordination отменена пользователем: её отдельные ветки удалены, прототипы
+в эту ветку не входят. Полезная pure core sessions model сохранена; добавлены
+immutable RPC origins и Linux model integration с одним Worker/Store/real processes.
+Actual transport/WorkerConfig/Store attribution ещё не подключены. Windows остаётся
+у .203; пользователь вручную перезапустит worker для .204 только при необходимости.
+Здесь Windows не опрашивать/не запускать и runtime multi-controller не объявлять готовым.
+
 **Задача пользователя2026-10-26:** performance-ветка слита в main,
 merge50ceb0d, review fixes2b3734c. [Review](plans/run-speed/review-merge-2026-10-26.md).
 Source workspace794/0/17ignored, Linux/MSVC Clippy, TS/UI/contracts, safety probe1,

@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+В `feat/multi-controller` (.204): [прямые сессии двух controller](plans/multi-controller-runtime.md).
+Git coordination отменена. Pure sessions/origin и Linux one-worker model tests
+есть; actual transport, durable attribution и Windows gate впереди. Windows
+переключает пользователь вручную; установленный0.1.1 здесь не меняется.
+
 2026-10-26: по новой задаче пользователя выполняются
 [review/merge performance-ветки и выпуск worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
 Ветка слита в main: CPU fix и build profiles проверены, release harness исправлен. Worker0.1.1

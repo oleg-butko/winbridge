@@ -57,11 +57,19 @@ pub enum Phase {
     Connecting,
     Connected,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Peer {
     pub node: String,
     pub generation: String,
     pub session: String,
+}
+/// Captured from the live connection, not from caller-supplied task arguments.
+/// Attribution only: does not grant task, cancellation or update authority.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RpcOrigin {
+    pub worker_generation: String,
+    pub controller: String,
+    pub peer: Peer,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Observation {
@@ -79,6 +87,15 @@ pub struct Ticket {
 pub struct Permit {
     ticket: Ticket,
     request: String,
+    origin: RpcOrigin,
+}
+impl Permit {
+    pub fn origin(&self) -> &RpcOrigin {
+        &self.origin
+    }
+    pub fn request_id(&self) -> &str {
+        &self.request
+    }
 }
 struct Session {
     attempt: u64,
@@ -254,6 +271,15 @@ impl Sessions {
         let permit = Permit {
             ticket: ticket.clone(),
             request,
+            origin: RpcOrigin {
+                worker_generation: self.worker_generation.clone(),
+                controller: ticket.controller.clone(),
+                peer: self.sessions[&ticket.controller]
+                    .observation
+                    .peer
+                    .clone()
+                    .ok_or("Connected session has no peer identity")?,
+            },
         };
         if self.in_flight.contains(&permit) {
             return Err("Duplicate in-flight RPC ID".into());
@@ -396,5 +422,40 @@ mod tests {
         assert!(s.complete(&q));
         assert!(s.complete(&r));
         assert_eq!(s.in_flight(), 0);
+    }
+
+    #[test]
+    fn rpc_origin_survives_disconnect_and_cannot_be_rebound_by_reconnect() {
+        let mut s = registry();
+        let a = connect(&mut s, "debian-203");
+        let b = connect(&mut s, "debian-204");
+        let original = s.admit(&a, "same-rpc-id".into()).unwrap();
+        let other = s.admit(&b, "same-rpc-id".into()).unwrap();
+        assert_ne!(original.origin().controller, other.origin().controller);
+        assert_eq!(original.request_id(), other.request_id());
+        s.disconnected(&a, "network lost".into());
+        let next = s.begin("debian-203").unwrap();
+        s.connected(
+            &next,
+            Peer {
+                node: "node".into(),
+                generation: "new-generation".into(),
+                session: "new-session".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(original.origin().peer.session, "session");
+        assert_eq!(
+            s.observe("debian-203")
+                .unwrap()
+                .peer
+                .as_ref()
+                .unwrap()
+                .session,
+            "new-session"
+        );
+        assert!(!s.disconnected(&a, "late EOF".into()));
+        assert!(s.complete(&original));
+        assert!(s.complete(&other));
     }
 }
