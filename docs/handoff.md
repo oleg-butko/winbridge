@@ -46,14 +46,16 @@ session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат �
 focused worker13/0, Python verifier6 и scaffold292. Финальные Clippy/native
 результаты и source pins находятся в актуальном checkpoint. Первый event_log rotation failure с WouldBlock
 не воспроизвёлся отдельно и в полном повторе; logger не менялся. Логи и команды в checkpoint.
-Focused `--service-admission-only` **пройден**: run20261026-155845-0e79d392,
-taskf7c5320a-bb89-47ba-ba13-d7c27048d8e1 succeeded/0, **13+6 Windows fixture
-tests**,3 ready files twice, compiled source/manifest bound. Producerf145b62;
-полные pins/cache/storage и readonly recheck в checkpoint. Это не positive
-original-guard admission полного replacement graph, не normal IPC и не Main25.
-Тот же terminal run проверен readonly без submit/rebuild. Working0.1.1/source592
-healthy/active0/generation936909c6 прежний; controller5103 оставлен. Никаких
-тестовых worker/desktop окон/процессов не было; worker оставить работать.
+Focused `--service-admission-only` **пройден на новом source**:
+run20261026-192027-4bb92924/task563f5d39-7d3b-4d43-8b2c-3796f15a0882 succeeded/0,
+**13 updater +13 worker Windows fixture tests**, включая настоящий named pipe.
+Producer1f653b2;3 ready files twice, compiled source/manifest bound; independent
+proof и readonly recheck прошли без повторного submit/build. Полные pins/cache/
+storage/команда в актуальном checkpoint. Это library IPC fixtures с synthetic
+replacement graph, не service4/parent validation/full Main25. Working0.1.1/source592
+healthy/active0/generation936909c6/incarnation5a8eb173 прежние; controller5103 оставлен.
+Тестовые процессы завершены, окон не было; worker оставить работать, desktop не нужен.
+Исторический admission-only13+6 gatef145b62 сохранён в предыдущем checkpoint.
 
 ## История подготовки и прежние checkpoints
 

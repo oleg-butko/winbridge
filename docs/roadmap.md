@@ -8,8 +8,9 @@ readonly IPC реализованы; source workspace820/0, focused worker13/0. 
 service4 receiver/parent normal-IPC validation/actor25 ещё отсутствуют. Следом
 интеграция LocalService → Main25/actual19→20.
 [Checkpoint](plans/worker-self-update/local-service-runtime-2026-10-26.md).
-Native подготовка проверена:13 SQL/migration +6 transfer fixtures,3 files twice;
-это не actual service/IPC или Main25. Public updater/multi-controller не включаются.
+Native library gate проверен:13 SQL/migration +13 transfer/startup/real IPC fixtures,
+3 files twice, independent proof/readonly recheck. Полный replacement graph,
+service4/parent validation и Main25 ещё впереди. Public updater/multi-controller не включаются.
 Установленная0.1.1 не заменяется.
 
 ## Завершено: ускорение прогонов и выпуск 0.1.1
