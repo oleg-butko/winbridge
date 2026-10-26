@@ -13,6 +13,9 @@ codegen overhead найден. Defaults неизменны; v2 task974c9b0c-86c4
 завершился succeeded/0: median33.7865→18.3635s (45.65%),25 files twice,
 650 suite cases +2 policy probes. Ветка задаёт v2 в Cargo.toml для полного E2;
 `main`/installed runtime неизменны. Полного E2 proof ещё нет.
+E2 running: run20261026-043444-d41c13aa,
+taskc184f27a-7c52-499e-8109-e89cfa246580, producerf40321b/receiver9eed7c8.
+Наблюдать тот же task; exact readonly command в results. Не replay.
 
 **Начать с [актуального checkpoint](plans/worker-self-update/resume-2026-10-25-writer-verified.md)**
 и [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).
