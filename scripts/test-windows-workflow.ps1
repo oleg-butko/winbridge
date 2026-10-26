@@ -83,7 +83,7 @@ PID binding и cleanup. Без UI, reference worker и полного CAS gate. 
 режима не означает завершение этапа. Диагностика не записывает команды или output.
 .PARAMETER BuildCacheRunId
 Full CAS/readiness: переиспользовать только Cargo target прежнего подтверждённого CAS прогона.
-Исходники, test-temp, состояния и отчёт остаются новыми; lease исключает одновременную сборку.
+Исходники, tmp-test-temp, состояния и отчёт остаются новыми; lease исключает одновременную сборку.
 .PARAMETER BuildCacheReportSha256
 SHA-256 прежнего report.json, который Debian проверил вместе с ready artifacts.
 Провалившиеся тесты допустимы как compiler cache, но их результат не наследуется.
@@ -223,6 +223,7 @@ try {
             throw "Source manifest mismatch: $($file.path)"
         }
     }
+    . (Join-Path $PSScriptRoot 'lib/validation-storage.ps1')
     $env:CARGO_TARGET_DIR = Join-Path (Split-Path $source -Parent) 'test-build-cache'
     $previousCache = ''
     if ($UpdatePreparationCacheRunId -or $UpdatePreparationCacheSha256) {
@@ -276,9 +277,11 @@ try {
     $cacheLease = [IO.File]::Open($leasePath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     $report.buildCacheDirectory = $cachePath
     $env:CARGO_INCREMENTAL = '0'
-    $env:TEMP = Join-Path (Split-Path $source -Parent) 'test-temp'
+    $runDirectory = Split-Path $source -Parent
+    $env:TEMP = Get-WorkflowTemporaryDirectory -RunDirectory $runDirectory
     $env:TMP = $env:TEMP
     New-Item -ItemType Directory -Path $env:TEMP -Force | Out-Null
+    Write-WorkflowStorageGuide -RunDirectory $runDirectory
     Set-Location -LiteralPath $source
     $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
     if ($TaskCasRuntimeDiagnostic -and -not $TaskCasOnly) { throw 'TaskCasRuntimeDiagnostic requires TaskCasOnly' }

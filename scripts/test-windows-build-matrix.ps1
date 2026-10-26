@@ -21,7 +21,7 @@ if ($env:OS -cne 'Windows_NT' -or (Split-Path $work -Parent) -ine (Split-Path $s
     (Split-Path $source -Leaf) -cne 'winbridge' -or (Split-Path (Split-Path $source -Parent) -Leaf) -notmatch '^\d{8}-\d{6}-[a-f0-9]{8}$' -or
     (Split-Path $cache -Leaf) -cne 'test-build-cache' -or
     (Split-Path (Split-Path $cache -Parent) -Parent) -ine (Split-Path (Split-Path $source -Parent) -Parent) -or
-    (Split-Path $work -Leaf) -notmatch '^build-matrix-\d{8}-\d{6}-[a-f0-9]{8}$' -or
+    (Split-Path $work -Leaf) -notmatch '^tmp-build-matrix-\d{8}-\d{6}-[a-f0-9]{8}$' -or
     (Test-Path -LiteralPath $work) -or -not (Test-Path -LiteralPath $cache -PathType Container)) { throw 'Expected new isolated sibling work directory and retained local cache' }
 $tainted = @(Get-ChildItem Env: | Where-Object { $_.Name -match '^(RUSTFLAGS|CARGO_ENCODED_RUSTFLAGS|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|CARGO_PROFILE_.*|WINBRIDGE_.*)$' })
 if ($tainted.Count) { throw ('Refusing environment overrides: '+($tainted.Name -join ', ')) }
@@ -85,7 +85,7 @@ try {
     $env:CARGO_INCREMENTAL='0'
     $env:CARGO_TERM_COLOR='never'
     $env:CARGO_LOG='cargo::core::compiler::fingerprint=info'
-    $env:TEMP=Join-Path $work 'test-temp';$env:TMP=$env:TEMP
+    $env:TEMP=Join-Path $work 'tmp-test-temp';$env:TMP=$env:TEMP
     New-Item -ItemType Directory -Path $env:TEMP | Out-Null
     Set-Location $source
     $report.toolchain = (& rustc.exe -vV | Out-String).Trim()

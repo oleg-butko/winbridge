@@ -20,7 +20,7 @@ $cache=[IO.Path]::GetFullPath($CacheDirectory)
 Assert-SessionDirectory $work
 Assert-WorkflowCachePath $cache
 if ($env:OS -cne 'Windows_NT' -or (Test-Path -LiteralPath $work) -or
-    (Split-Path $work -Leaf) -notmatch '^worker-idle-\d{8}-\d{6}-[a-f0-9]{8}$' -or
+    (Split-Path $work -Leaf) -notmatch '^tmp-worker-idle-\d{8}-\d{6}-[a-f0-9]{8}$' -or
     (Split-Path $work -Parent) -ine (Split-Path ([IO.Path]::GetFullPath($SourceDirectory)) -Parent) -or
     (Split-Path $cache -Leaf) -cne 'test-build-cache' -or -not (Test-Path -LiteralPath $cache -PathType Container)) {
     throw 'Requires NEW isolated report directory and retained native compiler cache'
@@ -85,7 +85,7 @@ try {
     [IO.File]::Copy($BaselineExecutable,$baseline,$false)
     if ((Get-FileHash -LiteralPath $baseline).Hash.ToLowerInvariant() -cne $BaselineSha256) {throw 'Copied baseline differs'}
     $env:CARGO_INCREMENTAL='0';$env:CARGO_TERM_COLOR='never'
-    $env:TEMP=Join-Path $work 'test-temp';$env:TMP=$env:TEMP
+    $env:TEMP=Join-Path $work 'tmp-test-temp';$env:TMP=$env:TEMP
     New-Item -ItemType Directory -Path $env:TEMP|Out-Null
     Set-Location $source
     $report.toolchain=(& rustc.exe -vV|Out-String).Trim()

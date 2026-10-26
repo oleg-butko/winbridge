@@ -21,7 +21,7 @@ $work=[IO.Path]::GetFullPath($WorkDirectory)
 foreach ($path in @($source,$cache,$work)) { Assert-SessionDirectory $path }
 Assert-WorkflowCachePath $cache
 if ($env:OS -cne 'Windows_NT' -or (Split-Path $work -Parent) -ine (Split-Path $source -Parent) -or
-    (Split-Path $work -Leaf) -notmatch '^desktop-release-\d{8}-\d{6}-[a-f0-9]{8}$' -or
+    (Split-Path $work -Leaf) -notmatch '^tmp-desktop-release-\d{8}-\d{6}-[a-f0-9]{8}$' -or
     (Split-Path $cache -Parent) -ine (Split-Path (Split-Path $source -Parent) -Parent) -or
     (Test-Path -LiteralPath $work)) { throw 'Requires NEW isolated sibling report and retained native compiler cache' }
 $target=Join-Path $cache 'winbridge/apps/desktop/src-tauri/target'
@@ -71,7 +71,7 @@ try {
     [IO.File]::Copy($SourceArchivePath,$localArchive,$false)
     if ((Get-FileHash -LiteralPath $localArchive).Hash.ToLowerInvariant() -cne $ArchiveSha256) { throw 'Copied ZIP differs' }
     $env:CARGO_INCREMENTAL='0';$env:CARGO_TERM_COLOR='never'
-    $env:TEMP=Join-Path $work 'test-temp';$env:TMP=$env:TEMP
+    $env:TEMP=Join-Path $work 'tmp-test-temp';$env:TMP=$env:TEMP
     New-Item -ItemType Directory -Path $env:TEMP|Out-Null
     $report.toolchain=(& rustc.exe -vV|Out-String).Trim()
     for ($i=0; $i -lt $plan.Count; $i++) {

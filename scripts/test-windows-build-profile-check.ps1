@@ -6,7 +6,7 @@ Set-StrictMode -Version Latest
 Assert-SessionDirectory $WorkDirectory
 if (Test-Path -LiteralPath $WorkDirectory) { throw 'New profile-check work directory required' }
 if ((Split-Path $WorkDirectory -Parent) -ine (Split-Path $SourceDirectory -Parent) -or
-    (Split-Path $WorkDirectory -Leaf) -notmatch '^build-profile-check-\d{8}-\d{6}-[a-f0-9]{8}$') { throw 'Expected isolated sibling work directory' }
+    (Split-Path $WorkDirectory -Leaf) -notmatch '^tmp-build-profile-check-\d{8}-\d{6}-[a-f0-9]{8}$') { throw 'Expected isolated sibling work directory' }
 $target='K:\WinBridge compiler cache\Проверка\target'
 $expected=@('build','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--features','custom-protocol','--release','--locked','--target-dir',$target)
 $normal=@(Get-UpdateDesktopBuildArguments -TargetDirectory $target)

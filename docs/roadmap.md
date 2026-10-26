@@ -2,6 +2,11 @@
 
 ## Сейчас в этой ветке: ускорение прогонов
 
+2026-10-26 [маркировка validation storage](validation/validation-storage.md):
+37.66GiB измерены readonly; tmp- для новых временных work dirs, storage guide,
+inventory CLI и legacy-path compatibility. Очистка и перенос caches/references
+в новую раскладку не выполнялись.
+
 2026-10-26 дополнительный bugfix: [worker idle CPU](plans/run-speed/idle-worker-2026-10-26.md).
 Полная история читалась каждые25ms. Pending-index queries/diagnostics и isolated
 Windows CPU experiment завершены:99.19→1.51% одного ядра на synthetic history,

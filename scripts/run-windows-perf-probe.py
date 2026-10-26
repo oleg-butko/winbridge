@@ -37,14 +37,15 @@ def submit(args):
     root = PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/pin['run']
     run = time.strftime('%Y%m%d-%H%M%S', time.gmtime())+'-'+uuid.uuid4().hex[:8]
     prefix = args.probe if args.probe in {'desktop-release', 'build-profile-check', 'worker-idle'} else 'build-matrix'
-    work = str(root/(prefix+'-'+run))
-    helpers = str(root/('perf-script-'+run))
+    work = str(root/('tmp-'+prefix+'-'+run))
+    helpers = str(root/('tmp-perf-script-'+run))
     report = Path('/mnt/hgfs/shared/WinBridge/run-speed')/run
     shared = str(PureWindowsPath('K:/VMs/shared/WinBridge/run-speed')/run)
     script_name = 'test-windows-'+prefix+'.ps1'
     extra_args = ' -InventoryOnly' if args.probe == 'source-inventory' else ''
     code = (ROOT/'scripts'/script_name).read_text()
-    bundle = {script_name: code}
+    bundle = {script_name: code,
+              'lib/validation-storage.ps1': (ROOT/'scripts/lib/validation-storage.ps1').read_text()}
     if args.probe == 'build-profile-check':
         bundle['lib/update-build-profile.ps1'] = (ROOT/'scripts/lib/update-build-profile.ps1').read_text()
     payload = base64.b64encode(gzip.compress(json.dumps(bundle).encode())).decode()
@@ -104,6 +105,11 @@ foreach($name in @('session-runtime.ps1','lib/build-cache.ps1')){{[IO.File]::Cop
 & pwsh.exe -NoProfile -NonInteractive -File $path -SourceDirectory $source -ManifestSha256 {ps(manifest_sha)} -CacheDirectory {ps(cache)} -WorkDirectory {ps(work)}{extra_args}
 $exitCode=$LASTEXITCODE
 $work={ps(work)}
+if(Test-Path -LiteralPath $work){{
+ . (Join-Path $helpers 'lib/build-cache.ps1')
+ . (Join-Path $helpers 'lib/validation-storage.ps1')
+ Write-WorkflowStorageGuide -RunDirectory $work
+}}
 $shared={ps(shared)}
 if(Test-Path -LiteralPath (Join-Path $work 'report.ready.json')){{
  New-Item -ItemType Directory -Path $shared|Out-Null

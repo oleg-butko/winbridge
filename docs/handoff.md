@@ -1,5 +1,12 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
+**2026-10-26 storage:** [Windows validation storage](validation/validation-storage.md).
+Readonly inventory37.66GiB:25.34GiB в original cache owner20261017-061527-f4639971;
+7.93GiB shutdown-main references, известные top-level test-temp~54MiB. Для новых main workflow/perf
+прогонов добавлены tmp- names и README.storage.txt; legacy paths сохранены.
+Windows validation directories не удалять по имени/возрасту; сначала task/lease/
+reference checks. Root inventory/guide не являются cleanup approval.
+
 **Текущая дополнительная задача2026-10-26:** [idle CPU worker](plans/run-speed/idle-worker-2026-10-26.md).
 Installed PID19064 потребляет~103% одного логического ядра без задач. Найдено
 чтение всей истории каждые25ms; pending-index queries и scheduler timings
