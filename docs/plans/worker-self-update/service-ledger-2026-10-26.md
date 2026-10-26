@@ -1,5 +1,9 @@
 # Продолжение после установки worker 0.1.1
 
+Исторический checkpoint source5c9e965. Следом добавлены original-guard admission,
+sealed connection/state transfer и19 Windows fixture checks; актуальная точка
+продолжения — [новый checkpoint](service-admission-2026-10-26.md).
+
 2026-10-26, America/New_York. Performance-ветка слита в `main`; ограничения её
 старых checkpoint на разработку updater больше не относятся к текущей ветке.
 Предыдущий runtime checkpoint — [подтверждённый writer](resume-2026-10-25-writer-verified.md).

@@ -6,7 +6,9 @@ Source updater20 содержит intent/history, original-guard admission и se
 connection/state transfer preparation. Service4 receiver/normal Worker/IPC ещё
 отсутствуют. Следом receiver → общая инициализация Worker → actual local IPC →
 новый Main25/actual19→20. [Checkpoint](plans/worker-self-update/service-admission-2026-10-26.md).
-Public updater/multi-controller не включаются. Установленная0.1.1 не заменяется.
+Native подготовка проверена:13 SQL/migration +6 transfer fixtures,3 files twice;
+это не actual service/IPC или Main25. Public updater/multi-controller не включаются.
+Установленная0.1.1 не заменяется.
 
 ## Завершено: ускорение прогонов и выпуск 0.1.1
 

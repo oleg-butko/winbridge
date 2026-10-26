@@ -72,13 +72,62 @@ all-target validation Clippy, fmt/scaffold291/diff-check; Python verifier5 passe
 WouldBlock при повторном open. Его отдельный повтор и затем полный workspace
 прошли; причина временной блокировки не установлена, код логгера не менялся.
 Логи `.winbridge/update-preparation/service-admission-{workspace,workspace-repeat,
-log-recheck,clippy-linux,clippy-windows}.log`. Native run ещё предстоит; его
-результат будет добавлен после фактического выполнения.
+log-recheck,clippy-linux,clippy-windows}.log`. Native fixture run завершён; точные pins приведены ниже.
 
 Preflight task `25d7d666-ff67-4504-b120-c3430d68285b` succeeded/0. Debian
 16,952,639,488 bytes free; Windows K: 27,557,597,184 bytes free. Actual worker
 0.1.1/source59249e6, SHA536d8637…, generation936909c6… прежние. Evidence:
 `.winbridge/update-preparation/service-admission-preflight-20261026T192839Z-9de87cb6/`.
+
+## Windows fixture gate завершён
+
+Run **20261026-155845-0e79d392**, task
+**f7c5320a-bb89-47ba-ba13-d7c27048d8e1**, succeeded/0:
+**13 SQL/migration + 6 connection/state transfer tests**, все без ignored/failed.
+Три ready artifacts дважды проверены; compiled commit/manifest обоих test binaries
+совпали с archive. Это positive fixture proof; original-guard admission в полном
+replacement graph и настоящий service startup остаются будущим Main25.
+
+| Pin | Значение |
+| --- | --- |
+| Producer | `f145b62e7494dde0e94a6453af136da941e082a8` |
+| Archive | `winbridge-20261026T195736Z-f145b62-e2c1db04.zip`, 875 source files |
+| ZIP SHA-256 | `252f8e1b426c888c84c4d7916ce7c393145420ecdac5a00e680366abffefa02e` |
+| Manifest SHA-256 | `059828d9d265dedb65e84d18465dcc97832f2051cea8f78ce8bb746f9f3c6d2e` |
+| report.json | `6fde0592e7c148402d7ab0ce76cd9f938ef54977dc303944da5015604bf50e31` |
+| service-history-native.log | `9010919c99f963976a6ce89f521205da9c5f0b23129931960b177c21a17c3e77` |
+| service-transfer-native.log | `74958059a92fa76c8c803c19111661a2f5499e920e56986c6248f83df1863061` |
+
+Shared: `K:\VMs\shared\WinBridge\workflow-validation\20261026-155845-0e79d392`.
+Local `.winbridge/workflow-validation/20261026-155845-0e79d392/` содержит исходный
+request, fenced-request, terminal task/output, worker proof и
+`service-admission-verified.json`. Observer log:
+`.winbridge/update-preparation/service-admission-native.log`.
+Session51244 завершён/exit0; ни один тестовый worker/desktop не запускался.
+
+Compiler cache действительно переиспользован из original owner
+`20261017-061527-f4639971`, report SHA
+`22c40d278d595a82038d027184d3d706383d6ebf629fc65b3570fe6baf046bb5`.
+Группы исполнялись заново. Windows свободно до/после: 27,414,011,904 /
+26,898,288,640 bytes; Debian после: 16,728,076,288 bytes. Очистка не выполнялась.
+Installed worker source59249e6/generation936909c6… connected/active0/errors=null,
+не заменялся. Controller5103 оставлен. Desktop не нужен; worker оставить работать.
+
+В Debian driver добавлен readonly recheck без rebuild/submit. Он повторно принят
+на этом же terminal run; original reports/requests не перезаписываются, локальная
+observation получает новое имя. Команда продолжения из новой сессии:
+
+```bash
+python3 scripts/validate-workflow-native.py \
+  --controller-config .winbridge/controller-snapshot.local.json \
+  --archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261026T195736Z-f145b62-e2c1db04.zip \
+  --service-admission-only \
+  --verify-service-admission-run 20261026-155845-0e79d392
+```
+
+Заключительные изменения driver относятся к readonly наблюдению, directory fsync
+перед будущими dispatch и отображению cache receipt. Rust/PS producer этого gate
+остаётся **f145b62**; новые helper changes не выдаются за новый Windows run.
 
 ## Следующая работа
 

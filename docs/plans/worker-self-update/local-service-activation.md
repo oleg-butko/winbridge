@@ -14,7 +14,8 @@ receipt DTO, binding к confirmed writer/физическому6 и pure FSM Iss
 **Journal20 format/readback добавлен**: [подробный checkpoint](service-ledger-2026-10-26.md).
 Original-guard admission и closed connection/state transfer реализованы в
 [следующем checkpoint](service-admission-2026-10-26.md). Service4 send/receiver,
-normal Worker/IPC и actor25/view17 пока отсутствуют.
+normal Worker/IPC и actor25/view17 пока отсутствуют. Подготовка прошла19 Windows
+fixture checks; full same-child service/IPC ещё не проверялся.
 Ни Store, ни IPC этот код не открывает; private capability marker не добавлен.
 Следующий source шаг — service4 receiver и Worker из sealed PreparedServiceJournal;
 admission пишет journal20 только под consuming original guard, не из JSON.

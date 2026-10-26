@@ -45,10 +45,14 @@ session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат �
 17 ignored**; Linux/MSVC all-target validation Clippy, fmt/scaffold291/diff-check
 и Python verifier5 прошли. Первый event_log rotation failure с WouldBlock
 не воспроизвёлся отдельно и в полном повторе; logger не менялся. Логи и команды в checkpoint.
-Новый focused `--service-admission-only` готовит19 Windows fixture checks;
-это не Main25 и не positive original-guard runtime/service proof. Результаты будут
-внесены после окончания проверки. Последний preflight25d7d666 succeeded/0,
-working worker прежний; desktop не нужен. Worker оставить работать.
+Focused `--service-admission-only` **пройден**: run20261026-155845-0e79d392,
+taskf7c5320a-bb89-47ba-ba13-d7c27048d8e1 succeeded/0, **13+6 Windows fixture
+tests**,3 ready files twice, compiled source/manifest bound. Producerf145b62;
+полные pins/cache/storage и readonly recheck в checkpoint. Это не positive
+original-guard admission полного replacement graph, не normal IPC и не Main25.
+Тот же terminal run проверен readonly без submit/rebuild. Working0.1.1/source592
+healthy/active0/generation936909c6 прежний; controller5103 оставлен. Никаких
+тестовых worker/desktop окон/процессов не было; worker оставить работать.
 
 ## История подготовки и прежние checkpoints
 
