@@ -43,6 +43,7 @@ def fixture():
                     candidateVerified=False, image=dict(querySupported=True, sha256=sha, bytes=len(image)), descriptor=descriptor),
                   artifacts=[dict(name='winbridge-worker.exe', bytes=len(image), sha256=sha)])
     files = {'winbridge-worker.exe': image, 'build-identity.json': json.dumps(descriptor).encode(),
+             'source-final-validation.log': json.dumps(dict(kind='source_verified', sourceCommit=source['sourceCommit'], manifestSha256=manifest)).encode(),
              'worker-regressions.log': ('test result: ok. 1 passed; 0 failed;\n' * 9).encode(),
              'test-runtime-policy.log': b'TEST_RUNTIME_POLICY {"passed":true,"stablePath":true,"checksPassed":6}',
              'idle-cpu.log': ('\n'.join('IDLE_CPU ' + json.dumps(s) for s in cpu) + '\ntest result: ok. 1 passed; 0 failed;').encode()}
@@ -88,7 +89,8 @@ class ReleaseProofTests(unittest.TestCase):
                      lambda r, f, n: r.update(testExecutable='K:/random-run/winbridge-worker.exe'),
                      lambda r, f, n: r.update(firewallWaitSeconds=True),
                      lambda r, f, n: r.update(testExecutableSha256='f' * 64),
-                     lambda r, f, n: f.update({'test-runtime-policy.log': b'TEST_RUNTIME_POLICY {"passed":true,"stablePath":true,"checksPassed":true}'})]
+                     lambda r, f, n: f.update({'test-runtime-policy.log': b'TEST_RUNTIME_POLICY {"passed":true,"stablePath":true,"checksPassed":true}'}),
+                     lambda r, f, n: f.update({'source-final-validation.log': b'{"kind":"source_verified","sourceCommit":"wrong","manifestSha256":"wrong"}'})]
         for i, mutate in enumerate(mutations):
             with self.subTest(case=i):
                 r, f, s, m, n = fixture()

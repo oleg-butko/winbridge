@@ -96,3 +96,10 @@ Cancel запрошен; actual task всё ещё running/cancelRequested=true1
 connection allowance900s, RPC120s отдельно, parent task получает этот allowance.
 Updater240s/старые120s contracts не меняются. Python publication4 passed;
 actual Windows policy6 и новый release ещё не выполнены. Путь и CLI в release note.
+
+Fixed-path run20261026-180118-1321e697 подтвердил140 Rust/6 native policy tests,
+actual RPC/dedup/stale-scope/Unicode и cleanup. Финальный guard остановил публикацию:
+наш policy fixture без cwd создал runs.log в source. Cwd теперь explicit scratch,
+readiness проверяет log там, source final validation сохраняется и независимо
+сверяется. Старый failed snapshot не чистится; повтор новым clean producer и
+namespace, network executable path тот же.

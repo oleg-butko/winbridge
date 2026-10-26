@@ -35,6 +35,9 @@ def verify(files, source, manifest_sha, network, baseline_sha, test_runtime, fir
          and report['manifestSha256'] == manifest_sha
          and report['archiveSha256'] == source['sha256']
          and report['baselineWorkerSha256'] == baseline_sha, 'Patch source or CPU baseline differs')
+    final_source = json.loads(files['source-final-validation.log'].decode('utf-8-sig'))
+    need(final_source['kind'] == 'source_verified' and final_source['sourceCommit'] == source['sourceCommit']
+         and final_source['manifestSha256'] == manifest_sha, 'Final source readback differs')
     commands = report['commands']
     need([c['name'] for c in commands] == ['worker-regressions', 'idle-cpu', 'test-runtime-policy'], 'Release checks omitted or changed')
     for c in commands:

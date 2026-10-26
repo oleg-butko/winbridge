@@ -29,13 +29,36 @@
 - Native policy test проверяет6 свойств: защита production, чужих файлов, lease,
   write pin, hash mismatch и live process; также проверяет reuse того же пути.
   Independent publication verifier связывает эти проверки, stable path/hash/budget
-  с actual worker payload и новым RPC. Python4 passed; native check ещё впереди.
+  с actual worker payload и новым RPC. Python4 passed; новый native check выполняется.
 
 Старый run20261026-133349-ec2d99c5/taska6a111f7-8350-4d95-b28d-959ef697881d
 теперь **terminal cancelled** (`Managed process tree cancelled`), не passed.
 Рабочий d052/generation301be6ea снова connected/active0/errors=null17:38Z.
 Старый observer завершился; его namespace не replay. Новый gate допускается только
 после fresh Info/space/source pins. ZIP0.1.1 пока не опубликован.
+
+## Новый прогон из clean fixed-path source
+
+Run **20261026-180118-1321e697**, task **eb06c919-2870-48f7-b9eb-0216a468a801**
+terminal failed/exit1; не replay. Source **f3d6be8c1025ac1409d15610857c94b81970b124**,
+ZIP `winbridge-20261026T180042Z-f3d6be8-73967cd0.zip`, SHA256
+`7731dcbbff4738e66155afa5ed6ea8dd44ceecc3d0f044607a268dc7fbbb57fe`.
+Metadata `.winbridge/releases/20261026-180118-1321e697/submission.json`;
+observer session65575/log `.winbridge/releases/review-0.1.1/native-stable-build.log`.
+Shared report `K:/VMs/shared/WinBridge/releases/20261026-180118-1321e697`.
+Source/inputs и original request сохранены до dispatch. Native syntax preflight,
+**140 Rust tests,6 runtime policy checks и old-controller/new-worker RPC прошли**.
+CPU98.1770→3.2183% одного ядра. Cleanup подтвердил exit;9 ready files проверены.
+Report SHA `c0983c1b34231b00b9457bfd8fc2106eecbfc4247238c2a90984727ab775fa69`.
+
+**Overall failed:** policy test запустил fixture без explicit cwd; fixture оставил
+`runs.log` в delivered source. Final verifier правильно отказал с unmanaged_file,
+ZIP не опубликован. Файл в failed run сохранён, guard не ослаблен. Исправление:
+fixture получает отдельный scratch cwd и ждёт runs.log именно там; final source
+readback теперь сохраняется в source-final-validation.log и отдельно проверяется
+publication verifier. Следом новый clean producer/run с тем же постоянным exe;
+рабочая установка не менялась. Первое firewall разрешение для runtime-test уже
+подтверждено успешным соединением в этом run.
 
 ## История предыдущего прогона
 

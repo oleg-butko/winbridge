@@ -15,7 +15,11 @@ Installed d052/generation301be6ea connected/active0/errors=null17:38Z.
 .203:1144 и default900s на разрешение/соединение; RPC имеет отдельные120s.
 CLI overrides/budgets/lease/pin/ownership/live-process guards — в release note.
 State/config/instance/report свежие per-run, production runtime не меняется.
-Python publication4 passed; native policy6/новый release gate ещё впереди.
+Python publication4 passed. Fixed-path taskeb06c919/run20261026-180118-1321e697
+terminal failed после140 Rust/6 policy/RPC success: fixture cwd оставил runs.log
+в source; final guard отказал. Исправлен scratch cwd и добавлен final readback log/
+verifier. Нужен новый clean producer/full release gate с тем же постоянным exe.
+Old failed run не replay; native component proof и exact hashes в release note.
 Updater startup240s и прежние120s intents не менялись. Нужен установленный worker;
 desktop не нужен. Новый путь требует первого пользовательского firewall allow,
 затем его имя не меняется. Source/commit/export перед новым native gate обязательны.

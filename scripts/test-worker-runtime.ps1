@@ -29,8 +29,14 @@ try{
  Refuses {Open-TestWorkerRuntime $root $installed $Fixture ('0'*64)}
  if((Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() -cne $sha){throw 'Bad input changed prior binary'};$checks++
  $si=[Diagnostics.ProcessStartInfo]::new($path);$si.UseShellExecute=$false;$si.CreateNoWindow=$true
+ $si.WorkingDirectory=[IO.Path]::GetFullPath($WorkDirectory)
  $si.ArgumentList.Add('long')
  $child=[Diagnostics.Process]::Start($si)
+ $scratchLog=Join-Path $WorkDirectory 'runs.log';$ready=[Diagnostics.Stopwatch]::StartNew()
+ while(-not (Test-Path -LiteralPath $scratchLog)){
+  if($child.HasExited -or $ready.Elapsed.TotalSeconds -ge 15){throw 'Policy fixture did not write into its explicit scratch directory'}
+  Start-Sleep -Milliseconds 25
+ }
  Refuses {Open-TestWorkerRuntime $root $installed $Fixture $sha};$checks++
  $child.Kill();if(-not $child.WaitForExit(15000)){throw 'Policy child exit unconfirmed'};$child.Dispose();$child=$null
  $slot=Open-TestWorkerRuntime $root $installed $Fixture $sha

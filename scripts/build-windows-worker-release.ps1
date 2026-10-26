@@ -195,7 +195,8 @@ try{
  Save-ProcessCapture $out (Join-Path $work 'network-worker-stdout.log')
  Save-ProcessCapture $err (Join-Path $work 'network-worker-stderr.log')
  $child.Dispose();$child=$null;$childStarted=$false
- $readback=@(& $VerifierExecutable verify-source $source $ManifestSha256);if($LASTEXITCODE -ne 0){throw 'Source changed after build'}
+ & $VerifierExecutable verify-source $source $ManifestSha256 2>&1|ForEach-Object {$_.ToString()}|Set-Content -LiteralPath (Join-Path $work 'source-final-validation.log') -Encoding utf8
+ if($LASTEXITCODE -ne 0){throw 'Source changed after build; see source-final-validation.log'}
  if(Test-Path -LiteralPath $installedManifest){throw 'Installed runtime now requires a coordinated release'}
  if((Get-FileHash -LiteralPath $InstalledConfig).Hash.ToLowerInvariant() -cne $InstalledConfigSha256){throw 'Installed config changed during validation'}
  if((Get-FileHash -LiteralPath $InstalledWorker).Hash.ToLowerInvariant() -cne $InstalledWorkerSha256){throw 'Installed worker bytes changed during validation'}
