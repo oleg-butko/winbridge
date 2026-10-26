@@ -135,6 +135,7 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
             .map_err(|e| e.to_string())?
             != root.join("state")
         || worker.config.worker.controller_url.is_some()
+        || worker.config.worker.controller_topology.is_some()
         || worker
             .runtime_guard
             .lock()

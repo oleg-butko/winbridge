@@ -25,6 +25,27 @@ fn config(root: &Path) -> WorkerConfig {
     fs::create_dir_all(root.join("project")).unwrap();
     serde_json::from_value(serde_json::json!({"schemaVersion":1,"instanceId":format!("source-{}",uuid::Uuid::new_v4()),"nodeId":"worker","stateDirectory":root.join("source"),"maxOutputBytesPerTask":10000,"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"fixture","workspaceRoot":root.join("project"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]})).unwrap()
 }
+
+#[test]
+fn recovery_removes_all_controller_endpoints_until_explicit_repair() {
+    let _scope = recovery_case_scope();
+    let temp = TempDir::new().unwrap();
+    let mut cfg = config(temp.path());
+    cfg.worker.controller_topology = Some(
+        serde_json::from_value(
+            serde_json::json!({"schemaVersion":1,"primary":"a","controllers":[
+        {"id":"a","url":"ws://192.168.44.203:1143"},{"id":"b","url":"ws://192.168.44.204:1143"}]}),
+        )
+        .unwrap(),
+    );
+    drop(Worker::open(cfg.clone()).unwrap());
+    retire(&cfg);
+    let prepared = prepare_recovery(&cfg, &temp.path().join("replacement")).unwrap();
+    let target = WorkerConfig::load(&prepared.worker_config_path).unwrap();
+    assert!(target.worker.controller_url.is_none());
+    assert!(target.worker.controller_topology.is_none());
+    assert!(target.worker.topology().unwrap().is_none());
+}
 fn submission(key: &str) -> LocalRequest {
     LocalRequest::Submit {
         request: TaskSubmission {

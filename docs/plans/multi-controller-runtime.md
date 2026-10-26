@@ -45,14 +45,14 @@ Portable `controller_sessions::Topology` описывает endpoints с уст�
 Controller generations/session IDs независимы; совпадение строк session ID
 между двумя соединениями не делает их одной сессией.
 
-Будущее поле `worker.controllerTopology` будет взаимоисключающим с legacy
+Новое поле `worker.controllerTopology` взаимоисключающее с legacy
 `worker.controllerUrl`. Ни одно/None сохраняет local-only IPC. Старый single-url
 config сохраняет прежнее поведение и serialized scope; пустые новые поля должны
-опускаться. Сейчас WorkerSettings **не расширен**: этот план не является готовым
-config для установленного0.1.1. Два поля одновременно должны давать явную ошибку,
+опускаться. В этой ветке WorkerSettings расширен; установленный0.1.1 новый формат
+не поддерживает. Два поля одновременно дают явную ошибку,
 а не выбор одного адреса или игнорирование второго.
 
-Целевой пример, **не применять к текущему0.1.1**:
+Пример для новой сборки из этой ветки, **не применять к текущему0.1.1**:
 
 ```json
 {
@@ -65,9 +65,11 @@ config для установленного0.1.1. Два поля одновре�
 }
 ```
 
-Это содержимое планируемого `controllerTopology`, не целый WorkerConfig.
+Это содержимое `worker.controllerTopology`, не целый WorkerConfig. Legacy
+`controllerUrl` при переходе нужно удалить. Оба адреса — исходящие соединения
+одного worker. Конфигурации реальных .203/.204 пока не менялись.
 
-Первый integration slice:
+Подключённый transport slice:
 
 1. Создать одну immutable topology при старте worker и независимый reconnect task
    на каждый endpoint. Каждый attempt получает ticket с настоящим fresh worker
@@ -79,8 +81,16 @@ config для установленного0.1.1. Два поля одновре�
 4. Legacy local Info/desktop показывает явно выбранный primary. Для полного списка
    нужна отдельная typed extension с per-controller state/last confirmation/error;
    frozen старые DTO не дополняются незаметно и не получают чужую readiness.
-   Secondary controller должен читать именно свою session/readiness через новый
-   согласованный контракт. Нельзя просто клонировать текущую глобальную projection.
+   Сетевой Info каждого controller возвращает именно его connection/projection в
+   существующих полях; остальные поля каталога сохраняются. Поэтому secondary
+   не получает чужую readiness. Формат старых DTO не изменён. Полный список связей
+   в локальном desktop/diagnostics ещё предстоит добавить отдельной typed extension.
+
+Recovery pair удаляет оба режима подключения: восстановленный config остаётся
+local-only до явной настройки. Isolated update validation отвергает оба режима.
+Shutdown supervisor не просто abort-ит родителя: сигнал останавливает и join-ит
+все endpoint tasks до завершения service. Drop owner также подаёт сигнал на cleanup.
+Регрессионные тесты проверяют suspended upgrade и остановку двух активных связей.
 
 ## Общая очередь, RPC и происхождение заданий
 
@@ -145,17 +155,50 @@ Worker integration model на Debian использует **один реаль�
   ровно два запуска, без дубликата от повторного submit.
 - Разные projects одновременно Running с разными PID, в общем capacity=2.
 
-Эти тесты не используют TCP и не доказывают два настоящих controller connections.
-Runtime multi-controller ещё не включён, новые capabilities не объявлены.
-Следом нужны реальные portable transport tests с двумя controller processes;
-затем отдельный Windows gate и проверка настоящих .203+.204 после ручного
-предоставления Windows пользователем. Installed worker/config/firewall не менялись.
+Модельные тесты не используют TCP. Дополнительно добавлены library integration
+tests: два настоящих Controller с TCP/WebSocket listener на ephemeral loopback
+портах и один Worker::serve с настоящим SQLite и Linux fixture процессами.
+Они проверяют собственный сетевой Info обоих caller, dedup/общую очередь,
+отключение/новую generation одного controller, повтор исходного ключа без нового
+процесса, cross-controller cancel/output, stale journal rejection и параллельные
+проекты. Намеренно одинаковые nodeId controller не смешивают соединения.
+Это два library runtime в одном test process, не два CLI subprocess и не Windows.
 
-Проверки этой итерации: **6 core session tests +2 Linux worker integration model
-tests passed**; core/worker Clippy all-targets с `-D warnings`, fmt и scaffold290
-passed. Тесты вызывают неизменённый `Worker::handle_fenced`, не добавляют новый
+Сетевой runtime подключён в исходниках feature-ветки; production readiness
+не объявлена и новые capabilities не объявлены. Следом нужны отдельный Windows
+gate и проверка настоящих .203+.204 после ручного предоставления Windows
+пользователем. Installed worker/config/firewall не менялись.
+
+Текущий slice: **136 library tests passed /3 штатно ignored**:
+core38 (в том числе8 sessions/config), worker86, controller12 (в том числе2
+actual multi-controller WebSocket). Linux free space перед сборками **20 GiB**;
+Windows space не опрашивался, native Windows сборок/прогонов в этой итерации нет.
+Дополнительно **51 regression passed /2 штатно ignored**: legacy_baseline8,
+maintenance10, multi_controller_model2, recovery_pair10, request_context8,
+runtime8, update_coordination5. Всего **187 passed /5 ignored**.
+Clippy core/worker/controller all-targets с `-D warnings`, fmt, scaffold290 и
+`cargo check -p winbridge-worker --target x86_64-pc-windows-msvc --locked` passed.
+Последнее — cross-target compile check из Debian, не выполнение Windows worker.
+
+Команды для повторения (из feature worktree; `CARGO_INCREMENTAL=0`, основной
+`CARGO_TARGET_DIR=/home/user1/winbridge/target`):
+
+```sh
+cargo test -p winbridge-core -p winbridge-worker -p winbridge-controller --lib --locked
+cargo test -p winbridge-worker --locked --test multi_controller_model --test recovery_pair --test request_context --test legacy_baseline --test runtime --test update_coordination --test maintenance
+cargo clippy -p winbridge-core -p winbridge-worker -p winbridge-controller --all-targets --locked -- -D warnings
+cargo check -p winbridge-worker --target x86_64-pc-windows-msvc --locked
+```
+
+Тесты вызывают неизменённый `Worker::handle_fenced`, не добавляют новый
 публичный dispatch без проверки scope. Снимок origin пока хранится в RPC permit
 и test observations; durable task creator не объявляется реализованным.
+
+Следующий source slice без Windows: typed readonly список всех соединений для
+локальных diagnostics/desktop (primary, state, error, confirmed time, RPC counters),
+затем durable creator attribution с атомарным fresh acceptance и неизменным dedup.
+Это не разрешение на смену installed worker. Отдельный native gate требует
+доступного пользователем Windows worker; normal-service updater остаётся отдельно.
 
 Удалены origin refs `coordination/windows-v1` и
 `feat/multi-controller-foundation`, а также local branch последней. Проверено,

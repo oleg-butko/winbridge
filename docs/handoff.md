@@ -3,11 +3,18 @@
 **Ветка .204:** `feat/multi-controller`, base9b47a9c;
 [прямые multi-controller sessions](plans/multi-controller-runtime.md).
 Git coordination отменена пользователем: её отдельные ветки удалены, прототипы
-в эту ветку не входят. Полезная pure core sessions model сохранена; добавлены
-immutable RPC origins и Linux model integration с одним Worker/Store/real processes.
-Actual transport/WorkerConfig/Store attribution ещё не подключены. Windows остаётся
-у .203; пользователь вручную перезапустит worker для .204 только при необходимости.
-Здесь Windows не опрашивать/не запускать и runtime multi-controller не объявлять готовым.
+в эту ветку не входят. Pure sessions model и immutable RPC origins подключены к
+реальному сетевому runtime: worker.controllerTopology, независимые reconnect loops,
+общий RPC budget, отдельные connection/readiness данные; один Worker/Store/scheduler.
+Локальный Info показывает primary, сетевой — собственную связь caller. Recovery
+pair отключает оба режима подключения. Linux model и actual loopback WebSocket
+tests используют настоящие процессы. **187 passed /5 штатно ignored**, Linux
+Clippy all-targets, MSVC worker check, fmt/scaffold290 passed; детали — в плане.
+Durable task attribution и список всех связей в desktop ещё впереди.
+Windows остаётся у .203; пользователь вручную перезапустит worker для .204 только
+при необходимости. Здесь Windows не опрашивать/не запускать; Windows gate
+и production readiness новой функции не объявлять. Installed0.1.1 не поддерживает
+controllerTopology: config/бинарник до отдельного выпуска не менять.
 
 **Задача пользователя2026-10-26:** performance-ветка слита в main,
 merge50ceb0d, review fixes2b3734c. [Review](plans/run-speed/review-merge-2026-10-26.md).

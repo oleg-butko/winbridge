@@ -3,6 +3,7 @@ pub mod activation;
 mod artifacts;
 mod attention;
 pub mod compatibility;
+mod controller_links;
 mod domain;
 mod extensions;
 mod history;
@@ -134,8 +135,7 @@ pub struct Worker {
     scheduler_diagnostics: Mutex<scheduler_diagnostics::Diagnostics>,
     checks: Mutex<HashMap<String, Option<Result<workflows::CheckResult>>>>,
     stop: AtomicBool,
-    controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
-    controller_projection: Mutex<Option<projection::CachedProjection>>,
+    controllers: Option<Arc<Mutex<controller_links::Links>>>,
     unreconciled_tasks: Mutex<HashMap<String, String>>,
     inspection: bool,
     execution_domain: Mutex<Option<winbridge_platform::execution_domain::ExecutionDomain>>,
@@ -248,24 +248,22 @@ impl Worker {
         store.configure_work_scheduling(config.work_scheduling.clone())?;
         store.configure_queue_policy(config.queue_policy.clone())?;
         store.configure_resource_scheduling(config.resource_scheduling.clone())?;
-        let controller_connection = config.worker.controller_url.as_ref().map(|url| {
-            winbridge_protocol::ControllerConnection {
-                url: url.clone(),
-                state: winbridge_protocol::ConnectionState::Connecting,
-                session_id: None,
-                controller_node_id: None,
-                controller_generation: None,
-                last_confirmed_at_ms: None,
-                error: None,
-            }
-        });
+        let generation = uuid::Uuid::new_v4().to_string();
+        let controllers = config
+            .worker
+            .topology()?
+            .map(|t| {
+                controller_links::Links::new(&t, generation.clone())
+                    .map(|l| Arc::new(Mutex::new(l)))
+            })
+            .transpose()?;
         let worker = Arc::new(Self {
             runtime_guard: Mutex::new(None),
             config_path: Mutex::new(config_path),
             maintenance: Mutex::new((0, None)),
             maintenance_running: AtomicBool::new(false),
             config,
-            generation: uuid::Uuid::new_v4().to_string(),
+            generation,
             store: Mutex::new(store),
             active_projects: Mutex::new(HashMap::new()),
             active_jobs: AtomicUsize::new(0),
@@ -274,8 +272,7 @@ impl Worker {
             scheduler_diagnostics: Mutex::new(scheduler_diagnostics::Diagnostics::new()),
             checks: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
-            controller_connection: Mutex::new(controller_connection),
-            controller_projection: Mutex::new(None),
+            controllers,
             unreconciled_tasks: Mutex::new(HashMap::new()),
             inspection,
             execution_domain: Mutex::new(None),
@@ -719,11 +716,9 @@ impl Worker {
                         snapshot_resume_available: !self.inspection
                             && self.config.delivery.is_some(),
                         workflow_available: !self.inspection && self.config.delivery.is_some(),
-                        controller_connection: self
-                            .controller_connection
-                            .lock()
-                            .map_err(|_| "connection state lock poisoned")?
-                            .clone(),
+                        controller_connection: self.controllers.as_ref().map(|c|c.lock()
+                            .map_err(|_| "Controller state lock poisoned")
+                            .map(|c|c.primary_connection())).transpose()?.flatten(),
                     }),
                 })
             }
@@ -1544,12 +1539,6 @@ enum ReadinessOutput {
 }
 
 async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<()> {
-    struct NetworkTask(tokio::task::JoinHandle<()>);
-    impl Drop for NetworkTask {
-        fn drop(&mut self) {
-            self.0.abort();
-        }
-    }
     let address =
         winbridge_transport::endpoint(&worker.config.state_directory, &worker.config.instance_id)
             .map_err(|e| e.to_string())?;
@@ -1600,11 +1589,9 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
     let control = update_control::start(Arc::clone(&worker))?;
     let network = worker
-        .config
-        .worker
-        .controller_url
+        .controllers
         .as_ref()
-        .map(|_| NetworkTask(tokio::spawn(network::connect(Arc::clone(&worker)))));
+        .map(|_| network::start(Arc::clone(&worker)));
     let mut interval = tokio::time::interval(Duration::from_millis(25));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let shutdown = tokio::signal::ctrl_c();
@@ -1626,11 +1613,8 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
         }
     }
     if let Some(network) = network {
-        network.0.abort();
-        // Aborting is asynchronous. Join before declaring this service stopped
-        // so the network owner cannot keep the instance lock across a restart.
-        let mut network = network;
-        let _ = (&mut network.0).await;
+        // Stop and join every endpoint before reporting service shutdown.
+        network.close().await;
     }
     if let Some(control) = control {
         control.close().await;

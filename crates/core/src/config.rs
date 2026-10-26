@@ -146,6 +146,25 @@ fn default_output_limit() -> u64 {
 pub struct WorkerSettings {
     pub controller_url: Option<String>,
     pub keep_running_on_ui_exit: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub controller_topology: Option<crate::controller_sessions::Topology>,
+}
+impl WorkerSettings {
+    pub fn topology(&self) -> Result<Option<crate::controller_sessions::Topology>> {
+        match (&self.controller_url, &self.controller_topology) {
+            (Some(_), Some(_)) => {
+                Err("Choose worker.controllerUrl OR worker.controllerTopology, not both".into())
+            }
+            (Some(url), None) => {
+                crate::controller_sessions::Topology::legacy(url.clone()).map(Some)
+            }
+            (None, Some(topology)) => {
+                topology.validate()?;
+                Ok(Some(topology.clone()))
+            }
+            (None, None) => Ok(None),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -229,9 +248,7 @@ impl WorkerConfig {
         if !self.worker.keep_running_on_ui_exit {
             return Err("worker.keepRunningOnUiExit must be true: tasks belong to worker".into());
         }
-        if let Some(url) = &self.worker.controller_url {
-            crate::controller_config::validate_controller_url(url)?;
-        }
+        self.worker.topology()?;
         if let Some(policy) = &self.work_scheduling {
             crate::work_scheduling::validate(policy)?;
         }

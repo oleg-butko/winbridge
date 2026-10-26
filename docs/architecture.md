@@ -235,6 +235,19 @@ Windows worker устанавливает постоянное соединен�
 
 Worker использует настроенный адрес controller. Controller проверяет instance/node/version/capabilities и показывает подключённый worker в UI. По решению пользователя 2026-10-05 входящие соединения не блокируются по IP; адрес источника записывается в журнал. Listener остаётся на выбранном интерфейсе. Настраиваемый список разрешённых IP можно добавить позднее. Изменения firewall/mounts не выполняются скрытно.
 
+В feature-ветке `.204` `feat/multi-controller` добавлен альтернативный
+`worker.controllerTopology`: 1–4 исходящих соединения с явным primary, независимыми
+attempt tickets/reconnect и readiness caches. Один Worker/SQLite/scheduler обслуживает
+всех доверенных caller; nodeId controller может совпадать, связь различается по
+настроенному endpoint ID. RPC budget общий (32 total/16 per endpoint), timeout
+не освобождает ещё работающий blocking handler. Завершение сетевого supervisor
+отменяет и дожидается всех endpoint tasks. Local Info показывает primary, сетевой
+Info — связь/проекцию своего caller без изменения DTO. Legacy controllerUrl и
+local-only сохраняются, оба режима одновременно отклоняются. Проверяется на
+Debian; установленный0.1.1 новый config не понимает, Windows gate ещё не пройден.
+Durable task attribution и общий desktop список связей остаются следующими шагами.
+Подробности и границы — в [плане](plans/multi-controller-runtime.md).
+
 Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, список реально реализованных capabilities. Несовместимая версия даёт понятную ошибку с дальнейшим действием. AppVersion не заменяет wire version. Session generation меняется после рестарта, durable task/event IDs сохраняются.
 
 Текущая сессия: выбран VMnet8, Debian `192.168.44.203:1143`, Windows `192.168.44.1` (адрес подтверждён пользователем). Strict schema 1 controller config задаёт stateDirectory, listenAddress и workerNodeId; instanceId совпадает у пары. Прежнее allowedWorkerAddresses принимается для совместимости, но игнорируется. Поддерживаются literal private/loopback IPv4 для адреса listener/controllerUrl, без DNS и extra URL path. Controller CLI использует private Unix socket (0700 directory/0600 socket), worker сохраняет прежний SID named pipe для desktop.

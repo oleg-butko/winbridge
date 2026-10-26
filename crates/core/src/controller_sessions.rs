@@ -1,4 +1,4 @@
-//! Portable multi-controller foundation. Not wired to worker config or transport.
+//! Portable multi-controller session state and admission.
 //! Session observations never grant execution authority or release durable tasks.
 use crate::{config::valid_id, controller_config::validate_controller_url};
 use serde::{Deserialize, Serialize};
@@ -82,6 +82,11 @@ pub struct Ticket {
     worker_generation: String,
     controller: String,
     attempt: u64,
+}
+impl Ticket {
+    pub fn controller_id(&self) -> &str {
+        &self.controller
+    }
 }
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Permit {
@@ -176,7 +181,7 @@ impl Sessions {
             attempt: state.attempt,
         })
     }
-    fn current(&self, ticket: &Ticket) -> bool {
+    pub fn is_current(&self, ticket: &Ticket) -> bool {
         ticket.worker_generation == self.worker_generation
             && self
                 .sessions
@@ -184,7 +189,7 @@ impl Sessions {
                 .is_some_and(|s| s.attempt == ticket.attempt)
     }
     pub fn connected(&mut self, ticket: &Ticket, peer: Peer) -> Result<bool, String> {
-        if !self.current(ticket) {
+        if !self.is_current(ticket) {
             return Ok(false);
         }
         if ![&peer.node, &peer.generation, &peer.session]
@@ -210,7 +215,7 @@ impl Sessions {
         Ok(true)
     }
     pub fn disconnected(&mut self, ticket: &Ticket, reason: String) -> bool {
-        if !self.current(ticket) {
+        if !self.is_current(ticket) {
             return false;
         }
         let state = self.sessions.get_mut(&ticket.controller).unwrap();
@@ -228,7 +233,7 @@ impl Sessions {
         self.sessions.get(controller).map(|s| &s.observation)
     }
     pub fn project(&mut self, ticket: &Ticket, session: &str, sequence: u64, now_ms: u64) -> bool {
-        if !self.current(ticket) || sequence == 0 {
+        if !self.is_current(ticket) || sequence == 0 {
             return false;
         }
         let state = self.sessions.get_mut(&ticket.controller).unwrap();
@@ -262,8 +267,12 @@ impl Sessions {
         self.projection_sequence(&self.primary, now_ms)
     }
     pub fn admit(&mut self, ticket: &Ticket, request: String) -> Result<Permit, String> {
-        if !valid_id(&request)
-            || !self.current(ticket)
+        if request.is_empty()
+            || request.len() > 160
+            || !request
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+            || !self.is_current(ticket)
             || self.sessions[&ticket.controller].observation.phase != Phase::Connected
         {
             return Err("RPC needs a live session and valid request ID".into());
@@ -457,5 +466,35 @@ mod tests {
         assert!(!s.disconnected(&a, "late EOF".into()));
         assert!(s.complete(&original));
         assert!(s.complete(&other));
+    }
+
+    #[test]
+    fn worker_settings_preserve_legacy_serialization_and_reject_ambiguous_modes() {
+        use crate::config::WorkerSettings;
+        let old = r#"{"controllerUrl":"ws://192.168.44.203:1143","keepRunningOnUiExit":true}"#;
+        let settings: WorkerSettings = serde_json::from_str(old).unwrap();
+        assert_eq!(serde_json::to_string(&settings).unwrap(), old);
+        assert_eq!(settings.topology().unwrap().unwrap().controllers.len(), 1);
+        let mut multi = settings.clone();
+        multi.controller_url = None;
+        multi.controller_topology = Some(topology());
+        assert_eq!(multi.topology().unwrap().unwrap().controllers.len(), 2);
+        multi.controller_url = settings.controller_url;
+        assert!(multi.topology().is_err());
+        multi.controller_url = None;
+        multi.controller_topology.as_mut().unwrap().primary = "unknown".into();
+        assert!(multi.topology().is_err());
+        multi.controller_topology = None;
+        assert!(multi.topology().unwrap().is_none());
+    }
+
+    #[test]
+    fn rpc_correlation_ids_keep_the_existing_160_byte_transport_contract() {
+        let mut s = registry();
+        let t = connect(&mut s, "debian-203");
+        let p = s.admit(&t, "a".repeat(160)).unwrap();
+        s.complete(&p);
+        assert!(s.admit(&t, "a".repeat(161)).is_err());
+        assert!(s.admit(&t, "invalid_under_score".into()).is_err());
     }
 }

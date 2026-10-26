@@ -499,6 +499,8 @@ pub fn endpoint(config: &ControllerConfig) -> String {
 mod server;
 #[cfg(unix)]
 pub use server::serve;
+#[cfg(all(test, unix))]
+mod multi_controller_tests;
 #[cfg(not(unix))]
 pub async fn serve(_controller: Arc<Controller>) -> Result<()> {
     Err("Controller listener runs in Debian; use winbridge-worker on Windows".into())
