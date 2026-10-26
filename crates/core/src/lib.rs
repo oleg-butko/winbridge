@@ -4,6 +4,7 @@ pub mod attention;
 pub mod commands;
 pub mod config;
 pub mod controller_config;
+pub mod controller_sessions;
 pub mod desktop_state;
 pub mod diagnostics;
 pub mod notifications;
