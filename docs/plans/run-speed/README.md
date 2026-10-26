@@ -7,6 +7,11 @@
 [writer24 + service data foundation](../worker-self-update/resume-2026-10-25-writer-verified.md),
 source58e6109. Schema19/17/private3 и public install off сохраняются.
 
+**2026-10-26: E1 подтвердил ускорение activation suite на 42.83% при более дорогой
+первой сборке.** [Измерения, причины задержек и точные pins](results-2026-10-26.md).
+Следующий эксперимент v2 оставляет updater opt0 и оптимизирует остальные три
+packages. Он ещё выполняется; defaults пока не менялись.
+
 ## Исходные измерения
 
 Verified Windows run `20261025-232746-26bad6d7`:193 tests/56 ready files twice,
@@ -123,8 +128,8 @@ python3 scripts/test-update-profile-experiment.py
 
 2026-10-26: Windows syntax/plan-only preflight succeeded/0,
 task `2a55798e-0224-4a53-a8d5-144c01e9b37a`; ни Cargo, ни test binaries не запускались.
-Portable verifier: 3 tests, включая 15 независимых подмен и noisy/insufficient-gain
-decisions, passed. Rust fmt passed. Реальный E1 запущен:
+Portable verifier: 4 tests, включая 16 независимых подмен, CRLF/collation и
+noisy/insufficient-gain decisions, passed. Rust fmt passed. Реальный E1 succeeded/0:
 run `20261026-040152-f3f5757a`, task `07cfe524-cee4-4b1e-b3c1-a525ac2528bc`;
 источник `6035edde28d8362003c96cfee36b9a76f820efe9`, ZIP
 `winbridge-20261026T040058Z-6035edd-55e7ad58.zip`, SHA
@@ -134,7 +139,12 @@ run `20261026-040152-f3f5757a`, task `07cfe524-cee4-4b1e-b3c1-a525ac2528bc`;
 Owner cache terminal failed, четыре compiler commands succeeded; это только cache,
 не proof тестов. Task `ac5724f1-c38a-4a50-a446-f9b57ae5473b`, report SHA
 `22c40d278d595a82038d027184d3d706383d6ebf629fc65b3570fe6baf046bb5`.
-Результатов E1 ещё нет, наблюдать этот же task. Ускорение не заявлено.
+E1: 65 tests × 10 suites + 2 policy probes passed;25 ready files twice.
+Median36.165→20.6745s, spread<3%,4/4 pairs faster. Exact diagnostic130/130 passed,
+131 ready files twice. Default/full-gate speedup не заявлен.
+Followup v2 run `20261026-042205-115786e9`, task
+`974c9b0c-86c4-42a2-a688-9f9e2fba26d5` выполняется. Наблюдать этот же task,
+не replay. Для v2 анализа передать `--spec scripts/experiments/update-profile-v2.json`.
 Эта ветка не открывает schema20/private4/actor25;
 updater развивается независимо в `main`.
 

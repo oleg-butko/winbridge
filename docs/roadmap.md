@@ -6,7 +6,9 @@
 результатов в отдельной ветке; другой агент продолжает updater в `main`.
 [План оптимизации и E1 A/B эксперимент](plans/run-speed/README.md): сначала
 opt-level1 при сохранённых safety checks; затем полный native gate и build
-batching по результатам. Результатов E1 пока нет. Updater эта ветка не развивает.
+batching по результатам. E1: median65 tests36.165→20.6745s,42.83% быстрее,
+но первая сборка дороже; [измерения и v2](plans/run-speed/results-2026-10-26.md).
+Updater эта ветка не развивает.
 
 ## Текущий checkpoint — writer24 подтверждён 2026-10-25
 

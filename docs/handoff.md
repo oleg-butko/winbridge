@@ -6,6 +6,12 @@
 другой агент может продолжать updater в `main`. Ниже — исходный checkpoint
 этой ветки. Здесь не переходить к service/schema20 или U2–U4.
 
+2026-10-26: [E1 результаты и текущий v2](plans/run-speed/results-2026-10-26.md).
+65 Windows tests median36.165→20.6745s (42.83% быстрее),650 suite cases +2 policy
+probes +130 exact diagnostic cases passed;25/131 ready files twice. Compiler
+codegen overhead найден. Defaults неизменны; v2 task974c9b0c-86c4-42a2-a688-9f9e2fba26d5
+ещё running, не replay.
+
 **Начать с [актуального checkpoint](plans/worker-self-update/resume-2026-10-25-writer-verified.md)**
 и [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).
 Они приоритетнее исторических NEXT/ACTIVE ниже.

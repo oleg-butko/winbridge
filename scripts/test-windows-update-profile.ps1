@@ -11,12 +11,19 @@ param(
     [Parameter(Mandatory)][ValidatePattern('^[a-f0-9]{64}$')][string]$ManifestSha256,
     [Parameter(Mandatory)][string]$WorkDirectory,
     [Parameter(Mandatory)][string]$CacheDirectory,
+    [string]$SpecPath = '',
     [switch]$Execute
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference = $false
-$spec = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'experiments/update-profile-v1.json') | ConvertFrom-Json
+if (-not $SpecPath) { $SpecPath = Join-Path $PSScriptRoot 'experiments/update-profile-v1.json' }
+$spec = Get-Content -Raw -LiteralPath $SpecPath | ConvertFrom-Json
+function Get-PackageLevel([string]$Variant, [string]$Package) {
+    if ($spec.PSObject.Properties['packageOverrides'] -and $spec.packageOverrides.PSObject.Properties[$Variant] -and
+        $spec.packageOverrides.$Variant.PSObject.Properties[$Package]) { return $spec.packageOverrides.$Variant.$Package }
+    return $spec.variants.$Variant
+}
 function Get-BuildArguments([string]$Variant) {
     $args = @()
     foreach ($profile in @('dev', 'test')) {
@@ -24,7 +31,7 @@ function Get-BuildArguments([string]$Variant) {
             $args += @('--config', "profile.$profile.$setting")
         }
         foreach ($package in $spec.packages) {
-            $args += @('--config', "profile.$profile.package.$package.opt-level=$($spec.variants.$Variant)")
+            $args += @('--config', "profile.$profile.package.$package.opt-level=$(Get-PackageLevel $Variant $package)")
             foreach ($setting in @('debug=2', 'debug-assertions=true', 'overflow-checks=true', 'incremental=false')) {
                 $args += @('--config', "profile.$profile.package.$package.$setting")
             }
@@ -103,7 +110,7 @@ $savedEnv = @{}
 foreach ($name in @('CARGO_INCREMENTAL','CARGO_TERM_COLOR','TEMP','TMP')) { $savedEnv[$name] = [Environment]::GetEnvironmentVariable($name) }
 $report = [ordered]@{ schemaVersion=1; kind='update_profile_pilot'; passed=$false; installedRuntimeChanged=$false;
     sourceCommit=$manifest.sourceCommit; sourceDirty=$false; sourceManifestSha256=$ManifestSha256;
-    specSha256=(Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'experiments/update-profile-v1.json')).Hash.ToLowerInvariant();
+    specSha256=(Get-FileHash -LiteralPath $SpecPath).Hash.ToLowerInvariant();
     platform='windows'; startedAt=[DateTime]::UtcNow.ToString('o'); initialSpace=$initialSpace;
     builds=@(); binaries=@(); commands=@(); error=$null }
 function Invoke-Logged([string]$Name, [string]$Executable, [string[]]$Arguments) {
@@ -145,7 +152,7 @@ try {
                 $packageArtifacts = @($artifacts | Where-Object { $_.target.name -ceq $package.Replace('-','_') -and 'lib' -in $_.target.kind })
                 if (-not $packageArtifacts.Count) { throw "Missing profile evidence: $package" }
                 foreach ($artifact in $packageArtifacts) {
-                    if ($artifact.profile.opt_level -cne [string]$spec.variants.$variant -or $artifact.profile.debuginfo -ne 2 -or
+                    if ($artifact.profile.opt_level -cne [string](Get-PackageLevel $variant $package) -or $artifact.profile.debuginfo -ne 2 -or
                         $artifact.profile.debug_assertions -ne $true -or $artifact.profile.overflow_checks -ne $true) { throw "Unexpected compiled profile: $package" }
                 }
             }

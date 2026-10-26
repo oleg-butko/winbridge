@@ -20,6 +20,14 @@ def counter(value):
     return type(value) is int and value >= 0
 
 
+def same_json(left, right):
+    return json.dumps(left, sort_keys=True, separators=(',', ':')) == json.dumps(right, sort_keys=True, separators=(',', ':'))
+
+
+def package_level(spec, variant, package):
+    return spec.get('packageOverrides', {}).get(variant, {}).get(package, spec['variants'][variant])
+
+
 def compare_samples(samples, warm_builds, setup_builds, spec):
     need([x['variant'] for x in samples] == spec['sampleOrder'], 'Sample order differs')
     need(all(counter(x['elapsedMs']) and x['elapsedMs'] > 0 for x in samples), 'Invalid sample duration')
@@ -40,13 +48,13 @@ def compare_samples(samples, warm_builds, setup_builds, spec):
                 'Execution samples exclude Cargo. A pilot gain is not a full native-gate speedup or updater readiness.')
 
 
-def verify(directory):
+def verify(directory, spec_path=SPEC):
     loader = importlib.util.spec_from_file_location('timings', Path(__file__).with_name('summarize-update-timings.py'))
     timings = importlib.util.module_from_spec(loader)
     loader.loader.exec_module(timings)
     files = timings.verified_files(directory)
     report = json.loads(files['report.json'].decode('utf-8-sig'))
-    spec_bytes = SPEC.read_bytes()
+    spec_bytes = spec_path.read_bytes()
     spec = json.loads(spec_bytes)
     need(type(report['schemaVersion']) is int and report['schemaVersion'] == 1
          and report['kind'] == 'update_profile_pilot' and report['passed'] is True
@@ -55,7 +63,7 @@ def verify(directory):
     need(report['specSha256'] == hashlib.sha256(spec_bytes).hexdigest(), 'Different experiment spec')
     need(re.fullmatch('[a-f0-9]{40,64}', report['sourceCommit']) and re.fullmatch('[a-f0-9]{64}', report['sourceManifestSha256']), 'Invalid source pin')
     names = report['testNames']
-    need(names == sorted(set(names)) and len(names) >= spec['minimumTests']
+    need(len(names) == len(set(names)) and len(names) >= spec['minimumTests']
          and all(n in names for n in spec['requiredTests']), 'Incomplete test set')
     commands = {}
     for command in report['commands']:
@@ -85,7 +93,7 @@ def verify(directory):
                 for setting in ('opt-level=0', 'debug=2', 'debug-assertions=true', 'overflow-checks=true', 'incremental=false'):
                     need(f'profile.{profile}.{setting}' in args, 'Missing explicit safety setting')
                 for package in spec['packages']:
-                    need(f'profile.{profile}.package.{package}.opt-level={spec["variants"][v]}' in args, 'Profile override differs')
+                    need(f'profile.{profile}.package.{package}.opt-level={package_level(spec, v, package)}' in args, 'Profile override differs')
             need(all(a in args for a in ('--locked', '--offline', '--no-run', '--message-format=json', '--timings')), 'Build invocation differs')
             messages = [json.loads(line) for line in files[command['log']].decode('utf-8-sig').splitlines() if line.startswith('{')]
             artifacts = [x for x in messages if x['reason'] == 'compiler-artifact']
@@ -94,11 +102,11 @@ def verify(directory):
                 need(matches, 'Missing package profile evidence: '+package)
                 for artifact in matches:
                     profile = artifact['profile']
-                    need(profile['opt_level'] == str(spec['variants'][v]) and type(profile['debuginfo']) is int
+                    need(profile['opt_level'] == str(package_level(spec, v, package)) and type(profile['debuginfo']) is int
                          and profile['debuginfo'] == 2 and profile['debug_assertions'] is True
                          and profile['overflow_checks'] is True, 'Compiled profile weakened or differs')
             roots = [x for x in artifacts if x['target']['name'] == 'winbridge_update' and x['profile']['test'] is True and x['executable']]
-            need(len(roots) == 1 and roots[0] == row['artifact'] and roots[0]['profile'] == binary['profile']
+            need(len(roots) == 1 and same_json(roots[0], row['artifact']) and same_json(roots[0]['profile'], binary['profile'])
                  and sorted(roots[0]['features']) == sorted(spec['features']), 'Libtest artifact differs')
             identity = dict(pair for m in messages if m['reason'] == 'build-script-executed' for pair in m['env'] if pair[0].startswith('WINBRIDGE_'))
             need(identity == row['sourceIdentity'] and identity['WINBRIDGE_SOURCE_COMMIT'] == report['sourceCommit']
@@ -107,7 +115,7 @@ def verify(directory):
             need(f'build-{v}-{phase}.html' in files, 'Cargo HTML timing missing')
             need(row['space'] and all(counter(s['freeBytes']) and s['freeBytes'] >= 6*1024**3 for s in row['space']), 'Build disk admission missing')
         listing = files[commands[f'list-{v}']['log']].decode('utf-8-sig')
-        need(sorted(re.findall(r'^(.+): test$', listing, re.M)) == names, 'Listed tests differ')
+        need(sorted(re.findall(r'^(.+): test\r?$', listing, re.M)) == sorted(names), 'Listed tests differ')
         policy = files[commands[f'policy-{v}']['log']].decode('utf-8-sig')
         need(commands[f'policy-{v}']['arguments'] == [spec['policyTest'], '--exact', '--ignored', '--test-threads=1', '--nocapture', '--color=never']
              and re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;', policy), 'Safety policy probe missing')
@@ -126,8 +134,52 @@ def verify(directory):
     return dict(sourceCommit=report['sourceCommit'], filesVerifiedTwice=len(files), testsPerSample=len(names), **result)
 
 
+def verify_hotspots(directory, pilot_directory):
+    verify(pilot_directory)
+    loader = importlib.util.spec_from_file_location('timings', Path(__file__).with_name('summarize-update-timings.py'))
+    timings = importlib.util.module_from_spec(loader)
+    loader.loader.exec_module(timings)
+    pilot_files = timings.verified_files(pilot_directory)
+    pilot_raw = pilot_files['report.json']
+    pilot_report = json.loads(pilot_raw.decode('utf-8-sig'))
+    files = timings.verified_files(directory)
+    report = json.loads(files['report.json'].decode('utf-8-sig'))
+    need(type(report['schemaVersion']) is int and report['schemaVersion'] == 1 and report['kind'] == 'update_profile_hotspots'
+         and report['passed'] is True and report['diagnosticOnly'] is True and report['installedRuntimeChanged'] is False
+         and report['error'] is None and report['pilotReportSha256'] == hashlib.sha256(pilot_raw).hexdigest()
+         and report['sourceCommit'] == pilot_report['sourceCommit'] and same_json(report['binaries'], pilot_report['binaries'])
+         and report['testNames'] == pilot_report['testNames'], 'Diagnostic differs from verified pilot')
+    need(len(report['commands']) == 2*len(report['testNames']), 'Diagnostic test set incomplete')
+    cases, groups = [], {}
+    for i, name in enumerate(report['testNames']):
+        group = name.rsplit('::', 1)[0]+'::'
+        values = {}
+        for j, variant in enumerate(('A', 'B')):
+            row = report['commands'][2*i+j]
+            need(row['group'] == group and row['testName'] == name and row['variant'] == variant and type(row['count']) is int and row['count'] == 1
+                 and type(row['exitCode']) is int and row['exitCode'] == 0 and counter(row['elapsedMs'])
+                 and row['arguments'] == [name, '--exact', '--test-threads=1', '--nocapture', '--color=never']
+                 and row['log'] == f'case-{i}-{variant}.log', 'Exact test invocation/count differs')
+            log = files[row['log']].decode('utf-8-sig')
+            matches = re.findall(r'test result: ok\. (\d+) passed; 0 failed; 0 ignored;[^\r\n]*finished in ([0-9.]+)s', log)
+            need(len(matches) == 1 and int(matches[0][0]) == 1 and float(matches[0][1])*1000 == row['libtestMs'], 'Exact test did not complete')
+            values[variant] = row['elapsedMs']
+        cases.append(dict(test=name, elapsedMs=values, savedMs=values['A']-values['B']))
+        total = groups.setdefault(group, dict(group=group, tests=0, elapsedMs=dict(A=0, B=0)))
+        total['tests'] += 1
+        for v in ('A', 'B'):
+            total['elapsedMs'][v] += values[v]
+    return dict(filesVerifiedTwice=len(files), groups=sorted(groups.values(), key=lambda r: r['elapsedMs']['A'], reverse=True),
+                slowestCases=sorted(cases, key=lambda r: r['elapsedMs']['A'], reverse=True)[:15],
+                interpretation='One fresh process per exact test and variant. Diagnostic only; family sums include extra process startup. '
+                'Use the repeated whole-suite pilot for stable A/B gains, not these single observations.')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('report_directory', type=Path)
+    parser.add_argument('--pilot', type=Path, help='Verify family diagnostic against this original pilot')
+    parser.add_argument('--spec', type=Path, default=SPEC)
     args = parser.parse_args()
-    print(json.dumps(verify(args.report_directory), indent=2, ensure_ascii=False))
+    result = verify_hotspots(args.report_directory, args.pilot) if args.pilot else verify(args.report_directory, args.spec)
+    print(json.dumps(result, indent=2, ensure_ascii=False))

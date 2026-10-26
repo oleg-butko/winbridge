@@ -92,6 +92,7 @@ class PilotTests(unittest.TestCase):
             lambda r, f: r['commands'][-1].update(elapsedMs=True),
             lambda r, f: r['testNames'].pop(),
             lambda r, f: r['binaries'][0].update(features=['bundled-sqlite']),
+            lambda r, f: r['binaries'][0]['profile'].update(debug_assertions=1),
             lambda r, f: f.update({'tests-A.exe': b'changed image'}),
             lambda r, f: f.update({'policy-B.log': b'test result: ok. 0 passed; 0 failed; 1 ignored;'}),
             lambda r, f: f.update({'sample-0-A.log': b'test result: ok. 1 passed; 0 failed; 0 ignored; finished in 1.00s'}),
@@ -117,6 +118,12 @@ class PilotTests(unittest.TestCase):
                     row['elapsedMs'] = next(it)
             result = pilot.compare_samples(samples, dict(A=10, B=10), dict(A=200, B=500), SPEC)
             self.assertEqual(result['decision'], expected)
+
+    def test_platform_collation_does_not_change_test_set(self):
+        report, files = fixture()
+        report['testNames'].reverse()
+        files = {name: data.replace(b'\n', b'\r\n') if name.endswith('.log') else data for name, data in files.items()}
+        self.assertEqual(check(report, files)['decision'], 'promising_component_only')
 
 
 if __name__ == '__main__':
