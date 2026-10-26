@@ -38,6 +38,8 @@ unification и выбор frozen supervisor/test images, поэтому треб
 Спецификация: `scripts/experiments/update-profile-v1.json`.
 Runner: `scripts/test-windows-update-profile.ps1`; без `-Execute` он только
 показывает план. Обычный Cargo.toml, global config и installed runtime не меняются.
+Ветка `perf/run-speed-2026-10-25`, worktree `/home/user1/winbridge-run-speed`.
+Основной `/home/user1/winbridge` оставлен на чистом `main` для реализации updater.
 
 - A: opt-level0 для updater/core/protocol/serde_json.
 - B: opt-level1 для тех же четырёх packages. Существующие sha2/memchr opt-level2
@@ -61,6 +63,11 @@ Runner: `scripts/test-windows-update-profile.ps1`; без `-Execute` он тол
 - Сохраняются toolchain, profile evidence, executable bytes/SHA, exact test names,
   command arguments, wall durations, libtest durations, warm-build cost и raw logs.
   Cargo timing HTML копируется отдельно для каждой сборки.
+
+Именованные package overrides дополнительно задают одинаковые debug/assertions/
+overflow/incremental settings. Это касается и serde_json как build dependency:
+не полагаться на отличающиеся defaults build-override. Поэтому A — контроль
+этого эксперимента, не точная копия settings всех прежних native builds.
 
 E1 promising: все checks passed, median test runtime B хотя бы на15% ниже A,
 минимум3 из4 пар быстрее и spread каждой стороны≤20% median. Это **только pilot**.
@@ -98,10 +105,37 @@ Source сначала export из clean commit через `scripts/export-source
 после terminal/report.ready.json с двойной bytes/SHA проверкой. После прогона
 desktop можно закрыть, installed worker оставить; validation directories не удалять.
 
+Debian driver `scripts/run-update-profile-native.py` принимает `--archive`,
+`--controller-config`, `--cache-owner-task`, `--cache-report`,
+`--cache-report-sha256`. Он проверяет owner terminal/ready bytes, свежие Info и
+Debian disk, сохраняет request до submit и task ID до ожидания. Наблюдение через
+`--observe PATH_TO_SUBMISSION_JSON` никогда не делает submit. Новый Windows work
+directory и shared `WinBridge/run-speed/<run>` создаются один раз; ready переносится
+последним. Полный запрос и task state остаются в ignored `.winbridge/run-speed`.
+
+```bash
+python3 scripts/run-update-profile-native.py --observe .winbridge/run-speed/RUN/submission.json
+python3 scripts/verify-update-profile.py /mnt/hgfs/shared/WinBridge/run-speed/RUN
+python3 scripts/test-update-profile-experiment.py
+```
+
 ## Статус
 
-План и эксперимент подготавливаются. Реального E1 A/B результата ещё нет;
-ускорение не заявлено. Эта ветка не открывает schema20/private4/actor25;
+2026-10-26: Windows syntax/plan-only preflight succeeded/0,
+task `2a55798e-0224-4a53-a8d5-144c01e9b37a`; ни Cargo, ни test binaries не запускались.
+Portable verifier: 3 tests, включая 15 независимых подмен и noisy/insufficient-gain
+decisions, passed. Rust fmt passed. Реальный E1 запущен:
+run `20261026-040152-f3f5757a`, task `07cfe524-cee4-4b1e-b3c1-a525ac2528bc`;
+источник `6035edde28d8362003c96cfee36b9a76f820efe9`, ZIP
+`winbridge-20261026T040058Z-6035edd-55e7ad58.zip`, SHA
+`a08927a933cbfc95e2c1109c74969793e7cbcb5af8fbd4096af7301bfdc3df2d`.
+Перед запуском Debian24,566,149,120 bytes, предыдущий fresh Windows preflight
+38,828,167,168 bytes; runner сохраняет собственный fresh admission до каждой сборки.
+Owner cache terminal failed, четыре compiler commands succeeded; это только cache,
+не proof тестов. Task `ac5724f1-c38a-4a50-a446-f9b57ae5473b`, report SHA
+`22c40d278d595a82038d027184d3d706383d6ebf629fc65b3570fe6baf046bb5`.
+Результатов E1 ещё нет, наблюдать этот же task. Ускорение не заявлено.
+Эта ветка не открывает schema20/private4/actor25;
 updater развивается независимо в `main`.
 
 Основания инструментов: [Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html),
