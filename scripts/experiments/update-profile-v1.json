@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "update_profile_pilot_spec",
+  "packages": ["winbridge-update", "winbridge-core", "winbridge-protocol", "serde_json"],
+  "variants": {"A": 0, "B": 1},
+  "features": ["bundled-sqlite", "update-validation"],
+  "filter": "activation",
+  "minimumTests": 62,
+  "requiredTests": [
+    "activation::lifecycle::tests::new_startup_budget_allows_slow_activation_but_never_renews_a_saved_attempt",
+    "activation::service::tests::service_binding_keeps_same_committed_authority_child_and_generation",
+    "activation::service::tests::late_service_receipt_resolves_data_uncertainty_without_reissue",
+    "journal::activation::tests::activation_ledger_retains_each_causal_step_and_rejects_stale_cas",
+    "journal::activation::tests::activation_history_rewrite_is_detected_independently_of_current_row",
+    "journal::activation_writer::tests::writer_causal_history_retains_late_confirmation_without_renewing_or_reissuing",
+    "journal::activation_writer::tests::writer_intent_key_physical_header_and_rewritten_history_are_all_checked"
+  ],
+  "policyTest": "profile_validation::experiment_requires_assertions_and_runtime_overflow_checks",
+  "warmupOrder": ["A", "B"],
+  "sampleOrder": ["A", "B", "B", "A", "B", "A", "A", "B"],
+  "minimumMedianGain": 0.15,
+  "minimumFasterPairs": 3,
+  "maximumRelativeSpread": 0.2
+}

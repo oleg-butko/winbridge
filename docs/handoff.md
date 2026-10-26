@@ -1,5 +1,11 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
+**Эта ветка занимается скоростью прогонов, 2026-10-25.** Текущее действие —
+[оптимизация, E1 profile pilot](plans/run-speed/README.md). Пользователь поручил
+продолжать эксперименты до существенных результатов в отдельной ветке/worktree;
+другой агент может продолжать updater в `main`. Ниже — исходный checkpoint
+этой ветки. Здесь не переходить к service/schema20 или U2–U4.
+
 **Начать с [актуального checkpoint](plans/worker-self-update/resume-2026-10-25-writer-verified.md)**
 и [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).
 Они приоритетнее исторических NEXT/ACTIVE ниже.
