@@ -28,30 +28,49 @@ def fixture():
                      arguments=common + args) for name, args in [
         ('worker-regressions', selected), ('idle-cpu', ['--test', 'idle_scheduler',
          'native_idle_cpu_baseline_and_candidate', '--', '--ignored', '--nocapture'])]]
+    commands.append(dict(name='test-runtime-policy', log='test-runtime-policy.log', exitCode=0,
+                    elapsedMs=1, freeBytesBefore=10 * 1024**3, arguments=['-NoProfile', '-NonInteractive', '-File',
+                    'K:/src/scripts/test-worker-runtime.ps1', '-WorkDirectory', 'K:/case/policy', '-Fixture', 'K:/fixture.exe']))
     cpu = [dict(variant=v, rows=256, argumentBytesPerRecord=32768, wallMs=33000,
                 cpuMs=n, percentOfOneCore=100 * n / 33000) for v, n in [('baseline', 32000), ('candidate', 500)]]
     report = dict(schemaVersion=1, kind='worker_patch_release', version='0.1.1', passed=True, error=None,
-                  installedRuntimeChanged=False, windowsOpened=False, isolatedWorkerExitConfirmed=True,
+                  installedRuntimeChanged=False, windowsOpened=False, isolatedWorkerExitConfirmed=True, syntaxVerified=True,
                   sourceCommit=source['sourceCommit'], manifestSha256=manifest, archiveSha256=source['sha256'],
                   commands=commands, cpu=cpu, network=network, baselineWorkerSha256='d' * 64,
+                  testRuntimeDirectory='K:/winbridge/runtime-test', testExecutable='K:/winbridge/runtime-test/winbridge-worker.exe',
+                  testExecutableSha256=sha, firewallWaitSeconds=900,
                   artifactQuery=dict(kind='artifact_query', cleanupVerified=True, readOnly=True,
                     candidateVerified=False, image=dict(querySupported=True, sha256=sha, bytes=len(image)), descriptor=descriptor),
                   artifacts=[dict(name='winbridge-worker.exe', bytes=len(image), sha256=sha)])
     files = {'winbridge-worker.exe': image, 'build-identity.json': json.dumps(descriptor).encode(),
              'worker-regressions.log': ('test result: ok. 1 passed; 0 failed;\n' * 9).encode(),
+             'test-runtime-policy.log': b'TEST_RUNTIME_POLICY {"passed":true,"stablePath":true,"checksPassed":6}',
              'idle-cpu.log': ('\n'.join('IDLE_CPU ' + json.dumps(s) for s in cpu) + '\ntest result: ok. 1 passed; 0 failed;').encode()}
     # Report and independent network observation must not alias.
     return json.loads(json.dumps(report)), files, source, manifest, json.loads(json.dumps(network))
 
 
 def verify(report, files, source, manifest, network):
-    return proof.verify(dict(files, **{'report.json': json.dumps(report).encode()}), source, manifest, network, 'd' * 64)
+    return proof.verify(dict(files, **{'report.json': json.dumps(report).encode()}), source, manifest, network,
+                        'd' * 64, 'K:/winbridge/runtime-test', 900)
 
 
 class ReleaseProofTests(unittest.TestCase):
+    def test_stable_directory_is_independent_of_run_and_cannot_overlap_production(self):
+        spec = importlib.util.spec_from_file_location('builder', Path(__file__).with_name('build-worker-release-native.py'))
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        installed = 'K:/_proj-26/winbridge/runtime/winbridge-worker.exe'
+        self.assertEqual(builder.stable_runtime_directory(installed), 'K:\\_proj-26\\winbridge\\runtime-test')
+        for path in ('relative', 'K:relative', '//host/share/test', 'K:/_proj-26/winbridge/runtime',
+                     'K:/_proj-26/winbridge', 'K:/_proj-26/winbridge/runtime/test', 'K:/foo/../runtime-test'):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                builder.stable_runtime_directory(installed, path)
+
     def test_complete_components_accept_only_the_exact_frozen_image(self):
         result = verify(*fixture())
         self.assertEqual(result['nativeTestsPassed'], 10)
+        self.assertEqual(result['testRuntimeChecksPassed'], 6)
 
     def test_publication_rejects_partial_changed_or_numeric_success(self):
         mutations = [lambda r, f, n: r.update(passed=1),
@@ -65,7 +84,11 @@ class ReleaseProofTests(unittest.TestCase):
                      lambda r, f, n: r['network']['build'].update(buildId='another frozen executable'),
                      lambda r, f, n: r['network'].update(retainedTaskCount=True),
                      lambda r, f, n: r.update(installedRuntimeChanged=True),
-                     lambda r, f, n: r.update(baselineWorkerSha256='e' * 64)]
+                     lambda r, f, n: r.update(baselineWorkerSha256='e' * 64),
+                     lambda r, f, n: r.update(testExecutable='K:/random-run/winbridge-worker.exe'),
+                     lambda r, f, n: r.update(firewallWaitSeconds=True),
+                     lambda r, f, n: r.update(testExecutableSha256='f' * 64),
+                     lambda r, f, n: f.update({'test-runtime-policy.log': b'TEST_RUNTIME_POLICY {"passed":true,"stablePath":true,"checksPassed":true}'})]
         for i, mutate in enumerate(mutations):
             with self.subTest(case=i):
                 r, f, s, m, n = fixture()

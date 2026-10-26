@@ -6,21 +6,25 @@ Source workspace794/0/17ignored, Linux/MSVC Clippy, TS/UI/contracts, safety prob
 Python profile5/desktop3/publication3 passed. Runtime CPU fix принят.
 
 **Worker0.1.1 ещё не выпущен:** [release status](releases/worker-0.1.1.md).
-Native run20261026-133349-ec2d99c5/taska6a111f7-8350-4d95-b28d-959ef697881d
-прошёл стадии regressions/CPU, сообщил network connection failure и не завершил
-cleanup. At13:52:30Z running/cancelRequested=true; это не terminal. Повтор не
-отправлять; сначала reconcile тот же task. Root pwsh23220/test worker17496
-наблюдались живыми, работающий installed worker12740/d052 connected/generation
-301be6ea прежняя; active1 — этот gate. Запрошено наблюдение пользователя о
-специальном файерволе, причина пока не доказана. До выяснения зависимые Windows
-действия остановлены. Installed runtime/config/journal не заменялись, firewall
-не менялся. Новый source ограничивает cleanup waits/пишет connection diagnostic,
-но это исправление ещё не проверено на Windows и не действует на текущий task.
-Current controller .203:1143/PID5103, actual old0.1.0 copy для isolated controller
-сохранена в .winbridge/releases/review-0.1.1. Observer session72424/log и metadata
-указаны в release note. Не объявлять ZIP published и не продолжать updater service
-до разрешения неожиданного Windows поведения. Старые branch-only запреты ниже
-исторические, пользователь явно поручил merge.
+Пользователь подтвердил firewall block временного exe. Старый taska6a111f7/run
+20261026-133349-ec2d99c5 теперь terminal cancelled, не replay и не passed.
+Installed d052/generation301be6ea connected/active0/errors=null17:38Z.
+
+Новый source использует постоянный network test exe
+`K:\_proj-26\winbridge\runtime-test\winbridge-worker.exe`, isolated controller
+.203:1144 и default900s на разрешение/соединение; RPC имеет отдельные120s.
+CLI overrides/budgets/lease/pin/ownership/live-process guards — в release note.
+State/config/instance/report свежие per-run, production runtime не меняется.
+Python publication4 passed; native policy6/новый release gate ещё впереди.
+Updater startup240s и прежние120s intents не менялись. Нужен установленный worker;
+desktop не нужен. Новый путь требует первого пользовательского firewall allow,
+затем его имя не меняется. Source/commit/export перед новым native gate обязательны.
+
+Current controller .203:1143/PID5103 оставлен; actual old0.1.0 controller copy,
+reference и fresh preflight находятся в .winbridge/releases/review-0.1.1.
+Продолжить release gate с новым clean producer и fixed test runtime, подтвердить
+cleanup/ready hashes/independent verifier, затем опубликовать worker-only ZIP.
+Не продолжать updater service как будто пакет уже установлен. История ниже.
 
 **Текущая задача2026-10-26:** [worker0.1.1](releases/worker-0.1.1.md), source
 version/startup diagnostics подготовлены; Linux checks passed. Windows build и

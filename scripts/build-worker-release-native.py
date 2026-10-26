@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path, PureWindowsPath
 import shutil
 import signal
@@ -47,6 +48,15 @@ def save_json(path, value):
     temporary.replace(path)
 
 
+def stable_runtime_directory(installed_worker, chosen=None):
+    production = PureWindowsPath(installed_worker).parent
+    candidate = PureWindowsPath(chosen) if chosen else production.with_name('runtime-test')
+    if (not candidate.is_absolute() or not re.fullmatch('[A-Za-z]:', candidate.drive)
+            or '..' in candidate.parts or candidate.is_relative_to(production) or production.is_relative_to(candidate)):
+        raise ValueError('Stable test runtime must be a separate absolute local directory')
+    return str(candidate)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--controller-config', required=True, type=Path)
@@ -54,7 +64,12 @@ def main():
     p.add_argument('--source-ready', required=True, type=Path)
     p.add_argument('--controller-baseline', required=True, type=Path)
     p.add_argument('--preflight', required=True, type=Path, help='Fresh installed build/config/hash/manifest observation')
+    p.add_argument('--test-runtime-directory', help='Stable Windows test executable directory; defaults to runtime-test beside installed runtime')
+    p.add_argument('--firewall-wait-seconds', type=int, default=900, help='Connection approval budget only; 60..3600 seconds')
+    p.add_argument('--test-controller-port', type=int, default=1144, help='Fixed isolated controller port, separate from installed1143')
     args = p.parse_args()
+    if not 60 <= args.firewall_wait_seconds <= 3600 or not 1024 <= args.test_controller_port <= 65535:
+        raise ValueError('Invalid test connection budget/port')
     cfg = json.loads(args.controller_config.read_text())
     ep = Path(cfg['stateDirectory']) / ('controller-' + cfg['instanceId'] + '.sock')
     info = native.call(ep, dict(method='info'))['info']
@@ -92,11 +107,12 @@ def main():
     shared.mkdir(parents=True)
     win_shared = str(PureWindowsPath('K:/VMs/shared/WinBridge/releases') / run)
     work = str(PureWindowsPath(project['workspaceRoot']) / 'releases' / ('worker-0.1.1-' + run))
+    test_runtime = stable_runtime_directory(preflight['windows']['installedWorkerPath'], args.test_runtime_directory)
     instance = 'release-' + uuid.uuid4().hex[:8]
     state = Path(tempfile.mkdtemp(prefix='wb-rel-'))
     host = cfg['controller']['listenAddress'].rsplit(':', 1)[0]
     with socket.socket() as reserve:
-        reserve.bind((host, 0))
+        reserve.bind((host, args.test_controller_port))
         port = reserve.getsockname()[1]
     controller_config = dict(schemaVersion=1, instanceId=instance, nodeId='release-controller',
         stateDirectory=str(state), controller=dict(listenAddress=f'{host}:{port}', workerNodeId='release-worker'),
@@ -116,7 +132,7 @@ def main():
             time.sleep(.1)
         with zipfile.ZipFile(archive) as z:
             bundle = {name: z.read('winbridge/scripts/' + name).decode() for name in
-                ('build-windows-worker-release.ps1', 'session-runtime.ps1', 'lib/build-cache.ps1', 'lib/validation-storage.ps1')}
+                ('build-windows-worker-release.ps1', 'session-runtime.ps1', 'lib/build-cache.ps1', 'lib/validation-storage.ps1', 'lib/test-worker-runtime.ps1')}
         parameters = dict(SourceArchive=str(PureWindowsPath('K:/VMs/shared/WinBridge/sources') / ready['archive']),
             ArchiveSha256=ready['sha256'], ManifestSha256=manifest_sha, SourceCommit=ready['sourceCommit'],
             WorkDirectory=work, CacheDirectory=str(PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / ref['cacheRun'] / 'test-build-cache'),
@@ -125,7 +141,8 @@ def main():
             InstalledConfig=preflight['windows']['configPath'],
             InstalledConfigSha256=preflight['windows']['configSha256'],
             InstalledWorker=preflight['windows']['installedWorkerPath'],
-            InstalledWorkerSha256=preflight['windows']['installedWorkerSha256'], InstalledGeneration=info['generation'])
+            InstalledWorkerSha256=preflight['windows']['installedWorkerSha256'], InstalledGeneration=info['generation'],
+            TestRuntimeDirectory=test_runtime, FirewallWaitSeconds=args.firewall_wait_seconds)
         helper_hashes = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in bundle.items()}
         packed = base64.b64encode(gzip.compress(json.dumps(dict(files=helper_hashes, parameters=parameters)).encode())).decode()
         helpers = str(PureWindowsPath(work).parent / ('tmp-release-script-' + run))
@@ -142,10 +159,11 @@ def main():
         if len(encoded) > 30000:
             raise ValueError('Release command exceeds bounded argv')
         request = dict(protocolVersion=1, requestId=str(uuid.uuid4()), projectId=project['id'], idempotencyKey='worker-release-' + run,
-            timeoutMs=1800000, command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.', arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]))
+            timeoutMs=1800000 + args.firewall_wait_seconds * 1000, command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.', arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]))
         meta = dict(run=run, taskId=None, request=request, source=ready, manifestSha256=manifest_sha,
             windowsWorkDirectory=work, reportDirectory=str(shared), controllerConfig=str(config_path), controllerEndpoint=str(ep), installedConfig=preflight['windows']['configPath'],
             controllerBaselineSha256=hashlib.sha256(args.controller_baseline.read_bytes()).hexdigest(),
+            testRuntimeDirectory=test_runtime, firewallWaitSeconds=args.firewall_wait_seconds, testControllerPort=port,
             debianFreeBytesBefore=shutil.disk_usage(ROOT).free, bundleSha256={k: hashlib.sha256(v.encode()).hexdigest() for k, v in bundle.items()})
         save_json(meta_path, meta)
         task = native.call(ep, dict(method='submit', request=request))['task']
@@ -217,7 +235,7 @@ def main():
         report = json.loads(files['report.json'].decode('utf-8-sig'))
         if report['passed'] is not True or not network_done or report['isolatedWorkerExitConfirmed'] is not True:
             raise ValueError('Incomplete release proof')
-        verified = release_proof.verify(files, ready, manifest_sha, json.loads((local / 'network-proof.json').read_text()), baseline['sha256'])
+        verified = release_proof.verify(files, ready, manifest_sha, json.loads((local / 'network-proof.json').read_text()), baseline['sha256'], test_runtime, args.firewall_wait_seconds)
         readme = ('WinBridge worker 0.1.1, Windows x86_64, local dev profile with safety checks.\n'
             'Fix: indexed pending-only scheduler reads; idle CPU diagnostics and build/PID startup identity.\n'
             'Source: ' + ready['sourceCommit'] + '\n\n'
@@ -241,9 +259,15 @@ def main():
                 z.writestr(name, data)
         with zipfile.ZipFile(zip_path) as z:
             assert z.testzip() is None and all(z.read(n) == b for n, b in package.items())
-        result = dict(passed=True, taskId=task['taskId'], run=run, archive=str(zip_path), archiveSha256=hashlib.sha256(zip_path.read_bytes()).hexdigest(),
+        result = dict(schemaVersion=1, kind='winbridge_worker_patch_release', passed=True,
+            sourceCommit=ready['sourceCommit'], sourceManifestSha256=manifest_sha,
+            taskId=task['taskId'], run=run, archive=str(zip_path), archiveSha256=hashlib.sha256(zip_path.read_bytes()).hexdigest(),
             workerSha256=hashlib.sha256(files['winbridge-worker.exe']).hexdigest(), reportSha256=hashlib.sha256(files['report.json']).hexdigest(),
-            filesVerifiedTwice=len(files), nativeTestsPassed=verified['nativeTestsPassed'], cpuPercentOfOneCore=verified['cpuPercentOfOneCore'], networkVerified=True, installedRuntimeChanged=False, debianFreeBytesAfter=shutil.disk_usage(ROOT).free)
+            filesVerifiedTwice=len(files), nativeTestsPassed=verified['nativeTestsPassed'],
+            testRuntimeChecksPassed=verified['testRuntimeChecksPassed'], testRuntimeDirectory=test_runtime,
+            firewallWaitSeconds=args.firewall_wait_seconds, testControllerPort=port,
+            cpuPercentOfOneCore=verified['cpuPercentOfOneCore'], networkVerified=True,
+            installedRuntimeChanged=False, debianFreeBytesAfter=shutil.disk_usage(ROOT).free)
         (local / 'verified.json').write_text(json.dumps(result, indent=2))
         (shared / 'release.ready.json').write_text(json.dumps(result, indent=2))
         print(json.dumps(result, indent=2), flush=True)

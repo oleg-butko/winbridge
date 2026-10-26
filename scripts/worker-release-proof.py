@@ -23,24 +23,35 @@ def same_json(left, right):
     return json.dumps(left, sort_keys=True, allow_nan=False) == json.dumps(right, sort_keys=True, allow_nan=False)
 
 
-def verify(files, source, manifest_sha, network, baseline_sha):
+def verify(files, source, manifest_sha, network, baseline_sha, test_runtime, firewall_wait_seconds):
     report = json.loads(files['report.json'].decode('utf-8-sig'))
     need(type(report['schemaVersion']) is int and report['schemaVersion'] == 1
          and report['kind'] == 'worker_patch_release' and report['version'] == '0.1.1'
          and report['passed'] is True and report['error'] is None
          and report['installedRuntimeChanged'] is False and report['windowsOpened'] is False
+         and report['syntaxVerified'] is True
          and report['isolatedWorkerExitConfirmed'] is True, 'Incomplete or unsafe patch report')
     need(report['sourceCommit'] == source['sourceCommit']
          and report['manifestSha256'] == manifest_sha
          and report['archiveSha256'] == source['sha256']
          and report['baselineWorkerSha256'] == baseline_sha, 'Patch source or CPU baseline differs')
     commands = report['commands']
-    need([c['name'] for c in commands] == ['worker-regressions', 'idle-cpu'], 'Release checks omitted or changed')
+    need([c['name'] for c in commands] == ['worker-regressions', 'idle-cpu', 'test-runtime-policy'], 'Release checks omitted or changed')
     for c in commands:
         need(type(c['exitCode']) is int and c['exitCode'] == 0 and counter(c['elapsedMs'])
              and counter(c['freeBytesBefore']) and c['freeBytesBefore'] >= 6 * 1024**3
              and c['log'] == c['name'] + '.log', 'Invalid release command/disk evidence')
         args = c['arguments']
+        if c['name'] == 'test-runtime-policy':
+            need(len(args) == 8 and args[:3] == ['-NoProfile', '-NonInteractive', '-File']
+                 and PureWindowsPath(args[3]).name == 'test-worker-runtime.ps1'
+                 and args[4] == '-WorkDirectory' and args[6] == '-Fixture', 'Policy test invocation differs')
+            lines = files[c['log']].decode('utf-8-sig').splitlines()
+            policies = [json.loads(x[len('TEST_RUNTIME_POLICY '):]) for x in lines if x.startswith('TEST_RUNTIME_POLICY ')]
+            need(len(policies) == 1 and policies[0]['passed'] is True and policies[0]['stablePath'] is True
+                 and type(policies[0]['checksPassed']) is int and policies[0]['checksPassed'] == 6,
+                 'Test runtime safety checks incomplete')
+            continue
         need(len(args) > 9 and args[:8] == ['test', '-p', 'winbridge-worker', '--locked', '--offline',
              '--features', 'bundled-sqlite', '--target-dir']
              and PureWindowsPath(args[8]).is_absolute(), 'Unexpected build/features/cache')
@@ -68,6 +79,12 @@ def verify(files, source, manifest_sha, network, baseline_sha):
     need(samples[1]['percentOfOneCore'] < samples[0]['percentOfOneCore'] * .5, 'Idle CPU regression')
     image = files['winbridge-worker.exe']
     sha = hashlib.sha256(image).hexdigest()
+    need(isinstance(report['testRuntimeDirectory'], str) and isinstance(report['testExecutable'], str)
+         and PureWindowsPath(report['testRuntimeDirectory']) == PureWindowsPath(test_runtime)
+         and PureWindowsPath(report['testExecutable']) == PureWindowsPath(test_runtime) / 'winbridge-worker.exe'
+         and report['testExecutableSha256'] == sha
+         and type(report['firewallWaitSeconds']) is int and report['firewallWaitSeconds'] == firewall_wait_seconds,
+         'Stable test runtime/connection budget differs')
     q = report['artifactQuery']
     descriptor = q['descriptor']
     build = descriptor['build']
@@ -87,4 +104,5 @@ def verify(files, source, manifest_sha, network, baseline_sha):
          and network['retainedTaskCount'] == 1 and 'Привет' in network['output'], 'Cross-version RPC evidence differs')
     return dict(workerSha256=sha, nativeTestsPassed=sum(int(n) for c in commands for n in
                 re.findall(r'test result: ok\. (\d+) passed; 0 failed;', files[c['log']].decode('utf-8-sig'))),
+                testRuntimeChecksPassed=6,
                 cpuPercentOfOneCore={s['variant']: s['percentOfOneCore'] for s in samples})

@@ -2,28 +2,50 @@
 
 Ветка слита в main: merge50ceb0d, review fixes2b3734c.
 [Результаты ревью](../plans/run-speed/review-merge-2026-10-26.md).
-Новый native release run20261026-133349-ec2d99c5/taska6a111f7-8350-4d95-b28d-959ef697881d
-прошёл стадии regressions/CPU, но network handshake не завершён. Сценарий сообщил
-ошибку соединения и завис на cleanup. **ZIP выпуска не опубликован.**
-13:52:30Z task всё ещё running/cancelRequested=true; отмена запрошена ровно один
-раз. Это не terminal failed и не разрешение повторить build. Worker d052 остаётся
-connected/maintenanceError=null/recoveryError=null, generation прежняя; active1
-относится к этой незавершённой проверке. Controller .203:1143 и observer оставлены.
 
-Readonly process diagnostic task8a85df70-3caa-4ae3-a132-8b82168586d9 succeeded/0:
-root pwsh23220 и тестовый worker17496 оставались живыми. Тестовый путь:
-`K:\_proj-26\winbridge\workspaces\snapshot-fixture\releases\worker-0.1.1-20261026-133349-ec2d99c5\winbridge-worker.exe`.
-Запрошено наблюдение пользователя о специальном файерволе; причина пока
-**не подтверждена**. Системные/firewall настройки не менялись. Новых Windows
-сборок/прогонов до выяснения и подтверждения terminal состояния не запускать.
+## Постоянный сетевой test runtime — 2026-10-26
 
-Source50ceb0d чистый. Metadata
-`.winbridge/releases/20261026-133349-ec2d99c5/submission.json`, observer session72424,
-log `.winbridge/releases/review-0.1.1/native-build.log`; pending info/process/cancel
-receipts в той же review-0.1.1 папке. После перезапуска сначала get_task по ID.
-В новом source исправлены unbounded WaitForExit/EOF waits и добавлен вывод последнего
-controller connection до cleanup. Это изменение ещё **не выполнено на Windows**;
-оно не меняет уже работающий старый task и не доказывает остановку PID17496.
+Пользователь подтвердил блокировку exe из каталога с run ID. Для сетевой проверки
+теперь используется **`K:\_proj-26\winbridge\runtime-test\winbridge-worker.exe`**.
+Это отдельный слот, не установленный `runtime\winbridge-worker.exe`.
+Разрешение файервола понадобится для этого постоянного пути; правила автоматически
+не меняются. Fresh config/state/instance/report каждого теста по-прежнему изолированы.
+Старые каталоги не переименовываются и не удаляются.
+
+- Test controller: **ws://192.168.44.203:1144**, working controller остаётся1143.
+- Ожидание разрешения/соединения: **900s (15min)** по умолчанию. CLI
+  `--firewall-wait-seconds 1800` даёт30min (допустимо60..3600).
+- RPC получает отдельные120s после connection; общий task budget увеличен на
+  connection allowance. **Startup240s самого updater и сохранённые120s attempts
+  не меняются.** Статус ожидания печатается каждые15s.
+- `--test-runtime-directory` позволяет выбрать другой постоянный локальный путь;
+  default получается как sibling runtime-test от фактического installed runtime.
+  Относительные/UNC/traversal и пересечение с production runtime запрещены.
+- Ownership marker, exclusive lease и read pin защищают слот. Неизвестный каталог
+  с файлами не присваивается; live test worker не заменяется/не запускается вторично.
+  В слоте только binary/marker/lease, без journal/config; пользовательские данные
+  и рабочие executable не переносятся сюда. После подтверждённого exit слот остаётся
+  для следующей версии с тем же executable path.
+- Native policy test проверяет6 свойств: защита production, чужих файлов, lease,
+  write pin, hash mismatch и live process; также проверяет reuse того же пути.
+  Independent publication verifier связывает эти проверки, stable path/hash/budget
+  с actual worker payload и новым RPC. Python4 passed; native check ещё впереди.
+
+Старый run20261026-133349-ec2d99c5/taska6a111f7-8350-4d95-b28d-959ef697881d
+теперь **terminal cancelled** (`Managed process tree cancelled`), не passed.
+Рабочий d052/generation301be6ea снова connected/active0/errors=null17:38Z.
+Старый observer завершился; его namespace не replay. Новый gate допускается только
+после fresh Info/space/source pins. ZIP0.1.1 пока не опубликован.
+
+## История предыдущего прогона
+
+Source50ceb0d был чистым. Metadata
+`.winbridge/releases/20261026-133349-ec2d99c5/submission.json`,
+log `.winbridge/releases/review-0.1.1/native-build.log`. Он прошёл стадии regressions/
+CPU, но network не подтвердился из-за блокировки временного exe. Cleanup долго
+оставался unconfirmed, затем cancel подтверждён. Не выдавать это за успешный
+release proof; исходные файлы и отчёты сохраняются. Source74ae95e ограничил waits
+и добавил connection diagnostic; реальное выполнение исправления — в новом gate.
 Старые записи о perf-ветке ниже — история подготовки, не инструкция запрещать merge.
 
 Подготовка2026-10-26 в `perf/run-speed-2026-10-25`. Собирается worker-only пакет;

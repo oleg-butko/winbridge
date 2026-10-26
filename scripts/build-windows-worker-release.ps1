@@ -17,7 +17,9 @@ param(
  [Parameter(Mandatory)][string]$InstalledConfigSha256,
  [Parameter(Mandatory)][string]$InstalledWorker,
  [Parameter(Mandatory)][string]$InstalledWorkerSha256,
- [Parameter(Mandatory)][string]$InstalledGeneration
+ [Parameter(Mandatory)][string]$InstalledGeneration,
+ [Parameter(Mandatory)][string]$TestRuntimeDirectory,
+ [ValidateRange(60,3600)][int]$FirewallWaitSeconds=900
 )
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 $PSNativeCommandUseErrorActionPreference=$false
@@ -25,6 +27,7 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
 . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
 . (Join-Path $PSScriptRoot 'lib/validation-storage.ps1')
+. (Join-Path $PSScriptRoot 'lib/test-worker-runtime.ps1')
 $work=[IO.Path]::GetFullPath($WorkDirectory)
 $cache=[IO.Path]::GetFullPath($CacheDirectory)
 foreach($path in @($work,$cache)){Assert-SessionDirectory $path;Assert-WorkflowCachePath $path;if([IO.DriveInfo]::new([IO.Path]::GetPathRoot($path)).DriveType -ne [IO.DriveType]::Fixed){throw 'Local fixed disk required'}}
@@ -46,6 +49,7 @@ $report=[ordered]@{schemaVersion=1;kind='worker_patch_release';passed=$false;ver
  manifestSha256=$ManifestSha256;archiveSha256=$ArchiveSha256;installedRuntimeChanged=$false;windowsOpened=$false;
  profile='dev; existing package optimizations; debug assertions and overflow checks enabled';commands=@();artifacts=@();cpu=@();error=$null}
 $saved=@{};foreach($name in @('CARGO_INCREMENTAL','CARGO_TERM_COLOR','TEMP','TMP','WINBRIDGE_IDLE_BASELINE_WORKER')){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
+$testSlot=$null
 $location=Get-Location;$childStarted=$false;$childStopAttempted=$false;$child=$null;$out=$null;$err=$null
 function Save-ProcessCapture($Capture,[string]$Path){
  # EOF is not guaranteed after termination is requested (inherited handles or
@@ -91,6 +95,12 @@ try{
  if($LASTEXITCODE -ne 0){throw 'Source verification failed'}
  $verified=($verify -join "`n")|ConvertFrom-Json
  if($verified.kind -cne 'source_verified' -or $verified.sourceCommit -cne $SourceCommit -or $verified.manifestSha256 -cne $ManifestSha256){throw 'Source pin differs'}
+ foreach($relative in @('scripts/build-windows-worker-release.ps1','scripts/lib/test-worker-runtime.ps1','scripts/test-worker-runtime.ps1')){
+  $tokens=$null;$errors=$null
+  [Management.Automation.Language.Parser]::ParseFile((Join-Path $source $relative),[ref]$tokens,[ref]$errors)|Out-Null
+  if($errors.Count){throw ('PowerShell syntax check failed: '+$relative+' '+($errors|Out-String))}
+ }
+ $report.syntaxVerified=$true
  $env:CARGO_INCREMENTAL='0';$env:CARGO_TERM_COLOR='never'
  $env:TEMP=Join-Path $work 'tmp-build/tmp-test-temp';$env:TMP=$env:TEMP;New-Item -ItemType Directory -Path $env:TEMP|Out-Null
  Set-Location $source
@@ -131,20 +141,36 @@ try{
  $config=@{schemaVersion=1;instanceId=$InstanceId;nodeId='release-worker';stateDirectory=(Join-Path $network 'state');worker=@{controllerUrl=$ControllerUrl;keepRunningOnUiExit=$true};
   projects=@(@{id='fixture';workspaceRoot=$project;allowDirectCommands=$true;maxConcurrentMutations=1;recipes=@(@{id='fixture-success';executable=(Join-Path $project 'winbridge-fixture.exe');arguments=@('success');workingDirectory='.';timeoutMs=5000})})}
  Write-NewJson $configPath $config
- $si=[Diagnostics.ProcessStartInfo]::new($image);$si.UseShellExecute=$false;$si.CreateNoWindow=$true;$si.RedirectStandardOutput=$true;$si.RedirectStandardError=$true
+ Write-Host 'WinBridge worker release: test-runtime-policy'
+ $policyArguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/test-worker-runtime.ps1'),'-WorkDirectory',(Join-Path $work 'tmp-build/runtime-policy'),'-Fixture',(Join-Path $project 'winbridge-fixture.exe'))
+ $watch=[Diagnostics.Stopwatch]::StartNew()
+ & pwsh.exe @policyArguments 2>&1|ForEach-Object {$_.ToString()}|Set-Content -LiteralPath (Join-Path $work 'test-runtime-policy.log') -Encoding utf8
+ $code=$LASTEXITCODE;$watch.Stop()
+ $report.commands+=@(@{name='test-runtime-policy';log='test-runtime-policy.log';arguments=$policyArguments;exitCode=$code;elapsedMs=$watch.ElapsedMilliseconds;freeBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($cache)).AvailableFreeSpace})
+ if($code -ne 0){throw 'Test runtime safety checks failed'}
+ $testSlot=Open-TestWorkerRuntime -Directory $TestRuntimeDirectory -InstalledWorker $InstalledWorker -Image $image -Sha256 $q.image.sha256
+ $report.testRuntimeDirectory=$testSlot.directory;$report.testExecutable=$testSlot.executable;$report.testExecutableSha256=$testSlot.sha256
+ $report.firewallWaitSeconds=$FirewallWaitSeconds
+ Write-Host ("Test worker network executable (fixed path): "+$testSlot.executable)
+ $si=[Diagnostics.ProcessStartInfo]::new($testSlot.executable);$si.UseShellExecute=$false;$si.CreateNoWindow=$true;$si.RedirectStandardOutput=$true;$si.RedirectStandardError=$true
  $si.StandardOutputEncoding=[Text.UTF8Encoding]::new($false);$si.StandardErrorEncoding=[Text.UTF8Encoding]::new($false)
  foreach($arg in @('--config',$configPath,'serve')){$si.ArgumentList.Add($arg)}
  $si.Environment['WINBRIDGE_SCHEDULER_DIAGNOSTICS']='1'
  $child=[Diagnostics.Process]::new();$child.StartInfo=$si;[void]$child.Start();$childStarted=$true
  $out=$child.StandardOutput.ReadToEndAsync();$err=$child.StandardError.ReadToEndAsync()
  Write-Host 'WinBridge worker release: waiting for old-controller/new-worker RPC check'
- $deadline=[DateTime]::UtcNow.AddSeconds(90);$info=$null
+ Write-Host ("Waiting up to $FirewallWaitSeconds seconds for firewall approval/connection; updater startup deadlines are unchanged")
+ $connectionWait=[Diagnostics.Stopwatch]::StartNew();$info=$null;$lastProgress=-15
  do{
   if($child.HasExited){throw 'Isolated worker exited before network validation'}
   try{$reply=Invoke-WorkerJson @('--config',$configPath,'info');$info=$reply.info}catch{Start-Sleep -Milliseconds 200;continue}
   if($info.controllerConnection.state -ceq 'connected'){break}
+  if($connectionWait.Elapsed.TotalSeconds -ge $lastProgress+15){
+   $lastProgress=$connectionWait.Elapsed.TotalSeconds
+   Write-Host ("Waiting for test worker connection: "+($info.controllerConnection|ConvertTo-Json -Compress))
+  }
   Start-Sleep -Milliseconds 200
- }while([DateTime]::UtcNow -lt $deadline)
+ }while($connectionWait.Elapsed.TotalSeconds -lt $FirewallWaitSeconds)
  if($null -eq $info -or $info.controllerConnection.state -cne 'connected'){
   if($null -ne $info){
    Write-NewJson (Join-Path $SharedReportDirectory 'network-last-connection.json') $info.controllerConnection
@@ -154,8 +180,9 @@ try{
  }
  Write-NewJson (Join-Path $SharedReportDirectory 'network-ready.json') @{version='0.1.1';sourceCommit=$SourceCommit;instanceId=$InstanceId;context=$info.fencedRequests.context}
  $donePath=Join-Path $SharedReportDirectory 'network-complete.json'
+ $rpcWait=[Diagnostics.Stopwatch]::StartNew()
  while(-not (Test-Path -LiteralPath $donePath)){
-  if($child.HasExited -or [DateTime]::UtcNow -ge $deadline){throw 'Cross-version RPC validation incomplete'}
+  if($child.HasExited -or $rpcWait.Elapsed.TotalSeconds -ge 120){throw 'Cross-version RPC validation incomplete'}
   Start-Sleep -Milliseconds 200
  }
  $done=Get-Content -Raw -LiteralPath $donePath|ConvertFrom-Json
@@ -187,6 +214,7 @@ finally{
   Save-ProcessCapture $err (Join-Path $work 'network-worker-stderr.log')
   $child.Dispose()
  }
+ Close-TestWorkerRuntime $testSlot
  Set-Location $location;foreach($name in $saved.Keys){[Environment]::SetEnvironmentVariable($name,$saved[$name])};$lease.Dispose()
  if(Test-Path -LiteralPath $work){
   $report.freeBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($cache)).AvailableFreeSpace

@@ -86,3 +86,13 @@ Cancel запрошен; actual task всё ещё running/cancelRequested=true1
 ожидания с unconfirmed cleanup/error, выводит last connection перед teardown.
 На текущий frozen script исправление не влияет, native recheck ещё не выполнен.
 Все exact IDs/paths/handles и следующий порядок — в release note.
+
+## Исправление по ответу пользователя: постоянный executable
+
+Пользователь подтвердил firewall block; taska6a111f7 теперь terminal cancelled.
+Сетевой test worker перемещён в отдельный постоянный runtime-test рядом с runtime,
+с exclusive lease/owned marker/read pin и запретом заменять live process/production
+или чужие файлы. State/report остаются fresh per-run. Default test port1144,
+connection allowance900s, RPC120s отдельно, parent task получает этот allowance.
+Updater240s/старые120s contracts не меняются. Python publication4 passed;
+actual Windows policy6 и новый release ещё не выполнены. Путь и CLI в release note.
