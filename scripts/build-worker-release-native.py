@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import shutil
 import signal
@@ -33,6 +34,17 @@ def module(name, filename):
 native = module('native', 'validate-workflow-native.py')
 fenced = module('fenced', 'validate-installed-provider.py')
 timings = module('timings', 'summarize-update-timings.py')
+health = module('health', 'validate-update-health-actor-native.py')
+release_proof = module('release_proof', 'worker-release-proof.py')
+
+
+def save_json(path, value):
+    temporary = path.with_name(path.name + '.part')
+    with temporary.open('x') as stream:
+        json.dump(value, stream, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(path)
 
 
 def main():
@@ -41,6 +53,7 @@ def main():
     p.add_argument('--reference', required=True, type=Path)
     p.add_argument('--source-ready', required=True, type=Path)
     p.add_argument('--controller-baseline', required=True, type=Path)
+    p.add_argument('--preflight', required=True, type=Path, help='Fresh installed build/config/hash/manifest observation')
     args = p.parse_args()
     cfg = json.loads(args.controller_config.read_text())
     ep = Path(cfg['stateDirectory']) / ('controller-' + cfg['instanceId'] + '.sock')
@@ -55,6 +68,9 @@ def main():
     with zipfile.ZipFile(archive) as z:
         manifest = z.read('winbridge/winbridge-source-manifest.json')
     manifest_sha = hashlib.sha256(manifest).hexdigest()
+    pin = health.archive_pin(archive)
+    if pin['sourceCommit'] != ready['sourceCommit'] or pin['manifestSha256'] != manifest_sha:
+        raise ValueError('Source manifest/actual payload pin differs')
     ref = json.loads(args.reference.read_text())
     files = timings.verified_files(Path('/mnt/hgfs/shared/WinBridge/workflow-validation') / ref['run'])
     if ref['passed'] is not True or hashlib.sha256(files['report.json']).hexdigest() != ref['reportSha256']:
@@ -64,7 +80,7 @@ def main():
     baseline, verifier = retained[0], retained[3]
     if not baseline['path'].endswith('\\winbridge-worker.exe') or not verifier['path'].endswith('\\winbridge-update.exe'):
         raise ValueError('Pinned retained binaries required')
-    preflight = json.loads((ROOT / '.winbridge/releases/0.1.1/preflight-result.json').read_text())
+    preflight = json.loads(args.preflight.read_text())
     if info['build'] != preflight['installedBuild'] or preflight['windows']['installedSetExists']:
         raise ValueError('Working runtime changed or requires coordinated installed-set release')
     if shutil.disk_usage(ROOT).free < 6 * 1024**3:
@@ -106,8 +122,10 @@ def main():
             WorkDirectory=work, CacheDirectory=str(PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / ref['cacheRun'] / 'test-build-cache'),
             VerifierExecutable=verifier['path'], VerifierSha256=verifier['sha256'], BaselineWorker=baseline['path'], BaselineSha256=baseline['sha256'],
             ControllerUrl=f'ws://{host}:{port}', InstanceId=instance, SharedReportDirectory=win_shared,
-            InstalledConfig='K:\\_proj-26\\winbridge\\runtime\\winbridge-worker.snapshot.local_204.json',
-            InstalledConfigSha256=preflight['windows']['configSha256'])
+            InstalledConfig=preflight['windows']['configPath'],
+            InstalledConfigSha256=preflight['windows']['configSha256'],
+            InstalledWorker=preflight['windows']['installedWorkerPath'],
+            InstalledWorkerSha256=preflight['windows']['installedWorkerSha256'], InstalledGeneration=info['generation'])
         helper_hashes = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in bundle.items()}
         packed = base64.b64encode(gzip.compress(json.dumps(dict(files=helper_hashes, parameters=parameters)).encode())).decode()
         helpers = str(PureWindowsPath(work).parent / ('tmp-release-script-' + run))
@@ -126,13 +144,13 @@ def main():
         request = dict(protocolVersion=1, requestId=str(uuid.uuid4()), projectId=project['id'], idempotencyKey='worker-release-' + run,
             timeoutMs=1800000, command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.', arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]))
         meta = dict(run=run, taskId=None, request=request, source=ready, manifestSha256=manifest_sha,
-            windowsWorkDirectory=work, reportDirectory=str(shared), controllerConfig=str(config_path),
+            windowsWorkDirectory=work, reportDirectory=str(shared), controllerConfig=str(config_path), controllerEndpoint=str(ep), installedConfig=preflight['windows']['configPath'],
             controllerBaselineSha256=hashlib.sha256(args.controller_baseline.read_bytes()).hexdigest(),
             debianFreeBytesBefore=shutil.disk_usage(ROOT).free, bundleSha256={k: hashlib.sha256(v.encode()).hexdigest() for k, v in bundle.items()})
-        meta_path.write_text(json.dumps(meta, indent=2))
+        save_json(meta_path, meta)
         task = native.call(ep, dict(method='submit', request=request))['task']
         meta['taskId'] = task['taskId']
-        meta_path.write_text(json.dumps(meta, indent=2))
+        save_json(meta_path, meta)
         print(json.dumps(dict(taskId=task['taskId'], metadata=str(meta_path), report=str(shared))), flush=True)
         sequence = 0
         network_done = False
@@ -144,20 +162,26 @@ def main():
                     print(bytes(chunk['bytes']).decode('utf8', errors='replace'), end='', flush=True)
             marker = shared / 'network-ready.json'
             if marker.exists() and not network_done:
-                network_ready = json.loads(marker.read_text(encoding='utf-8-sig'))
+                try:
+                    network_ready = json.loads(marker.read_text(encoding='utf-8-sig'))
+                except (OSError, json.JSONDecodeError):
+                    # The marker may be visible while HGFS is still publishing bytes.
+                    time.sleep(.1)
+                    task = native.call(ep, dict(method='get_task', taskId=task['taskId']))['task']
+                    continue
                 live = native.call(isolated_ep, dict(method='info'))['info']
-                if live['build']['version'] != '0.1.1' or live['build']['sourceCommit'] != ready['sourceCommit'] or live['fencedRequests']['context'] != network_ready['context']:
+                if live['build']['version'] != '0.1.1' or live['build']['sourceCommit'] != ready['sourceCommit'] or live['build']['sourceManifestSha256'] != manifest_sha or live['build']['sourceDirty'] is not False or live['fencedRequests']['context'] != network_ready['context']:
                     raise ValueError('Unexpected provider on isolated controller')
                 context = live['fencedRequests']['context']
                 envelope = dict(requestContractVersion=2, context=context, request=dict(method='submit', request=dict(protocolVersion=1,
                     requestId=str(uuid.uuid4()), projectId='fixture', idempotencyKey='release-rpc-' + run, timeoutMs=10000,
                     command=dict(kind='recipe', recipeId='fixture-success', arguments=[]))))
-                (local / 'network-request.json').write_text(json.dumps(envelope, indent=2))
+                save_json(local / 'network-request.json', envelope)
                 accepted = fenced.call_fenced(isolated_ep, envelope)['task']
                 duplicate = fenced.call_fenced(isolated_ep, envelope)['task']
                 assert duplicate['taskId'] == accepted['taskId']
                 wrong = json.loads(json.dumps(envelope))
-                wrong['context']['journalIncarnation'] = 'foreign-' + uuid.uuid4().hex
+                wrong['context']['journalIncarnation'] = str(uuid.uuid4())
                 try:
                     fenced.call_fenced(isolated_ep, wrong)
                 except RuntimeError as error:
@@ -173,15 +197,15 @@ def main():
                     accepted = native.call(isolated_ep, dict(method='get_task', taskId=accepted['taskId']))['task']
                 assert accepted['status'] == 'succeeded' and accepted['exitCode'] == 0
                 output = native.call(isolated_ep, dict(method='read_output', taskId=accepted['taskId'], afterSequence=0))['chunks']
-                text = b''.join(bytes(c['bytes']) for c in output).decode('utf8')
+                text = '\n'.join(b''.join(bytes(c['bytes']) for c in output if c['stream'] == stream).decode('utf8')
+                                 for stream in ('stdout', 'stderr'))
                 assert 'Привет' in text
                 history = native.call(isolated_ep, dict(method='list_tasks'))['tasks']
                 assert len(history) == 1
                 done = dict(passed=True, context=context, build=live['build'], taskId=accepted['taskId'],
                     duplicateSameTask=True, staleScopeRejected=True, output=text, retainedTaskCount=len(history))
-                (local / 'network-proof.json').write_text(json.dumps(done, indent=2))
-                with (shared / 'network-complete.json').open('x') as f:
-                    json.dump(done, f)
+                save_json(local / 'network-proof.json', done)
+                save_json(shared / 'network-complete.json', done)
                 network_done = True
                 print('Old-controller/new-worker RPC, deduplication, stale scope and Unicode passed', flush=True)
             time.sleep(1)
@@ -193,16 +217,20 @@ def main():
         report = json.loads(files['report.json'].decode('utf-8-sig'))
         if report['passed'] is not True or not network_done or report['isolatedWorkerExitConfirmed'] is not True:
             raise ValueError('Incomplete release proof')
+        verified = release_proof.verify(files, ready, manifest_sha, json.loads((local / 'network-proof.json').read_text()), baseline['sha256'])
         readme = ('WinBridge worker 0.1.1, Windows x86_64, local dev profile with safety checks.\n'
             'Fix: indexed pending-only scheduler reads; idle CPU diagnostics and build/PID startup identity.\n'
             'Source: ' + ready['sourceCommit'] + '\n\n'
             'This package has NOT replaced the installed worker. Config/state/journal stay in place.\n'
             'Manual application: wait for zero active work, stop the old worker with Ctrl+C,\n'
-            'preserve its exe as a rollback copy, copy this winbridge-worker.exe over the old exe,\n'
-            'then use the SAME --config K:\\_proj-26\\winbridge\\runtime\\winbridge-worker.snapshot.local_204.json serve.\n'
+            'preserve its exe for recovery, copy this winbridge-worker.exe over the old exe,\n'
+            'then use the SAME --config ' + preflight['windows']['configPath'] + ' serve.\n'
             'If winbridge-installed-set.json exists, do not replace one exe: coordinated installed-set update required.\n'
             'The tested current runtime has no installed-set manifest. Never delete config/state/journal.\n'
             'For periodic diagnostics set $env:WINBRIDGE_SCHEDULER_DIAGNOSTICS=\'1\' before serve.\n'
+            'The new worker migrates inactive journal16 to17 with a consistent automatic backup.\n'
+            'The old worker cannot open journal17. Do not roll back only the exe after new startup.\n'
+            'After new tasks run, never restore an old journal automatically: preserve state and request recovery.\n'
             'Multiple Debian controllers and public updater installation are not enabled by this release.\n')
         package = dict({'winbridge-worker.exe': files['winbridge-worker.exe'], 'build-identity.json': files['build-identity.json'], 'README.txt': readme.encode()})
         sums = ''.join(hashlib.sha256(b).hexdigest() + '  ' + n + '\n' for n, b in package.items()).encode()
@@ -215,7 +243,7 @@ def main():
             assert z.testzip() is None and all(z.read(n) == b for n, b in package.items())
         result = dict(passed=True, taskId=task['taskId'], run=run, archive=str(zip_path), archiveSha256=hashlib.sha256(zip_path.read_bytes()).hexdigest(),
             workerSha256=hashlib.sha256(files['winbridge-worker.exe']).hexdigest(), reportSha256=hashlib.sha256(files['report.json']).hexdigest(),
-            filesVerifiedTwice=len(files), networkVerified=True, installedRuntimeChanged=False, debianFreeBytesAfter=shutil.disk_usage(ROOT).free)
+            filesVerifiedTwice=len(files), nativeTestsPassed=verified['nativeTestsPassed'], cpuPercentOfOneCore=verified['cpuPercentOfOneCore'], networkVerified=True, installedRuntimeChanged=False, debianFreeBytesAfter=shutil.disk_usage(ROOT).free)
         (local / 'verified.json').write_text(json.dumps(result, indent=2))
         (shared / 'release.ready.json').write_text(json.dumps(result, indent=2))
         print(json.dumps(result, indent=2), flush=True)

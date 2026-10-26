@@ -14,7 +14,10 @@ param(
  [Parameter(Mandatory)][string]$InstanceId,
  [Parameter(Mandatory)][string]$SharedReportDirectory,
  [Parameter(Mandatory)][string]$InstalledConfig,
- [Parameter(Mandatory)][string]$InstalledConfigSha256
+ [Parameter(Mandatory)][string]$InstalledConfigSha256,
+ [Parameter(Mandatory)][string]$InstalledWorker,
+ [Parameter(Mandatory)][string]$InstalledWorkerSha256,
+ [Parameter(Mandatory)][string]$InstalledGeneration
 )
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 $PSNativeCommandUseErrorActionPreference=$false
@@ -30,18 +33,20 @@ if($env:OS -cne 'Windows_NT' -or (Test-Path -LiteralPath $work) -or
  (Split-Path $cache -Leaf) -cne 'test-build-cache' -or -not (Test-Path -LiteralPath $cache -PathType Container)){throw 'New local release directory and existing compiler cache required'}
 if(@(Get-Process cargo -ErrorAction SilentlyContinue).Count -or
  @(Get-ChildItem Env:|Where-Object {$_.Name -match '^(RUSTFLAGS|CARGO_ENCODED_RUSTFLAGS|RUSTC_WRAPPER|RUSTC_WORKSPACE_WRAPPER|CARGO_PROFILE_.*|WINBRIDGE_.*)$'}).Count){throw 'Requires idle compiler and unmodified environment'}
-foreach($pair in @(@($SourceArchive,$ArchiveSha256),@($VerifierExecutable,$VerifierSha256),@($BaselineWorker,$BaselineSha256),@($InstalledConfig,$InstalledConfigSha256))){
+foreach($pair in @(@($SourceArchive,$ArchiveSha256),@($VerifierExecutable,$VerifierSha256),@($BaselineWorker,$BaselineSha256),@($InstalledConfig,$InstalledConfigSha256),@($InstalledWorker,$InstalledWorkerSha256))){
  Assert-SessionFile $pair[0]
  if((Get-FileHash -LiteralPath $pair[0]).Hash.ToLowerInvariant() -cne $pair[1]){throw 'Pinned input differs'}
 }
 $leasePath=Join-Path $cache '.winbridge-build-cache.lock';Assert-SessionFile $leasePath
 $lease=[IO.File]::Open($leasePath,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+$installedManifest=Join-Path (Split-Path $InstalledWorker -Parent) 'winbridge-installed-set.json'
+if(Test-Path -LiteralPath $installedManifest){throw 'Installed-set manifest requires a coordinated release, not one worker exe'}
 $source=Join-Path $work 'tmp-build/source/winbridge'
 $report=[ordered]@{schemaVersion=1;kind='worker_patch_release';passed=$false;version='0.1.1';sourceCommit=$SourceCommit;
  manifestSha256=$ManifestSha256;archiveSha256=$ArchiveSha256;installedRuntimeChanged=$false;windowsOpened=$false;
  profile='dev; existing package optimizations; debug assertions and overflow checks enabled';commands=@();artifacts=@();cpu=@();error=$null}
 $saved=@{};foreach($name in @('CARGO_INCREMENTAL','CARGO_TERM_COLOR','TEMP','TMP','WINBRIDGE_IDLE_BASELINE_WORKER')){$saved[$name]=[Environment]::GetEnvironmentVariable($name)}
-$location=Get-Location;$child=$null;$out=$null;$err=$null
+$location=Get-Location;$childStarted=$false;$child=$null;$out=$null;$err=$null
 function Invoke-Check([string]$Name,[string[]]$Arguments){
  $free=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($cache)).AvailableFreeSpace
  if($free -lt 6GB){throw 'Less than 6GiB free; no build started'}
@@ -83,7 +88,15 @@ try{
  # Network timing fixtures and real process ownership are validated serially,
  # matching the established native workflow harness; do not saturate their clocks.
  Invoke-Check 'worker-regressions' ($common+@('--lib','--test','idle_scheduler','--test','runtime','--test','leases','--test','queue_control','--test','resource_scheduling','--test','task_fsm','--test','work_scheduling','--test','workflows','--','--test-threads=1'))
- $env:WINBRIDGE_IDLE_BASELINE_WORKER=$BaselineWorker
+ # Retained runtime files have adjacent update guards. Preserve that reference;
+ # run only an exact, independent copy with no installed-set/config neighbours.
+ $baselineDirectory=Join-Path $work 'tmp-build/baseline'
+ New-Item -ItemType Directory -Path $baselineDirectory|Out-Null
+ $baselineCopy=Join-Path $baselineDirectory 'winbridge-worker.exe'
+ [IO.File]::Copy($BaselineWorker,$baselineCopy,$false)
+ if((Get-FileHash -LiteralPath $baselineCopy).Hash.ToLowerInvariant() -cne $BaselineSha256){throw 'Independent baseline copy differs'}
+ $report.baselineWorkerSha256=$BaselineSha256
+ $env:WINBRIDGE_IDLE_BASELINE_WORKER=$baselineCopy
  Invoke-Check 'idle-cpu' ($common+@('--test','idle_scheduler','native_idle_cpu_baseline_and_candidate','--','--ignored','--nocapture'))
  $report.cpu=@(Get-Content -LiteralPath (Join-Path $work 'idle-cpu.log')|Where-Object {$_.StartsWith('IDLE_CPU ')}|ForEach-Object {$_.Substring(9)|ConvertFrom-Json})
  if($report.cpu.Count -ne 2 -or $report.cpu[1].percentOfOneCore -ge $report.cpu[0].percentOfOneCore*0.5){throw 'Idle CPU acceptance failed'}
@@ -99,7 +112,7 @@ try{
  & $image --config $InstalledConfig validate|Set-Content -LiteralPath (Join-Path $work 'installed-config-validation.log') -Encoding utf8
  if($LASTEXITCODE -ne 0){throw 'Existing configuration is not accepted'}
  $old=Invoke-WorkerJson @('--config',$InstalledConfig,'info')
- if($old.kind -cne 'info' -or $old.info.build.version -cne '0.1.0'){throw 'New CLI failed against old installed worker'}
+ if($old.kind -cne 'info' -or $old.info.build.version -cne '0.1.0' -or $old.info.generation -cne $InstalledGeneration){throw 'Installed worker changed or new CLI failed against old worker'}
  $report.installedGeneration=$old.info.generation
  $network=Join-Path $work 'tmp-build/network';$project=Join-Path $network 'project'
  New-Item -ItemType Directory -Path $project|Out-Null
@@ -112,7 +125,7 @@ try{
  $si.StandardOutputEncoding=[Text.UTF8Encoding]::new($false);$si.StandardErrorEncoding=[Text.UTF8Encoding]::new($false)
  foreach($arg in @('--config',$configPath,'serve')){$si.ArgumentList.Add($arg)}
  $si.Environment['WINBRIDGE_SCHEDULER_DIAGNOSTICS']='1'
- $child=[Diagnostics.Process]::new();$child.StartInfo=$si;[void]$child.Start()
+ $child=[Diagnostics.Process]::new();$child.StartInfo=$si;[void]$child.Start();$childStarted=$true
  $out=$child.StandardOutput.ReadToEndAsync();$err=$child.StandardError.ReadToEndAsync()
  Write-Host 'WinBridge worker release: waiting for old-controller/new-worker RPC check'
  $deadline=[DateTime]::UtcNow.AddSeconds(90);$info=$null
@@ -135,15 +148,17 @@ try{
  $last=Invoke-WorkerJson @('--config',$configPath,'info');if($last.info.activeTaskCount -ne 0){throw 'Isolated tasks still active'}
  $child.Kill();$child.WaitForExit();$report.isolatedWorkerExitConfirmed=$true
  [IO.File]::WriteAllText((Join-Path $work 'network-worker-stdout.log'),$out.GetAwaiter().GetResult());[IO.File]::WriteAllText((Join-Path $work 'network-worker-stderr.log'),$err.GetAwaiter().GetResult())
- $child.Dispose();$child=$null
+ $child.Dispose();$child=$null;$childStarted=$false
  $readback=@(& $VerifierExecutable verify-source $source $ManifestSha256);if($LASTEXITCODE -ne 0){throw 'Source changed after build'}
+ if(Test-Path -LiteralPath $installedManifest){throw 'Installed runtime now requires a coordinated release'}
  if((Get-FileHash -LiteralPath $InstalledConfig).Hash.ToLowerInvariant() -cne $InstalledConfigSha256){throw 'Installed config changed during validation'}
+ if((Get-FileHash -LiteralPath $InstalledWorker).Hash.ToLowerInvariant() -cne $InstalledWorkerSha256){throw 'Installed worker bytes changed during validation'}
  if((Get-FileHash -LiteralPath $image).Hash.ToLowerInvariant() -cne $q.image.sha256){throw 'Frozen worker changed'}
  $report.artifacts=@(@{name='winbridge-worker.exe';bytes=(Get-Item -LiteralPath $image).Length;sha256=$q.image.sha256})
  $report.passed=$true
 }catch{$report.error=$_.Exception.Message;Write-Host "Worker release failed: $($report.error)"}
 finally{
- if($null -ne $child){if(-not $child.HasExited){$child.Kill();$child.WaitForExit()};[IO.File]::WriteAllText((Join-Path $work 'network-worker-stderr.log'),$err.GetAwaiter().GetResult());$child.Dispose()}
+ if($null -ne $child -and $childStarted){if(-not $child.HasExited){$child.Kill();$child.WaitForExit()};[IO.File]::WriteAllText((Join-Path $work 'network-worker-stderr.log'),$err.GetAwaiter().GetResult());$child.Dispose()}
  Set-Location $location;foreach($name in $saved.Keys){[Environment]::SetEnvironmentVariable($name,$saved[$name])};$lease.Dispose()
  if(Test-Path -LiteralPath $work){
   $report.freeBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($cache)).AvailableFreeSpace

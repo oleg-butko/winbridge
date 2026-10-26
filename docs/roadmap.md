@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-26: по новой задаче пользователя выполняются
+[review/merge performance-ветки и выпуск worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
+CPU fix и build profiles проверены; release harness исправлен. Новый пакет
+проходит отдельный native gate; public updater/multi-controller не включаются.
+
 ## Сейчас в этой ветке: ускорение прогонов
 
 2026-10-26: [локальный worker0.1.1](releases/worker-0.1.1.md) с idle CPU fix и

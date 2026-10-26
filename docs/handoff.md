@@ -1,5 +1,10 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
+**Задача пользователя2026-10-26:** [review/merge performance-ветки и worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
+Runtime CPU fix принят после review; release harness исправлен. Merge и новый
+чистый Windows пакет готовятся. Branch-only запреты ниже исторические; пользователь
+явно поручил merge в main. Installed d052 пока не обновлён.
+
 **Текущая задача2026-10-26:** [worker0.1.1](releases/worker-0.1.1.md), source
 version/startup diagnostics подготовлены; Linux checks passed. Windows build и
 проверка against actual controller0.1.0 ещё впереди. Installed pair не заменять

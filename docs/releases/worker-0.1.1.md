@@ -1,5 +1,9 @@
 # Локальный Windows worker0.1.1
 
+Текущая задача: [review/merge и повторная подготовка выпуска](../plans/run-speed/review-merge-2026-10-26.md).
+Исправлены release harness и проверка публикации; новый native release ещё не завершён.
+Старые записи о perf-ветке ниже — история подготовки, не инструкция запрещать merge.
+
 Подготовка2026-10-26 в `perf/run-speed-2026-10-25`. Собирается worker-only пакет;
 main worktree и установленная Windows пара не заменяются. Статус native build
 **ещё не подтверждён**. Метаданные workspace/npm/desktop синхронизированы0.1.1;
@@ -51,13 +55,16 @@ cache в независимый frozen файл, проверяет роль/bui
 
 Текущий installed runtime **не имеет** `winbridge-installed-set.json`.
 Поэтому применим ручной worker-only patch при остановленном старом процессе,
-с сохранением прежнего exe для отката и прежнего config/state/journal. Для
+с сохранением прежнего exe для диагностики и прежнего config/state/journal.
+Новый worker мигрирует inactive journal16→17 с consistent automatic backup. Старый
+worker16 не открывает17: после запуска новой версии нельзя откатить только exe;
+после новых задач нельзя автоматически восстанавливать прежнюю БД. Для
 runtime с installed-set manifest заменять один exe нельзя: требуется согласованный
 набор и штатная проверка manifest. Эти guards не обходятся и не ослабляются.
 
 После успешной сборки: дождаться отсутствия работ, Ctrl+C в окне старого worker,
 сохранить его exe, скопировать новый worker, запустить с тем же выбранным
-`K:\_proj-26\winbridge\runtime\winbridge-worker.snapshot.local_204.json`.
+`K:\_proj-26\winbridge\runtime\winbridge-worker.snapshot.local_203.json`.
 Замена работающего exe/остановка через его же managed build task не выполняется.
 В этом сценарии финальный перезапуск требует действия в Windows консоли.
 
@@ -69,3 +76,8 @@ terminal failed:79 library tests passed,2 network timing tests failed при п�
 Release harness переведён на `--test-threads=1`, как основной Windows harness.
 Production deadlines не увеличиваются, проверки не исключаются. Новый run имеет
 новый source/key/state; старый failed task не replay и не становится passed.
+
+Повторный старый run20261026-124153-18ee88bb также terminal failed: worker
+regressions прошли, CPU fixture попыталась открыть baseline рядом с retained
+update guards и получила missing updater config. Исправлено отдельной копией
+baseline; этот run не становится successful и не replay.

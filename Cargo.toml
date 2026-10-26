@@ -38,7 +38,7 @@ opt-level = 2
 [profile.test.package.memchr]
 opt-level = 2
 
-# Experimental branch only: profile v2, validated by paired Windows pilots.
+# Local dev/test profile v2, validated by paired Windows pilots.
 # Keep updater unoptimized: v2 retains the measured suite gain at this setting.
 # Explicit safety/debug flags match the pilot, including host serde_json builds.
 [profile.dev.package.winbridge-update]
