@@ -2,7 +2,10 @@
 
 **Новая текущая задача этой ветки 2026-10-26:** [раунд 2 оптимизации](plans/run-speed/round2-2026-10-26.md).
 Пользователь поручил следующие существенные результаты. Matrix probe terminal,
-полностью cached; выбран release desktop A/B. Старый E2 не replay, main не менять.
+полностью cached. Desktop rebuild pilot118.5625→41.7945s(64.75%) passed:25 files
+twice, fresh local crates, no UI. В private ValidationCacheDirectory path добавлен
+local desktop opt0; production argv unchanged проверен на Windows. Новый full
+native gate ещё впереди. Старый E2 не replay, main не менять.
 
 **Эта ветка занимается скоростью прогонов, 2026-10-25.** Текущее действие —
 [оптимизация, E1 profile pilot](plans/run-speed/README.md). Пользователь поручил

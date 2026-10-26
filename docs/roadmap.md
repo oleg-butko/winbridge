@@ -3,8 +3,10 @@
 ## Сейчас в этой ветке: ускорение прогонов
 
 2026-10-26 новая цель: [следующий раунд](plans/run-speed/round2-2026-10-26.md).
-Cargo matrix не пересобирает cached variants; следующий A/B — release desktop
-local crates opt3→1, новые source copies и прежние checks.
+Cargo matrix не пересобирает cached variants. Desktop rebuild pilot с новым
+source directory каждого trial: ordinary release118.5625→validation local opt0
+41.7945s(64.75%),25 ready files twice, role/source/cleanup passed. Production argv
+unchanged. Private native full gate с новым builder ещё не пройден.
 
 Пользователь 2026-10-25 поручил продолжать эксперименты до существенных
 результатов в отдельной ветке; другой агент продолжает updater в `main`.

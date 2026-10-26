@@ -36,15 +36,30 @@ def submit(args):
     project = next(p for p in info['projects'] if p['id'] == 'snapshot-fixture' and p['allowDirectCommands'])
     root = PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/pin['run']
     run = time.strftime('%Y%m%d-%H%M%S', time.gmtime())+'-'+uuid.uuid4().hex[:8]
-    work = str(root/('build-matrix-'+run))
+    prefix = args.probe if args.probe in {'desktop-release', 'build-profile-check'} else 'build-matrix'
+    work = str(root/(prefix+'-'+run))
     helpers = str(root/('perf-script-'+run))
     report = Path('/mnt/hgfs/shared/WinBridge/run-speed')/run
     shared = str(PureWindowsPath('K:/VMs/shared/WinBridge/run-speed')/run)
-    script_name = 'test-windows-build-matrix.ps1'
+    script_name = 'test-windows-'+prefix+'.ps1'
     extra_args = ' -InventoryOnly' if args.probe == 'source-inventory' else ''
     code = (ROOT/'scripts'/script_name).read_text()
-    payload = base64.b64encode(gzip.compress(code.encode())).decode()
+    bundle = {script_name: code}
+    if args.probe == 'build-profile-check':
+        bundle['lib/update-build-profile.ps1'] = (ROOT/'scripts/lib/update-build-profile.ps1').read_text()
+    payload = base64.b64encode(gzip.compress(json.dumps(bundle).encode())).decode()
     cache = str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/pin['cacheRun']/'test-build-cache')
+    if args.probe == 'desktop-release':
+        proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
+        helper = proof['cases'][0]['replacement']['actualRetainedFiles'][3]
+        if not helper['path'].endswith('\\winbridge-update.exe'):
+            raise ValueError('Pinned retained updater required')
+        archive = str(PureWindowsPath('K:/VMs/shared/WinBridge/sources')/pin['source']['archiveName'])
+        cache = str(PureWindowsPath(cache).parent)
+        extra_args = (' -SourceArchivePath '+previous.native.ps_string(archive)
+                      +' -ArchiveSha256 '+previous.native.ps_string(pin['source']['archiveSha256'])
+                      +' -VerifierExecutable '+previous.native.ps_string(helper['path'])
+                      +' -VerifierSha256 '+previous.native.ps_string(helper['sha256']))
     ps = previous.native.ps_string
     script = f'''$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
@@ -55,11 +70,13 @@ if(Test-Path -LiteralPath $helpers){{throw 'Existing probe helpers preserved'}}
 $stream=[IO.MemoryStream]::new([Convert]::FromBase64String({ps(payload)}))
 $gzip=[IO.Compression.GzipStream]::new($stream,[IO.Compression.CompressionMode]::Decompress)
 $reader=[IO.StreamReader]::new($gzip)
-try{{$code=$reader.ReadToEnd()}}finally{{$reader.Dispose()}}
+try{{$bundle=$reader.ReadToEnd()|ConvertFrom-Json -AsHashtable}}finally{{$reader.Dispose()}}
 New-Item -ItemType Directory -Path (Join-Path $helpers 'lib')|Out-Null
 $path=Join-Path $helpers {ps(script_name)}
-$handle=[IO.File]::Open($path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
-try{{$bytes=[Text.UTF8Encoding]::new($false).GetBytes($code);$handle.Write($bytes,0,$bytes.Length)}}finally{{$handle.Dispose()}}
+foreach($name in $bundle.Keys){{
+ $handle=[IO.File]::Open((Join-Path $helpers $name),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+ try{{$bytes=[Text.UTF8Encoding]::new($false).GetBytes($bundle[$name]);$handle.Write($bytes,0,$bytes.Length)}}finally{{$handle.Dispose()}}
+}}
 foreach($name in @('session-runtime.ps1','lib/build-cache.ps1')){{[IO.File]::Copy((Join-Path $source ('scripts/'+$name)),(Join-Path $helpers $name),$false)}}
 & pwsh.exe -NoProfile -NonInteractive -File $path -SourceDirectory $source -ManifestSha256 {ps(pin['source']['manifestSha256'])} -CacheDirectory {ps(cache)} -WorkDirectory {ps(work)}{extra_args}
 $exitCode=$LASTEXITCODE
@@ -67,7 +84,11 @@ $work={ps(work)}
 $shared={ps(shared)}
 if(Test-Path -LiteralPath (Join-Path $work 'report.ready.json')){{
  New-Item -ItemType Directory -Path $shared|Out-Null
- foreach($file in Get-ChildItem -LiteralPath $work -File|Where-Object {{$_.Name -cne 'report.ready.json'}}){{[IO.File]::Copy($file.FullName,(Join-Path $shared $file.Name),$false)}}
+ $ready=Get-Content -Raw -LiteralPath (Join-Path $work 'report.ready.json')|ConvertFrom-Json
+ foreach($file in $ready.files){{
+  if($file.path -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$'){{throw 'Unsafe ready filename'}}
+  [IO.File]::Copy((Join-Path $work $file.path),(Join-Path $shared $file.path),$false)
+ }}
  [IO.File]::Copy((Join-Path $work 'report.ready.json'),(Join-Path $shared 'report.ready.json'),$false)
 }}
 exit $exitCode
@@ -80,7 +101,8 @@ exit $exitCode
                    arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]))
     meta = dict(run=run, taskId=None, request=request, reference=str(args.reference.resolve()), referenceReportSha256=pin['reportSha256'],
                 controllerConfig=str(args.controller_config.resolve()), reportDirectory=str(report), windowsWorkDirectory=work,
-                source=pin['source'], scriptSha256=hashlib.sha256(code.encode()).hexdigest(), debianFreeBytes=free)
+                source=pin['source'], scriptSha256=hashlib.sha256(code.encode()).hexdigest(),
+                bundleSha256={name: hashlib.sha256(text.encode()).hexdigest() for name, text in bundle.items()}, debianFreeBytes=free)
     local = ROOT/'.winbridge/run-speed'/run
     local.mkdir(parents=True)
     path = local/'submission.json'
@@ -94,7 +116,7 @@ exit $exitCode
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--observe', type=Path)
-    parser.add_argument('--probe', choices=['build-matrix','source-inventory'])
+    parser.add_argument('--probe', choices=['build-matrix','source-inventory','desktop-release','build-profile-check'])
     parser.add_argument('--reference', type=Path)
     parser.add_argument('--controller-config', type=Path)
     args = parser.parse_args()

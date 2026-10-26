@@ -92,7 +92,8 @@ try {
     for ($cycle=0; $cycle -lt 2; $cycle++) {
         foreach ($step in $matrix) {
             $drive=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($cache))
-            if ($drive.DriveType -ne [IO.DriveType]::Fixed -or $drive.AvailableFreeSpace -lt 6GB) { throw 'Need local fixed disk with >=6GiB' }
+            $freeBefore=$drive.AvailableFreeSpace
+            if ($drive.DriveType -ne [IO.DriveType]::Fixed -or $freeBefore -lt 6GB) { throw 'Need local fixed disk with >=6GiB' }
             $name="cycle-$cycle-$($step.key)"
             $args=$step.arguments+@('--locked','--offline','--no-run','--message-format=json','--timings','--target-dir',$cache)
             Write-Host "WinBridge Cargo matrix: $name"
@@ -103,7 +104,7 @@ try {
             $artifacts=@($messages|Where-Object {$_.reason -ceq 'compiler-artifact'})
             $compiled=@($artifacts|Where-Object {$_.fresh -eq $false})
             $report.commands+=@{key=$step.key;cycle=$cycle;arguments=$args;log="$name.log";exitCode=$code;elapsedMs=$watch.ElapsedMilliseconds;
-                freshArtifacts=@($artifacts|Where-Object {$_.fresh -eq $true}).Count;compiled=$compiled;freeBytes=$drive.AvailableFreeSpace}
+                freshArtifacts=@($artifacts|Where-Object {$_.fresh -eq $true}).Count;compiled=$compiled;freeBytesBefore=$freeBefore;freeBytes=$drive.AvailableFreeSpace}
             if ($code -ne 0) { throw "Cargo matrix failed: $name" }
             Copy-Item -LiteralPath (Join-Path $cache 'cargo-timings/cargo-timing.html') -Destination (Join-Path $work "$name.html")
             Write-Host "WinBridge Cargo matrix: $name completed $($watch.ElapsedMilliseconds)ms, $($compiled.Count) compiled units"
