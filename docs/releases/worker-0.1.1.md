@@ -1,5 +1,12 @@
 # Локальный Windows worker0.1.1
 
+## Установка подтверждена
+
+2026-10-26: пользователь установил этот пакет. Actual build/exe SHA-256, прежний
+config, journal incarnation и task/output history проверены через controller;
+worker connected/active0, recovery errors отсутствуют.
+[Результаты и дальнейшая работа](../plans/worker-self-update/service-ledger-2026-10-26.md).
+
 ## Готовый выпуск — 2026-10-26
 
 **Worker0.1.1 выпущен.** Пакет:

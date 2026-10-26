@@ -1,5 +1,12 @@
 # Архитектура WinBridge
 
+2026-10-26: worker0.1.1 установлен и проверен. [Продолжение updater](plans/worker-self-update/service-ledger-2026-10-26.md):
+source journal20 хранит service intent/history и читает их в одном snapshot с
+writer/activation graph. Runtime admission/driver/receiver/normal IPC пока нет;
+новый формат не установлен. Worker schema17 и supervisor24/view16 прежние,
+private service4/actor25/view17 и public install не включены. Статусы ниже
+относятся к своим историческим source/gates.
+
 Дополнение2026-10-25: [Main24 writer gate подтверждён](plans/worker-self-update/resume-2026-10-25-writer-verified.md)
 на19/17/actor24/view16/private3:193 tests,56 files twice,44+16+18 negative audits.
 Новые startup admissions240s разрешены пользователем, старые intents не меняются.

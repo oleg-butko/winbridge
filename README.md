@@ -1,8 +1,7 @@
 # WinBridge
 
-**Ветка экспериментов скорости, 2026-10-25.** Здесь выполняется
-[план ускорения прогонов](docs/plans/run-speed/README.md); реализация updater
-продолжается другим агентом в `main`. Эта ветка runtime updater не развивает.
+**Текущая ветка — main.** Performance-изменения проверены и слиты; worker 0.1.1
+установлен и проверен. Продолжается [реализация апдейтера](docs/plans/worker-self-update/service-ledger-2026-10-26.md).
 
 Локальный проект для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
 
@@ -74,8 +73,10 @@ Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в 
 Актуальная точка updater: [checkpoint](docs/plans/worker-self-update/resume-2026-10-25-writer-verified.md),
 [review/latency](docs/plans/worker-self-update/review-2026-10-25-latency.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source updater19/worker17/supervisor24/view16/private2+writer3.
-**Main24 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
+Source updater20/worker17/supervisor24/view16/private2+writer3.
+[Journal20](docs/plans/worker-self-update/service-ledger-2026-10-26.md) добавляет формат
+service intent/history и readonly проверки; runtime service admission пока отсутствует.
+**Main24 на updater19 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
 Both actual migrations, same-child epoch+1/receipt/fencing и actual Job exit
 подтверждены. Verifier исправлен и тот же terminal report проверен readonly.
 Новые startup admissions240s разрешены пользователем; старые120s intents неизменны.
@@ -83,9 +84,10 @@ Both actual migrations, same-child epoch+1/receipt/fencing и actual Job exit
 отделяют сборку target, replacement, hashing, graph checks и writer delivery.
 **Normal service/reconciliation/local/controller/lifetime, remaining U2 и U3/U4
 впереди. Public install выключен; самообновление целиком ещё не готово.**
-Service strict DTO и pure binding/FSM добавлены как foundation; runtime admission,
-Store/lock transfer и normal IPC пока не подключены.
-Installed runtime не менялся. Controller теперь слушает192.168.44.204:1143.
+Service strict DTO, pure binding/FSM и журнал добавлены как foundation; runtime
+admission, Store/lock transfer и normal IPC пока не подключены.
+Installed worker 0.1.1/source59249e6 проверен; новый source updater20 не установлен.
+Текущий controller слушает 192.168.44.203:1143.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

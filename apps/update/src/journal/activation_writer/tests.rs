@@ -215,12 +215,12 @@ fn updater_eighteen_to_nineteen_preserves_root_keys_backup_and_fences_old_owner(
         },
     };
     let saved = old.accept(&owner, &request, &request.expected).unwrap();
-    old.connection.execute_batch("DROP TABLE activation_writer_history;DROP TABLE activation_writer_records;DROP TABLE activation_writer_intents;PRAGMA user_version=18;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    old.connection.execute_batch("DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;DROP TABLE activation_writer_history;DROP TABLE activation_writer_records;DROP TABLE activation_writer_intents;PRAGMA user_version=18;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let before = old.info().unwrap();
     fs2::FileExt::unlock(&owner.lock).unwrap();
     let mut new = UpdateJournal::open(root.path(), &scope).unwrap();
     let after = new.info().unwrap();
-    assert_eq!(after.schema_version, 19);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.last_sequence, before.last_sequence);

@@ -1,8 +1,9 @@
 # Самообновление: план реализации U0–U4
 
-**2026-10-25: эта ветка выполняет [оптимизацию прогонов](../run-speed/README.md).**
-Другой агент может продолжать updater в `main`; здесь не реализовать service/schema20
-или следующие U этапы. Ниже сохранён исходный checkpoint эксперимента.
+**2026-10-26: performance-ветка слита в main, worker0.1.1 установлен.**
+Начать с [актуального продолжения](service-ledger-2026-10-26.md): source schema20
+format/readback реализованы, runtime service ещё нет. Старые checkpoints ниже
+сохраняют историю; прежнее ограничение perf-ветки больше не действует.
 
 2026-10-17. Пользователь одобрил [анализ](../../analysis/worker-self-update/README.md)
 и поручил детализацию и реализацию. Архитектурный переход A4 временно отложен.
@@ -24,11 +25,13 @@ Source updater19/worker17/supervisor24/view16/physical2+writer3.
 child/Store/lock → новая controller session → durable activation Job lifetime
 transfer → commit/scoped release → remaining U2 faults/management/opt-in → U3
 → U4 actual stable-runtime self-update → A4.3. Schema20/private4/actor25/view17
-пока проект, не capability. Public install off. Installed d052 runtime не менялся;
-controller теперь192.168.44.204. Desktop можно закрыть; installed worker оставить.
+частично реализованы: schema20 format/readback есть, private4/actor25/view17 — проект.
+Public install off. Installed worker0.1.1/source59249e6 проверен;
+controller сейчас192.168.44.203. Desktop не нужен; installed worker оставить.
 Все проверки terminal; старые NEXT/ACTIVE ниже не задают текущее действие.
 После gate добавлены service DTO/binding/pure FSM (7 focused/791 full workspace,
-Linux/MSVC Clippy/TS/contracts passed); journal20/driver/normal service ещё впереди.
+Linux/MSVC Clippy/TS/contracts passed); затем добавлен journal20 format/readback.
+Original-guard admission/driver/normal service ещё впереди.
 
 ### История предыдущих checkpoints
 

@@ -1,43 +1,46 @@
-# Продолжение работы — worker 0.1.1 выпущен 2026-10-26
+# Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-**Задача пользователя2026-10-26:** performance-ветка слита в main,
-merge50ceb0d, review fixes2b3734c. [Review](plans/run-speed/review-merge-2026-10-26.md).
-Source workspace794/0/17ignored, Linux/MSVC Clippy, TS/UI/contracts, safety probe1,
-Python profile5/desktop3/publication4 passed. Runtime CPU fix принят.
+2026-10-26. Начать с [нового checkpoint](plans/worker-self-update/service-ledger-2026-10-26.md)
+и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
+Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
-**Worker0.1.1 выпущен:** [пакет, proof и установка](releases/worker-0.1.1.md).
-Run20261026-182213-6cd81f3e/taskbf07a5ed-aa0d-4d94-b780-e524e66d269e
-**succeeded/0,140 Rust +6 Windows policy checks**,10 ready files twice;
-old-controller0.1.0/new-worker0.1.1 RPC/dedup/stale/Unicode и source-final-readback
-passed. CPU matched history98.8823→1.9404% одного ядра. ZIP worker0.1.1-59249e6
-опубликован в K:/VMs/shared/WinBridge/releases/20261026-182213-6cd81f3e.
-Source59249e6/manifestf7497e8..., ZIP2356cef5..., worker536d8637... — полные pins
-в release note. Metadata/verified.json/source archive указаны там; не replay.
+Пользователь установил worker **0.1.1/source59249e6**, SHA exe `536d8637…` совпал
+с выпущенным пакетом. Проверочная Windows task
+`ca8c7760-8bd0-4680-b4d2-d7fdaa19b325` — succeeded/0. Generation
+`936909c6-d148-40cd-abf6-a0d996935994`, session `c1a7e0b6-edb6-46e2-85ba-2f0fc6461c76`;
+incarnation и actual config `_203` сохранены. Connected/active0, maintenance/recovery
+errors отсутствуют, прежние task/output/workflow/application читаются.
+Полные hashes/evidence/process/disk measurements — в checkpoint.
+CPU24.37% измерен во время принятой задачи, **это не idle benchmark**.
 
-Постоянный network exe `K:\_proj-26\winbridge\runtime-test\winbridge-worker.exe`,
-порт1144, default900s на firewall/connection, RPC120s отдельно. Повтор использовал
-тот же executable path и подтвердил reuse; lease/ownership/read pin/live-process/
-production overlap guards пройдены. В AGENTS.md закреплено это требование.
-State/config/instance/report per-run, рабочий runtime отдельно. Updater startup240s
-и старые120s intents не менялись; автоматические firewall rules не создавались.
+Controller `ws://192.168.44.203:1143`, PID5103, оставлен работать. Рабочий worker
+PID21776 в `K:\_proj-26\winbridge\runtime\winbridge-worker.exe`; desktop не нужен,
+тестовых окон нет. Не обновлять его повторно без необходимости. В каждом новом
+Windows gate заранее сообщать какие процессы/окна нужны. Постоянный network test
+slot `runtime-test/winbridge-worker.exe`, wait900s, отдельный controller1144;
+state/config/instance/report каждого run изолированы. Firewall rules не менять.
 
-**Следующее внешнее действие — ручное применение ZIP пользователем.** Working
-worker оставлен d052/0.1.0/generation301be6ea connected/active0/errors=null;
-application stopped, workflow succeeded. Desktop не нужен. Его exe/config/state
-не заменялись. Пользователь останавливает старый worker, заменяет exe в runtime
-и запускает с прежним winbridge-worker.snapshot.local_203.json; полная команда
-и migration16→17/rollback ограничения в release note. До сообщения об обновлении
-не выполнять зависимые Windows updater gates/не останавливать working worker.
-После ответа сверить actual0.1.1/source59249e6/manifestf749..., новый generation/
-session, health и прежнюю историю. Затем продолжить normal local-service plan
-в том же activated child/Store/lock; DTO/FSM foundation есть, journal20/driver/
-receiver/local IPC ещё не реализованы. Public update/U3/U4 off.
+**Source updater20/worker17, supervisor24/view16, private2+writer3.** Добавлены
+service intent/current/history и согласованное readonly чтение под schema20;
+запись пока только в тестах, native admission/driver/receiver4 не подключены.
+Schema19→20 имеет verified consistent backup и fencing updater owner; это не
+новая worker authority. Сохранённые факты не дают разрешения открыть Store или
+повторить send. Public install/advertised activation/controller/desktop выключены.
 
-Current controller .203:1143/PID5103 оставлен. Native observer50035, isolated
-controller и тестовые child завершены. Source checks794/0/17ignored, Linux/MSVC,
-TS/UI/contracts, safety probe1 прежнего review и Python publication4 актуальны;
-эта итерация меняла PS/Python/docs, Rust не менялся. Native test140 добавлен выше.
-История старых failed/cancelled прогонов ниже и в release note; они не passed.
+Следующий шаг: consuming service admission от original Written guard → private
+receiver4 и тот же ActivationJournal/Fresh permit/полный LockedShutdownState в
+Worker → reconciliation и настоящий normal IPC → actor25/view17 → новый Main25
+и actual19→20/refusal. Нельзя заново открывать Store, получать второй lock,
+прибавлять epoch или обновлять original startup deadline. Maintenance/user pause
+сохраняются, local-only service не подключается к controller. Затем controller
+session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат к A4.3.
+
+Прежний Main24 writer proof и release140+6 остаются действительны для своих
+исторических source pins, не доказывают normal service/schema20. Native service
+пока не проверялся; runtime реализации ещё нет. Source checks: **workspace804/0,
+17 ignored**, включая10 новых SQL/migration tests; Linux/MSVC all-target validation
+Clippy, fmt/scaffold290/diff-check прошли. Логи и команды в checkpoint.
+Последний working Windows probe завершён; worker оставить работать.
 
 ## История подготовки и прежние checkpoints
 

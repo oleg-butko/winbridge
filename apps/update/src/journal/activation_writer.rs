@@ -115,7 +115,10 @@ fn backup_binding(
     }
     Ok(backup)
 }
-fn physical_prefix(c: &Connection, current: &ActivationRecord) -> Result<ActivationRecord> {
+pub(super) fn physical_prefix(
+    c: &Connection,
+    current: &ActivationRecord,
+) -> Result<ActivationRecord> {
     // The full causal graph/current was validated in this same snapshot.
     // Observation after Indeterminate/LocalVerified still binds to immutable6;
     // this helper is not used to issue a new command from a progressed state.
@@ -142,7 +145,7 @@ fn physical_prefix(c: &Connection, current: &ActivationRecord) -> Result<Activat
     }
     Ok(physical)
 }
-fn load(
+pub(super) fn load(
     c: &Connection,
     id: &str,
 ) -> Result<

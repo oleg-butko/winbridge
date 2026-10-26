@@ -100,7 +100,7 @@ fn schema_sixteen_migration_backs_up_and_fences_without_creating_decisions() {
     };
     let saved = old.accept(&owner, &request, &request.expected).unwrap();
     old.connection
-        .execute_batch("DROP TABLE activation_writer_history;DROP TABLE activation_writer_records;DROP TABLE activation_writer_intents;DROP TABLE activation_history; DROP TABLE activation_records; DROP TABLE activation_intents; DROP TABLE compatible_drain_records;PRAGMA user_version=16;")
+        .execute_batch("DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;DROP TABLE activation_writer_history;DROP TABLE activation_writer_records;DROP TABLE activation_writer_intents;DROP TABLE activation_history; DROP TABLE activation_records; DROP TABLE activation_intents; DROP TABLE compatible_drain_records;PRAGMA user_version=16;")
         .unwrap();
     let before = old.info().unwrap();
     fs2::FileExt::unlock(&owner.lock).unwrap();
