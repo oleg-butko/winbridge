@@ -58,7 +58,7 @@ def fixture():
     return report, files
 
 
-def check(report, files):
+def check(report, files, spec_path=pilot.SPEC):
     with tempfile.TemporaryDirectory(prefix='winbridge-pilot-verify-') as tmp:
         root = Path(tmp)
         data = dict(files, **{'report.json': json.dumps(report).encode()})
@@ -67,7 +67,7 @@ def check(report, files):
             (root/name).write_bytes(raw)
             ready['files'].append(dict(path=name, bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest()))
         (root/'report.ready.json').write_text(json.dumps(ready))
-        return pilot.verify(root)
+        return pilot.verify(root, spec_path)
 
 
 class PilotTests(unittest.TestCase):
@@ -124,6 +124,27 @@ class PilotTests(unittest.TestCase):
         report['testNames'].reverse()
         files = {name: data.replace(b'\n', b'\r\n') if name.endswith('.log') else data for name, data in files.items()}
         self.assertEqual(check(report, files)['decision'], 'promising_component_only')
+
+    def test_selective_profile_requires_updater_zero_and_other_packages_one(self):
+        report, files = fixture()
+        spec_path = pilot.SPEC.with_name('update-profile-v2.json')
+        report['specSha256'] = hashlib.sha256(spec_path.read_bytes()).hexdigest()
+        # A v1 executable cannot be relabelled as selective v2.
+        with self.assertRaises(ValueError):
+            check(report, files, spec_path)
+        for command in report['commands']:
+            if command['name'].startswith('build-B-'):
+                command['arguments'] = [a.replace('package.winbridge-update.opt-level=1', 'package.winbridge-update.opt-level=0') for a in command['arguments']]
+                rows = [json.loads(line) for line in files[command['log']].decode().splitlines()]
+                for row in rows:
+                    if row.get('target', {}).get('name') == 'winbridge_update':
+                        row['profile']['opt_level'] = '0'
+                files[command['log']] = '\n'.join(json.dumps(row) for row in rows).encode()
+        for row in report['builds']:
+            if row['variant'] == 'B':
+                row['artifact']['profile']['opt_level'] = '0'
+        report['binaries'][1]['profile']['opt_level'] = '0'
+        self.assertEqual(check(report, files, spec_path)['decision'], 'promising_component_only')
 
 
 if __name__ == '__main__':

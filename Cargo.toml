@@ -37,3 +37,62 @@ opt-level = 2
 
 [profile.test.package.memchr]
 opt-level = 2
+
+# Experimental branch only: profile v2, validated by paired Windows pilots.
+# Keep updater unoptimized: v2 retains the measured suite gain at this setting.
+# Explicit safety/debug flags match the pilot, including host serde_json builds.
+[profile.dev.package.winbridge-update]
+opt-level = 0
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+[profile.test.package.winbridge-update]
+opt-level = 0
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+[profile.dev.package.winbridge-core]
+opt-level = 1
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+[profile.test.package.winbridge-core]
+opt-level = 1
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+[profile.dev.package.winbridge-protocol]
+opt-level = 1
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+[profile.test.package.winbridge-protocol]
+opt-level = 1
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+[profile.dev.package.serde_json]
+opt-level = 1
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false
+
+[profile.test.package.serde_json]
+opt-level = 1
+debug = 2
+debug-assertions = true
+overflow-checks = true
+incremental = false

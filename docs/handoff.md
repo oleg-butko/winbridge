@@ -10,7 +10,9 @@
 65 Windows tests median36.165→20.6745s (42.83% быстрее),650 suite cases +2 policy
 probes +130 exact diagnostic cases passed;25/131 ready files twice. Compiler
 codegen overhead найден. Defaults неизменны; v2 task974c9b0c-86c4-42a2-a688-9f9e2fba26d5
-ещё running, не replay.
+завершился succeeded/0: median33.7865→18.3635s (45.65%),25 files twice,
+650 suite cases +2 policy probes. Ветка задаёт v2 в Cargo.toml для полного E2;
+`main`/installed runtime неизменны. Полного E2 proof ещё нет.
 
 **Начать с [актуального checkpoint](plans/worker-self-update/resume-2026-10-25-writer-verified.md)**
 и [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).

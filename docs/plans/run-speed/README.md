@@ -9,8 +9,9 @@ source58e6109. Schema19/17/private3 и public install off сохраняются
 
 **2026-10-26: E1 подтвердил ускорение activation suite на 42.83% при более дорогой
 первой сборке.** [Измерения, причины задержек и точные pins](results-2026-10-26.md).
-Следующий эксперимент v2 оставляет updater opt0 и оптимизирует остальные три
-packages. Он ещё выполняется; defaults пока не менялись.
+V2 оставляет updater opt0 и оптимизирует остальные три packages: median
+33.7865→18.3635s,45.65% быстрее. Начинается полный E2; его profiles заданы
+только в Cargo.toml этой экспериментальной ветки. Defaults `main` не менялись.
 
 ## Исходные измерения
 
@@ -143,8 +144,9 @@ E1: 65 tests × 10 suites + 2 policy probes passed;25 ready files twice.
 Median36.165→20.6745s, spread<3%,4/4 pairs faster. Exact diagnostic130/130 passed,
 131 ready files twice. Default/full-gate speedup не заявлен.
 Followup v2 run `20261026-042205-115786e9`, task
-`974c9b0c-86c4-42a2-a688-9f9e2fba26d5` выполняется. Наблюдать этот же task,
-не replay. Для v2 анализа передать `--spec scripts/experiments/update-profile-v2.json`.
+`974c9b0c-86c4-42a2-a688-9f9e2fba26d5` succeeded/0:25 files twice,650 suite
+cases +2 policy probes. Для анализа передать `--spec scripts/experiments/update-profile-v2.json`.
+V2 сохранён в экспериментальном Cargo.toml для E2, не в `main`.
 Эта ветка не открывает schema20/private4/actor25;
 updater развивается независимо в `main`.
 

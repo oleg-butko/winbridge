@@ -82,12 +82,15 @@ def main():
     parser.add_argument('--reference-pin', type=Path, required=True)
     parser.add_argument('--controller-config', type=Path, default=Path('.winbridge/controller-snapshot.local.json'))
     parser.add_argument('--verify-run', help='Observe the saved task, never resubmit')
+    parser.add_argument('--task-timeout-ms', type=int, default=1800000,
+                        help='Whole isolated experiment task budget, not startup admission')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--activation-files',action='store_true',help='Explicit actor21 whole-set read binding; no worker launch')
     mode.add_argument('--activation-process',action='store_true',help='Explicit actor22 private receiver; no worker state writer')
     mode.add_argument('--activation-state',action='store_true',help='Explicit actor23 same-child physical lock handoff; no worker state writer')
     mode.add_argument('--activation-writer',action='store_true',help='Explicit actor24 same-child journal writer, actual18/16 migrations; no normal service or install')
     args = parser.parse_args()
+    need(1800000 <= args.task_timeout_ms <= 7200000, 'Expected task budget between 30 and 120 minutes')
     state_mode = args.activation_state or args.activation_writer
     process_mode = args.activation_process or state_mode
     files_mode = args.activation_files or process_mode
@@ -179,7 +182,7 @@ Expand-Archive -LiteralPath $copy -DestinationPath $root
 exit $LASTEXITCODE
 """
         request = dict(protocolVersion=1, requestId=str(uuid.uuid4()), projectId='snapshot-fixture', idempotencyKey=prefix+run,
-                       timeoutMs=1800000, command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.',
+                       timeoutMs=args.task_timeout_ms, command=dict(kind='direct', executable='pwsh.exe', workingDirectory='.',
                        arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()]))
         raw = json.dumps(request).encode()
         with (local/'request.json').open('xb') as f:
@@ -197,7 +200,7 @@ exit $LASTEXITCODE
         meta['taskId'] = native.call(endpoint, {'method': 'submit', 'request': request})['task']['taskId']
         support.save_meta(meta_file, meta)
     print(json.dumps(dict(taskId=meta['taskId'], run=run)), flush=True)
-    deadline = time.monotonic()+1850
+    deadline = time.monotonic()+args.task_timeout_ms/1000+50
     while True:
         task = native.call(endpoint, {'method': 'get_task', 'taskId': meta['taskId']})['task']
         need(task['submission']['projectId'] == 'snapshot-fixture' and task['submission']['idempotencyKey'] == prefix+run, 'Task scope differs')
