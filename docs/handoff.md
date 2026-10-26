@@ -1,14 +1,15 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
 **Новая текущая задача этой ветки 2026-10-26:** [раунд 2 оптимизации](plans/run-speed/round2-2026-10-26.md).
-Пользователь поручил следующие существенные результаты. Matrix probe terminal,
-полностью cached. Desktop rebuild pilot118.5625→41.7945s(64.75%) passed:25 files
-twice, fresh local crates, no UI. В private ValidationCacheDirectory path добавлен
-local desktop opt0; production argv unchanged проверен на Windows. Новый full
-native gate running: run20261026-094754-aa840d26,
-task554fc3f9-d75d-467c-9e99-047b8edf676d, producer33510c9/receiverb0467a8.
-Proof пока нет, наблюдать тот же task; команда в round2. Старый E2 не replay,
-main не менять.
+Следующий существенный результат получен. Desktop rebuild pilot118.5625→41.7945s
+(64.75%) passed:25 files twice, fresh local crates, no UI. В private
+ValidationCacheDirectory path добавлен local desktop opt0; production argv
+unchanged проверен на Windows. Full run20261026-094754-aa840d26/
+task554fc3f9-d75d-467c-9e99-047b8edf676d, producer33510c9/receiverb0467a8:
+**succeeded/0,201 tests,56 files twice,44+16+18 negative mutations passed**.
+Сумма команд21.409→20.266min, nested compiler214→143s; полное сравнение observational.
+Все runs terminal; worker healthy/idle/generation unchanged. Точные pins/readonly
+reverify в round2. Старый E2 не replay, main не менять.
 
 **Эта ветка занимается скоростью прогонов, 2026-10-25.** Текущее действие —
 [оптимизация, E1 profile pilot](plans/run-speed/README.md). Пользователь поручил

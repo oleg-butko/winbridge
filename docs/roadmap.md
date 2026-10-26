@@ -3,10 +3,11 @@
 ## Сейчас в этой ветке: ускорение прогонов
 
 2026-10-26 новая цель: [следующий раунд](plans/run-speed/round2-2026-10-26.md).
-Cargo matrix не пересобирает cached variants. Desktop rebuild pilot с новым
-source directory каждого trial: ordinary release118.5625→validation local opt0
+Раунд завершён: desktop rebuild ordinary release118.5625→private local opt0
 41.7945s(64.75%),25 ready files twice, role/source/cleanup passed. Production argv
-unchanged. Private native full gate с новым builder ещё не пройден.
+unchanged. Full gate с новым builder:201 tests/56 files twice/78 negative audits
+passed. Command sum21.409→20.266min observational. Warm feature matrix не требует
+перекомпиляции; дальнейшие варианты — dev/test codegen/symbols и точный SDK target set.
 
 Пользователь 2026-10-25 поручил продолжать эксперименты до существенных
 результатов в отдельной ветке; другой агент продолжает updater в `main`.
