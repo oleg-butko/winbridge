@@ -1,6 +1,6 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-2026-10-26. Начать с [admission/transfer checkpoint](plans/worker-self-update/service-admission-2026-10-26.md)
+2026-10-26. Начать с [локального Worker/IPC checkpoint](plans/worker-self-update/local-service-runtime-2026-10-26.md)
 и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
 Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
@@ -25,14 +25,15 @@ service intent/current/history и согласованное чтение под
 admission от original process guard подключён как trusted Rust API; duplicate
 даёт только историю, свежий permit появляется после commit. Parent удерживает
 ActivationServicePreparation, child может передать тот же connection/full state
-в PreparedServiceJournal. Это подготовка: send/receiver4/Worker constructor/IPC
-и actor25 ещё не подключены.
+в PreparedServiceJournal. Общие constructor/reconciliation и library local IPC
+реализованы через LocalService: тот же Store/full lock/generation, временная
+startup scope, затем readonly IPC. Controller/scheduler/mutations не включаются.
+Send/receiver4 и actor25 ещё не подключены.
 Schema19→20 имеет verified consistent backup и fencing updater owner; это не
 новая worker authority. Сохранённые факты не дают разрешения открыть Store или
 повторить send. Public install/advertised activation/controller/desktop выключены.
 
-Следующий шаг: private service4 receiver → Worker из sealed PreparedServiceJournal
-с общим constructor/reconciliation → настоящий normal IPC → подтверждение
+Следующий шаг: private service4 receiver → подключение готового LocalService → подтверждение
 parent driver → actor25/view17 → новый Main25
 и actual19→20/refusal. Нельзя заново открывать Store, получать второй lock,
 прибавлять epoch или обновлять original startup deadline. Maintenance/user pause
@@ -40,10 +41,10 @@ parent driver → actor25/view17 → новый Main25
 session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат к A4.3.
 
 Прежний Main24 writer proof и release140+6 остаются действительны для своих
-исторических source pins, не доказывают normal service/schema20. Native service
-пока не проверялся; runtime реализации ещё нет. Source checks: **workspace813/0,
-17 ignored**; Linux/MSVC all-target validation Clippy, fmt/scaffold291/diff-check
-и Python verifier5 прошли. Первый event_log rotation failure с WouldBlock
+исторических source pins, не доказывают normal service/schema20. Full replacement service/Main25
+ещё не проверялся. Текущие source checks: **workspace820/0, 17 ignored**,
+focused worker13/0, Python verifier6 и scaffold292. Финальные Clippy/native
+результаты и source pins находятся в актуальном checkpoint. Первый event_log rotation failure с WouldBlock
 не воспроизвёлся отдельно и в полном повторе; logger не менялся. Логи и команды в checkpoint.
 Focused `--service-admission-only` **пройден**: run20261026-155845-0e79d392,
 taskf7c5320a-bb89-47ba-ba13-d7c27048d8e1 succeeded/0, **13+6 Windows fixture

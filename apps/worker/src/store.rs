@@ -63,6 +63,7 @@ pub struct Store {
     read_only: bool,
     work_scheduling: Option<winbridge_protocol::WorkSchedulingPolicy>,
     queue_policy: Option<winbridge_protocol::QueuePolicy>,
+    service_startup: Option<activation_service_open::ServiceStartupFence>,
 }
 
 impl Store {
@@ -464,6 +465,7 @@ impl Store {
             read_only: false,
             work_scheduling: None,
             queue_policy: None,
+            service_startup: None,
         })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {

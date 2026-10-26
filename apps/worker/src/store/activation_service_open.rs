@@ -1,7 +1,55 @@
 //! Consuming existing-connection transfer. Does not open a second Store or lock,
 //! run reconciliation, bind IPC, start dispatch or release maintenance.
-use super::{activation_open::ActivationJournal, JournalActivationPermit, Result};
+use super::{
+    activation, activation_open::ActivationJournal, sql, JournalActivationPermit, Result, Store,
+};
 use winbridge_protocol::update::{WorkerServiceActivationCommand, WorkerShutdownState};
+use winbridge_update::shutdown::LockedShutdownState;
+
+/// Only the sealed existing-state transfer can construct this transient fence.
+/// Every startup write rechecks the exact receipt, header, lease and deadline;
+/// ordinary root-admission/dispatch/admin checks remain enabled throughout.
+pub(super) struct ServiceStartupFence {
+    command: WorkerServiceActivationCommand,
+    shutdown: winbridge_protocol::update::WorkerShutdownReceipt,
+    deadline: std::time::Instant,
+}
+impl ServiceStartupFence {
+    pub(super) fn require(&self, c: &rusqlite::Connection) -> Result<()> {
+        if std::time::Instant::now() >= self.deadline
+            || super::now_ms() < self.command.issued_at_ms
+            || super::now_ms() >= self.command.deadline_at_ms
+        {
+            return Err(
+                "Original local-service initialization window expired or clock moved backwards"
+                    .into(),
+            );
+        }
+        activation::window(&self.command.binding.writer_command)?;
+        let schema: u32 = c
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .map_err(sql)?;
+        if schema != super::JOURNAL_SCHEMA_VERSION
+            || activation::stamp(&Store::read_authority(c)?)?
+                != self.command.binding.writer_receipt.authority
+            || activation::read(c, &self.command.binding.writer_command)?.as_ref()
+                != Some(&self.command.binding.writer_receipt)
+            || super::update::read(c, &self.shutdown.update_id)? != self.shutdown.lease
+            || super::shutdown::read(c, &self.shutdown.update_id, &self.shutdown.command)?.as_ref()
+                != Some(&self.shutdown)
+        {
+            return Err("Service initialization authority/receipt/lease/schema changed".into());
+        }
+        Ok(())
+    }
+}
+pub(crate) struct ServiceRuntimeState {
+    pub(crate) store: Store,
+    pub(crate) state: LockedShutdownState,
+    pub(crate) command: WorkerServiceActivationCommand,
+    pub(crate) deadline: std::time::Instant,
+    pub(crate) shutdown: winbridge_protocol::update::WorkerShutdownReceipt,
+}
 
 /// Sealed ownership of the same activated connection and full locked state.
 /// Future Worker construction consumes this object; serialized receipts cannot
@@ -11,6 +59,36 @@ pub struct PreparedServiceJournal {
     command: WorkerServiceActivationCommand,
 }
 impl PreparedServiceJournal {
+    /// Crate-private consuming factory; no Store/lock extraction from JSON.
+    pub(crate) fn into_runtime(
+        self,
+        mut checkpoint: impl FnMut() -> Result<()>,
+    ) -> std::result::Result<ServiceRuntimeState, Box<ServiceJournalPreparationFailure>> {
+        let result = (|| {
+            self.journal.check_service_continuation(&self.command)?;
+            checkpoint()?;
+            self.journal.check_service_continuation(&self.command)
+        })();
+        if let Err(reason) = result {
+            return Err(Box::new(ServiceJournalPreparationFailure {
+                reason,
+                journal: self.journal,
+            }));
+        }
+        let (mut store, state, shutdown, deadline) = self.journal.into_service_parts();
+        store.service_startup = Some(ServiceStartupFence {
+            command: self.command.clone(),
+            shutdown: shutdown.clone(),
+            deadline,
+        });
+        Ok(ServiceRuntimeState {
+            store,
+            state,
+            command: self.command,
+            deadline,
+            shutdown,
+        })
+    }
     pub fn command(&self) -> &WorkerServiceActivationCommand {
         &self.command
     }
@@ -24,6 +102,37 @@ impl PreparedServiceJournal {
     }
     pub fn revalidate_state(&self) -> Result<()> {
         self.journal.revalidate_state()
+    }
+}
+
+impl Store {
+    pub(crate) fn check_local_service_identity(
+        &self,
+        command: &WorkerServiceActivationCommand,
+        shutdown: &winbridge_protocol::update::WorkerShutdownReceipt,
+        deadline: std::time::Instant,
+    ) -> Result<()> {
+        let tx = self.connection.unchecked_transaction().map_err(sql)?;
+        self.check_authority()?;
+        ServiceStartupFence {
+            command: command.clone(),
+            shutdown: shutdown.clone(),
+            deadline,
+        }
+        .require(&tx)?;
+        tx.commit().map_err(sql)
+    }
+    pub(crate) fn finish_service_initialization(&mut self) -> Result<()> {
+        let scope = self
+            .service_startup
+            .as_ref()
+            .ok_or("Service initialization has no fresh sealed fence")?;
+        let tx = self.connection.unchecked_transaction().map_err(sql)?;
+        self.check_authority()?;
+        scope.require(&tx)?;
+        tx.commit().map_err(sql)?;
+        self.service_startup = None;
+        Ok(())
     }
 }
 

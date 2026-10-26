@@ -66,6 +66,7 @@ impl Store {
             read_only: true,
             work_scheduling: None,
             queue_policy: None,
+            service_startup: None,
         })
     }
 

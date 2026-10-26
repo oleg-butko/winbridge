@@ -14,7 +14,21 @@ fn activated(
     Box<JournalActivationPermit>,
     WorkerServiceActivationCommand,
 ) {
-    let (old, state, writer, shutdown) = fixture(root);
+    activated_with(fixture(root))
+}
+fn activated_with(
+    (old, state, writer, shutdown): (
+        Store,
+        LockedShutdownState,
+        winbridge_protocol::update::WorkerJournalActivationCommand,
+        winbridge_protocol::update::WorkerShutdownReceipt,
+    ),
+) -> (
+    ActivationJournal,
+    Box<JournalActivationPermit>,
+    WorkerServiceActivationCommand,
+) {
+    let root = std::path::PathBuf::from(&writer.binding.physical.state.state_directory);
     let mut journal = ActivationJournal::open(state, writer.clone(), shutdown, || Ok(())).unwrap();
     let JournalActivationAcceptance::Fresh(fresh) = journal.activate(|| Ok(())).unwrap() else {
         panic!("fresh activation");
@@ -215,4 +229,392 @@ fn service_transfer_rechecks_authority_after_the_last_external_checkpoint() {
     );
     assert!(!lock_available(root.path()));
     failure.revalidate_state().unwrap();
+}
+
+// The graph/process metadata stays synthetic. These tests additionally exercise
+// shared Worker recovery and real local IPC (named pipe on Windows), never TCP.
+fn service_fixture(root: &Path) -> (PreparedServiceJournal, std::path::PathBuf, String) {
+    use winbridge_protocol::*;
+    let state = root.join("state");
+    std::fs::create_dir(&state).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    let project = root.join("project");
+    std::fs::create_dir(&project).unwrap();
+    let instance = format!("svc-{}", uuid::Uuid::new_v4().simple());
+    let config = serde_json::json!({"schemaVersion":1,"instanceId":instance,"nodeId":"service-test",
+        "stateDirectory":state,"worker":{"controllerUrl":"ws://127.0.0.1:9","keepRunningOnUiExit":true},
+        "projects":[{"id":"source","workspaceRoot":project,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]});
+    let config_path = root.join("worker.json");
+    let config_bytes = serde_json::to_vec(&config).unwrap();
+    std::fs::write(&config_path, &config_bytes).unwrap();
+    let mut task_id = String::new();
+    let parts = crate::store::activation_open::tests::fixture_with(
+        &state,
+        &instance,
+        &winbridge_update::sha256(&config_bytes),
+        |store| {
+            let task = store
+                .accept(
+                    submission("old"),
+                    ResolvedCommand {
+                        executable: "synthetic-never-run".into(),
+                        arguments: vec![],
+                        working_directory: ".".into(),
+                        timeout_ms: 5000,
+                    },
+                    None,
+                )
+                .unwrap();
+            task_id = task.task_id.clone();
+            store
+                .append_output(
+                    &task_id,
+                    OutputStream::Stdout,
+                    0,
+                    b"old output: \xe2\x9c\x93",
+                    1024,
+                )
+                .unwrap();
+            store
+                .finish(
+                    &task_id,
+                    TaskStatus::Cancelled,
+                    None,
+                    "Metadata fixture; no process started",
+                )
+                .unwrap();
+            let context = RequestContext {
+                instance_id: instance.clone(),
+                journal_incarnation: store.journal_authority().incarnation.clone(),
+            };
+            let observation = store.queue_observation(context.clone()).unwrap();
+            assert!(matches!(
+                store
+                    .queue_control(
+                        context,
+                        QueueControlCommand::Set {
+                            command_id: "old-pause".into(),
+                            expected_revision: observation.revision,
+                            mode: QueueMode::Paused
+                        }
+                    )
+                    .unwrap(),
+                QueueControlResult::Applied { .. }
+            ));
+        },
+    );
+    let (journal, fresh, command) = activated_with(parts);
+    (
+        journal
+            .prepare_local_service(fresh, command, || Ok(()))
+            .unwrap(),
+        config_path,
+        task_id,
+    )
+}
+fn submission(key: &str) -> winbridge_protocol::TaskSubmission {
+    winbridge_protocol::TaskSubmission {
+        protocol_version: 1,
+        request_id: key.into(),
+        project_id: "source".into(),
+        idempotency_key: key.into(),
+        timeout_ms: 5000,
+        snapshot_id: None,
+        command: winbridge_protocol::CommandSource::Direct {
+            executable: "synthetic-never-run".into(),
+            arguments: vec![],
+            working_directory: ".".into(),
+        },
+    }
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_service_recovers_same_owner_and_exposes_readonly_history_over_real_ipc() {
+    use winbridge_protocol::*;
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, config, task_id) = service_fixture(root.path());
+    let expected = prepared.command().clone();
+    let state = root.path().join("state");
+    let service = crate::LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap();
+    assert!(!lock_available(&state));
+    let running = service.start().await.unwrap();
+    let endpoint = running.endpoint().unwrap();
+    let response: LocalResponse =
+        winbridge_transport::supervisor::call(&endpoint, std::process::id(), &LocalRequest::Info)
+            .await
+            .unwrap();
+    let LocalResponse::Info { info } = response else {
+        panic!("Info")
+    };
+    assert_eq!(
+        info.generation,
+        expected.binding.writer_command.binding.physical.generation
+    );
+    assert!(
+        !info.maintenance_available && !info.snapshot_import_available && !info.workflow_available
+    );
+    assert!(
+        !info
+            .fenced_requests
+            .as_ref()
+            .unwrap()
+            .legacy_mutations_allowed
+    );
+    assert!(info.journal_inspection.is_none());
+    assert!(info
+        .runtime_validation
+        .contains("Локальная проверка обновления"));
+    let connection = info.controller_connection.unwrap();
+    assert_eq!(connection.url, "ws://127.0.0.1:9");
+    assert!(matches!(connection.state, ConnectionState::Disconnected));
+    assert!(connection.session_id.is_none() && connection.last_confirmed_at_ms.is_none());
+    let catalog = info.contract_catalog.unwrap();
+    for key in ["workScheduling", "queueControl", "resourceScheduling"] {
+        assert_eq!(catalog[key]["readOnly"], true, "{key}");
+    }
+    let response: LocalResponse = winbridge_transport::supervisor::call(
+        &endpoint,
+        std::process::id(),
+        &LocalRequest::GetTask {
+            task_id: task_id.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(response, LocalResponse::Task { task } if task.status == TaskStatus::Cancelled)
+    );
+    let response: LocalResponse = winbridge_transport::supervisor::call(
+        &endpoint,
+        std::process::id(),
+        &LocalRequest::ReadOutput {
+            task_id: task_id.clone(),
+            after_sequence: 0,
+        },
+    )
+    .await
+    .unwrap();
+    let LocalResponse::Output { chunks } = response else {
+        panic!("output")
+    };
+    assert_eq!(
+        chunks
+            .iter()
+            .flat_map(|c| c.bytes.clone())
+            .collect::<Vec<_>>(),
+        b"old output: \xe2\x9c\x93"
+    );
+    let response: LocalResponse = winbridge_transport::supervisor::call(
+        &endpoint,
+        std::process::id(),
+        &LocalRequest::Submit {
+            request: submission("new"),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(response, LocalResponse::Error { message } if message.contains("Локальная проверка обновления"))
+    );
+    assert!(winbridge_transport::supervisor::call::<_, LocalResponse>(
+        &endpoint,
+        std::process::id() + 1,
+        &LocalRequest::Info
+    )
+    .await
+    .is_err());
+    let context = info.fenced_requests.unwrap().context;
+    let observe = QueueControlRequest {
+        queue_control_version: 1,
+        context: context.clone(),
+        command: QueueControlCommand::Observe {
+            command_id: Some("old-pause".into()),
+        },
+    };
+    let response: QueueControlResponse =
+        winbridge_transport::supervisor::call(&endpoint, std::process::id(), &observe)
+            .await
+            .unwrap();
+    let QueueControlResult::Observed {
+        observation,
+        receipt,
+    } = response.result
+    else {
+        panic!("queue observation")
+    };
+    assert_eq!(observation.mode, QueueMode::Paused);
+    assert!(observation.read_only && receipt.is_some());
+    let set = QueueControlRequest {
+        queue_control_version: 1,
+        context,
+        command: QueueControlCommand::Set {
+            command_id: "new-unpause".into(),
+            expected_revision: observation.revision,
+            mode: QueueMode::Running,
+        },
+    };
+    let response: QueueControlResponse =
+        winbridge_transport::supervisor::call(&endpoint, std::process::id(), &set)
+            .await
+            .unwrap();
+    assert!(matches!(
+        response.result,
+        QueueControlResult::Rejected {
+            code: QueueControlError::Unavailable,
+            ..
+        }
+    ));
+    let observed = Store::open_read_only(&state.join("journal.sqlite")).unwrap();
+    assert_eq!(
+        observed.state_backup_authority().unwrap(),
+        expected.binding.writer_receipt.authority
+    );
+    assert!(observed.update_frozen().unwrap());
+    assert_eq!(observed.recent().unwrap().len(), 1);
+    assert!(!lock_available(&state));
+    drop(observed);
+    running.close().await.unwrap();
+    assert!(lock_available(&state));
+}
+#[test]
+fn local_service_failed_initialization_retains_same_lock_and_never_binds_ipc() {
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, config, _) = service_fixture(root.path());
+    let mut calls = 0;
+    let failure = crate::LocalService::prepare_fixture(prepared, &config, || {
+        calls += 1;
+        if calls == 5 {
+            Err("Parent scope changed during recovery".into())
+        } else {
+            Ok(())
+        }
+    })
+    .err()
+    .unwrap();
+    assert!(
+        failure.reason().contains("Parent scope changed"),
+        "{}",
+        failure.reason()
+    );
+    failure.revalidate_state().unwrap();
+    assert!(!lock_available(&root.path().join("state")));
+    drop(failure);
+    assert!(lock_available(&root.path().join("state")));
+}
+#[test]
+fn local_service_rejects_changed_config_without_initializing_or_releasing_state() {
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, config, _) = service_fixture(root.path());
+    let before = bytes(&root.path().join("state"));
+    std::fs::write(&config, b"{}").unwrap();
+    let failure = crate::LocalService::prepare_fixture(prepared, &config, || {
+        panic!("No checkpoint before pinned config check")
+    })
+    .err()
+    .unwrap();
+    assert!(
+        failure.reason().contains("SHA mismatch"),
+        "{}",
+        failure.reason()
+    );
+    failure.revalidate_state().unwrap();
+    assert!(!lock_available(&root.path().join("state")));
+    assert_eq!(bytes(&root.path().join("state")), before);
+}
+#[test]
+fn local_service_initialization_cannot_renew_the_original_monotonic_window() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut prepared, config, _) = service_fixture(root.path());
+    prepared
+        .journal
+        .constrain_startup_deadline(std::time::Instant::now());
+    let failure = crate::LocalService::prepare_fixture(prepared, &config, || Ok(()))
+        .err()
+        .unwrap();
+    assert!(
+        failure.reason().contains("window expired"),
+        "{}",
+        failure.reason()
+    );
+    failure.revalidate_state().unwrap();
+    assert!(!lock_available(&root.path().join("state")));
+}
+
+#[test]
+fn sealed_initialization_fence_allows_recovery_but_keeps_admission_admin_and_epoch_closed() {
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, _, _) = service_fixture(root.path());
+    let mut state = prepared.into_runtime(|| Ok(())).unwrap();
+    state
+        .store
+        .write_transaction(rusqlite::TransactionBehavior::Immediate)
+        .unwrap()
+        .commit()
+        .unwrap();
+    assert!(state.store.require_update_administration().is_err());
+    assert!(state.store.begin_authority().is_err());
+    assert!(state
+        .store
+        .accept(
+            submission("closed"),
+            winbridge_protocol::ResolvedCommand {
+                executable: "synthetic-never-run".into(),
+                arguments: vec![],
+                working_directory: ".".into(),
+                timeout_ms: 5000
+            },
+            None
+        )
+        .unwrap_err()
+        .contains("обновление WinBridge"));
+    state.store.finish_service_initialization().unwrap();
+    assert!(state
+        .store
+        .write_transaction(rusqlite::TransactionBehavior::Immediate)
+        .err()
+        .unwrap()
+        .contains("frozen"));
+    assert!(state.store.finish_service_initialization().is_err());
+    assert!(!lock_available(&root.path().join("state")));
+}
+#[test]
+fn sealed_initialization_fence_rechecks_header_on_each_transaction() {
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, _, _) = service_fixture(root.path());
+    let mut state = prepared.into_runtime(|| Ok(())).unwrap();
+    let other = rusqlite::Connection::open(root.path().join("state/journal.sqlite")).unwrap();
+    other
+        .execute(
+            "UPDATE journal_authority SET epoch=epoch+1,authority=?1 WHERE singleton=1",
+            [uuid::Uuid::new_v4().to_string()],
+        )
+        .unwrap();
+    assert!(state
+        .store
+        .write_transaction(rusqlite::TransactionBehavior::Immediate)
+        .err()
+        .unwrap()
+        .contains("stale"));
+    assert!(state.store.finish_service_initialization().is_err());
+    assert!(!lock_available(&root.path().join("state")));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn local_service_bind_conflict_is_not_readiness_and_keeps_original_state_owned() {
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, config, _) = service_fixture(root.path());
+    let service = crate::LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap();
+    let endpoint = service.endpoint().unwrap();
+    #[cfg(unix)]
+    let occupied = tokio::net::UnixListener::bind(&endpoint).unwrap();
+    #[cfg(windows)]
+    let occupied = winbridge_transport::create_pipe(&endpoint, true).unwrap();
+    let failure = service.start().await.err().unwrap();
+    failure.revalidate_state().unwrap();
+    assert!(!lock_available(&root.path().join("state")));
+    drop((occupied, failure));
+    assert!(lock_available(&root.path().join("state")));
 }

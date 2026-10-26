@@ -25,6 +25,10 @@ def fixture():
 
 
 class Proof(unittest.TestCase):
+    def test_counts_sync_and_async_native_tests_from_pinned_source(self):
+        source = b'#[test]\nfn sync() {}\n#[tokio::test(flavor = "multi_thread", worker_threads = 2)]\nasync fn ipc() {}\n#[tokio::test]\r\nasync fn other() {}\nfn helper() {}'
+        self.assertEqual(native.service_source_test_count(source), 3)
+
     def test_accepts_exact_complete_preparation_only(self):
         report, files = fixture()
         native.verify_service_admission(report, files, [13, 6], 'b'*64)

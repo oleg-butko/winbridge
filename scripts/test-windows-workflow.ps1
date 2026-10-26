@@ -46,8 +46,8 @@ artifact/log, managed stop и journal restart. Desktop и сетевые сое�
 Проверяет build identity на настоящей Windows/Git: parent checkout, Unicode paths
 и скрытые index flags. Запускает только protocol tests, без desktop/test worker.
 .PARAMETER ServiceAdmissionOnly
-Проверяет service intent/history и consuming передачу того же SQLite connection/lock.
-Не запускает normal service, controller session, desktop или рабочее обновление.
+Проверяет service intent/history, передачу того же SQLite connection/lock и локальный
+readonly IPC на fixtures. Без controller session, desktop или рабочего обновления.
 .PARAMETER UpdatePreparationOnly
 Проверяет updater journal/ZIP, source apply/crash/migration, drain/quiesce и startup guard
 на отдельных worker/journal. Собирает четыре candidate exe без установки и UI-окон.

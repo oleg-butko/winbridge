@@ -2025,7 +2025,7 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
         };
         assert_eq!(
             state.lock_identity,
-            winbridge_platform::file_identity(&f.worker._instance_lock).unwrap()
+            f.worker._instance_lock.lock_identity().unwrap()
         );
         let original = q.binding.clone();
         q.binding.generation = uuid::Uuid::new_v4().to_string();

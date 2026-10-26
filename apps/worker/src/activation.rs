@@ -323,6 +323,7 @@ mod native {
         )
         .map_err(|e| e.to_string())?;
         timing.mark("existing_journal_opened", None, None);
+        journal.constrain_startup_deadline(handoff_deadline);
         let crate::store::JournalActivationAcceptance::Fresh(fresh) =
             journal.activate(&mut checkpoint)?
         else {

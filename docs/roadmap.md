@@ -3,9 +3,11 @@
 2026-10-26: performance-ветка слита в main, worker0.1.1 выпущен и **установлен
 пользователем, actual build/hash/history проверены**. [Проверка и продолжение](plans/worker-self-update/service-ledger-2026-10-26.md).
 Source updater20 содержит intent/history, original-guard admission и sealed
-connection/state transfer preparation. Service4 receiver/normal Worker/IPC ещё
-отсутствуют. Следом receiver → общая инициализация Worker → actual local IPC →
-новый Main25/actual19→20. [Checkpoint](plans/worker-self-update/service-admission-2026-10-26.md).
+connection/state transfer preparation. Общий Worker/reconciliation и library local
+readonly IPC реализованы; source workspace820/0, focused worker13/0. Private
+service4 receiver/parent normal-IPC validation/actor25 ещё отсутствуют. Следом
+интеграция LocalService → Main25/actual19→20.
+[Checkpoint](plans/worker-self-update/local-service-runtime-2026-10-26.md).
 Native подготовка проверена:13 SQL/migration +6 transfer fixtures,3 files twice;
 это не actual service/IPC или Main25. Public updater/multi-controller не включаются.
 Установленная0.1.1 не заменяется.

@@ -184,7 +184,11 @@ impl Store {
             .map_err(sql)?;
         Self::assert_authority(&transaction, &expected)?;
         Self::read_admission_boundary(&transaction, &expected.incarnation)?;
-        Self::require_update_writes(&transaction)?;
+        if let Some(startup) = &self.service_startup {
+            startup.require(&transaction)?;
+        } else {
+            Self::require_update_writes(&transaction)?;
+        }
         if let Some(token) = callback {
             Self::assert_attempt(&transaction, &token)?;
         }

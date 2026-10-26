@@ -180,6 +180,12 @@ def verify_build_cache_usage(result, requested, local):
         raise RuntimeError('Native build-cache receipt does not match the pinned prior run/fresh fallback')
 
 
+def service_source_test_count(source):
+    # Both synchronous fixtures and real Tokio IPC tests must finish. Fail
+    # closed if a new attribute shape is not recognized by this pinned count.
+    return len(re.findall(rb'(?m)^#\[(?:test|tokio::test(?:\([^\r\n]*\))?)\]\r?\n(?:async )?fn ', source))
+
+
 def verify_service_admission(result, files, counts, manifest_sha256):
     expected = ['service-history-native', 'service-transfer-native']
     if (result.get('serviceAdmissionOnly') is not True or result.get('passed') is not True
@@ -220,7 +226,7 @@ def main():
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
     parser.add_argument('--verify-service-admission-run', help='Read-only recheck of an existing terminal service preparation run; never submit or rebuild')
-    parser.add_argument('--service-admission-only', action='store_true', help='Check service history and same-connection/lock transfer on isolated SQLite fixtures; no runtime service, network or UI')
+    parser.add_argument('--service-admission-only', action='store_true', help='Check service history, same-state Worker initialization and readonly local IPC on isolated fixtures; no controller network or UI')
     parser.add_argument('--update-preparation-only', action='store_true', help='Test updater/source transactions on isolated fixtures and build a complete candidate without changing installed runtime or opening windows')
     parser.add_argument('--update-preparation-reuse-run', help='Reuse only compiler caches of a terminal update-preparation run with checksummed successful native groups; always use new source/state/staging')
     parser.add_argument('--update-reference-updater', help='Retained previous updater path for isolated current-schema refusal')
@@ -616,7 +622,7 @@ exit $nativeExit
             source_manifest = json.loads(manifest_bytes)
             if source_manifest.get('dirty') is not False or result['sourceCommit'] != source_manifest['sourceCommit']:
                 raise ValueError('Service native source pin differs from the supplied archive')
-            counts = [len(re.findall(rb'(?m)^#\[test\]\r?\nfn ', archive.read('winbridge/' + path))) for path in (
+            counts = [service_source_test_count(archive.read('winbridge/' + path)) for path in (
                 'apps/update/src/journal/activation_service/tests.rs',
                 'apps/worker/src/store/activation_service_open/tests.rs')]
         files = {item['path']: (report / item['path']).read_bytes() for item in ready['files']}

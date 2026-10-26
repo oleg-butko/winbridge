@@ -1,6 +1,6 @@
 //! Real file locks/SQLite, synthetic child/graph metadata. No runtime exit proof.
 use super::*;
-use crate::store::{shutdown_metadata_fixture, ShutdownAcceptance};
+use crate::store::ShutdownAcceptance;
 use std::{fs, fs::OpenOptions};
 use winbridge_protocol::{
     update::{ActivationStateOwned, WorkerJournalActivationBinding},
@@ -16,7 +16,21 @@ pub(crate) fn fixture(
     WorkerJournalActivationCommand,
     WorkerShutdownReceipt,
 ) {
-    let (mut store, mut pending, _) = shutdown_metadata_fixture(&root.join("journal.sqlite"));
+    fixture_with(root, "shutdown-test", &"c".repeat(64), |_| {})
+}
+pub(crate) fn fixture_with(
+    root: &Path,
+    instance: &str,
+    config_sha: &str,
+    seed: impl FnOnce(&mut Store),
+) -> (
+    Store,
+    LockedShutdownState,
+    WorkerJournalActivationCommand,
+    WorkerShutdownReceipt,
+) {
+    let (mut store, mut pending, _) =
+        crate::store::shutdown::tests::ready_with(&root.join("journal.sqlite"), instance, seed);
     fs::write(root.join("worker.lock"), b"existing lock").unwrap();
     let pins = ShutdownStatePins::capture(root).unwrap();
     pending.state = pins.observation().clone();
@@ -55,7 +69,7 @@ pub(crate) fn fixture(
             },
             worker_journal_schema: JOURNAL_SCHEMA_VERSION,
             updater_journal_schema: 18,
-            worker_config_sha256: "c".repeat(64),
+            worker_config_sha256: config_sha.into(),
         },
         issued_at_ms: at,
         deadline_at_ms: at + 120000,

@@ -3,7 +3,10 @@
 2026-10-26: worker0.1.1 установлен и проверен. [Продолжение updater](plans/worker-self-update/service-ledger-2026-10-26.md):
 source journal20 хранит service intent/history и читает их в одном snapshot с
 writer/activation graph. [Consuming admission/transfer preparation](plans/worker-self-update/service-admission-2026-10-26.md)
-подключены как trusted API; service4 driver/receiver/normal Worker/IPC пока нет;
+подключены как trusted API. [Общий Worker и library local readonly IPC](plans/worker-self-update/local-service-runtime-2026-10-26.md)
+потребляют тот же connection/full custody/generation. Startup reconciliation имеет
+временную transaction fence; root/dispatch/admin остаются закрыты, перед IPC
+восстанавливается обычная write freeze. Service4 driver/receiver ещё не подключены;
 новый формат не установлен. Worker schema17 и supervisor24/view16 прежние,
 private service4/actor25/view17 и public install не включены. Статусы ниже
 относятся к своим историческим source/gates.

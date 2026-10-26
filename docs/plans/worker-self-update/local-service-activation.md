@@ -1,6 +1,9 @@
 # Следующий сценарий: normal local service после writer
 
-2026-10-26. **Data foundation и journal20 format/readback реализованы; runtime service ещё отсутствует.**
+2026-10-26. **Общий Worker/reconciliation и library local IPC реализованы**:
+[актуальный checkpoint и оставшаяся интеграция](local-service-runtime-2026-10-26.md).
+Service4/parent validation/actor25/Main25 ещё впереди. Записи ниже сохраняют
+первоначальный порядок реализации и исторические результаты.
 Реализация начата после полного положительного Main24 и независимого review.
 [Текущий run и результаты](review-2026-10-25-latency.md).
 
@@ -14,10 +17,10 @@ receipt DTO, binding к confirmed writer/физическому6 и pure FSM Iss
 **Journal20 format/readback добавлен**: [подробный checkpoint](service-ledger-2026-10-26.md).
 Original-guard admission и closed connection/state transfer реализованы в
 [следующем checkpoint](service-admission-2026-10-26.md). Service4 send/receiver,
-normal Worker/IPC и actor25/view17 пока отсутствуют. Подготовка прошла19 Windows
-fixture checks; full same-child service/IPC ещё не проверялся.
-Ни Store, ни IPC этот код не открывает; private capability marker не добавлен.
-Следующий source шаг — service4 receiver и Worker из sealed PreparedServiceJournal;
+actor25/view17 пока отсутствуют. Исторический admission gate прошёл19 Windows
+fixture checks; новый library Worker/IPC описан в актуальном checkpoint выше.
+Private capability marker не добавлен.
+Следующий source шаг — service4 receiver и подключение LocalService;
 admission пишет journal20 только под consuming original guard, не из JSON.
 Проверки первоначальной data foundation2026-10-25: workspace791/0 (16 ignored), focused service7/0,
 Linux/MSVC workspace all-target validation Clippy, TypeScript feature и generated
