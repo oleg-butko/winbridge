@@ -1,5 +1,10 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
+**Текущая дополнительная задача2026-10-26:** [idle CPU worker](plans/run-speed/idle-worker-2026-10-26.md).
+Installed PID19064 потребляет~103% одного логического ядра без задач. Найдено
+чтение всей истории каждые25ms; pending-index queries и scheduler timings
+подготовлены. Native comparison впереди; installed runtime не менять.
+
 **Новая текущая задача этой ветки 2026-10-26:** [раунд 2 оптимизации](plans/run-speed/round2-2026-10-26.md).
 Следующий существенный результат получен. Desktop rebuild pilot118.5625→41.7945s
 (64.75%) passed:25 files twice, fresh local crates, no UI. В private

@@ -2,6 +2,10 @@
 
 ## Сейчас в этой ветке: ускорение прогонов
 
+2026-10-26 дополнительный bugfix: [worker idle CPU](plans/run-speed/idle-worker-2026-10-26.md).
+Полная история читалась каждые25ms. Pending-index queries/diagnostics и isolated
+Windows CPU experiment подготовлены; native подтверждение впереди.
+
 2026-10-26 новая цель: [следующий раунд](plans/run-speed/round2-2026-10-26.md).
 Раунд завершён: desktop rebuild ordinary release118.5625→private local opt0
 41.7945s(64.75%),25 ready files twice, role/source/cleanup passed. Production argv

@@ -36,7 +36,7 @@ def submit(args):
     project = next(p for p in info['projects'] if p['id'] == 'snapshot-fixture' and p['allowDirectCommands'])
     root = PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/pin['run']
     run = time.strftime('%Y%m%d-%H%M%S', time.gmtime())+'-'+uuid.uuid4().hex[:8]
-    prefix = args.probe if args.probe in {'desktop-release', 'build-profile-check'} else 'build-matrix'
+    prefix = args.probe if args.probe in {'desktop-release', 'build-profile-check', 'worker-idle'} else 'build-matrix'
     work = str(root/(prefix+'-'+run))
     helpers = str(root/('perf-script-'+run))
     report = Path('/mnt/hgfs/shared/WinBridge/run-speed')/run
@@ -49,6 +49,29 @@ def submit(args):
         bundle['lib/update-build-profile.ps1'] = (ROOT/'scripts/lib/update-build-profile.ps1').read_text()
     payload = base64.b64encode(gzip.compress(json.dumps(bundle).encode())).decode()
     cache = str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/pin['cacheRun']/'test-build-cache')
+    manifest_sha = pin['source']['manifestSha256']
+    candidate_source = None
+    if args.probe == 'worker-idle':
+        if not args.source_ready:
+            raise ValueError('Worker idle probe requires --source-ready for the clean candidate ZIP')
+        import zipfile
+        ready = json.loads(args.source_ready.read_text())
+        archive_path = args.source_ready.parent / ready['archive']
+        if archive_path.name != ready['archive'] or ready['dirty'] or hashlib.sha256(archive_path.read_bytes()).hexdigest() != ready['sha256']:
+            raise ValueError('Clean candidate archive pin differs')
+        with zipfile.ZipFile(archive_path) as archive_file:
+            manifest = archive_file.read('winbridge/winbridge-source-manifest.json')
+        manifest_sha = hashlib.sha256(manifest).hexdigest()
+        candidate_source = dict(ready, manifestSha256=manifest_sha)
+        proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
+        baseline = proof['cases'][0]['replacement']['actualRetainedFiles'][0]
+        if not baseline['path'].endswith('\\displaced-runtime\\winbridge-worker.exe'):
+            raise ValueError('Pinned retained baseline worker required')
+        archive = str(PureWindowsPath('K:/VMs/shared/WinBridge/sources')/ready['archive'])
+        extra_args = (' -SourceArchivePath '+previous.native.ps_string(archive)
+                      +' -ArchiveSha256 '+previous.native.ps_string(ready['sha256'])
+                      +' -BaselineExecutable '+previous.native.ps_string(baseline['path'])
+                      +' -BaselineSha256 '+previous.native.ps_string(baseline['sha256']))
     if args.probe == 'desktop-release':
         proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
         helper = proof['cases'][0]['replacement']['actualRetainedFiles'][3]
@@ -78,7 +101,7 @@ foreach($name in $bundle.Keys){{
  try{{$bytes=[Text.UTF8Encoding]::new($false).GetBytes($bundle[$name]);$handle.Write($bytes,0,$bytes.Length)}}finally{{$handle.Dispose()}}
 }}
 foreach($name in @('session-runtime.ps1','lib/build-cache.ps1')){{[IO.File]::Copy((Join-Path $source ('scripts/'+$name)),(Join-Path $helpers $name),$false)}}
-& pwsh.exe -NoProfile -NonInteractive -File $path -SourceDirectory $source -ManifestSha256 {ps(pin['source']['manifestSha256'])} -CacheDirectory {ps(cache)} -WorkDirectory {ps(work)}{extra_args}
+& pwsh.exe -NoProfile -NonInteractive -File $path -SourceDirectory $source -ManifestSha256 {ps(manifest_sha)} -CacheDirectory {ps(cache)} -WorkDirectory {ps(work)}{extra_args}
 $exitCode=$LASTEXITCODE
 $work={ps(work)}
 $shared={ps(shared)}
@@ -101,7 +124,7 @@ exit $exitCode
                    arguments=['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]))
     meta = dict(run=run, taskId=None, request=request, reference=str(args.reference.resolve()), referenceReportSha256=pin['reportSha256'],
                 controllerConfig=str(args.controller_config.resolve()), reportDirectory=str(report), windowsWorkDirectory=work,
-                source=pin['source'], scriptSha256=hashlib.sha256(code.encode()).hexdigest(),
+                source=pin['source'], candidateSource=candidate_source, scriptSha256=hashlib.sha256(code.encode()).hexdigest(),
                 bundleSha256={name: hashlib.sha256(text.encode()).hexdigest() for name, text in bundle.items()}, debianFreeBytes=free)
     local = ROOT/'.winbridge/run-speed'/run
     local.mkdir(parents=True)
@@ -116,7 +139,8 @@ exit $exitCode
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--observe', type=Path)
-    parser.add_argument('--probe', choices=['build-matrix','source-inventory','desktop-release','build-profile-check'])
+    parser.add_argument('--probe', choices=['build-matrix','source-inventory','desktop-release','build-profile-check','worker-idle'])
+    parser.add_argument('--source-ready', type=Path)
     parser.add_argument('--reference', type=Path)
     parser.add_argument('--controller-config', type=Path)
     args = parser.parse_args()
