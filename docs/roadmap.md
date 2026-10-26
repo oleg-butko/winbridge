@@ -4,8 +4,9 @@
 Git coordination отменена. Pure sessions/origin, WorkerSettings topology и actual
 transport подключены; Linux model и два реальных loopback WebSocket соединения
 проверены с одним Worker/Store (187 passed /5 штатно ignored, Clippy/MSVC check).
-Durable attribution, полный список связей в
-desktop и Windows gate впереди. Windows переключает пользователь вручную;
+Readonly список связей и RPC counters подключён отдельным контрактом/панелью;
+scope/old-worker/offline проверены на Chromium + Linux worker. Durable attribution
+и Windows gate впереди. Windows переключает пользователь вручную;
 установленный0.1.1 и его config здесь не меняются.
 
 2026-10-26: по новой задаче пользователя выполняются

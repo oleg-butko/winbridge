@@ -221,6 +221,7 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                 Some(SessionFrame::Extension(winbridge_protocol::ExtensionSessionMessage::ExtensionRequest {id,request}))=> {
                     if id.is_empty() || id.len()>160 || !id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-') || active_ids.contains(&id) {return Err("Invalid/duplicate extension correlation ID".into());}
                     if handlers.len()+extensions.len()>=ws::MAX_IN_FLIGHT {
+                        links.lock().map_err(|_|"Controller state lock poisoned")?.reject(&ticket);
                         ws::send_frame(&mut socket,&SessionFrame::Extension(winbridge_protocol::ExtensionSessionMessage::ExtensionResponse {id,response:winbridge_protocol::ExtensionResponse::rejected(request.contract,winbridge_protocol::ExtensionError::QueryFailed,"Readonly query rejected before dispatch: session busy".into())})).await?;continue;
                     }
                     let guard=match RpcGuard::admit(&links,&ticket,id.clone()) {
@@ -245,6 +246,7 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                         return Err("Invalid/duplicate WebSocket correlation ID".into());
                     }
                     if handlers.len()+extensions.len() >= ws::MAX_IN_FLIGHT {
+                        links.lock().map_err(|_|"Controller state lock poisoned")?.reject(&ticket);
                         ws::send_frame(&mut socket, &SessionFrame::response(id, WireResponse::rejected_for(&request, "Worker has 16 active requests; request rejected before acceptance".into()))).await?;
                         continue;
                     }

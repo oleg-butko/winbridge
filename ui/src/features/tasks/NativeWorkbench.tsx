@@ -13,6 +13,7 @@ import type { CommandForm } from "../../runtime/commandDrafts";
 import type { CommandDraft, DeliveryDraft, TaskRecord, TaskSummary, TaskSubmission, WorkerInfo, CompanionStatus, NotificationPreferences, AttentionTarget } from "../../runtime/contracts";
 import { catalogSummary, projectPolicySummary } from "../../runtime/discovery";
 import { ReadinessPanel } from "./ReadinessPanel";
+import { ControllerConnectionsPanel, controllerConnectionsSupported } from "./ControllerConnectionsPanel";
 import { WorkSchedulingSummary } from "./WorkSchedulingSummary";
 import { QueueControlPanel } from "./QueueControlPanel";
 import { ResourceSchedulingSummary } from "./ResourceSchedulingSummary";
@@ -322,7 +323,7 @@ export function NativeWorkbench() {
       {info && <Text size="xs">Версия worker: {info.build ? `${info.build.version} · commit ${info.build.sourceCommit || "не указан"}${!info.build.sourceCommit ? " · происхождение исходников не подтверждено" : info.build.sourceDirty ? " · изменённые исходники" : ""} · build ${info.build.buildId}` : "этот выпуск не передаёт сведения о сборке"} · generation {info.generation}</Text>}
       <Text size="xs">Версия desktop: {desktopBuild ? `${desktopBuild.version} · commit ${desktopBuild.sourceCommit || "не указан"}${!desktopBuild.sourceCommit ? " · происхождение исходников не подтверждено" : desktopBuild.sourceDirty ? " · изменённые исходники" : ""} · build ${desktopBuild.buildId}` : "сведения о сборке ещё не получены"}</Text>
     </Alert>
-    <Alert color={controllerFresh ? "teal" : "yellow"} title={controllerFresh ? "Controller Debian подключён" : !info ? "Состояние controller пока неизвестно" : controller ? connected && controller.state === "connecting" ? "Подключение к controller Debian…" : "Нет свежего соединения с controller Debian" : "Управление из Debian не настроено"}>
+    {(!info || !controllerConnectionsSupported(info)) && <Alert color={controllerFresh ? "teal" : "yellow"} title={controllerFresh ? "Controller Debian подключён" : !info ? "Состояние controller пока неизвестно" : controller ? connected && controller.state === "connecting" ? "Подключение к controller Debian…" : "Нет свежего соединения с controller Debian" : "Управление из Debian не настроено"}>
       {controller ? <>
         <Text size="sm">{controller.url} · {controller.controllerNodeId ?? "node controller ещё не получен"}</Text>
         <Text size="xs">Последнее подтверждение: {controller.lastConfirmedAtMs === null ? "ещё не получено" : new Date(controller.lastConfirmedAtMs).toLocaleString()} · session: {controller.sessionId ?? "ещё не создана"}</Text>
@@ -330,7 +331,8 @@ export function NativeWorkbench() {
         {controller.error && <Text size="sm">{controller.error}</Text>}
         {!controllerFresh && <Text size="sm">{info?.journalInspection ? "Доступна диагностика журнала; состояние прежних процессов не подтверждено." : "Принятая задача принадлежит worker и продолжает выполняться. Автоматического повторного запуска нет."}</Text>}
       </> : <Text size="sm">{info ? "Для связи указать локальный ws:// адрес Debian в worker.controllerUrl. Локальные задачи доступны через worker." : "Ожидаются данные локального worker о соединении с Debian."}</Text>}
-    </Alert>
+    </Alert>}
+    {info && <ControllerConnectionsPanel key={`connections:${info.instanceId}:${info.fencedRequests?.context.journalIncarnation}:${info.generation}:${info.build?.buildId}`} info={info} connected={connected} />}
     {info && <WorkSchedulingSummary info={info} connected={connected} />}
     {info && <UpdateCoordinationSummary info={info} connected={connected} />}
     {info && <ResourceSchedulingSummary info={info} connected={connected} />}

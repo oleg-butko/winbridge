@@ -12,6 +12,7 @@ use winbridge_protocol::{
 };
 use winbridge_transport::websocket::{self as ws, Result, RpcSender};
 mod activity;
+mod controller_connections;
 pub mod mcp;
 #[cfg(unix)]
 mod operations;

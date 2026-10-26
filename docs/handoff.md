@@ -10,7 +10,15 @@ Git coordination отменена пользователем: её отдель�
 pair отключает оба режима подключения. Linux model и actual loopback WebSocket
 tests используют настоящие процессы. **187 passed /5 штатно ignored**, Linux
 Clippy all-targets, MSVC worker check, fmt/scaffold290 passed; детали — в плане.
-Durable task attribution и список всех связей в desktop ещё впереди.
+Readonly список всех связей теперь подключён отдельным контрактом
+`winbridge.controller-connections` v1: scoped IPC/сетевой Rust SDK, main-window
+Tauri command и desktop панель с primary, ошибками/attempts и RPC counters.
+Старый Info/fingerprints не менялись; нет постоянного дополнительного polling.
+140 library /30 worker integration /64 protocol tests и Chromium с настоящим
+Linux worker прошли (protocol3 входят и в library группу); native Windows
+проверка новой панели ещё впереди. Clippy/contracts/TS/UI, standalone desktop
+Linux check, MSVC worker check, fmt/scaffold290 passed. Durable task attribution —
+следующий slice.
 Windows остаётся у .203; пользователь вручную перезапустит worker для .204 только
 при необходимости. Здесь Windows не опрашивать/не запускать; Windows gate
 и production readiness новой функции не объявлять. Installed0.1.1 не поддерживает

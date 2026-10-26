@@ -227,6 +227,10 @@ pub fn implemented_contract_schemas(provider: BuildIdentity) -> ContractSchemaCa
                 sha256: crate::operation_schema_sha256(),
             },
             ContractSchemaFingerprint {
+                contract: crate::controller_connections_contract(),
+                sha256: crate::controller_connections_schema_sha256(),
+            },
+            ContractSchemaFingerprint {
                 contract: ContractRef {
                     id: crate::WORK_SCHEDULING_CONTRACT.into(),
                     version: 1,

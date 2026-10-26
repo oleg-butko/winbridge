@@ -223,6 +223,29 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     );
     let context = ia.fenced_requests.unwrap().context;
     assert_eq!(ib.fenced_requests.unwrap().context, context);
+    let query = winbridge_protocol::ControllerConnectionsRequest {
+        context: context.clone(),
+    };
+    let all = h.a.controller_connections(query.clone()).await.unwrap();
+    assert_eq!(all.primary.as_deref(), Some("a"));
+    assert_eq!(all.connections.len(), 2);
+    assert!(all.connections.iter().all(|l| matches!(
+        l.connection.state,
+        winbridge_protocol::ConnectionState::Connected
+    )));
+    assert!(
+        all.rpc.in_flight >= 1,
+        "The observing WebSocket handler owns a slot too"
+    );
+    assert_eq!(
+        all.connections
+            .iter()
+            .find(|l| l.id == "b")
+            .unwrap()
+            .connection
+            .session_id,
+        h.b.status().unwrap().session_id
+    );
     projection(&h.a).await;
     projection(&h.b).await;
     let request = submission("a", "same-key", true);
@@ -236,6 +259,29 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     assert_eq!(task(&h.b, &queued.task_id).await.status, TaskStatus::Queued);
     h.servers[0].abort();
     let _ = (&mut h.servers[0]).await;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let all = h.b.controller_connections(query.clone()).await.unwrap();
+        let a = all.connections.iter().find(|l| l.id == "a").unwrap();
+        assert!(matches!(
+            all.connections
+                .iter()
+                .find(|l| l.id == "b")
+                .unwrap()
+                .connection
+                .state,
+            winbridge_protocol::ConnectionState::Connected
+        ));
+        if !matches!(
+            a.connection.state,
+            winbridge_protocol::ConnectionState::Connected
+        ) && a.last_error.is_some()
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     assert_eq!(task(&h.b, &one.task_id).await.status, TaskStatus::Running);
     let cancel =
         h.b.call_fenced(envelope(
@@ -271,6 +317,24 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     );
     projection(&h.a).await;
     projection(&h.b).await;
+    let all = h.b.controller_connections(query.clone()).await.unwrap();
+    let a = all.connections.iter().find(|l| l.id == "a").unwrap();
+    assert!(a.attempts.parse::<u64>().unwrap() >= 2);
+    assert!(a.last_error.is_some());
+    assert_eq!(
+        a.connection.controller_generation.as_ref(),
+        Some(&h.a.generation)
+    );
+    let address = winbridge_transport::endpoint(
+        &h.worker.config.state_directory,
+        &h.worker.config.instance_id,
+    )
+    .unwrap();
+    let local = winbridge_transport::controller_connections(&address, &query)
+        .await
+        .unwrap();
+    assert_eq!(local.worker_generation, all.worker_generation);
+    assert_eq!(local.primary, all.primary);
     let duplicate = submit(&h.a, &context, request).await;
     assert_eq!(duplicate.task_id, one.task_id);
     assert_eq!(duplicate.status, TaskStatus::Cancelled);

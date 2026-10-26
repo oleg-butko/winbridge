@@ -84,7 +84,8 @@ config сохраняет прежнее поведение и serialized scope;
    Сетевой Info каждого controller возвращает именно его connection/projection в
    существующих полях; остальные поля каталога сохраняются. Поэтому secondary
    не получает чужую readiness. Формат старых DTO не изменён. Полный список связей
-   в локальном desktop/diagnostics ещё предстоит добавить отдельной typed extension.
+   доступен через отдельную typed readonly extension и новую панель desktop;
+   native Windows проверка этой панели ещё не пройдена.
 
 Recovery pair удаляет оба режима подключения: восстановленный config остаётся
 local-only до явной настройки. Isolated update validation отвергает оба режима.
@@ -194,11 +195,77 @@ cargo check -p winbridge-worker --target x86_64-pc-windows-msvc --locked
 публичный dispatch без проверки scope. Снимок origin пока хранится в RPC permit
 и test observations; durable task creator не объявляется реализованным.
 
-Следующий source slice без Windows: typed readonly список всех соединений для
-локальных diagnostics/desktop (primary, state, error, confirmed time, RPC counters),
-затем durable creator attribution с атомарным fresh acceptance и неизменным dedup.
+Следующий source slice без Windows: durable creator attribution с атомарным fresh
+acceptance и неизменным dedup. Readonly диагностика связей подключена ниже.
 Это не разрешение на смену installed worker. Отдельный native gate требует
 доступного пользователем Windows worker; normal-service updater остаётся отдельно.
+
+## Readonly диагностика всех соединений, 2026-10-26
+
+`winbridge.controller-connections` v1 работает поверх существующего
+`winbridge.extensions` v1. Новый контракт отдельно объявлен в catalog и schema
+fingerprints; frozen WorkerInfo/worker RPC 1/2 и прежние fingerprints не расширены.
+Запрос — строго пустой JSON object `{}` плюс pinned RequestContext в envelope.
+`[]`, null, неизвестные поля/версии и чужая journal incarnation отклоняются.
+SDK предварительно проверяет catalog/schema/context; старый worker получает
+только Info, без неизвестной extension и без fallback к командам.
+
+Ответ содержит один согласованный срез всех настроенных связей (до4): endpoint ID,
+URL, primary, connection/session/controller generation, last confirmation,
+last connected/disconnected time, число попыток и последнюю ошибку. Последняя
+ошибка сохраняется между попытками и после успешного reconnect отдельно от
+текущей ошибки. Stale callback старого attempt её не перезаписывает. Ошибки
+ограничены по размеру с сохранением UTF-8; весь ответ укладывается в frame budget.
+Local-only worker возвращает пустой список и primary=null.
+
+Общие и per-controller RPC counters — lifetime observations текущей worker
+generation, без записи в SQLite. admitted/completed/rejected/attempts передаются
+decimal strings, без потери точности в JavaScript. inFlight — реально занятые
+network handler permits, включая старые соединения после reconnect. completed
+растёт только при окончательном освобождении permit; timeout/drop сокета не
+завершает ещё работающий blocking handler. rejected означает отказ до handler
+из-за RPC admission/буфера session, а не все ошибки выполнения методов.
+Info/readiness/readonly запросы тоже учитываются. Сам сетевой запрос диагностики
+видит собственный занятый слот; локальный IPC не входит в сетевой budget.
+Counters saturate на u64::MAX; decoder проверяет суммы, лимиты и scope/generation.
+
+Доступны local IPC SDK `winbridge_transport::controller_connections`, сетевой Rust
+SDK `Controller::controller_connections` и main-window Tauri command с тем же
+именем. CLI/MCP operation для нового контракта ещё не добавлена.
+Новая панель «Соединения с Debian» показывает все связи и явный primary;
+legacy desktop alert остаётся fallback для старого worker. Панель автоматически
+читает срез при подключении к worker, затем обновляется явной кнопкой. Постоянного
+дополнительного polling нет. Ошибка/потеря IPC сохраняет прошлый срез с предупреждением;
+старые ответы после смены scope/generation не попадают в новую панель. Это
+наблюдение на момент среза, не подтверждение завершения задач и не право на update.
+
+Проверки текущего slice:
+
+- 140 library tests passed /3 штатно ignored (core38, worker87, controller12,
+  protocol3). Два настоящих loopback WebSocket проверяют новый SDK от обоих
+  controller, local IPC, loss/reconnect, сохранение ошибки и перезапуск generation.
+- 30 worker integration tests passed: controller_connections2, legacy_baseline8,
+  multi_controller_model2, recovery_pair10, request_context8.
+- 64 protocol tests passed, включая3 из library группы: старые wire/fingerprint
+  контракты, новое negotiation и21 malformed/stale observation cases.
+- `test:controller-connections`: Chromium + настоящий Linux worker/local IPC,
+  два loopback адреса; primary/error/counters, delayed old-generation response,
+  lost IPC, offline и old-worker no-query. Никаких принятых задач.
+- Clippy protocol/core/worker/controller all-targets с `-D warnings`, contracts
+  generation/check, TypeScript, UI build, fmt (workspace и standalone desktop),
+  scaffold290, standalone desktop Linux check и MSVC worker check прошли.
+  Browser test прошёл с включённым Chromium sandbox. Linux free space перед работой
+  **19 GiB**. Windows не опрашивался и не использовался.
+
+Повтор browser test после сборки worker и установки npm dependencies:
+
+```sh
+CARGO_TARGET_DIR=/home/user1/winbridge/target PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:controller-connections
+```
+
+Переменная Chromium необязательна при установленном Playwright browser. Harness
+использует create-only временные каталоги и удаляет только собственные fixtures;
+production controller/worker/config не открывает.
 
 Удалены origin refs `coordination/windows-v1` и
 `feat/multi-controller-foundation`, а также local branch последней. Проверено,

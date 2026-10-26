@@ -21,6 +21,8 @@ mod projection;
 pub use projection::*;
 mod operations;
 pub use operations::*;
+mod controller_connections;
+pub use controller_connections::*;
 mod work_scheduling;
 pub use work_scheduling::*;
 mod queue_control;

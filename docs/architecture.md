@@ -245,7 +245,13 @@ attempt tickets/reconnect и readiness caches. Один Worker/SQLite/scheduler 
 Info — связь/проекцию своего caller без изменения DTO. Legacy controllerUrl и
 local-only сохраняются, оба режима одновременно отклоняются. Проверяется на
 Debian; установленный0.1.1 новый config не понимает, Windows gate ещё не пройден.
-Durable task attribution и общий desktop список связей остаются следующими шагами.
+Отдельная readonly extension `winbridge.controller-connections` v1 предоставляет
+согласованный список всех связей, сохранённые ошибки/attempts и общие/per-peer RPC
+counters без изменения старого Info и без записей в SQLite. SDK проверяет
+schema/context/worker generation. Desktop показывает срез с явным primary,
+ошибками и предупреждением о несвежих данных; для старого worker остаётся прежняя
+сводка. Дополнительного постоянного polling нет. Durable task attribution
+остаётся следующим шагом; native Windows проверка новой панели ещё впереди.
 Подробности и границы — в [плане](plans/multi-controller-runtime.md).
 
 Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, список реально реализованных capabilities. Несовместимая версия даёт понятную ошибку с дальнейшим действием. AppVersion не заменяет wire version. Session generation меняется после рестарта, durable task/event IDs сохраняются.

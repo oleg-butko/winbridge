@@ -312,6 +312,12 @@ impl Sessions {
     pub fn in_flight(&self) -> usize {
         self.in_flight.len()
     }
+    pub fn in_flight_for(&self, controller: &str) -> usize {
+        self.in_flight
+            .iter()
+            .filter(|p| p.ticket.controller == controller)
+            .count()
+    }
 }
 
 #[cfg(test)]
