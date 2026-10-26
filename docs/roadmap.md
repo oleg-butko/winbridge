@@ -2,6 +2,11 @@
 
 ## Сейчас в этой ветке: ускорение прогонов
 
+2026-10-26: [локальный worker0.1.1](releases/worker-0.1.1.md) с idle CPU fix и
+startup/version diagnostics, Windows release/compatibility gate готовится.
+[Несколько Debian controller](plans/multiple-debian-controllers.md) — отдельная
+будущая фича; конфигурацией0.1.1 один worker к двум controller не подключается.
+
 2026-10-26 [маркировка validation storage](validation/validation-storage.md):
 37.66GiB измерены readonly; tmp- для новых временных work dirs, storage guide,
 inventory CLI и legacy-path compatibility. Очистка и перенос caches/references

@@ -1,5 +1,11 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
+**Текущая задача2026-10-26:** [worker0.1.1](releases/worker-0.1.1.md), source
+version/startup diagnostics подготовлены; Linux checks passed. Windows build и
+проверка against actual controller0.1.0 ещё впереди. Installed pair не заменять
+из её managed task. [Два Debian/controller](plans/multiple-debian-controllers.md)
+проанализированы; multi-controller не реализовывать в patch release.
+
 **2026-10-26 storage:** [Windows validation storage](validation/validation-storage.md).
 Readonly inventory37.66GiB:25.34GiB в original cache owner20261017-061527-f4639971;
 7.93GiB shutdown-main references, известные top-level test-temp~54MiB. Для новых main workflow/perf

@@ -16,6 +16,31 @@ fn config(root: &Path) -> WorkerConfig {
     })).unwrap()
 }
 
+#[test]
+fn version_and_artifact_queries_need_no_config_and_keep_json_clean() {
+    let root = tempfile::tempdir().unwrap();
+    let exe = env!("CARGO_BIN_EXE_winbridge-worker");
+    let version = std::process::Command::new(exe)
+        .arg("--version")
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(version.status.success());
+    assert!(String::from_utf8(version.stdout)
+        .unwrap()
+        .starts_with(&format!("WinBridge worker {} ", env!("CARGO_PKG_VERSION"))));
+    let artifact = std::process::Command::new(exe)
+        .arg("--artifact-info")
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert!(artifact.status.success());
+    assert!(artifact.stderr.is_empty());
+    let identity: serde_json::Value = serde_json::from_slice(&artifact.stdout).unwrap();
+    assert_eq!(identity["build"]["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+}
+
 fn seed(config: &WorkerConfig) {
     std::fs::create_dir(&config.state_directory).unwrap();
     #[cfg(unix)]

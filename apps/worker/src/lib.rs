@@ -1589,10 +1589,13 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
     let mut listener =
         winbridge_transport::create_pipe(&address, true).map_err(|e| e.to_string())?;
     if matches!(readiness, ReadinessOutput::Console) {
+        let build = winbridge_protocol::build_identity();
         eprintln!(
-            "WinBridge worker ready: {address}; generation {}",
-            worker.generation
+            "WinBridge worker ready: {address}; generation {}; pid {}; version {}; source {}; dirty {}",
+            worker.generation, std::process::id(), env!("CARGO_PKG_VERSION"),
+            build.source_commit.as_deref().unwrap_or("unknown"), build.source_dirty
         );
+        eprintln!("WinBridge scheduler diagnostics: 30s windows; automatic slow-window reports; set WINBRIDGE_SCHEDULER_DIAGNOSTICS=1 for all windows (wall timings include lock waits; not process CPU)");
     }
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
     let control = update_control::start(Arc::clone(&worker))?;
