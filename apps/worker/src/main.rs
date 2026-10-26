@@ -14,6 +14,17 @@ async fn main() -> ExitCode {
 }
 async fn run() -> Result<(), String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--version"] || args == ["-V"] {
+        let build = winbridge_protocol::build_identity();
+        println!(
+            "WinBridge worker {} (source {}; dirty {}; build {})",
+            env!("CARGO_PKG_VERSION"),
+            build.source_commit.as_deref().unwrap_or("unknown"),
+            build.source_dirty,
+            build.build_id
+        );
+        return Ok(());
+    }
     if args.first().is_some_and(|arg| arg == "--activate-update") {
         if let [_, config, update, attempt] = args.as_slice() {
             return winbridge_worker::activation::run(Path::new(config), update, attempt);
@@ -94,7 +105,7 @@ async fn run() -> Result<(), String> {
         return Ok(());
     }
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
-        println!("WinBridge worker — local command service\n  --check-update-config ABSOLUTE_CONFIG SHA256 (readonly; no journal)\n  --rehearsal NEW_ABSOLUTE_DIRECTORY (fresh isolated diagnostic, no production config)\n  --describe\n  --config PATH validate\n  --config PATH verify-runtime (read-only; no journal/scheduler)\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH prepare-recovery NEW_DIRECTORY (archive/new pair; stays blocked)\n  --config PATH activate-recovery (prepared target config; physical check required)\n  --config PATH info | list\n  --config PATH operations REQUEST.json (readonly; pinned journal scope)\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
+        println!("WinBridge worker — local command service\n  --version | -V (no configuration; build identity)\n  --artifact-info (JSON artifact identity; no configuration)\n  --check-update-config ABSOLUTE_CONFIG SHA256 (readonly; no journal)\n  --rehearsal NEW_ABSOLUTE_DIRECTORY (fresh isolated diagnostic, no production config)\n  --describe\n  --config PATH validate\n  --config PATH verify-runtime (read-only; no journal/scheduler)\n  --config PATH serve\n  --config PATH serve-recovery (read-only; persistent execution block)\n  --config PATH prepare-recovery NEW_DIRECTORY (archive/new pair; stays blocked)\n  --config PATH activate-recovery (prepared target config; physical check required)\n  --config PATH info | list\n  --config PATH operations REQUEST.json (readonly; pinned journal scope)\n  --config PATH invoke-v2 ENVELOPE.json (caller-pinned context; no fallback)\n  --config PATH submit REQUEST.json\n  --config PATH attention REQUEST.json | attention-list [AFTER_SEQUENCE] | attention-history [AFTER_SEQUENCE] | ack-attention ID\n  --config PATH attention-events [AFTER_SEQUENCE] | attention-events-history [AFTER_SEQUENCE] | ack-attention-event ID\n  --config PATH history QUERY.json | diagnostic REQUEST.json | storage-usage\n  --config PATH import-delta REQUEST.json\n  --config PATH import REQUEST.json | imports | get-import ID | cancel-import ID\n  --config PATH preview PROJECT SNAPSHOT\n  --config PATH snapshots PROJECT [OFFSET]\n  --config PATH workflow REQUEST.json | workflows | get-workflow ID | cancel-workflow ID\n  --config PATH applications | get-application ID | stop-application ID | log ID [CURSOR.json]\n  --config PATH get TASK_ID\n  --config PATH output TASK_ID [AFTER_SEQUENCE]\n  --config PATH cancel TASK_ID\nRuntime data stays in stateDirectory; UI/client exit does not cancel tasks.");
         return Ok(());
     }
     if args == ["--describe"] {

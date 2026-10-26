@@ -466,7 +466,9 @@ $source = Join-Path $local 'winbridge'
 if ($reuse) {{
     # Revalidate trusted entrypoints before executing an existing script. The
     # script then validates every source file against the archive-pinned manifest.
-    foreach ($path in @($local, $source, (Join-Path $local 'test-build-cache'), (Join-Path $local 'test-temp'))) {{
+    $temporary = Join-Path $local 'tmp-test-temp'
+    if (Test-Path -LiteralPath (Join-Path $local 'test-temp')) {{ $temporary = Join-Path $local 'test-temp' }}
+    foreach ($path in @($local, $source, (Join-Path $local 'test-build-cache'), $temporary)) {{
         $node = Get-Item -LiteralPath $path -ErrorAction Stop
         while ($null -ne $node) {{
             if ($node.Attributes -band [IO.FileAttributes]::ReparsePoint) {{ throw 'Refusing linked diagnostic source/cache' }}

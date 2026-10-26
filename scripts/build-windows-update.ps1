@@ -79,7 +79,10 @@ try {
     $commands += @{name='npm-ci';executable='npm.cmd';arguments=@('ci')}
     $commands += @{name='frontend';executable='npm.cmd';arguments=@('run','build:ui')}
   }
-  $commands += @{name='desktop';executable='cargo.exe';arguments=@('build','--manifest-path','apps/desktop/src-tauri/Cargo.toml','--features','custom-protocol','--release','--locked','--target-dir',$desktopTarget)}
+  . (Join-Path $PSScriptRoot 'lib/update-build-profile.ps1')
+  $desktopArguments=@(Get-UpdateDesktopBuildArguments -TargetDirectory $desktopTarget -NativeValidation:([bool]$ValidationCacheDirectory))
+  if ($ValidationCacheDirectory) { Write-Host 'WinBridge native validation: desktop local crates opt0; release/custom-protocol/check flags preserved; no production profile change' }
+  $commands += @{name='desktop';executable='cargo.exe';arguments=$desktopArguments}
   foreach ($command in $commands) {
     Write-Host "WinBridge candidate: $($command.name); installed runtime remains active"
     $exe = $command.executable

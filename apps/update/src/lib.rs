@@ -16,6 +16,8 @@ pub mod health;
 pub mod installed_set;
 pub mod journal;
 mod preparation;
+#[cfg(test)]
+mod profile_validation;
 pub mod runtime_baseline;
 pub mod runtime_exchange;
 pub mod runtime_preimages;

@@ -594,12 +594,12 @@ impl Worker {
                 if reserved.contains_key(&project) || active.contains_key(&project) {
                     continue;
                 }
-                let earlier_task = store.all()?.iter().any(|t| {
+                let earlier_task = store.pending_tasks()?.iter().any(|t| {
                     t.status == TaskStatus::Queued
                         && t.submission.project_id == project
                         && t.accepted_at_ms < flow.accepted_at_ms
                 });
-                let earlier_import = store.imports(false)?.iter().any(|t| {
+                let earlier_import = store.pending_imports()?.iter().any(|t| {
                     t.status == TaskStatus::Queued
                         && t.submission.project_id == project
                         && t.accepted_at_ms < flow.accepted_at_ms

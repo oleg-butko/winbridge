@@ -147,6 +147,17 @@ impl Store {
         rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
             .collect()
     }
+    pub(crate) fn pending_imports(&self) -> Result<Vec<ImportRecord>> {
+        let mut statement = self
+            .connection
+            .prepare(crate::store::PENDING_IMPORTS_SQL)
+            .map_err(sql)?;
+        let rows = statement
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(sql)?;
+        rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
+            .collect()
+    }
     pub fn save_import(&mut self, import: &mut JournalSnapshot<ImportRecord>) -> Result<()> {
         self.guard_callback(
             Some(crate::store::OperationKind::Import),

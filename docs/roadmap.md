@@ -1,5 +1,49 @@
 # Постепенная реализация и расширение
 
+2026-10-26: по новой задаче пользователя выполняются
+[review/merge performance-ветки и выпуск worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
+Ветка слита в main: CPU fix и build profiles проверены, release harness исправлен. Новый пакет
+проходит отдельный native gate; public updater/multi-controller не включаются.
+
+## Сейчас в этой ветке: ускорение прогонов
+
+2026-10-26: [локальный worker0.1.1](releases/worker-0.1.1.md) с idle CPU fix и
+startup/version diagnostics, Windows release/compatibility gate готовится.
+[Несколько Debian controller](plans/multiple-debian-controllers.md) — отдельная
+будущая фича; конфигурацией0.1.1 один worker к двум controller не подключается.
+
+2026-10-26 [маркировка validation storage](validation/validation-storage.md):
+37.66GiB измерены readonly; tmp- для новых временных work dirs, storage guide,
+inventory CLI и legacy-path compatibility. Очистка и перенос caches/references
+в новую раскладку не выполнялись.
+
+2026-10-26 дополнительный bugfix: [worker idle CPU](plans/run-speed/idle-worker-2026-10-26.md).
+Полная история читалась каждые25ms. Pending-index queries/diagnostics и isolated
+Windows CPU experiment завершены:99.19→1.51% одного ядра на synthetic history,
+52 native tests passed/5 ready files twice. Installed worker ещё старый;
+его замена и проверка на рабочей истории не выполнялись.
+
+2026-10-26 новая цель: [следующий раунд](plans/run-speed/round2-2026-10-26.md).
+Раунд завершён: desktop rebuild ordinary release118.5625→private local opt0
+41.7945s(64.75%),25 ready files twice, role/source/cleanup passed. Production argv
+unchanged. Full gate с новым builder:201 tests/56 files twice/78 negative audits
+passed. Command sum21.409→20.266min observational. Warm feature matrix не требует
+перекомпиляции; дальнейшие варианты — dev/test codegen/symbols и точный SDK target set.
+
+Пользователь 2026-10-25 поручил продолжать эксперименты до существенных
+результатов в отдельной ветке; другой агент продолжает updater в `main`.
+[План оптимизации и E1 A/B эксперимент](plans/run-speed/README.md): сначала
+opt-level1 при сохранённых safety checks; затем полный native gate и build
+batching по результатам. E1: median65 tests36.165→20.6745s,42.83% быстрее,
+но первая сборка дороже; [измерения и v2](plans/run-speed/results-2026-10-26.md).
+Updater эта ветка не развивает.
+
+2026-10-26 итог: v2(core/protocol/serde_json opt1, updater0) ускоряет paired65-test
+suite45.65%; full E2 **201 Windows tests/56 files twice/78 negative audits passed**.
+Ветка содержит профили и инструменты эксперимента; `main` чистый. Полные команды
+заняли21.41min против прежних24.10min, это observational сравнение. Следующий
+кандидат E3 — стоимость feature variants/rebuild по Cargo fingerprint/timings.
+
 ## Текущий checkpoint — writer24 подтверждён 2026-10-25
 
 [Актуальное продолжение](plans/worker-self-update/resume-2026-10-25-writer-verified.md)

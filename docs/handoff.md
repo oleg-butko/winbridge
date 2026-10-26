@@ -1,5 +1,62 @@
 # Продолжение updater — writer24 подтверждён 2026-10-25
 
+**Задача пользователя2026-10-26:** [review/merge performance-ветки и worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
+Runtime CPU fix принят после review; release harness исправлен. Ветка слита
+в main с сохранением её commits; новый чистый Windows пакет готовится. Branch-only запреты ниже исторические; пользователь
+явно поручил merge в main. Installed d052 пока не обновлён.
+
+**Текущая задача2026-10-26:** [worker0.1.1](releases/worker-0.1.1.md), source
+version/startup diagnostics подготовлены; Linux checks passed. Windows build и
+проверка against actual controller0.1.0 ещё впереди. Installed pair не заменять
+из её managed task. [Два Debian/controller](plans/multiple-debian-controllers.md)
+проанализированы; multi-controller не реализовывать в patch release.
+
+**2026-10-26 storage:** [Windows validation storage](validation/validation-storage.md).
+Readonly inventory37.66GiB:25.34GiB в original cache owner20261017-061527-f4639971;
+7.93GiB shutdown-main references, известные top-level test-temp~54MiB. Для новых main workflow/perf
+прогонов добавлены tmp- names и README.storage.txt; legacy paths сохранены.
+Windows validation directories не удалять по имени/возрасту; сначала task/lease/
+reference checks. Root inventory/guide не являются cleanup approval.
+
+**Текущая дополнительная задача2026-10-26:** [idle CPU worker](plans/run-speed/idle-worker-2026-10-26.md).
+Installed PID19064 потребляет~103% одного логического ядра без задач. Найдено
+чтение всей истории каждые25ms; pending-index queries и scheduler timings
+реализованы. Isolated Windows99.19→1.51% одного ядра,52 tests passed,
+5 files twice, run20261026-113022-1c313991/task018d081d-7b69-45c2-b938-549ddd183681.
+Source d683199; installed d052c6c не обновлён, healthy/active0. Точные pins в плане.
+
+**Новая текущая задача этой ветки 2026-10-26:** [раунд 2 оптимизации](plans/run-speed/round2-2026-10-26.md).
+Следующий существенный результат получен. Desktop rebuild pilot118.5625→41.7945s
+(64.75%) passed:25 files twice, fresh local crates, no UI. В private
+ValidationCacheDirectory path добавлен local desktop opt0; production argv
+unchanged проверен на Windows. Full run20261026-094754-aa840d26/
+task554fc3f9-d75d-467c-9e99-047b8edf676d, producer33510c9/receiverb0467a8:
+**succeeded/0,201 tests,56 files twice,44+16+18 negative mutations passed**.
+Сумма команд21.409→20.266min, nested compiler214→143s; полное сравнение observational.
+Все runs terminal; worker healthy/idle/generation unchanged. Точные pins/readonly
+reverify в round2. Старый E2 не replay, main не менять.
+
+**Эта ветка занимается скоростью прогонов, 2026-10-25.** Текущее действие —
+[оптимизация, E1 profile pilot](plans/run-speed/README.md). Пользователь поручил
+продолжать эксперименты до существенных результатов в отдельной ветке/worktree;
+другой агент может продолжать updater в `main`. Ниже — исходный checkpoint
+этой ветки. Здесь не переходить к service/schema20 или U2–U4.
+
+2026-10-26: [E1 результаты и текущий v2](plans/run-speed/results-2026-10-26.md).
+65 Windows tests median36.165→20.6745s (42.83% быстрее),650 suite cases +2 policy
+probes +130 exact diagnostic cases passed;25/131 ready files twice. Compiler
+codegen overhead найден. Defaults неизменны; v2 task974c9b0c-86c4-42a2-a688-9f9e2fba26d5
+завершился succeeded/0: median33.7865→18.3635s (45.65%),25 files twice,
+650 suite cases +2 policy probes. Ветка задаёт v2 в Cargo.toml;
+`main`/installed runtime неизменны.
+E2 run20261026-043444-d41c13aa/taskc184f27a-7c52-499e-8109-e89cfa246580,
+producerf40321b/receiver9eed7c8 **succeeded/0, independently verified**:
+201 Windows tests,56 ready files twice,44+16+18 negative mutations. Сумма команд
+21.41min против прежних24.10min — observational, не строгое end-to-end A/B.
+Nested compiler214s остаётся большим расходом; следующий эксперимент E3 —
+fingerprint/feature-matrix builds. Все runs terminal; installed worker healthy/idle.
+Точные pins и readonly reverify command в results. Не replay.
+
 **Начать с [актуального checkpoint](plans/worker-self-update/resume-2026-10-25-writer-verified.md)**
 и [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).
 Они приоритетнее исторических NEXT/ACTIVE ниже.

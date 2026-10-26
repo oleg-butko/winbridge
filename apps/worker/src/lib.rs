@@ -19,6 +19,7 @@ pub use recovery_pair::{
 pub mod rehearsal;
 mod retention;
 pub mod runtime_guard;
+mod scheduler_diagnostics;
 mod settings;
 pub mod shutdown_inspection;
 pub mod state_backup_export;
@@ -130,6 +131,7 @@ pub struct Worker {
     active_jobs: AtomicUsize,
     readiness_scans: Mutex<HashMap<String, (u64, Vec<u8>)>>,
     recovery_scan: Mutex<Instant>,
+    scheduler_diagnostics: Mutex<scheduler_diagnostics::Diagnostics>,
     checks: Mutex<HashMap<String, Option<Result<workflows::CheckResult>>>>,
     stop: AtomicBool,
     controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
@@ -269,6 +271,7 @@ impl Worker {
             active_jobs: AtomicUsize::new(0),
             readiness_scans: Mutex::new(HashMap::new()),
             recovery_scan: Mutex::new(Instant::now()),
+            scheduler_diagnostics: Mutex::new(scheduler_diagnostics::Diagnostics::new()),
             checks: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
             controller_connection: Mutex::new(controller_connection),
@@ -837,10 +840,12 @@ impl Worker {
         }
     }
     pub fn schedule(self: &Arc<Self>) -> Result<()> {
+        let mut timing = scheduler_diagnostics::Tick::new(&self.scheduler_diagnostics);
         if self.stop.load(Ordering::Acquire) || self.journal_recovery_required()?.is_some() {
             return Ok(());
         }
         self.automatic_output_cleanup()?;
+        timing.phase(scheduler_diagnostics::Phase::Recovery);
         {
             let mut last = self
                 .recovery_scan
@@ -863,6 +868,7 @@ impl Worker {
                 *last = Instant::now();
             }
         }
+        timing.phase(scheduler_diagnostics::Phase::Admission);
         let mut active = self
             .active_projects
             .lock()
@@ -875,10 +881,19 @@ impl Worker {
         if self.journal_recovery_required()?.is_some() {
             return Ok(());
         }
+        timing.phase(scheduler_diagnostics::Phase::Workflows);
         self.advance_workflows(&mut store, &mut active)?;
+        timing.phase(scheduler_diagnostics::Phase::QueueRead);
         let workflows = store.workflows(false)?;
-        let tasks = store.all()?;
-        let imports = store.imports(false)?;
+        let tasks = store.pending_tasks()?;
+        let imports = store.pending_imports()?;
+        timing.pending(tasks.len(), imports.len(), workflows.len());
+        timing.phase(scheduler_diagnostics::Phase::Dispatch);
+        if !tasks.iter().any(|t| t.status == TaskStatus::Queued)
+            && !imports.iter().any(|i| i.status == TaskStatus::Queued)
+        {
+            return Ok(());
+        }
         let projects =
             if self.config.work_scheduling.is_some() || self.config.resource_scheduling.is_some() {
                 // Retained queued work from a removed project still needs its normal
@@ -1574,10 +1589,13 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
     let mut listener =
         winbridge_transport::create_pipe(&address, true).map_err(|e| e.to_string())?;
     if matches!(readiness, ReadinessOutput::Console) {
+        let build = winbridge_protocol::build_identity();
         eprintln!(
-            "WinBridge worker ready: {address}; generation {}",
-            worker.generation
+            "WinBridge worker ready: {address}; generation {}; pid {}; version {}; source {}; dirty {}",
+            worker.generation, std::process::id(), env!("CARGO_PKG_VERSION"),
+            build.source_commit.as_deref().unwrap_or("unknown"), build.source_dirty
         );
+        eprintln!("WinBridge scheduler diagnostics: 30s windows; automatic slow-window reports; set WINBRIDGE_SCHEDULER_DIAGNOSTICS=1 for all windows (wall timings include lock waits; not process CPU)");
     }
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
     let control = update_control::start(Arc::clone(&worker))?;

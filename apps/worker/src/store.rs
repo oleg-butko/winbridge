@@ -37,6 +37,12 @@ mod update;
 mod work_scheduling;
 pub use task_records::TaskSnapshot;
 pub const JOURNAL_SCHEMA_VERSION: u32 = 17;
+// ORDER BY rowid can otherwise make SQLite prefer a full history scan to
+// sorting the small pending set. These indexes already exist since schema 13.
+const PENDING_TASKS_SQL: &str = "SELECT record FROM tasks INDEXED BY queue_pending_tasks WHERE json_extract(record,'$.status') IN ('queued','running') ORDER BY rowid";
+pub(crate) const PENDING_IMPORTS_SQL: &str = "SELECT record FROM imports INDEXED BY queue_pending_imports WHERE json_extract(record,'$.status') IN ('queued','running') ORDER BY rowid";
+#[cfg(test)]
+mod idle_tests;
 
 pub type Result<T> = std::result::Result<T, String>;
 pub fn now_ms() -> u64 {
@@ -583,7 +589,18 @@ impl Store {
         rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
             .collect()
     }
+    pub(crate) fn pending_tasks(&self) -> Result<Vec<TaskRecord>> {
+        // Match the existing partial index exactly. Terminal history (including
+        // large encoded command lines and events) must not be decoded every tick.
+        let mut statement = self.connection.prepare(PENDING_TASKS_SQL).map_err(sql)?;
+        let rows = statement
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(sql)?;
+        rows.map(|r| serde_json::from_str(&r.map_err(sql)?).map_err(|e| e.to_string()))
+            .collect()
+    }
     pub fn active_task_count(&self) -> Result<u64> {
+        // This predicate also uses queue_pending_tasks.
         let count: i64 = self.connection.query_row(
             "SELECT count(*) FROM tasks WHERE json_extract(record,'$.status') IN ('queued','running')",
             [], |r| r.get(0),
