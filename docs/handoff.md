@@ -11,11 +11,15 @@
 probes +130 exact diagnostic cases passed;25/131 ready files twice. Compiler
 codegen overhead найден. Defaults неизменны; v2 task974c9b0c-86c4-42a2-a688-9f9e2fba26d5
 завершился succeeded/0: median33.7865→18.3635s (45.65%),25 files twice,
-650 suite cases +2 policy probes. Ветка задаёт v2 в Cargo.toml для полного E2;
-`main`/installed runtime неизменны. Полного E2 proof ещё нет.
-E2 running: run20261026-043444-d41c13aa,
-taskc184f27a-7c52-499e-8109-e89cfa246580, producerf40321b/receiver9eed7c8.
-Наблюдать тот же task; exact readonly command в results. Не replay.
+650 suite cases +2 policy probes. Ветка задаёт v2 в Cargo.toml;
+`main`/installed runtime неизменны.
+E2 run20261026-043444-d41c13aa/taskc184f27a-7c52-499e-8109-e89cfa246580,
+producerf40321b/receiver9eed7c8 **succeeded/0, independently verified**:
+201 Windows tests,56 ready files twice,44+16+18 negative mutations. Сумма команд
+21.41min против прежних24.10min — observational, не строгое end-to-end A/B.
+Nested compiler214s остаётся большим расходом; следующий эксперимент E3 —
+fingerprint/feature-matrix builds. Все runs terminal; installed worker healthy/idle.
+Точные pins и readonly reverify command в results. Не replay.
 
 **Начать с [актуального checkpoint](plans/worker-self-update/resume-2026-10-25-writer-verified.md)**
 и [review/latency](plans/worker-self-update/review-2026-10-25-latency.md).

@@ -10,6 +10,12 @@ batching по результатам. E1: median65 tests36.165→20.6745s,42.83%
 но первая сборка дороже; [измерения и v2](plans/run-speed/results-2026-10-26.md).
 Updater эта ветка не развивает.
 
+2026-10-26 итог: v2(core/protocol/serde_json opt1, updater0) ускоряет paired65-test
+suite45.65%; full E2 **201 Windows tests/56 files twice/78 negative audits passed**.
+Ветка содержит профили и инструменты эксперимента; `main` чистый. Полные команды
+заняли21.41min против прежних24.10min, это observational сравнение. Следующий
+кандидат E3 — стоимость feature variants/rebuild по Cargo fingerprint/timings.
+
 ## Текущий checkpoint — writer24 подтверждён 2026-10-25
 
 [Актуальное продолжение](plans/worker-self-update/resume-2026-10-25-writer-verified.md)

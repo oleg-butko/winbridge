@@ -10,8 +10,9 @@ source58e6109. Schema19/17/private3 и public install off сохраняются
 **2026-10-26: E1 подтвердил ускорение activation suite на 42.83% при более дорогой
 первой сборке.** [Измерения, причины задержек и точные pins](results-2026-10-26.md).
 V2 оставляет updater opt0 и оптимизирует остальные три packages: median
-33.7865→18.3635s,45.65% быстрее. Начинается полный E2; его profiles заданы
-только в Cargo.toml этой экспериментальной ветки. Defaults `main` не менялись.
+33.7865→18.3635s,45.65% быстрее. Полный E2 passed:201 Windows tests,56 ready files
+twice,78 negative audits. Profiles заданы только в Cargo.toml этой ветки.
+Defaults `main` не менялись.
 
 ## Исходные измерения
 
@@ -129,7 +130,7 @@ python3 scripts/test-update-profile-experiment.py
 
 2026-10-26: Windows syntax/plan-only preflight succeeded/0,
 task `2a55798e-0224-4a53-a8d5-144c01e9b37a`; ни Cargo, ни test binaries не запускались.
-Portable verifier: 4 tests, включая 16 независимых подмен, CRLF/collation и
+Portable verifier: 5 tests, включая 16 независимых подмен, CRLF/collation, selective profile и
 noisy/insufficient-gain decisions, passed. Rust fmt passed. Реальный E1 succeeded/0:
 run `20261026-040152-f3f5757a`, task `07cfe524-cee4-4b1e-b3c1-a525ac2528bc`;
 источник `6035edde28d8362003c96cfee36b9a76f820efe9`, ZIP
@@ -147,6 +148,11 @@ Followup v2 run `20261026-042205-115786e9`, task
 `974c9b0c-86c4-42a2-a688-9f9e2fba26d5` succeeded/0:25 files twice,650 suite
 cases +2 policy probes. Для анализа передать `--spec scripts/experiments/update-profile-v2.json`.
 V2 сохранён в экспериментальном Cargo.toml для E2, не в `main`.
+E2 run `20261026-043444-d41c13aa`, task `c184f27a-7c52-499e-8109-e89cfa246580`
+**succeeded/0 и independently verified**:201 tests,56 files twice,44+16+18 mutations.
+Сумма команд21.41min против прежних24.10min — наблюдение, не строгое end-to-end
+A/B из-за различий source/test set/cache history. Nested compiler всё ещё214s.
+Все задачи terminal; installed worker healthy/idle. [Итог и точные pins](results-2026-10-26.md).
 Эта ветка не открывает schema20/private4/actor25;
 updater развивается независимо в `main`.
 
