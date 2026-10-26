@@ -3,7 +3,9 @@
 **Текущая дополнительная задача2026-10-26:** [idle CPU worker](plans/run-speed/idle-worker-2026-10-26.md).
 Installed PID19064 потребляет~103% одного логического ядра без задач. Найдено
 чтение всей истории каждые25ms; pending-index queries и scheduler timings
-подготовлены. Native comparison впереди; installed runtime не менять.
+реализованы. Isolated Windows99.19→1.51% одного ядра,52 tests passed,
+5 files twice, run20261026-113022-1c313991/task018d081d-7b69-45c2-b938-549ddd183681.
+Source d683199; installed d052c6c не обновлён, healthy/active0. Точные pins в плане.
 
 **Новая текущая задача этой ветки 2026-10-26:** [раунд 2 оптимизации](plans/run-speed/round2-2026-10-26.md).
 Следующий существенный результат получен. Desktop rebuild pilot118.5625→41.7945s

@@ -4,7 +4,9 @@
 
 2026-10-26 дополнительный bugfix: [worker idle CPU](plans/run-speed/idle-worker-2026-10-26.md).
 Полная история читалась каждые25ms. Pending-index queries/diagnostics и isolated
-Windows CPU experiment подготовлены; native подтверждение впереди.
+Windows CPU experiment завершены:99.19→1.51% одного ядра на synthetic history,
+52 native tests passed/5 ready files twice. Installed worker ещё старый;
+его замена и проверка на рабочей истории не выполнялись.
 
 2026-10-26 новая цель: [следующий раунд](plans/run-speed/round2-2026-10-26.md).
 Раунд завершён: desktop rebuild ordinary release118.5625→private local opt0
