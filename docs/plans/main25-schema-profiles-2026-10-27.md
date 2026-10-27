@@ -141,3 +141,18 @@ ZIP SHA96d403293a08d59b3d608cfb282911f2d5a7b0490ac07d94ee80f972fb3a074c.
 Policy regression использует catch_unwind для ожидаемых отказов: verifier проверяет
 точный выбранный test argument и successful count, не требует contiguity строки
 имени/ok через намеренно напечатанные panic diagnostics. Native запуск пока отложен.
+
+## Portable проверка той же SQLite логики
+
+2026-10-27. Row snapshot/точная epoch normalization вынесены в общий test helper
+`apps/worker/tests/support/journal_history.rs`. Его вызывают Windows Main25 и
+отдельный portable integration test. Это один алгоритм, а не две копии comparator.
+На настоящем Store/schema19 создаются task/output без исполнения команды; тест
+проверяет unchanged bytes после нормализации, обнаружение порчи output/policy,
+неверного epoch и неизвестного столбца. Linux1/0, body0.04s (build41.24s);
+Linux targeted Clippy и MSVC Clippy обеих integration suites с update-validation
+пройдены. Windows execution/full Main25 этим не подтверждаются.
+
+В independent cold migration reader исправлен пропуск проверки schemaVersion:
+принимается только integer1, неизвестная/отсутствующая/boolean версия отвергается.
+Дополнены boundary cases, Python7/0. Historical17 profile не меняется.

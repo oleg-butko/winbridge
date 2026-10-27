@@ -307,6 +307,8 @@ def verify_auxiliary(files, proof, source):
 def verify_worker_migration(proof, reference_sha256, source):
     """Separate cold worker17->19 gate, never active updater migration authority."""
     strict(proof)
+    need(type(proof.get('schemaVersion')) is int and proof['schemaVersion'] == 1,
+         'Unsupported native worker migration proof version')
     need(proof.get('kind') == 'worker_attribution_migration_native_proof'
          and proof.get('passed') is True and proof.get('platform') == 'windows', 'Missing native worker migration proof')
     need(type(proof.get('fromSchema')) is int and proof['fromSchema'] == 17

@@ -41,7 +41,8 @@ class ServiceEvidenceTests(unittest.TestCase):
                      installedStateOpened=False, activeUpdaterMigrationChecked=False, completedExternalExecutions=2, startedAndCancelledProcesses=1)
         value.update({flag: True for flag in flags})
         self.assertTrue(proof.verify_worker_migration(value, reference, source)['workerJournalMigrationChecked'])
-        for key, replacement in [(flag, 1) for flag in flags] + [('toSchema', 17), ('fromSchema', True),
+        for key, replacement in [(flag, 1) for flag in flags] + [('schemaVersion', 2), ('schemaVersion', None),
+                ('schemaVersion', True), ('toSchema', 17), ('fromSchema', True),
                 ('installedStateOpened', True), ('activeUpdaterMigrationChecked', True), ('referenceSha256', 'd'*64),
                 ('completedExternalExecutions', True), ('startedAndCancelledProcesses', 2)]:
             bad = copy.deepcopy(value); bad[key] = replacement

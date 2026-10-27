@@ -28,66 +28,17 @@ fn connection(root: &FixtureLayout) -> Connection {
     c.execute_batch("PRAGMA query_only=ON").unwrap();
     c
 }
-// Hash the exact values of every table other than the two deliberately changed
-// by activation. Never export private authority IDs, tasks or command payloads.
+#[path = "../support/journal_history.rs"]
+mod journal_history;
+// Writer-only gates retain the original exact hash. Service startup separately
+// validates the next policy-owner epoch before normalizing that one column.
 fn preserved_rows(root: &FixtureLayout) -> serde_json::Value {
-    preserved_rows_inner(root, None)
+    journal_history::snapshot(&root.join("state/journal.sqlite"), None)
 }
-// Normal startup rebinds this single policy metadata column to the new owner.
-// Writer-only gates retain the original exact hash. Service gates first require
-// the exact next epoch and exact singleton/schema, then hash every other value.
 fn preserved_service_rows(root: &FixtureLayout, before: u64, after: u64) -> serde_json::Value {
-    assert_eq!(before.checked_add(1), Some(after));
-    preserved_rows_inner(root, Some((before, after)))
+    journal_history::snapshot(&root.join("state/journal.sqlite"), Some((before, after)))
 }
-fn preserved_rows_inner(
-    root: &FixtureLayout,
-    policy_epoch: Option<(u64, u64)>,
-) -> serde_json::Value {
-    let mut c = connection(root);
-    let tx = c.transaction().unwrap();
-    let names: Vec<String> = tx.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('journal_authority','worker_journal_activations') ORDER BY name").unwrap()
-        .query_map([], |r| r.get(0)).unwrap().collect::<Result<_,_>>().unwrap();
-    let mut data = Vec::new();
-    let mut policy_checked = false;
-    for name in names {
-        assert!(name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'));
-        let mut q = tx
-            .prepare(&format!("SELECT * FROM {name} ORDER BY rowid"))
-            .unwrap();
-        let columns = q.column_count();
-        let mut rows = q
-            .query_map([], |r| {
-                (0..columns)
-                    .map(|i| r.get::<_, rusqlite::types::Value>(i))
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        if let Some((before, after)) = policy_epoch.filter(|_| name == "resource_policy") {
-            assert_eq!(q.column_names(), ["singleton", "epoch", "policy"]);
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0][0], rusqlite::types::Value::Integer(1));
-            assert_eq!(
-                rows[0][1],
-                rusqlite::types::Value::Integer(i64::try_from(after).unwrap())
-            );
-            rows[0][1] = rusqlite::types::Value::Integer(i64::try_from(before).unwrap());
-            policy_checked = true;
-        }
-        data.push((name, format!("{rows:?}")));
-    }
-    assert!(policy_epoch.is_none() || policy_checked);
-    let tasks: i64 = tx
-        .query_row("SELECT count(*) FROM tasks", [], |r| r.get(0))
-        .unwrap();
-    let output: i64 = tx
-        .query_row("SELECT count(*) FROM output", [], |r| r.get(0))
-        .unwrap();
-    tx.commit().unwrap();
-    json!({"sha256":winbridge_update::sha256(&serde_json::to_vec(&data).unwrap()),"tasks":tasks,"output":output})
-}
+
 impl Baseline {
     pub(super) fn capture(root: &FixtureLayout, id: &str) -> Self {
         let stale = Store::open_read_only(&root.join("state/journal.sqlite")).unwrap();
@@ -508,35 +459,5 @@ pub(super) fn after_owned_exit(
 
 #[test]
 fn local_service_history_hash_allows_only_the_exact_policy_owner_epoch() {
-    let temp = tempfile::tempdir().unwrap();
-    fs::create_dir(temp.path().join("runtime")).unwrap();
-    fs::create_dir(temp.path().join("state")).unwrap();
-    let root =
-        FixtureLayout::bind(temp.path(), None, &winbridge_protocol::build_identity()).unwrap();
-    let path = root.join("state/journal.sqlite");
-    drop(Store::open(&path).unwrap());
-    let baseline = preserved_rows(&root);
-    let c = Connection::open(&path).unwrap();
-    c.execute("UPDATE resource_policy SET epoch=1", []).unwrap();
-    assert_ne!(preserved_rows(&root), baseline);
-    assert_eq!(preserved_service_rows(&root, 0, 1), baseline);
-    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        preserved_service_rows(&root, 0, 2)
-    }))
-    .is_err());
-    c.execute("UPDATE resource_policy SET policy='{}'", [])
-        .unwrap();
-    assert_ne!(preserved_service_rows(&root, 0, 1), baseline);
-    c.execute("UPDATE resource_policy SET epoch=2", []).unwrap();
-    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        preserved_service_rows(&root, 0, 1)
-    }))
-    .is_err());
-    c.execute("UPDATE resource_policy SET epoch=1", []).unwrap();
-    c.execute("ALTER TABLE resource_policy ADD COLUMN unexpected TEXT", [])
-        .unwrap();
-    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        preserved_service_rows(&root, 0, 1)
-    }))
-    .is_err());
+    journal_history::assert_reconciliation_contract();
 }
