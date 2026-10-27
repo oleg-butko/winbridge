@@ -48,16 +48,17 @@ focused updater16/worker14, Linux/MSVC all-target validation Clippy,
 Python verifier6 и scaffold293. Финальные Clippy/native
 результаты и source pins находятся в актуальном checkpoint. Первый event_log rotation failure с WouldBlock
 не воспроизвёлся отдельно и в полном повторе; logger не менялся. Логи и команды в checkpoint.
-Focused `--service-admission-only` **пройден на новом source**:
-run20261026-192027-4bb92924/task563f5d39-7d3b-4d43-8b2c-3796f15a0882 succeeded/0,
-**13 updater +13 worker Windows fixture tests**, включая настоящий named pipe.
-Producer1f653b2;3 ready files twice, compiled source/manifest bound; independent
-proof и readonly recheck прошли без повторного submit/build. Полные pins/cache/
-storage/команда в актуальном checkpoint. Это library IPC fixtures с synthetic
-replacement graph, не service4/parent validation/full Main25. Working0.1.1/source592
-healthy/active0/generation936909c6/incarnation5a8eb173 прежние; controller5103 оставлен.
-Тестовые процессы завершены, окон не было; worker оставить работать, desktop не нужен.
-Исторический admission-only13+6 gatef145b62 сохранён в предыдущем checkpoint.
+Новый `--service-admission-only` **component gate пройден**:
+run20261026-200828-7bcf7834/task52e8eda0-e7a4-4623-a967-d747ae637bcc succeeded/0,
+**16 updater +14 worker Windows tests**. Producer15429a4;3 files verified twice,
+compiled source/manifest bound, independent proof и readonly recheck прошли.
+Parent probe здесь положительно проверен через OS IPC к mock provider; это НЕ
+same-child V4/installed-set/Job/Main25 proof. Точные pins/команда/storage в
+актуальном checkpoint. Следом actor25/view17, activation7/root LocalVerified и
+полный Main25; текущий этап не является готовым updater.
+Working0.1.1/source592 healthy/active0/generation936909c6/incarnation5a8eb173 прежние;
+controller5103 оставлен, test processes завершены. Desktop не нужен; worker оставить.
+Исторические1f653b2/13+13 иf145b62/13+6 gates сохранены в прежних checkpoints.
 
 ## История подготовки и прежние checkpoints
 

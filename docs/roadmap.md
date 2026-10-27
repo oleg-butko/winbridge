@@ -7,8 +7,9 @@ readonly IPC и trusted V4 sender/receiver с независимым parent norm
 Actor25/view17 и full Main25 ещё отсутствуют. Следом resident service actor →
 activation7/root LocalVerified → actual Main25/retained19→20.
 [Checkpoint](plans/worker-self-update/service-v4-2026-10-26.md).
-Предыдущий native library gate1f653b2:13+13 tests/3 files twice. Новый V4 source
-требует отдельной проверки, прежний gate не доказывает новый receiver/sender.
+Native component gate15429a4:16+14 tests/3 files twice, independent verification
+и readonly recheck; это не actual same-child V4/Job/Main25. Старый1f653b2/13+13
+сохраняет лишь свой historical library scope.
 Public updater/multi-controller не включаются.
 Установленная0.1.1 не заменяется.
 
