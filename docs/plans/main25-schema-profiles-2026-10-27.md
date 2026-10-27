@@ -133,3 +133,11 @@ scaffold304. Native normalizer regression и новый full Main25 отложе
 переиспользовать. Изменения после release-source3435 в normal worker коде только
 устраняют needless borrow внутри feature-only validation hook; normal product
 поведение0.2.0 не меняется. Source/target будущего Main25 фиксировать отдельно.
+
+Новый clean producer6f01036aa03adc6350cfe483113f2a503edfcb67 экспортирован:
+winbridge-20261027T155350Z-6f01036-3d2ffe26.zip,
+ZIP SHA96d403293a08d59b3d608cfb282911f2d5a7b0490ac07d94ee80f972fb3a074c.
+Следующий target — worker0.2.0/source3435f0c из отдельного verified archive.
+Policy regression использует catch_unwind для ожидаемых отказов: verifier проверяет
+точный выбранный test argument и successful count, не требует contiguity строки
+имени/ok через намеренно напечатанные panic diagnostics. Native запуск пока отложен.

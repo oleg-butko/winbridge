@@ -86,3 +86,10 @@ last Info сохраняется при connection timeout. Бounded capture/exi
 отдельно; незавершённый pipe disposal не должен блокировать публикацию error report.
 Эти новые diagnostics ещё требуют native проверки. Новый run только после
 подтверждённого завершения прежней задачи и отсутствия worker в test slot.
+
+Readonly native PowerShell Parser проверил оба обновлённых сценария из clean
+archive6f01036/96d40329…: taskc7e11b20-2de8-404d-9ef1-c36f3cb2f4e8 succeeded/0,
+ошибок0, новый worker не запускался. Root Python coordinator завершил свой
+observation budget900s, сохранил last-bootstrap-observation и оставил только
+owned controller processes; это не terminal Windows task и не cleanup proof.
+Следующая Main25 candidate pin3435f0c остаётся отдельной от нового producer.

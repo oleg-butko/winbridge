@@ -68,8 +68,10 @@ def main():
         epoch_commands = [c for c in commands if c['name'] == 'service-history-epoch-check']
         checks.need(len(epoch_commands) == 1, 'Missing policy epoch/history corruption regression')
         epoch_log = files[epoch_commands[0]['log']].decode('utf-8-sig')
-        checks.need('activation_writer::local_service_history_hash_allows_only_the_exact_policy_owner_epoch ... ok' in epoch_log
-                    and 'test result: ok. 1 passed; 0 failed;' in epoch_log, 'Policy epoch/history regression not selected')
+        epoch_name = 'activation_writer::local_service_history_hash_allows_only_the_exact_policy_owner_epoch'
+        checks.need(epoch_name in epoch_commands[0]['arguments'] and '--exact' in epoch_commands[0]['arguments']
+                    and epoch_name in epoch_log and 'test result: ok. 1 passed; 0 failed;' in epoch_log,
+                    'Policy epoch/history regression not selected')
         reference = meta['worker17ReferenceSha256']
         checks.need(report.get('worker17ReferenceSha256') == reference, 'Native migration reference differs from saved request')
         migration_command = [c for c in commands if c['name'] == 'worker17-to19-cold-migration']
