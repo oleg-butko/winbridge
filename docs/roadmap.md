@@ -1,5 +1,8 @@
 # Постепенная реализация и расширение
 
+2026-10-26: [activation runtime reservation](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md)
+прошёл6+11 native checks. Full Main25/archive/layout ещё впереди; production не менялся.
+
 2026-10-26: performance-ветка слита в main, worker0.1.1 выпущен и **установлен
 пользователем, actual build/hash/history проверены**. [Проверка и продолжение](plans/worker-self-update/service-ledger-2026-10-26.md).
 Source updater20 содержит intent/history, original-guard admission, shared Worker/

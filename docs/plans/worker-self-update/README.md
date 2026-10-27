@@ -1,10 +1,12 @@
 # Самообновление: план реализации U0–U4
 
 **2026-10-26: performance-ветка слита в main, worker0.1.1 установлен.**
-Начать с [актуального продолжения](local-service-actor-2026-10-26.md): source schema20
+Начать с [runtime reservation checkpoint](activation-runtime-reservation-2026-10-26.md)
+и [Actor25](local-service-actor-2026-10-26.md): source schema20
 format/readback/admission и consuming transfer реализованы; общий Worker и library
 readonly local IPC, V4 sender/receiver и independent parent probe добавлены.
-Actor25/view17 и atomic local-proof/root добавлены; full Main25 ещё впереди. Старые checkpoints ниже
+Actor25/view17 и atomic local-proof/root добавлены. Reservation helper прошёл6+11
+native checks; archive/layout/full Main25 ещё впереди. Старые checkpoints ниже
 сохраняют историю; прежнее ограничение perf-ветки больше не действует.
 
 2026-10-17. Пользователь одобрил [анализ](../../analysis/worker-self-update/README.md)
