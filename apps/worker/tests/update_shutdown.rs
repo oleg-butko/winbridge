@@ -73,9 +73,13 @@ struct GateInput {
     #[serde(default)]
     activation_writer: bool,
     #[serde(default)]
+    activation_service: bool,
+    #[serde(default)]
     runtime: Option<FixtureRuntimePin>,
     #[serde(default)]
     controller_url: Option<String>,
+    #[serde(default)]
+    instance_id: Option<String>,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -240,7 +244,7 @@ fn setup(
     )
     .unwrap();
     let worker_config = runtime.join("winbridge-worker.local.json");
-    let mut worker_settings = json!({"schemaVersion":1,"instanceId":format!("shutdown-{}",uuid::Uuid::new_v4()),"nodeId":"shutdown-main-test","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"source","workspaceRoot":input.root.join("source"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]});
+    let mut worker_settings = json!({"schemaVersion":1,"instanceId":input.instance_id.clone().unwrap_or_else(||format!("shutdown-{}",uuid::Uuid::new_v4())),"nodeId":"shutdown-main-test","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"source","workspaceRoot":input.root.join("source"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]});
     if let Some(url) = &input.controller_url {
         worker_settings["worker"]["controllerUrl"] = json!(url);
     }
@@ -296,7 +300,7 @@ fn setup(
     };
     write(&runtime.join(MANIFEST_NAME), &manifest);
     if input.final_backup {
-        seed_history(&worker_config, runtime, &root);
+        seed_history(&worker_config, runtime, &root, input.activation_service);
     }
     let config_sha = winbridge_update::sha256(&fs::read(&worker_config).unwrap());
     let request = UpdateRequest {
@@ -554,7 +558,7 @@ fn restart_refused(worker: &Path, config: &Path, root: &FixtureLayout, update_id
     );
 }
 
-fn seed_history(config: &Path, runtime: &Path, root: &FixtureLayout) {
+fn seed_history(config: &Path, runtime: &Path, root: &FixtureLayout, pause: bool) {
     use winbridge_protocol::{
         CommandSource, LocalRequest, LocalResponse, TaskStatus, TaskSubmission,
     };
@@ -605,6 +609,25 @@ fn seed_history(config: &Path, runtime: &Path, root: &FixtureLayout) {
         panic!("History duplicate rejected")
     };
     assert_eq!(task.task_id, id);
+    if pause {
+        use winbridge_protocol::{
+            QueueControlCommand, QueueControlRequest, QueueControlResult, QueueMode,
+        };
+        let response = worker.handle_queue_control(QueueControlRequest {
+            queue_control_version: 1,
+            context: worker.request_context().unwrap(),
+            command: QueueControlCommand::Set {
+                command_id: "main25-user-pause".into(),
+                expected_revision: "0".into(),
+                mode: QueueMode::Paused,
+            },
+        });
+        assert!(matches!(
+            response.result,
+            QueueControlResult::Applied { .. }
+        ));
+        write(&root.join("seed-user-pause.json"), &response);
+    }
     worker.stop();
     drop(worker);
     let lock = fs::OpenOptions::new()
@@ -1355,6 +1378,7 @@ fn case(
     let launch_process = input.activation_process;
     let handoff_state = input.activation_state;
     let activate_writer = input.activation_writer;
+    let activate_service = input.activation_service;
     let worker = root.runtime().join("winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -1384,7 +1408,11 @@ fn case(
             "serve".into(),
         ],
         working_directory: root.to_string_lossy().into(),
-        timeout_ms: 900000,
+        timeout_ms: if input.controller_url.is_some() {
+            1800000
+        } else {
+            900000
+        },
     };
     let main_job = format!(
         "WinBridge-shutdown-main-validation-{}",
@@ -1406,7 +1434,12 @@ fn case(
     let capture = (capture(stdout), capture(stderr));
     let mut holder = (fault == Fault::DelayedInstanceLock).then(|| LockHolder::start(&root));
     child.resume().unwrap();
-    let until = Instant::now() + Duration::from_secs(900);
+    let until = Instant::now()
+        + Duration::from_secs(if input.controller_url.is_some() {
+            1800
+        } else {
+            900
+        });
     let mut progress = Instant::now();
     let status = loop {
         if fault == Fault::SupervisorCrashBeforeExit
@@ -1612,7 +1645,9 @@ fn case(
                 };
             timing.mark("replacement_complete", None, None);
             if launch_process {
-                let result = if activate_writer {
+                let result = if activate_service {
+                    activation_state::execute_service(&root, &sup, &proof["runtimeReplacement"])
+                } else if activate_writer {
                     activation_state::execute_writer(&root, &sup, &proof["runtimeReplacement"])
                 } else if handoff_state {
                     activation_state::execute(&root, &sup, &proof["runtimeReplacement"])
@@ -1849,7 +1884,16 @@ fn case(
             .unwrap()
             .remove("runtimeReplacement")
             .unwrap();
-        let after = if input.activation_writer {
+        let after = if input.activation_service {
+            replacement::after_service_exit(
+                &root,
+                &config,
+                &worker,
+                id,
+                &replacement,
+                &proof["activationWriter"]["workerBytesAfter"],
+            )
+        } else if input.activation_writer {
             replacement::after_writer_exit(
                 &root,
                 &config,
@@ -1893,7 +1937,21 @@ fn case(
         });
         let writer = proof.as_object_mut().unwrap().remove("activationWriter");
         let cold_writer = writer.as_ref().map(|p| {
-            activation_writer::after_owned_exit(&root, id, p, activation_child.as_ref().unwrap())
+            if input.activation_service {
+                activation_writer::service::after_owned_exit(
+                    &root,
+                    id,
+                    p,
+                    activation_child.as_ref().unwrap(),
+                )
+            } else {
+                activation_writer::after_owned_exit(
+                    &root,
+                    id,
+                    p,
+                    activation_child.as_ref().unwrap(),
+                )
+            }
         });
         let mut after = after;
         if process.is_some() || state.is_some() || writer.is_some() {
@@ -2029,7 +2087,40 @@ fn run_gate(
     let path = PathBuf::from(
         std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
     );
+    run_gate_inner(
+        [
+            replacement_requested,
+            faults_requested,
+            activation_requested,
+            files_requested,
+            process_requested,
+            state_requested,
+            writer_requested,
+        ],
+        false,
+        path,
+    );
+}
+#[test]
+#[ignore = "Explicit Main25 same-child local service with configured live test controller; no installed update"]
+fn actual_main_activates_one_local_service_without_controller_or_replay() {
+    let path = PathBuf::from(
+        std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
+    );
+    run_gate_inner([true, false, true, true, true, true, true], true, path);
+}
+fn run_gate_inner(requested: [bool; 7], service_requested: bool, path: PathBuf) {
+    let [replacement_requested, faults_requested, activation_requested, files_requested, process_requested, state_requested, writer_requested] =
+        requested;
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    assert_eq!(input.activation_service, service_requested);
+    assert!(
+        !service_requested
+            || (writer_requested
+                && input.runtime.is_some()
+                && input.controller_url.is_some()
+                && input.instance_id.is_some())
+    );
     assert_eq!(input.runtime_replacement, replacement_requested);
     assert_eq!(input.activation_preparation, activation_requested);
     assert_eq!(input.activation_files, files_requested);
@@ -2038,6 +2129,14 @@ fn run_gate(
     assert_eq!(input.activation_writer, writer_requested);
     assert!(input.runtime.is_none() || writer_requested);
     assert!(input.controller_url.is_none() || input.runtime.is_some());
+    assert!(input
+        .instance_id
+        .as_ref()
+        .is_none_or(|id| input.runtime.is_some() && winbridge_core::config::valid_id(id)));
+    assert!(
+        input.controller_url.is_none() || input.instance_id.is_some(),
+        "Predeclare the network fixture identity before starting its controller"
+    );
     assert!(!writer_requested || state_requested);
     assert!(!state_requested || process_requested);
     assert!(!process_requested || files_requested);
@@ -2158,6 +2257,6 @@ fn run_gate(
             }
         }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.activation_service {"activation_service_main_native_proof"} else if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

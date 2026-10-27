@@ -1,5 +1,7 @@
 //! Main24 writer effect on the original child; no normal service or lease release.
 use super::*;
+#[path = "activation_service.rs"]
+pub(super) mod service;
 use rusqlite::{Connection, OpenFlags};
 use winbridge_platform::{
     infrastructure,
@@ -110,7 +112,7 @@ fn call(
             winbridge_transport::supervisor::CONTROL_TIMEOUT,
         ))
         .unwrap();
-    assert_eq!(r.contract_version, 24);
+    assert_eq!(r.contract_version, q.contract_version);
     assert_eq!(r.launch_id, q.launch_id);
     assert!(
         r.error.is_none(),
@@ -119,7 +121,10 @@ fn call(
     );
     assert!(r.record.is_none() && r.worker_control.is_none());
     if let Some(v) = &r.preparation {
-        assert_eq!(v.schema_version, 16);
+        assert_eq!(
+            v.schema_version,
+            if q.contract_version == 25 { 17 } else { 16 }
+        );
         assert_eq!(v.update.update_id, sup.spec.update_id);
     }
     r.preparation
@@ -197,6 +202,7 @@ pub(super) fn execute(
     rt: &tokio::runtime::Runtime,
     mut q: SupervisorRequest,
     baseline: Baseline,
+    service_requested: bool,
     mut proof: serde_json::Value,
 ) -> serde_json::Value {
     // FIRST action after the StateOwned observation: no hash/DB/legacy audits
@@ -227,6 +233,10 @@ pub(super) fn execute(
         );
         std::thread::sleep(Duration::from_millis(25));
     };
+    if service_requested {
+        // No DB/hash/legacy audits between confirmed writer and service dispatch.
+        return service::execute(root, sup, rt, q, baseline, proof, view);
+    }
     let id = &sup.spec.update_id;
     let directory = root.runtime().join("update-state");
     let w = view.activation_writer.as_ref().unwrap();

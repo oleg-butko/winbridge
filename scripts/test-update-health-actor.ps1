@@ -23,12 +23,19 @@ param(
   [switch]$ActivationProcessGate,
   [switch]$ActivationStateGate,
   [switch]$ActivationWriterGate,
+  [switch]$ActivationServiceGate,
+  [string]$FixtureInstanceId,
+  [string]$FixtureControllerUrl,
+  [string]$TestRuntimeDirectory = 'K:\_proj-26\winbridge\runtime-test',
+  [string]$InstalledWorker = 'K:\_proj-26\winbridge\runtime\winbridge-worker.exe',
   [string]$MigrationReferenceFile,
   [string]$MigrationReferenceSha256,
   [string]$PreviousUpdaterExecutable,
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ActivationServiceGate){if($ActivationWriterGate -or $ActivationStateGate -or $ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationWriterGate=$true}
+if($ActivationServiceGate -and ($FixtureInstanceId -cnotmatch '^[A-Za-z0-9_-]{1,64}$' -or $FixtureControllerUrl -cnotmatch '^ws://(?:[0-9]{1,3}\.){3}[0-9]{1,3}:1144/?$')){throw 'Predeclared isolated instance ID and literal private IPv4 controller1144 required; start that controller before this gate'}
 if($ActivationWriterGate){if($ActivationStateGate -or $ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationStateGate=$true}
 if($ActivationStateGate){if($ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationProcessGate=$true}
 if($ActivationProcessGate){if($ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationFilesGate=$true}
@@ -46,6 +53,7 @@ Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
 . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
+if($ActivationServiceGate){. (Join-Path $PSScriptRoot 'lib/test-activation-archive.ps1')}
 foreach($path in @($SourceDirectory,$ValidationCacheDirectory,$ReportDirectory)){Assert-SessionDirectory $path}
 foreach($sha in @($SourceArchiveSha256,$TargetArchiveSha256)){if($sha -cnotmatch '^[0-9a-f]{64}$'){throw 'Exact source archive SHA required'}}
 $source=[IO.Path]::GetFullPath($SourceDirectory)
@@ -62,7 +70,7 @@ $oldPreviousUpdater=$env:WINBRIDGE_PREVIOUS_UPDATER10
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_HEALTH_GATE_INPUT;$oldProof=$env:WINBRIDGE_HEALTH_GATE_PROOF
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP;$oldLocation=Get-Location
-$lease=$null
+$lease=$null;$activationReservation=$null
 try {
   if($env:OS -cne 'Windows_NT' -or $report.storage.availableBytesBefore -lt 6GB){throw 'Windows local disk with at least 6 GiB required; no cleanup'}
   [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -78,7 +86,7 @@ try {
   $targetManifest=[Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json
   if($targetManifest.dirty -or -not $targetManifest.includesBuiltUi -or $targetManifest.sourceCommit -ceq $manifest.sourceCommit){throw 'Distinct clean target generation with built UI required'}
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
-  if($ActivationPreparationGate){
+  if($ActivationPreparationGate -and -not $ActivationServiceGate){
     Assert-SessionFile $MigrationReferenceFile
     if($MigrationReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $MigrationReferenceFile -Algorithm SHA256).Hash.ToLowerInvariant() -cne $MigrationReferenceSha256){throw 'Pinned migration reference SHA required'}
     $reference=Get-Content -LiteralPath $MigrationReferenceFile -Raw|ConvertFrom-Json
@@ -154,7 +162,8 @@ try {
     if($ActivationProcessGate){$shutdownArguments.activationProcess=$true;$report.kind='activation_process_main_native_gate'}
     if($ActivationStateGate){$shutdownArguments.activationState=$true;$report.kind='activation_state_main_native_gate'}
     if($ActivationWriterGate){$shutdownArguments.activationWriter=$true;$report.kind='activation_writer_main_native_gate'}
-    Write-NewJson $shutdownInput $shutdownArguments
+    if($ActivationServiceGate){$shutdownArguments.activationService=$true;$shutdownArguments.controllerUrl=$FixtureControllerUrl;$shutdownArguments.instanceId=$FixtureInstanceId;$report.kind='activation_service_main_native_gate'}
+    if(-not $ActivationServiceGate){Write-NewJson $shutdownInput $shutdownArguments}
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
     if($ActivationPreparationGate){$mainTest='actual_main_prepares_activation_without_launch_or_cold_adoption'}
@@ -162,6 +171,7 @@ try {
     if($ActivationProcessGate){$mainTest='actual_main_launches_one_private_receiver_before_state_handoff'}
     if($ActivationStateGate){$mainTest='actual_main_hands_the_existing_state_to_the_same_private_receiver'}
     if($ActivationWriterGate){$mainTest='actual_main_activates_one_journal_writer_without_service_or_replay'}
+    if($ActivationServiceGate){$mainTest='actual_main_activates_one_local_service_without_controller_or_replay'}
     # The Main fixture copies its supervisor from validationUpdater. Building a
     # validation test harness alone does not enable diagnostics in that process.
     $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
@@ -170,6 +180,14 @@ try {
       @{name='shutdown-old-real-set';executable=$pwsh;arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $source 'scripts/build-windows-update.ps1'),'-SourceDirectory',$source,'-ManifestSha256',(Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant(),'-StagingDirectory',$oldStage,'-VerifierExecutable',(Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-update.exe'),'-ValidationCacheDirectory',$cache)},
       @{name='shutdown-main-pipeline';arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact',$mainTest,'--ignored','--test-threads=1','--nocapture')}
     )
+    if($ActivationServiceGate){
+      # Freeze the initial validation image AFTER ordinary old-role builds and
+      # BEFORE creating config/manifest/journal. Cargo test uses exactly this binary.
+      $commands=@($commands | Where-Object {$_.name -cne 'shutdown-main-pipeline'})+@(
+        @{name='service-validation-worker-build';arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--bin','winbridge-worker','--locked','--offline')},
+        @($commands | Where-Object {$_.name -ceq 'shutdown-main-pipeline'})[0]
+      )
+    }
   }
   if($FinalStateBackupGate){
     $commands=@(
@@ -196,7 +214,7 @@ try {
   }
   # Worker IPC fixtures launch this executable. Reused caches may still hold an
   # older updater that correctly refuses the freshly migrated journal.
-  if($ActivationPreparationGate){
+  if($ActivationPreparationGate -and -not $ActivationServiceGate){
     $migrationTest=if($ActivationWriterGate){'activation_writer_migration'}else{'activation_migration'}
     $commands=@(
       @{name='activation-data-ledger';arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','activation','--locked','--offline','--','--test-threads=1','--nocapture')},
@@ -245,6 +263,11 @@ try {
       @{name='writer-actual-worker-migration';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','journal_activation_migration','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($ActivationServiceGate){
+    $commands=@($commands | Where-Object {$_.name -cne 'writer-actual-worker-migration'})
+    $report.migrationChecked=$false
+    $report.migrationScope='Main25 only; retained19-to20/refusal is a separate required gate'
+  }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
@@ -268,11 +291,29 @@ try {
     }
     $report.commands+=@{name=$command.name;arguments=$arguments;exitCode=$code;log=$log;startedAt=$commandStarted.ToString('o');elapsedMs=$commandTimer.ElapsedMilliseconds;cargoBuildMs=[long]$cargoBuildMs;testExecutionMs=[long]$testExecutionMs}
     Write-Output "Health native timing: $($command.name); total $($commandTimer.ElapsedMilliseconds)ms; Cargo build $([long]$cargoBuildMs)ms; test bodies $([long]$testExecutionMs)ms; exit $code"
+    if($ActivationServiceGate -and $command.name -ceq 'shutdown-main-pipeline'){
+      $retirement=Join-Path $caseRoot 'runtime-retirement.json'
+      if(Test-Path -LiteralPath $retirement -PathType Leaf){
+        $retirementSha=(Get-FileHash -LiteralPath $retirement -Algorithm SHA256).Hash.ToLowerInvariant()
+        $archive=Archive-TestWorkerActivationRuntime -Reservation $activationReservation -RetirementProof $retirement -RetirementProofSha256 $retirementSha
+        $report.runtimeArchive=$archive
+      }else{throw 'Native retirement evidence missing; test slot preserved and blocked, no automatic new runtime'}
+    }
     if($code -ne 0){throw "Health native command failed: $($command.name); see $log"}
     if($command.ContainsKey('minimum')){
       $counts=[regex]::Matches((Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw),'test result: ok\. ([0-9]+) passed; 0 failed;')
       $selected=0;foreach($count in $counts){$selected+=[int]$count.Groups[1].Value}
       if($selected -lt $command.minimum){throw "Required native tests were not selected: $($command.name)"}
+    }
+    if($ActivationServiceGate -and $command.name -ceq 'service-validation-worker-build'){
+      $initialWorker=Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-worker.exe'
+      $initialSha=(Get-FileHash -LiteralPath $initialWorker -Algorithm SHA256).Hash.ToLowerInvariant()
+      $activationReservation=Open-TestWorkerActivationRuntime -Directory $TestRuntimeDirectory -InstalledWorker $InstalledWorker -Image $initialWorker -Sha256 $initialSha -RunDirectory $caseRoot -SourceCommit $manifest.sourceCommit -SourceManifestSha256 (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+      $shutdownArguments.runtime=@{directory=$activationReservation.binding.runtimeDirectory;markerSha256=$activationReservation.markerSha256}
+      Write-NewJson $shutdownInput $shutdownArguments
+      $report.activationReservation=$activationReservation.binding
+      $report.activationMarkerSha256=$activationReservation.markerSha256
+      Release-TestWorkerActivationImagePin $activationReservation
     }
     if($ActivationFilesGate -and $command.name -ceq 'health-supervisor-build'){
       # Other cargo feature variants may replace debug/winbridge-update.exe.
@@ -303,6 +344,7 @@ try {
   if($ActivationProcessGate){$expectedKind='activation_process_main_native_proof'}
   if($ActivationStateGate){$expectedKind='activation_state_main_native_proof'}
   if($ActivationWriterGate){$expectedKind='activation_writer_main_native_proof'}
+  if($ActivationServiceGate){$expectedKind='activation_service_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}
@@ -335,6 +377,7 @@ try {
   }
   } catch {Write-Output ('Optional case diagnostic export failed: '+$_.Exception.Message)}
   $report.storage.availableBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace
+  if($activationReservation){Close-TestWorkerActivationRuntime $activationReservation}
   if($lease){$lease.Dispose()}
   $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$oldShutdownInput
   $env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT=$oldActivationInput

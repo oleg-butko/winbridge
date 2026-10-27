@@ -1,6 +1,7 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-2026-10-27. Начать с [runtime archive checkpoint](plans/worker-self-update/runtime-archive-2026-10-27.md),
+2026-10-27. Начать с [Main25 checkpoint](plans/worker-self-update/main25-2026-10-27.md),
+затем [runtime archive checkpoint](plans/worker-self-update/runtime-archive-2026-10-27.md),
 [fixture layout checkpoint](plans/worker-self-update/fixture-layout-2026-10-27.md),
 [stable runtime reservation checkpoint](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md),
 [actor25/local-root checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md)

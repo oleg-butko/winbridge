@@ -78,7 +78,8 @@ normal IPC, затем атомарно сохраняет LocalVerified/root Aw
 Controller session/lifetime transfer/commit/release пока не реализованы.
 **Main24 на updater19 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
 Service4 component gate16+14 также пройден, но не доказывает новый Actor25/full Main25.
-Следом постоянный activation test runtime и полный Main25 на Windows.
+Сценарий [полного Main25](docs/plans/worker-self-update/main25-2026-10-27.md) подключён в source;
+фактическое выполнение и independent proof на Windows ещё впереди.
 Public install выключен; самообновление целиком ещё не готово.
 Installed worker0.1.1/source59249e6 проверен; новые изменения не установлены.
 Текущий controller слушает192.168.44.203:1143.

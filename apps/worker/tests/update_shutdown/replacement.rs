@@ -381,7 +381,7 @@ pub(super) fn after_owned_exit(
         id,
         proof,
         &proof["workerBytesBefore"],
-        false,
+        None,
     )
 }
 pub(super) fn after_writer_exit(
@@ -392,7 +392,33 @@ pub(super) fn after_writer_exit(
     proof: &serde_json::Value,
     writer_bytes: &serde_json::Value,
 ) -> serde_json::Value {
-    after_exit(root, config, worker, id, proof, writer_bytes, true)
+    after_exit(
+        root,
+        config,
+        worker,
+        id,
+        proof,
+        writer_bytes,
+        Some(UpdatePhase::VerifyingLocal),
+    )
+}
+pub(super) fn after_service_exit(
+    root: &FixtureLayout,
+    config: &Path,
+    worker: &Path,
+    id: &str,
+    proof: &serde_json::Value,
+    service_bytes: &serde_json::Value,
+) -> serde_json::Value {
+    after_exit(
+        root,
+        config,
+        worker,
+        id,
+        proof,
+        service_bytes,
+        Some(UpdatePhase::AwaitingController),
+    )
 }
 fn after_exit(
     root: &FixtureLayout,
@@ -401,7 +427,7 @@ fn after_exit(
     id: &str,
     proof: &serde_json::Value,
     expected_bytes: &serde_json::Value,
-    activation_started: bool,
+    activation_phase: Option<UpdatePhase>,
 ) -> serde_json::Value {
     let directory = root.runtime().join("update-state");
     let (r, _) =
@@ -410,7 +436,10 @@ fn after_exit(
     let r = r.unwrap();
     assert_eq!(serde_json::to_value(&r).unwrap(), proof["record"]);
     let view = UpdateJournal::runtime_replacement_snapshot(&directory, id, false, None).unwrap();
-    assert_eq!(view.update.phase, UpdatePhase::VerifyingLocal);
+    assert_eq!(
+        view.update.phase,
+        activation_phase.unwrap_or(UpdatePhase::VerifyingLocal)
+    );
     assert_eq!(
         view.runtime_replacement.as_ref().unwrap().phase,
         RuntimeReplacementPhase::FilesMoved
@@ -437,5 +466,5 @@ fn after_exit(
     assert_eq!(&bytes, expected_bytes);
     json!({"record":r,"view":view,"normalStartupRefused":true,"workerBytesUnchanged":true,
         "workerBytesBeforeStartup":bytes,"workerBytesAfterStartup":journal_bytes(root),
-        "ownedJobEmpty":true,"activationStarted":activation_started})
+        "ownedJobEmpty":true,"activationStarted":activation_phase.is_some()})
 }

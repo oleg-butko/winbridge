@@ -1,5 +1,9 @@
 # Постепенная реализация и расширение
 
+2026-10-27: [Main25 native scenario](plans/worker-self-update/main25-2026-10-27.md)
+подключён в source: pre-admission firewall wait, same-child service, IPC/history/pause,
+cold exit и archive под original lease. Actual full Windows proof пока впереди.
+
 2026-10-27: [runtime archive](plans/worker-self-update/runtime-archive-2026-10-27.md)
 имеет29 native policy checks; retirement hook cross-checked. Full Main25/wiring ещё впереди.
 

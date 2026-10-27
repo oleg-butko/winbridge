@@ -11,6 +11,7 @@ use std::{
 };
 use winbridge_update::shutdown::ShutdownDeliveryState;
 mod layout;
+mod network;
 pub use layout::{FixtureLayout, FixtureRuntimePin};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -247,6 +248,9 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+    // Firewall admission belongs to the old normal runtime, before any
+    // supervisor/update/startup grant. It never renews an activation deadline.
+    network::wait_before_admission(&worker, input).await?;
     let weak: Weak<Worker> = Arc::downgrade(&worker);
     let WorkerSupervisorLaunch::Started(mut h) =
         worker.launch_supervisor_inner(&input.request, true).await?
