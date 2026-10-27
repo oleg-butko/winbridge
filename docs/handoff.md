@@ -2,7 +2,7 @@
 
 **Текущая задача2026-10-27:** пользователь переключил installed worker0.1.1 на
 .204 и разрешил реализацию [Main25 profiles/cold migration плана](plans/main25-schema-profiles-2026-10-27.md).
-Main ba9557b интегрируется в feature с проверенным source adapter. Profiles17/20
+Main ba9557b включён в feature с проверенным source adapter. Profiles17/20
 и19/20 явные; expected schemas сверяются с обоими verified archives, не выводятся
 из proof. Historical17 default и frozen view17 сохранены. Native worker17→19
 cold migration test добавлен отдельно, active updater migration этим не разрешается.
@@ -10,7 +10,12 @@ Worker0.1.1 остаётся установленным. Native test slot:runtim
 runtime-test/conservation files не трогать. После последнего native task агент
 обязан сообщить пользователю, что worker можно переключить обратно на.203.
 Preflight a0c6924a-360e-4e38-98d4-0993fcee6857 succeeded/0; Windows free31,514,517,504.
-Linux workspace894/0/17ignored и Python6/0 прошли; native результаты ещё впереди.
+Linux workspace894/0/17ignored и Python6/0 прошли. Cold worker17→19 native test
+прошёл12.57s и отдельный independent audit; Main25 прошёл137 prerequisites,
+но остановился на устаревшем scope export fixture (Input1/case-runtime вместо
+Input2/stable slot). Исправление и точные run/retirement pins — в плане выше.
+Пользователь разрешил runtime-test-204 EXE в firewall; сохранить постоянный путь,
+не считать Cargo hashed EXE автоматически разрешёнными. Full Main25 ещё не пройден.
 
 ## Multi-controller: текущая ветка .204
 

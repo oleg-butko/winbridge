@@ -365,7 +365,7 @@ try {
   try { if($ShutdownMainGate -and (Get-Variable caseRoot -ErrorAction SilentlyContinue)){
     foreach($caseName in @('None','LostAck','DelayedReply','ReceiptWriteDenied','DelayedInstanceLock','SupervisorCrashBeforeExit','None-ExistingDestination','None-ExitAfterCopy','None-WrongInputReport','None-HoldBeforeCopy','None-PreparationExistingDirectory','None-PreparationChangedCandidate','None-PreparationHoldBeforeReceipt','None-ReplacementExistingDirectory','None-ReplacementLockedOldFile','None-ReplacementReceiptWriteDenied','None-ReplacementHoldBeforeReceipt')){
       $caseDirectory=Join-Path $caseRoot $caseName
-      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json','activation-state-before_release.json','activation-state-after_release.json','activation-writer-before-send.json')){
+      foreach($logName in @('stdout.log','stderr.log','validation-error.json','final-backup-observed.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json','activation-state-before_release.json','activation-state-after_release.json','activation-writer-before-send.json')){
         $path=Join-Path $caseDirectory $logName
         if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-'+$logName)),$false)}
       }
@@ -374,7 +374,10 @@ try {
         $sup=Get-Content -LiteralPath $saved -Raw | ConvertFrom-Json
         $updateId=$sup.spec.updateId
         if($updateId -cmatch '^[0-9a-f-]{36}$'){
-          $path=Join-Path $caseDirectory ('runtime/update/'+$updateId+'/supervisor/stderr.log')
+          $diagnosticRuntime=Join-Path $caseDirectory 'runtime'
+          if($ActivationServiceGate -and $report.runtimeArchive){$diagnosticRuntime=$report.runtimeArchive.directory}
+          elseif($ActivationServiceGate -and $activationReservation){$diagnosticRuntime=$activationReservation.binding.runtimeDirectory}
+          $path=Join-Path $diagnosticRuntime ('update/'+$updateId+'/supervisor/stderr.log')
           if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-supervisor-stderr.log')),$false)}
         }
       }

@@ -1345,7 +1345,16 @@ fn final_backup(
         assert_eq!(journal_bytes(root), bytes);
         return json!({"expectedFault":expected_fault,"beforeAdmission":before_admission,"faultMarker":fault_marker,"record":record,"view":done,"duplicate":duplicate,"sourceRowsSha256":rows.0,"backupRowsSha256":if expected_fault == BackupFault::ExistingDestination {None} else {Some(&rows.0)},"destinationEvidence":destination.evidence(),"sourceTaskCount":rows.1,"sourceOutputCount":rows.2,"sourceBytesUnchanged":true,"destinationPreserved":preserved,"duplicateNoNewAttempt":true});
     }
-    assert!(done.driver_error.is_none());
+    fs::write(
+        root.join("final-backup-observed.json"),
+        serde_json::to_vec_pretty(&done).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        done.driver_error.is_none(),
+        "Final backup failed: {:?}",
+        done.driver_error
+    );
     assert_eq!(
         done.candidate_state_backup.as_ref().unwrap().phase,
         CandidateStateBackupPhase::Verified
