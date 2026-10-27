@@ -668,3 +668,24 @@ async fn service_observation_never_promotes_fixture_metadata_or_rebinds_a_comman
     running.close().await.unwrap();
     assert!(lock_available(&root.path().join("state")));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn service_monitor_observes_listener_exit_and_close_never_polls_a_completed_join_twice() {
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, config, _) = service_fixture(root.path());
+    let service = crate::LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap();
+    let mut running = service.start().await.unwrap();
+    running.stop_fixture();
+    tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        running.wait_until_stopped(),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    // This is retained state, not a handoff: actual close/drain is still needed.
+    assert!(!lock_available(&root.path().join("state")));
+    running.wait_until_stopped().await.unwrap();
+    running.close().await.unwrap();
+    assert!(lock_available(&root.path().join("state")));
+}

@@ -22,6 +22,7 @@ use winbridge_protocol::update::{
 
 mod abort;
 mod activation;
+mod activation_local;
 mod activation_service;
 mod activation_writer;
 mod build;

@@ -22,7 +22,8 @@ WouldBlock с retained alias, успешный новый owner после LOCK_
 новой эксклюзивности после закрытия старого alias. Evidence:
 `.winbridge/update-preparation/actor25-event-log.log` и
 `actor25-event-log-inheritance.json`. Failed full run:
-`actor25-workspace.log`; он не записывается как успешный. Полный повтор и обе
-Clippy относятся к следующему commit actor25 и будут записаны после завершения.
+`actor25-workspace.log`; он не записывается как успешный. Полный повтор после fix прошёл833/0 (17 ignored); Linux/MSVC Clippy
+workspace/all-targets/update-validation с `-D warnings` прошли. Эти проверки
+относятся к последующему actor25 checkpoint, не к native Windows исполнению.
 
 Рабочий Windows worker0.1.1/source59249e6 не заменялся и не проявлял неисправностей.

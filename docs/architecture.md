@@ -8,8 +8,9 @@ writer/activation graph. [Consuming admission/transfer preparation](plans/worker
 временную transaction fence; root/dispatch/admin остаются закрыты, перед IPC
 восстанавливается обычная write freeze. [Trusted V4 sender/receiver и normal-IPC
 probe](plans/worker-self-update/service-v4-2026-10-26.md) добавлены. Новый формат
-не установлен; actor25/full Main25 ещё впереди. Worker schema17 и supervisor24/view16 прежние,
-actor25/view17 и public install не включены. Статусы ниже
+не установлен. [Actor25/view17 и атомарный local proof/root AwaitingController](plans/worker-self-update/local-service-actor-2026-10-26.md)
+реализованы; full Main25 ещё впереди. Worker schema17/updater20 прежние,
+public install не включён. Статусы ниже
 относятся к своим историческим source/gates.
 
 Дополнение2026-10-25: [Main24 writer gate подтверждён](plans/worker-self-update/resume-2026-10-25-writer-verified.md)

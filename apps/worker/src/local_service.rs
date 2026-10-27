@@ -75,6 +75,7 @@ pub struct LocalService {
 pub struct RunningLocalService {
     service: LocalService,
     task: Option<tokio::task::JoinHandle<Result<()>>>,
+    exit: Option<Result<()>>,
 }
 impl LocalService {
     /// Trusted private receiver must supply the original graph/liveness/window
@@ -283,6 +284,7 @@ impl LocalService {
         let worker = Arc::clone(&self.worker);
         let mut running = RunningLocalService {
             service: self,
+            exit: None,
             task: Some(tokio::spawn(serve_inner(
                 worker,
                 ReadinessOutput::Local(ready),
@@ -323,24 +325,31 @@ impl RunningLocalService {
     pub fn endpoint(&self) -> Result<String> {
         self.service.endpoint()
     }
+    /// Cancel-safe monitor. Consume the join result exactly once; close must
+    /// not poll a completed JoinHandle again or discard an earlier IPC failure.
+    pub(crate) async fn wait_until_stopped(&mut self) -> Result<()> {
+        if let Some(exit) = &self.exit {
+            return exit.clone();
+        }
+        let result = match self.task.as_mut().ok_or("Local IPC owner missing")?.await {
+            Ok(result) => result,
+            Err(error) => Err(format!("Local IPC task exit unconfirmed: {error}")),
+        };
+        self.task.take();
+        self.exit = Some(result.clone());
+        result
+    }
+    #[cfg(test)]
+    pub(crate) fn stop_fixture(&self) {
+        self.service.worker.stop();
+    }
     pub async fn close(mut self) -> std::result::Result<(), Box<LocalServiceFailure>> {
         self.service.worker.stop();
-        if let Some(task) = self.task.take() {
-            match task.await {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => {
-                    return Err(LocalServiceFailure::worker(
-                        e,
-                        Arc::clone(&self.service.worker),
-                    ))
-                }
-                Err(e) => {
-                    return Err(LocalServiceFailure::worker(
-                        format!("Local IPC exit unconfirmed: {e}"),
-                        Arc::clone(&self.service.worker),
-                    ))
-                }
-            }
+        if let Err(reason) = self.wait_until_stopped().await {
+            return Err(LocalServiceFailure::worker(
+                reason,
+                Arc::clone(&self.service.worker),
+            ));
         }
         let deadline = Instant::now() + winbridge_transport::IPC_TIMEOUT + Duration::from_secs(1);
         while Arc::strong_count(&self.service.worker) > 1 {

@@ -1,6 +1,6 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-2026-10-26. Начать с [private V4 checkpoint](plans/worker-self-update/service-v4-2026-10-26.md)
+2026-10-26. Начать с [actor25/local-root checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md)
 и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
 Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
@@ -20,7 +20,7 @@ Windows gate заранее сообщать какие процессы/окн�
 slot `runtime-test/winbridge-worker.exe`, wait900s, отдельный controller1144;
 state/config/instance/report каждого run изолированы. Firewall rules не менять.
 
-**Source updater20/worker17, supervisor24/view16, private2+writer3+service4.** Добавлены
+**Source updater20/worker17, supervisor25/view17, private2+writer3+service4.** Добавлены
 service intent/current/history и согласованное чтение под schema20. Native consuming
 admission от original process guard подключён как trusted Rust API; duplicate
 даёт только историю, свежий permit появляется после commit. Parent удерживает
@@ -29,36 +29,39 @@ ActivationServicePreparation, child может передать тот же conn
 реализованы через LocalService: тот же Store/full lock/generation, временная
 startup scope, затем readonly IPC. Controller/scheduler/mutations не включаются.
 Trusted V4 sender/receiver и readonly normal-IPC identity query добавлены;
-родитель независимо читает обычный IPC перед service confirmation. Actor25 ещё
-не подключён; actual same-child Main25 не пройден.
+родитель независимо читает обычный IPC перед service confirmation. Actor25/view17
+подключены: один resident Written guard, busy/confirmed/uncertain states и cold
+no-adoption. После service confirmation activation7/LocalVerified и root
+AwaitingController записываются атомарно. Actual same-child Main25 ещё не пройден.
 Schema19→20 имеет verified consistent backup и fencing updater owner; это не
 новая worker authority. Сохранённые факты не дают разрешения открыть Store или
 повторить send. Public install/advertised activation/controller/desktop выключены.
 
-Следующий шаг: actor25/view17 → resident service state/activation7/root LocalVerified → новый Main25
-и actual19→20/refusal. Нельзя заново открывать Store, получать второй lock,
+Следующий шаг: stable activation runtime fixture/network preflight → новый Main25
+и actual19→20/refusal. Старый normal Main тоже открывает configured controller URL;
+поэтому нельзя запускать этот gate из новых hash paths и нельзя подменить URL=None. Нельзя заново открывать Store, получать второй lock,
 прибавлять epoch или обновлять original startup deadline. Maintenance/user pause
 сохраняются, local-only service не подключается к controller. Затем controller
 session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат к A4.3.
 
 Прежний Main24 writer proof и release140+6 остаются действительны для своих
 исторических source pins, не доказывают normal service/schema20. Full replacement service/Main25
-ещё не проверялся. Текущие source checks: **workspace824/0, 17 ignored**,
-focused updater16/worker14, Linux/MSVC all-target validation Clippy,
-Python verifier6 и scaffold293. Финальные Clippy/native
-результаты и source pins находятся в актуальном checkpoint. Старый event_log
+ещё не проверялся. Текущие source checks: **workspace833/0, 17 ignored**,
+updater246/0 (4 ignored), mailbox25/1, worker15/0, TS typecheck.
+Linux/MSVC Clippy all-targets/update-validation `-D warnings`, generated
+contracts-check/fmt/scaffold295 прошли. Точные logs и source pins — в checkpoint. Старый event_log
 WouldBlock повторился при actor25 workspace. [Найден механизм retained FD и исправлен
 Unix Drop log writer](plans/worker-self-update/review-actor25-2026-10-26.md):5 focused
-tests/OS experiment passed. Этот failed workspace не считается успешным; actor25
-и полный повтор пока в работе.
+tests/OS experiment passed. Первый failed workspace не считается успешным;
+полный повтор после fix прошёл833/0.
 Новый `--service-admission-only` **component gate пройден**:
 run20261026-200828-7bcf7834/task52e8eda0-e7a4-4623-a967-d747ae637bcc succeeded/0,
 **16 updater +14 worker Windows tests**. Producer15429a4;3 files verified twice,
 compiled source/manifest bound, independent proof и readonly recheck прошли.
 Parent probe здесь положительно проверен через OS IPC к mock provider; это НЕ
 same-child V4/installed-set/Job/Main25 proof. Точные pins/команда/storage в
-актуальном checkpoint. Следом actor25/view17, activation7/root LocalVerified и
-полный Main25; текущий этап не является готовым updater.
+service4 checkpoint. Эти tests не доказывают новый actor25/atomic root/monitor;
+полный Main25 остаётся обязательным, updater не считается готовым.
 Working0.1.1/source592 healthy/active0/generation936909c6/incarnation5a8eb173 прежние;
 controller5103 оставлен, test processes завершены. Desktop не нужен; worker оставить.
 Исторические1f653b2/13+13 иf145b62/13+6 gates сохранены в прежних checkpoints.

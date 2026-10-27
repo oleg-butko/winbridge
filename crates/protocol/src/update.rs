@@ -611,6 +611,9 @@ pub enum SupervisorAction {
     /// Internal24: one private writer command; ACK/busy carries no saved result.
     ActivateJournalWriter,
     ObserveJournalWriter,
+    /// Internal25: one local service activation; no controller/lifetime grant.
+    ActivateLocalService,
+    ObserveLocalService,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -698,6 +701,9 @@ pub struct UpdatePreparationView {
     /// Internal24/view16 only. Saved commit and current resident owner differ.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_writer: Option<ActivationWriterView>,
+    /// Internal25/view17. Historical confirmations alone imply no live service.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_service: Option<ActivationServiceView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1123,3 +1129,6 @@ mod activation_writer;
 pub use activation_writer::*;
 mod activation_service;
 pub use activation_service::*;
+
+mod activation_service_view;
+pub use activation_service_view::*;

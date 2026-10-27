@@ -13,7 +13,8 @@ pub struct ActivationServicePreparation {
 }
 impl ActivationServicePreparation {
     /// One private send followed by independent normal-IPC health readback.
-    /// Success retains the original child; no controller/lifetime/root commit.
+    /// Success retains the child and records local proof/AwaitingController.
+    /// No controller, lifetime transfer or final commit is granted.
     pub fn start_local_service_blocking(
         self,
         j: &mut UpdateJournal,
@@ -217,6 +218,13 @@ impl ActivationProcessGuard {
         j.append_activation_service_owned(a, s, &self.files.preparation, &self.record, &next)
             .map_err(|e| e.to_string())?;
         timing.mark("service_confirmation_committed", None, None);
+        self.record = j
+            .finish_local_activation(a, s, &self.files.preparation, &self.record, &next, || {
+                self.require_fixed_custody(false)?;
+                live.require_live().map_err(|e| e.to_string())
+            })
+            .map_err(|e| e.to_string())?;
+        timing.mark("local_root_verified", None, None);
         Ok(())
     }
 

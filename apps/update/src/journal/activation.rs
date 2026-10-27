@@ -251,7 +251,7 @@ fn seed(c: &Connection, value: &ActivationRecord, r: &RuntimeReplacementRecord) 
 }
 // No public unbound writer: only the native consuming owner uses this.
 #[cfg(any(windows, test))]
-fn persist(
+pub(super) fn persist(
     c: &Connection,
     old: &ActivationRecord,
     next: &ActivationRecord,

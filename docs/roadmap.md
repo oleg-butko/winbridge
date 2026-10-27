@@ -4,9 +4,10 @@
 пользователем, actual build/hash/history проверены**. [Проверка и продолжение](plans/worker-self-update/service-ledger-2026-10-26.md).
 Source updater20 содержит intent/history, original-guard admission, shared Worker/
 readonly IPC и trusted V4 sender/receiver с независимым parent normal-IPC probe.
-Actor25/view17 и full Main25 ещё отсутствуют. Следом resident service actor →
-activation7/root LocalVerified → actual Main25/retained19→20.
-[Checkpoint](plans/worker-self-update/service-v4-2026-10-26.md).
+Actor25/view17, resident service states и атомарные activation7/LocalVerified +
+root AwaitingController реализованы. Source workspace833/0. Следом stable
+activation runtime/network fixture → actual Main25/retained19→20.
+[Checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md).
 Native component gate15429a4:16+14 tests/3 files twice, independent verification
 и readonly recheck; это не actual same-child V4/Job/Main25. Старый1f653b2/13+13
 сохраняет лишь свой historical library scope.

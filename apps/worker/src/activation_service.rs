@@ -91,7 +91,7 @@ impl Receiver {
         let service = LocalService::prepare(prepared, &config, guard, &mut checkpoint)
             .map_err(|e| e.to_string())?;
         timing.mark("worker_initialized", None, None);
-        let running = service.start().await.map_err(|e| e.to_string())?;
+        let mut running = service.start().await.map_err(|e| e.to_string())?;
         timing.mark("local_ipc_bound", None, None);
         let result = async {
             checkpoint()?;
@@ -108,6 +108,7 @@ impl Receiver {
             // Verification ownership is resident. A later contract must grant
             // controller/lifetime transfer; channel closure never grants them.
             tokio::select! {
+                outcome=running.wait_until_stopped() => Err(format!("Local IPC stopped during resident verification: {outcome:?}; no lifetime transfer")),
                 _=channel::read::<_,serde::de::IgnoredAny>(&mut stream,Duration::from_millis(writer.activation.intent.context.startup_timeout_ms)) => Err("Local verification parent channel closed or unsupported next phase; no lifetime transfer".into()),
                 outcome=super::native::parent_alive(&parent,Duration::from_millis(writer.activation.intent.context.startup_timeout_ms)) => outcome,
             }

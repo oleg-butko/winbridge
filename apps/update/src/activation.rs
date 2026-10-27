@@ -14,6 +14,8 @@ pub use lifecycle::*;
 pub mod channel;
 mod process_view;
 pub mod service;
+mod service_view;
+pub(crate) use service_view::view as service_view;
 #[cfg(any(windows, test))]
 pub(crate) mod service_probe;
 pub mod writer;
