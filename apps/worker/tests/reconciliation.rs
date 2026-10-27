@@ -126,7 +126,7 @@ fn process_binding_rejects_foreign_identity_rebinding_stale_owners_and_false_no_
 }
 
 fn downgrade_to_ten(cfg: &WorkerConfig) {
-    sql(cfg, "DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TRIGGER resource_physical_guard; ALTER TABLE resource_leases DROP COLUMN physical; PRAGMA user_version=10;");
+    sql(cfg, "DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TRIGGER resource_physical_guard; ALTER TABLE resource_leases DROP COLUMN physical; PRAGMA user_version=10;");
 }
 #[test]
 fn schema_ten_upgrade_preserves_raw_records_owners_keys_and_consistent_backup() {

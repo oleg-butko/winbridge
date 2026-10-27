@@ -14,6 +14,7 @@ import type { CommandDraft, DeliveryDraft, TaskRecord, TaskSummary, TaskSubmissi
 import { catalogSummary, projectPolicySummary } from "../../runtime/discovery";
 import { ReadinessPanel } from "./ReadinessPanel";
 import { ControllerConnectionsPanel, controllerConnectionsSupported } from "./ControllerConnectionsPanel";
+import { OperationAttributionPanel } from "./OperationAttributionPanel";
 import { WorkSchedulingSummary } from "./WorkSchedulingSummary";
 import { QueueControlPanel } from "./QueueControlPanel";
 import { ResourceSchedulingSummary } from "./ResourceSchedulingSummary";
@@ -29,7 +30,7 @@ import { closeDeadline, CloseTimeout, desktopEvent } from "../../runtime/desktop
 import type { ClosePhase, CloseSource, DesktopLogStatus } from "../../runtime/desktopEvents";
 import { TaskDetail, statuses } from "./TaskDetail";
 
-function TaskSession({ id, readOnly, requestContext }: { id: string; readOnly: boolean; requestContext?: import("../../runtime/contracts").RequestContext }) {
+function TaskSession({ id, readOnly, requestContext, info, connected }: { id: string; readOnly: boolean; requestContext?: import("../../runtime/contracts").RequestContext; info: WorkerInfo | null; connected: boolean }) {
   const [task, setTask] = useState<TaskRecord | null>(null);
   const [output, setOutput] = useState(() => new OutputBuffer().snapshot());
   const [error, setError] = useState<string | null>(null);
@@ -69,6 +70,7 @@ function TaskSession({ id, readOnly, requestContext }: { id: string; readOnly: b
         <Button color="orange" variant="light" disabled={readOnly || !["queued", "running"].includes(task.status) || task.cancelRequested} loading={cancelling} onClick={() => void cancel()}>Отменить задачу</Button>
       </Group>
       <TaskDetail task={task} outputState={output} />
+      {info && <OperationAttributionPanel info={info} connected={connected} kind="task" operationId={id} />}
     </> : <Text>Читается сохранённая задача…</Text>}
   </Stack>;
 }
@@ -392,6 +394,6 @@ export function NativeWorkbench() {
       <Button onClick={() => void submit()} loading={submitting} disabled={!executionReady || pending !== null || !project || !formReady || closing || (!recipeId && !project.allowDirectCommands)}>Передать задачу worker</Button>
     </Stack></Card>
     <Select label="Последние 10 задач" value={selectedId} onChange={setSelectedId} searchable data={tasks.map((t) => ({ value: t.taskId, label: `${t.projectId} · ${statuses[t.status].label} · ${t.taskId}` }))} />
-    {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} readOnly={!!info?.journalInspection} requestContext={info?.fencedRequests?.context} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
+    {selectedId ? <div id="native-task-detail" tabIndex={-1}><TaskSession key={selectedId} id={selectedId} readOnly={!!info?.journalInspection} requestContext={info?.fencedRequests?.context} info={info} connected={connected} /></div> : <Text c="dimmed">Задач пока нет. Выберите проект и передайте команду worker.</Text>}
   </Stack>;
 }

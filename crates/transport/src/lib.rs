@@ -168,6 +168,27 @@ pub async fn controller_connections(
         .map_err(|e| e.to_string())?;
     decode_controller_connections(response, &info, request)
 }
+/// Scoped readonly historical attribution, independent of execution authority.
+pub async fn operation_attribution(
+    address: &str,
+    request: &winbridge_protocol::OperationAttributionRequest,
+) -> Result<winbridge_protocol::OperationAttribution, String> {
+    use winbridge_protocol::*;
+    let LocalResponse::Info { info } = call(address, &LocalRequest::Info)
+        .await
+        .map_err(|e| e.to_string())?
+    else {
+        return Err("Missing attribution provider Info".into());
+    };
+    let envelope = operation_attribution_envelope(&info, request)?;
+    decode_operation_attribution(
+        call_extension(address, &envelope)
+            .await
+            .map_err(|e| e.to_string())?,
+        &info,
+        request,
+    )
+}
 /// A distinct local control route; WebSocket and readonly extensions cannot dispatch it.
 pub async fn queue_control(
     address: &str,

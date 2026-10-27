@@ -209,6 +209,16 @@ async fn controller_connections(
     )
     .await
 }
+#[tauri::command]
+async fn operation_attribution(
+    window: tauri::WebviewWindow,
+    endpoint: tauri::State<'_, WorkerEndpoint>,
+    request: winbridge_protocol::OperationAttributionRequest,
+) -> Result<winbridge_protocol::OperationAttribution, String> {
+    main_only(&window)?;
+    winbridge_transport::operation_attribution(endpoint.0.as_ref().map_err(Clone::clone)?, &request)
+        .await
+}
 
 #[tauri::command]
 async fn queue_control(
@@ -414,6 +424,7 @@ fn main() {
             worker_rpc,
             operation_page,
             controller_connections,
+            operation_attribution,
             queue_control,
             worker_rpc_fenced,
             load_command_drafts,

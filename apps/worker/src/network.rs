@@ -259,9 +259,9 @@ async fn session<S: AsyncRead + AsyncWrite + Unpin>(
                     handlers.spawn(async move {
                         let fallback = WireResponse::rejected_for(&request, String::new());
                         let result = tokio::time::timeout(ws::RPC_TIMEOUT, tokio::task::spawn_blocking(move || {
-                            let _guard=guard;
+                            let creator=guard.creator();let _guard=guard;
                             if request.request().local_maintenance_only() { WireResponse::rejected_for(&request, "Runtime settings and output cleanup are available through local desktop IPC only".into()) }
-                            else { worker.handle_controller_wire(&ticket, request) }
+                            else { worker.handle_controller_wire(&ticket, request,&creator) }
                         })).await;
                         let response = match result {
                             Ok(Ok(response)) => response,

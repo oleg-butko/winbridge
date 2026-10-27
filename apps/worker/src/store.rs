@@ -13,6 +13,7 @@ use winbridge_protocol::{
 mod activation;
 mod activation_open;
 mod admission;
+mod attribution;
 pub use activation::{JournalActivationAcceptance, JournalActivationPermit};
 pub use activation_open::{ActivationJournal, ActivationJournalOpenFailure};
 mod archive;
@@ -36,7 +37,7 @@ mod task_records;
 mod update;
 mod work_scheduling;
 pub use task_records::TaskSnapshot;
-pub const JOURNAL_SCHEMA_VERSION: u32 = 17;
+pub const JOURNAL_SCHEMA_VERSION: u32 = 18;
 // ORDER BY rowid can otherwise make SQLite prefer a full history scan to
 // sorting the small pending set. These indexes already exist since schema 13.
 const PENDING_TASKS_SQL: &str = "SELECT record FROM tasks INDEXED BY queue_pending_tasks WHERE json_extract(record,'$.status') IN ('queued','running') ORDER BY rowid";
@@ -85,6 +86,11 @@ impl Store {
         // commits, before journal-mode/schema writes on an existing v16 source.
         let activation_backup = if version == 16 {
             Some(Self::backup_activation_migration(path, &connection)?)
+        } else {
+            None
+        };
+        let attribution_backup = if version == 17 {
+            Some(Self::backup_schema_migration(path, &connection, 17)?)
         } else {
             None
         };
@@ -454,6 +460,23 @@ impl Store {
             }
             migration.commit().map_err(sql)?;
         }
+        if version <= 17 {
+            let migration = connection
+                .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)
+                .map_err(sql)?;
+            Self::require_update_activation(&migration)?;
+            if let Some(backup) = &attribution_backup {
+                backup.revalidate()?;
+                if Self::read_authority(&migration)? != backup.authority {
+                    return Err("Journal authority changed during attribution migration".into());
+                }
+            }
+            Self::migrate_attribution(&migration)?;
+            if let Some(backup) = &attribution_backup {
+                backup.revalidate()?;
+            }
+            migration.commit().map_err(sql)?;
+        }
         let authority = Self::read_authority(&connection)?;
         Ok(Self {
             connection,
@@ -511,6 +534,16 @@ impl Store {
         snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
         recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
     ) -> Result<TaskRecord> {
+        self.accept_attributed(request, command, snapshot, recipe_origin, None)
+    }
+    pub(crate) fn accept_attributed(
+        &mut self,
+        request: TaskSubmission,
+        command: ResolvedCommand,
+        snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
+        recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
+        creator: Option<&winbridge_protocol::OperationCreator>,
+    ) -> Result<TaskRecord> {
         self.guard_callback(None, None)?;
         if let Some(existing) = self.existing(&request)? {
             return Ok(existing);
@@ -521,7 +554,15 @@ impl Store {
             return Ok(existing);
         }
         Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
-        let task = Self::accept_task_on(&transaction, request, command, snapshot, recipe_origin)?;
+        let task = Self::accept_task_on(
+            &transaction,
+            request,
+            command,
+            snapshot,
+            recipe_origin,
+            creator,
+            None,
+        )?;
         Self::freeze_resource_root(
             &transaction,
             "task",
@@ -543,6 +584,8 @@ impl Store {
         command: ResolvedCommand,
         snapshot: Option<winbridge_protocol::VerifiedSnapshotRef>,
         recipe_origin: Option<winbridge_protocol::RecipeOrigin>,
+        creator: Option<&winbridge_protocol::OperationCreator>,
+        parent: Option<&str>,
     ) -> Result<TaskRecord> {
         if let Some(task) = Self::existing_task(connection, &request)? {
             return Ok(task);
@@ -573,6 +616,7 @@ impl Store {
                 "local journal: Task acceptance was not stored; acknowledgement rejected".into(),
             );
         }
+        Self::record_creator(connection, "task", &task.task_id, creator, parent)?;
         Ok(task)
     }
     pub fn get(&self, id: &str) -> Result<TaskRecord> {

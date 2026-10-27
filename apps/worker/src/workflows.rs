@@ -48,6 +48,14 @@ impl Store {
         request: WorkflowSubmission,
         recipe_pins: Option<Vec<WorkflowRecipePin>>,
     ) -> Result<WorkflowRecord> {
+        self.accept_workflow_attributed(request, recipe_pins, None)
+    }
+    pub(crate) fn accept_workflow_attributed(
+        &mut self,
+        request: WorkflowSubmission,
+        recipe_pins: Option<Vec<WorkflowRecipePin>>,
+        creator: Option<&OperationCreator>,
+    ) -> Result<WorkflowRecord> {
         self.guard_callback(None, None)?;
         if let Some(existing) = self.existing_workflow(&request)? {
             return Ok(existing);
@@ -95,6 +103,13 @@ impl Store {
                 "local journal: workflow acceptance not stored; acknowledgement rejected".into(),
             );
         }
+        Self::record_creator(
+            &transaction,
+            "workflow",
+            &workflow.workflow_id,
+            creator,
+            None,
+        )?;
         Self::insert_queue_root(
             &transaction,
             "workflow",
@@ -279,6 +294,14 @@ impl Store {
         if changed != 1 {
             return Err("local journal: application acceptance not stored".into());
         }
+        let (creator, _) = Self::creator_on(connection, "workflow", &app.workflow_id)?;
+        Self::record_creator(
+            connection,
+            "application",
+            &app.application_id,
+            creator.as_ref(),
+            Some(&app.workflow_id),
+        )?;
         Ok(())
     }
     pub fn accept_workflow_import(
@@ -300,7 +323,15 @@ impl Store {
             return Err("local journal: import child admission contradicts workflow".into());
         }
         let mut updated = flow.clone();
-        let import = Self::accept_import_on(&transaction, request, shared, workspace)?;
+        let (creator, _) = Self::creator_on(&transaction, "workflow", &flow.workflow_id)?;
+        let import = Self::accept_import_on(
+            &transaction,
+            request,
+            shared,
+            workspace,
+            creator.as_ref(),
+            Some(&flow.workflow_id),
+        )?;
         Self::freeze_resource_child(
             &transaction,
             &flow.workflow_id,
@@ -344,7 +375,16 @@ impl Store {
             return Err("local journal: task child admission contradicts workflow".into());
         }
         let mut updated = flow.clone();
-        let task = Self::accept_task_on(&transaction, request, command, snapshot, origin)?;
+        let (creator, _) = Self::creator_on(&transaction, "workflow", &flow.workflow_id)?;
+        let task = Self::accept_task_on(
+            &transaction,
+            request,
+            command,
+            snapshot,
+            origin,
+            creator.as_ref(),
+            Some(&flow.workflow_id),
+        )?;
         Self::freeze_resource_child(
             &transaction,
             &flow.workflow_id,

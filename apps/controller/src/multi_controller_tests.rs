@@ -254,6 +254,29 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
         submit(&h.b, &context, request.clone())
     );
     assert_eq!(one.task_id, two.task_id);
+    let creator_query = winbridge_protocol::OperationAttributionRequest {
+        context: context.clone(),
+        query: winbridge_protocol::OperationAttributionQuery {
+            kind: winbridge_protocol::HistoryKind::Task,
+            operation_id: one.task_id.clone(),
+        },
+    };
+    let initial =
+        h.a.operation_attribution(creator_query.clone())
+            .await
+            .unwrap()
+            .creator
+            .unwrap();
+    assert!(
+        matches!(&initial,winbridge_protocol::OperationCreator::Controller {controller_id,..} if controller_id=="a"||controller_id=="b")
+    );
+    assert_eq!(
+        h.b.operation_attribution(creator_query.clone())
+            .await
+            .unwrap()
+            .creator,
+        Some(initial.clone())
+    );
     running(&h.b, &one.task_id).await;
     let queued = submit(&h.b, &context, submission("a", "next", false)).await;
     assert_eq!(task(&h.b, &queued.task_id).await.status, TaskStatus::Queued);
@@ -338,6 +361,13 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     let duplicate = submit(&h.a, &context, request).await;
     assert_eq!(duplicate.task_id, one.task_id);
     assert_eq!(duplicate.status, TaskStatus::Cancelled);
+    assert_eq!(
+        h.a.operation_attribution(creator_query)
+            .await
+            .unwrap()
+            .creator,
+        Some(initial)
+    );
     assert_eq!(
         std::fs::read_to_string(root.path().join("a/starts.log"))
             .unwrap()

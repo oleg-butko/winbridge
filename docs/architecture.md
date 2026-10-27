@@ -250,8 +250,16 @@ Debian; установленный0.1.1 новый config не понимает,
 counters без изменения старого Info и без записей в SQLite. SDK проверяет
 schema/context/worker generation. Desktop показывает срез с явным primary,
 ошибками и предупреждением о несвежих данных; для старого worker остаётся прежняя
-сводка. Дополнительного постоянного polling нет. Durable task attribution
-остаётся следующим шагом; native Windows проверка новой панели ещё впереди.
+сводка. Дополнительного постоянного polling нет. Durable creator attribution
+добавлена в source/schema18 отдельной immutable таблицей: same-transaction fresh
+acceptance, неизменность при duplicate, наследование workflow children. Network
+origin берётся из RPC permit, local entry отмечается без идентификации человека.
+Старые операции остаются unknown; side table не меняет wire task DTO/fingerprint.
+Cold migration17→18 делает verified SQLite backup и отказывает при active update;
+exact-schema activation не получает нового migration разрешения. Readonly
+`winbridge.operation-attribution` v1/SDK и task detail UI читают исторического
+creator с pinned scope/provider. Инициатор отмены отдельно ещё не сохраняется.
+Installed worker/main17 не менялись; native Windows gate18 ещё впереди.
 Подробности и границы — в [плане](plans/multi-controller-runtime.md).
 
 Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, список реально реализованных capabilities. Несовместимая версия даёт понятную ошибку с дальнейшим действием. AppVersion не заменяет wire version. Session generation меняется после рестарта, durable task/event IDs сохраняются.

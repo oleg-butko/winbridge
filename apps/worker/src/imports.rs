@@ -46,6 +46,15 @@ impl Store {
         shared_path: String,
         workspace_path: String,
     ) -> Result<ImportRecord> {
+        self.accept_import_attributed(request, shared_path, workspace_path, None)
+    }
+    pub(crate) fn accept_import_attributed(
+        &mut self,
+        request: ImportSubmission,
+        shared_path: String,
+        workspace_path: String,
+        creator: Option<&OperationCreator>,
+    ) -> Result<ImportRecord> {
         self.guard_callback(None, None)?;
         if let Some(existing) = self.existing_import(&request)? {
             return Ok(existing);
@@ -56,7 +65,14 @@ impl Store {
             return Ok(existing);
         }
         Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
-        let import = Self::accept_import_on(&transaction, request, shared_path, workspace_path)?;
+        let import = Self::accept_import_on(
+            &transaction,
+            request,
+            shared_path,
+            workspace_path,
+            creator,
+            None,
+        )?;
         Self::freeze_resource_root(
             &transaction,
             "import",
@@ -77,6 +93,8 @@ impl Store {
         request: ImportSubmission,
         shared_path: String,
         workspace_path: String,
+        creator: Option<&OperationCreator>,
+        parent: Option<&str>,
     ) -> Result<ImportRecord> {
         if let Some(import) = Self::existing_import_on(connection, &request)? {
             return Ok(import);
@@ -124,6 +142,7 @@ impl Store {
                 "local journal: import acceptance not stored; acknowledgement rejected".into(),
             );
         }
+        Self::record_creator(connection, "import", &import.import_id, creator, parent)?;
         Ok(import)
     }
     pub fn get_import(&self, id: &str) -> Result<ImportRecord> {

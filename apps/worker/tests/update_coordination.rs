@@ -391,7 +391,7 @@ fn startup_guard_blocks_migration_and_lost_guard_does_not_release_database_lease
     let path = cfg.state_directory.join("journal.sqlite");
     drop(winbridge_worker::store::Store::open(&path).unwrap());
     let c = rusqlite::Connection::open(&path).unwrap();
-    c.execute_batch("DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; PRAGMA user_version=14;").unwrap();
+    c.execute_batch("DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; PRAGMA user_version=14;").unwrap();
     drop(c);
     let before = fs::read(&path).unwrap();
     let guard = cfg.state_directory.join(UPDATE_STARTUP_GUARD);
@@ -470,7 +470,7 @@ fn reference_worker_refuses_schema(variable: &str, schema: u32) {
     if schema == 15 {
         // Retain the frozen predecessor-14→15 test's exact original scope.
         let c = rusqlite::Connection::open(&path).unwrap();
-        c.execute_batch("DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts;PRAGMA user_version=15;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        c.execute_batch("DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts;PRAGMA user_version=15;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     }
     let before = fs::read(&path).unwrap();
     let config_path = dir.path().join("worker.local.json");

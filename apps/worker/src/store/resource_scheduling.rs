@@ -636,7 +636,7 @@ mod tests {
         let task = admit(&mut s, "a", "legacy");
         drop(s);
         let db = Connection::open(&path).unwrap();
-        db.execute_batch("DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=13;").unwrap();
+        db.execute_batch("DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; PRAGMA user_version=13;").unwrap();
         drop(db);
         let s = Store::open(&path).unwrap();
         assert_eq!(s.get(&task.task_id).unwrap().task_id, task.task_id);

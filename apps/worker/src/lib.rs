@@ -50,9 +50,9 @@ use winbridge_core::config::WorkerConfig;
 use winbridge_core::task::TaskEffect;
 use winbridge_platform::{trace_process, ManagedChild};
 use winbridge_protocol::{
-    FencedRequest, FencedRequestInfo, FencedResponse, LocalRequest, LocalResponse, OutputStream,
-    RequestContext, TaskRecord, TaskStatus, WireRequest, WireResponse, WorkerInfo,
-    FENCED_REQUEST_CONTRACT, PROTOCOL_VERSION,
+    FencedRequest, FencedRequestInfo, FencedResponse, LocalRequest, LocalResponse,
+    OperationCreator, OutputStream, RequestContext, TaskRecord, TaskStatus, WireRequest,
+    WireResponse, WorkerInfo, FENCED_REQUEST_CONTRACT, PROTOCOL_VERSION,
 };
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -328,7 +328,15 @@ impl Worker {
         Ok(store)
     }
     pub fn handle(&self, request: LocalRequest) -> LocalResponse {
-        match self.dispatch(request, false) {
+        self.handle_from(request, &self.local_creator())
+    }
+    fn local_creator(&self) -> OperationCreator {
+        OperationCreator::Local {
+            worker_generation: self.generation.clone(),
+        }
+    }
+    fn handle_from(&self, request: LocalRequest, creator: &OperationCreator) -> LocalResponse {
+        match self.dispatch(request, false, creator) {
             Ok(response) => response,
             Err(message) => LocalResponse::Error { message },
         }
@@ -340,6 +348,13 @@ impl Worker {
         })
     }
     pub fn handle_fenced(&self, request: FencedRequest) -> FencedResponse {
+        self.handle_fenced_from(request, &self.local_creator())
+    }
+    fn handle_fenced_from(
+        &self,
+        request: FencedRequest,
+        creator: &OperationCreator,
+    ) -> FencedResponse {
         let context = self.request_context();
         let mut dispatched = false;
         let result = (|| {
@@ -350,7 +365,7 @@ impl Worker {
                 return Err("Request belongs to another instance/journal incarnation; create a new explicit request after reconnecting. The original logical request was not replayed".into());
             }
             dispatched = true;
-            self.dispatch(request.request, true)
+            self.dispatch(request.request, true, creator)
         })();
         FencedResponse {
             request_contract_version: FENCED_REQUEST_CONTRACT,
@@ -366,14 +381,28 @@ impl Worker {
         }
     }
     pub fn handle_wire(&self, request: WireRequest) -> WireResponse {
+        self.handle_wire_from(request, &self.local_creator())
+    }
+    pub(crate) fn handle_wire_from(
+        &self,
+        request: WireRequest,
+        creator: &OperationCreator,
+    ) -> WireResponse {
         match request {
-            WireRequest::Legacy(request) => WireResponse::Legacy(Box::new(self.handle(request))),
+            WireRequest::Legacy(request) => {
+                WireResponse::Legacy(Box::new(self.handle_from(request, creator)))
+            }
             WireRequest::Fenced(request) => {
-                WireResponse::Fenced(Box::new(self.handle_fenced(*request)))
+                WireResponse::Fenced(Box::new(self.handle_fenced_from(*request, creator)))
             }
         }
     }
-    fn dispatch(&self, request: LocalRequest, fenced: bool) -> Result<LocalResponse> {
+    fn dispatch(
+        &self,
+        request: LocalRequest,
+        fenced: bool,
+        creator: &OperationCreator,
+    ) -> Result<LocalResponse> {
         let requires_fenced = self.store()?.requires_fenced_requests()?;
         if !fenced && !request.is_observation() && requires_fenced {
             return Err("This recovered instance requires request contract 2 with a caller-pinned journal incarnation. Legacy mutation was rejected; do not automatically retry in a new scope".into());
@@ -529,7 +558,11 @@ impl Worker {
                 }
                 let pins = winbridge_core::workflow::recipe_pins(&self.config, &request)?;
                 Ok(LocalResponse::Workflow {
-                    workflow: Box::new(store.accept_workflow_with_pins(*request, Some(pins))?),
+                    workflow: Box::new(store.accept_workflow_attributed(
+                        *request,
+                        Some(pins),
+                        Some(creator),
+                    )?),
                 })
             }
             LocalRequest::ListWorkflows => {
@@ -740,10 +773,11 @@ impl Worker {
                 let (shared, local) =
                     self.import_paths(&request.project_id, &request.snapshot_id)?;
                 Ok(LocalResponse::Import {
-                    import: Box::new(store.accept_import(
+                    import: Box::new(store.accept_import_attributed(
                         request,
                         shared.to_string_lossy().into(),
                         local.to_string_lossy().into(),
+                        Some(creator),
                     )?),
                 })
             }
@@ -795,11 +829,12 @@ impl Worker {
                 let command = self.resolve_task(&request)?;
                 let origin = winbridge_runner::recipe_origin(&self.config, &request)?;
                 Ok(LocalResponse::Task {
-                    task: Box::new(store.accept_with_origin(
+                    task: Box::new(store.accept_attributed(
                         request.clone(),
                         command,
                         self.snapshot_reference(&request)?,
                         origin,
+                        Some(creator),
                     )?),
                 })
             }

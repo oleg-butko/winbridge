@@ -7,6 +7,9 @@ Windows пока переключает пользователь вручную;
 Windows gate ещё впереди. Установленный worker0.1.1 новый config не поддерживает.
 Добавлены отдельная readonly диагностика всех соединений и desktop панель с
 primary, ошибками и RPC counters; проверены на Debian с настоящим worker и Chromium.
+Source journal schema18 сохраняет автора первоначального запроса, наследует его
+в workflow children и показывает в task detail. Legacy history остаётся unknown;
+Linux migration/retry/restart проверены, отдельный Windows gate18 ещё впереди.
 
 Локальный проект для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
 

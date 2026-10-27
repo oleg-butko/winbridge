@@ -17,8 +17,19 @@ Tauri command и desktop панель с primary, ошибками/attempts и R
 140 library /30 worker integration /64 protocol tests и Chromium с настоящим
 Linux worker прошли (protocol3 входят и в library группу); native Windows
 проверка новой панели ещё впереди. Clippy/contracts/TS/UI, standalone desktop
-Linux check, MSVC worker check, fmt/scaffold290 passed. Durable task attribution —
-следующий slice.
+Linux check, MSVC worker check, fmt/scaffold290 passed.
+Durable creator attribution подключена в source/schema18: атомарная таблица
+авторов, immutable RPC origin, наследование workflow children, readonly SDK/Tauri
+и task detail UI. **819 workspace passed /17 ignored +3 protocol attribution**;
+actual Linux schema17→18 migration/backup/retry/restart/old-worker refusal и
+Chromium sandbox прошли. Старым задачам автор не назначается при retry.
+Workspace Clippy all-targets, desktop Linux/MSVC worker compile checks,
+contracts/TypeScript/UI, workspace/desktop fmt и scaffold290 прошли.
+Автор не является ACL; инициатор отмены и CLI/MCP query wrapper ещё впереди.
+Это новая несовместимая для старого worker схема журнала: installed schema17
+не мигрировался. Active updater блокирует normal migration; exact-schema
+activation/updater migration driver17→18 не объявлять готовым. Прежний Windows
+proof16→17 относится к source17, отдельный native gate18 ещё нужен.
 Windows остаётся у .203; пользователь вручную перезапустит worker для .204 только
 при необходимости. Здесь Windows не опрашивать/не запускать; Windows gate
 и production readiness новой функции не объявлять. Installed0.1.1 не поддерживает

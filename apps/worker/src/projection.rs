@@ -145,8 +145,9 @@ impl Worker {
         &self,
         ticket: &Ticket,
         request: WireRequest,
+        creator: &OperationCreator,
     ) -> WireResponse {
-        let mut response = self.handle_wire(request);
+        let mut response = self.handle_wire_from(request, creator);
         let local = match &mut response {
             WireResponse::Legacy(r) => r.as_mut(),
             WireResponse::Fenced(r) => &mut r.response,
@@ -218,7 +219,7 @@ mod tests {
         let observed = |ticket: Option<&Ticket>| {
             let request = WireRequest::Legacy(LocalRequest::Info);
             let response = match ticket {
-                Some(t) => worker.handle_controller_wire(t, request),
+                Some(t) => worker.handle_controller_wire(t, request, &worker.local_creator()),
                 None => worker.handle_wire(request),
             };
             let LocalResponse::Info { info } = response.response() else {

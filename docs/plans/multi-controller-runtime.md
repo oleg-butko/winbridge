@@ -107,14 +107,15 @@ Socket disconnect не освобождает ещё выполняющийся 
 Он остаётся прежним после disconnect/reconnect. Это атрибуция, не новая система
 аутентификации и не право на отмену/обновление.
 
-Для durable attribution следующий шаг — отдельная internal side table операций
-в Store. Записывать creator атомарно **только при fresh acceptance**; duplicate
+Durable attribution подключена отдельной internal side table операций
+в Store (schema18, детали ниже). Creator записывается атомарно **только при fresh acceptance**; duplicate
 возвращает исходный task и creator, не заменяет его последним caller. Связанные
-дети workflow наследуют creator родителя. Отмена другим controller отдельно
-указывает инициатора отмены; создатель задачи при этом не меняется.
-Такой side table/миграции/readonly DTO в этой итерации ещё нет.
-Номер будущей схемы и migration boundary выбирать после синхронизации с актуальным
-main первого агента, который развивает updater; здесь версия журнала не резервируется.
+дети workflow наследуют creator родителя. Для отмены другим controller следом
+нужна отдельная запись инициатора; создатель задачи при этом не меняется.
+Side table, migration, readonly DTO/SDK и task detail UI реализованы в feature
+source. Инициатор отмены отдельно ещё не записывается. После fetch main остаётся
+9b47a9c/schema17; schema18 выделена только в этой ветке, установленный worker
+и main не менялись. Слияние с дальнейшими updater изменениями требует сверки схем.
 
 Глобальный ключ `(projectId,idempotencyKey)` сохраняется. Origin не добавляется
 в fingerprint: иначе retry через другой controller мог бы породить второй process.
@@ -195,8 +196,8 @@ cargo check -p winbridge-worker --target x86_64-pc-windows-msvc --locked
 публичный dispatch без проверки scope. Снимок origin пока хранится в RPC permit
 и test observations; durable task creator не объявляется реализованным.
 
-Следующий source slice без Windows: durable creator attribution с атомарным fresh
-acceptance и неизменным dedup. Readonly диагностика связей подключена ниже.
+Durable creator attribution с атомарным fresh acceptance и неизменным dedup
+подключена ниже. Следом нужны инициатор отмены и CLI/MCP оболочка readonly API.
 Это не разрешение на смену installed worker. Отдельный native gate требует
 доступного пользователем Windows worker; normal-service updater остаётся отдельно.
 
@@ -266,6 +267,83 @@ CARGO_TARGET_DIR=/home/user1/winbridge/target PLAYWRIGHT_CHROMIUM_EXECUTABLE_PAT
 Переменная Chromium необязательна при установленном Playwright browser. Harness
 использует create-only временные каталоги и удаляет только собственные fixtures;
 production controller/worker/config не открывает.
+
+## Durable creator attribution, 2026-10-26
+
+В source-ветке journal schema **18**. Таблица `operation_creators` хранит creator
+и parent workflow отдельно от frozen TaskRecord/ImportRecord/WorkflowRecord/
+ApplicationRecord. JSON fingerprints запросов и глобальный `(project,key)` не
+меняются. INSERT creator — часть той же транзакции, что acceptance, queue root
+и resource plan: ошибка/ignored INSERT откатывает всё. UPDATE/DELETE автора
+запрещены SQLite triggers. Первоначальные creator и родитель не дописываются
+при duplicate, даже если legacy запись не имеет автора.
+
+Network creator берётся из immutable RPC Permit при admission: configured
+endpoint ID, observed controller node/generation/session и worker generation.
+Он передаётся явно в blocking handler, не вычисляется по текущей связи после
+reconnect и не принимается из TaskSubmission/payload. Local handler отмечается
+как local worker entry; это не идентификация человека или конкретного desktop/CLI.
+Прямой низкоуровневый Store API без runtime context записывает unknown.
+Workflow import/build/start/application наследуют сохранённого creator родителя
+в своих acceptance транзакциях. Отмена другим controller не меняет creator;
+отдельного durable cancellation actor в этом slice пока нет.
+
+При normal cold open схемы17 создаётся create-new consistent SQLite backup с
+проверкой quick_check, версии и authority, pinned file identity и sync. Только
+затем отдельная транзакция добавляет таблицу/guards и меняет user_version на18.
+Legacy history не переписывается и не получает выдуманных авторов. Active update
+блокирует миграцию до любых schema writes. Activation cold-open сохраняет правило
+exact schema и сам миграцию17→18 не разрешает. Это не реализация updater migration
+driver и не native Windows proof. Старый schema17 worker отказывает на18.
+Прежний pinned native proof16→17 остаётся замороженным на source/schema17, его
+ignored test теперь явно помечен историческим; он не является gate для18.
+
+Readonly контракт `winbridge.operation-attribution` v1 отдельно advertised и
+schema-pinned: context + kind/operationId → creator nullable, inheritedFrom,
+provider/current worker generation и observation time. Creator generation может
+быть исторической: после worker restart она намеренно не перепривязывается.
+SDK проверяет scope, operation, provider и generation ответа; old worker не
+получает неизвестного extension. Доступны local IPC SDK, сетевой Controller Rust
+SDK и main-window Tauri command `operation_attribution`. Desktop task detail
+показывает источник первоначального запроса, unknown history, наследование и
+явные ошибки/несвежие сведения; дополнительного постоянного polling нет.
+Для остальных operation kinds readonly API есть, отдельные detail UI и CLI/MCP
+оболочка ещё не добавлены. Старый публичный wire RPC/Info и его hash не менялись.
+
+Проверки:
+
+- Полный `cargo test --workspace --locked`: **819 passed /17 штатно ignored**.
+  Реальные два WebSocket проверяют одного автора при concurrent duplicate,
+  неизменность после cross-controller cancel/reconnect/retry. Реальный workflow
+  проверяет inheritance у import/build/start/application.
+- Ещё3 protocol attribution tests passed: historical generation/unknown, семь
+  malformed/stale cases и отказ старого worker до dispatch.
+- Unit SQLite: concurrent connections выбирают одного автора; ignored creator
+  INSERT откатывает task/queue/resource admission; immutable guards; consistent
+  backup17 и legacy unknown после retry/reopen. Старые migration fixtures удаляют
+  новую таблицу при построении предыдущих схем; future-schema fixtures обновлены,
+  activation reader использует current+1, не принимает18 за future после обновления.
+- `scripts/test-attribution-migration.py` прошёл с actual сохранённым schema17
+  Linux worker: настоящая старая task/history →18, backup rows совпадают,
+  retry не назначает автора и не запускает повторно; fresh local creator пережил
+  restart; старый exe отказал без записи в journal18. Ровно2 `/bin/sh` исполнения
+  (старая и новая task), а не синтетический rewrite версии.
+- `test:operation-attribution`: Chromium sandbox + actual Linux worker IPC,
+  одна owned `/bin/true` task, новый author UI, scope/offline/old-worker сценарии.
+  TypeScript и UI build passed. Workspace Clippy all-targets с `-D warnings`,
+  standalone desktop Linux check, MSVC worker check, contracts generation/check,
+  workspace/desktop fmt и scaffold290 passed.
+- Перед тяжёлыми сборками Debian free space **17 GiB**, после workspace9.5 GiB;
+  `CARGO_INCREMENTAL=0`, основной target переиспользован. Windows не опрашивался,
+  его worker/config/journal не открывались.
+
+Actual Linux migration proof повторяется с проверенным schema17 reference.json
+(sha256 exe + isolated rehearsal report), не с production state:
+
+```sh
+python3 scripts/test-attribution-migration.py --reference PRIVATE_REFERENCE_JSON --worker NEW_LINUX_WORKER
+CARGO_TARGET_DIR=/home/user1/winbridge/target PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:operation-attribution
+```
 
 Удалены origin refs `coordination/windows-v1` и
 `feat/multi-controller-foundation`, а также local branch последней. Проверено,

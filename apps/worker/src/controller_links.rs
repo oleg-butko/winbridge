@@ -249,6 +249,16 @@ pub(crate) struct RpcGuard {
     permit: Permit,
 }
 impl RpcGuard {
+    pub fn creator(&self) -> OperationCreator {
+        let origin = self.permit.origin();
+        OperationCreator::Controller {
+            worker_generation: origin.worker_generation.clone(),
+            controller_id: origin.controller.clone(),
+            controller_node_id: origin.peer.node.clone(),
+            controller_generation: origin.peer.generation.clone(),
+            session_id: origin.peer.session.clone(),
+        }
+    }
     pub fn admit(links: &Arc<Mutex<Links>>, ticket: &Ticket, id: String) -> Result<Self> {
         let permit = links
             .lock()

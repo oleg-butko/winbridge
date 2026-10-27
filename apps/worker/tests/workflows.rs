@@ -366,6 +366,52 @@ fn actual_pipeline_dedup_readiness_log_and_owner_leases() {
         .iter()
         .all(|s| s.status == WorkflowStepStatus::Succeeded));
     assert!(done.steps[..3].iter().all(|s| s.operation_id.is_some()));
+    let context = worker.request_context().unwrap();
+    let creator = |kind, id: &str| {
+        let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+            panic!("Info")
+        };
+        let request = OperationAttributionRequest {
+            context: context.clone(),
+            query: OperationAttributionQuery {
+                kind,
+                operation_id: id.into(),
+            },
+        };
+        decode_operation_attribution(
+            worker.handle_extension(operation_attribution_envelope(&info, &request).unwrap()),
+            &info,
+            &request,
+        )
+        .unwrap()
+    };
+    let root_creator = creator(HistoryKind::Workflow, &done.workflow_id)
+        .creator
+        .unwrap();
+    assert_eq!(
+        root_creator,
+        OperationCreator::Local {
+            worker_generation: worker.generation.clone()
+        }
+    );
+    for (index, kind) in [
+        (0, HistoryKind::Import),
+        (1, HistoryKind::Task),
+        (2, HistoryKind::Task),
+    ] {
+        let child = creator(kind, done.steps[index].operation_id.as_deref().unwrap());
+        assert_eq!(child.creator, Some(root_creator.clone()));
+        assert_eq!(child.inherited_from.unwrap().operation_id, done.workflow_id);
+    }
+    let application_creator = creator(
+        HistoryKind::Application,
+        done.application_id.as_deref().unwrap(),
+    );
+    assert_eq!(application_creator.creator, Some(root_creator));
+    assert_eq!(
+        application_creator.inherited_from.unwrap().operation_id,
+        done.workflow_id
+    );
     let id = done.application_id.unwrap();
     let ready = app(&worker, &id);
     assert_eq!(ready.status, ApplicationStatus::Ready);
@@ -641,7 +687,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();

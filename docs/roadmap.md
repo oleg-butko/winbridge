@@ -5,8 +5,10 @@ Git coordination отменена. Pure sessions/origin, WorkerSettings topology
 transport подключены; Linux model и два реальных loopback WebSocket соединения
 проверены с одним Worker/Store (187 passed /5 штатно ignored, Clippy/MSVC check).
 Readonly список связей и RPC counters подключён отдельным контрактом/панелью;
-scope/old-worker/offline проверены на Chromium + Linux worker. Durable attribution
-и Windows gate впереди. Windows переключает пользователь вручную;
+scope/old-worker/offline проверены на Chromium + Linux worker. Durable creator
+attribution (schema18, workflow inheritance, readonly API/task UI) добавлена:
+819 workspace +3 protocol tests и actual Linux17→18 proof прошли. Cancellation
+actor/CLI-MCP query wrappers и Windows gate18 впереди. Windows переключает пользователь вручную;
 установленный0.1.1 и его config здесь не меняются.
 
 2026-10-26: по новой задаче пользователя выполняются
