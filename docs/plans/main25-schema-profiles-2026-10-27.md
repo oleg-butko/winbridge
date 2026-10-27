@@ -39,3 +39,11 @@ Linux workspace894 passed/17 ignored; Python profile/evidence boundary tests6/0.
 MSVC workspace/all-targets/update-validation check и Clippy `-D warnings`, UI/typecheck,
 fmt/scaffold303 прошли. Source/target pins и native результаты записываются по завершении.
 Не считать подготовленные profiles или synthetic boundary tests native proof.
+
+## Первый закреплённый producer
+
+Source a127894f8fdcd225ce1144c88365b9c28863816d, archive winbridge-20261027T132020Z-a127894-342c8cf0.zip;
+ZIP SHA f32a8534de582ca14ae1d14ff3ac7d192ca0a52f071cef2e6b4a7b547807a196;
+manifest SHA c9510d35ffe0cad11002d73b7e5e1ace44eded783cce33d3ac4957db05209a5f.
+Следующий docs-only commit служит отдельным target pin с тем же кодом.
+Эти archives содержат worker19/updater20 и built UI; это ещё не native proof.
