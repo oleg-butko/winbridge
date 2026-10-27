@@ -53,7 +53,10 @@ if((Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvar
 $manifest=Get-Content -Raw -LiteralPath $manifestPath|ConvertFrom-Json
 if($manifest.dirty -isnot [bool] -or $manifest.dirty){throw 'Clean source export required'}
 foreach($f in $manifest.files){
- if($f.path -notmatch '^[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$' -or $f.path -match '(^|/)\.\.?(/|$)'){throw 'Unsafe source path'}
+ # Snapshot fixtures deliberately include Unicode names. Constrain path
+ # structure, not the language of valid regular filenames.
+ if($f.path -isnot [string] -or $f.path -notmatch '^[^/\\:\x00-\x1f]+(?:/[^/\\:\x00-\x1f]+)*$' -or
+  $f.path -match '(^|/)\.\.?(/|$)'){throw "Unsafe source manifest path: $($f.path)"}
  $p=Join-Path $source $f.path;Assert-SessionFile $p
  if((Get-Item -LiteralPath $p).Length -ne $f.bytes -or (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLowerInvariant() -cne $f.sha256){throw 'Source bytes differ'}
 }

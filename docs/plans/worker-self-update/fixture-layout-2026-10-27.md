@@ -66,6 +66,13 @@ report SHA22c40d278d595a82038d027184d3d706383d6ebf629fc65b3570fe6baf046bb5.
 становится положительным proof/reference. Новый gate проверяет свою clean build
 identity и результаты независимо. Старые задачи не повторяются.
 
+Первый native attempt20261027-061445-e82d94b7/taskbb9978fb-3166-4b2f-8ce9-821177745426
+на sourcef0dd146 failed/1 до Cargo/cache lease: ASCII-only manifest path whitelist
+ошибочно отклонил существующий fixtures/snapshot-project/Привет.txt. Структурная
+проверка теперь допускает Unicode, сохраняя запрет absolute/empty/traversal/colon/
+backslash/control-character paths. Failed source/task/output сохранены; рабочий
+worker не менялся. Повтор использует новый source pin и новый run, не replay.
+
 ## Disk
 
 Preflight taskdfc4d89f-a200-4eab-bba3-3db4c87f9f6b succeeded/0:
