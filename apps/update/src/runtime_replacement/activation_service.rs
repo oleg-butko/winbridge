@@ -1,4 +1,4 @@
-//! Consuming service preparation. No command is sent and no readiness is claimed.
+//! Consuming admission, one V4 send and independent normal-IPC verification.
 use super::*;
 use crate::activation::service::{
     ActivationServiceAdmission, ActivationServicePermit, ActivationServiceState,
@@ -12,6 +12,50 @@ pub struct ActivationServicePreparation {
     permit: Box<ActivationServicePermit>,
 }
 impl ActivationServicePreparation {
+    /// One private send followed by independent normal-IPC health readback.
+    /// Success retains the original child; no controller/lifetime/root commit.
+    pub fn start_local_service_blocking(
+        self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+    ) -> std::result::Result<Box<ActivationProcessGuard>, ActivationLaunchFailure> {
+        let Self { owner, permit } = self;
+        let key = permit.record().command.command_id.clone();
+        let result = {
+            let journal = &mut *j;
+            crate::activation::on_original_io(owner, move |mut owner| async move {
+                match owner.deliver_local_service(journal, a, s, &permit).await {
+                    Ok(()) => Ok(owner),
+                    Err(reason) => {
+                        owner.record_service_uncertainty(
+                            journal,
+                            a,
+                            s,
+                            &permit.record().command.command_id,
+                        );
+                        owner.record_uncertainty(journal, a, s);
+                        Err(ActivationLaunchFailure {
+                            reason,
+                            custody: owner,
+                        })
+                    }
+                }
+            })
+        };
+        match result {
+            Ok(result) => result,
+            Err((mut custody, reason)) => {
+                custody.record_service_uncertainty(j, a, s, &key);
+                custody.record_uncertainty(j, a, s);
+                Err(ActivationLaunchFailure {
+                    reason: reason.into(),
+                    custody,
+                })
+            }
+        }
+    }
+
     pub fn record(&self) -> &crate::activation::service::ActivationServiceRecord {
         self.permit.record()
     }
@@ -25,7 +69,7 @@ impl ActivationServicePreparation {
 
 impl ActivationProcessGuard {
     /// Consume an original confirmed writer exactly once. The returned owner is
-    /// preparation only; service4 capability/send/IPC verification come later.
+    /// preparation only; start_local_service_blocking consumes its one send.
     /// Neither a duplicate key nor an uncertain commit can recreate this owner.
     pub fn prepare_local_service_blocking(
         self: Box<Self>,
@@ -79,6 +123,12 @@ impl ActivationProcessGuard {
                     .into(),
             );
         }
+        let worker = crate::artifact::pin(Path::new(&self.record.intent.source.worker.path))?;
+        if worker.evidence != self.record.intent.source.worker
+            || !crate::worker_rehearsal::supports(&worker, channel::SERVICE_MARKER)?
+        {
+            return Err("Resident child lacks private service V4; no intent/send".into());
+        }
         self.require_custody(j, a, s, true)?;
         let actual = self
             .resident_process()
@@ -104,6 +154,70 @@ impl ActivationProcessGuard {
         live.require_live().map_err(|e| e.to_string())?;
         timing.mark("issued_checked", None, None);
         Ok(permit)
+    }
+
+    async fn deliver_local_service(
+        &mut self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        permit: &ActivationServicePermit,
+    ) -> Result<()> {
+        let mut timing = crate::activation::ActivationTiming::new(
+            "service_delivery",
+            Some(self.files.preparation.deadline),
+        );
+        j.require_activation_service_issued(a, s, &self.files.preparation, &self.record, permit)
+            .map_err(|e| e.to_string())?;
+        timing.mark("service_issued_checked", None, None);
+        self.require_fixed_custody(true)?;
+        let live = infrastructure::PinnedProcess::live(
+            &self.resident_process().ok_or("Service child missing")?,
+        )
+        .map_err(|e| e.to_string())?;
+        let remaining = self
+            .files
+            .preparation
+            .deadline
+            .saturating_duration_since(std::time::Instant::now());
+        if remaining.is_zero() {
+            return Err("Original service startup window expired before send".into());
+        }
+        let command = &permit.record().command;
+        let stream = self
+            .channel
+            .as_mut()
+            .ok_or("Original service channel missing")?;
+        channel::write(
+            stream,
+            &channel::ServiceCommand {
+                contract_version: channel::SERVICE_CONTRACT,
+                command: command.clone(),
+            },
+            remaining,
+        )
+        .await?;
+        timing.mark("service_command_sent", None, None);
+        let ready: channel::ServiceReady = channel::read(
+            stream,
+            Duration::from_millis(self.record.intent.context.startup_timeout_ms),
+        )
+        .await?;
+        timing.mark("service_ready_received", None, None);
+        channel::validate_service_ready(&ready, command)?;
+        let receipt = crate::activation::service_probe::probe(command, &ready.receipt, || {
+            self.require_custody(j, a, s, false)?;
+            live.require_live().map_err(|e| e.to_string())
+        })
+        .await?;
+        timing.mark("normal_ipc_verified", None, None);
+        let next = permit
+            .record()
+            .confirmed(receipt, self.at()?.max(permit.record().updated_at_ms))?;
+        j.append_activation_service_owned(a, s, &self.files.preparation, &self.record, &next)
+            .map_err(|e| e.to_string())?;
+        timing.mark("service_confirmation_committed", None, None);
+        Ok(())
     }
 
     fn record_service_uncertainty(

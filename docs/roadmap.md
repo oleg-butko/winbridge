@@ -2,15 +2,14 @@
 
 2026-10-26: performance-ветка слита в main, worker0.1.1 выпущен и **установлен
 пользователем, actual build/hash/history проверены**. [Проверка и продолжение](plans/worker-self-update/service-ledger-2026-10-26.md).
-Source updater20 содержит intent/history, original-guard admission и sealed
-connection/state transfer preparation. Общий Worker/reconciliation и library local
-readonly IPC реализованы; source workspace820/0, focused worker13/0. Private
-service4 receiver/parent normal-IPC validation/actor25 ещё отсутствуют. Следом
-интеграция LocalService → Main25/actual19→20.
-[Checkpoint](plans/worker-self-update/local-service-runtime-2026-10-26.md).
-Native library gate проверен:13 SQL/migration +13 transfer/startup/real IPC fixtures,
-3 files twice, independent proof/readonly recheck. Полный replacement graph,
-service4/parent validation и Main25 ещё впереди. Public updater/multi-controller не включаются.
+Source updater20 содержит intent/history, original-guard admission, shared Worker/
+readonly IPC и trusted V4 sender/receiver с независимым parent normal-IPC probe.
+Actor25/view17 и full Main25 ещё отсутствуют. Следом resident service actor →
+activation7/root LocalVerified → actual Main25/retained19→20.
+[Checkpoint](plans/worker-self-update/service-v4-2026-10-26.md).
+Предыдущий native library gate1f653b2:13+13 tests/3 files twice. Новый V4 source
+требует отдельной проверки, прежний gate не доказывает новый receiver/sender.
+Public updater/multi-controller не включаются.
 Установленная0.1.1 не заменяется.
 
 ## Завершено: ускорение прогонов и выпуск 0.1.1

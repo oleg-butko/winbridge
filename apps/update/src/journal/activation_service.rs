@@ -326,6 +326,37 @@ impl UpdateJournal {
         Ok(result)
     }
 
+    pub fn inspect_activation_service_receiver(
+        directory: &Path,
+        id: &str,
+        attempt: &str,
+        actual: &winbridge_protocol::update::SupervisorProcess,
+    ) -> Result<crate::activation::ActivationServiceSnapshot> {
+        check_files(directory)?;
+        let mut c = connection(&directory.join("updates.sqlite"), true)?;
+        if schema(&c)? != UPDATE_SCHEMA_VERSION {
+            return Err(bad("Service receiver requires exact updater schema"));
+        }
+        let tx = c.transaction().map_err(storage)?;
+        let (_, writer) =
+            activation_writer::load(&tx, id)?.ok_or_else(|| bad("Service writer graph missing"))?;
+        activation_writer::require_receiver_custody(&tx, id, attempt, actual, &writer)?;
+        if writer.activation.intent.context.updater_journal_schema != UPDATE_SCHEMA_VERSION {
+            return Err(bad(
+                "Service receiver cannot adopt a pre-migration activation scope",
+            ));
+        }
+        let service = ledger(&tx, id, &writer.activation, &writer.writer)?;
+        if !matches!(service.state, service::ActivationServiceState::Issued {}) {
+            return Err(bad(
+                "Service delivery is not Issued; no startup from history",
+            ));
+        }
+        let value = crate::activation::ActivationServiceSnapshot { writer, service };
+        tx.commit().map_err(storage)?;
+        Ok(value)
+    }
+
     pub fn inspect_activation_service(
         directory: &Path,
         id: &str,

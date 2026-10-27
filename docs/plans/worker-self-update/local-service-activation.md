@@ -1,5 +1,9 @@
 # Следующий сценарий: normal local service после writer
 
+2026-10-26: [private V4 sender/receiver и independent normal-IPC probe](service-v4-2026-10-26.md)
+добавлены. Следом actor25/view17 и full Main25; описания «ещё впереди» ниже
+сохраняют исторический порядок реализации.
+
 2026-10-26. **Общий Worker/reconciliation и library local IPC реализованы**:
 [актуальный checkpoint и оставшаяся интеграция](local-service-runtime-2026-10-26.md).
 Service4/parent validation/actor25/Main25 ещё впереди. Записи ниже сохраняют

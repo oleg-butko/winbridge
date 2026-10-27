@@ -1,6 +1,6 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-2026-10-26. Начать с [локального Worker/IPC checkpoint](plans/worker-self-update/local-service-runtime-2026-10-26.md)
+2026-10-26. Начать с [private V4 checkpoint](plans/worker-self-update/service-v4-2026-10-26.md)
 и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
 Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
@@ -20,7 +20,7 @@ Windows gate заранее сообщать какие процессы/окн�
 slot `runtime-test/winbridge-worker.exe`, wait900s, отдельный controller1144;
 state/config/instance/report каждого run изолированы. Firewall rules не менять.
 
-**Source updater20/worker17, supervisor24/view16, private2+writer3.** Добавлены
+**Source updater20/worker17, supervisor24/view16, private2+writer3+service4.** Добавлены
 service intent/current/history и согласованное чтение под schema20. Native consuming
 admission от original process guard подключён как trusted Rust API; duplicate
 даёт только историю, свежий permit появляется после commit. Parent удерживает
@@ -28,13 +28,14 @@ ActivationServicePreparation, child может передать тот же conn
 в PreparedServiceJournal. Общие constructor/reconciliation и library local IPC
 реализованы через LocalService: тот же Store/full lock/generation, временная
 startup scope, затем readonly IPC. Controller/scheduler/mutations не включаются.
-Send/receiver4 и actor25 ещё не подключены.
+Trusted V4 sender/receiver и readonly normal-IPC identity query добавлены;
+родитель независимо читает обычный IPC перед service confirmation. Actor25 ещё
+не подключён; actual same-child Main25 не пройден.
 Schema19→20 имеет verified consistent backup и fencing updater owner; это не
 новая worker authority. Сохранённые факты не дают разрешения открыть Store или
 повторить send. Public install/advertised activation/controller/desktop выключены.
 
-Следующий шаг: private service4 receiver → подключение готового LocalService → подтверждение
-parent driver → actor25/view17 → новый Main25
+Следующий шаг: actor25/view17 → resident service state/activation7/root LocalVerified → новый Main25
 и actual19→20/refusal. Нельзя заново открывать Store, получать второй lock,
 прибавлять epoch или обновлять original startup deadline. Maintenance/user pause
 сохраняются, local-only service не подключается к controller. Затем controller
@@ -42,8 +43,9 @@ session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат �
 
 Прежний Main24 writer proof и release140+6 остаются действительны для своих
 исторических source pins, не доказывают normal service/schema20. Full replacement service/Main25
-ещё не проверялся. Текущие source checks: **workspace820/0, 17 ignored**,
-focused worker13/0, Python verifier6 и scaffold292. Финальные Clippy/native
+ещё не проверялся. Текущие source checks: **workspace824/0, 17 ignored**,
+focused updater16/worker14, Linux/MSVC all-target validation Clippy,
+Python verifier6 и scaffold293. Финальные Clippy/native
 результаты и source pins находятся в актуальном checkpoint. Первый event_log rotation failure с WouldBlock
 не воспроизвёлся отдельно и в полном повторе; logger не менялся. Логи и команды в checkpoint.
 Focused `--service-admission-only` **пройден на новом source**:

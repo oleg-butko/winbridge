@@ -30,7 +30,9 @@ impl Worker {
                     "Queue command belongs to another journal; no rebind",
                 ));
             }
-            if self.local_activation && matches!(request.command, QueueControlCommand::Set { .. }) {
+            if self.local_activation.is_some()
+                && matches!(request.command, QueueControlCommand::Set { .. })
+            {
                 return Ok(rejected(
                     QueueControlError::Unavailable,
                     crate::local_service::READ_ONLY_REASON,
@@ -46,7 +48,7 @@ impl Worker {
                 ));
             }
             let mut result = store.queue_control(context.clone(), request.command)?;
-            if self.local_activation {
+            if self.local_activation.is_some() {
                 crate::local_service::readonly_queue_result(&mut result);
             }
             Ok::<_, String>(QueueControlResponse {

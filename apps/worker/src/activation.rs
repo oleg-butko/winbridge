@@ -1,6 +1,9 @@
 //! Private startup before Store/instance lock/dispatch. Ready grants no writer.
 use crate::Result;
 use std::path::Path;
+#[cfg(windows)]
+#[path = "activation_service.rs"]
+mod service;
 
 /// Construct the graph-heavy startup future on its own stack, as the original
 /// supervisor does. Do not enlarge the ordinary worker main coroutine frame.
@@ -36,6 +39,7 @@ pub async fn receive(config: &Path, update_id: &str, attempt_id: &str) -> Result
     std::hint::black_box(winbridge_update::activation::channel::RECEIVER_MARKER);
     std::hint::black_box(winbridge_update::activation::channel::HANDOFF_MARKER);
     std::hint::black_box(winbridge_update::activation::channel::WRITER_MARKER);
+    std::hint::black_box(winbridge_update::activation::channel::SERVICE_MARKER);
     #[cfg(not(windows))]
     {
         let _ = (config, update_id, attempt_id);
@@ -338,17 +342,21 @@ mod native {
         };
         channel::validate_writer_receipt(&response, &request.command)?;
         channel::write(&mut stream, &response, timeout).await?;
-        // Hold the accepted authority, same lock and fresh data permit. Local
-        // service/scheduler/lifetime handoff need their own later contracts.
-        let result = tokio::select! {
-            _=channel::read::<_,serde::de::IgnoredAny>(&mut stream,timeout) =>
-                Err("Local service activation unavailable or parent channel closed; retained writer closes on exit".into()),
-            outcome=parent_alive(&parent,timeout) => outcome,
-        };
-        drop(fresh);
-        drop(journal);
-        result
+        service::Receiver {
+            config,
+            directory,
+            writer: writer_snapshot,
+            parent,
+            guard,
+            journal,
+            fresh,
+            deadline: handoff_deadline,
+            stream,
+        }
+        .run()
+        .await
     }
+
     fn now() -> Result<u64> {
         u64::try_from(
             std::time::SystemTime::now()
@@ -371,7 +379,10 @@ mod native {
             .checked_add(Duration::from_millis(remaining))
             .ok_or_else(|| "State handoff monotonic deadline overflow".into())
     }
-    fn require_handoff_window(record: &ActivationRecord, deadline: Instant) -> Result<()> {
+    pub(super) fn require_handoff_window(
+        record: &ActivationRecord,
+        deadline: Instant,
+    ) -> Result<()> {
         let end = record
             .intent
             .admitted_at_ms
@@ -382,7 +393,7 @@ mod native {
         }
         Ok(())
     }
-    async fn parent_alive(parent: &PinnedProcess, timeout: Duration) -> Result<()> {
+    pub(super) async fn parent_alive(parent: &PinnedProcess, timeout: Duration) -> Result<()> {
         let until = Instant::now()
             .checked_add(timeout)
             .ok_or("Activation hold deadline overflow")?;

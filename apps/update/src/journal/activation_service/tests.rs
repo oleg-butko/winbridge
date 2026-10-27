@@ -507,3 +507,170 @@ fn service_duplicate_admission_returns_only_history_in_every_delivery_phase() {
         );
     }
 }
+
+#[test]
+fn service_v4_messages_are_strict_and_cannot_accept_old_contracts_or_rebound_scope() {
+    use crate::activation::channel;
+    let (_, _, _, value) = fixture();
+    let command = channel::ServiceCommand {
+        contract_version: channel::SERVICE_CONTRACT,
+        command: value.command.clone(),
+    };
+    let ready = channel::ServiceReady {
+        contract_version: channel::SERVICE_CONTRACT,
+        receipt: receipt(&value),
+    };
+    channel::validate_service_command(&command, &value.command).unwrap();
+    channel::validate_service_ready(&ready, &value.command).unwrap();
+    for version in [0, 1, 2, 3, 5] {
+        let mut bad = command.clone();
+        bad.contract_version = version;
+        assert!(channel::validate_service_command(&bad, &value.command).is_err());
+        let mut bad = ready.clone();
+        bad.contract_version = version;
+        assert!(channel::validate_service_ready(&bad, &value.command).is_err());
+    }
+    let mut bad = command.clone();
+    bad.command.binding.writer_receipt.authority.epoch += 1;
+    assert!(channel::validate_service_command(&bad, &value.command).is_err());
+    let mut raw = serde_json::to_value(command).unwrap();
+    raw["controllerGranted"] = true.into();
+    assert!(serde_json::from_value::<channel::ServiceCommand>(raw).is_err());
+    let mut raw = serde_json::to_value(ready).unwrap();
+    raw["lifetimeTransferred"] = true.into();
+    assert!(serde_json::from_value::<channel::ServiceReady>(raw).is_err());
+}
+fn probe_info(
+    command: &winbridge_protocol::update::WorkerServiceActivationCommand,
+) -> winbridge_protocol::WorkerInfo {
+    let physical = &command.binding.writer_command.binding.physical;
+    serde_json::from_value(serde_json::json!({"protocolVersion":command.binding.protocol_version,"instanceId":physical.context.instance_id,"nodeId":"fixture","generation":physical.generation,"platform":std::env::consts::OS,"runtimeValidation":"synthetic normal IPC probe","projects":[],"build":command.binding.expected_worker.descriptor.build,"activeTaskCount":0,"recoveryCoverage":{"complete":true,"reason":"Synthetic Info fixture; not physical proof"},"fencedRequests":{"requestContractVersion":2,"context":physical.context,"legacyMutationsAllowed":false},"updateCoordination":{"schemaVersion":1,"readOnly":true,"lease":{"spec":{"updateId":command.binding.writer_command.binding.update_id},"phase":"quiesced"}}})).unwrap()
+}
+#[test]
+fn service_parent_probe_rejects_stale_mutable_or_connected_normal_info() {
+    let (_, _, _, value) = fixture();
+    let info = probe_info(&value.command);
+    crate::activation::service_probe::validate_info(&value.command, &info).unwrap();
+    for n in 0..12 {
+        let mut bad = serde_json::to_value(&info).unwrap();
+        match n {
+            0 => bad["generation"] = "other".into(),
+            1 => bad["maintenanceAvailable"] = true.into(),
+            2 => bad["activeTaskCount"] = 1.into(),
+            3 => bad["workflowAvailable"] = true.into(),
+            4 => bad["fencedRequests"]["legacyMutationsAllowed"] = true.into(),
+            5 => bad["updateCoordination"]["readOnly"] = false.into(),
+            6 => bad["updateCoordination"]["lease"]["phase"] = "released".into(),
+            7 => bad["updateCoordination"]["lease"]["spec"]["updateId"] = "other".into(),
+            8 => bad["build"]["buildId"] = "other".into(),
+            10 => bad["platform"] = "other".into(),
+            11 => bad["fencedRequests"]["requestContractVersion"] = 1.into(),
+            _ => {
+                bad["controllerConnection"] = serde_json::json!({"url":"ws://127.0.0.1:9","state":"connected","sessionId":"unexpected","lastConfirmedAtMs":1})
+            }
+        }
+        let bad = serde_json::from_value(bad).unwrap();
+        assert!(
+            crate::activation::service_probe::validate_info(&value.command, &bad).is_err(),
+            "mutation {n}"
+        );
+    }
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn service_parent_probe_requires_real_authenticated_normal_ipc_not_just_private_ready() {
+    use winbridge_protocol::{update::*, LocalRequest, LocalResponse};
+    let (_, _, _, value) = fixture();
+    let temp = tempfile::tempdir().unwrap();
+    let mut command = value.command;
+    command
+        .binding
+        .writer_command
+        .binding
+        .physical
+        .context
+        .instance_id = format!("probe-{}", Uuid::new_v4().simple());
+    command
+        .binding
+        .writer_command
+        .binding
+        .physical
+        .state
+        .state_directory = temp.path().canonicalize().unwrap().to_str().unwrap().into();
+    command.binding.writer_command.binding.physical.process =
+        winbridge_platform::infrastructure::stamp(std::process::id()).unwrap();
+    command.binding.expected_worker.process = command
+        .binding
+        .writer_command
+        .binding
+        .physical
+        .process
+        .clone();
+    command.binding.writer_receipt.command_sha256 =
+        crate::activation::writer::command_sha256(&command.binding.writer_command).unwrap();
+    let value = ActivationServiceRecord::issued(command.clone()).unwrap();
+    let signal = receipt(&value);
+    assert!(
+        crate::activation::service_probe::probe(&command, &signal, || Ok(()))
+            .await
+            .is_err()
+    );
+    let endpoint = winbridge_transport::endpoint(
+        temp.path(),
+        &command
+            .binding
+            .writer_command
+            .binding
+            .physical
+            .context
+            .instance_id,
+    )
+    .unwrap();
+    let mut listener = winbridge_transport::supervisor::Listener::bind(&endpoint).unwrap();
+    let response = ActivationServiceObservation {
+        service_observation_version: 1,
+        result: ActivationServiceObservationResult::Observed {
+            receipt: Box::new(signal.clone()),
+        },
+    };
+    let info = probe_info(&command);
+    let server = tokio::spawn(async move {
+        for step in 0..3 {
+            let (mut stream, peer) = listener.accept().await.unwrap();
+            assert_eq!(peer, std::process::id());
+            let bytes = winbridge_transport::read_frame(&mut stream).await.unwrap();
+            let result = match step {
+                0 => {
+                    let query: ActivationServiceQuery = serde_json::from_slice(&bytes).unwrap();
+                    assert_eq!(query.command, command);
+                    serde_json::to_vec(&response).unwrap()
+                }
+                1 => {
+                    assert!(matches!(
+                        serde_json::from_slice::<LocalRequest>(&bytes).unwrap(),
+                        LocalRequest::Info
+                    ));
+                    serde_json::to_vec(&LocalResponse::Info {
+                        info: Box::new(info.clone()),
+                    })
+                    .unwrap()
+                }
+                _ => {
+                    assert!(matches!(
+                        serde_json::from_slice::<LocalRequest>(&bytes).unwrap(),
+                        LocalRequest::ListTasks
+                    ));
+                    serde_json::to_vec(&LocalResponse::Tasks { tasks: vec![] }).unwrap()
+                }
+            };
+            winbridge_transport::write_frame(&mut stream, &result)
+                .await
+                .unwrap();
+        }
+    });
+    let command = &value.command;
+    let observed = crate::activation::service_probe::probe(command, &signal, || Ok(()))
+        .await
+        .unwrap();
+    assert_eq!(observed, signal);
+    server.await.unwrap();
+}

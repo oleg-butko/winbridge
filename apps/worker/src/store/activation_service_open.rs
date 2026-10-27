@@ -26,17 +26,24 @@ impl ServiceStartupFence {
             );
         }
         activation::window(&self.command.binding.writer_command)?;
+        Self::require_binding(c, &self.command, &self.shutdown)
+    }
+    fn require_binding(
+        c: &rusqlite::Connection,
+        command: &WorkerServiceActivationCommand,
+        shutdown: &winbridge_protocol::update::WorkerShutdownReceipt,
+    ) -> Result<()> {
         let schema: u32 = c
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .map_err(sql)?;
         if schema != super::JOURNAL_SCHEMA_VERSION
             || activation::stamp(&Store::read_authority(c)?)?
-                != self.command.binding.writer_receipt.authority
-            || activation::read(c, &self.command.binding.writer_command)?.as_ref()
-                != Some(&self.command.binding.writer_receipt)
-            || super::update::read(c, &self.shutdown.update_id)? != self.shutdown.lease
-            || super::shutdown::read(c, &self.shutdown.update_id, &self.shutdown.command)?.as_ref()
-                != Some(&self.shutdown)
+                != command.binding.writer_receipt.authority
+            || activation::read(c, &command.binding.writer_command)?.as_ref()
+                != Some(&command.binding.writer_receipt)
+            || super::update::read(c, &shutdown.update_id)? != shutdown.lease
+            || super::shutdown::read(c, &shutdown.update_id, &shutdown.command)?.as_ref()
+                != Some(shutdown)
         {
             return Err("Service initialization authority/receipt/lease/schema changed".into());
         }
@@ -106,6 +113,21 @@ impl PreparedServiceJournal {
 }
 
 impl Store {
+    pub(crate) fn observe_local_service_binding(
+        &self,
+        command: &WorkerServiceActivationCommand,
+        shutdown: &winbridge_protocol::update::WorkerShutdownReceipt,
+    ) -> Result<(winbridge_protocol::update::StateBackupAuthority, u32)> {
+        let tx = self.connection.unchecked_transaction().map_err(sql)?;
+        self.check_authority()?;
+        ServiceStartupFence::require_binding(&tx, command, shutdown)?;
+        let authority = self.state_backup_authority()?;
+        let schema = tx
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .map_err(sql)?;
+        tx.commit().map_err(sql)?;
+        Ok((authority, schema))
+    }
     pub(crate) fn check_local_service_identity(
         &self,
         command: &WorkerServiceActivationCommand,

@@ -7,6 +7,9 @@ pub const ACTIVATION_STATE_HANDOFF_CONTRACT: u16 = 2;
 pub const ACTIVATION_STATE_HANDOFF_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_STATE_HANDOFF_V2";
 pub const ACTIVATION_WRITER_CONTRACT: u16 = 3;
 pub const ACTIVATION_WRITER_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_JOURNAL_WRITER_V3";
+/// Local service only; no controller, dispatch or Job lifetime transfer.
+pub const ACTIVATION_SERVICE_CONTRACT: u16 = 4;
+pub const ACTIVATION_SERVICE_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_LOCAL_SERVICE_V4";
 
 // No Debug: the transient nonce must never appear in diagnostics.
 #[derive(Serialize, Deserialize)]
@@ -74,4 +77,18 @@ pub struct ActivationReceiverWriterCommand {
 pub struct ActivationReceiverWriterReceipt {
     pub contract_version: u16,
     pub receipt: super::WorkerJournalActivationReceipt,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverServiceCommand {
+    pub contract_version: u16,
+    pub command: super::WorkerServiceActivationCommand,
+}
+/// A signal to independently probe normal IPC, never sufficient health proof.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverServiceReady {
+    pub contract_version: u16,
+    pub receipt: super::WorkerServiceActivationReceipt,
 }

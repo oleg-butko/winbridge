@@ -6,9 +6,10 @@ writer/activation graph. [Consuming admission/transfer preparation](plans/worker
 подключены как trusted API. [Общий Worker и library local readonly IPC](plans/worker-self-update/local-service-runtime-2026-10-26.md)
 потребляют тот же connection/full custody/generation. Startup reconciliation имеет
 временную transaction fence; root/dispatch/admin остаются закрыты, перед IPC
-восстанавливается обычная write freeze. Service4 driver/receiver ещё не подключены;
-новый формат не установлен. Worker schema17 и supervisor24/view16 прежние,
-private service4/actor25/view17 и public install не включены. Статусы ниже
+восстанавливается обычная write freeze. [Trusted V4 sender/receiver и normal-IPC
+probe](plans/worker-self-update/service-v4-2026-10-26.md) добавлены. Новый формат
+не установлен; actor25/full Main25 ещё впереди. Worker schema17 и supervisor24/view16 прежние,
+actor25/view17 и public install не включены. Статусы ниже
 относятся к своим историческим source/gates.
 
 Дополнение2026-10-25: [Main24 writer gate подтверждён](plans/worker-self-update/resume-2026-10-25-writer-verified.md)

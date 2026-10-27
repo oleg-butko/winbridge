@@ -14,6 +14,8 @@ pub use lifecycle::*;
 pub mod channel;
 mod process_view;
 pub mod service;
+#[cfg(any(windows, test))]
+pub(crate) mod service_probe;
 pub mod writer;
 mod writer_record;
 mod writer_view;
@@ -89,6 +91,12 @@ pub struct ActivationWriterSnapshot {
     pub activation: ActivationRecord,
     pub writer: ActivationWriterRecord,
     pub shutdown_receipt: winbridge_protocol::update::WorkerShutdownReceipt,
+}
+/// Data for an already authenticated same-child receiver, never a startup grant.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivationServiceSnapshot {
+    pub writer: ActivationWriterSnapshot,
+    pub service: service::ActivationServiceRecord,
 }
 #[cfg(windows)]
 pub use crate::runtime_replacement::{

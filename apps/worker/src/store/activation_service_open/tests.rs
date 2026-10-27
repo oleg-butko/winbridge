@@ -618,3 +618,53 @@ async fn local_service_bind_conflict_is_not_readiness_and_keeps_original_state_o
     drop((occupied, failure));
     assert!(lock_available(&root.path().join("state")));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn service_observation_never_promotes_fixture_metadata_or_rebinds_a_command() {
+    use winbridge_protocol::update::*;
+    let root = tempfile::tempdir().unwrap();
+    let (prepared, config, _) = service_fixture(root.path());
+    let command = prepared.command().clone();
+    let mut normal = winbridge_core::config::WorkerConfig::load(&config).unwrap();
+    normal.state_directory = root.path().join("normal-state");
+    normal.instance_id = format!("normal-{}", uuid::Uuid::new_v4().simple());
+    let normal = crate::Worker::open(normal).unwrap();
+    let query = ActivationServiceQuery {
+        service_observation_version: 1,
+        command: command.clone(),
+    };
+    assert!(matches!(
+        normal.handle_service_observation(query.clone()).result,
+        ActivationServiceObservationResult::Rejected { .. }
+    ));
+    drop(normal);
+    let service = crate::LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap();
+    let running = service.start().await.unwrap();
+    let endpoint = running.endpoint().unwrap();
+    for mutation in 0..3 {
+        let mut query = query.clone();
+        if mutation == 1 {
+            query.service_observation_version = 2;
+        }
+        if mutation == 2 {
+            query.command.command_id = uuid::Uuid::new_v4().to_string();
+        }
+        let response: ActivationServiceObservation =
+            winbridge_transport::supervisor::call(&endpoint, std::process::id(), &query)
+                .await
+                .unwrap();
+        let ActivationServiceObservationResult::Rejected { message } = response.result else {
+            panic!("No installed-set guard; cannot fabricate actual runtime identity")
+        };
+        assert!(
+            message.contains(if mutation == 0 {
+                "No actual loaded runtime guard"
+            } else {
+                "binding differs"
+            }),
+            "{message}"
+        );
+    }
+    running.close().await.unwrap();
+    assert!(lock_available(&root.path().join("state")));
+}

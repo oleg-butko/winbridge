@@ -141,7 +141,7 @@ pub struct Worker {
     controller_projection: Mutex<Option<projection::CachedProjection>>,
     unreconciled_tasks: Mutex<HashMap<String, String>>,
     inspection: bool,
-    local_activation: bool,
+    local_activation: Option<local_service::LocalServiceScope>,
     execution_domain: Mutex<Option<winbridge_platform::execution_domain::ExecutionDomain>>,
     update_control: Mutex<Option<Arc<update_control::Registration>>>,
     coverage: Mutex<Option<winbridge_protocol::RecoveryCoverageInfo>>,
@@ -155,7 +155,7 @@ impl Worker {
         Self::open_inner(config, None, true)
     }
     fn store(&self) -> Result<std::sync::MutexGuard<'_, Store>> {
-        if self.local_activation {
+        if self.local_activation.is_some() {
             self._instance_lock.revalidate()?;
         }
         let store = self
@@ -212,7 +212,7 @@ impl Worker {
         }
     }
     fn dispatch(&self, request: LocalRequest, fenced: bool) -> Result<LocalResponse> {
-        if self.local_activation && !request.is_observation() {
+        if self.local_activation.is_some() && !request.is_observation() {
             return Err(local_service::READ_ONLY_REASON.into());
         }
         let requires_fenced = self.store()?.requires_fenced_requests()?;
@@ -480,13 +480,13 @@ impl Worker {
                             };
                             let mut catalog = self.projection_catalog(&context)?;
                             let mut observation = store.work_scheduling_observation(context.clone())?;
-                            observation.read_only |= self.local_activation;
+                            observation.read_only |= self.local_activation.is_some();
                             catalog.work_scheduling = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
                             let mut observation = store.queue_observation(context.clone())?;
-                            observation.read_only |= self.local_activation;
+                            observation.read_only |= self.local_activation.is_some();
                             catalog.queue_control = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
                             let mut observation = store.resource_scheduling_observation(context.clone())?;
-                            observation.read_only |= self.local_activation;
+                            observation.read_only |= self.local_activation.is_some();
                             catalog.resource_scheduling = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
                             serde_json::to_value(catalog).map_err(|e| e.to_string())?
                         }),
@@ -501,7 +501,7 @@ impl Worker {
                                 instance_id: self.config.instance_id.clone(),
                                 journal_incarnation: store.journal_authority().incarnation.clone(),
                             },
-                            legacy_mutations_allowed: !self.inspection && !self.local_activation
+                            legacy_mutations_allowed: !self.inspection && self.local_activation.is_none()
                                 && !store.requires_fenced_requests()?,
                         }),
                         resource_recovery: if self.inspection {
@@ -516,12 +516,12 @@ impl Worker {
                             }
                         }),
                         build: Some(winbridge_protocol::build_identity()),
-                        update_coordination: store.active_worker_update()?.map(|lease|serde_json::json!({"schemaVersion":1,"lease":lease,"readOnly":self.inspection || self.local_activation,"observedAtMs":store::now_ms()})),
+                        update_coordination: store.active_worker_update()?.map(|lease|serde_json::json!({"schemaVersion":1,"lease":lease,"readOnly":self.inspection || self.local_activation.is_some(),"observedAtMs":store::now_ms()})),
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
                         attention_targets_available: true,
                         history_available: true,
-                        maintenance_available: !self.inspection && !self.local_activation,
+                        maintenance_available: !self.inspection && self.local_activation.is_none(),
                         maintenance_error: self
                             .maintenance
                             .lock()
@@ -535,7 +535,7 @@ impl Worker {
                         node_id: self.config.node_id.clone(),
                         generation: self.generation.clone(),
                         platform: std::env::consts::OS.into(),
-                        runtime_validation: if self.local_activation {
+                        runtime_validation: if self.local_activation.is_some() {
                             local_service::READ_ONLY_REASON
                         } else if cfg!(windows) {
                             "Локальное выполнение, отмена и восстановление проверены на Windows"
@@ -545,13 +545,13 @@ impl Worker {
                         .into(),
                         projects: self.config.public_projects()?,
                         command_handlers: Some(winbridge_runner::metadata()),
-                        snapshot_import_available: !self.inspection && !self.local_activation
+                        snapshot_import_available: !self.inspection && self.local_activation.is_none()
                             && self.config.delivery.is_some(),
-                        snapshot_delta_available: !self.inspection && !self.local_activation
+                        snapshot_delta_available: !self.inspection && self.local_activation.is_none()
                             && self.config.delivery.is_some(),
-                        snapshot_resume_available: !self.inspection && !self.local_activation
+                        snapshot_resume_available: !self.inspection && self.local_activation.is_none()
                             && self.config.delivery.is_some(),
-                        workflow_available: !self.inspection && !self.local_activation && self.config.delivery.is_some(),
+                        workflow_available: !self.inspection && self.local_activation.is_none() && self.config.delivery.is_some(),
                         controller_connection: self
                             .controller_connection
                             .lock()
@@ -673,7 +673,7 @@ impl Worker {
         }
     }
     pub fn schedule(self: &Arc<Self>) -> Result<()> {
-        if self.local_activation {
+        if self.local_activation.is_some() {
             return Ok(());
         }
         let mut timing = scheduler_diagnostics::Tick::new(&self.scheduler_diagnostics);
@@ -1435,12 +1435,12 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
         eprintln!("WinBridge scheduler diagnostics: 30s windows; automatic slow-window reports; set WINBRIDGE_SCHEDULER_DIAGNOSTICS=1 for all windows (wall timings include lock waits; not process CPU)");
     }
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
-    let control = if worker.local_activation {
+    let control = if worker.local_activation.is_some() {
         None
     } else {
         update_control::start(Arc::clone(&worker))?
     };
-    let network = (!worker.local_activation)
+    let network = (worker.local_activation.is_none())
         .then_some(&worker)
         .and_then(|worker| {
             worker
@@ -1458,7 +1458,7 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
     let mut interval = tokio::time::interval(Duration::from_millis(25));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let shutdown = async {
-        if worker.local_activation {
+        if worker.local_activation.is_some() {
             std::future::pending::<()>().await;
         }
         tokio::signal::ctrl_c().await
@@ -1527,6 +1527,26 @@ where
         let _permit = permit;
         let operation = async {
             let bytes = winbridge_transport::read_frame(&mut stream).await?;
+            if serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .is_some_and(|v| v.get("serviceObservationVersion").is_some())
+            {
+                let response = match serde_json::from_slice(&bytes) {
+                    Ok(request) => tokio::task::spawn_blocking(move || {
+                        worker.handle_service_observation(request)
+                    })
+                    .await
+                    .map_err(std::io::Error::other)?,
+                    Err(_) => local_service::rejected_observation(
+                        "Invalid service observation envelope".into(),
+                    ),
+                };
+                return winbridge_transport::write_frame(
+                    &mut stream,
+                    &serde_json::to_vec(&response)?,
+                )
+                .await;
+            }
             if serde_json::from_slice::<serde_json::Value>(&bytes)
                 .ok()
                 .is_some_and(|v| v.get("queueControlVersion").is_some())

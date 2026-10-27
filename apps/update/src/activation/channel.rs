@@ -8,10 +8,12 @@ use winbridge_protocol::update::SupervisorProcess;
 
 pub use winbridge_protocol::update::{
     ActivationReceiverChallenge as Challenge, ActivationReceiverReady as Ready,
-    ActivationReceiverStateHandoff as StateHandoff, ActivationReceiverStateOwned as StateOwned,
-    ActivationReceiverWriterCommand as WriterCommand,
+    ActivationReceiverServiceCommand as ServiceCommand,
+    ActivationReceiverServiceReady as ServiceReady, ActivationReceiverStateHandoff as StateHandoff,
+    ActivationReceiverStateOwned as StateOwned, ActivationReceiverWriterCommand as WriterCommand,
     ActivationReceiverWriterReceipt as WriterReceipt, ACTIVATION_RECEIVER_CONTRACT as CONTRACT,
-    ACTIVATION_RECEIVER_MARKER as RECEIVER_MARKER,
+    ACTIVATION_RECEIVER_MARKER as RECEIVER_MARKER, ACTIVATION_SERVICE_CONTRACT as SERVICE_CONTRACT,
+    ACTIVATION_SERVICE_MARKER as SERVICE_MARKER,
     ACTIVATION_STATE_HANDOFF_CONTRACT as HANDOFF_CONTRACT,
     ACTIVATION_STATE_HANDOFF_MARKER as HANDOFF_MARKER,
     ACTIVATION_WRITER_CONTRACT as WRITER_CONTRACT, ACTIVATION_WRITER_MARKER as WRITER_MARKER,
@@ -50,6 +52,25 @@ pub fn validate_writer_receipt(
         return Err("Private writer receipt contract differs".into());
     }
     super::writer::validate_receipt(&message.receipt, command)
+}
+
+pub fn validate_service_command(
+    message: &ServiceCommand,
+    expected: &winbridge_protocol::update::WorkerServiceActivationCommand,
+) -> Result<()> {
+    if message.contract_version != SERVICE_CONTRACT || &message.command != expected {
+        return Err("Private service command differs from durable intent".into());
+    }
+    super::service::validate_command_envelope(expected)
+}
+pub fn validate_service_ready(
+    message: &ServiceReady,
+    command: &winbridge_protocol::update::WorkerServiceActivationCommand,
+) -> Result<()> {
+    if message.contract_version != SERVICE_CONTRACT {
+        return Err("Private service Ready contract differs".into());
+    }
+    super::service::validate_receipt(&message.receipt, command)
 }
 
 /// The caller also authenticates the OS pipe peer before using any message.

@@ -29,7 +29,7 @@ pub(super) struct WorkerParts {
     pub config: WorkerConfig,
     pub config_path: Option<std::path::PathBuf>,
     pub inspection: bool,
-    pub local_activation: bool,
+    pub local_activation: Option<crate::local_service::LocalServiceScope>,
     pub generation: String,
     pub store: Store,
     pub custody: InstanceCustody,
@@ -89,7 +89,7 @@ impl Worker {
         let controller_connection = config.worker.controller_url.as_ref().map(|url| {
             winbridge_protocol::ControllerConnection {
                 url: url.clone(),
-                state: if local_activation {
+                state: if local_activation.is_some() {
                     winbridge_protocol::ConnectionState::Disconnected
                 } else {
                     winbridge_protocol::ConnectionState::Connecting
@@ -98,7 +98,7 @@ impl Worker {
                 controller_node_id: None,
                 controller_generation: None,
                 last_confirmed_at_ms: None,
-                error: local_activation.then(|| {
+                error: local_activation.is_some().then(|| {
                     "Локальная проверка обновления: соединение с controller ещё не разрешено".into()
                 }),
             }
@@ -166,7 +166,7 @@ impl Worker {
                 self.reconcile_applications(&mut store)
             };
             if let Err(error) = result {
-                if self.local_activation || self.journal_recovery_required()?.is_none() {
+                if self.local_activation.is_some() || self.journal_recovery_required()?.is_none() {
                     return Err(error);
                 }
             }
@@ -252,7 +252,7 @@ impl Worker {
             config,
             config_path,
             inspection,
-            local_activation: false,
+            local_activation: None,
             generation: uuid::Uuid::new_v4().to_string(),
             store,
             custody: InstanceCustody::Ordinary { _lock: lock },

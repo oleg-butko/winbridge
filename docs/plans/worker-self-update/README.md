@@ -1,9 +1,10 @@
 # Самообновление: план реализации U0–U4
 
 **2026-10-26: performance-ветка слита в main, worker0.1.1 установлен.**
-Начать с [актуального продолжения](local-service-runtime-2026-10-26.md): source schema20
+Начать с [актуального продолжения](service-v4-2026-10-26.md): source schema20
 format/readback/admission и consuming transfer реализованы; общий Worker и library
-readonly local IPC добавлены. Service4/parent validation/actor25 ещё впереди. Старые checkpoints ниже
+readonly local IPC, V4 sender/receiver и independent parent probe добавлены.
+Actor25 и full Main25 ещё впереди. Старые checkpoints ниже
 сохраняют историю; прежнее ограничение perf-ветки больше не действует.
 
 2026-10-17. Пользователь одобрил [анализ](../../analysis/worker-self-update/README.md)

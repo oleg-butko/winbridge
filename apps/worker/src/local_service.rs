@@ -11,6 +11,12 @@ use winbridge_protocol::update::WorkerServiceActivationCommand;
 
 pub(crate) const READ_ONLY_REASON: &str = "Локальная проверка обновления: доступны только чтение журнала и диагностика; новые команды ещё не разрешены";
 
+/// Immutable resident binding, not reconstructed from an observation request.
+pub(super) struct LocalServiceScope {
+    command: WorkerServiceActivationCommand,
+    shutdown: winbridge_protocol::update::WorkerShutdownReceipt,
+}
+
 enum FailureOwner {
     Prepared(Box<PreparedServiceJournal>),
     Transfer(Box<ServiceJournalPreparationFailure>),
@@ -190,7 +196,10 @@ impl LocalService {
             config,
             config_path: Some(path),
             inspection: false,
-            local_activation: true,
+            local_activation: Some(LocalServiceScope {
+                command: state.command.clone(),
+                shutdown: state.shutdown.clone(),
+            }),
             generation: state
                 .command
                 .binding
@@ -361,5 +370,128 @@ pub(crate) fn readonly_queue_result(result: &mut winbridge_protocol::QueueContro
             observation.read_only = true
         }
         _ => {}
+    }
+}
+
+pub(crate) fn rejected_observation(
+    message: String,
+) -> winbridge_protocol::update::ActivationServiceObservation {
+    use winbridge_protocol::update::*;
+    ActivationServiceObservation {
+        service_observation_version: 1,
+        result: ActivationServiceObservationResult::Rejected { message },
+    }
+}
+impl Worker {
+    fn observe_service(
+        &self,
+        request: winbridge_protocol::update::ActivationServiceQuery,
+    ) -> Result<winbridge_protocol::update::WorkerServiceActivationReceipt> {
+        use winbridge_protocol::update::*;
+        if self.stop.load(Ordering::Acquire) {
+            return Err("Local service stopping; readiness unconfirmed".into());
+        }
+        let scope = self
+            .local_activation
+            .as_ref()
+            .ok_or("No resident staged local service")?;
+        if request.service_observation_version != 1 || request.command != scope.command {
+            return Err("Service observation contract/binding differs; no rebind".into());
+        }
+        self._instance_lock.revalidate()?;
+        let guard = self
+            .runtime_guard
+            .lock()
+            .map_err(|_| "Runtime guard lock poisoned")?
+            .clone()
+            .ok_or("No actual loaded runtime guard; fixture metadata is not identity proof")?;
+        guard.revalidate()?;
+        if guard.identity() != &scope.command.binding.expected_worker {
+            return Err("Service loaded identity changed".into());
+        }
+        let config = self
+            .config_path
+            .lock()
+            .map_err(|_| "Config lock poisoned")?
+            .clone()
+            .ok_or("Service config path missing")?;
+        let check = compatibility::check_config(
+            &config,
+            &scope
+                .command
+                .binding
+                .writer_command
+                .binding
+                .worker_config_sha256,
+        )?;
+        if check.instance_id != self.config.instance_id
+            || check.worker_config_schema != self.config.schema_version
+        {
+            return Err("Service config binding changed".into());
+        }
+        let updater_directory = Path::new(&guard.identity().image.path)
+            .parent()
+            .ok_or("Service runtime parent missing")?
+            .join("update-state");
+        let updater = winbridge_update::journal::UpdateJournal::inspect(&updater_directory)
+            .map_err(|e| e.to_string())?;
+        let store = self.store()?;
+        let (authority, schema) =
+            store.observe_local_service_binding(&scope.command, &scope.shutdown)?;
+        let receipt = WorkerServiceActivationReceipt {
+            schema_version: 1,
+            command_id: scope.command.command_id.clone(),
+            update_id: scope
+                .command
+                .binding
+                .writer_command
+                .binding
+                .update_id
+                .clone(),
+            attempt_id: scope
+                .command
+                .binding
+                .writer_command
+                .binding
+                .attempt_id
+                .clone(),
+            command_sha256: winbridge_update::activation::service::command_sha256(&scope.command)?,
+            authority,
+            compatibility: winbridge_protocol::WorkerRuntimeCompatibility {
+                schema_version: 1,
+                kind: "worker_runtime_compatibility".into(),
+                identity: guard.identity().clone(),
+                context: RequestContext {
+                    instance_id: self.config.instance_id.clone(),
+                    journal_incarnation: store.journal_authority().incarnation.clone(),
+                },
+                generation: self.generation.clone(),
+                worker_config_sha256: check.config.sha256,
+                worker_config_schema: self.config.schema_version,
+                worker_journal_schema: schema,
+                updater_journal_schema: updater.schema_version,
+                protocol_version: PROTOCOL_VERSION,
+                observed_at_ms: store::now_ms(),
+            },
+        };
+        winbridge_update::activation::service::validate_receipt(&receipt, &scope.command)?;
+        guard.revalidate()?;
+        self._instance_lock.revalidate()?;
+        Ok(receipt)
+    }
+    pub(crate) fn handle_service_observation(
+        &self,
+        request: winbridge_protocol::update::ActivationServiceQuery,
+    ) -> winbridge_protocol::update::ActivationServiceObservation {
+        use winbridge_protocol::update::*;
+        match self.observe_service(request) {
+            Ok(receipt) => ActivationServiceObservation {
+                service_observation_version: 1,
+                result: ActivationServiceObservationResult::Observed {
+                    receipt: Box::new(receipt),
+                },
+            },
+            Err(message) => rejected_observation(message),
+        }
     }
 }
