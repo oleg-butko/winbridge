@@ -3,7 +3,8 @@
 2026-10-27: [Main25 native scenario](plans/worker-self-update/main25-2026-10-27.md)
 подключён в source: pre-admission firewall wait, same-child service, IPC/history/pause,
 cold exit и archive под original lease. Первый actual run:136 prerequisites passed,
-setup отказал на Cargo hard link до Main; fix cross-checked, test slot сохранён.
+setup отказал на Cargo hard link до Main; fix cross-checked и native regression1/0
+прошёл с2 files twice, test slot сохранён.
 Разовая консервация закрытого slot ожидает отдельного одобрения; positive Main25 впереди.
 
 2026-10-27: [runtime archive](plans/worker-self-update/runtime-archive-2026-10-27.md)

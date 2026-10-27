@@ -11,7 +11,9 @@
 исправлен без ослабления runtime checks. `runtime-test` сохранён с закрытой lease;
 подготовлен readonly-проверенный разовый conservation plan, **-Execute требует
 отдельного одобрения пользователя**. Точные2 files/пути/SHA/tasks — в Main25 checkpoint.
-Independent verifier/source regression готовы, actual positive gate ещё впереди.
+Cache fix **38dfe85** прошёл настоящий Windows regression1/0,2 files twice;
+independent verifier готов, actual positive Main25 ещё впереди. Ответ на разовую
+консервацию2 files пока не получен; -Execute не выполнялся.
 
 Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
