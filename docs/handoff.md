@@ -17,23 +17,27 @@ Input2/stable slot). Исправление и точные run/retirement pins 
 Пользователь разрешил runtime-test-204 EXE в firewall; сохранить постоянный путь,
 не считать Cargo hashed EXE автоматически разрешёнными. Full Main25 ещё не пройден.
 
-## Текущее ограничение Windows: owned test process не завершился
+## Windows: прежнее ожидание завершения снято
 
-Не запускать новый Windows gate и не занимать runtime-test-204 повторно:
-[native run20261027-153506-fe00e6f2](plans/multi-controller-native-2026-10-27.md)
-прошёл build/cold17→19 для0.2.0, но network ready не получен, PID3524 имеет
-неподтверждённое kernel termination. Bootstrap task29421ccd… всё ещё running,
-fenced cancel принят/cancelRequested=true. Existing0.1.1 healthy/active1;
-ресурс не освобождать по одному отсутствию root PID. Пары/службы/firewall не менять.
-Обнаружен Outpost Firewall Pro, чтение NetFirewall rules запрещено; причина ещё
-не доказана, вопрос пользователю pending. Сначала проверить тот же task/PID/Job.
-Свежая проверка обнаружила все четыре test controller завершёнными,1145–1148 свободны.
-Оба runner исправлены: stdin=DEVNULL/start_new_session=True сохраняют peers при exit
-observer; actual Linux controller пережил parent exit, ответил IPC, затем остановлен.
-Owner files и точные paths сохранены; старые PID не считать живыми по metadata.
-Новый Main25 исправляет только expected resource_policy.epoch metadata (описание
-в [плане](plans/main25-schema-profiles-2026-10-27.md)); positive proof ещё нужен.
-До освобождения Windows не сообщать, что можно переключить worker обратно на.203.
+Свежая проверка после сообщения пользователя: task29421ccd-9e84-457d-87d0-59e3b99e35c0
+terminal failed/exit1, cancelRequested=true, installed worker active0/generation772e0679
+не менялся. Win32_Process больше не содержит PID3524. Единственный worker —
+PID14448, K:\_proj-26\winbridge\runtime\winbridge-worker.exe; test slot содержит
+только обычные marker/lock/EXE, запущенного test worker нет. Readonly task
+dafb5009-ebc1-4453-be7e-a2d4155a79be succeeded/0. Late terminal и свежий process list
+сохранены в native run; новый worker не запускался.
+
+Пользователь не видит уведомлений Outpost. Его участие в сбое не установлено;
+прежние API observations PID3524/HasExited=true не называть живым дочерним процессом.
+Прежнее ожидание больше не является основанием блокировать следующие проверки.
+Перед новым run повторить lease/ownership/idle checks. Native network gate и full
+Main25 остаются непрошедшими, release/install готовность не объявлять.
+
+Все четыре прежних test controller завершены,1145–1148 свободны. Оба runner
+исправлены: stdin=DEVNULL/start_new_session=True сохраняют peers при exit observer;
+actual Linux controller пережил parent exit, ответил IPC, затем остановлен.
+Новый Main25 проверяет resource_policy.epoch отдельно, общий history helper
+проверен на Debian; точные source pins и results — в планах ниже.
 
 ## Локальная проверка history comparator
 

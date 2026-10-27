@@ -126,3 +126,17 @@ controller0.2.0/source3435f0c/PID162810 пережил завершение ро
 Receipt /tmp/wb-retain-1uyp2c0f/result.json; не было Windows worker/новых сетевых
 прогонов. Это проверка Unix lifecycle harness, не Windows gate. Windows PID3524
 и original cancellation остаются отдельным текущим блокером.
+
+## Уточнение после свежей проверки пользователя
+
+Пользователь сообщил: уведомлений Outpost нет, Process Explorer показывает один
+установленный worker без дочерних процессов. Повторный API/CIM запрос подтвердил:
+original bootstrap29421ccd… уже failed/exit1, activeTaskCount0; PID3524 отсутствует,
+единственный worker14448 находится в production runtime. Readonly fresh-list task
+dafb5009-ebc1-4453-be7e-a2d4155a79be succeeded/0, Windows free27,985,526,784 bytes.
+Late terminal сохранён отдельно, старые диагностические receipts не переписаны.
+Отсутствие завершения больше не текущий blocker; старые raw API поля HasExited=true
+и WAIT_TIMEOUT не представлять как доказательство работающего child process.
+Связь сбоя с Outpost не доказана. Следующий network run должен опираться на новые
+partial logs/last Info и проверять readiness всех связей; никаких firewall changes.
+Это не положительный native network proof, новый worker в этой проверке не запускался.
