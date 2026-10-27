@@ -7,7 +7,8 @@
 format/readback/admission и consuming transfer реализованы; общий Worker и library
 readonly local IPC, V4 sender/receiver и independent parent probe добавлены.
 Actor25/view17 и atomic local-proof/root добавлены. Reservation helper прошёл6+11
-native checks; archive/layout/full Main25 ещё впереди. Старые checkpoints ниже
+native checks; FixtureLayout теперь имеет native5+2 proof/12 negative audits.
+Archive/network/full Main25 ещё впереди. Старые checkpoints ниже
 сохраняют историю; прежнее ограничение perf-ветки больше не действует.
 
 2026-10-17. Пользователь одобрил [анализ](../../analysis/worker-self-update/README.md)

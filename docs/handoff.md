@@ -47,9 +47,11 @@ Image pin снимается отдельно; lease/marker остаются, co
 Explicit FixtureLayout/private input2 подключён в source всех Main helpers и
 feature-only validation Main; legacy input1/root-runtime/no-controller сохранён.
 Windows attrs-only lease inspection/hard-link check добавлен. Source workspace843/0
-(17 ignored), оба all-targets Clippy прошли; native layout component ещё впереди.
+(17 ignored), оба all-targets Clippy прошли; native layout component5+2 подтверждён на sourcec4b7aea:
+run20261027-063128-2873e42d/taska9650312-9a20-40a5-b34c-76946f71b090 succeeded/0,
+3 files twice/12 negative audits. Это не full Main25; точные pins в checkpoint.
 Debian старые unused test ELF caches очищены: available22.74GB, controller сохранён.
-Следующий шаг: native layout component/archive/network preflight → новый Main25
+Следующий шаг: archive/original slot lease + network preflight → новый Main25
 и actual19→20/refusal. Старый normal Main тоже открывает configured controller URL;
 поэтому нельзя запускать этот gate из новых hash paths и нельзя подменить URL=None. Нельзя заново открывать Store, получать второй lock,
 прибавлять epoch или обновлять original startup deadline. Maintenance/user pause

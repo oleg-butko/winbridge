@@ -81,6 +81,44 @@ runtime не ослаблялась. Cold no-lease assertion после этог
 требуют повтора. Исходные source/task/report/ready/logs сохранены, не являются
 положительным gate; установленный worker healthy и неизменён.
 
+## Native component подтверждён
+
+Run **20261027-063128-2873e42d**, task **a9650312-9a20-40a5-b34c-76946f71b090**,
+**succeeded/0,5 layout +2 file-link/lease Windows tests**. Producer
+**c4b7aea23d15bda4827d853e4c273354702eb596**. Source ZIP:
+`winbridge-20261027T102836Z-c4b7aea-a660f5df.zip`,896 files, clean/no built UI.
+
+- ZIP SHA: `8e58395361b4b03a26d03ca15f17e3b73438935d64ef8107888fd05d73ccb95e`.
+- Manifest SHA: `593351788459d3abdfe8da264f55fa64222c55f89ce657d64db8216b2693b3d3`.
+- Report SHA: `0248788097cb0d9476e034af6c27927b807e27900aa554fbb6a577d6c32fc371`.
+- Layout log SHA: `6495a6a48993e2614a50f77fe0e154bc5925361b2865bafd0f907215d008a363`.
+- Links log SHA: `c8ff4ef8fd875d8798c37a9b803e0b34852a93f43fd2bf8a5d4b202265933fee`.
+
+Independent Debian verifier проверил exact argv/group/count/typed flags,
+compiled commit/manifest markers и3 ready files дважды;12 in-memory negative
+mutations отвергнуты (wrong source/argv/flags/count/marker/missing log и попытка
+назвать component полным Main25). Cold no-lease assertion и оба настоящих kernel
+checks пройдены. На Linux последний canonical assertion также проверен5/0.
+Это **не** actual normal Main по внешнему пути, actor25 same-child proof,
+controller session или actual19→20 migration. Root/lease data fixtures не выдаются
+за original process custody. Full Main25 остаётся обязательным.
+
+Evidence: `.winbridge/update-preparation/layout-native-20261027-063128-2873e42d/`
+(`pin`, `request`, `accepted`, `terminal`, `chunks`, `info-before/after`, `verified.json`),
+`layout-native-final-observer.log`, `layout-native-proof.log`.
+Readonly recheck без новых задач/сборки:
+`python3 .winbridge/update-preparation/verify-layout-native.py`.
+Shared report: `K:\VMs\shared\WinBridge\workflow-validation\20261027-063128-2873e42d`.
+Каталоги новых source/report и верхний tmp-каталог сохранены; внутренние
+TempDir fixtures освобождены штатными тестами. Старые Windows validation
+directories не очищались и не удалялись.
+
+Windows free33,654,177,792 →33,494,745,088 bytes; commands75,362ms +31,621ms.
+Debian перед native22,743,166,976 bytes. Installed SHA536d8637… совпал до/после;
+Info build59249e6/generation936909c6/incarnation5a8eb173 прежние, active0,
+maintenance/recovery errors=null. Controller5103 по-прежнему работает. Test
+processes закончились; рабочий worker оставить, desktop не нужен.
+
 ## Disk
 
 Preflight taskdfc4d89f-a200-4eab-bba3-3db4c87f9f6b succeeded/0:
@@ -99,8 +137,8 @@ Libraries/configs/journals/reports/Windows directories не затрагивал
 
 ## Следующее
 
-1. Подтвердить layout/link mechanics нативным component gate и сохранить exact
-   source/command/task/report pins. Это ещё не запуск normal Main по внешнему пути.
+1. Native layout/link component подтверждён выше. Начать с archive и включения
+   stable slot в full Main25; не повторять component вместо этого сценария.
 2. Добавить сохранение собственного inactive slot в archive после actual child/
    Job exit, с process/lock/marker/file checks и crash-safe plan. Старые state,
    configs и source paths сохраняются. Reservation helper пока cold reuse запрещает.
@@ -115,3 +153,19 @@ Libraries/configs/journals/reports/Windows directories не затрагивал
    configured URL без session у local service, root AwaitingController, lost ACK/
    cold no-replay, actual Job exit. Independent proof/negative mutations и actual
    retained19→20/refusal. Только затем controller/lifetime/commit/release и U2–U4.
+
+При проектировании следующего gate сохранить original script slot lease на всё
+время native Cargo/case и архивирования. Closing script lease/receipt JSON не
+превращаются в updater process custody. Archive сохраняет все собственные файлы
+в прежнем run с locator/identity/hash, не переписывает configs/serialized paths,
+не удаляет validation directories и не принимает unknown/live scope.
+
+Для controller1144 выбрать fixture instance ID заранее в GateInput и использовать
+его в обоих configs: запуск controller не должен ждать случайный UUID из середины
+Windows case. First firewall permission wait900s можно выполнить в реальном old
+Main driver после normal serve readiness, **до launch_supervisor/accept/baseline**.
+Так используются тот же stable exe и frozen config без дополнительного открытия
+Store/смены epoch только ради preflight. Original startup grant240s начинается
+позже и не продлевается. Увеличивать внешний case/task timeout отдельно от этого
+startup grant. Отдельный controller оставить доступным при local service probe,
+чтобы configured-but-disconnected не объяснялось намеренно выключенным сервером.
