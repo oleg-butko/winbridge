@@ -8,6 +8,12 @@ Core audit24 negatives/49 files twice прошёл; отдельный readonly 
 рабочий worker0.1.1 неизменён/active0. После trace/export/selection fixes нужен
 свежий actual run; старый результат не объявлять full Main25 success.
 
+Повтор Main25 e03bb2a: run20261027-195930-24f64ab8,
+task85b38bd5-3a77-4e7f-83ac-b044c25e806f принят; до terminal не resubmit.
+Параллельно подготовлен [отдельный actual19→20 copy-only gate](plans/worker-self-update/retained19-to20-2026-10-27.md),
+native proof пока нет. Его запускать после Main25; перед ним восстановить старые
+ZIP только из retained exact bytes, проверить old reference полностью.
+
 **Актуально после review/merge на .203,2026-10-27:** multi-controller слит в main.
 [Ревью, исправления и проверки](analysis/multi-controller-merge-review-2026-10-27.md):
 895 workspace tests/0 failures/17 ignored, Linux/MSVC Clippy, contracts/TS/UI,
