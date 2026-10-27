@@ -1,6 +1,7 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-2026-10-26. Начать с [stable runtime reservation checkpoint](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md),
+2026-10-27. Начать с [fixture layout checkpoint](plans/worker-self-update/fixture-layout-2026-10-27.md),
+[stable runtime reservation checkpoint](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md),
 [actor25/local-root checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md)
 и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
 Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
@@ -43,7 +44,12 @@ run20261026-210824-6ce141b3/task354d9f95-6d9c-4066-ad0f-612c9ce7e17e succeeded/0
 Image pin снимается отдельно; lease/marker остаются, cold reservation не принимается.
 Это не reusable archive/layout/full Main25. Первый failed path-policy test и
 его test-only relative slot сохранены; scope/hashes/storage — в checkpoint.
-Следующий шаг: explicit fixture runtime layout/archive/network preflight → новый Main25
+Explicit FixtureLayout/private input2 подключён в source всех Main helpers и
+feature-only validation Main; legacy input1/root-runtime/no-controller сохранён.
+Windows attrs-only lease inspection/hard-link check добавлен. Source workspace843/0
+(17 ignored), оба all-targets Clippy прошли; native layout component ещё впереди.
+Debian старые unused test ELF caches очищены: available22.74GB, controller сохранён.
+Следующий шаг: native layout component/archive/network preflight → новый Main25
 и actual19→20/refusal. Старый normal Main тоже открывает configured controller URL;
 поэтому нельзя запускать этот gate из новых hash paths и нельзя подменить URL=None. Нельзя заново открывать Store, получать второй lock,
 прибавлять epoch или обновлять original startup deadline. Maintenance/user pause

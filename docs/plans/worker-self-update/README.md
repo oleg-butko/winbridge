@@ -1,7 +1,8 @@
 # Самообновление: план реализации U0–U4
 
 **2026-10-26: performance-ветка слита в main, worker0.1.1 установлен.**
-Начать с [runtime reservation checkpoint](activation-runtime-reservation-2026-10-26.md)
+Начать с [fixture layout checkpoint](fixture-layout-2026-10-27.md)
+и [runtime reservation checkpoint](activation-runtime-reservation-2026-10-26.md)
 и [Actor25](local-service-actor-2026-10-26.md): source schema20
 format/readback/admission и consuming transfer реализованы; общий Worker и library
 readonly local IPC, V4 sender/receiver и independent parent probe добавлены.

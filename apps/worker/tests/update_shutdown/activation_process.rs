@@ -33,7 +33,7 @@ pub(super) fn job(record: &ActivationRecord) -> ProcessIdentity {
     }
 }
 fn marker(
-    root: &Path,
+    root: &FixtureLayout,
     phase: &str,
     rt: &tokio::runtime::Runtime,
     sup: &SupervisorRecord,
@@ -67,7 +67,7 @@ fn marker(
         std::thread::sleep(Duration::from_millis(20));
     }
 }
-fn release(root: &Path, phase: &str, held: &serde_json::Value) {
+fn release(root: &FixtureLayout, phase: &str, held: &serde_json::Value) {
     let destination = root.join(format!("activation-process-{phase}-release.json"));
     let staging = destination.with_extension("part");
     assert!(!destination.exists());
@@ -79,7 +79,7 @@ fn release(root: &Path, phase: &str, held: &serde_json::Value) {
     fs::rename(staging, destination).unwrap();
 }
 
-fn locked(root: &Path) {
+fn locked(root: &FixtureLayout) {
     let lock = fs::OpenOptions::new()
         .read(true)
         .write(true)
@@ -88,12 +88,12 @@ fn locked(root: &Path) {
     assert!(fs2::FileExt::try_lock_exclusive(&lock).is_err());
 }
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
 ) -> serde_json::Value {
     let timer = Instant::now();
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -137,7 +137,7 @@ pub(super) fn execute(
         "attemptId":prepared.intent.attempt_id,"runtimeIdentity":source.runtime_identity,"updaterConfigSha256":source.updater_config_sha256}),
     );
     assert!(winbridge_update::installed_set::pin_installed_set(
-        &root.join("runtime"),
+        root.runtime(),
         &source.installation_id,
         &source.scope_sha256
     )
@@ -332,7 +332,7 @@ pub(super) fn execute(
         replacement["view"]["update"]
     );
     let loaded = winbridge_update::installed_set::pin_installed_set(
-        &root.join("runtime"),
+        root.runtime(),
         &source.installation_id,
         &source.scope_sha256,
     )
@@ -389,7 +389,7 @@ pub(super) fn execute(
         "workerWriteDenied":true,"workerDeleteDenied":true,"workerLaunchCount":1,"stateHandoffCount":0,"publicActivationEnabled":false})
 }
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     id: &str,
     saved: &serde_json::Value,
     pin: &infrastructure::PinnedProcess,
@@ -403,7 +403,7 @@ pub(super) fn after_owned_exit(
         process_identity::observe_process(&job(&record)),
         ProcessObservation::Empty(_)
     ));
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let view = UpdateJournal::activation_process_snapshot(&directory, id, false, None).unwrap();
     let process = view.activation_process.as_ref().unwrap();
     assert_eq!(process.phase, ActivationProcessPhase::NotResident);

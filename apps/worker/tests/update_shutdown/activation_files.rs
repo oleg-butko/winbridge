@@ -1,17 +1,17 @@
 //! Real actor21 binding: strict readable set, original state lock and cold refusal.
 use super::*;
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     record: &winbridge_update::activation::ActivationRecord,
 ) -> serde_json::Value {
     let timing = Instant::now();
     let source = &record.intent.source;
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let bytes = journal_bytes(root);
     let pin_set = || {
         winbridge_update::installed_set::pin_installed_set(
-            &root.join("runtime"),
+            root.runtime(),
             &source.installation_id,
             &source.scope_sha256,
         )
@@ -138,11 +138,11 @@ pub(super) fn execute(
         "workerBytesBefore":bytes,"workerBytesAfter":journal_bytes(root),"record":record,"legacyFieldAbsent":true,"workerLaunchCount":0,"stateHandoffCount":0})
 }
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     id: &str,
     saved: &serde_json::Value,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let v = UpdateJournal::activation_files_snapshot(&directory, id, false, None).unwrap();
     let files = v.activation_files.as_ref().unwrap();
     assert_eq!(files.phase, ActivationFilesPhase::NotBound);

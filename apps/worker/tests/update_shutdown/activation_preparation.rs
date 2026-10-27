@@ -18,13 +18,13 @@ pub(super) fn history(directory: &Path, id: &str) -> Vec<ActivationRecord> {
 }
 
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
     bind_files: bool,
 ) -> serde_json::Value {
     let timing = Instant::now();
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
     let mut request: SupervisorRequest =
@@ -141,7 +141,8 @@ pub(super) fn execute(
     // binding nor a duplicate may change the durable Prepared record or nonce.
     if bind_files {
         let diagnostic_log = root
-            .join("runtime/update")
+            .runtime()
+            .join("update")
             .join(id)
             .join("supervisor/stderr.log");
         let diagnostic = fs::read_to_string(diagnostic_log).unwrap();
@@ -249,11 +250,11 @@ pub(super) fn execute(
 }
 
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     id: &str,
     proof: &serde_json::Value,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let (record, _) =
         observe_after_owned_exit(|| UpdateJournal::inspect_activation(&directory, id)).unwrap();
     let record = record.unwrap();

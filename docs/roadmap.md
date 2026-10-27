@@ -1,5 +1,8 @@
 # Постепенная реализация и расширение
 
+2026-10-27: [FixtureLayout/private input2](plans/worker-self-update/fixture-layout-2026-10-27.md)
+подключён в source; workspace843/0, Linux/MSVC Clippy. Native layout/archive/full Main25 впереди.
+
 2026-10-26: [activation runtime reservation](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md)
 прошёл6+11 native checks. Full Main25/archive/layout ещё впереди; production не менялся.
 

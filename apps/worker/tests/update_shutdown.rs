@@ -16,7 +16,9 @@ use winbridge_update::{
     journal::UpdateJournal,
     shutdown::{ShutdownDeliveryState, ShutdownInspectionRequest},
 };
-use winbridge_worker::update_validation::{BackupFault, Fault, Input};
+use winbridge_worker::update_validation::{
+    BackupFault, Fault, FixtureLayout, FixtureRuntimePin, Input,
+};
 #[path = "update_shutdown/activation_files.rs"]
 mod activation_files;
 #[path = "update_shutdown/activation_preparation.rs"]
@@ -70,6 +72,10 @@ struct GateInput {
     activation_state: bool,
     #[serde(default)]
     activation_writer: bool,
+    #[serde(default)]
+    runtime: Option<FixtureRuntimePin>,
+    #[serde(default)]
+    controller_url: Option<String>,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -166,7 +172,7 @@ fn setup(
     backup_fault: BackupFault,
     preparation_fault: PreparationFault,
     replacement_fault: replacement::ReplacementFault,
-) -> (PathBuf, PathBuf, InstalledSetManifest) {
+) -> (FixtureLayout, PathBuf, InstalledSetManifest) {
     let label = if replacement_fault != replacement::ReplacementFault::None {
         format!("{fault:?}-Replacement{replacement_fault:?}")
     } else if preparation_fault != PreparationFault::None {
@@ -178,8 +184,54 @@ fn setup(
     };
     let root = input.root.join(label);
     fs::create_dir(&root).unwrap();
-    let runtime = root.join("runtime");
-    fs::create_dir(&runtime).unwrap();
+    let runtime = input
+        .runtime
+        .as_ref()
+        .map(|r| r.directory.clone())
+        .unwrap_or_else(|| root.join("runtime"));
+    if input.runtime.is_none() {
+        fs::create_dir(&runtime).unwrap();
+    } else {
+        assert!(
+            input.activation_writer
+                && fault == Fault::None
+                && backup_fault == BackupFault::None
+                && preparation_fault == PreparationFault::None
+                && replacement_fault == replacement::ReplacementFault::None,
+            "One clean activation case may reserve the stable runtime"
+        );
+    }
+    let root = FixtureLayout::bind(
+        &root,
+        input.runtime.as_ref(),
+        &winbridge_protocol::build_identity(),
+    )
+    .unwrap();
+    let runtime = root.runtime();
+    if input.runtime.is_some() {
+        assert_eq!(
+            winbridge_update::supervisor::image_sha256(Path::new(env!(
+                "CARGO_BIN_EXE_winbridge-worker"
+            )))
+            .unwrap(),
+            root.initial_worker_sha256().unwrap(),
+            "Build the exact validation worker before reserving its stable runtime"
+        );
+        let allowed = [
+            "winbridge-worker.exe",
+            "winbridge-test-runtime.json",
+            ".winbridge-test-runtime.lock",
+            "winbridge-activation-runtime.json",
+        ];
+        for entry in fs::read_dir(runtime).unwrap() {
+            let entry = entry.unwrap();
+            assert!(
+                entry.file_type().unwrap().is_file()
+                    && allowed.contains(&entry.file_name().to_str().unwrap()),
+                "Pre-existing stable runtime content preserved; explicit archive required"
+            );
+        }
+    }
     fs::create_dir(root.join("state")).unwrap();
     fs::create_dir(root.join("packages")).unwrap();
     fs::copy(
@@ -188,10 +240,11 @@ fn setup(
     )
     .unwrap();
     let worker_config = runtime.join("winbridge-worker.local.json");
-    write(
-        &worker_config,
-        &json!({"schemaVersion":1,"instanceId":format!("shutdown-{}",uuid::Uuid::new_v4()),"nodeId":"shutdown-main-test","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"source","workspaceRoot":input.root.join("source"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]}),
-    );
+    let mut worker_settings = json!({"schemaVersion":1,"instanceId":format!("shutdown-{}",uuid::Uuid::new_v4()),"nodeId":"shutdown-main-test","stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true},"projects":[{"id":"source","workspaceRoot":input.root.join("source"),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]});
+    if let Some(url) = &input.controller_url {
+        worker_settings["worker"]["controllerUrl"] = json!(url);
+    }
+    write(&worker_config, &worker_settings);
     let config = runtime.join("winbridge-update.local.json");
     write(
         &config,
@@ -243,7 +296,7 @@ fn setup(
     };
     write(&runtime.join(MANIFEST_NAME), &manifest);
     if input.final_backup {
-        seed_history(&worker_config, &runtime, &root);
+        seed_history(&worker_config, runtime, &root);
     }
     let config_sha = winbridge_update::sha256(&fs::read(&worker_config).unwrap());
     let request = UpdateRequest {
@@ -261,9 +314,9 @@ fn setup(
     write(
         &root.join("input.json"),
         &Input {
-            schema_version: 1,
+            schema_version: if input.runtime.is_some() { 2 } else { 1 },
             kind: "winbridge_shutdown_main_validation".into(),
-            root: root.clone(),
+            root: root.to_path_buf(),
             worker_config_sha256: config_sha,
             request,
             fault,
@@ -271,6 +324,8 @@ fn setup(
             backup_fault,
             candidate_support: input.candidate_support,
             compatible_drain: input.compatible_drain,
+            runtime: input.runtime.clone(),
+            controller_url: input.controller_url.clone(),
         },
     );
     (root, worker_config, manifest)
@@ -298,7 +353,7 @@ struct LockHolder {
     ),
 }
 impl LockHolder {
-    fn start(root: &Path) -> Self {
+    fn start(root: &FixtureLayout) -> Self {
         let command = ResolvedCommand {
             executable: std::env::current_exe().unwrap().to_string_lossy().into(),
             arguments: vec![
@@ -337,7 +392,7 @@ impl LockHolder {
         }
         assert!(self.child.tree_is_empty().unwrap());
     }
-    fn finish(mut self, root: &Path) {
+    fn finish(mut self, root: &FixtureLayout) {
         self.child.terminate_tree().unwrap();
         fs::write(
             root.join("lock-helper-stdout.log"),
@@ -365,6 +420,7 @@ fn instance_lock_holder_process() {
         root.canonicalize().unwrap()
     );
     assert_eq!(input.fault, Fault::DelayedInstanceLock);
+    let root = input.fixture_layout().unwrap();
     let until = Instant::now() + Duration::from_secs(900);
     while !root.join("request-instance-lock.json").is_file() {
         assert!(Instant::now() < until);
@@ -373,7 +429,7 @@ fn instance_lock_holder_process() {
     let sup: SupervisorRecord =
         serde_json::from_slice(&fs::read(root.join("supervisor.json")).unwrap()).unwrap();
     let saved =
-        UpdateJournal::inspect_shutdown(&root.join("runtime/update-state"), &sup.spec.update_id)
+        UpdateJournal::inspect_shutdown(&root.runtime().join("update-state"), &sup.spec.update_id)
             .unwrap()
             .unwrap();
     assert!(matches!(
@@ -428,7 +484,7 @@ fn instance_lock_holder_process() {
     }
     drop(file);
 }
-fn before_exit_crash(root: &Path, directory: &Path) -> serde_json::Value {
+fn before_exit_crash(root: &FixtureLayout, directory: &Path) -> serde_json::Value {
     let before: serde_json::Value =
         serde_json::from_slice(&fs::read(root.join("worker-proof.json")).unwrap()).unwrap();
     assert_eq!(before["requestShutdownCount"], 1);
@@ -451,7 +507,7 @@ fn before_exit_crash(root: &Path, directory: &Path) -> serde_json::Value {
     json!({"fault":Fault::SupervisorCrashBeforeExit,"beforeMainExit":before,"shutdown":shutdown,"root":state,"mainAndSupervisorAliveBeforeCrash":true,"physicalCustodyAfterExit":false})
 }
 
-fn restart_refused(worker: &Path, config: &Path, root: &Path, update_id: &str) {
+fn restart_refused(worker: &Path, config: &Path, root: &FixtureLayout, update_id: &str) {
     let command = ResolvedCommand {
         executable: worker.to_string_lossy().into(),
         arguments: vec![
@@ -498,7 +554,7 @@ fn restart_refused(worker: &Path, config: &Path, root: &Path, update_id: &str) {
     );
 }
 
-fn seed_history(config: &Path, runtime: &Path, root: &Path) {
+fn seed_history(config: &Path, runtime: &Path, root: &FixtureLayout) {
     use winbridge_protocol::{
         CommandSource, LocalRequest, LocalResponse, TaskStatus, TaskSubmission,
     };
@@ -652,7 +708,7 @@ fn journal_fingerprint_allows_only_empty_wal_creation_and_detects_data_changes()
     assert_ne!(journal_bytes(root.path()), before);
 }
 fn prepare_runtime(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     fault: PreparationFault,
 ) -> serde_json::Value {
@@ -713,7 +769,7 @@ fn prepare_runtime(
     if fault != PreparationFault::None {
         return prepare_runtime_fault(root, sup, request, &call, before, fault);
     }
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let source_bytes = journal_bytes(root);
     let baseline = UpdateJournal::inspect_runtime_baseline(&directory, id)
@@ -849,7 +905,7 @@ fn prepare_runtime(
     json!({"beforeAdmission":before,"admitted":admitted,"view":done,"duplicate":duplicate,"record":record,"actualFiles":actual,"oldImagesBefore":old_images,"sourceFiles":source_files,"sourceBytesUnchanged":true,"oldRuntimeUnchanged":true,"preimagesUnchanged":true,"allCopiesIndependent":true,"duplicateNoNewAttempt":true,"privateAuthorityNotExported":true,"oldViewsOmitPreparation":true,"retainedGraphMatches":true})
 }
 fn prepare_runtime_fault(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     mut request: SupervisorRequest,
     call: &impl Fn(&SupervisorRequest) -> UpdatePreparationView,
@@ -857,9 +913,9 @@ fn prepare_runtime_fault(
     fault: PreparationFault,
 ) -> serde_json::Value {
     use winbridge_update::runtime_preparation::{PreparationFileState, PreparationPhase};
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
-    let parent = root.join("runtime/update").join(id);
+    let parent = root.runtime().join("update").join(id);
     let destination = parent.join("prepared-runtime");
     let bytes = journal_bytes(root);
     let baseline = UpdateJournal::inspect_runtime_baseline(&directory, id)
@@ -1036,7 +1092,7 @@ fn prepare_runtime_fault(
         "duplicateNoNewAttempt":true,"privateAuthorityNotExported":true})
 }
 fn final_backup(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     expected_fault: BackupFault,
 ) -> serde_json::Value {
@@ -1117,7 +1173,7 @@ fn final_backup(
             && root.join("backup-helper-held.json").is_file()
         {
             let saved = UpdateJournal::inspect_state_backup(
-                &root.join("runtime/update-state"),
+                &root.runtime().join("update-state"),
                 &sup.spec.update_id,
             )
             .unwrap()
@@ -1175,7 +1231,7 @@ fn final_backup(
                 .physical_custody_held
         );
         let record = UpdateJournal::inspect_state_backup(
-            &root.join("runtime/update-state"),
+            &root.runtime().join("update-state"),
             &sup.spec.update_id,
         )
         .unwrap()
@@ -1225,7 +1281,7 @@ fn final_backup(
         );
         assert_eq!(
             UpdateJournal::inspect_state_backup(
-                &root.join("runtime/update-state"),
+                &root.runtime().join("update-state"),
                 &sup.spec.update_id
             )
             .unwrap()
@@ -1246,7 +1302,7 @@ fn final_backup(
             .unwrap()
             .physical_custody_held
     );
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let record = UpdateJournal::inspect_state_backup(&directory, &sup.spec.update_id)
         .unwrap()
         .unwrap();
@@ -1299,7 +1355,7 @@ fn case(
     let launch_process = input.activation_process;
     let handoff_state = input.activation_state;
     let activate_writer = input.activation_writer;
-    let worker = root.join("runtime/winbridge-worker.exe");
+    let worker = root.runtime().join("winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
     // running any helper; cold inspection never initializes this fixture driver.
@@ -1378,7 +1434,7 @@ fn case(
         }
         std::thread::sleep(Duration::from_millis(25));
     };
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     // Keep cleanup unconditional on assertions below; killing this validation
     timing.mark("old_worker_exited", None, None);
     // Job owns only the copied worker/supervisor descendants, never installed ones.
@@ -1483,7 +1539,8 @@ fn case(
                     "Lost ACK must retain Uncertain edge before readonly reconciliation"
                 );
                 assert!(
-                    root.join("runtime/update")
+                    root.runtime()
+                        .join("update")
                         .join(id)
                         .join(format!(
                             "shutdown-receipt-{}.json",
@@ -1532,16 +1589,14 @@ fn case(
         .contains(id));
         assert_eq!(
             serde_json::from_slice::<InstalledSetManifest>(
-                &fs::read(root.join("runtime").join(MANIFEST_NAME)).unwrap()
+                &fs::read(root.runtime().join(MANIFEST_NAME)).unwrap()
             )
             .unwrap(),
             manifest
         );
         for image in &manifest.artifacts {
             assert_eq!(
-                winbridge_update::sha256(
-                    &fs::read(root.join("runtime").join(&image.name)).unwrap()
-                ),
+                winbridge_update::sha256(&fs::read(root.runtime().join(&image.name)).unwrap()),
                 image.sha256
             );
         }
@@ -1653,7 +1708,8 @@ fn case(
                 expected.push(serde_json::from_value(p["sentinel"].clone()).unwrap());
             }
             let target = root
-                .join("runtime/update")
+                .runtime()
+                .join("update")
                 .join(id)
                 .join("prepared-runtime");
             let after = if target.is_dir() {
@@ -1732,9 +1788,7 @@ fn case(
         proof["startupStillBlocked"] = json!(true);
         for image in &manifest.artifacts {
             assert_eq!(
-                winbridge_update::sha256(
-                    &fs::read(root.join("runtime").join(&image.name)).unwrap()
-                ),
+                winbridge_update::sha256(&fs::read(root.runtime().join(&image.name)).unwrap()),
                 image.sha256
             );
         }
@@ -1925,6 +1979,8 @@ fn run_gate(
     assert_eq!(input.activation_process, process_requested);
     assert_eq!(input.activation_state, state_requested);
     assert_eq!(input.activation_writer, writer_requested);
+    assert!(input.runtime.is_none() || writer_requested);
+    assert!(input.controller_url.is_none() || input.runtime.is_some());
     assert!(!writer_requested || state_requested);
     assert!(!state_requested || process_requested);
     assert!(!process_requested || files_requested);

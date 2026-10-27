@@ -17,7 +17,7 @@ pub(super) struct Baseline {
     shutdown: WorkerShutdownReceipt,
     preserved: serde_json::Value,
 }
-fn connection(root: &Path) -> Connection {
+fn connection(root: &FixtureLayout) -> Connection {
     let c = Connection::open_with_flags(
         root.join("state/journal.sqlite"),
         OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -28,7 +28,7 @@ fn connection(root: &Path) -> Connection {
 }
 // Hash the exact values of every table other than the two deliberately changed
 // by activation. Never export private authority IDs, tasks or command payloads.
-fn preserved_rows(root: &Path) -> serde_json::Value {
+fn preserved_rows(root: &FixtureLayout) -> serde_json::Value {
     let mut c = connection(root);
     let tx = c.transaction().unwrap();
     let names: Vec<String> = tx.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('journal_authority','worker_journal_activations') ORDER BY name").unwrap()
@@ -61,12 +61,12 @@ fn preserved_rows(root: &Path) -> serde_json::Value {
     json!({"sha256":winbridge_update::sha256(&serde_json::to_vec(&data).unwrap()),"tasks":tasks,"output":output})
 }
 impl Baseline {
-    pub(super) fn capture(root: &Path, id: &str) -> Self {
+    pub(super) fn capture(root: &FixtureLayout, id: &str) -> Self {
         let stale = Store::open_read_only(&root.join("state/journal.sqlite")).unwrap();
         let authority = stale.state_backup_authority().unwrap();
         let lease = stale.worker_update_lease(id).unwrap();
         assert_eq!(lease.phase, WorkerUpdatePhase::Quiesced);
-        let shutdown = UpdateJournal::inspect_shutdown(&root.join("runtime/update-state"), id)
+        let shutdown = UpdateJournal::inspect_shutdown(&root.runtime().join("update-state"), id)
             .unwrap()
             .unwrap();
         let ShutdownDeliveryState::Exited { receipt, .. } = shutdown.delivery else {
@@ -172,7 +172,7 @@ fn lock_occupied(expected: &WorkerShutdownState) {
     );
 }
 fn worker_receipt(
-    root: &Path,
+    root: &FixtureLayout,
     r: &ActivationWriterRecord,
 ) -> (StateBackupAuthority, WorkerJournalActivationReceipt) {
     let store = Store::open_read_only(&root.join("state/journal.sqlite")).unwrap();
@@ -192,7 +192,7 @@ fn worker_receipt(
     (authority, receipt)
 }
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     rt: &tokio::runtime::Runtime,
     mut q: SupervisorRequest,
@@ -228,7 +228,7 @@ pub(super) fn execute(
         std::thread::sleep(Duration::from_millis(25));
     };
     let id = &sup.spec.update_id;
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let w = view.activation_writer.as_ref().unwrap();
     let actual = w.resident_process.as_ref().unwrap();
     assert_eq!(w.process_alive, Some(true));
@@ -331,7 +331,7 @@ pub(super) fn execute(
     );
     let source = &record.intent.source;
     let loaded = winbridge_update::installed_set::pin_installed_set(
-        &root.join("runtime"),
+        root.runtime(),
         &source.installation_id,
         &source.scope_sha256,
     )
@@ -394,12 +394,12 @@ pub(super) fn execute(
     proof
 }
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     id: &str,
     saved: &serde_json::Value,
     pin: &infrastructure::PinnedProcess,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let record: ActivationRecord = serde_json::from_value(saved["record"].clone()).unwrap();
     let writer: ActivationWriterRecord =
         serde_json::from_value(saved["writerRecord"].clone()).unwrap();

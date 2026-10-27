@@ -503,18 +503,8 @@ impl Drop for ManagedChild {
 pub fn require_single_link(path: &std::path::Path) -> io::Result<()> {
     #[cfg(windows)]
     {
-        use std::os::windows::io::AsRawHandle;
-        use windows_sys::Win32::Storage::FileSystem::{
-            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
-        };
         let file = std::fs::File::open(path)?;
-        let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
-        if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) } == 0 {
-            return Err(io::Error::last_os_error());
-        }
-        if information.nNumberOfLinks != 1 {
-            return Err(io::Error::other("Hard-linked regular file refused"));
-        }
+        require_single_link_handle(&file)?;
     }
     #[cfg(unix)]
     {
@@ -522,6 +512,32 @@ pub fn require_single_link(path: &std::path::Path) -> io::Result<()> {
         if std::fs::symlink_metadata(path)?.nlink() != 1 {
             return Err(io::Error::other("Hard-linked regular file refused"));
         }
+    }
+    Ok(())
+}
+
+/// Check the exact opened file, including handles opened only for attributes.
+/// This does not reopen a locked file for data access or grant any write/lease.
+pub fn require_single_link_handle(file: &std::fs::File) -> io::Result<()> {
+    #[cfg(windows)]
+    let links = {
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::Storage::FileSystem::{
+            GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION,
+        };
+        let mut information: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut information) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        u64::from(information.nNumberOfLinks)
+    };
+    #[cfg(unix)]
+    let links = {
+        use std::os::unix::fs::MetadataExt;
+        file.metadata()?.nlink()
+    };
+    if links != 1 {
+        return Err(io::Error::other("Hard-linked regular file refused"));
     }
     Ok(())
 }

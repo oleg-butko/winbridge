@@ -157,14 +157,14 @@ fn retained_files(r: &RuntimeReplacementRecord) -> (Vec<ImageEvidence>, Vec<Imag
     );
     (old, new)
 }
-fn preserved(root: &Path, before: &serde_json::Value) -> serde_json::Value {
+fn preserved(root: &FixtureLayout, before: &serde_json::Value) -> serde_json::Value {
     let images: Vec<ImageEvidence> =
         serde_json::from_value(before["runtimePreparation"]["sourceFiles"].clone()).unwrap();
     for image in &images {
         assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *image);
     }
     let preimages = UpdateJournal::inspect_runtime_preimages(
-        &root.join("runtime/update-state"),
+        &root.runtime().join("update-state"),
         before["root"]["updateId"].as_str().unwrap(),
     )
     .unwrap()
@@ -185,11 +185,11 @@ fn preserved(root: &Path, before: &serde_json::Value) -> serde_json::Value {
     json!({"sourceFiles":images,"preimages":preimages,"backupFile":image})
 }
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     before: &serde_json::Value,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
     let mut request: SupervisorRequest =
@@ -333,8 +333,7 @@ pub(super) fn execute(
     assert_eq!(records.last(), Some(&r));
     let (old, new) = retained_files(&r);
     let actual_manifest: InstalledSetManifest =
-        serde_json::from_slice(&fs::read(root.join("runtime").join(MANIFEST_NAME)).unwrap())
-            .unwrap();
+        serde_json::from_slice(&fs::read(root.runtime().join(MANIFEST_NAME)).unwrap()).unwrap();
     assert_eq!(actual_manifest, r.intent.preparation.plan.manifest);
     let preservation = preserved(root, before);
     assert_eq!(journal_bytes(root), bytes);
@@ -369,7 +368,7 @@ pub(super) fn execute(
         "activationStarted":false,"installedRuntimeApplied":false})
 }
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     config: &Path,
     worker: &Path,
     id: &str,
@@ -386,7 +385,7 @@ pub(super) fn after_owned_exit(
     )
 }
 pub(super) fn after_writer_exit(
-    root: &Path,
+    root: &FixtureLayout,
     config: &Path,
     worker: &Path,
     id: &str,
@@ -396,7 +395,7 @@ pub(super) fn after_writer_exit(
     after_exit(root, config, worker, id, proof, writer_bytes, true)
 }
 fn after_exit(
-    root: &Path,
+    root: &FixtureLayout,
     config: &Path,
     worker: &Path,
     id: &str,
@@ -404,7 +403,7 @@ fn after_exit(
     expected_bytes: &serde_json::Value,
     activation_started: bool,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let (r, _) =
         observe_after_owned_exit(|| UpdateJournal::inspect_runtime_replacement(&directory, id))
             .unwrap();

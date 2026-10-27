@@ -68,27 +68,27 @@ fn wait(
     }
 }
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
 ) -> serde_json::Value {
     execute_inner(root, sup, replacement, false)
 }
 pub(super) fn execute_writer(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
 ) -> serde_json::Value {
     execute_inner(root, sup, replacement, true)
 }
 fn execute_inner(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
     writer: bool,
 ) -> serde_json::Value {
     let timer = Instant::now();
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
     // All baseline observations precede preparation admission. Do not spend
@@ -280,7 +280,7 @@ fn execute_inner(
         .is_none());
 
     let loaded = winbridge_update::installed_set::pin_installed_set(
-        &root.join("runtime"),
+        root.runtime(),
         &source.installation_id,
         &source.scope_sha256,
     )
@@ -322,7 +322,7 @@ fn execute_inner(
         "writableStoreStarted":false,"publicActivationEnabled":false})
 }
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     id: &str,
     saved: &serde_json::Value,
     pin: &infrastructure::PinnedProcess,
@@ -336,7 +336,7 @@ pub(super) fn after_owned_exit(
         process_identity::observe_process(&job(&record)),
         ProcessObservation::Empty(_)
     ));
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let view = UpdateJournal::activation_state_snapshot(&directory, id, false, None).unwrap();
     let state = view.activation_state.as_ref().unwrap();
     assert_eq!(state.phase, ActivationStatePhase::NotResident);
