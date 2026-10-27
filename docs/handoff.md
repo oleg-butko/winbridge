@@ -46,8 +46,11 @@ session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат �
 ещё не проверялся. Текущие source checks: **workspace824/0, 17 ignored**,
 focused updater16/worker14, Linux/MSVC all-target validation Clippy,
 Python verifier6 и scaffold293. Финальные Clippy/native
-результаты и source pins находятся в актуальном checkpoint. Первый event_log rotation failure с WouldBlock
-не воспроизвёлся отдельно и в полном повторе; logger не менялся. Логи и команды в checkpoint.
+результаты и source pins находятся в актуальном checkpoint. Старый event_log
+WouldBlock повторился при actor25 workspace. [Найден механизм retained FD и исправлен
+Unix Drop log writer](plans/worker-self-update/review-actor25-2026-10-26.md):5 focused
+tests/OS experiment passed. Этот failed workspace не считается успешным; actor25
+и полный повтор пока в работе.
 Новый `--service-admission-only` **component gate пройден**:
 run20261026-200828-7bcf7834/task52e8eda0-e7a4-4623-a967-d747ae637bcc succeeded/0,
 **16 updater +14 worker Windows tests**. Producer15429a4;3 files verified twice,
