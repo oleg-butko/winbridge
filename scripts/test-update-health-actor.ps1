@@ -271,7 +271,7 @@ try {
     $attributionInput=Join-Path (Split-Path $source -Parent) 'attribution-migration-input.json'
     Write-NewJson $attributionInput @{root=(Join-Path (Split-Path $source -Parent) 'worker17-to19-cold');reference=$InstalledWorker;referenceSha256=$Worker17ReferenceSha256;powershell=$pwsh;proof=(Join-Path $ReportDirectory 'worker-journal-attribution-migration-proof.json')}
     $env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$attributionInput
-    $commands=@{name='worker17-to19-cold-migration';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','attribution_migration','--locked','--offline','--','--exact','actual_seventeen_history_migrates_to_nineteen_without_replay_or_old_worker_write','--ignored','--test-threads=1','--nocapture')}+$commands
+    $commands=@(@{name='worker17-to19-cold-migration';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','attribution_migration','--locked','--offline','--','--exact','actual_seventeen_history_migrates_to_nineteen_without_replay_or_old_worker_write','--ignored','--test-threads=1','--nocapture')})+$commands
     $report.worker17ReferenceSha256=$Worker17ReferenceSha256
   }
   if($ActivationServiceGate){

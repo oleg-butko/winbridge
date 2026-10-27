@@ -47,3 +47,12 @@ ZIP SHA f32a8534de582ca14ae1d14ff3ac7d192ca0a52f071cef2e6b4a7b547807a196;
 manifest SHA c9510d35ffe0cad11002d73b7e5e1ace44eded783cce33d3ac4957db05209a5f.
 Следующий docs-only commit служит отдельным target pin с тем же кодом.
 Эти archives содержат worker19/updater20 и built UI; это ещё не native proof.
+
+## Первый native bootstrap
+
+Run20261027-132156-64322013/task5426a8e2-2a0b-4c15-8173-7b2fbb42ba75
+завершился failed/1 до native test commands и до reservation runtime-test-204.
+Причина — добавленная PS hashtable+array вместо array+array при включении cold
+migration command. Исправлено оборачиванием первого command в массив. Это ошибка
+harness, не Windows worker и не migration/Main25 proof. Test controller1144 закрыт,
+installed worker0.1.1/generation772e0679 оставлен. Старый run/report сохранён.
