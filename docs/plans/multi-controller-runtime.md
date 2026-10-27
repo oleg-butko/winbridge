@@ -464,3 +464,12 @@ annotations readonly подкреплены реальным typed dispatch; CLI
 Исторические пометки «CLI/MCP впереди» в предыдущих slices относятся к тому source;
 текущие wrappers готовы в feature-ветке. Native Windows/updater migration proof
 по-прежнему не объявлены, установленный worker0.1.1 не заменён.
+
+## Review и новые изменения main — 2026-10-27
+
+[Отчёт и source patch](multi-controller-review-2026-10-27.md): main обновлён до
+c4b7aea, самостоятельный source ac9e0cb проверен. Временное объединение с сохранением
+local-service gates и общей topology прошло879 workspace tests/17 ignored,
+Clippy/MSVC all-targets с update-validation, contracts/TS/UI/fmt/scaffold298.
+Добавлен staged-service/two-controller regression test. Это проверка совместимости,
+а не слияние веток, не Windows gate и не разрешение миграции updater17→19.

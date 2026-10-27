@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-27: [review и сравнение с main c4b7aea](plans/multi-controller-review-2026-10-27.md).
+Подготовлен source patch для общего startup и readonly service с topology.
+Проверочное объединение879/0/17ignored, Clippy/MSVC/contracts/TS/UI passed;
+ветки не слиты, Windows gate19/updater migration остаются впереди.
+
 В `feat/multi-controller` (.204): [прямые сессии двух controller](plans/multi-controller-runtime.md).
 Git coordination отменена. Pure sessions/origin, WorkerSettings topology и actual
 transport подключены; Linux model и два реальных loopback WebSocket соединения

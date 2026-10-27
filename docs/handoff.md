@@ -1,5 +1,13 @@
 # Продолжение работы — worker 0.1.1 выпущен 2026-10-26
 
+**Review2026-10-27:** main подтянут fast-forward доc4b7aea (13 commits).
+[Совместимость и готовый source patch](plans/multi-controller-review-2026-10-27.md):
+самостоятельная feature без подтверждённых существенных дефектов; прямое слияние
+имеет5 конфликтующих файлов и требует адаптации shared startup/local-service.
+Исправленное временное объединение прошло879 tests/17 ignored, Linux Clippy,
+MSVC all-targets/update-validation check, contracts/TS/UI/fmt/scaffold298.
+Main и feature не слиты, source остаётсяac9e0cb; Windows не использовался.
+
 **Ветка .204:** `feat/multi-controller`, base9b47a9c;
 [прямые multi-controller sessions](plans/multi-controller-runtime.md).
 **2026-10-27, readonly CLI/MCP:** три query tools/CLI команды для всех соединений,
