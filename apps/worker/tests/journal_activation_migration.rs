@@ -262,7 +262,7 @@ fn refused_open(path: &Path) -> String {
     }
 }
 #[test]
-#[ignore = "Frozen schema16-to17 proof: run from schema17 source with pinned actual16 executables; not a schema18 gate"]
+#[ignore = "Frozen schema16-to17 proof: run from schema17 source with pinned actual16 executables; not a current-schema gate"]
 fn actual_sixteen_cli_history_migrates_to_seventeen_and_active_sixteen_stays_blocked() {
     assert_eq!(winbridge_worker::store::JOURNAL_SCHEMA_VERSION, 17);
     let input: Input = serde_json::from_slice(

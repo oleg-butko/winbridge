@@ -15,6 +15,7 @@ import { catalogSummary, projectPolicySummary } from "../../runtime/discovery";
 import { ReadinessPanel } from "./ReadinessPanel";
 import { ControllerConnectionsPanel, controllerConnectionsSupported } from "./ControllerConnectionsPanel";
 import { OperationAttributionPanel } from "./OperationAttributionPanel";
+import { OperationCancellationPanel } from "./OperationCancellationPanel";
 import { WorkSchedulingSummary } from "./WorkSchedulingSummary";
 import { QueueControlPanel } from "./QueueControlPanel";
 import { ResourceSchedulingSummary } from "./ResourceSchedulingSummary";
@@ -71,6 +72,7 @@ function TaskSession({ id, readOnly, requestContext, info, connected }: { id: st
       </Group>
       <TaskDetail task={task} outputState={output} />
       {info && <OperationAttributionPanel info={info} connected={connected} kind="task" operationId={id} />}
+      {info && <OperationCancellationPanel info={info} connected={connected} kind="task" operationId={id} updateKey={`${task.status}:${task.cancelRequested}`} />}
     </> : <Text>Читается сохранённая задача…</Text>}
   </Stack>;
 }

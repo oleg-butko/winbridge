@@ -584,7 +584,9 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_workflow_result(&store.workflow(&workflow_id)?)?;
                 Ok(LocalResponse::Workflow {
-                    workflow: Box::new(store.cancel_workflow(&workflow_id)?),
+                    workflow: Box::new(
+                        store.cancel_workflow_attributed(&workflow_id, Some(creator))?,
+                    ),
                 })
             }
             LocalRequest::ListApplications => {
@@ -604,7 +606,11 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_application_result(&store.application(&application_id)?)?;
                 Ok(LocalResponse::Application {
-                    application: store.stop_application(&application_id)?,
+                    application: store.stop_application_attributed(
+                        &application_id,
+                        Some(creator),
+                        None,
+                    )?,
                 })
             }
             LocalRequest::ReadApplicationLog {
@@ -799,7 +805,11 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_committed_result(&import_id)?;
                 Ok(LocalResponse::Import {
-                    import: Box::new(store.cancel_import(&import_id)?),
+                    import: Box::new(store.cancel_import_attributed(
+                        &import_id,
+                        Some(creator),
+                        None,
+                    )?),
                 })
             }
             LocalRequest::PreviewSnapshot {
@@ -864,7 +874,7 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_committed_result(&task_id)?;
                 Ok(LocalResponse::Task {
-                    task: Box::new(store.cancel(&task_id)?),
+                    task: Box::new(store.cancel_attributed(&task_id, Some(creator), None)?),
                 })
             }
         }

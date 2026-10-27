@@ -15,7 +15,8 @@ impl Worker {
         if request.extension_version != 1
             || (request.contract != operation_contract()
                 && request.contract != controller_connections_contract()
-                && request.contract != operation_attribution_contract())
+                && request.contract != operation_attribution_contract()
+                && request.contract != operation_cancellation_contract())
         {
             return reject(
                 ExtensionError::UnsupportedContract,
@@ -34,7 +35,30 @@ impl Worker {
                     "Readonly query belongs to another journal scope; cursor not rebound".into(),
                 ));
             }
-            let payload = if request.contract == operation_attribution_contract() {
+            let payload = if request.contract == operation_cancellation_contract() {
+                if !request.payload.is_object() {
+                    return Ok(reject(
+                        ExtensionError::InvalidRequest,
+                        "Cancellation query must be an object".into(),
+                    ));
+                }
+                let query: OperationAttributionQuery =
+                    match serde_json::from_value(request.payload.clone()) {
+                        Ok(q) => q,
+                        Err(_) => {
+                            return Ok(reject(
+                                ExtensionError::InvalidRequest,
+                                "Invalid cancellation query".into(),
+                            ))
+                        }
+                    };
+                serde_json::to_value(store.operation_cancellation(
+                    &context,
+                    &query,
+                    &self.generation,
+                )?)
+                .map_err(|e| e.to_string())?
+            } else if request.contract == operation_attribution_contract() {
                 if !request.payload.is_object() {
                     return Ok(reject(
                         ExtensionError::InvalidRequest,

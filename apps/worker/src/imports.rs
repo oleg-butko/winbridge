@@ -222,24 +222,44 @@ impl Store {
         Ok(import.record)
     }
     pub fn cancel_import(&mut self, id: &str) -> Result<ImportRecord> {
+        self.cancel_import_attributed(id, None, None)
+    }
+    pub(crate) fn cancel_import_attributed(
+        &mut self,
+        id: &str,
+        actor: Option<&OperationCreator>,
+        parent: Option<(HistoryKind, &str)>,
+    ) -> Result<ImportRecord> {
         self.guard_callback(Some(crate::store::OperationKind::Import), Some(id))?;
-        let mut import = self.import_snapshot(id)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
+        let mut import = Self::read_domain::<ImportRecord>(&transaction, id)?;
         if import.status.is_terminal() || import.cancel_requested {
             return Ok(import.record);
         }
         if import.status == TaskStatus::Queued {
-            return self.finish_import(
-                id,
-                TaskStatus::Cancelled,
-                "Import cancelled before filesystem work",
+            import.status = TaskStatus::Cancelled;
+            import.finished_at_ms = Some(now_ms());
+            import.reason = Some("Import cancelled before filesystem work".into());
+            Self::import_event(&mut import, "Import cancelled before filesystem work");
+        } else {
+            import.cancel_requested = true;
+            Self::import_event(
+                &mut import,
+                "Cancellation requested; awaiting staging checkpoint",
             );
         }
-        import.cancel_requested = true;
-        Self::import_event(
-            &mut import,
-            "Cancellation requested; awaiting staging checkpoint",
-        );
-        self.save_import(&mut import)?;
+        Self::write_domain(&transaction, &import)?;
+        if import.status.is_terminal() {
+            Self::complete_attempt(
+                &transaction,
+                crate::store::OperationKind::Import,
+                id,
+                import.status,
+            )?;
+        }
+        Self::record_cancellation(&transaction, "import", id, actor, parent)?;
+        transaction.commit().map_err(sql)?;
+        import.committed()?;
         Ok(import.record)
     }
 }

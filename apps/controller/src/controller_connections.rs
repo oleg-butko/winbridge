@@ -1,6 +1,29 @@
 use crate::Controller;
 use winbridge_protocol::*;
 impl Controller {
+    pub async fn operation_cancellation(
+        &self,
+        request: OperationAttributionRequest,
+    ) -> Result<OperationCancellation, String> {
+        if request.context.instance_id != self.config.instance_id {
+            return Err("Cancellation observation instance differs; no transmission".into());
+        }
+        let sender = {
+            let state = self.state.lock().map_err(|_| "Controller state poisoned")?;
+            state
+                .active
+                .as_ref()
+                .filter(|s| s.ready)
+                .ok_or("Worker offline")?
+                .sender
+                .clone()
+        };
+        let LocalResponse::Info { info } = sender.call(LocalRequest::Info).await? else {
+            return Err("Missing cancellation provider Info".into());
+        };
+        let envelope = operation_cancellation_envelope(&info, &request)?;
+        decode_operation_cancellation(sender.call_extension(envelope).await?, &info, &request)
+    }
     pub async fn operation_attribution(
         &self,
         request: OperationAttributionRequest,

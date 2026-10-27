@@ -436,3 +436,68 @@ async fn both_controllers_run_independent_projects_in_one_worker() {
     );
     assert_ne!(one.process_id, two.process_id);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn different_controller_cancel_keeps_creator_and_first_cancellation_actor() {
+    use winbridge_protocol::*;
+    let root = tempfile::tempdir().unwrap();
+    let h = Harness::new(root.path());
+    h.connected().await;
+    let context = info(&h.a).await.fenced_requests.unwrap().context;
+    let accepted = submit(&h.a, &context, submission("a", "cancel-origin", true)).await;
+    running(&h.b, &accepted.task_id).await;
+    let query = OperationAttributionRequest {
+        context: context.clone(),
+        query: OperationAttributionQuery {
+            kind: HistoryKind::Task,
+            operation_id: accepted.task_id.clone(),
+        },
+    };
+    assert!(h
+        .a
+        .operation_cancellation(query.clone())
+        .await
+        .unwrap()
+        .intent
+        .is_none());
+    let response =
+        h.b.call_fenced(envelope(
+            &context,
+            LocalRequest::Cancel {
+                task_id: accepted.task_id.clone(),
+            },
+        ))
+        .await;
+    assert_eq!(response.outcome, FencedReplyOutcome::Responded);
+    let first =
+        h.a.operation_cancellation(query.clone())
+            .await
+            .unwrap()
+            .intent
+            .unwrap();
+    assert!(
+        matches!(&first.actor,Some(OperationCreator::Controller {controller_id,..}) if controller_id=="b")
+    );
+    let duplicate =
+        h.a.call_fenced(envelope(
+            &context,
+            LocalRequest::Cancel {
+                task_id: accepted.task_id,
+            },
+        ))
+        .await;
+    assert_eq!(duplicate.outcome, FencedReplyOutcome::Responded);
+    let again =
+        h.b.operation_cancellation(query.clone())
+            .await
+            .unwrap()
+            .intent
+            .unwrap();
+    assert_eq!(
+        (again.actor, again.requested_at_ms),
+        (first.actor, first.requested_at_ms)
+    );
+    assert!(
+        matches!(h.b.operation_attribution(query).await.unwrap().creator,Some(OperationCreator::Controller {controller_id,..}) if controller_id=="a")
+    );
+}

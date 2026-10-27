@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual Linux schema17 history ->18; create-only fixtures, no Windows/config reuse."""
+"""Actual Linux schema17/18 history ->19; create-only fixtures, no Windows/config reuse."""
 import argparse
 import hashlib
 import json
@@ -78,12 +78,13 @@ def rows(path):
 
 def main():
     args = argparse.ArgumentParser()
-    args.add_argument('--reference', type=Path, required=True, help='Pinned schema17 reference.json from a private rehearsal')
+    args.add_argument('--reference', type=Path, required=True, help='Pinned schema17/18 reference.json from a private rehearsal')
     args.add_argument('--worker', type=Path, required=True, help='Current Linux worker executable')
     options = args.parse_args()
     reference = json.loads(options.reference.read_text())
     old = Path(reference['path'])
-    assert reference['report']['workerJournalSchema'] == 17
+    old_schema = reference['report']['workerJournalSchema']
+    assert old_schema in [17, 18]
     assert hashlib.sha256(old.read_bytes()).hexdigest() == reference['sha256']
     with tempfile.TemporaryDirectory(prefix='wb-attr-') as temporary:
         root = Path(temporary)
@@ -97,7 +98,7 @@ def main():
         db = state / 'journal.sqlite'
         processes = []
         try:
-            first = Worker(old, config, endpoint, root, 'old17'); processes.append(first)
+            first = Worker(old, config, endpoint, root, f'old{old_schema}'); processes.append(first)
             info = first.ready(); context = info['fencedRequests']['context']
 
             def submit(request):
@@ -112,46 +113,69 @@ def main():
                 result = until(terminal)
                 assert result['status'] == 'succeeded', result
 
-            task = submit(submission); finish(task); first.close()
-            before = rows(db)
-            with sqlite3.connect(db) as connection:
-                assert connection.execute('PRAGMA user_version').fetchone()[0] == 17
-            second = Worker(options.worker, config, endpoint, root, 'new18'); processes.append(second)
-            new_info = second.ready(); assert new_info['fencedRequests']['context'] == context
-
             def attribution(task_id):
                 response = call(endpoint, {'extensionVersion': 1, 'contract': {'id': 'winbridge.operation-attribution', 'version': 1}, 'context': context,
                                            'payload': {'kind': 'task', 'operationId': task_id}})
                 assert response['result']['kind'] == 'data', response
                 return response['result']['payload']
 
-            assert attribution(task['taskId'])['creator'] is None
+            task = submit(submission); finish(task)
+            old_creator = attribution(task['taskId'])['creator'] if old_schema == 18 else None
+            first.close()
+            before = rows(db)
+            with sqlite3.connect(db) as connection:
+                assert connection.execute('PRAGMA user_version').fetchone()[0] == old_schema
+            second = Worker(options.worker, config, endpoint, root, 'new19'); processes.append(second)
+            new_info = second.ready(); assert new_info['fencedRequests']['context'] == context
+            assert attribution(task['taskId'])['creator'] == old_creator
             retry = dict(submission, requestId='retry-new-worker')
             assert submit(retry)['taskId'] == task['taskId']
-            assert attribution(task['taskId'])['creator'] is None
+            assert attribution(task['taskId'])['creator'] == old_creator
             assert rows(db) == before
-            backups = list(state.glob('journal-v17-*.sqlite')); assert len(backups) == 1
+            backups = list(state.glob(f'journal-v{old_schema}-*.sqlite')); assert len(backups) == 1
             assert rows(backups[0]) == before
             fresh = json.loads(json.dumps(submission)); fresh['idempotencyKey'] = 'new-key'; fresh['command']['arguments'][1] = "printf 'new\\n' >> runs.log"
             new_task = submit(fresh); finish(new_task)
             creator = attribution(new_task['taskId'])['creator']
             assert creator == {'kind': 'local', 'workerGeneration': new_info['generation']}
+
+            def cancellation(task_id):
+                response = call(endpoint, {'extensionVersion': 1, 'contract': {'id': 'winbridge.operation-cancellation', 'version': 1}, 'context': context,
+                                           'payload': {'kind': 'task', 'operationId': task_id}})
+                assert response['result']['kind'] == 'data', response
+                return response['result']['payload']['intent']
+
+            def cancel(task_id):
+                response = call(endpoint, {'requestContractVersion': 2, 'context': context, 'request': {'method': 'cancel', 'taskId': task_id}})
+                assert response['outcome'] == 'responded', response
+
+            assert cancellation(task['taskId']) is None
+            cancel(task['taskId']); assert cancellation(task['taskId']) is None
+            long = json.loads(json.dumps(submission)); long['idempotencyKey'] = 'cancel-key'; long['timeoutMs'] = 60000; long['command']['arguments'][1] = 'exec sleep 60'
+            active = submit(long)
+            until(lambda: call(endpoint, {'method': 'get_task', 'taskId': active['taskId']})['task']['processId'])
+            cancel(active['taskId'])
+            intent = cancellation(active['taskId']); assert intent['actor'] == creator
+            cancel(active['taskId']); assert cancellation(active['taskId']) == intent
+            until(lambda: call(endpoint, {'method': 'get_task', 'taskId': active['taskId']})['task']['status'] == 'cancelled')
             second.close()
-            third = Worker(options.worker, config, endpoint, root, 'reopened18'); processes.append(third)
+            third = Worker(options.worker, config, endpoint, root, 'reopened19'); processes.append(third)
             reopened = third.ready(); assert reopened['generation'] != new_info['generation']
             assert attribution(new_task['taskId'])['creator'] == creator
+            assert cancellation(active['taskId']) == intent
             assert submit(fresh)['taskId'] == new_task['taskId']
             assert (root / 'runs.log').read_text().splitlines() == ['old', 'new']
             third.close()
             frozen = hashlib.sha256(db.read_bytes()).hexdigest()
             incompatible = subprocess.run([str(old), '--config', str(config), 'serve'], capture_output=True, text=True, timeout=8)
-            assert incompatible.returncode != 0 and 'schema 18' in incompatible.stderr, incompatible.stderr
+            assert incompatible.returncode != 0 and 'schema 19' in incompatible.stderr, incompatible.stderr
             assert hashlib.sha256(db.read_bytes()).hexdigest() == frozen
             with sqlite3.connect(db) as connection:
-                assert connection.execute('PRAGMA user_version').fetchone()[0] == 18
-            print(json.dumps({'passed': True, 'platform': 'linux', 'fromSchema': 17, 'toSchema': 18, 'oldHistoryPreserved': True,
-                              'verifiedMigrationBackup': True, 'legacyCreatorUnknownAfterRetry': True, 'creatorSurvivesRestart': True,
-                              'externalExecutions': 2, 'oldWorkerRefusesWithoutJournalWrite': True}, indent=2))
+                assert connection.execute('PRAGMA user_version').fetchone()[0] == 19
+            print(json.dumps({'passed': True, 'platform': 'linux', 'fromSchema': old_schema, 'toSchema': 19, 'oldHistoryPreserved': True,
+                              'verifiedMigrationBackup': True, 'oldCreatorPreservedAfterRetry': True, 'creatorSurvivesRestart': True,
+                              'cancellationSurvivesRetryAndRestart': True, 'terminalLateCancelUnattributed': True,
+                              'completedExternalExecutions': 2, 'startedAndCancelledProcesses': 1, 'oldWorkerRefusesWithoutJournalWrite': True}, indent=2))
         finally:
             for process in processes:
                 process.close()

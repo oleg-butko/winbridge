@@ -218,7 +218,7 @@ mod tests {
         let path = root.path().join("journal.sqlite");
         let mut s = Store::open(&path).unwrap();
         let task = s.accept(request(), command(), None).unwrap();
-        s.connection.execute_batch("DROP TABLE operation_creators;PRAGMA user_version=17;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        s.connection.execute_batch("DROP TABLE operation_cancellations; DROP TABLE operation_creators;PRAGMA user_version=17;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
         let authority = s.journal_authority().clone();
         drop(s);
         let mut next = Store::open(&path).unwrap();

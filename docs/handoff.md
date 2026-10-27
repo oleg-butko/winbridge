@@ -2,6 +2,16 @@
 
 **Ветка .204:** `feat/multi-controller`, base9b47a9c;
 [прямые multi-controller sessions](plans/multi-controller-runtime.md).
+**Текущий source journal schema19:** первый effective cancellation actor хранится
+отдельно от creator, атомарно с отменой task/import/workflow/application. Workflow
+передаёт источник отмены своим children; repeated/terminal cancel не переатрибутирует.
+**829 workspace passed /17 ignored +3 cancellation protocol tests**, actual Linux
+17/18→19 migration/backup/retry/restart/old-exe refusal и Chromium sandbox passed.
+Workspace Clippy all-targets, desktop Linux/MSVC worker checks, contracts,
+TypeScript/UI, workspace/desktop fmt и scaffold290 прошли.
+Installed worker/main schema17 не менялись; active updater/exact-schema activation
+не получают нового migration разрешения. Native Windows gate19 ещё нужен.
+
 Git coordination отменена пользователем: её отдельные ветки удалены, прототипы
 в эту ветку не входят. Pure sessions model и immutable RPC origins подключены к
 реальному сетевому runtime: worker.controllerTopology, независимые reconnect loops,
@@ -25,7 +35,8 @@ actual Linux schema17→18 migration/backup/retry/restart/old-worker refusal и
 Chromium sandbox прошли. Старым задачам автор не назначается при retry.
 Workspace Clippy all-targets, desktop Linux/MSVC worker compile checks,
 contracts/TypeScript/UI, workspace/desktop fmt и scaffold290 прошли.
-Автор не является ACL; инициатор отмены и CLI/MCP query wrapper ещё впереди.
+Автор не является ACL. Инициатор отмены подключён в schema19 (выше);
+CLI/MCP query wrapper ещё впереди.
 Это новая несовместимая для старого worker схема журнала: installed schema17
 не мигрировался. Active updater блокирует normal migration; exact-schema
 activation/updater migration driver17→18 не объявлять готовым. Прежний Windows

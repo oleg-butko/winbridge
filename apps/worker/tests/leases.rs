@@ -470,7 +470,7 @@ fn schema_nine_upgrade_retains_raw_bytes_keys_and_consistent_backup_without_inve
     drop(store);
     sql(
         &root,
-        "DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; PRAGMA user_version=9;",
+        "DROP TABLE operation_cancellations; DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; PRAGMA user_version=9;",
     );
     let raw = |path: &Path| {
         Connection::open(path)
@@ -525,7 +525,7 @@ fn schema_nine_upgrade_retains_raw_bytes_keys_and_consistent_backup_without_inve
 fn failed_schema_ten_upgrade_is_atomic() {
     let (root, store) = setup();
     drop(store);
-    sql(&root, "DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; PRAGMA user_version=9; CREATE TABLE resource_leases(canary TEXT); INSERT INTO resource_leases VALUES('unchanged');");
+    sql(&root, "DROP TABLE operation_cancellations; DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; PRAGMA user_version=9; CREATE TABLE resource_leases(canary TEXT); INSERT INTO resource_leases VALUES('unchanged');");
     assert!(Store::open(&root.path().join("journal.sqlite")).is_err());
     let db = Connection::open(root.path().join("journal.sqlite")).unwrap();
     assert_eq!(

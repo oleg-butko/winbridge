@@ -9,7 +9,8 @@ import { createServer as viteServer } from "vite";
 import { chromium } from "playwright";
 
 const root = resolve(import.meta.dirname, "..");
-const attributionMode = process.argv.includes("--attribution");
+const cancellationMode = process.argv.includes("--cancellation");
+const attributionMode = process.argv.includes("--attribution") || cancellationMode;
 const run = await mkdtemp(join(tmpdir(), "wb-links-"));
 await mkdir(join(root, ".winbridge"), { recursive: true });
 const harness = await mkdtemp(join(root, ".winbridge", "connections-ui-"));
@@ -65,7 +66,7 @@ try {
   const config = join(run, "worker.json");
   await writeFile(config, JSON.stringify({ schemaVersion: 1, instanceId: "links-ui", nodeId: "worker", stateDirectory: join(run, "state"),
     worker: { keepRunningOnUiExit: true, controllerTopology: { schemaVersion: 1, primary: "debian-203", controllers: endpoints.map((port, i) => ({ id: `debian-${203 + i}`, url: `ws://127.0.0.1:${port}` })) } },
-    projects: [{ id: "fixture", workspaceRoot: run, allowDirectCommands: false, maxConcurrentMutations: 1, recipes: attributionMode ? [{id:"proof",executable:"/bin/true",arguments:[],workingDirectory:".",timeoutMs:2000}] : [] }] }));
+    projects: [{ id: "fixture", workspaceRoot: run, allowDirectCommands: false, maxConcurrentMutations: 1, recipes: attributionMode ? [{id:"proof",executable:cancellationMode?"/bin/sh":"/bin/true",arguments:cancellationMode?["-c","exec sleep 60"]:[],workingDirectory:".",timeoutMs:cancellationMode?60000:2000}] : [] }] }));
   worker = spawn(join(process.env.CARGO_TARGET_DIR ?? join(root, "target"), "debug/winbridge-worker"), ["--config", config, "serve"], { stdio: ["ignore", "pipe", "pipe"] });
   worker.stdout.on("data", (data) => { logs += data; }); worker.stderr.on("data", (data) => { logs += data; });
   let startError; worker.on("error", (error) => { startError = error; });
@@ -85,9 +86,9 @@ try {
   await until(async () => (await snapshot()).connections.find((c) => c.id === "debian-204").connection.state === "disconnected");
   let attributionTask = null;
   if (attributionMode) {
-    const accepted = await call({method:"submit",request:{protocolVersion:1,requestId:"attribution-ui",projectId:"fixture",idempotencyKey:"attribution-ui",timeoutMs:2000,command:{kind:"recipe",recipeId:"proof",arguments:[]}}});
+    const accepted = await call({method:"submit",request:{protocolVersion:1,requestId:"attribution-ui",projectId:"fixture",idempotencyKey:"attribution-ui",timeoutMs:cancellationMode?60000:2000,command:{kind:"recipe",recipeId:"proof",arguments:[]}}});
     assert.equal(accepted.kind,"task");attributionTask=accepted.task.taskId;
-    await until(async () => (await call({method:"get_task",taskId:attributionTask})).task.status === "succeeded");
+    await until(async () => {const task=(await call({method:"get_task",taskId:attributionTask})).task;return cancellationMode?task.processId!==null:task.status==="succeeded";});
   }
   await writeFile(join(harness, "index.html"), '<div id="root"></div><script type="module" src="./harness.tsx"></script>');
   await writeFile(join(harness, "harness.tsx"), `import React, {useState} from "react";
@@ -96,7 +97,8 @@ import {MantineProvider} from "@mantine/core";
 import "@mantine/core/styles.css";
 import {ControllerConnectionsPanel} from "/@fs/${root}/ui/src/features/tasks/ControllerConnectionsPanel.tsx";
 import {OperationAttributionPanel} from "/@fs/${root}/ui/src/features/tasks/OperationAttributionPanel.tsx";
-function Harness(){const [props,setProps]=useState({info:${JSON.stringify(info)},connected:true});window.updateConnectionProps=(change)=>setProps((old)=>({...old,...change}));return <MantineProvider><ControllerConnectionsPanel key={props.info.generation} {...props}/>${attributionMode ? `<OperationAttributionPanel key={'author:'+props.info.generation} {...props} kind="task" operationId=${JSON.stringify(attributionTask)}/>` : ""}</MantineProvider>}
+import {OperationCancellationPanel} from "/@fs/${root}/ui/src/features/tasks/OperationCancellationPanel.tsx";
+function Harness(){const [props,setProps]=useState({info:${JSON.stringify(info)},connected:true,cancellationKey:'initial'});window.updateConnectionProps=(change)=>setProps((old)=>({...old,...change}));return <MantineProvider><ControllerConnectionsPanel key={props.info.generation} {...props}/>${attributionMode ? `<OperationAttributionPanel key={'author:'+props.info.generation} {...props} kind="task" operationId=${JSON.stringify(attributionTask)}/>` : ""}${cancellationMode ? `<OperationCancellationPanel key={'cancel:'+props.info.generation} {...props} kind="task" operationId=${JSON.stringify(attributionTask)} updateKey={props.cancellationKey}/>` : ""}</MantineProvider>}
 createRoot(document.getElementById("root")).render(<Harness/>);`);
   vite = await viteServer({ root, logLevel: "error", server: { host: "127.0.0.1", port: 0, fs: { allow: [root] } } });
   await vite.listen();
@@ -114,7 +116,11 @@ createRoot(document.getElementById("root")).render(<Harness/>);`);
     const response=await call({extensionVersion:1,contract:{id:"winbridge.operation-attribution",version:1},context:request.context,payload:request.query});
     assert.equal(response.result.kind,"data");return response.result.payload;
   });
-  await page.addInitScript(() => { window.__TAURI_INTERNALS__ = { invoke: (command, args) => { if (command === "controller_connections") return window.readConnectionSnapshot(args.request); if(command==="operation_attribution") return window.readAttribution(args.request); throw new Error(`Unexpected command ${command}`); } }; });
+  await page.exposeFunction("readCancellation", async (request) => {
+    const response=await call({extensionVersion:1,contract:{id:"winbridge.operation-cancellation",version:1},context:request.context,payload:request.query});
+    assert.equal(response.result.kind,"data");return response.result.payload;
+  });
+  await page.addInitScript(() => { window.__TAURI_INTERNALS__ = { invoke: (command, args) => { if (command === "controller_connections") return window.readConnectionSnapshot(args.request); if(command==="operation_attribution") return window.readAttribution(args.request); if(command==="operation_cancellation") return window.readCancellation(args.request); throw new Error(`Unexpected command ${command}`); } }; });
   await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/.winbridge/${harness.split("/").at(-1)}/index.html`);
   const panel = page.getByTestId("controller-connections");
   const a = page.getByTestId("controller-link-debian-203"), b = page.getByTestId("controller-link-debian-204");
@@ -123,6 +129,16 @@ createRoot(document.getElementById("root")).render(<Harness/>);`);
   assert.match(await panel.innerText(), /Обработчики RPC: 0 \/ 32/);
   assert.equal((await call({ method: "list_tasks" })).tasks.length, attributionMode ? 1 : 0);
   if(attributionMode) await page.getByTestId("operation-attribution").getByText("Локальный вход worker",{exact:true}).waitFor();
+  if(cancellationMode) {
+    const cancellation=page.getByTestId("operation-cancellation");
+    await cancellation.getByText(/Сохранённой записи об инициаторе отмены нет/).waitFor();
+    const response=await call({requestContractVersion:2,context:info.fencedRequests.context,request:{method:"cancel",taskId:attributionTask}});
+    assert.equal(response.outcome,"responded");
+    await page.evaluate(()=>window.updateConnectionProps({cancellationKey:"cancelled"}));
+    await cancellation.getByText("Локальный вход worker",{exact:true}).waitFor();
+    await cancellation.getByText(/не подтверждает остановку процесса/).waitFor();
+    await until(async()=>(await call({method:"get_task",taskId:attributionTask})).task.status==="cancelled");
+  }
 
   // Old in-flight replies must not populate the view of a new worker generation.
   holdNext = true;
@@ -145,12 +161,13 @@ createRoot(document.getElementById("root")).render(<Harness/>);`);
   assert.equal(await panel.getByRole("button", { name: "Обновить соединения", exact: true }).isDisabled(), true);
 
   const before = calls;
-  const oldInfo = structuredClone(info); oldInfo.contractCatalog.supported = oldInfo.contractCatalog.supported.filter((c) => c.id !== contract.id && c.id!=="winbridge.operation-attribution");
+  const oldInfo = structuredClone(info); oldInfo.contractCatalog.supported = oldInfo.contractCatalog.supported.filter((c) => c.id !== contract.id && c.id!=="winbridge.operation-attribution" && c.id!=="winbridge.operation-cancellation");
   await page.evaluate((info) => window.updateConnectionProps({ info, connected: true }), oldInfo);
   await panel.waitFor({ state: "hidden" }); assert.equal(calls, before, "Old worker received an unsupported query");
   assert.deepEqual(errors, []);
   if(attributionMode) await page.getByTestId("operation-attribution").getByText("Эта версия worker не предоставляет сведения об авторе.",{exact:true}).waitFor();
-  console.log(`Controller connections UI: two real links, primary/error/counters, stale generation, lost IPC, offline and old-worker negotiation passed; ${attributionMode ? "one owned /bin/true task, real immutable creator UI" : "no tasks accepted"}.`);
+  if(cancellationMode) await page.getByTestId("operation-cancellation").getByText("Эта версия worker не предоставляет сведения об инициаторе отмены.",{exact:true}).waitFor();
+  console.log(`Controller connections UI: two real links, primary/error/counters, stale generation, lost IPC, offline and old-worker negotiation passed; ${cancellationMode ? "owned running process cancelled; real creator and cancellation intent UI" : attributionMode ? "one owned /bin/true task, real immutable creator UI" : "no tasks accepted"}.`);
 } catch (error) {
   console.error(logs); throw error;
 } finally {

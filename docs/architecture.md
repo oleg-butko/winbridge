@@ -258,8 +258,16 @@ origin берётся из RPC permit, local entry отмечается без �
 Cold migration17→18 делает verified SQLite backup и отказывает при active update;
 exact-schema activation не получает нового migration разрешения. Readonly
 `winbridge.operation-attribution` v1/SDK и task detail UI читают исторического
-creator с pinned scope/provider. Инициатор отмены отдельно ещё не сохраняется.
-Installed worker/main17 не менялись; native Windows gate18 ещё впереди.
+creator с pinned scope/provider. В текущей source/schema19 добавлена отдельная
+immutable cancellation intent таблица. Первый effective cancel/stop атомарно
+связывает initiator и изменение business state; duplicate/terminal no-op не
+переписывает источник и время. Workflow передаёт actor дочерним import/task/app,
+application — managed task; creator при этом не меняется. Legacy отсутствие
+metadata не доказывает отсутствие старой отмены; internal Store вызов может иметь
+unknown actor. Readonly `winbridge.operation-cancellation` v1 и task detail UI
+не выдают intent за подтверждение process cleanup. Cold17/18→19 backup/refusal
+проверены на Linux; active update и exact-schema activation migration не допускают.
+Installed worker/main17 не менялись; native Windows gate19 ещё впереди.
 Подробности и границы — в [плане](plans/multi-controller-runtime.md).
 
 Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, список реально реализованных capabilities. Несовместимая версия даёт понятную ошибку с дальнейшим действием. AppVersion не заменяет wire version. Session generation меняется после рестарта, durable task/event IDs сохраняются.

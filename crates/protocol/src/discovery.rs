@@ -96,6 +96,7 @@ impl ContractCatalog {
                 crate::operation_contract(),
                 crate::controller_connections_contract(),
                 crate::operation_attribution_contract(),
+                crate::operation_cancellation_contract(),
                 ContractRef {
                     id: crate::QUEUE_CONTROL_CONTRACT.into(),
                     version: 1,

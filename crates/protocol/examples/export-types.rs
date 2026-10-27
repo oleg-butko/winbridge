@@ -129,6 +129,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         OperationAttributionQuery::decl(&config),
         OperationAttributionRequest::decl(&config),
         OperationAttribution::decl(&config),
+        CancellationIntent::decl(&config),
+        OperationCancellation::decl(&config),
         WorkSchedulingPolicy::decl(&config),
         WorkSchedulingObservation::decl(&config),
         QueuePolicy::decl(&config),

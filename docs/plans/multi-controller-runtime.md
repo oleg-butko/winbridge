@@ -2,6 +2,9 @@
 
 2026-10-26, ветка `feat/multi-controller`, base9b47a9c.
 Первый агент192.168.44.203, второй192.168.44.204.
+Текущая source schema19: creator и первый cancellation actor реализованы отдельно;
+проверки и границы миграции описаны в последних разделах. Installed/main schema17
+не мигрировались, Windows gate19 ещё впереди.
 Пользователь отменил Git coordination. Репозиторий остаётся только средством
 совместной разработки: Git claims/очередей/состояния Windows здесь нет.
 До готовности функции пользователь при необходимости вручную переключает
@@ -113,7 +116,7 @@ Durable attribution подключена отдельной internal side table 
 дети workflow наследуют creator родителя. Для отмены другим controller следом
 нужна отдельная запись инициатора; создатель задачи при этом не меняется.
 Side table, migration, readonly DTO/SDK и task detail UI реализованы в feature
-source. Инициатор отмены отдельно ещё не записывается. После fetch main остаётся
+source. Инициатор отмены отдельно подключён в schema19 (раздел ниже). После fetch main остаётся
 9b47a9c/schema17; schema18 выделена только в этой ветке, установленный worker
 и main не менялись. Слияние с дальнейшими updater изменениями требует сверки схем.
 
@@ -197,7 +200,7 @@ cargo check -p winbridge-worker --target x86_64-pc-windows-msvc --locked
 и test observations; durable task creator не объявляется реализованным.
 
 Durable creator attribution с атомарным fresh acceptance и неизменным dedup
-подключена ниже. Следом нужны инициатор отмены и CLI/MCP оболочка readonly API.
+подключена ниже. Инициатор отмены добавлен в следующем slice; далее CLI/MCP оболочка readonly API.
 Это не разрешение на смену installed worker. Отдельный native gate требует
 доступного пользователем Windows worker; normal-service updater остаётся отдельно.
 
@@ -344,6 +347,75 @@ Actual Linux migration proof повторяется с проверенным sc
 python3 scripts/test-attribution-migration.py --reference PRIVATE_REFERENCE_JSON --worker NEW_LINUX_WORKER
 CARGO_TARGET_DIR=/home/user1/winbridge/target PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:operation-attribution
 ```
+
+## Первый инициатор отмены, schema19, 2026-10-26
+
+`operation_cancellations` — отдельная immutable таблица с first effective intent:
+kind/operation, timestamp, actor(nullable), parent workflow/application(nullable).
+Она вводится миграцией18→19, без изменения creators, business DTO или idempotency
+fingerprints. Creator/schema18 и его readonly контракт v1 остаются прежними.
+Для cold17/18→19 используются verified consistent SQLite backups с исходным
+номером схемы; active update проверяется до writable migration и в transaction.
+Никакого migration driver для активной updater activation здесь не добавлено.
+
+Все foreground cancel/stop берут initiator из того же immutable RPC permit/local
+entry, что и creator acceptance. Task, import, workflow и application пишут intent
+в transaction смены состояния: ignored/failed INSERT откатывает cancellation
+state/events/revision. INSERT не выполняется для duplicate, terminal no-op или
+старого уже принятого намерения без metadata. UPDATE/DELETE intent запрещены.
+Отмена queued import сохраняет прежние finish/attempt semantics, workflow/app —
+attention/CAS semantics. Повтор stop уже Stopping application не увеличивает revision.
+
+Workflow propagates свой cancellation actor на pending/running children;
+application propagates на managed task. Parent reference объясняет цепочку.
+Успешным/уже отменённым children метаданные заново не назначаются. Явный cancel
+конкретной child раньше родителя сохраняет своего первоначального инициатора.
+Runtime timeout/failure/низкоуровневый Store cancel без caller context не получает
+ложного local user: actor может быть unknown. Creator никогда не подменяется.
+
+`winbridge.operation-cancellation` v1 — отдельный schema-pinned readonly контракт;
+query использует kind/operationId и pinned journal scope. Ответ содержит nullable
+intent и observation/provider/current generation; сохранённая actor generation
+может быть исторической. `intent=null` означает отсутствие записи, а не доказанное
+отсутствие старого cancel. API не вызывает команды и не разрешает новый cancel.
+Local IPC SDK, Controller Rust SDK, main-window Tauri command и task detail UI
+подключены. Старому worker неизвестный запрос не передаётся; CLI/MCP wrapper ещё
+впереди. UI обновляет сведения по смене Task status/cancel flag и явной кнопке,
+без дополнительного interval. Intent не выдаётся за terminal status/physical proof.
+
+Проверки текущего slice:
+
+- **829 workspace tests passed /17 штатно ignored +3 protocol cancellation tests**.
+  Unit SQLite проверяет concurrent cancels, immutable actor/time, no-op terminal
+  без backfill, ignored INSERT rollback для task/import, reopen и migration18
+  с сохранением creator/unknown history. Active18 update отказан до backup/write.
+- Actual два controller/WebSocket: A создаёт running task, B отменяет; A повторяет,
+  оба видят одного initiator B и прежнего creator A. Real workflow startup cancel
+  передаёт actor через application к process task; successful import/build не
+  получают fake cancellation intent. Managed fixture процессы завершаются.
+- Actual сохранённые Linux schema17 и18 binaries: history →19 с consistent backup,
+  source creator сохраняется (unknown для17), retry/restart не заменяют creator
+  или cancellation actor/time; late terminal cancel остаётся без новой записи.
+  На каждый прогон:2 completed `/bin/sh` команды и1 started/cancelled process,
+  без повторного исполнения. Старые17/18 exe отказывают на19 без записи в journal.
+  `scripts/test-attribution-migration.py` теперь проверяет оба source schemas и19.
+- `test:operation-cancellation`: sandbox Chromium + actual Linux worker IPC,
+  running owned process и реальная отмена, author/intent UI, status-change refresh,
+  scope/offline/old-worker cases. TypeScript/UI build и workspace Clippy all-targets
+  с `-D warnings`, standalone desktop Linux check, MSVC worker check,
+  contracts generation/check, workspace/desktop fmt и scaffold290 прошли.
+- Debian free space перед сборками **9.5 GiB**, после workspace9.3 GiB;
+  CARGO_INCREMENTAL=0, основной target reused. Windows не использовался;
+  installed config/journal/firewall не менялись. Windows native gate19 не объявлен.
+
+Пример local browser проверки после сборки worker:
+
+```sh
+CARGO_TARGET_DIR=/home/user1/winbridge/target PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:operation-cancellation
+```
+
+Старые proof16→17 и17→18 выше относятся к соответствующим прошлым source slices;
+новые17/18→19 результаты Linux не заменяют native Windows/updater migration proof.
 
 Удалены origin refs `coordination/windows-v1` и
 `feat/multi-controller-foundation`, а также local branch последней. Проверено,

@@ -7,8 +7,10 @@ transport подключены; Linux model и два реальных loopback 
 Readonly список связей и RPC counters подключён отдельным контрактом/панелью;
 scope/old-worker/offline проверены на Chromium + Linux worker. Durable creator
 attribution (schema18, workflow inheritance, readonly API/task UI) добавлена:
-819 workspace +3 protocol tests и actual Linux17→18 proof прошли. Cancellation
-actor/CLI-MCP query wrappers и Windows gate18 впереди. Windows переключает пользователь вручную;
+819 workspace +3 protocol tests и actual Linux17→18 proof прошли. Затем добавлены
+cancellation actor/propagation/readonly UI в schema19:829 workspace +3 protocol,
+actual Linux17/18→19 proof и Chromium прошли. CLI-MCP query wrappers и Windows
+gate19 впереди. Windows переключает пользователь вручную;
 установленный0.1.1 и его config здесь не меняются.
 
 2026-10-26: по новой задаче пользователя выполняются

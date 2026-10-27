@@ -25,6 +25,8 @@ mod controller_connections;
 pub use controller_connections::*;
 mod operation_attribution;
 pub use operation_attribution::*;
+mod operation_cancellation;
+pub use operation_cancellation::*;
 mod work_scheduling;
 pub use work_scheduling::*;
 mod queue_control;

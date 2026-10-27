@@ -344,6 +344,82 @@ fn stop(worker: &Arc<Worker>, id: &str) {
 }
 
 #[test]
+fn cancellation_propagates_from_workflow_to_starting_application_and_its_task() {
+    let (_temp, config, mut request) = setup();
+    request.readiness.stdout_contains = "NEVER-READY".into();
+    request.readiness.timeout_ms = 30000;
+    let worker = WorkerOwner(Worker::open(config).unwrap());
+    let accepted = accept(&worker, request);
+    until(&worker, || {
+        let flow = flow(&worker, &accepted.workflow_id);
+        flow.application_id
+            .as_ref()
+            .is_some_and(|id| app(&worker, id).process_id.is_some())
+    });
+    let active = flow(&worker, &accepted.workflow_id);
+    let context = worker.request_context().unwrap();
+    let observe = |kind, id: &str| {
+        let LocalResponse::Info { info } = worker.handle(LocalRequest::Info) else {
+            panic!("Info")
+        };
+        let request = OperationAttributionRequest {
+            context: context.clone(),
+            query: OperationAttributionQuery {
+                kind,
+                operation_id: id.into(),
+            },
+        };
+        decode_operation_cancellation(
+            worker.handle_extension(operation_cancellation_envelope(&info, &request).unwrap()),
+            &info,
+            &request,
+        )
+        .unwrap()
+        .intent
+    };
+    let cancelled = worker.handle(LocalRequest::CancelWorkflow {
+        workflow_id: accepted.workflow_id.clone(),
+    });
+    assert!(matches!(cancelled, LocalResponse::Workflow { .. }));
+    let root = observe(HistoryKind::Workflow, &accepted.workflow_id).unwrap();
+    assert_eq!(
+        root.actor,
+        Some(OperationCreator::Local {
+            worker_generation: worker.generation.clone()
+        })
+    );
+    let done = complete(&worker, &accepted.workflow_id);
+    assert_eq!(done.status, TaskStatus::Cancelled);
+    let application_id = active.application_id.unwrap();
+    let app_intent = observe(HistoryKind::Application, &application_id).unwrap();
+    assert_eq!(app_intent.actor, root.actor);
+    assert_eq!(
+        app_intent.inherited_from.unwrap().operation_id,
+        accepted.workflow_id
+    );
+    let start = observe(
+        HistoryKind::Task,
+        active.steps[2].operation_id.as_deref().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(start.actor, root.actor);
+    let parent = start.inherited_from.unwrap();
+    assert_eq!(parent.kind, HistoryKind::Application);
+    assert_eq!(parent.operation_id, application_id);
+    assert!(observe(
+        HistoryKind::Import,
+        active.steps[0].operation_id.as_deref().unwrap()
+    )
+    .is_none());
+    assert!(observe(
+        HistoryKind::Task,
+        active.steps[1].operation_id.as_deref().unwrap()
+    )
+    .is_none());
+    until(&worker, || worker.is_idle());
+}
+
+#[test]
 fn actual_pipeline_dedup_readiness_log_and_owner_leases() {
     let (_temp, config, request) = setup();
     let worker = WorkerOwner(Worker::open(config).unwrap());
@@ -687,7 +763,7 @@ fn queued_cancel_has_no_child_effects_and_v2_migration_preserves_state() {
         .unwrap();
     drop(store);
     let connection = rusqlite::Connection::open(&db).unwrap();
-    connection.execute_batch("DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
+    connection.execute_batch("DROP TABLE operation_cancellations; DROP TABLE operation_creators; DROP TABLE worker_journal_activations; DROP TABLE worker_shutdown_receipts; DROP TABLE worker_update_commands; DROP TABLE worker_update_leases; DROP TABLE resource_claims; DROP TABLE resource_requests; DROP TABLE resource_policy; DROP TABLE queue_roots; DROP TABLE queue_commands; DROP TABLE queue_control; DROP INDEX queue_pending_tasks; DROP INDEX queue_pending_imports; DROP INDEX queue_pending_workflows; DROP TABLE journal_admission; DROP TABLE resource_leases; DROP TABLE execution_attempts; DROP TABLE journal_authority; DROP TRIGGER imports_revision_guard; ALTER TABLE imports DROP COLUMN revision; DROP TRIGGER workflows_revision_guard; ALTER TABLE workflows DROP COLUMN revision; DROP TRIGGER applications_revision_guard; ALTER TABLE applications DROP COLUMN revision; DROP TRIGGER attention_revision_guard; ALTER TABLE attention DROP COLUMN revision; DROP TRIGGER tasks_revision_guard; ALTER TABLE tasks DROP COLUMN revision; DROP TABLE output_cleanup; DROP TABLE attention; DELETE FROM workflows; DROP TABLE applications; DROP TABLE workflows; PRAGMA user_version=2;").unwrap();
     drop(connection);
     // A v2 task/output survives the consistent snapshot and v3 table migration.
     let store = Store::open(&db).unwrap();

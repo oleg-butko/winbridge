@@ -15,6 +15,7 @@
     "test:ui": "node scripts/validate-ui.mjs",
     "test:controller-connections": "node scripts/test-controller-connections.mjs",
     "test:operation-attribution": "node scripts/test-controller-connections.mjs --attribution",
+    "test:operation-cancellation": "node scripts/test-controller-connections.mjs --cancellation",
     "test:command-presentation": "node scripts/test-command-presentation.mjs",
     "test:output-buffer": "node scripts/test-output-buffer.mjs",
     "test:request-context": "node scripts/test-request-context.mjs",
