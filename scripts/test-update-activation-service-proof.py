@@ -51,6 +51,19 @@ class ServiceEvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             proof.verify_worker_migration(bad, reference, source)
 
+    def test_resource_policy_metadata_allows_only_the_bound_next_epoch(self):
+        good = {'schemaVersion': 1, 'normalizedColumn': 'resource_policy.epoch',
+                'policyUnchanged': True, 'beforeEpoch': 1, 'afterEpoch': 2}
+        proof.require_resource_policy_reconciliation(good, 1, 2)
+        for key, replacement in [('beforeEpoch', True), ('afterEpoch', 3), ('schemaVersion', True),
+                                 ('policyUnchanged', 1), ('normalizedColumn', 'resource_policy')]:
+            bad = dict(good); bad[key] = replacement
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                proof.require_resource_policy_reconciliation(bad, 1, 2)
+        for absent in (None, {}, []):
+            with self.assertRaises(ValueError):
+                proof.require_resource_policy_reconciliation(absent, 1, 2)
+
     def test_boolean_observations_reject_json_number_coercion(self):
         for key in ('lostServiceAckSentOnce', 'actualRetainedProcessExited', 'controllerStarted', 'userResumeRefused'):
             for value in (True, False):

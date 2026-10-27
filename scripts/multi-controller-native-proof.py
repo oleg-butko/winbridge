@@ -10,12 +10,13 @@ def need(value, message):
         raise ValueError(message)
 
 
-def verify(files, source, controller_build, runtime):
+def verify(files, source, controller_build, runtime, legacy=None):
     def value(name):
         return json.loads(files[name].decode('utf-8-sig'))
     report, proof, descriptor, ready = map(value, ('report.json', 'network-complete.json', 'worker-build-identity.json', 'network-ready.json'))
     need(report['kind'] == 'multi_controller_native_windows' and report['passed'] is True
          and report['error'] is None and report['isolatedWorkerExitConfirmed'] is True
+         and report['stdoutCaptureComplete'] is True and report['stderrCaptureComplete'] is True
          and type(report['remainingFixtureProcesses']) is int and report['remainingFixtureProcesses'] == 0
          and report['installedRuntimeChanged'] is False and report['windowsOpened'] is False, 'Windows gate/cleanup incomplete')
     need(report['sourceCommit'] == source['sourceCommit'] and report['manifestSha256'] == source['manifestSha256'], 'Report source differs')
@@ -27,6 +28,7 @@ def verify(files, source, controller_build, runtime):
     build = descriptor['build']
     need(build['version'] == '0.2.0' and controller_build['version'] == '0.2.0' and build['sourceCommit'] == source['sourceCommit'] and build['sourceManifestSha256'] == source['manifestSha256']
          and build['sourceDirty'] is False and proof['build'] == build and ready['build'] == build, 'Worker build differs')
+    need(proof.get('legacyController') == legacy, 'Installed controller reference differs')
     need(proof['source'] == source and proof['controllerBuild'] == controller_build and controller_build['sourceCommit'] == source['sourceCommit']
          and controller_build['sourceDirty'] is False, 'Controller source differs')
     for name in ('source-before.log', 'source-after.log'):
@@ -85,8 +87,8 @@ def verify(files, source, controller_build, runtime):
     return {'passed': True, 'workerSha256': sha, 'controllers': 4, 'retainedTasks': 5}
 
 
-def audit(files, source, controller_build, runtime):
-    result = verify(files, source, controller_build, runtime)
+def audit(files, source, controller_build, runtime, legacy=None):
+    result = verify(files, source, controller_build, runtime, legacy)
     # Mutate observed positive evidence; these are verifier checks, never native runs.
     mutations = [
         ('report.json', lambda v: v.update(remainingFixtureProcesses=1)),
@@ -109,7 +111,7 @@ def audit(files, source, controller_build, runtime):
         change(payload)
         mutated[name] = json.dumps(payload).encode()
         try:
-            verify(mutated, source, controller_build, runtime)
+            verify(mutated, source, controller_build, runtime, legacy)
         except (ValueError, KeyError, IndexError):
             continue
         raise ValueError('Verifier accepted corrupted evidence: ' + name)

@@ -74,6 +74,8 @@ def main():
     parser.add_argument('--controller-binary', required=True, type=Path)
     parser.add_argument('--test-runtime-directory', required=True)
     parser.add_argument('--cache-run', required=True)
+    parser.add_argument('--legacy-controller-binary', type=Path, help='Optional immutable copy of the installed controller for peer0')
+    parser.add_argument('--legacy-controller-sha256')
     args = parser.parse_args()
     pin = health.archive_pin(args.source_archive)
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run), 'Explicit cache run required')
@@ -88,6 +90,14 @@ def main():
     need(runtime.is_absolute() and runtime.drive.lower() == 'k:' and '..' not in runtime.parts, 'Explicit local test runtime required')
     build = json.loads(subprocess.check_output([str(args.controller_binary.resolve()), '--describe'], text=True))['build']
     need(build['sourceCommit'] == pin['sourceCommit'] and build['sourceDirty'] is False, 'Controller must be built from the same clean source commit')
+    legacy = None
+    if args.legacy_controller_binary:
+        sha = hashlib.sha256(args.legacy_controller_binary.read_bytes()).hexdigest()
+        need(re.fullmatch(r'[0-9a-f]{64}', args.legacy_controller_sha256 or '') and sha == args.legacy_controller_sha256, 'Pinned installed controller hash required')
+        legacy_build = json.loads(subprocess.check_output([str(args.legacy_controller_binary.resolve()), '--describe'], text=True))['build']
+        legacy = {'peer': 0, 'sha256': sha, 'build': legacy_build}
+    else:
+        need(args.legacy_controller_sha256 is None, 'Legacy hash without executable')
     project = next(p for p in before['projects'] if p['id'] == 'snapshot-fixture')
     run = time.strftime('%Y%m%d-%H%M%S', time.gmtime()) + '-' + uuid.uuid4().hex[:8]
     local = ROOT / '.winbridge/multi-controller-native' / run
@@ -135,7 +145,8 @@ def main():
         peer = peers[index]
         suffix = '-restart' if restart else ''
         log = (local / f'controller-{index}{suffix}.log').open('x')
-        peer['process'] = subprocess.Popen([str(args.controller_binary.resolve()), '--config', str(peer['config']), 'serve'], stdout=log, stderr=subprocess.STDOUT)
+        binary = args.legacy_controller_binary if legacy is not None and index == 0 else args.controller_binary
+        peer['process'] = subprocess.Popen([str(binary.resolve()), '--config', str(peer['config']), 'serve'], stdout=log, stderr=subprocess.STDOUT)
         peer['log'] = log
         save(local / f'controller-{index}{suffix}-owner.json', {'pid': peer['process'].pid, 'config': str(peer['config']), 'endpoint': str(peer['endpoint']), 'url': peer['url']})
         wait_for(lambda: (peer['process'].poll(), peer['endpoint'].exists()), lambda x: x == (None, True), 10)
@@ -159,7 +170,8 @@ def main():
         metadata = {'schemaVersion': 1, 'run': run, 'source': pin, 'controllerBuild': build,
                     'controllerSha256': hashlib.sha256(args.controller_binary.read_bytes()).hexdigest(),
                     'testRuntimeDirectory': str(runtime), 'workingDirectory': str(work), 'reportDirectory': str(shared),
-                    'instanceId': instance, 'controllers': [p['url'] for p in peers]}
+                    'instanceId': instance, 'controllers': [p['url'] for p in peers], 'legacyController': legacy,
+                    'coordinatorSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
         save(local / 'run-info.json', metadata)
         worker_config = {'schemaVersion': 1, 'instanceId': instance, 'nodeId': 'multi-worker', 'stateDirectory': str(work / 'state'),
                          'worker': {'keepRunningOnUiExit': True, 'controllerTopology': {'schemaVersion': 1, 'primary': 'c3',
@@ -207,7 +219,7 @@ exit $LASTEXITCODE
         need(all(x['build']['sourceCommit'] == pin['sourceCommit'] and x['build']['sourceManifestSha256'] == pin['manifestSha256'] and x['build']['sourceDirty'] is False for x in infos), 'Worker build differs from source')
         for i, info in enumerate(infos):
             need(info['controllerConnection']['url'] == peers[i]['url'], 'Info reports another caller connection')
-            page = diagnostics(i, 'controller_connections')
+            page = diagnostics(3 if legacy is not None and i == 0 else i, 'controller_connections')
             need(page['primary'] == 'c3' and len(page['connections']) == 4 and page['rpc']['limit'] == 32
                  and all(c['rpc']['limit'] == 16 and c['connection']['state'] == 'connected' for c in page['connections']), 'Incomplete topology/budget')
         save(local / 'connected-infos.json', infos)
@@ -260,7 +272,7 @@ exit $LASTEXITCODE
         need('Привет' in ''.join(bytes(c['bytes']).decode('utf-8', errors='replace') for c in output['chunks']), 'Output lost or unreadable from another controller')
         evidence = {'schemaVersion': 1, 'kind': 'multi_controller_native', 'passed': True, 'platform': 'windows', 'context': context,
                     'generation': infos[0]['generation'], 'build': infos[0]['build'], 'source': pin, 'controllerBuild': build,
-                    'controllers': 4, 'primary': 'c3', 'sameRuntime': True, 'parallelProjects': True, 'sameProjectSerialized': True,
+                    'controllers': 4, 'legacyController': legacy, 'primary': 'c3', 'sameRuntime': True, 'parallelProjects': True, 'sameProjectSerialized': True,
                     'crossControllerDedup': True, 'disconnectPreservedTask': True, 'controllerRestartPreservedCreator': True,
                     'crossControllerCancellation': True, 'sharedOutput': True, 'tasks': tasks, 'creators': creators,
                     'parallel': parallel, 'duplicates': duplicates, 'cancellations': cancellations,
@@ -281,7 +293,9 @@ exit $LASTEXITCODE
         report = json.loads(files['report.json'].decode('utf-8-sig'))
         need(report['passed'] is True and report['isolatedWorkerExitConfirmed'] is True and report['remainingFixtureProcesses'] == 0,
              'Windows cleanup/counter checks incomplete')
-        audit = module('multi_evidence', 'multi-controller-native-proof.py').audit(files, pin, build, str(runtime))
+        if legacy is not None:
+            need(hashlib.sha256(args.legacy_controller_binary.read_bytes()).hexdigest() == legacy['sha256'], 'Installed controller reference changed')
+        audit = module('multi_evidence', 'multi-controller-native-proof.py').audit(files, pin, build, str(runtime), legacy)
         audit.update(module('multi_migration', 'update-activation-service-proof.py').verify_worker_migration(
             json.loads(files['worker-journal-attribution-migration-proof.json'].decode('utf-8-sig')),
             '536d86378b5c5adfc98b135c404e322d1dc9cc7dd19fb20941ca9b3f6686a712', pin))

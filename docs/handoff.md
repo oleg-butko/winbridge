@@ -17,6 +17,21 @@ Input2/stable slot). Исправление и точные run/retirement pins 
 Пользователь разрешил runtime-test-204 EXE в firewall; сохранить постоянный путь,
 не считать Cargo hashed EXE автоматически разрешёнными. Full Main25 ещё не пройден.
 
+## Текущее ограничение Windows: owned test process не завершился
+
+Не запускать новый Windows gate и не занимать runtime-test-204 повторно:
+[native run20261027-153506-fe00e6f2](plans/multi-controller-native-2026-10-27.md)
+прошёл build/cold17→19 для0.2.0, но network ready не получен, PID3524 имеет
+неподтверждённое kernel termination. Bootstrap task29421ccd… всё ещё running,
+fenced cancel принят/cancelRequested=true. Existing0.1.1 healthy/active1;
+ресурс не освобождать по одному отсутствию root PID. Пары/службы/firewall не менять.
+Обнаружен Outpost Firewall Pro, чтение NetFirewall rules запрещено; причина ещё
+не доказана, вопрос пользователю pending. Сначала проверить тот же task/PID/Job.
+Четыре owned test controller сохраняются; owner files и точные paths в native run.
+Новый Main25 исправляет только expected resource_policy.epoch metadata (описание
+в [плане](plans/main25-schema-profiles-2026-10-27.md)); positive proof ещё нужен.
+До освобождения Windows не сообщать, что можно переключить worker обратно на.203.
+
 ## Подготовка worker0.2.0
 
 Версии workspace/desktop/npm согласованы на0.2.0. Нативный сценарий

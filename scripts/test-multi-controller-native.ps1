@@ -25,7 +25,7 @@ $lease=[IO.File]::Open((Join-Path $cache '.winbridge-build-cache.lock'),[IO.File
 $report=[ordered]@{schemaVersion=1;kind='multi_controller_native_windows';passed=$false;sourceCommit=$SourceCommit;manifestSha256=$ManifestSha256;
  installedRuntimeChanged=$false;windowsOpened=$false;commands=@();isolatedWorkerExitConfirmed=$false;remainingFixtureProcesses=$null;error=$null;
  freeBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($work)).AvailableFreeSpace}
-$slot=$null;$child=$null;$out=$null;$err=$null
+$slot=$null;$child=$null;$out=$null;$err=$null;$outFile=$null;$errFile=$null
 $oldLocation=Get-Location;$oldIncremental=$env:CARGO_INCREMENTAL;$oldMigration=$env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT
 function Worker-Json([string[]]$Arguments){
  $si=[Diagnostics.ProcessStartInfo]::new($slot.executable)
@@ -89,7 +89,12 @@ try{
  foreach($a in @('--config',$config,'serve')){$si.ArgumentList.Add($a)}
  Write-Output ('Native multi-controller: start fixed network EXE '+$slot.executable)
  $child=[Diagnostics.Process]::new();$child.StartInfo=$si;[void]$child.Start()
- $out=$child.StandardOutput.ReadToEndAsync();$err=$child.StandardError.ReadToEndAsync()
+ Write-NewJson (Join-Path $SharedReportDirectory 'worker-process.json') @{processId=$child.Id;startedAtUtc=$child.StartTime.ToUniversalTime().ToString('o');executable=$slot.executable;workerSha256=$sha}
+ # Write bytes as they arrive. A stalled process/pipe must leave partial logs;
+ # retaining an unfinished ReadToEnd task must never hide startup diagnostics.
+ $outFile=[IO.FileStream]::new((Join-Path $SharedReportDirectory 'worker-stdout.log'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,1,$true)
+ $errFile=[IO.FileStream]::new((Join-Path $SharedReportDirectory 'worker-stderr.log'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,1,$true)
+ $out=$child.StandardOutput.BaseStream.CopyToAsync($outFile);$err=$child.StandardError.BaseStream.CopyToAsync($errFile)
  $until=[DateTime]::UtcNow.AddSeconds(90);$info=$null
  do{
   if($child.HasExited){throw 'Test worker exited before readiness'}
@@ -97,7 +102,10 @@ try{
   if($info.controllerConnection.state -ceq 'connected'){break}
   Start-Sleep -Milliseconds 200
  }while([DateTime]::UtcNow -lt $until)
- if($null -eq $info -or $info.controllerConnection.state -cne 'connected'){throw 'Fixed-path worker connection failed; inspect stderr and firewall; no automatic firewall changes'}
+ if($null -eq $info -or $info.controllerConnection.state -cne 'connected'){
+  if($null -ne $info){Write-NewJson (Join-Path $SharedReportDirectory 'network-last-info.json') $info}
+  throw 'Fixed-path worker connection failed; inspect partial stderr and last Info; no automatic firewall changes'
+ }
  Write-NewJson (Join-Path $SharedReportDirectory 'network-ready.json') @{context=$info.fencedRequests.context;generation=$info.generation;processId=$child.Id;build=$info.build}
  $donePath=Join-Path $SharedReportDirectory 'network-complete.json';$until=[DateTime]::UtcNow.AddSeconds(240)
  while(-not (Test-Path -LiteralPath $donePath)){
@@ -128,12 +136,16 @@ try{
 finally{
  if($null -ne $child){
   try{if(-not $child.HasExited){$child.Kill()};if($child.WaitForExit(15000)){$report.isolatedWorkerExitConfirmed=$true}else{$report.passed=$false;$report.error+='; worker exit unconfirmed'}}catch{$report.passed=$false;$report.error+='; worker cleanup unconfirmed'}
-  foreach($pair in @(@($out,'worker-stdout.log'),@($err,'worker-stderr.log'))){
-   $text='Capture did not finish within bounded wait'
-   try{if($pair[0].Wait(5000)){$text=$pair[0].GetAwaiter().GetResult()}}catch{$report.passed=$false}
-   [IO.File]::WriteAllText((Join-Path $SharedReportDirectory $pair[1]),$text,[Text.UTF8Encoding]::new($false))
+  $report.stdoutCaptureComplete=$false;$report.stderrCaptureComplete=$false
+  foreach($pair in @(@($out,$outFile,'stdoutCaptureComplete'),@($err,$errFile,'stderrCaptureComplete'))){
+   try{if($null -ne $pair[0] -and $pair[0].Wait(5000)){
+    $pair[0].GetAwaiter().GetResult();$pair[1].Flush($true);$pair[1].Dispose();$report[$pair[2]]=$true
+   }}catch{$report.passed=$false}
   }
-  $child.Dispose()
+  if(-not $report.stdoutCaptureComplete -or -not $report.stderrCaptureComplete){$report.passed=$false;$report.error+='; capture incomplete, partial logs preserved'}
+  # A process with unconfirmed termination may retain unfinished pipe I/O.
+  # Do not let synchronous disposal block publication of its owner/error report.
+  if($report.isolatedWorkerExitConfirmed -and $report.stdoutCaptureComplete -and $report.stderrCaptureComplete){$child.Dispose()}
  }
  Close-TestWorkerRuntime $slot
  Set-Location -LiteralPath $oldLocation;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$oldMigration;$lease.Dispose()

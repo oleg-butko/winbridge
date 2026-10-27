@@ -65,6 +65,17 @@ def require_schema_binding(value, profile):
          'Journal schema differs from the selected Main25 profile')
 
 
+def require_resource_policy_reconciliation(value, before, after):
+    need(type(value) is dict and value.get('schemaVersion') == 1
+         and type(value.get('schemaVersion')) is int
+         and value.get('normalizedColumn') == 'resource_policy.epoch'
+         and value.get('policyUnchanged') is True
+         and type(value.get('beforeEpoch')) is int and value['beforeEpoch'] == before
+         and type(value.get('afterEpoch')) is int and value['afterEpoch'] == after
+         and type(before) is int and type(after) is int and after == before + 1,
+         'Resource policy reconciliation must change only the exact next owner epoch')
+
+
 def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
     profile_schemas(profile)
     strict(proof)
@@ -185,6 +196,9 @@ def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
              and info['build']['sourceCommit'] == target['sourceCommit'] and info['build']['sourceManifestSha256'] == target['manifestSha256']
              and info['updateCoordination']['readOnly'] is True and info['updateCoordination']['lease']['phase'] == 'quiesced',
              'Normal IPC identity/maintenance differs')
+    if profile == 'worker19-updater20' or 'resourcePolicyReconciliation' in p:
+        require_resource_policy_reconciliation(p.get('resourcePolicyReconciliation'),
+                                              p['workerAuthorityBefore']['epoch'], p['workerAuthorityAfter']['epoch'])
     need(p['preservedRowsBefore'] == p['preservedRowsAfter'] and p['preservedRowsBefore']['tasks'] > 0
          and p['preservedRowsBefore']['output'] > 0 and len(p['normalHistory']) == p['preservedRowsBefore']['tasks']
          and all(t['mutationRefused'] is True and t['taskId'] == t['task']['taskId'] for t in p['normalHistory'])
@@ -233,6 +247,11 @@ def audit(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
         ('cases/0/coldActivationWriter/view/activationService/processAlive', True),
         ('cases/0/coldActivationWriter/automaticColdLaunchCount', 1),
     ]
+    if 'resourcePolicyReconciliation' in proof['cases'][0]['activationWriter']:
+        mutations += [(base+'resourcePolicyReconciliation/beforeEpoch', True),
+                      (base+'resourcePolicyReconciliation/afterEpoch', 0),
+                      (base+'resourcePolicyReconciliation/policyUnchanged', False),
+                      (base+'resourcePolicyReconciliation/normalizedColumn', 'resource_policy')]
     for path, replacement in mutations:
         bad = copy.deepcopy(proof)
         node = bad

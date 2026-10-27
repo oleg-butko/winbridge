@@ -512,7 +512,7 @@ pub(crate) fn export_before_copy(
     }
     if input.backup_fault != BackupFault::None {
         publish(
-            &root,
+            root,
             "backup-helper-fault.json",
             &serde_json::json!({"fault":input.backup_fault,"attemptId":guard.intent().attempt_id,"process":guard.process()}),
         )?;
@@ -530,7 +530,7 @@ pub(crate) fn export_before_copy(
         }
         BackupFault::HoldBeforeCopy => {
             publish(
-                &root,
+                root,
                 "backup-helper-held.json",
                 &serde_json::json!({"attemptId":guard.intent().attempt_id,"process":guard.process()}),
             )?;

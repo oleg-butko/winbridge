@@ -188,6 +188,7 @@ try {
       $commands=@($commands | Where-Object {$_.name -cne 'shutdown-main-pipeline'})+@(
         @{name='service-validation-worker-build';arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--bin','winbridge-worker','--locked','--offline')},
         @{name='service-cache-layout-check';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','cached_build_links_are_not_runtime_image_permissions','--test-threads=1','--nocapture')},
+        @{name='service-history-epoch-check';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','activation_writer::local_service_history_hash_allows_only_the_exact_policy_owner_epoch','--test-threads=1','--nocapture')},
         @($commands | Where-Object {$_.name -ceq 'shutdown-main-pipeline'})[0]
       )
     }

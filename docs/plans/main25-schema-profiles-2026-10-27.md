@@ -93,3 +93,43 @@ free29,977,870,336 bytes после run. Failed report и архив сохра�
 
 Исправление прошло targeted fixture layout5/0, Python6/0, MSVC worker all-targets
 с update-validation, fmt и diff whitespace check. Debian свободно13 GiB.
+
+## Третий run: copy исправлена, обнаружена policy epoch в normal startup
+
+Source73752e12adc8e5c0467f67937adc13c7d08ebcd3,
+ZIPe0008181ae7210538b3114ce5d8d4e1322189798efc87323a341f4fe44a2ff10,
+targetd500fc5. Run20261027-150519-77f7cadf,
+task8598db08-edcf-426d-a420-f2e8984a5c24 failed/1.137 prerequisites и cold17→19
+прошли; actual Main639.08s дошёл до confirmed LocalService, затем assertion
+preserved_rows failed. Это не положительный Main25 proof.
+
+Readonly compare через системную winsqlite3.dll, с SQLITE_OPEN_READONLY и snapshot
+transactions для24 tables, выявил только journal_authority(epoch/authority),
+worker_journal_activations(0→1) и resource_policy.epoch. Все task/output/policy
+payload/attribution rows неизменны. Private contents не выводились и не копировались.
+Diagnostic taskc289da33-f594-47aa-86eb-94dbce007036 succeeded/0; предыдущий readonly
+probe22939e59… отказал на long path, исправлено extended local prefix.
+
+Причина последнего hash mismatch: обычный initialize_startup/configure_resource_scheduling
+привязывает policy epoch к новому владельцу. Main24 hash учитывал только два writer
+изменения и ошибочно считал эту normal-startup metadata повреждением истории.
+Исправление сохраняет exact Main24 hash. Для Main25 проверяется ровно singleton1,
+точная схема policy table, фактический next owner epoch, и только этот integer
+нормализуется к baseline при общем hash. Policy payload и все другие значения
+остаются внутри hash. Cold observation повторяет ту же проверку. Новый независимый
+binding явно записывает before/after epoch и normalized column; worker19 profile
+требует его,17 historical default не меняется. Добавлены4 negative audits и native
+регрессия: неверный epoch/изменённая policy/новый столбец не скрываются нормализацией.
+
+Runtime автоматически заархивирован: reservationb1d51e73-ac56-4821-9bd5-e781e759ab3d,
+plan SHA4d194852c125039c78cfb1ed856f25bf515152372ff3fba8519bb06e9dc259d3.
+Failed artifacts сохранены, исходная попытка не replay-ится. Python7/0 и MSVC
+all-targets check прошли; новый положительный Main25 run ещё нужен.
+
+После исправления: Linux workspace Clippy all-targets/update-validation и MSVC
+all-targets/update-validation Clippy `-D warnings` пройдены, Python7/0, fmt и
+scaffold304. Native normalizer regression и новый full Main25 отложены до
+подтверждения termination PID3524 из независимого multi-controller run; slot не
+переиспользовать. Изменения после release-source3435 в normal worker коде только
+устраняют needless borrow внутри feature-only validation hook; normal product
+поведение0.2.0 не меняется. Source/target будущего Main25 фиксировать отдельно.
