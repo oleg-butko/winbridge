@@ -514,7 +514,7 @@ index 174b49e..559de4a 100644
 @@ -22,21 +22,35 @@ fn ready(connection: Option<&ControllerConnection>, url: &str, now: u64) -> bool
      })
  }
- 
+
 +// Main25 remains a declared single-route fixture. Never silently choose a
 +// primary from a production topology when validating its firewall preflight.
 +fn connection(worker: &Worker, url: &str) -> Result<Option<ControllerConnection>> {
