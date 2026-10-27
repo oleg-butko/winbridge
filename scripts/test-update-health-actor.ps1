@@ -25,6 +25,7 @@ param(
   [switch]$ActivationWriterGate,
   [switch]$ActivationServiceGate,
   [string]$Worker17ReferenceSha256,
+  [string]$Worker17Reference,
   [string]$FixtureInstanceId,
   [string]$FixtureControllerUrl,
   [string]$TestRuntimeDirectory = 'K:\_proj-26\winbridge\runtime-test',
@@ -35,6 +36,7 @@ param(
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if([bool]$Worker17Reference -ne [bool]$Worker17ReferenceSha256){throw 'Retained worker17 reference requires both path and SHA256'}
 if($ActivationServiceGate){if($ActivationWriterGate -or $ActivationStateGate -or $ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationWriterGate=$true}
 if($ActivationServiceGate -and ($FixtureInstanceId -cnotmatch '^[A-Za-z0-9_-]{1,64}$' -or $FixtureControllerUrl -cnotmatch '^ws://(?:[0-9]{1,3}\.){3}[0-9]{1,3}:1144/?$')){throw 'Predeclared isolated instance ID and literal private IPv4 controller1144 required; start that controller before this gate'}
 if($ActivationWriterGate){if($ActivationStateGate -or $ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationStateGate=$true}
@@ -268,12 +270,19 @@ try {
     )+$commands
   }
   if($ActivationServiceGate -and $Worker17ReferenceSha256){
-    if($Worker17ReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $InstalledWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Worker17ReferenceSha256){throw 'Exact released worker17 reference SHA required'}
+    if(-not $Worker17Reference -or -not [IO.Path]::IsPathFullyQualified($Worker17Reference) -or
+      [IO.Path]::GetFullPath($Worker17Reference).Equals([IO.Path]::GetFullPath($InstalledWorker),[StringComparison]::OrdinalIgnoreCase)){
+      throw 'Explicit retained worker17 path required, separate from InstalledWorker'
+    }
+    Assert-SessionDirectory (Split-Path $Worker17Reference -Parent)
+    Assert-SessionFile $Worker17Reference
+    if($Worker17ReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $Worker17Reference -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Worker17ReferenceSha256){throw 'Exact released worker17 reference SHA required'}
     $attributionInput=Join-Path (Split-Path $source -Parent) 'attribution-migration-input.json'
-    Write-NewJson $attributionInput @{root=(Join-Path (Split-Path $source -Parent) 'worker17-to19-cold');reference=$InstalledWorker;referenceSha256=$Worker17ReferenceSha256;powershell=$pwsh;proof=(Join-Path $ReportDirectory 'worker-journal-attribution-migration-proof.json')}
+    Write-NewJson $attributionInput @{root=(Join-Path (Split-Path $source -Parent) 'worker17-to19-cold');reference=$Worker17Reference;referenceSha256=$Worker17ReferenceSha256;powershell=$pwsh;proof=(Join-Path $ReportDirectory 'worker-journal-attribution-migration-proof.json')}
     $env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$attributionInput
     $commands=@(@{name='worker17-to19-cold-migration';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','attribution_migration','--locked','--offline','--','--exact','actual_seventeen_history_migrates_to_nineteen_without_replay_or_old_worker_write','--ignored','--test-threads=1','--nocapture')})+$commands
     $report.worker17ReferenceSha256=$Worker17ReferenceSha256
+    $report.worker17Reference=$Worker17Reference
   }
   if($ActivationServiceGate){
     $commands=@($commands | Where-Object {$_.name -cne 'writer-actual-worker-migration'})

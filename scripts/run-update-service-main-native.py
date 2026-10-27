@@ -54,6 +54,7 @@ def main():
     parser.add_argument('--target-archive', required=True, type=Path)
     parser.add_argument('--cache-run', required=True)
     parser.add_argument('--worker17-reference-sha256')
+    parser.add_argument('--worker17-reference', help='Retained worker17 EXE, independent of the installed worker (absolute K: path)')
     parser.add_argument('--test-runtime-directory', required=True)
     parser.add_argument('--profile', choices=('worker17-updater20', 'worker19-updater20'), default='worker17-updater20')
     parser.add_argument('--controller-config', required=True, type=Path)
@@ -62,10 +63,8 @@ def main():
     native = load('main25_native', 'validate-workflow-native.py')
     health = load('main25_archive', 'validate-update-health-actor-native.py')
     checks = load('main25_checks', 'update-activation-service-proof.py')
-    if args.profile == 'worker19-updater20':
-        checks.need(re.fullmatch(r'[0-9a-f]{64}', args.worker17_reference_sha256 or ''), 'Explicit released worker17 hash required for separate cold migration gate')
-    if args.profile != 'worker19-updater20':
-        checks.need(args.worker17_reference_sha256 is None, 'Cold worker17-to19 migration belongs only to the worker19 profile')
+    reference = load('main25_references', 'worker-migration-reference.py').reference_for_profile(
+        args.profile, args.worker17_reference, args.worker17_reference_sha256)
     source, target = map(health.archive_pin, (args.source_archive, args.target_archive))
     expected = checks.profile_schemas(args.profile)
     for path in (args.source_archive, args.target_archive):
@@ -121,7 +120,8 @@ def main():
         ps = native.ps_string
         archives = [str(PureWindowsPath('K:/VMs/shared') / path.resolve().relative_to('/mnt/hgfs/shared'))
                     for path in (args.source_archive, args.target_archive)]
-        migration_arg = (' -Worker17ReferenceSha256 ' + ps(args.worker17_reference_sha256)) if args.worker17_reference_sha256 else ''
+        migration_arg = (' -Worker17Reference ' + ps(str(reference))
+                         + ' -Worker17ReferenceSha256 ' + ps(args.worker17_reference_sha256)) if reference else ''
         script = f'''$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $local={ps(str(work))};$archive={ps(archives[0])};$target={ps(archives[1])}
@@ -149,6 +149,7 @@ exit $LASTEXITCODE
         task = reply['response']['task']
         meta = {'run': run, 'taskId': task['taskId'], 'reportDirectory': str(shared), 'instanceId': instance,
                 'source': source, 'target': target, 'profile': args.profile, 'worker17ReferenceSha256': args.worker17_reference_sha256,
+                'worker17Reference': str(reference) if reference else None,
                 'sourceArchive': str(args.source_archive.resolve()), 'targetArchive': str(args.target_archive.resolve()),
                 'requestSha256': hashlib.sha256((local / 'request.json').read_bytes()).hexdigest(), 'controllerPid': controller.pid,
                 'testRuntimeDirectory': str(runtime), 'workingDirectory': str(work), 'cacheDirectory': str(cache)}

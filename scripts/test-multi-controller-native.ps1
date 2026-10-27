@@ -6,6 +6,7 @@ param(
  [Parameter(Mandatory)][string]$TestRuntimeDirectory,
  [Parameter(Mandatory)][string]$SourceCommit,
  [Parameter(Mandatory)][string]$ManifestSha256,
+ [Parameter(Mandatory)][string]$Worker17Reference,
  [ValidateRange(60,900)][int]$ConnectionWaitSeconds=240
 )
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
@@ -14,6 +15,15 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
 . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
 . (Join-Path $PSScriptRoot 'lib/test-worker-runtime.ps1')
+$worker17Sha256='536d86378b5c5adfc98b135c404e322d1dc9cc7dd19fb20941ca9b3f6686a712'
+$installed='K:\_proj-26\winbridge\runtime\winbridge-worker.exe'
+if(-not [IO.Path]::IsPathFullyQualified($Worker17Reference) -or
+ [IO.Path]::GetFullPath($Worker17Reference).Equals($installed,[StringComparison]::OrdinalIgnoreCase)){
+ throw 'Retained worker17 reference must be separate from the installed runtime'
+}
+Assert-SessionDirectory (Split-Path $Worker17Reference -Parent)
+Assert-SessionFile $Worker17Reference
+if((Get-FileHash -LiteralPath $Worker17Reference).Hash.ToLowerInvariant() -cne $worker17Sha256){throw 'Retained worker17 reference changed; no build'}
 $work=[IO.Path]::GetFullPath($WorkDirectory);$cache=[IO.Path]::GetFullPath($CacheDirectory)
 $source=Join-Path $work 'winbridge';$verifier=Join-Path $cache 'debug/winbridge-update.exe'
 foreach($path in @($work,$cache)){Assert-SessionDirectory $path;Assert-WorkflowCachePath $path}
@@ -75,10 +85,9 @@ try{
  $report.commands+=@(@{name='worker-build';arguments=$cargoArguments;exitCode=$code;elapsedMs=$timer.ElapsedMilliseconds})
  Trace-Gate 'build-complete' @{elapsedMs=$timer.ElapsedMilliseconds;exitCode=$code}
  if($code -ne 0){throw 'Native worker build failed'}
- $installed='K:\_proj-26\winbridge\runtime\winbridge-worker.exe'
  $migrationInput=Join-Path $work 'worker-migration-input.json'
- Write-NewJson $migrationInput @{root=(Join-Path $work 'worker-migration-case');reference=$installed;
-  referenceSha256='536d86378b5c5adfc98b135c404e322d1dc9cc7dd19fb20941ca9b3f6686a712';
+ Write-NewJson $migrationInput @{root=(Join-Path $work 'worker-migration-case');reference=$Worker17Reference;
+  referenceSha256=$worker17Sha256;
   powershell=(Get-Command pwsh.exe).Source;proof=(Join-Path $SharedReportDirectory 'worker-journal-attribution-migration-proof.json')}
  $env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$migrationInput
  $migrationArguments=@('test','-p','winbridge-worker','--locked','--offline','--features','bundled-sqlite','--target-dir',$cache,

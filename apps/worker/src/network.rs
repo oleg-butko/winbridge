@@ -365,7 +365,7 @@ mod tests {
     }
     #[tokio::test]
     async fn timeout_distinguishes_websocket_upgrade_from_hello_welcome() {
-        for websocket_upgraded in [false, true] {
+        async fn check_stage(websocket_upgraded: bool) {
             let root = tempfile::tempdir().unwrap();
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let worker = test_worker(root.path(), listener.local_addr().unwrap());
@@ -401,6 +401,9 @@ mod tests {
             }
             connector.close().await;
         }
+        // Independent workers and sockets can wait on the real deadline together.
+        // Keep the production five-second budget rather than reducing test timeouts.
+        tokio::join!(check_stage(false), check_stage(true));
     }
 
     #[tokio::test]

@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-27, .204: [post-install review](analysis/multi-controller-post-install-review-2026-10-27.md)
+устраняет привязку native migration tests к installed0.1.1, удаляет superseded model
+integration target и объединяет controller diagnostics metadata lookup. Реальные
+multi-controller/old-schema guards сохранены; runtime deployment не меняется.
+Новые PS reference параметры пока требуют будущей native проверки, не считать
+этот review новым Windows gate. Updater продолжать по основному плану ниже.
+
 2026-10-27, .204: **worker0.2.0 установлен пользователем; controller.204 обновлён
 до0.2.0**. [Actual deployment двух Debian подтверждён](releases/controller-0.2.0-debian204-2026-10-27.md):
 обе связи.203/.204 connected, один прежний worker generation/incarnation,10 tasks

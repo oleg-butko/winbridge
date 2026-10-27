@@ -30,17 +30,24 @@ impl Drop for Harness {
 impl Harness {
     async fn new(root: &Path) -> Self {
         std::fs::create_dir(root.join("project")).unwrap();
-        let mut addresses = vec![];
+        let mut reservations = vec![];
         for _ in 0..2 {
             let socket = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-            addresses.push(socket.local_addr().unwrap());
+            reservations.push(socket);
         }
+        // Hold both reservations until both addresses are known: dropping the
+        // first listener early lets the OS assign its port to the second one.
+        let addresses: Vec<_> = reservations
+            .iter()
+            .map(|listener| listener.local_addr().unwrap())
+            .collect();
         let instance = format!("diag-{}", uuid::Uuid::new_v4());
         let configs = [root.join("a.json"), root.join("b.json")];
         let controllers=[0,1].map(|i| {
             let value=serde_json::json!({"schemaVersion":1,"instanceId":instance,"nodeId":"same-node","stateDirectory":root.join(format!("controller-{i}")),"controller":{"listenAddress":addresses[i],"workerNodeId":"worker"},"projects":[]});
             std::fs::write(&configs[i],serde_json::to_vec(&value).unwrap()).unwrap();Controller::new(serde_json::from_value(value).unwrap()).unwrap()
         });
+        drop(reservations);
         let servers = controllers
             .each_ref()
             .map(|c| tokio::spawn(winbridge_controller::serve(c.clone())));
@@ -65,6 +72,10 @@ impl Harness {
                 "Two fixture controllers did not connect"
             );
             assert!(!result.service.is_finished());
+            assert!(
+                result.servers.iter().all(|server| !server.is_finished()),
+                "A fixture controller stopped before connecting"
+            );
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         result

@@ -98,7 +98,7 @@ mod tests {
             "operation_attribution",
             "operation_cancellation",
         ] {
-            for fault in 0..4 {
+            for fault in 0..5 {
                 let root = tempfile::tempdir().unwrap();
                 let c=Controller::new(serde_json::from_value(serde_json::json!({"schemaVersion":1,"instanceId":"diagnostics","nodeId":"controller","stateDirectory":root.path().join("state"),"controller":{"listenAddress":"127.0.0.1:1143","workerNodeId":"worker"},"projects":[]})).unwrap()).unwrap();
                 let (sender, mut calls) = winbridge_transport::websocket::rpc_channel();
@@ -111,18 +111,21 @@ mod tests {
                     instance_id: "diagnostics".into(),
                     journal_incarnation: "journal".into(),
                 };
-                let payload = if method == "controller_connections" {
+                let mut payload = if method == "controller_connections" {
                     serde_json::json!({"context":context})
                 } else {
                     serde_json::json!({"context":context,"query":{"kind":"task","operationId":"task"}})
                 };
+                if fault == 4 {
+                    payload["context"]["instanceId"] = "another-pair".into();
+                }
                 let mut request = super::request(method, payload).unwrap();
                 if fault == 3 {
                     request.controller_diagnostics_version = 2;
                 }
                 let cloned = c.clone();
                 let pending = tokio::spawn(async move { cloned.call_diagnostics(request).await });
-                if fault != 3 {
+                if !matches!(fault, 3 | 4) {
                     let call = calls.recv().await.unwrap();
                     assert!(matches!(
                         call.request,

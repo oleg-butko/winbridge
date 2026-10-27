@@ -33,6 +33,9 @@ def module(name, filename):
 
 native = module('multi_native', 'validate-workflow-native.py')
 health = module('multi_archive', 'validate-update-health-actor-native.py')
+references = module('multi_references', 'worker-migration-reference.py')
+WORKER17_SHA256 = references.WORKER17_SHA256
+worker17_reference = references.worker17_reference
 
 
 def need(value, message):
@@ -77,9 +80,12 @@ def main():
     parser.add_argument('--controller-binary', required=True, type=Path)
     parser.add_argument('--test-runtime-directory', required=True)
     parser.add_argument('--cache-run', required=True)
+    parser.add_argument('--worker17-reference', required=True,
+                        help='Retained released Windows worker0.1.1 EXE (absolute K: path), never the installed runtime')
     parser.add_argument('--legacy-controller-binary', type=Path, help='Optional immutable copy of the installed controller for peer0')
     parser.add_argument('--legacy-controller-sha256')
     args = parser.parse_args()
+    reference = worker17_reference(args.worker17_reference)
     pin = health.archive_pin(args.source_archive)
     need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.cache_run), 'Explicit cache run required')
     cfg = json.loads(args.controller_config.read_text())
@@ -183,6 +189,7 @@ def main():
                     'controllerSha256': hashlib.sha256(args.controller_binary.read_bytes()).hexdigest(),
                     'testRuntimeDirectory': str(runtime), 'workingDirectory': str(work), 'reportDirectory': str(shared),
                     'instanceId': instance, 'controllers': [p['url'] for p in peers], 'legacyController': legacy,
+                    'worker17Reference': {'path': str(reference), 'sha256': WORKER17_SHA256},
                     'coordinatorSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
         save(local / 'run-info.json', metadata)
         worker_config = {'schemaVersion': 1, 'instanceId': instance, 'nodeId': 'multi-worker', 'stateDirectory': str(work / 'state'),
@@ -198,7 +205,7 @@ if((Get-FileHash -LiteralPath $archive).Hash.ToLowerInvariant() -cne {native.ps_
 if([IO.DriveInfo]::new('K:\\').AvailableFreeSpace -lt 6GB){{throw 'Less than 6 GiB; no build'}}
 New-Item -ItemType Directory -Path $work|Out-Null
 Expand-Archive -LiteralPath $archive -DestinationPath $work
-& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $work 'winbridge/scripts/test-multi-controller-native.ps1') -WorkDirectory $work -CacheDirectory $cache -SharedReportDirectory $shared -TestRuntimeDirectory {native.ps_string(str(runtime))} -SourceCommit {native.ps_string(pin['sourceCommit'])} -ManifestSha256 {native.ps_string(pin['manifestSha256'])}
+& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $work 'winbridge/scripts/test-multi-controller-native.ps1') -WorkDirectory $work -CacheDirectory $cache -SharedReportDirectory $shared -TestRuntimeDirectory {native.ps_string(str(runtime))} -SourceCommit {native.ps_string(pin['sourceCommit'])} -ManifestSha256 {native.ps_string(pin['manifestSha256'])} -Worker17Reference {native.ps_string(str(reference))}
 exit $LASTEXITCODE
 '''
         request = {'method': 'submit', 'request': {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': 'snapshot-fixture',
@@ -355,7 +362,7 @@ exit $LASTEXITCODE
         audit = module('multi_evidence', 'multi-controller-native-proof.py').audit(files, pin, build, str(runtime), legacy)
         audit.update(module('multi_migration', 'update-activation-service-proof.py').verify_worker_migration(
             json.loads(files['worker-journal-attribution-migration-proof.json'].decode('utf-8-sig')),
-            '536d86378b5c5adfc98b135c404e322d1dc9cc7dd19fb20941ca9b3f6686a712', pin))
+            WORKER17_SHA256, pin))
         need(module('multi_files_again', 'summarize-update-timings.py').verified_files(shared) == files, 'Report changed on second read')
         save(local / 'verified.json', {'passed': True, 'audit': audit, 'filesVerifiedTwice': len(files), 'reportSha256': hashlib.sha256(files['report.json']).hexdigest(), 'installedUnchanged': True})
         print(json.dumps({'passed': True, 'runInfo': str(local / 'run-info.json'), 'filesVerifiedTwice': len(files)}), flush=True)

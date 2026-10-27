@@ -1,4 +1,4 @@
-// Linux browser + real worker IPC. No Windows, builds, commands or production config.
+// Linux browser + real worker IPC and optional owned commands; no Windows or production config.
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

@@ -281,9 +281,13 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     projection(&h.controllers[0]).await;
     projection(&h.controllers[1]).await;
     let request = submission("a", "same-key", true);
+    let retry = TaskSubmission {
+        request_id: "other-correlation".into(),
+        ..request.clone()
+    };
     let (one, two) = tokio::join!(
         submit(&h.controllers[0], &context, request.clone()),
-        submit(&h.controllers[1], &context, request.clone())
+        submit(&h.controllers[1], &context, retry)
     );
     assert_eq!(one.task_id, two.task_id);
     let creator_query = winbridge_protocol::OperationAttributionRequest {

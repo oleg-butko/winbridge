@@ -1,5 +1,22 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Ревью после установки,2026-10-27:** ветка `refactor/multi-controller-review`,
+[находки, покрытие и направление рефакторинга](analysis/multi-controller-post-install-review-2026-10-27.md).
+Native multi-controller и Main25 cold17→19 больше не используют installed EXE
+как worker17 reference: нужен явный retained `--worker17-reference`, для Main25
+profile19 также прежний SHA argument. На Windows эти изменения пока не исполнялись.
+Удалены2 дублирующих model tests/отдельный integration target; concurrent retry с
+другим requestId сохранён в real WebSocket test. Исправлена port selection race
+fixture; readonly controller sender/Info получаются общим helper с теми же fences.
+Два handshake timeout cases ждут параллельно: тело10.05→5.07s, timeout5s сохранён.
+Для общего browser gate `npm run test:multi-controller-ui` заменяет три повторных
+полных запуска; combined Chromium scenario passed. Production worker/controller
+не заменялись, срочного исправления установленного worker не требуется.
+Проверки review:132 Rust passed/3 прежних ignored,19 Python, combined browser,
+Linux/MSVC controller+worker all-target Clippy, fmt/diff/scaffold310. Изменённые PS
+не исполнялись; workspace895 — прежний checkpoint, не новый полный run. Финальный
+readonly query подтвердил обе production связи connected и прежний worker generation.
+
 **Установка и deployment подтверждены2026-10-27:** пользователь вручную установил
 worker0.2.0/source48c834c. Затем на.204 обновлён user-process controller0.1.0→0.2.0
 из проверенного Linux image, старый PID5312 штатно остановлен, новый PID166074.
