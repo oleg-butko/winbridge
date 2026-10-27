@@ -240,7 +240,11 @@ Worker использует настроенный адрес controller. Contro
 attempt tickets/reconnect и readiness caches. Один Worker/SQLite/scheduler обслуживает
 всех доверенных caller; nodeId controller может совпадать, связь различается по
 настроенному endpoint ID. RPC budget общий (32 total/16 per endpoint), timeout
-не освобождает ещё работающий blocking handler. Завершение сетевого supervisor
+не освобождает ещё работающий blocking handler. Число endpoints не умножает budget;
+1–4 ограничены общей `MAX_CONTROLLERS` в config и observation decoder. Это пределы,
+а не зарезервированная доля: при заполненном общем budget запрос отклоняется до
+admission. Runtime tests с3/4 controller выбирают primary последним и проверяют
+reconnect, общую очередь и источники запросов. Завершение сетевого supervisor
 отменяет и дожидается всех endpoint tasks. Local Info показывает primary, сетевой
 Info — связь/проекцию своего caller без изменения DTO. Legacy controllerUrl и
 local-only сохраняются, оба режима одновременно отклоняются. Проверяется на

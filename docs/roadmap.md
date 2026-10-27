@@ -1,5 +1,9 @@
 # Постепенная реализация и расширение
 
+2026-10-27: подтверждён source/runtime сценарий3/4 controller, общий limit constant
+и универсальный test harness. [Проверки и границы](plans/multi-controller-runtime.md#три-и-четыре-controller--2026-10-27).
+Native Windows gate19 и интеграция с main остаются отдельными шагами.
+
 2026-10-27: [review и сравнение с main c4b7aea](plans/multi-controller-review-2026-10-27.md).
 Подготовлен source patch для общего startup и readonly service с topology.
 Проверочное объединение879/0/17ignored, Clippy/MSVC/contracts/TS/UI passed;

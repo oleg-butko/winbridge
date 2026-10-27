@@ -1,4 +1,4 @@
-# Один worker и два Debian controller
+# Один worker и несколько Debian controller
 
 2026-10-26, ветка `feat/multi-controller`, base9b47a9c.
 Первый агент192.168.44.203, второй192.168.44.204.
@@ -13,8 +13,9 @@ worker перезапуском. Агент .204 не использует Windo
 
 ## Целевой сценарий
 
-Один процесс worker на Windows держит два независимых исходящих ws:// соединения
-к `.203:1143` и `.204:1143`. На каждом Debian остаётся собственный controller,
+Один процесс worker на Windows держит от1 до4 независимых исходящих ws:// соединений.
+Исходный сценарий — `.203:1143` и `.204:1143`; третий и четвёртый controller
+добавляются тем же списком, без отдельных веток runtime. На каждом Debian свой controller,
 CLI/MCP агенты используют его обычный локальный вход. Worker не становится новым
 TCP server; входящие firewall rules на Windows для этой схемы не требуются.
 Stable test exe/firewall policy из AGENTS.md сохраняется.
@@ -36,7 +37,7 @@ Scheduler, Store, execution domain и владельцы процессов ос
 экземпляре**, не создаются заново на каждое соединение.
 
 Общий worker не объединяет автоматически исходные Git branches. Для независимых
-сборок двух версий одного репозитория рекомендуются отдельные project IDs и
+сборок разных версий одного репозитория рекомендуются отдельные project IDs и
 непересекающиеся Windows workspace roots. Один project ID означает намеренно
 общую рабочую область с общей очередью, а не две изолированные копии.
 
@@ -56,7 +57,8 @@ config сохраняет прежнее поведение и serialized scope;
 не поддерживает. Два поля одновременно дают явную ошибку,
 а не выбор одного адреса или игнорирование второго.
 
-Пример для новой сборки из этой ветки, **не применять к текущему0.1.1**:
+Минимальный пример с двумя controller для новой сборки из этой ветки,
+**не применять к текущему0.1.1**:
 
 ```json
 {
@@ -69,7 +71,11 @@ config сохраняет прежнее поведение и serialized scope;
 }
 ```
 
-Это содержимое `worker.controllerTopology`, не целый WorkerConfig. Legacy
+Это содержимое `worker.controllerTopology`, не целый WorkerConfig. Для третьего и
+четвёртого Debian добавить элементы `{id,url}` с уникальными ID и фактическими
+адресами; primary может быть любым из них. Граница1–4 задаётся общей константой
+`winbridge_protocol::MAX_CONTROLLERS`, которую используют и config validator, и
+decoder списка связей. Пятый endpoint явно отклоняется. Legacy
 `controllerUrl` при переходе нужно удалить. Оба адреса — исходящие соединения
 одного worker. Конфигурации реальных .203/.204 пока не менялись.
 
@@ -99,8 +105,10 @@ Shutdown supervisor не просто abort-ит родителя: сигнал 
 
 ## Общая очередь, RPC и происхождение заданий
 
-RPC admission общий: например32 in-flight handlers всего и16 на controller для
-двух endpoints. Это предел обработки запросов, не число работающих процессов.
+RPC admission общий:32 in-flight handlers всего и16 на controller независимо
+от числа endpoints. Например, четыре caller могут одновременно держать по8 slots.
+Общий budget не умножается при добавлении Debian. Это upper bounds, не fair-share
+резервация: при заполненных32 slots новый RPC получает отказ до dispatch. Это предел обработки запросов, не число работающих процессов.
 Билды/импорты ограничиваются существующими durable project/resource/work leases.
 Socket disconnect не освобождает ещё выполняющийся blocking handler; permit
 завершается владельцем handler после его фактического окончания. Старый completion
@@ -126,7 +134,7 @@ source. Инициатор отмены отдельно подключён в s
 Агенты используют уникальные logical keys; lost ACK сохраняет исходные context/key/
 payload. Переподключение не означает автоматическую отправку команды заново.
 
-MVP предполагает двух доверенных caller в общей области работ. Оба видят общую
+MVP предполагает до четырёх доверенных caller в общей области работ. Все видят общую
 историю и могут отменять принятые задачи по ID. Per-agent ACL/изоляция пользователей
 не подразумеваются; это отдельная будущая политика.
 
@@ -473,3 +481,43 @@ local-service gates и общей topology прошло879 workspace tests/17 ig
 Clippy/MSVC all-targets с update-validation, contracts/TS/UI/fmt/scaffold298.
 Добавлен staged-service/two-controller regression test. Это проверка совместимости,
 а не слияние веток, не Windows gate и не разрешение миграции updater17→19.
+
+## Три и четыре controller — 2026-10-27
+
+Проверена просьба пользователя о третьем/четвёртом агенте. Production runtime уже
+обходит полный topology list; registry/observations — maps/vector по endpoint ID,
+а UI показывает все links через map. Жёсткой пары A/B в dispatch, reconnect,
+attribution, cancellation, project leases и primary selection нет.
+
+Небольшой refactor: общая `MAX_CONTROLLERS=4` вместо отдельных literals в config
+и readonly decoder. Test harness теперь создаёт произвольное допустимое число
+controller/listeners/projects и выбранный primary. Старые парные проверки сохранены.
+DTO/schema fingerprints, journal19, runtime RPC budgets32/16 и installed configs
+не меняются. Количество выполняемых процессов задаётся WorkSchedulingPolicy и
+project/resource leases отдельно от количества controller.
+
+Добавленные проверки:
+
+- Core:1–4 endpoints принимаются,0/5 отклоняются; primary необязательно первый.
+  Четыре peers занимают32 slots по8, overflow отклоняется; disconnect/reconnect
+  третьего не освобождает старые handlers, late completion не освобождает новый.
+  Per-peer16 не запрещает запросы остальных, пока есть общий budget.
+- Actual Linux runtime с3 и4 controller: один Worker/Store, совпадающие node IDs,
+  primary последний, собственные Info/readiness projections и полный список связей.
+  Все участники создают команды в своих проектах и повторяют исходный logical
+  request первого; запускается ровно один процесс на key.
+- Один проект сериализован между caller. Disconnect/restart одного controller
+  сохраняет его running task, остальных peers и исторического creator. Каждый
+  controller выступает cancel actor для чужой операции. После cleanup очередь
+  продвигается, counts starts.log исключают повторное исполнение, shutdown
+  закрывает все3/4 соединения и не удерживает Worker через endpoint task.
+- Protocol decoder принимает согласованные observations с1–4 links/last primary,
+  но отказывает при5; прежние scope/generation/provider/counter checks сохранены.
+
+Финальные проверки: **182 controller/core/protocol tests passed /0 ignored**,
+включая3/4-controller runtime; workspace Clippy all-targets `-D warnings`, MSVC
+workspace all-targets compile check, Rust→TypeScript contracts check, fmt/diff и
+scaffold291 прошли. DTO fingerprints не менялись; frontend runtime не менялся.
+Debian перед сборками8.8 GiB, CARGO_INCREMENTAL=0, основной target reused. Windows не
+опрашивался, configs/runtime/journal/firewall не менялись. Native Windows gate19
+и реальное объединение с main по предыдущему review всё ещё впереди.

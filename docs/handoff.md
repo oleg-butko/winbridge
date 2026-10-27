@@ -1,5 +1,14 @@
 # Продолжение работы — worker 0.1.1 выпущен 2026-10-26
 
+**Три/четыре controller2026-10-27:** проверена работа полного topology list,
+общая `MAX_CONTROLLERS=4` для config/decoder, test harness переведён на vector.
+Actual Linux3/4 connections с последним primary, shared queue/dedup, caller attribution,
+cross-controller cancellation и disconnect/restart/shutdown прошли. Глобальный
+RPC budget остаётся32, per-controller16; процессный parallelism задаётся отдельно.
+[Подробности](plans/multi-controller-runtime.md#три-и-четыре-controller--2026-10-27).
+182 controller/core/protocol tests/0 ignored, Clippy all-targets, MSVC all-targets
+check, contracts/fmt/scaffold291 прошли. Границы Windows приведены в плане; ветки не слиты.
+
 **Review2026-10-27:** main подтянут fast-forward доc4b7aea (13 commits).
 [Совместимость и готовый source patch](plans/multi-controller-review-2026-10-27.md):
 самостоятельная feature без подтверждённых существенных дефектов; прямое слияние

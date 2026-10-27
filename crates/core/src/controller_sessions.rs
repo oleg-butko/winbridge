@@ -3,6 +3,7 @@
 use crate::{config::valid_id, controller_config::validate_controller_url};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use winbridge_protocol::MAX_CONTROLLERS;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -31,8 +32,10 @@ impl Topology {
         Ok(topology)
     }
     pub fn validate(&self) -> Result<(), String> {
-        if self.schema_version != 1 || !(1..=4).contains(&self.controllers.len()) {
-            return Err("Topology requires schema 1 and 1..4 controllers".into());
+        if self.schema_version != 1 || !(1..=MAX_CONTROLLERS).contains(&self.controllers.len()) {
+            return Err(format!(
+                "Topology requires schema 1 and 1..{MAX_CONTROLLERS} controllers"
+            ));
         }
         let mut ids = BTreeSet::new();
         let mut addresses = BTreeSet::new();
@@ -502,5 +505,100 @@ mod tests {
         s.complete(&p);
         assert!(s.admit(&t, "a".repeat(161)).is_err());
         assert!(s.admit(&t, "invalid_under_score".into()).is_err());
+    }
+}
+
+#[cfg(test)]
+mod multi_peer_tests {
+    use super::*;
+    use winbridge_protocol::{CONTROLLER_RPC_LIMIT, NETWORK_RPC_LIMIT};
+
+    fn topology(count: usize) -> Topology {
+        Topology {
+            schema_version: 1,
+            primary: format!("peer-{}", count.saturating_sub(1)),
+            controllers: (0..count)
+                .map(|i| Endpoint {
+                    id: format!("peer-{i}"),
+                    url: format!("ws://127.0.0.1:{}", 1143 + i),
+                })
+                .collect(),
+        }
+    }
+    fn connect(s: &mut Sessions, id: &str) -> Ticket {
+        let t = s.begin(id).unwrap();
+        s.connected(
+            &t,
+            Peer {
+                node: "same-node".into(),
+                generation: "same-generation".into(),
+                session: "same-session".into(),
+            },
+        )
+        .unwrap();
+        t
+    }
+    #[test]
+    fn every_supported_count_and_non_first_primary_is_accepted_but_overflow_is_refused() {
+        for count in 1..=MAX_CONTROLLERS {
+            let t = topology(count);
+            t.validate().unwrap();
+            assert!(Sessions::new(&t, "worker".into(), 32, 16, 1000).is_ok());
+        }
+        assert!(topology(0).validate().is_err());
+        assert!(topology(MAX_CONTROLLERS + 1).validate().is_err());
+    }
+    #[test]
+    fn four_peers_share_one_global_budget_and_reconnect_keeps_old_permits() {
+        let topology = topology(4);
+        let mut s = Sessions::new(
+            &topology,
+            "worker".into(),
+            NETWORK_RPC_LIMIT.into(),
+            CONTROLLER_RPC_LIMIT.into(),
+            1000,
+        )
+        .unwrap();
+        let tickets: Vec<_> = topology
+            .controllers
+            .iter()
+            .map(|c| connect(&mut s, &c.id))
+            .collect();
+        let mut permits = vec![];
+        for request in 0..8 {
+            for ticket in &tickets {
+                permits.push(s.admit(ticket, format!("rpc-{request}")).unwrap());
+            }
+        }
+        assert_eq!(s.in_flight(), NETWORK_RPC_LIMIT as usize);
+        for ticket in &tickets {
+            assert_eq!(s.in_flight_for(ticket.controller_id()), 8);
+            assert!(s.admit(ticket, "overflow".into()).is_err());
+        }
+        s.disconnected(&tickets[2], "third peer lost".into());
+        let fresh = connect(&mut s, tickets[2].controller_id());
+        assert!(s.admit(&fresh, "rpc-0".into()).is_err());
+        let old = permits.remove(2);
+        assert!(s.complete(&old));
+        let replacement = s.admit(&fresh, "rpc-0".into()).unwrap();
+        assert!(!s.complete(&old));
+        assert_eq!(s.in_flight(), NETWORK_RPC_LIMIT as usize);
+        assert!(s.complete(&replacement));
+        for permit in permits {
+            assert!(s.complete(&permit));
+        }
+        assert_eq!(s.in_flight(), 0);
+
+        let first: Vec<_> = (0..CONTROLLER_RPC_LIMIT)
+            .map(|i| s.admit(&tickets[0], format!("first-{i}")).unwrap())
+            .collect();
+        assert!(s.admit(&tickets[0], "peer-overflow".into()).is_err());
+        for ticket in [&tickets[1], &fresh, &tickets[3]] {
+            let permit = s.admit(ticket, "other-peer".into()).unwrap();
+            assert!(s.complete(&permit));
+        }
+        for permit in first {
+            assert!(s.complete(&permit));
+        }
     }
 }

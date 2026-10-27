@@ -1,7 +1,7 @@
 # WinBridge
 
 **Ветка `feat/multi-controller`, Debian .204.** Здесь разрабатываются
-[прямые сессии двух Debian controller к одному worker](docs/plans/multi-controller-runtime.md).
+[прямые сессии до четырёх Debian controller к одному worker](docs/plans/multi-controller-runtime.md).
 Windows пока переключает пользователь вручную; runtime updater развивается отдельно.
 Сетевой runtime новой функции подключён в feature-ветке и проверяется на Debian;
 Windows gate ещё впереди. Установленный worker0.1.1 новый config не поддерживает.
@@ -12,7 +12,8 @@ Source journal schema19 сохраняет автора первоначальн
 Инициатор первой принятой отмены хранится отдельно, с передачей дочерним операциям.
 Linux migrations17/18→19, retry/restart и UI проверены; отдельный Windows gate19 ещё впереди.
 Для агентов добавлены [три readonly CLI/MCP запроса](docs/guides/mcp.md#readonly-диагностика-нескольких-controller):
-все соединения, автор операции и инициатор отмены. Два controller проверены на Linux.
+все соединения, автор операции и инициатор отмены. Сценарии с2,3 и4 controller
+проверены на Linux; один общий runtime, очередь и история.
 
 Локальный проект для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
 

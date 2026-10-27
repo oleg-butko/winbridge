@@ -3,6 +3,9 @@ use crate::*;
 use serde::{Deserialize, Serialize};
 
 pub const CONTROLLER_CONNECTIONS_CONTRACT: &str = "winbridge.controller-connections";
+/// Maximum configured controller endpoints; shared by config and observation validation.
+pub const MAX_CONTROLLERS: usize = 4;
+/// Aggregate network handler capacity, independent of the number of controllers.
 pub const NETWORK_RPC_LIMIT: u16 = 32;
 pub const CONTROLLER_RPC_LIMIT: u16 = 16;
 pub fn controller_connections_contract() -> ContractRef {
@@ -149,7 +152,7 @@ pub fn decode_controller_connections(
         || page.context != request.context
         || page.worker_generation != info.generation
         || info.build.as_ref() != Some(&page.provider)
-        || page.connections.len() > 4
+        || page.connections.len() > MAX_CONTROLLERS
         || !page.rpc.valid(NETWORK_RPC_LIMIT)
         || !time(page.observed_at_ms)
         || page.connections.iter().any(|l| {
@@ -293,6 +296,40 @@ mod tests {
         };
         (info, ControllerConnectionsRequest { context }, response)
     }
+    #[test]
+    fn observation_accepts_all_supported_counts_and_last_primary_but_refuses_overflow() {
+        let (info, request, response) = fixture();
+        let ExtensionResult::Data { payload } = &response.result else {
+            panic!("data")
+        };
+        let template: ControllerConnections = serde_json::from_value(payload.clone()).unwrap();
+        for count in 1..=MAX_CONTROLLERS + 1 {
+            let mut page = template.clone();
+            page.rpc.in_flight = count as u16;
+            page.rpc.admitted = count.to_string();
+            page.rpc.completed = "0".into();
+            page.primary = Some(format!("peer-{}", count - 1));
+            page.connections = (0..count)
+                .map(|i| {
+                    let mut link = template.connections[0].clone();
+                    link.id = format!("peer-{i}");
+                    link.connection.url = format!("ws://127.0.0.1:{}", 1143 + i);
+                    link.rpc.admitted = "1".into();
+                    link.rpc.completed = "0".into();
+                    link
+                })
+                .collect();
+            let mut response = response.clone();
+            response.result = ExtensionResult::Data {
+                payload: serde_json::to_value(page).unwrap(),
+            };
+            assert_eq!(
+                decode_controller_connections(response, &info, &request).is_ok(),
+                count <= MAX_CONTROLLERS
+            );
+        }
+    }
+
     #[test]
     fn scoped_snapshot_keeps_exact_large_counters() {
         let (info, request, response) = fixture();

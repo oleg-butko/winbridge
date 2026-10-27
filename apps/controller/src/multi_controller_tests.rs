@@ -1,4 +1,4 @@
-//! Two actual TCP/WebSocket controller instances, one real Linux worker.
+//! Configurable TCP/WebSocket controller instances, one real Linux worker.
 //! No connection to .203/.204 and no Windows processes/configuration involved.
 use super::*;
 use std::{net::SocketAddr, path::Path, time::Duration};
@@ -20,12 +20,22 @@ fn listen(address: SocketAddr) -> TcpListener {
     socket.bind(address).unwrap();
     socket.listen(64).unwrap()
 }
-fn controller(root: &Path, name: &str, address: SocketAddr, instance: &str) -> Arc<Controller> {
+fn controller(
+    root: &Path,
+    name: &str,
+    address: SocketAddr,
+    instance: &str,
+    projects: &[String],
+) -> Arc<Controller> {
     // Equal node IDs are intentional: copied Debian configs must not alias
     // connection slots. Configured endpoint IDs/session generations separate them.
+    let projects: Vec<_> = projects
+        .iter()
+        .map(|id| serde_json::json!({"id":id,"sourceRoot":root.join(id),"sourceMode":"commit"}))
+        .collect();
     Controller::new(serde_json::from_value(serde_json::json!({"schemaVersion":1,"instanceId":instance,"nodeId":"debian",
         "stateDirectory":root.join(name),"controller":{"listenAddress":address,"workerNodeId":"worker"},
-        "projects":[{"id":"a","sourceRoot":root.join("a"),"sourceMode":"commit"},{"id":"b","sourceRoot":root.join("b"),"sourceMode":"commit"}]})).unwrap()).unwrap()
+        "projects":projects})).unwrap()).unwrap()
 }
 fn server(controller: Arc<Controller>, listener: TcpListener) -> JoinHandle<()> {
     tokio::spawn(async move {
@@ -43,11 +53,10 @@ fn server(controller: Arc<Controller>, listener: TcpListener) -> JoinHandle<()> 
 }
 struct Harness {
     worker: Arc<Worker>,
-    a: Arc<Controller>,
-    b: Arc<Controller>,
+    controllers: Vec<Arc<Controller>>,
     worker_task: JoinHandle<winbridge_worker::Result<()>>,
     servers: Vec<JoinHandle<()>>,
-    addresses: [SocketAddr; 2],
+    addresses: Vec<SocketAddr>,
 }
 impl Drop for Harness {
     fn drop(&mut self) {
@@ -70,33 +79,49 @@ impl Drop for Harness {
 }
 impl Harness {
     fn new(root: &Path) -> Self {
-        for id in ["a", "b"] {
+        Self::with_controllers(root, 2, 0)
+    }
+    fn with_controllers(root: &Path, count: usize, primary: usize) -> Self {
+        assert!((1..=winbridge_protocol::MAX_CONTROLLERS).contains(&count));
+        assert!(primary < count);
+        let ids: Vec<_> = (0..count)
+            .map(|i| char::from(b'a' + i as u8).to_string())
+            .collect();
+        for id in &ids {
             std::fs::create_dir(root.join(id)).unwrap();
         }
-        let listeners = [
-            listen("127.0.0.1:0".parse().unwrap()),
-            listen("127.0.0.1:0".parse().unwrap()),
-        ];
-        let addresses = [
-            listeners[0].local_addr().unwrap(),
-            listeners[1].local_addr().unwrap(),
-        ];
-        let instance = format!("two-{}", uuid::Uuid::new_v4());
-        let a = controller(root, "controller-a", addresses[0], &instance);
-        let b = controller(root, "controller-b", addresses[1], &instance);
-        let projects=["a","b"].map(|id|serde_json::json!({"id":id,"workspaceRoot":root.join(id),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}));
+        let listeners: Vec<_> = (0..count)
+            .map(|_| listen("127.0.0.1:0".parse().unwrap()))
+            .collect();
+        let addresses: Vec<_> = listeners.iter().map(|l| l.local_addr().unwrap()).collect();
+        let instance = format!("multi-{}", uuid::Uuid::new_v4());
+        let controllers: Vec<_> = ids
+            .iter()
+            .zip(&addresses)
+            .map(|(id, address)| {
+                controller(root, &format!("controller-{id}"), *address, &instance, &ids)
+            })
+            .collect();
+        let projects:Vec<_> = ids.iter().map(|id|serde_json::json!({"id":id,"workspaceRoot":root.join(id),"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]})).collect();
+        let endpoints: Vec<_> = ids
+            .iter()
+            .zip(&addresses)
+            .map(|(id, address)| serde_json::json!({"id":id,"url":format!("ws://{address}")}))
+            .collect();
         let config:WorkerConfig=serde_json::from_value(serde_json::json!({"schemaVersion":1,"instanceId":instance,"nodeId":"worker",
-            "stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true,"controllerTopology":{"schemaVersion":1,"primary":"a","controllers":[
-                {"id":"a","url":format!("ws://{}",addresses[0])},{"id":"b","url":format!("ws://{}",addresses[1])}]}},
-            "workScheduling":{"maxConcurrentWork":2},"projects":projects})).unwrap();
+            "stateDirectory":root.join("state"),"worker":{"keepRunningOnUiExit":true,"controllerTopology":{"schemaVersion":1,"primary":ids[primary],"controllers":endpoints}},
+            "workScheduling":{"maxConcurrentWork":count},"projects":projects})).unwrap();
         let worker = Worker::open(config).unwrap();
-        let [la, lb] = listeners;
-        let servers = vec![server(a.clone(), la), server(b.clone(), lb)];
+        let servers = controllers
+            .iter()
+            .cloned()
+            .zip(listeners)
+            .map(|(c, l)| server(c, l))
+            .collect();
         let worker_task = tokio::spawn(winbridge_worker::serve(worker.clone()));
         Self {
             worker,
-            a,
-            b,
+            controllers,
             worker_task,
             servers,
             addresses,
@@ -104,10 +129,14 @@ impl Harness {
     }
     async fn connected(&self) {
         let deadline = Instant::now() + Duration::from_secs(15);
-        while !(self.a.status().unwrap().connected && self.b.status().unwrap().connected) {
+        while !self
+            .controllers
+            .iter()
+            .all(|c| c.status().unwrap().connected)
+        {
             assert!(
                 Instant::now() < deadline,
-                "Both real controllers did not connect"
+                "Not all configured controllers connected"
             );
             if self.worker_task.is_finished() {
                 panic!("Worker stopped before connections")
@@ -203,8 +232,8 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     let root = tempfile::tempdir().unwrap();
     let mut h = Harness::new(root.path());
     h.connected().await;
-    let ia = info(&h.a).await;
-    let ib = info(&h.b).await;
+    let ia = info(&h.controllers[0]).await;
+    let ib = info(&h.controllers[1]).await;
     assert_eq!(
         ia.controller_connection.as_ref().unwrap().url,
         format!("ws://{}", h.addresses[0])
@@ -215,18 +244,21 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     );
     assert_eq!(
         ia.controller_connection.as_ref().unwrap().session_id,
-        h.a.status().unwrap().session_id
+        h.controllers[0].status().unwrap().session_id
     );
     assert_eq!(
         ib.controller_connection.as_ref().unwrap().session_id,
-        h.b.status().unwrap().session_id
+        h.controllers[1].status().unwrap().session_id
     );
     let context = ia.fenced_requests.unwrap().context;
     assert_eq!(ib.fenced_requests.unwrap().context, context);
     let query = winbridge_protocol::ControllerConnectionsRequest {
         context: context.clone(),
     };
-    let all = h.a.controller_connections(query.clone()).await.unwrap();
+    let all = h.controllers[0]
+        .controller_connections(query.clone())
+        .await
+        .unwrap();
     assert_eq!(all.primary.as_deref(), Some("a"));
     assert_eq!(all.connections.len(), 2);
     assert!(all.connections.iter().all(|l| matches!(
@@ -244,14 +276,14 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
             .unwrap()
             .connection
             .session_id,
-        h.b.status().unwrap().session_id
+        h.controllers[1].status().unwrap().session_id
     );
-    projection(&h.a).await;
-    projection(&h.b).await;
+    projection(&h.controllers[0]).await;
+    projection(&h.controllers[1]).await;
     let request = submission("a", "same-key", true);
     let (one, two) = tokio::join!(
-        submit(&h.a, &context, request.clone()),
-        submit(&h.b, &context, request.clone())
+        submit(&h.controllers[0], &context, request.clone()),
+        submit(&h.controllers[1], &context, request.clone())
     );
     assert_eq!(one.task_id, two.task_id);
     let creator_query = winbridge_protocol::OperationAttributionRequest {
@@ -261,30 +293,37 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
             operation_id: one.task_id.clone(),
         },
     };
-    let initial =
-        h.a.operation_attribution(creator_query.clone())
-            .await
-            .unwrap()
-            .creator
-            .unwrap();
+    let initial = h.controllers[0]
+        .operation_attribution(creator_query.clone())
+        .await
+        .unwrap()
+        .creator
+        .unwrap();
     assert!(
         matches!(&initial,winbridge_protocol::OperationCreator::Controller {controller_id,..} if controller_id=="a"||controller_id=="b")
     );
     assert_eq!(
-        h.b.operation_attribution(creator_query.clone())
+        h.controllers[1]
+            .operation_attribution(creator_query.clone())
             .await
             .unwrap()
             .creator,
         Some(initial.clone())
     );
-    running(&h.b, &one.task_id).await;
-    let queued = submit(&h.b, &context, submission("a", "next", false)).await;
-    assert_eq!(task(&h.b, &queued.task_id).await.status, TaskStatus::Queued);
+    running(&h.controllers[1], &one.task_id).await;
+    let queued = submit(&h.controllers[1], &context, submission("a", "next", false)).await;
+    assert_eq!(
+        task(&h.controllers[1], &queued.task_id).await.status,
+        TaskStatus::Queued
+    );
     h.servers[0].abort();
     let _ = (&mut h.servers[0]).await;
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let all = h.b.controller_connections(query.clone()).await.unwrap();
+        let all = h.controllers[1]
+            .controller_connections(query.clone())
+            .await
+            .unwrap();
         let a = all.connections.iter().find(|l| l.id == "a").unwrap();
         assert!(matches!(
             all.connections
@@ -305,9 +344,12 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
         assert!(Instant::now() < deadline);
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    assert_eq!(task(&h.b, &one.task_id).await.status, TaskStatus::Running);
-    let cancel =
-        h.b.call_fenced(envelope(
+    assert_eq!(
+        task(&h.controllers[1], &one.task_id).await.status,
+        TaskStatus::Running
+    );
+    let cancel = h.controllers[1]
+        .call_fenced(envelope(
             &context,
             LocalRequest::Cancel {
                 task_id: one.task_id.clone(),
@@ -317,7 +359,7 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     assert_eq!(cancel.outcome, FencedReplyOutcome::Responded);
     let deadline = Instant::now() + Duration::from_secs(12);
     loop {
-        let t = task(&h.b, &queued.task_id).await;
+        let t = task(&h.controllers[1], &queued.task_id).await;
         if t.status.is_terminal() {
             assert_eq!(t.status, TaskStatus::Succeeded);
             break;
@@ -325,28 +367,31 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
         assert!(Instant::now() < deadline);
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    let mut config = h.a.config.clone();
-    let old_generation = h.a.generation.clone();
+    let mut config = h.controllers[0].config.clone();
+    let old_generation = h.controllers[0].generation.clone();
     // New private state simulates a restarted Debian without adopting old sessions.
     config.state_directory = root.path().join("controller-a-restarted");
-    h.a = Controller::new(config).unwrap();
-    h.servers[0] = server(h.a.clone(), listen(h.addresses[0]));
+    h.controllers[0] = Controller::new(config).unwrap();
+    h.servers[0] = server(h.controllers[0].clone(), listen(h.addresses[0]));
     h.connected().await;
-    assert_ne!(h.a.generation, old_generation);
-    let fresh = info(&h.a).await;
+    assert_ne!(h.controllers[0].generation, old_generation);
+    let fresh = info(&h.controllers[0]).await;
     assert_eq!(
         fresh.controller_connection.unwrap().controller_generation,
-        Some(h.a.generation.clone())
+        Some(h.controllers[0].generation.clone())
     );
-    projection(&h.a).await;
-    projection(&h.b).await;
-    let all = h.b.controller_connections(query.clone()).await.unwrap();
+    projection(&h.controllers[0]).await;
+    projection(&h.controllers[1]).await;
+    let all = h.controllers[1]
+        .controller_connections(query.clone())
+        .await
+        .unwrap();
     let a = all.connections.iter().find(|l| l.id == "a").unwrap();
     assert!(a.attempts.parse::<u64>().unwrap() >= 2);
     assert!(a.last_error.is_some());
     assert_eq!(
         a.connection.controller_generation.as_ref(),
-        Some(&h.a.generation)
+        Some(&h.controllers[0].generation)
     );
     let address = winbridge_transport::endpoint(
         &h.worker.config.state_directory,
@@ -358,11 +403,12 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
         .unwrap();
     assert_eq!(local.worker_generation, all.worker_generation);
     assert_eq!(local.primary, all.primary);
-    let duplicate = submit(&h.a, &context, request).await;
+    let duplicate = submit(&h.controllers[0], &context, request).await;
     assert_eq!(duplicate.task_id, one.task_id);
     assert_eq!(duplicate.status, TaskStatus::Cancelled);
     assert_eq!(
-        h.a.operation_attribution(creator_query)
+        h.controllers[0]
+            .operation_attribution(creator_query)
             .await
             .unwrap()
             .creator,
@@ -375,8 +421,8 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
             .count(),
         2
     );
-    let LocalResponse::Output { chunks } =
-        h.b.call(LocalRequest::ReadOutput {
+    let LocalResponse::Output { chunks } = h.controllers[1]
+        .call(LocalRequest::ReadOutput {
             task_id: queued.task_id.clone(),
             after_sequence: 0,
         })
@@ -391,8 +437,8 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     );
     let mut foreign = context.clone();
     foreign.journal_incarnation = "foreign".into();
-    let rejected =
-        h.b.call_fenced(envelope(
+    let rejected = h.controllers[1]
+        .call_fenced(envelope(
             &foreign,
             LocalRequest::Submit {
                 request: submission("b", "stale", false),
@@ -408,7 +454,9 @@ async fn two_real_websockets_share_queue_survive_one_disconnect_and_reconnect_wi
     h.worker.stop();
     (&mut h.worker_task).await.unwrap().unwrap();
     let deadline = Instant::now() + Duration::from_secs(3);
-    while h.a.status().unwrap().connected || h.b.status().unwrap().connected {
+    while h.controllers[0].status().unwrap().connected
+        || h.controllers[1].status().unwrap().connected
+    {
         assert!(
             Instant::now() < deadline,
             "Connection survived worker shutdown"
@@ -423,13 +471,17 @@ async fn both_controllers_run_independent_projects_in_one_worker() {
     let root = tempfile::tempdir().unwrap();
     let h = Harness::new(root.path());
     h.connected().await;
-    let context = info(&h.a).await.fenced_requests.unwrap().context;
-    let a = submit(&h.a, &context, submission("a", "job-a", true)).await;
-    let b = submit(&h.b, &context, submission("b", "job-b", true)).await;
-    running(&h.a, &a.task_id).await;
-    running(&h.b, &b.task_id).await;
-    let one = task(&h.a, &a.task_id).await;
-    let two = task(&h.b, &b.task_id).await;
+    let context = info(&h.controllers[0])
+        .await
+        .fenced_requests
+        .unwrap()
+        .context;
+    let a = submit(&h.controllers[0], &context, submission("a", "job-a", true)).await;
+    let b = submit(&h.controllers[1], &context, submission("b", "job-b", true)).await;
+    running(&h.controllers[0], &a.task_id).await;
+    running(&h.controllers[1], &b.task_id).await;
+    let one = task(&h.controllers[0], &a.task_id).await;
+    let two = task(&h.controllers[1], &b.task_id).await;
     assert_eq!(
         (one.status, two.status),
         (TaskStatus::Running, TaskStatus::Running)
@@ -443,9 +495,18 @@ async fn different_controller_cancel_keeps_creator_and_first_cancellation_actor(
     let root = tempfile::tempdir().unwrap();
     let h = Harness::new(root.path());
     h.connected().await;
-    let context = info(&h.a).await.fenced_requests.unwrap().context;
-    let accepted = submit(&h.a, &context, submission("a", "cancel-origin", true)).await;
-    running(&h.b, &accepted.task_id).await;
+    let context = info(&h.controllers[0])
+        .await
+        .fenced_requests
+        .unwrap()
+        .context;
+    let accepted = submit(
+        &h.controllers[0],
+        &context,
+        submission("a", "cancel-origin", true),
+    )
+    .await;
+    running(&h.controllers[1], &accepted.task_id).await;
     let query = OperationAttributionRequest {
         context: context.clone(),
         query: OperationAttributionQuery {
@@ -453,15 +514,14 @@ async fn different_controller_cancel_keeps_creator_and_first_cancellation_actor(
             operation_id: accepted.task_id.clone(),
         },
     };
-    assert!(h
-        .a
+    assert!(h.controllers[0]
         .operation_cancellation(query.clone())
         .await
         .unwrap()
         .intent
         .is_none());
-    let response =
-        h.b.call_fenced(envelope(
+    let response = h.controllers[1]
+        .call_fenced(envelope(
             &context,
             LocalRequest::Cancel {
                 task_id: accepted.task_id.clone(),
@@ -469,17 +529,17 @@ async fn different_controller_cancel_keeps_creator_and_first_cancellation_actor(
         ))
         .await;
     assert_eq!(response.outcome, FencedReplyOutcome::Responded);
-    let first =
-        h.a.operation_cancellation(query.clone())
-            .await
-            .unwrap()
-            .intent
-            .unwrap();
+    let first = h.controllers[0]
+        .operation_cancellation(query.clone())
+        .await
+        .unwrap()
+        .intent
+        .unwrap();
     assert!(
         matches!(&first.actor,Some(OperationCreator::Controller {controller_id,..}) if controller_id=="b")
     );
-    let duplicate =
-        h.a.call_fenced(envelope(
+    let duplicate = h.controllers[0]
+        .call_fenced(envelope(
             &context,
             LocalRequest::Cancel {
                 task_id: accepted.task_id,
@@ -487,17 +547,267 @@ async fn different_controller_cancel_keeps_creator_and_first_cancellation_actor(
         ))
         .await;
     assert_eq!(duplicate.outcome, FencedReplyOutcome::Responded);
-    let again =
-        h.b.operation_cancellation(query.clone())
-            .await
-            .unwrap()
-            .intent
-            .unwrap();
+    let again = h.controllers[1]
+        .operation_cancellation(query.clone())
+        .await
+        .unwrap()
+        .intent
+        .unwrap();
     assert_eq!(
         (again.actor, again.requested_at_ms),
         (first.actor, first.requested_at_ms)
     );
     assert!(
-        matches!(h.b.operation_attribution(query).await.unwrap().creator,Some(OperationCreator::Controller {controller_id,..}) if controller_id=="a")
+        matches!(h.controllers[1].operation_attribution(query).await.unwrap().creator,Some(OperationCreator::Controller {controller_id,..}) if controller_id=="a")
     );
+}
+
+async fn multiple_controllers_roundtrip(count: usize) {
+    use winbridge_protocol::*;
+    let root = tempfile::tempdir().unwrap();
+    let primary = count - 1;
+    let interrupted = count - 2;
+    let mut h = Harness::with_controllers(root.path(), count, primary);
+    h.connected().await;
+    let context = info(&h.controllers[0])
+        .await
+        .fenced_requests
+        .unwrap()
+        .context;
+    let query = ControllerConnectionsRequest {
+        context: context.clone(),
+    };
+    let ids: Vec<_> = h
+        .worker
+        .config
+        .worker
+        .topology()
+        .unwrap()
+        .unwrap()
+        .controllers
+        .into_iter()
+        .map(|c| c.id)
+        .collect();
+    let mut tasks = vec![];
+    for (i, controller) in h.controllers.iter().enumerate() {
+        let observed = info(controller).await;
+        assert_eq!(observed.fenced_requests.unwrap().context, context);
+        assert_eq!(
+            observed.controller_connection.unwrap().url,
+            format!("ws://{}", h.addresses[i])
+        );
+        projection(controller).await;
+        let all = controller
+            .controller_connections(query.clone())
+            .await
+            .unwrap();
+        assert_eq!(all.primary.as_deref(), Some(ids[primary].as_str()));
+        assert_eq!(all.connections.len(), count);
+        assert!(all
+            .connections
+            .iter()
+            .all(|l| matches!(l.connection.state, ConnectionState::Connected)));
+        assert_eq!(all.rpc.limit, NETWORK_RPC_LIMIT);
+        assert!(all
+            .connections
+            .iter()
+            .all(|l| l.rpc.limit == CONTROLLER_RPC_LIMIT));
+        tasks.push(
+            submit(
+                controller,
+                &context,
+                submission(&ids[i], &format!("job-{i}"), true),
+            )
+            .await,
+        );
+    }
+    for (i, controller) in h.controllers.iter().enumerate() {
+        running(controller, &tasks[i].task_id).await;
+        // Every peer retries the first peer's original logical request; one process/creator survives.
+        let duplicate = submit(controller, &context, tasks[0].submission.clone()).await;
+        assert_eq!(duplicate.task_id, tasks[0].task_id);
+    }
+    assert_eq!(
+        tasks
+            .iter()
+            .map(|t| t.task_id.as_str())
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        count
+    );
+    let queued = submit(
+        &h.controllers[primary],
+        &context,
+        submission(&ids[0], "same-project-next", false),
+    )
+    .await;
+    assert_eq!(
+        task(&h.controllers[primary], &queued.task_id).await.status,
+        TaskStatus::Queued
+    );
+    let origin_query = |index: usize| OperationAttributionRequest {
+        context: context.clone(),
+        query: OperationAttributionQuery {
+            kind: HistoryKind::Task,
+            operation_id: tasks[index].task_id.clone(),
+        },
+    };
+    let historical_creator = h.controllers[primary]
+        .operation_attribution(origin_query(interrupted))
+        .await
+        .unwrap()
+        .creator
+        .unwrap();
+    assert!(
+        matches!(&historical_creator,OperationCreator::Controller {controller_id,..} if controller_id==&ids[interrupted])
+    );
+    h.servers[interrupted].abort();
+    let _ = (&mut h.servers[interrupted]).await;
+    let deadline = Instant::now() + Duration::from_secs(6);
+    loop {
+        let all = h.controllers[primary]
+            .controller_connections(query.clone())
+            .await
+            .unwrap();
+        let lost = all
+            .connections
+            .iter()
+            .find(|l| l.id == ids[interrupted])
+            .unwrap();
+        assert!(all
+            .connections
+            .iter()
+            .filter(|l| l.id != ids[interrupted])
+            .all(|l| matches!(l.connection.state, ConnectionState::Connected)));
+        if !matches!(lost.connection.state, ConnectionState::Connected) && lost.last_error.is_some()
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Disconnected peer remained fresh"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    for (i, controller) in h
+        .controllers
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != interrupted)
+    {
+        assert_eq!(
+            task(controller, &tasks[interrupted].task_id).await.status,
+            TaskStatus::Running
+        );
+        let source = controller
+            .operation_attribution(origin_query(i))
+            .await
+            .unwrap()
+            .creator
+            .unwrap();
+        assert!(
+            matches!(source,OperationCreator::Controller {controller_id,..} if controller_id==ids[i])
+        );
+    }
+    let mut config = h.controllers[interrupted].config.clone();
+    let old_generation = h.controllers[interrupted].generation.clone();
+    config.state_directory = root.path().join(format!("restarted-{interrupted}"));
+    h.controllers[interrupted] = Controller::new(config).unwrap();
+    h.servers[interrupted] = server(
+        h.controllers[interrupted].clone(),
+        listen(h.addresses[interrupted]),
+    );
+    h.connected().await;
+    assert_ne!(h.controllers[interrupted].generation, old_generation);
+    for controller in &h.controllers {
+        projection(controller).await;
+        assert_eq!(
+            controller
+                .operation_attribution(origin_query(interrupted))
+                .await
+                .unwrap()
+                .creator,
+            Some(historical_creator.clone())
+        );
+    }
+    for (i, accepted) in tasks.iter().enumerate() {
+        let actor = (i + 1) % count;
+        let response = h.controllers[actor]
+            .call_fenced(envelope(
+                &context,
+                LocalRequest::Cancel {
+                    task_id: accepted.task_id.clone(),
+                },
+            ))
+            .await;
+        assert_eq!(response.outcome, FencedReplyOutcome::Responded);
+        let intent = h.controllers[primary]
+            .operation_cancellation(origin_query(i))
+            .await
+            .unwrap()
+            .intent
+            .unwrap();
+        assert!(
+            matches!(intent.actor,Some(OperationCreator::Controller {controller_id,..}) if controller_id==ids[actor])
+        );
+    }
+    let deadline = Instant::now() + Duration::from_secs(12);
+    loop {
+        let queued = task(&h.controllers[primary], &queued.task_id).await;
+        if queued.status.is_terminal() {
+            assert_eq!(queued.status, TaskStatus::Succeeded);
+            let mut all_terminal = true;
+            for accepted in &tasks {
+                all_terminal &= task(&h.controllers[primary], &accepted.task_id)
+                    .await
+                    .status
+                    .is_terminal();
+            }
+            if all_terminal {
+                break;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Shared project queue did not advance after cancellation"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    for (i, id) in ids.iter().enumerate() {
+        assert_eq!(
+            task(&h.controllers[primary], &tasks[i].task_id)
+                .await
+                .status,
+            TaskStatus::Cancelled
+        );
+        assert_eq!(
+            std::fs::read_to_string(root.path().join(id).join("starts.log"))
+                .unwrap()
+                .lines()
+                .count(),
+            if i == 0 { 2 } else { 1 }
+        );
+    }
+    h.worker.stop();
+    (&mut h.worker_task).await.unwrap().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(4);
+    while h.controllers.iter().any(|c| c.status().unwrap().connected) {
+        assert!(
+            Instant::now() < deadline,
+            "A controller survived worker shutdown"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(Arc::strong_count(&h.worker), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn three_and_four_controllers_share_one_runtime_with_non_first_primary() {
+    tokio::time::timeout(Duration::from_secs(70), async {
+        for count in [3, 4] {
+            multiple_controllers_roundtrip(count).await;
+        }
+    })
+    .await
+    .expect("Three/four-controller runtime deadline");
 }
