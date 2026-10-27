@@ -813,3 +813,9 @@ physical quiescence. Durable drain driver и exact shutdown остаются в�
 [Native multi-controller gate](plans/multi-controller-native-2026-10-27.md) подготовлен;
 Windows proof/release пока не объявлять. Main25 profiles используют отдельные pins,
 installed0.1.1 остаётся прежним. Новая версия не включает public updater install.
+
+
+2026-10-27: [Windows multi-controller gate](plans/multi-controller-native-2026-10-27.md)
+пройден на0.2.0/source48c834c:4 independent controllers,5 tasks, native cold17→19,
+independent16 negative audits/15 files twice. User разрешил новые TCP ports;
+installed0.1.1 не заменялся. Source19 Main25 и выпуск ZIP ещё впереди.

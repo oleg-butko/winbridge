@@ -17,27 +17,20 @@ Input2/stable slot). Исправление и точные run/retirement pins 
 Пользователь разрешил runtime-test-204 EXE в firewall; сохранить постоянный путь,
 не считать Cargo hashed EXE автоматически разрешёнными. Full Main25 ещё не пройден.
 
-## Windows: прежнее ожидание завершения снято
+## Windows: native multi-controller gate пройден
 
-Свежая проверка после сообщения пользователя: task29421ccd-9e84-457d-87d0-59e3b99e35c0
-terminal failed/exit1, cancelRequested=true, installed worker active0/generation772e0679
-не менялся. Win32_Process больше не содержит PID3524. Единственный worker —
-PID14448, K:\_proj-26\winbridge\runtime\winbridge-worker.exe; test slot содержит
-только обычные marker/lock/EXE, запущенного test worker нет. Readonly task
-dafb5009-ebc1-4453-be7e-a2d4155a79be succeeded/0. Late terminal и свежий process list
-сохранены в native run; новый worker не запускался.
-
-Пользователь не видит уведомлений Outpost. Его участие в сбое не установлено;
-прежние API observations PID3524/HasExited=true не называть живым дочерним процессом.
-Прежнее ожидание больше не является основанием блокировать следующие проверки.
-Перед новым run повторить lease/ownership/idle checks. Native network gate и full
-Main25 остаются непрошедшими, release/install готовность не объявлять.
-
-Все четыре прежних test controller завершены,1145–1148 свободны. Оба runner
-исправлены: stdin=DEVNULL/start_new_session=True сохраняют peers при exit observer;
-actual Linux controller пережил parent exit, ответил IPC, затем остановлен.
-Новый Main25 проверяет resource_policy.epoch отдельно, общий history helper
-проверен на Debian; точные source pins и results — в планах ниже.
+Run20261027-183307-dda61a12/task281cc8c4… succeeded/0, source48c834c/normal0.2.0,
+EXE SHA9dac4060… [Точные pins и результаты](plans/multi-controller-native-2026-10-27.md).
+Пользователь разрешил новые порты1145–1148, после чего4 сессии подключились.
+Actual4 independent controller processes (3 new/1 retained0.1.0), очередь/dedup/
+creator/disconnect/restart/cross-cancel/process-tree/output passed; native cold17→19
+также passed. Independent reader исправлен для TaskSummary projection;16 negative
+cases/15 files twice passed без повторного Windows исполнения.
+Test worker/fixture descendants и4 Debian test controllers завершены, production
+worker0.1.1/gen772e0679 остаётся прежним/active0. Старый PID3524 отсутствует.
+Никаких автоматических firewall/system changes. Source19 Main25 ещё нужен;
+следующий target48c834c, producer — новый clean commit с актуальным verifier.
+Release ZIP и готовность installation не объявлять до полного завершения gates.
 
 ## Локальная проверка history comparator
 

@@ -68,9 +68,15 @@ def verify(files, source, controller_build, runtime, legacy=None):
     peer = lambda p: next(x for x in p['connections'] if x['id'] == 'c2')['connection']
     need(peer(before)['controllerGeneration'] != peer(after)['controllerGeneration'], 'Restart identity missing')
     final = {t['taskId']: t for t in proof['finalTasks']}
-    need(len(final) == 5 and all(final[t]['status'] == 'cancelled' for t in ids), 'Final task/cancellation state differs')
+    need(len(proof['finalTasks']) == len(final) == 5 and all(final[t]['status'] == 'cancelled' for t in ids), 'Final task/cancellation state differs')
     queued = proof['queued']
-    need(queued['taskId'] not in ids and queued['status'] == 'succeeded' and queued == final[queued['taskId']]
+    # ListTasks returns frozen TaskSummary, while GetTask returns TaskRecord.
+    # Bind every summary field, then check the full record's successful exit.
+    summary = {'taskId': queued['taskId'], 'projectId': queued['submission']['projectId'],
+               'status': queued['status'], 'acceptedAtMs': queued['acceptedAtMs']}
+    need(queued['taskId'] not in ids and queued['status'] == 'succeeded' and summary == final[queued['taskId']]
+         and type(queued['exitCode']) is int and queued['exitCode'] == 0
+         and type(queued['finishedAtMs']) is int and queued['finishedAtMs'] >= queued['acceptedAtMs']
          and queued['submission']['projectId'] == 'p0', 'Serialized queue did not complete')
     text = ''.join(bytes(c['bytes']).decode('utf-8', errors='replace') for c in proof['output']['chunks'])
     need('Привет' in text, 'Cross-controller output missing')
@@ -102,6 +108,9 @@ def audit(files, source, controller_build, runtime, legacy=None):
         ('network-complete.json', lambda v: v.update(creatorAfterRestart=None)),
         ('network-complete.json', lambda v: v['lost']['connections'][0]['connection'].update(state='disconnected')),
         ('network-complete.json', lambda v: v.update(finalTasks=v['finalTasks'][:-1])),
+        ('network-complete.json', lambda v: v['finalTasks'].append(dict(v['finalTasks'][0]))),
+        ('network-complete.json', lambda v: next(t for t in v['finalTasks'] if t['taskId'] == v['queued']['taskId']).update(projectId='foreign')),
+        ('network-complete.json', lambda v: v['queued'].update(exitCode=1)),
         ('worker-build-identity.json', lambda v: v['build'].update(sourceDirty=True)),
         ('network-ready.json', lambda v: v['context'].update(journalIncarnation='foreign')),
     ]

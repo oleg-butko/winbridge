@@ -155,3 +155,34 @@ Coordinator сохраняет startup-observations.jsonl с фактическ�
 При любой доступной новой связи читает readonly список всех worker links с их
 ошибками. Это диагностические запросы; мутации остаются после подтверждения всех
 связей. Новый run только с новым request/key/state после terminal прежней попытки.
+
+## Положительный повторный native run
+
+Пользователь наблюдал запуск и подтвердил запросы firewall на новые порты;
+1145–1148 разрешены им вручную. После этого reconnect loops установили все4
+сессии без перезапуска accepted bootstrap. Source48c834c00c658f11feec066c9ae4650a4e6cff7a,
+ZIP d11deff1be30d9b376c64417a0b700498eb85f24d154c7533edcad0b143f0bdd,
+manifest310e6f7fef74b6f8e56b693c9cec028acf68afb7679c9176d349a6c15bcac3dd.
+Run20261027-183307-dda61a12/task281cc8c4-c0e6-4194-976d-db4b4af22aac succeeded/0.
+Server PID23072; normal EXE SHA9dac4060f3abf9a2167ee432b536d9f9ffc9a787730e5d4096ed4a5eda997104.
+Build67.156s, cold17→19 command22.250s. New trace показывает source verification,
+CLI Info примерно100ms, до разрешения — TCP timeout5s по всем новым портам.
+
+Actual Windows scenario прошёл:4 controller (три current0.2.0, один retained0.1.0),
+четыре concurrent project/process trees, common project queue, global dedup,
+original creator, controller disconnect/restart без отмены задания, cancellation
+другим caller, общий output и5 retained tasks. Runs.log counts3/2/2/2 подтверждены,
+managed fixture descendants0, server exit подтверждён, оба output captures complete,
+ошибок записи diagnostics0. Все четыре Debian test controller остановлены.
+Production worker0.1.1/build/generation/context не менялись, active0.
+
+Первый independent audit обнаружил ошибку verifier, не worker: полная TaskRecord
+сравнивалась с frozen TaskSummary. Исправлено точным projection четырёх полей
+(taskId/projectId/status/acceptedAtMs) с отдельными успешным exitCode0/finishedAtMs
+из full record. Дополнительно проверяются duplicate summary IDs и corruption.
+Сохранённые байты НЕ менялись, Windows команды НЕ повторялись: исправленный
+independent audit прошёл16 negative cases и15 ready files twice, включая actual
+cold17→19. Receipt .winbridge/multi-controller-native/20261027-183307-dda61a12/
+independent-audit-after-summary-fix.json. Это Windows proof четырёх процессов
+controller на.204, не одновременная deployment проверка VMs.203+.204.
+Main25 source19 и release ZIP остаются отдельными следующими шагами.
