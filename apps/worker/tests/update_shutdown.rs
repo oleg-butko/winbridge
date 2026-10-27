@@ -90,6 +90,40 @@ enum PreparationFault {
     ChangedCandidate,
     HoldBeforeReceipt,
 }
+// Cargo may hard-link debug/<bin> to deps/<bin-hash>. This is only a
+// reproducible input under the script build-cache lease, never the runtime
+// authority. FixtureLayout and RuntimeGuard still require single-link images.
+fn cached_build_sha256(path: &Path) -> String {
+    let file = fs::File::open(path).unwrap();
+    assert!(file.metadata().unwrap().is_file());
+    let mut bytes = Vec::new();
+    file.take(256 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .unwrap();
+    assert!(
+        bytes.len() <= 256 * 1024 * 1024,
+        "Bounded Cargo build artifact required"
+    );
+    winbridge_update::sha256(&bytes)
+}
+#[test]
+fn cached_build_links_are_not_runtime_image_permissions() {
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("cargo-artifact.exe");
+    let linked = temp.path().join("cargo-deps.exe");
+    fs::write(&source, b"generated cache input").unwrap();
+    fs::hard_link(&source, &linked).unwrap();
+    assert_eq!(cached_build_sha256(&source), cached_build_sha256(&linked));
+    assert!(winbridge_update::supervisor::image_sha256(&source)
+        .unwrap_err()
+        .contains("Hard-linked"));
+    let runtime = temp.path().join("runtime-worker.exe");
+    fs::copy(&source, &runtime).unwrap();
+    assert_eq!(
+        winbridge_update::supervisor::image_sha256(&runtime).unwrap(),
+        cached_build_sha256(&source)
+    );
+}
 fn write(path: &Path, value: &impl serde::Serialize) {
     use std::io::Write;
     let mut file = fs::OpenOptions::new()
@@ -214,10 +248,7 @@ fn setup(
     let runtime = root.runtime();
     if input.runtime.is_some() {
         assert_eq!(
-            winbridge_update::supervisor::image_sha256(Path::new(env!(
-                "CARGO_BIN_EXE_winbridge-worker"
-            )))
-            .unwrap(),
+            cached_build_sha256(Path::new(env!("CARGO_BIN_EXE_winbridge-worker"))),
             root.initial_worker_sha256().unwrap(),
             "Build the exact validation worker before reserving its stable runtime"
         );

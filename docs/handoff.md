@@ -6,6 +6,13 @@
 [stable runtime reservation checkpoint](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md),
 [actor25/local-root checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md)
 и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
+**Main25 первый полный run остановился до Main** на hard link в Cargo cache;
+136 подготовительных native tests passed, это не activation proof. Cache comparison
+исправлен без ослабления runtime checks. `runtime-test` сохранён с закрытой lease;
+подготовлен readonly-проверенный разовый conservation plan, **-Execute требует
+отдельного одобрения пользователя**. Точные2 files/пути/SHA/tasks — в Main25 checkpoint.
+Independent verifier/source regression готовы, actual positive gate ещё впереди.
+
 Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
 Пользователь установил worker **0.1.1/source59249e6**, SHA exe `536d8637…` совпал

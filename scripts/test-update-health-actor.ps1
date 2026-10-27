@@ -185,6 +185,7 @@ try {
       # BEFORE creating config/manifest/journal. Cargo test uses exactly this binary.
       $commands=@($commands | Where-Object {$_.name -cne 'shutdown-main-pipeline'})+@(
         @{name='service-validation-worker-build';arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--bin','winbridge-worker','--locked','--offline')},
+        @{name='service-cache-layout-check';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','cached_build_links_are_not_runtime_image_permissions','--test-threads=1','--nocapture')},
         @($commands | Where-Object {$_.name -ceq 'shutdown-main-pipeline'})[0]
       )
     }
@@ -305,7 +306,7 @@ try {
       $selected=0;foreach($count in $counts){$selected+=[int]$count.Groups[1].Value}
       if($selected -lt $command.minimum){throw "Required native tests were not selected: $($command.name)"}
     }
-    if($ActivationServiceGate -and $command.name -ceq 'service-validation-worker-build'){
+    if($ActivationServiceGate -and $command.name -ceq 'service-cache-layout-check'){
       $initialWorker=Join-Path $env:CARGO_TARGET_DIR 'debug/winbridge-worker.exe'
       $initialSha=(Get-FileHash -LiteralPath $initialWorker -Algorithm SHA256).Hash.ToLowerInvariant()
       $activationReservation=Open-TestWorkerActivationRuntime -Directory $TestRuntimeDirectory -InstalledWorker $InstalledWorker -Image $initialWorker -Sha256 $initialSha -RunDirectory $caseRoot -SourceCommit $manifest.sourceCommit -SourceManifestSha256 (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
