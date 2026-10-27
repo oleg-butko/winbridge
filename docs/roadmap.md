@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-27: **multi-controller слит в main** после [ревью](analysis/multi-controller-merge-review-2026-10-27.md).
+895 workspace/17 ignored, Linux/MSVC Clippy,3 browser scenarios, повторный readonly
+audit Windows4 peers/5 tasks/16 negatives/15 files twice прошли. Runtime остаётся
+одним; source journal19/updater20, установленный worker0.1.1 не меняется.
+Следом actual Main25 profile19/20 в отдельном постоянном runtime-test-204 через.203.
+Ниже сохранены прежние feature/checkpoint статусы.
+
 2026-10-27: выполняются [Main25 profiles и изолированная worker17→19 migration](plans/main25-schema-profiles-2026-10-27.md).
 Main ba9557b переносится в feature; profiles сохраняют17 и добавляют19 без ослабления
 schema/authority checks. Windows slot204 отдельный, installed worker не обновляется.

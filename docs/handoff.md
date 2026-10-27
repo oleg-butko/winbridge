@@ -1,5 +1,23 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
+**Актуально после review/merge на .203,2026-10-27:** multi-controller слит в main.
+[Ревью, исправления и проверки](analysis/multi-controller-merge-review-2026-10-27.md):
+895 workspace tests/0 failures/17 ignored, Linux/MSVC Clippy, contracts/TS/UI,
+три sandboxed browser сценария. Сохранённый Windows4-controller gate проверен
+заново:16 negative audits/15 files twice плюс отдельный cold17→19 proof.
+Native coordinators fsync metadata до dispatch; статический UI harness не смотрит
+target caches. Production Rust/UI48c834c→9877b9e не менялся.
+Рабочий0.1.1 уже подключён к.203: generation9b924962/incarnation5a8eb173, active0,
+errors=null, controller5103 сохранён. Не обновлять установленный runtime из его задачи.
+
+Следующий шаг — actual Main25 **worker19-updater20** с clean archives и explicit
+profile. Для него использовать постоянный `runtime-test-204`, controller.203:1144,
+новые state/instance/report. Legacy runtime-test.203 и его conservation plan
+остаются нетронутыми; прежний pending запрос переноса не выполнялся и для отдельного
+слота204 не требуется. Оба слота не смешивать. Source0.2.0 пока не release/install;
+Main25, active updater19→20, controller/lifetime/commit/release и U2–U4 ещё впереди.
+Описание ниже — checkpoints другой VM до слияния, сохраняется как история.
+
 **Текущая задача2026-10-27:** пользователь переключил installed worker0.1.1 на
 .204 и разрешил реализацию [Main25 profiles/cold migration плана](plans/main25-schema-profiles-2026-10-27.md).
 Main ba9557b включён в feature с проверенным source adapter. Profiles17/20

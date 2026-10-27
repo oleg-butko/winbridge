@@ -3,7 +3,7 @@
 2026-10-27, Debian .203. Проверен диапазон `ba9557b..9877b9e`
 из `origin/feat/multi-controller`; review branch основана на9877b9e.
 Существенных дефектов общего runtime/очереди/журнала при ревью не выявлено.
-Ветка подготовлена к слиянию; worker0.2.0 ещё не объявляется установленным/выпущенным.
+Ветка слита в main через отдельный merge commit; worker0.2.0 ещё не объявляется установленным/выпущенным.
 
 Проверены topology validation и stale connection tickets, общий/per-controller
 RPC budget, удержание permit до завершения blocking handler после timeout,

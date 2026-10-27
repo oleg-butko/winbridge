@@ -1,5 +1,14 @@
 # Архитектура WinBridge
 
+2026-10-27: [multi-controller review/merge](analysis/multi-controller-merge-review-2026-10-27.md)
+в main: до4 независимых связей, один Worker/Store/scheduler,32 RPC всего/16 на peer,
+проекции по session ticket. Source worker journal19 хранит creator и первый
+cancellation actor; cold17→19 проверен, active updater migration не разрешена.
+Updater20/actor25 сохраняют consuming custody и явные Main25 profiles17/20 и19/20.
+Native4-controller gate пройден; source19 Main25 ещё нужен. Установленный worker
+0.1.1/schema17 не заменён, public install выключен. Следующие датированные записи
+относятся к своим историческим версиям.
+
 2026-10-26: worker0.1.1 установлен и проверен. [Продолжение updater](plans/worker-self-update/service-ledger-2026-10-26.md):
 source journal20 хранит service intent/history и читает их в одном snapshot с
 writer/activation graph. [Consuming admission/transfer preparation](plans/worker-self-update/service-admission-2026-10-26.md)
