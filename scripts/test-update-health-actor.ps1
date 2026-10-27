@@ -24,6 +24,7 @@ param(
   [switch]$ActivationStateGate,
   [switch]$ActivationWriterGate,
   [switch]$ActivationServiceGate,
+  [string]$Worker17ReferenceSha256,
   [string]$FixtureInstanceId,
   [string]$FixtureControllerUrl,
   [string]$TestRuntimeDirectory = 'K:\_proj-26\winbridge\runtime-test',
@@ -66,6 +67,7 @@ $report=[ordered]@{schemaVersion=1;kind='candidate_health_native_gate';platform=
 $oldShutdownInput=$env:WINBRIDGE_SHUTDOWN_GATE_INPUT
 $oldActivationInput=$env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT
 $oldWorkerMigrationInput=$env:WINBRIDGE_WRITER_WORKER_MIGRATION_INPUT
+$oldAttributionMigrationInput=$env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT
 $oldPreviousUpdater=$env:WINBRIDGE_PREVIOUS_UPDATER10
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_HEALTH_GATE_INPUT;$oldProof=$env:WINBRIDGE_HEALTH_GATE_PROOF
 $oldConsoleEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
@@ -186,6 +188,7 @@ try {
       $commands=@($commands | Where-Object {$_.name -cne 'shutdown-main-pipeline'})+@(
         @{name='service-validation-worker-build';arguments=@('build','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--bin','winbridge-worker','--locked','--offline')},
         @{name='service-cache-layout-check';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','cached_build_links_are_not_runtime_image_permissions','--test-threads=1','--nocapture')},
+        @{name='service-history-epoch-check';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_shutdown','--locked','--offline','--','--exact','activation_writer::local_service_history_hash_allows_only_the_exact_policy_owner_epoch','--test-threads=1','--nocapture')},
         @($commands | Where-Object {$_.name -ceq 'shutdown-main-pipeline'})[0]
       )
     }
@@ -263,6 +266,14 @@ try {
       @{name='writer-send-trace';minimum=1;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','writer_trace_is_create_new','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='writer-actual-worker-migration';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--test','journal_activation_migration','--locked','--offline','--','--ignored','--test-threads=1','--nocapture')}
     )+$commands
+  }
+  if($ActivationServiceGate -and $Worker17ReferenceSha256){
+    if($Worker17ReferenceSha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-FileHash -LiteralPath $InstalledWorker -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Worker17ReferenceSha256){throw 'Exact released worker17 reference SHA required'}
+    $attributionInput=Join-Path (Split-Path $source -Parent) 'attribution-migration-input.json'
+    Write-NewJson $attributionInput @{root=(Join-Path (Split-Path $source -Parent) 'worker17-to19-cold');reference=$InstalledWorker;referenceSha256=$Worker17ReferenceSha256;powershell=$pwsh;proof=(Join-Path $ReportDirectory 'worker-journal-attribution-migration-proof.json')}
+    $env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$attributionInput
+    $commands=@(@{name='worker17-to19-cold-migration';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','attribution_migration','--locked','--offline','--','--exact','actual_seventeen_history_migrates_to_nineteen_without_replay_or_old_worker_write','--ignored','--test-threads=1','--nocapture')})+$commands
+    $report.worker17ReferenceSha256=$Worker17ReferenceSha256
   }
   if($ActivationServiceGate){
     $commands=@($commands | Where-Object {$_.name -cne 'writer-actual-worker-migration'})
@@ -355,7 +366,7 @@ try {
   try { if($ShutdownMainGate -and (Get-Variable caseRoot -ErrorAction SilentlyContinue)){
     foreach($caseName in @('None','LostAck','DelayedReply','ReceiptWriteDenied','DelayedInstanceLock','SupervisorCrashBeforeExit','None-ExistingDestination','None-ExitAfterCopy','None-WrongInputReport','None-HoldBeforeCopy','None-PreparationExistingDirectory','None-PreparationChangedCandidate','None-PreparationHoldBeforeReceipt','None-ReplacementExistingDirectory','None-ReplacementLockedOldFile','None-ReplacementReceiptWriteDenied','None-ReplacementHoldBeforeReceipt')){
       $caseDirectory=Join-Path $caseRoot $caseName
-      foreach($logName in @('stdout.log','stderr.log','validation-error.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json','activation-state-before_release.json','activation-state-after_release.json','activation-writer-before-send.json')){
+      foreach($logName in @('stdout.log','stderr.log','validation-error.json','final-backup-observed.json','lock-helper-stdout.log','lock-helper-stderr.log','backup-helper-fault.json','backup-helper-held.json','pre-crash-proof.json','activation-process-creating.json','activation-process-created.json','activation-state-before_release.json','activation-state-after_release.json','activation-writer-before-send.json')){
         $path=Join-Path $caseDirectory $logName
         if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-'+$logName)),$false)}
       }
@@ -364,7 +375,10 @@ try {
         $sup=Get-Content -LiteralPath $saved -Raw | ConvertFrom-Json
         $updateId=$sup.spec.updateId
         if($updateId -cmatch '^[0-9a-f-]{36}$'){
-          $path=Join-Path $caseDirectory ('runtime/update/'+$updateId+'/supervisor/stderr.log')
+          $diagnosticRuntime=Join-Path $caseDirectory 'runtime'
+          if($ActivationServiceGate -and $report.runtimeArchive){$diagnosticRuntime=$report.runtimeArchive.directory}
+          elseif($ActivationServiceGate -and $activationReservation){$diagnosticRuntime=$activationReservation.binding.runtimeDirectory}
+          $path=Join-Path $diagnosticRuntime ('update/'+$updateId+'/supervisor/stderr.log')
           if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-supervisor-stderr.log')),$false)}
         }
       }
@@ -383,6 +397,7 @@ try {
   $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$oldShutdownInput
   $env:WINBRIDGE_ACTIVATION_MIGRATION_INPUT=$oldActivationInput
   $env:WINBRIDGE_WRITER_WORKER_MIGRATION_INPUT=$oldWorkerMigrationInput
+  $env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$oldAttributionMigrationInput
   $env:WINBRIDGE_PREVIOUS_UPDATER10=$oldPreviousUpdater;$env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_HEALTH_GATE_INPUT=$oldInput;$env:WINBRIDGE_HEALTH_GATE_PROOF=$oldProof;$env:TEMP=$oldTemp;$env:TMP=$oldTmp
   [Console]::OutputEncoding=$oldConsoleEncoding;$OutputEncoding=$oldPipelineEncoding
   Set-Location -LiteralPath $oldLocation

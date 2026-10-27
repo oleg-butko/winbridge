@@ -48,6 +48,14 @@ impl Store {
         request: WorkflowSubmission,
         recipe_pins: Option<Vec<WorkflowRecipePin>>,
     ) -> Result<WorkflowRecord> {
+        self.accept_workflow_attributed(request, recipe_pins, None)
+    }
+    pub(crate) fn accept_workflow_attributed(
+        &mut self,
+        request: WorkflowSubmission,
+        recipe_pins: Option<Vec<WorkflowRecipePin>>,
+        creator: Option<&OperationCreator>,
+    ) -> Result<WorkflowRecord> {
         self.guard_callback(None, None)?;
         if let Some(existing) = self.existing_workflow(&request)? {
             return Ok(existing);
@@ -95,6 +103,13 @@ impl Store {
                 "local journal: workflow acceptance not stored; acknowledgement rejected".into(),
             );
         }
+        Self::record_creator(
+            &transaction,
+            "workflow",
+            &workflow.workflow_id,
+            creator,
+            None,
+        )?;
         Self::insert_queue_root(
             &transaction,
             "workflow",
@@ -180,8 +195,16 @@ impl Store {
         self.save_workflow(record)
     }
     pub fn cancel_workflow(&mut self, id: &str) -> Result<WorkflowRecord> {
+        self.cancel_workflow_attributed(id, None)
+    }
+    pub(crate) fn cancel_workflow_attributed(
+        &mut self,
+        id: &str,
+        actor: Option<&OperationCreator>,
+    ) -> Result<WorkflowRecord> {
         self.guard_callback(None, None)?;
-        let mut record = self.workflow_snapshot(id)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
+        let mut record = Self::read_domain::<WorkflowRecord>(&transaction, id)?;
         if record.status.is_terminal() || record.cancel_requested {
             return Ok(record.record);
         }
@@ -190,7 +213,11 @@ impl Store {
             &mut record,
             "Cancellation requested; waiting for owned child operations to terminate",
         );
-        self.save_workflow(&mut record)?;
+        Self::write_domain(&transaction, &record)?;
+        Self::record_cancellation(&transaction, "workflow", id, actor, None)?;
+        crate::attention::workflow_outcome(&transaction, &record)?;
+        transaction.commit().map_err(sql)?;
+        record.committed()?;
         Ok(record.record)
     }
     pub fn application(&self, id: &str) -> Result<ApplicationRecord> {
@@ -279,6 +306,14 @@ impl Store {
         if changed != 1 {
             return Err("local journal: application acceptance not stored".into());
         }
+        let (creator, _) = Self::creator_on(connection, "workflow", &app.workflow_id)?;
+        Self::record_creator(
+            connection,
+            "application",
+            &app.application_id,
+            creator.as_ref(),
+            Some(&app.workflow_id),
+        )?;
         Ok(())
     }
     pub fn accept_workflow_import(
@@ -300,7 +335,15 @@ impl Store {
             return Err("local journal: import child admission contradicts workflow".into());
         }
         let mut updated = flow.clone();
-        let import = Self::accept_import_on(&transaction, request, shared, workspace)?;
+        let (creator, _) = Self::creator_on(&transaction, "workflow", &flow.workflow_id)?;
+        let import = Self::accept_import_on(
+            &transaction,
+            request,
+            shared,
+            workspace,
+            creator.as_ref(),
+            Some(&flow.workflow_id),
+        )?;
         Self::freeze_resource_child(
             &transaction,
             &flow.workflow_id,
@@ -344,7 +387,16 @@ impl Store {
             return Err("local journal: task child admission contradicts workflow".into());
         }
         let mut updated = flow.clone();
-        let task = Self::accept_task_on(&transaction, request, command, snapshot, origin)?;
+        let (creator, _) = Self::creator_on(&transaction, "workflow", &flow.workflow_id)?;
+        let task = Self::accept_task_on(
+            &transaction,
+            request,
+            command,
+            snapshot,
+            origin,
+            creator.as_ref(),
+            Some(&flow.workflow_id),
+        )?;
         Self::freeze_resource_child(
             &transaction,
             &flow.workflow_id,
@@ -411,11 +463,11 @@ impl Store {
         }
         let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
         if cancel_task {
-            Self::transition_task_on(
+            Self::cancel_task_on(
                 &transaction,
                 &app.task_id,
                 None,
-                winbridge_core::task::TaskEvent::CancellationRequested,
+                Some((HistoryKind::Application, &app.application_id)),
             )?;
         }
         Self::write_domain(&transaction, app)?;
@@ -427,19 +479,28 @@ impl Store {
         flow.committed()
     }
     pub fn stop_application(&mut self, id: &str) -> Result<ApplicationRecord> {
+        self.stop_application_attributed(id, None, None)
+    }
+    pub(crate) fn stop_application_attributed(
+        &mut self,
+        id: &str,
+        actor: Option<&OperationCreator>,
+        parent: Option<(HistoryKind, &str)>,
+    ) -> Result<ApplicationRecord> {
         self.guard_callback(None, None)?;
-        let mut app = self.application_snapshot(id)?;
-        if !app.status.is_terminal() {
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
+        let mut app = Self::read_domain::<ApplicationRecord>(&transaction, id)?;
+        if !app.status.is_terminal() && app.status != ApplicationStatus::Stopping {
             app.status = ApplicationStatus::Stopping;
             app.reason = Some("Stop requested; awaiting managed process tree termination".into());
-            let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
-            Self::transition_task_on(
+            Self::cancel_task_on(
                 &transaction,
                 &app.task_id,
-                None,
-                winbridge_core::task::TaskEvent::CancellationRequested,
+                actor,
+                Some((HistoryKind::Application, id)),
             )?;
             Self::write_domain(&transaction, &app)?;
+            Self::record_cancellation(&transaction, "application", id, actor, parent)?;
             crate::attention::application_outcome(&transaction, &app)?;
             transaction.commit().map_err(sql)?;
             app.committed()?;
@@ -702,12 +763,32 @@ impl Worker {
                 }
             }
             let mut waiting = false;
+            let intent = if flow.cancel_requested {
+                Store::cancellation_on(&store.connection, "workflow", &flow.workflow_id)?
+            } else {
+                None
+            };
+            let actor = intent.as_ref().and_then(|i| i.actor.as_ref());
+            let parent = flow
+                .cancel_requested
+                .then_some((HistoryKind::Workflow, flow.workflow_id.as_str()));
+            if flow.cancel_requested {
+                if let Some(id) = &flow.application_id {
+                    store.stop_application_attributed(id, actor, parent)?;
+                }
+            }
             for (index, step) in flow.steps.iter().enumerate().take(3) {
                 if let Some(id) = &step.operation_id {
                     if index == 0 {
-                        waiting |= !store.cancel_import(id)?.status.is_terminal();
+                        waiting |= !store
+                            .cancel_import_attributed(id, actor, parent)?
+                            .status
+                            .is_terminal();
                     } else {
-                        waiting |= !store.cancel(id)?.status.is_terminal();
+                        waiting |= !store
+                            .cancel_attributed(id, actor, parent)?
+                            .status
+                            .is_terminal();
                     }
                 }
             }

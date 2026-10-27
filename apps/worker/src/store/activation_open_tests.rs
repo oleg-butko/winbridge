@@ -155,7 +155,7 @@ fn existing_open_keeps_the_same_lock_header_bytes_and_maintenance_until_one_acti
 
 #[test]
 fn existing_open_refuses_old_future_and_non_wal_before_any_mode_or_schema_write() {
-    for schema in [16, 18] {
+    for schema in [16, JOURNAL_SCHEMA_VERSION + 1] {
         let root = tempfile::tempdir().unwrap();
         let (old, state, command, shutdown) = fixture(root.path());
         old.connection

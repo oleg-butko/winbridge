@@ -62,6 +62,15 @@ pub async fn serve(controller: Arc<Controller>) -> Result<()> {
                     let _permit = permit;
                     let operation = async {
                         let request = winbridge_transport::read_frame(&mut stream).await?;
+                        if serde_json::from_slice::<serde_json::Value>(&request).ok().is_some_and(|v|v.get("controllerDiagnosticsVersion").is_some()) {
+                            let response=match serde_json::from_slice(&request) {
+                                Ok(request)=>controller.call_diagnostics(request).await,
+                                Err(_)=>winbridge_protocol::ControllerDiagnosticsResponse::error("Invalid readonly diagnostics envelope; no worker request transmitted".into()),
+                            };
+                            let mut bytes=serde_json::to_vec(&response)?;
+                            if bytes.len()>winbridge_transport::MAX_FRAME_BYTES {bytes=serde_json::to_vec(&winbridge_protocol::ControllerDiagnosticsResponse::error("Controller diagnostic observation exceeds 1 MiB".into()))?;}
+                            return winbridge_transport::write_frame(&mut stream,&bytes).await;
+                        }
                         let controller_request = serde_json::from_slice::<serde_json::Value>(&request).ok().is_some_and(|v|v.get("controllerContractVersion").is_some());
                         if controller_request {
                             let response = match serde_json::from_slice(&request) {

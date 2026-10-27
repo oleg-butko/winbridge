@@ -46,6 +46,15 @@ impl Store {
         shared_path: String,
         workspace_path: String,
     ) -> Result<ImportRecord> {
+        self.accept_import_attributed(request, shared_path, workspace_path, None)
+    }
+    pub(crate) fn accept_import_attributed(
+        &mut self,
+        request: ImportSubmission,
+        shared_path: String,
+        workspace_path: String,
+        creator: Option<&OperationCreator>,
+    ) -> Result<ImportRecord> {
         self.guard_callback(None, None)?;
         if let Some(existing) = self.existing_import(&request)? {
             return Ok(existing);
@@ -56,7 +65,14 @@ impl Store {
             return Ok(existing);
         }
         Self::require_root_admission(&transaction, queue_policy.as_ref(), &request.project_id)?;
-        let import = Self::accept_import_on(&transaction, request, shared_path, workspace_path)?;
+        let import = Self::accept_import_on(
+            &transaction,
+            request,
+            shared_path,
+            workspace_path,
+            creator,
+            None,
+        )?;
         Self::freeze_resource_root(
             &transaction,
             "import",
@@ -77,6 +93,8 @@ impl Store {
         request: ImportSubmission,
         shared_path: String,
         workspace_path: String,
+        creator: Option<&OperationCreator>,
+        parent: Option<&str>,
     ) -> Result<ImportRecord> {
         if let Some(import) = Self::existing_import_on(connection, &request)? {
             return Ok(import);
@@ -124,6 +142,7 @@ impl Store {
                 "local journal: import acceptance not stored; acknowledgement rejected".into(),
             );
         }
+        Self::record_creator(connection, "import", &import.import_id, creator, parent)?;
         Ok(import)
     }
     pub fn get_import(&self, id: &str) -> Result<ImportRecord> {
@@ -203,24 +222,44 @@ impl Store {
         Ok(import.record)
     }
     pub fn cancel_import(&mut self, id: &str) -> Result<ImportRecord> {
+        self.cancel_import_attributed(id, None, None)
+    }
+    pub(crate) fn cancel_import_attributed(
+        &mut self,
+        id: &str,
+        actor: Option<&OperationCreator>,
+        parent: Option<(HistoryKind, &str)>,
+    ) -> Result<ImportRecord> {
         self.guard_callback(Some(crate::store::OperationKind::Import), Some(id))?;
-        let mut import = self.import_snapshot(id)?;
+        let transaction = self.write_transaction(rusqlite::TransactionBehavior::Immediate)?;
+        let mut import = Self::read_domain::<ImportRecord>(&transaction, id)?;
         if import.status.is_terminal() || import.cancel_requested {
             return Ok(import.record);
         }
         if import.status == TaskStatus::Queued {
-            return self.finish_import(
-                id,
-                TaskStatus::Cancelled,
-                "Import cancelled before filesystem work",
+            import.status = TaskStatus::Cancelled;
+            import.finished_at_ms = Some(now_ms());
+            import.reason = Some("Import cancelled before filesystem work".into());
+            Self::import_event(&mut import, "Import cancelled before filesystem work");
+        } else {
+            import.cancel_requested = true;
+            Self::import_event(
+                &mut import,
+                "Cancellation requested; awaiting staging checkpoint",
             );
         }
-        import.cancel_requested = true;
-        Self::import_event(
-            &mut import,
-            "Cancellation requested; awaiting staging checkpoint",
-        );
-        self.save_import(&mut import)?;
+        Self::write_domain(&transaction, &import)?;
+        if import.status.is_terminal() {
+            Self::complete_attempt(
+                &transaction,
+                crate::store::OperationKind::Import,
+                id,
+                import.status,
+            )?;
+        }
+        Self::record_cancellation(&transaction, "import", id, actor, parent)?;
+        transaction.commit().map_err(sql)?;
+        import.committed()?;
         Ok(import.record)
     }
 }

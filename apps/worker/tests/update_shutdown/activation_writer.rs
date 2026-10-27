@@ -28,40 +28,17 @@ fn connection(root: &FixtureLayout) -> Connection {
     c.execute_batch("PRAGMA query_only=ON").unwrap();
     c
 }
-// Hash the exact values of every table other than the two deliberately changed
-// by activation. Never export private authority IDs, tasks or command payloads.
+#[path = "../support/journal_history.rs"]
+mod journal_history;
+// Writer-only gates retain the original exact hash. Service startup separately
+// validates the next policy-owner epoch before normalizing that one column.
 fn preserved_rows(root: &FixtureLayout) -> serde_json::Value {
-    let mut c = connection(root);
-    let tx = c.transaction().unwrap();
-    let names: Vec<String> = tx.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT IN ('journal_authority','worker_journal_activations') ORDER BY name").unwrap()
-        .query_map([], |r| r.get(0)).unwrap().collect::<Result<_,_>>().unwrap();
-    let mut data = Vec::new();
-    for name in names {
-        assert!(name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'));
-        let mut q = tx
-            .prepare(&format!("SELECT * FROM {name} ORDER BY rowid"))
-            .unwrap();
-        let columns = q.column_count();
-        let rows = q
-            .query_map([], |r| {
-                (0..columns)
-                    .map(|i| r.get::<_, rusqlite::types::Value>(i))
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        data.push((name, format!("{rows:?}")));
-    }
-    let tasks: i64 = tx
-        .query_row("SELECT count(*) FROM tasks", [], |r| r.get(0))
-        .unwrap();
-    let output: i64 = tx
-        .query_row("SELECT count(*) FROM output", [], |r| r.get(0))
-        .unwrap();
-    tx.commit().unwrap();
-    json!({"sha256":winbridge_update::sha256(&serde_json::to_vec(&data).unwrap()),"tasks":tasks,"output":output})
+    journal_history::snapshot(&root.join("state/journal.sqlite"), None)
 }
+fn preserved_service_rows(root: &FixtureLayout, before: u64, after: u64) -> serde_json::Value {
+    journal_history::snapshot(&root.join("state/journal.sqlite"), Some((before, after)))
+}
+
 impl Baseline {
     pub(super) fn capture(root: &FixtureLayout, id: &str) -> Self {
         let stale = Store::open_read_only(&root.join("state/journal.sqlite")).unwrap();
@@ -478,4 +455,9 @@ pub(super) fn after_owned_exit(
         "actualRetainedProcessExited":true,"ownedJobEmpty":true,"activationJobEmpty":true,"sameInstanceLockAvailable":true,
         "observedState":record.intent.context.worker_state,"workerBytesAfter":journal_bytes(root),"preservedRowsAfter":preserved_rows(root),
         "workerLaunchCount":1,"stateHandoffCount":1,"savedWorkerCommandCount":1,"automaticColdLaunchCount":0,"normalServiceStarted":false})
+}
+
+#[test]
+fn local_service_history_hash_allows_only_the_exact_policy_owner_epoch() {
+    journal_history::assert_reconciliation_contract();
 }

@@ -49,7 +49,35 @@ def strict(value):
             strict(item)
 
 
-def verify(proof, source, target, reservation):
+PROFILES = {'worker17-updater20': (17, 20), 'worker19-updater20': (19, 20)}
+DEFAULT_PROFILE = 'worker17-updater20'
+
+
+def profile_schemas(profile):
+    need(type(profile) is str and profile in PROFILES, 'Unknown explicit Main25 schema profile')
+    return PROFILES[profile]
+
+
+def require_schema_binding(value, profile):
+    worker, updater = profile_schemas(profile)
+    need(type(value.get('workerJournalSchema')) is int and value['workerJournalSchema'] == worker
+         and type(value.get('updaterJournalSchema')) is int and value['updaterJournalSchema'] == updater,
+         'Journal schema differs from the selected Main25 profile')
+
+
+def require_resource_policy_reconciliation(value, before, after):
+    need(type(value) is dict and value.get('schemaVersion') == 1
+         and type(value.get('schemaVersion')) is int
+         and value.get('normalizedColumn') == 'resource_policy.epoch'
+         and value.get('policyUnchanged') is True
+         and type(value.get('beforeEpoch')) is int and value['beforeEpoch'] == before
+         and type(value.get('afterEpoch')) is int and value['afterEpoch'] == after
+         and type(before) is int and type(after) is int and after == before + 1,
+         'Resource policy reconciliation must change only the exact next owner epoch')
+
+
+def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
+    profile_schemas(profile)
     strict(proof)
     need(proof['schemaVersion'] == 1 and proof['kind'] == 'activation_service_main_native_proof'
          and proof['passed'] is True and proof['platform'] == 'windows', 'Not a completed Main25 proof')
@@ -68,8 +96,8 @@ def verify(proof, source, target, reservation):
     need(len(history) == 8 and history[0] == p['prepared'] and history[-1] == record, 'Incomplete activation history')
     intent, context = record['intent'], record['intent']['context']
     deadline = intent['admittedAtMs'] + context['startupTimeoutMs']
-    need(context['startupTimeoutMs'] == 240000 and context['workerJournalSchema'] == 17
-         and context['updaterJournalSchema'] == 20, 'Unreviewed schema/window')
+    require_schema_binding(context, profile)
+    need(context['startupTimeoutMs'] == 240000, 'Unreviewed startup window')
     previous = intent['admittedAtMs']
     for index, entry in enumerate(history):
         need(type(entry['revision']) is int and entry['revision'] == index and entry['intent'] == intent
@@ -118,9 +146,9 @@ def verify(proof, source, target, reservation):
          'Writer changed incarnation or advanced epoch more than once')
     w, s = p['writerRecord'], p['serviceRecord']
     wc, sc = w['command'], s['command']
+    require_schema_binding(wc['binding'], profile)
     need(wc['binding']['physical'] == physical and wc['binding']['expectedAuthority'] == old
          and wc['binding']['activationRecordSha256'] == digest('winbridge.activation.writer-binding.v1', history[6])
-         and wc['binding']['workerJournalSchema'] == 17 and wc['binding']['updaterJournalSchema'] == 20
          and wc['binding']['workerConfigSha256'] == context['workerConfig']['sha256'], 'Writer binding differs')
     receipt = p['actualWorkerReceipt']
     need(w['state'] == {'phase': 'confirmed', 'receipt': receipt} and w['revision'] == 1
@@ -142,11 +170,11 @@ def verify(proof, source, target, reservation):
          and history[6]['updatedAtMs'] <= wc['issuedAtMs'] <= receipt['committedAtMs'] < deadline
          and receipt['committedAtMs'] <= sc['issuedAtMs'] < deadline, 'Startup grant renewed or reordered')
     need(record['local'] == sr['compatibility'], 'LocalVerified/root do not use the confirmed normal IPC evidence')
+    require_schema_binding(sr['compatibility'], profile)
     need(sr['compatibility']['identity'] == record['ready']['identity']
          and sr['compatibility']['context'] == physical['context']
          and sr['compatibility']['generation'] == physical['generation']
-         and sr['compatibility']['workerConfigSha256'] == context['workerConfig']['sha256']
-         and sr['compatibility']['workerJournalSchema'] == 17 and sr['compatibility']['updaterJournalSchema'] == 20,
+         and sr['compatibility']['workerConfigSha256'] == context['workerConfig']['sha256'],
          'Local compatibility changed child/epoch/config/schema')
     need(p['writerConfirmed']['update']['phase'] == 'verifying_local'
          and p['confirmed']['schemaVersion'] == 17 and p['confirmed']['update']['phase'] == 'awaiting_controller'
@@ -168,6 +196,9 @@ def verify(proof, source, target, reservation):
              and info['build']['sourceCommit'] == target['sourceCommit'] and info['build']['sourceManifestSha256'] == target['manifestSha256']
              and info['updateCoordination']['readOnly'] is True and info['updateCoordination']['lease']['phase'] == 'quiesced',
              'Normal IPC identity/maintenance differs')
+    if profile == 'worker19-updater20' or 'resourcePolicyReconciliation' in p:
+        require_resource_policy_reconciliation(p.get('resourcePolicyReconciliation'),
+                                              p['workerAuthorityBefore']['epoch'], p['workerAuthorityAfter']['epoch'])
     need(p['preservedRowsBefore'] == p['preservedRowsAfter'] and p['preservedRowsBefore']['tasks'] > 0
          and p['preservedRowsBefore']['output'] > 0 and len(p['normalHistory']) == p['preservedRowsBefore']['tasks']
          and all(t['mutationRefused'] is True and t['taskId'] == t['task']['taskId'] for t in p['normalHistory'])
@@ -190,14 +221,18 @@ def verify(proof, source, target, reservation):
     need(reservation['sourceCommit'] == source['sourceCommit']
          and reservation['sourceManifestSha256'] == source['manifestSha256'], 'Original reservation source differs')
     return {'passed': True, 'schemaVersion': 1, 'kind': 'main25_independent_audit', 'updateId': wc['binding']['updateId'],
-            'serviceCommandId': sc['commandId'], 'source': source, 'target': target, 'migrationChecked': False}
+            'serviceCommandId': sc['commandId'], 'source': source, 'target': target, 'migrationChecked': False,
+            'profile': profile, 'workerJournalSchema': profile_schemas(profile)[0], 'updaterJournalSchema': profile_schemas(profile)[1]}
 
 
-def audit(proof, source, target, reservation):
-    result = verify(proof, source, target, reservation)
+def audit(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
+    result = verify(proof, source, target, reservation, profile=profile)
     base = 'cases/0/activationWriter/'
     mutations = [
         ('kind', 'activation_writer_main_native_proof'),
+        (base+'record/intent/context/workerJournalSchema', 18),
+        (base+'writerRecord/command/binding/workerJournalSchema', 18),
+        (base+'serviceRecord/state/receipt/compatibility/workerJournalSchema', 18),
         (base+'serviceDispatchCount', True), (base+'workerLaunchCount', 2),
         (base+'workerAuthorityAfter/epoch', 0), (base+'preservedRowsAfter/sha256', '0'*64),
         (base+'serviceRecord/command/deadlineAtMs', 1),
@@ -212,6 +247,11 @@ def audit(proof, source, target, reservation):
         ('cases/0/coldActivationWriter/view/activationService/processAlive', True),
         ('cases/0/coldActivationWriter/automaticColdLaunchCount', 1),
     ]
+    if 'resourcePolicyReconciliation' in proof['cases'][0]['activationWriter']:
+        mutations += [(base+'resourcePolicyReconciliation/beforeEpoch', True),
+                      (base+'resourcePolicyReconciliation/afterEpoch', 0),
+                      (base+'resourcePolicyReconciliation/policyUnchanged', False),
+                      (base+'resourcePolicyReconciliation/normalizedColumn', 'resource_policy')]
     for path, replacement in mutations:
         bad = copy.deepcopy(proof)
         node = bad
@@ -222,7 +262,7 @@ def audit(proof, source, target, reservation):
         need(canonical(node[key]) != canonical(replacement), 'No-op negative audit')
         node[key] = replacement
         try:
-            verify(bad, source, target, reservation)
+            verify(bad, source, target, reservation, profile=profile)
         except (ValueError, KeyError, IndexError, TypeError):
             continue
         raise ValueError('Accepted negative audit: ' + path)
@@ -262,3 +302,27 @@ def verify_auxiliary(files, proof, source):
          and command['issuedAtMs'] <= marker['observedAtMs'] <= p['actualWorkerReceipt']['committedAtMs'],
          'Lost writer ACK is not bound to its original single send')
     return {'nativeMarkersVerified': 3}
+
+
+def verify_worker_migration(proof, reference_sha256, source):
+    """Separate cold worker17->19 gate, never active updater migration authority."""
+    strict(proof)
+    need(type(proof.get('schemaVersion')) is int and proof['schemaVersion'] == 1,
+         'Unsupported native worker migration proof version')
+    need(proof.get('kind') == 'worker_attribution_migration_native_proof'
+         and proof.get('passed') is True and proof.get('platform') == 'windows', 'Missing native worker migration proof')
+    need(type(proof.get('fromSchema')) is int and proof['fromSchema'] == 17
+         and type(proof.get('toSchema')) is int and proof['toSchema'] == 19,
+         'Worker migration must be exactly17->19')
+    need(re.fullmatch('[0-9a-f]{64}', reference_sha256 or '')
+         and proof['referenceSha256'] == reference_sha256, 'Worker17 reference pin differs')
+    need(proof['build']['sourceDirty'] is False and proof['build']['sourceCommit'] == source['sourceCommit']
+         and proof['build']['sourceManifestSha256'] == source['manifestSha256'], 'Migration used another worker19 build')
+    for flag in ('oldHistoryPreserved', 'verifiedMigrationBackup', 'outputPreserved', 'dedupPreserved',
+                 'legacyCreatorUnknown', 'creatorSurvivesRestart', 'cancellationSurvivesRestart', 'oldWorkerRefusedWithoutJournalWrite'):
+        need(proof.get(flag) is True, 'Missing worker migration evidence: '+flag)
+    need(proof.get('installedStateOpened') is False and proof.get('activeUpdaterMigrationChecked') is False,
+         'Cold fixture must not claim installed/active-updater migration')
+    for field, expected in (('completedExternalExecutions', 2), ('startedAndCancelledProcesses', 1)):
+        need(type(proof.get(field)) is int and proof[field] == expected, 'Unexpected migration execution count')
+    return {'workerJournalMigrationChecked': True, 'workerMigrationScope': 'isolated cold17-to19; no active updater migration'}

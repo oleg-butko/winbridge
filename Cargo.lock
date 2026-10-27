@@ -947,7 +947,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "winbridge-controller"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fs2",
  "libc",
@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-log-reader"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "sha2",
  "tempfile",
@@ -988,7 +988,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-platform"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fs2",
  "libc",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-protocol"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "schemars",
  "serde",
@@ -1014,7 +1014,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-runner"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde_json",
  "tempfile",
@@ -1024,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-transport"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "futures-util",
  "libc",
@@ -1041,7 +1041,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-update"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "flate2",
  "fs2",
@@ -1065,7 +1065,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-worker"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fs2",
  "memchr",
@@ -1089,7 +1089,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-workspace-sync"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",

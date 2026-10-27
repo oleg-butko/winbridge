@@ -22,21 +22,35 @@ fn ready(connection: Option<&ControllerConnection>, url: &str, now: u64) -> bool
     })
 }
 
+// Main25 remains a declared single-route fixture. Never silently choose a
+// primary from a production topology when validating its firewall preflight.
+fn connection(worker: &Worker, url: &str) -> Result<Option<ControllerConnection>> {
+    if worker.config.worker.controller_url.as_deref() != Some(url)
+        || worker.config.worker.controller_topology.is_some()
+    {
+        return Err("Frozen Main fixture requires its exact single-route controller URL".into());
+    }
+    worker
+        .controllers
+        .as_ref()
+        .map(|links| {
+            links
+                .lock()
+                .map_err(|_| "Controller connection lock poisoned".to_string())
+                .map(|links| links.primary_connection())
+        })
+        .transpose()
+        .map(Option::flatten)
+}
+
 pub(super) async fn wait_before_admission(worker: &Worker, input: &Input) -> Result<()> {
     let Some(url) = input.controller_url.as_deref() else {
         return Ok(());
     };
-    if worker.config.worker.controller_url.as_deref() != Some(url) {
-        return Err("Frozen Main fixture controller URL differs".into());
-    }
     let started = Instant::now();
     let mut last_progress = None;
     loop {
-        let connection = worker
-            .controller_connection
-            .lock()
-            .map_err(|_| "Controller connection lock poisoned")?
-            .clone();
+        let connection = connection(worker, url)?;
         if ready(connection.as_ref(), url, crate::store::now_ms()) {
             publish(
                 &input.root,
@@ -75,6 +89,58 @@ mod tests {
             error: None,
         }
     }
+    #[test]
+    fn preflight_reads_legacy_link_but_never_adopts_a_topology_primary() {
+        use winbridge_core::controller_sessions::Peer;
+        let root = tempfile::tempdir().unwrap();
+        let project = root.path().join("project");
+        std::fs::create_dir(&project).unwrap();
+        let url = "ws://127.0.0.1:1144";
+        for topology in [false, true] {
+            let settings = if topology {
+                serde_json::json!({"controllerTopology":{"schemaVersion":1,"primary":"c","controllers":[
+                    {"id":"a","url":"ws://127.0.0.1:1143"},
+                    {"id":"b","url":url},{"id":"c","url":"ws://127.0.0.1:1145"}]},"keepRunningOnUiExit":true})
+            } else {
+                serde_json::json!({"controllerUrl":url,"keepRunningOnUiExit":true})
+            };
+            let worker = Worker::open(serde_json::from_value(serde_json::json!({
+                "schemaVersion":1,"instanceId":"network-preflight","nodeId":"worker",
+                "stateDirectory":root.path().join(if topology {"multi"} else {"legacy"}),"worker":settings,
+                "projects":[{"id":"fixture","workspaceRoot":project,"allowDirectCommands":false,"maxConcurrentMutations":1,"recipes":[]}]
+            })).unwrap()).unwrap();
+            if topology {
+                assert!(connection(&worker, url)
+                    .unwrap_err()
+                    .contains("single-route"));
+            } else {
+                assert!(matches!(
+                    connection(&worker, url).unwrap().unwrap().state,
+                    ConnectionState::Connecting
+                ));
+                assert!(connection(&worker, "ws://127.0.0.1:1143").is_err());
+                let mut links = worker.controllers.as_ref().unwrap().lock().unwrap();
+                let ticket = links.begin("legacy").unwrap();
+                links
+                    .connected(
+                        &ticket,
+                        Peer {
+                            node: "test-controller".into(),
+                            generation: "generation".into(),
+                            session: "session".into(),
+                        },
+                    )
+                    .unwrap();
+                drop(links);
+                assert!(ready(
+                    connection(&worker, url).unwrap().as_ref(),
+                    url,
+                    crate::store::now_ms()
+                ));
+            }
+        }
+    }
+
     #[test]
     fn fresh_exact_session_is_required_before_admission() {
         let c = connected();

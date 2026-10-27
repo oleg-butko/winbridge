@@ -1,5 +1,149 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
+**Текущая задача2026-10-27:** пользователь переключил installed worker0.1.1 на
+.204 и разрешил реализацию [Main25 profiles/cold migration плана](plans/main25-schema-profiles-2026-10-27.md).
+Main ba9557b включён в feature с проверенным source adapter. Profiles17/20
+и19/20 явные; expected schemas сверяются с обоими verified archives, не выводятся
+из proof. Historical17 default и frozen view17 сохранены. Native worker17→19
+cold migration test добавлен отдельно, active updater migration этим не разрешается.
+Worker0.1.1 остаётся установленным. Native test slot:runtime-test-204, чужой
+runtime-test/conservation files не трогать. После последнего native task агент
+обязан сообщить пользователю, что worker можно переключить обратно на.203.
+Preflight a0c6924a-360e-4e38-98d4-0993fcee6857 succeeded/0; Windows free31,514,517,504.
+Linux workspace894/0/17ignored и Python6/0 прошли. Cold worker17→19 native test
+прошёл12.57s и отдельный independent audit; Main25 прошёл137 prerequisites,
+но остановился на устаревшем scope export fixture (Input1/case-runtime вместо
+Input2/stable slot). Исправление и точные run/retirement pins — в плане выше.
+Пользователь разрешил runtime-test-204 EXE в firewall; сохранить постоянный путь,
+не считать Cargo hashed EXE автоматически разрешёнными. Full Main25 ещё не пройден.
+
+## Windows: native multi-controller gate пройден
+
+Run20261027-183307-dda61a12/task281cc8c4… succeeded/0, source48c834c/normal0.2.0,
+EXE SHA9dac4060… [Точные pins и результаты](plans/multi-controller-native-2026-10-27.md).
+Пользователь разрешил новые порты1145–1148, после чего4 сессии подключились.
+Actual4 independent controller processes (3 new/1 retained0.1.0), очередь/dedup/
+creator/disconnect/restart/cross-cancel/process-tree/output passed; native cold17→19
+также passed. Independent reader исправлен для TaskSummary projection;16 negative
+cases/15 files twice passed без повторного Windows исполнения.
+Test worker/fixture descendants и4 Debian test controllers завершены, production
+worker0.1.1/gen772e0679 остаётся прежним/active0. Старый PID3524 отсутствует.
+Никаких автоматических firewall/system changes. Source19 Main25 ещё нужен;
+следующий target48c834c, producer — новый clean commit с актуальным verifier.
+Release ZIP и готовность installation не объявлять до полного завершения gates.
+
+## Локальная проверка history comparator
+
+Пока Windows pending termination, общий SQLite helper для Main25 проверен отдельно
+на Debian:1/0, task1/output1, body0.04s, corruption/epoch/column rejection.
+Windows и Linux используют один implementation в tests/support/journal_history.rs;
+оба integration targets проходят MSVC Clippy, Linux targeted Clippy/Python7 также
+прошли. Дополнительно migration-proof reader отвергает unknown schemaVersion.
+Это не снимает Windows blocker и не заменяет pending Main25/native network gates.
+
+## Подготовка worker0.2.0
+
+Версии workspace/desktop/npm согласованы на0.2.0. Нативный сценарий
+[четырёх controller](plans/multi-controller-native-2026-10-27.md) подготовлен:
+normal Windows worker, повтор exact-source cold17→19, отдельные controller процессы,
+shared queue/dedup/creator/cancel/disconnect/restart и descendant absence.
+Это пока source и предстоящий gate, не release/install proof. После terminal Main25
+выполнить его в том же разрешённом runtime-test-204 slot. Installed0.1.1 не менять.
+
+## Multi-controller: текущая ветка .204
+
+**Новый pull2026-10-27:** main fast-forward c4b7aea→ba9557b,6 commits.
+[Обновлённое сравнение и полный source patch](plans/multi-controller-review-ba9557b.md).
+Сохраняются5 merge conflicts; новый Main25 network preflight требует адаптации
+удалённого singular connection field к Links. Прежнего patch недостаточно для
+update-validation build. Independent Windows audit пока frozen на worker17;
+для feature19 нужна отдельная явная адаптация/positive native proof.
+Main и feature не слиты, code source2ececad; Windows не использовался.
+Исправленное probe:894 workspace/update-validation tests/17 ignored, Clippy и
+MSVC all-targets, contracts/TS/UI/fmt/scaffold301 прошли. Disk/cache recovery
+и начальные space refusals сохранены в review; действующий controller не остановлен.
+
+**Три/четыре controller2026-10-27:** проверена работа полного topology list,
+общая `MAX_CONTROLLERS=4` для config/decoder, test harness переведён на vector.
+Actual Linux3/4 connections с последним primary, shared queue/dedup, caller attribution,
+cross-controller cancellation и disconnect/restart/shutdown прошли. Глобальный
+RPC budget остаётся32, per-controller16; процессный parallelism задаётся отдельно.
+[Подробности](plans/multi-controller-runtime.md#три-и-четыре-controller--2026-10-27).
+182 controller/core/protocol tests/0 ignored, Clippy all-targets, MSVC all-targets
+check, contracts/fmt/scaffold291 прошли. Границы Windows приведены в плане; ветки не слиты.
+
+**Review2026-10-27:** main подтянут fast-forward доc4b7aea (13 commits).
+[Совместимость и готовый source patch](plans/multi-controller-review-2026-10-27.md):
+самостоятельная feature без подтверждённых существенных дефектов; прямое слияние
+имеет5 конфликтующих файлов и требует адаптации shared startup/local-service.
+Исправленное временное объединение прошло879 tests/17 ignored, Linux Clippy,
+MSVC all-targets/update-validation check, contracts/TS/UI/fmt/scaffold298.
+Main и feature не слиты, source остаётсяac9e0cb; Windows не использовался.
+
+**Ветка .204:** `feat/multi-controller`, base9b47a9c;
+[прямые multi-controller sessions](plans/multi-controller-runtime.md).
+**2026-10-27, readonly CLI/MCP:** три query tools/CLI команды для всех соединений,
+creator и cancellation actor подключены через отдельный controller-local envelope
+`controllerDiagnosticsVersion:1`. [Аргументы и ошибки](guides/mcp.md#readonly-диагностика-нескольких-controller).
+Pinned context/operation, negotiated worker contracts, fail-closed old components;
+нет legacy fallback/автоперепривязки. Actual два Linux controller + один worker,
+CLI/MCP subprocesses: A создаёт, B отменяет, оба читают одинаковый source; чтение
+running task не отменяет её. 37 controller tests, 72 protocol tests и повтор
+усиленного end-to-end теста прошли (финальный combined run109/0). Workspace
+Clippy all-targets `-D warnings`, MSVC workspace compile check, contracts,
+TypeScript/UI build, fmt и scaffold290 прошли.
+Journal остаётся19, worker execution/installed runtime не меняются. Windows не опрашивался.
+**Текущий source journal schema19:** первый effective cancellation actor хранится
+отдельно от creator, атомарно с отменой task/import/workflow/application. Workflow
+передаёт источник отмены своим children; repeated/terminal cancel не переатрибутирует.
+**829 workspace passed /17 ignored +3 cancellation protocol tests**, actual Linux
+17/18→19 migration/backup/retry/restart/old-exe refusal и Chromium sandbox passed.
+Workspace Clippy all-targets, desktop Linux/MSVC worker checks, contracts,
+TypeScript/UI, workspace/desktop fmt и scaffold290 прошли.
+Installed worker/main schema17 не менялись; active updater/exact-schema activation
+не получают нового migration разрешения. Native Windows gate19 ещё нужен.
+
+Git coordination отменена пользователем: её отдельные ветки удалены, прототипы
+в эту ветку не входят. Pure sessions model и immutable RPC origins подключены к
+реальному сетевому runtime: worker.controllerTopology, независимые reconnect loops,
+общий RPC budget, отдельные connection/readiness данные; один Worker/Store/scheduler.
+Локальный Info показывает primary, сетевой — собственную связь caller. Recovery
+pair отключает оба режима подключения. Linux model и actual loopback WebSocket
+tests используют настоящие процессы. **187 passed /5 штатно ignored**, Linux
+Clippy all-targets, MSVC worker check, fmt/scaffold290 passed; детали — в плане.
+Readonly список всех связей теперь подключён отдельным контрактом
+`winbridge.controller-connections` v1: scoped IPC/сетевой Rust SDK, main-window
+Tauri command и desktop панель с primary, ошибками/attempts и RPC counters.
+Старый Info/fingerprints не менялись; нет постоянного дополнительного polling.
+140 library /30 worker integration /64 protocol tests и Chromium с настоящим
+Linux worker прошли (protocol3 входят и в library группу); native Windows
+проверка новой панели ещё впереди. Clippy/contracts/TS/UI, standalone desktop
+Linux check, MSVC worker check, fmt/scaffold290 passed.
+Durable creator attribution подключена в source/schema18: атомарная таблица
+авторов, immutable RPC origin, наследование workflow children, readonly SDK/Tauri
+и task detail UI. **819 workspace passed /17 ignored +3 protocol attribution**;
+actual Linux schema17→18 migration/backup/retry/restart/old-worker refusal и
+Chromium sandbox прошли. Старым задачам автор не назначается при retry.
+Workspace Clippy all-targets, desktop Linux/MSVC worker compile checks,
+contracts/TypeScript/UI, workspace/desktop fmt и scaffold290 прошли.
+Автор не является ACL. Инициатор отмены подключён в schema19 (выше);
+CLI/MCP query wrappers добавлены2026-10-27 (выше).
+Это новая несовместимая для старого worker схема журнала: installed schema17
+не мигрировался. Active updater блокирует normal migration; exact-schema
+activation/updater migration driver17→18 не объявлять готовым. Прежний Windows
+proof16→17 относится к source17, отдельный native gate18 ещё нужен.
+Windows остаётся у .203; пользователь вручную перезапустит worker для .204 только
+при необходимости. Здесь Windows не опрашивать/не запускать; Windows gate
+и production readiness новой функции не объявлять. Installed0.1.1 не поддерживает
+controllerTopology: config/бинарник до отдельного выпуска не менять.
+
+**Задача пользователя2026-10-26:** performance-ветка слита в main,
+merge50ceb0d, review fixes2b3734c. [Review](plans/run-speed/review-merge-2026-10-26.md).
+Source workspace794/0/17ignored, Linux/MSVC Clippy, TS/UI/contracts, safety probe1,
+Python profile5/desktop3/publication4 passed. Runtime CPU fix принят.
+
+## Updater: checkpoint main ba9557b
+
 2026-10-27. Начать с [Main25 checkpoint](plans/worker-self-update/main25-2026-10-27.md),
 затем [runtime archive checkpoint](plans/worker-self-update/runtime-archive-2026-10-27.md),
 [fixture layout checkpoint](plans/worker-self-update/fixture-layout-2026-10-27.md),

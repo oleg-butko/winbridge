@@ -197,13 +197,50 @@ async fn worker_rpc_fenced(
 }
 
 #[tauri::command]
-async fn queue_control(
-    window:tauri::WebviewWindow,
-    endpoint:tauri::State<'_,WorkerEndpoint>,
-    request:winbridge_protocol::QueueControlRequest,
-)->Result<winbridge_protocol::QueueControlResponse,String>{
+async fn controller_connections(
+    window: tauri::WebviewWindow,
+    endpoint: tauri::State<'_, WorkerEndpoint>,
+    request: winbridge_protocol::ControllerConnectionsRequest,
+) -> Result<winbridge_protocol::ControllerConnections, String> {
     main_only(&window)?;
-    winbridge_transport::queue_control(endpoint.0.as_ref().map_err(Clone::clone)?,&request).await
+    winbridge_transport::controller_connections(
+        endpoint.0.as_ref().map_err(Clone::clone)?,
+        &request,
+    )
+    .await
+}
+#[tauri::command]
+async fn operation_attribution(
+    window: tauri::WebviewWindow,
+    endpoint: tauri::State<'_, WorkerEndpoint>,
+    request: winbridge_protocol::OperationAttributionRequest,
+) -> Result<winbridge_protocol::OperationAttribution, String> {
+    main_only(&window)?;
+    winbridge_transport::operation_attribution(endpoint.0.as_ref().map_err(Clone::clone)?, &request)
+        .await
+}
+#[tauri::command]
+async fn operation_cancellation(
+    window: tauri::WebviewWindow,
+    endpoint: tauri::State<'_, WorkerEndpoint>,
+    request: winbridge_protocol::OperationAttributionRequest,
+) -> Result<winbridge_protocol::OperationCancellation, String> {
+    main_only(&window)?;
+    winbridge_transport::operation_cancellation(
+        endpoint.0.as_ref().map_err(Clone::clone)?,
+        &request,
+    )
+    .await
+}
+
+#[tauri::command]
+async fn queue_control(
+    window: tauri::WebviewWindow,
+    endpoint: tauri::State<'_, WorkerEndpoint>,
+    request: winbridge_protocol::QueueControlRequest,
+) -> Result<winbridge_protocol::QueueControlResponse, String> {
+    main_only(&window)?;
+    winbridge_transport::queue_control(endpoint.0.as_ref().map_err(Clone::clone)?, &request).await
 }
 
 fn configured_endpoint() -> Result<String, String> {
@@ -399,6 +436,9 @@ fn main() {
             save_diagnostic,
             worker_rpc,
             operation_page,
+            controller_connections,
+            operation_attribution,
+            operation_cancellation,
             queue_control,
             worker_rpc_fenced,
             load_command_drafts,

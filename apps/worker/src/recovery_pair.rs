@@ -217,6 +217,7 @@ pub fn prepare_recovery(source: &WorkerConfig, destination: &Path) -> Result<Rec
     target.instance_id = format!("recovery-{}", uuid::Uuid::new_v4());
     target.state_directory = fs::canonicalize(&state).map_err(|e| e.to_string())?;
     target.worker.controller_url = None; // Explicit pair/reconnect, no old session.
+    target.worker.controller_topology = None;
     target.validate()?;
     let mut target_store = Store::open(&state.join("journal.sqlite"))?;
     target_store.require_fenced_requests()?;

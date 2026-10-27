@@ -1,0 +1,616 @@
+diff --git a/apps/worker/src/lib.rs b/apps/worker/src/lib.rs
+index d352af8..fd807f6 100644
+--- a/apps/worker/src/lib.rs
++++ b/apps/worker/src/lib.rs
+@@ -154,178 +154,6 @@ impl Worker {
+     pub fn open_recovery(config: WorkerConfig) -> Result<Arc<Self>> {
+         Self::open_inner(config, None, true)
+     }
+-<<<<<<< HEAD
+-    fn open_inner(
+-        config: WorkerConfig,
+-        config_path: Option<std::path::PathBuf>,
+-        inspection: bool,
+-    ) -> Result<Arc<Self>> {
+-        config.validate()?;
+-        ensure_local_state(&config.state_directory)?;
+-        winbridge_platform::require_local_disk(&config.state_directory)
+-            .map_err(|e| e.to_string())?;
+-        for project in &config.projects {
+-            winbridge_platform::require_local_disk(&project.workspace_root)
+-                .map_err(|e| format!("project {}: {e}", project.id))?;
+-        }
+-        if !config.state_directory.exists() {
+-            let mut builder = fs::DirBuilder::new();
+-            builder.recursive(true);
+-            #[cfg(unix)]
+-            {
+-                use std::os::unix::fs::DirBuilderExt;
+-                builder.mode(0o700);
+-            }
+-            builder
+-                .create(&config.state_directory)
+-                .map_err(|e| format!("stateDirectory: {e}"))?;
+-        }
+-        #[cfg(unix)]
+-        {
+-            use std::os::unix::fs::{MetadataExt, PermissionsExt};
+-            let metadata =
+-                fs::symlink_metadata(&config.state_directory).map_err(|e| e.to_string())?;
+-            if metadata.file_type().is_symlink() || metadata.uid() != unsafe { libc_uid() } {
+-                return Err("stateDirectory must be a real directory owned by this user".into());
+-            }
+-            // Reject a shared directory; avoid changing permissions of user-maintained state.
+-            if metadata.permissions().mode() & 0o077 != 0 {
+-                return Err(
+-                    "stateDirectory must have mode 0700; choose/create a private directory".into(),
+-                );
+-            }
+-        }
+-        if !inspection {
+-            recovery::reject_normal_start(&config)?;
+-            update::reject_start(&config.state_directory)?;
+-        }
+-        let lock_path = config.state_directory.join("worker.lock");
+-        reject_symlink(&lock_path)?;
+-        let lock = OpenOptions::new()
+-            .read(true)
+-            .write(true)
+-            .create(true)
+-            .truncate(false)
+-            .open(lock_path)
+-            .map_err(|e| e.to_string())?;
+-        lock.try_lock_exclusive()
+-            .map_err(|e| format!("stateDirectory is already owned by another worker: {e}"))?;
+-        if !inspection {
+-            // Recheck under the instance lock: an updater may have installed
+-            // the barrier after the first readonly check, before this lock.
+-            update::reject_start(&config.state_directory)?;
+-        }
+-        let db_path = config.state_directory.join("journal.sqlite");
+-        let fresh_journal = !db_path.try_exists().map_err(|e| e.to_string())?;
+-        for suffix in ["", "-wal", "-shm"] {
+-            reject_symlink(
+-                &config
+-                    .state_directory
+-                    .join(format!("journal.sqlite{suffix}")),
+-            )?;
+-        }
+-        let mut store = if inspection {
+-            if !db_path.is_file() {
+-                return Err("Read-only recovery requires an existing journal.sqlite; no journal was created".into());
+-            }
+-            recovery::latch_source(&config.state_directory)?;
+-            Store::open_read_only(&db_path)?
+-        } else {
+-            recovery::reject_normal_start(&config)?;
+-            let mut store = Store::open(&db_path)?;
+-            if config
+-                .state_directory
+-                .join(domain::WITNESS)
+-                .try_exists()
+-                .map_err(|e| e.to_string())?
+-            {
+-                domain::load(&config.state_directory, &domain::context(&config, &store))?;
+-            }
+-            store.begin_authority()?;
+-            store.recover_resource_leases()?;
+-            store.capture_legacy_resources().map_err(|e| {
+-                format!("{e}; use --config PATH serve-recovery to inspect without dispatch")
+-            })?;
+-            store.reconcile_process_resources()?;
+-            store.recover()?;
+-            store
+-        };
+-        store.configure_work_scheduling(config.work_scheduling.clone())?;
+-        store.configure_queue_policy(config.queue_policy.clone())?;
+-        store.configure_resource_scheduling(config.resource_scheduling.clone())?;
+-        let generation = uuid::Uuid::new_v4().to_string();
+-        let controllers = config
+-            .worker
+-            .topology()?
+-            .map(|t| {
+-                controller_links::Links::new(&t, generation.clone())
+-                    .map(|l| Arc::new(Mutex::new(l)))
+-            })
+-            .transpose()?;
+-        let worker = Arc::new(Self {
+-            runtime_guard: Mutex::new(None),
+-            config_path: Mutex::new(config_path),
+-            maintenance: Mutex::new((0, None)),
+-            maintenance_running: AtomicBool::new(false),
+-            config,
+-            generation,
+-            store: Mutex::new(store),
+-            active_projects: Mutex::new(HashMap::new()),
+-            active_jobs: AtomicUsize::new(0),
+-            readiness_scans: Mutex::new(HashMap::new()),
+-            recovery_scan: Mutex::new(Instant::now()),
+-            scheduler_diagnostics: Mutex::new(scheduler_diagnostics::Diagnostics::new()),
+-            checks: Mutex::new(HashMap::new()),
+-            stop: AtomicBool::new(false),
+-            controllers,
+-            unreconciled_tasks: Mutex::new(HashMap::new()),
+-            inspection,
+-            execution_domain: Mutex::new(None),
+-            update_control: Mutex::new(None),
+-            coverage: Mutex::new(None),
+-            _instance_lock: lock,
+-        });
+-        if !inspection {
+-            worker.recover_imports()?;
+-            worker.store()?.release_stopped_import_resources()?;
+-            // Observe application/task consistency before the first IPC response,
+-            // without advancing workflows or creating any new process.
+-            let result = {
+-                let mut store = worker.store()?;
+-                worker.reconcile_applications(&mut store)
+-            };
+-            if let Err(error) = result {
+-                if worker.journal_recovery_required()?.is_none() {
+-                    return Err(error);
+-                }
+-            }
+-            let (owner, info) =
+-                domain::initialize(&worker.config, &*worker.store()?, fresh_journal)?;
+-            *worker
+-                .execution_domain
+-                .lock()
+-                .map_err(|_| "execution domain lock poisoned")? = owner;
+-            *worker
+-                .coverage
+-                .lock()
+-                .map_err(|_| "execution coverage lock poisoned")? = Some(info);
+-        } else {
+-            let context = domain::context(&worker.config, &*worker.store()?);
+-            let info = domain::load(&worker.config.state_directory, &context)
+-                .map(|witness| witness.info())
+-                .unwrap_or_else(|reason| winbridge_protocol::RecoveryCoverageInfo {
+-                    complete: false,
+-                    reason,
+-                });
+-            *worker
+-                .coverage
+-                .lock()
+-                .map_err(|_| "execution coverage lock poisoned")? = Some(info);
+-        }
+-        Ok(worker)
+-    }
+-=======
+->>>>>>> origin/main
+     fn store(&self) -> Result<std::sync::MutexGuard<'_, Store>> {
+         if self.local_activation.is_some() {
+             self._instance_lock.revalidate()?;
+@@ -407,19 +235,15 @@ impl Worker {
+             }
+         }
+     }
+-<<<<<<< HEAD
+     fn dispatch(
+         &self,
+         request: LocalRequest,
+         fenced: bool,
+         creator: &OperationCreator,
+     ) -> Result<LocalResponse> {
+-=======
+-    fn dispatch(&self, request: LocalRequest, fenced: bool) -> Result<LocalResponse> {
+         if self.local_activation.is_some() && !request.is_observation() {
+             return Err(local_service::READ_ONLY_REASON.into());
+         }
+->>>>>>> origin/main
+         let requires_fenced = self.store()?.requires_fenced_requests()?;
+         if !fenced && !request.is_observation() && requires_fenced {
+             return Err("This recovered instance requires request contract 2 with a caller-pinned journal incarnation. Legacy mutation was rejected; do not automatically retry in a new scope".into());
+@@ -766,19 +590,10 @@ impl Worker {
+                             && self.config.delivery.is_some(),
+                         snapshot_resume_available: !self.inspection && self.local_activation.is_none()
+                             && self.config.delivery.is_some(),
+-<<<<<<< HEAD
+-                        workflow_available: !self.inspection && self.config.delivery.is_some(),
++                        workflow_available: !self.inspection && self.local_activation.is_none() && self.config.delivery.is_some(),
+                         controller_connection: self.controllers.as_ref().map(|c|c.lock()
+                             .map_err(|_| "Controller state lock poisoned")
+                             .map(|c|c.primary_connection())).transpose()?.flatten(),
+-=======
+-                        workflow_available: !self.inspection && self.local_activation.is_none() && self.config.delivery.is_some(),
+-                        controller_connection: self
+-                            .controller_connection
+-                            .lock()
+-                            .map_err(|_| "connection state lock poisoned")?
+-                            .clone(),
+->>>>>>> origin/main
+                     }),
+                 })
+             }
+@@ -1657,34 +1472,24 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
+         eprintln!("WinBridge scheduler diagnostics: 30s windows; automatic slow-window reports; set WINBRIDGE_SCHEDULER_DIAGNOSTICS=1 for all windows (wall timings include lock waits; not process CPU)");
+     }
+     let permits = Arc::new(tokio::sync::Semaphore::new(32));
+-<<<<<<< HEAD
+-    let control = update_control::start(Arc::clone(&worker))?;
+-    let network = worker
+-        .controllers
+-        .as_ref()
+-        .map(|_| network::start(Arc::clone(&worker)));
+-=======
+     let control = if worker.local_activation.is_some() {
+         None
+     } else {
+         update_control::start(Arc::clone(&worker))?
+     };
+-    let network = (worker.local_activation.is_none())
+-        .then_some(&worker)
+-        .and_then(|worker| {
+-            worker
+-                .config
+-                .worker
+-                .controller_url
+-                .as_ref()
+-                .map(|_| NetworkTask(tokio::spawn(network::connect(Arc::clone(worker)))))
+-        });
++    let network = if worker.local_activation.is_none() {
++        worker
++            .controllers
++            .as_ref()
++            .map(|_| network::start(Arc::clone(&worker)))
++    } else {
++        None
++    };
+     if let ReadinessOutput::Local(ready) = readiness {
+         ready
+             .send(())
+             .map_err(|_| "Local-service readiness observer closed")?;
+     }
+->>>>>>> origin/main
+     let mut interval = tokio::time::interval(Duration::from_millis(25));
+     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+     let shutdown = async {
+diff --git a/apps/worker/src/local_service.rs b/apps/worker/src/local_service.rs
+index 8443ba3..f403944 100644
+--- a/apps/worker/src/local_service.rs
++++ b/apps/worker/src/local_service.rs
+@@ -168,13 +168,25 @@ impl LocalService {
+             Worker::validate_startup_paths(&config, false)?;
+             recovery::reject_normal_start(&config)?;
+             checkpoint()?;
++            let controllers = Worker::prepare_controllers(
++                &config,
++                &prepared
++                    .command()
++                    .binding
++                    .writer_command
++                    .binding
++                    .physical
++                    .generation,
++                true,
++            )?;
+             Ok::<_, String>((
+                 config,
++                controllers,
+                 pin,
+                 config_path.canonicalize().map_err(|e| e.to_string())?,
+             ))
+         })();
+-        let (config, pin, path) = match config {
++        let (config, controllers, pin, path) = match config {
+             Ok(value) => value,
+             Err(reason) => {
+                 return Err(Box::new(LocalServiceFailure {
+@@ -196,6 +208,7 @@ impl LocalService {
+         let worker = Worker::from_parts(WorkerParts {
+             config,
+             config_path: Some(path),
++            controllers,
+             inspection: false,
+             local_activation: Some(LocalServiceScope {
+                 command: state.command.clone(),
+diff --git a/apps/worker/src/startup.rs b/apps/worker/src/startup.rs
+index 7b9e4a7..5bec2b8 100644
+--- a/apps/worker/src/startup.rs
++++ b/apps/worker/src/startup.rs
+@@ -33,6 +33,7 @@ pub(super) struct WorkerParts {
+     pub generation: String,
+     pub store: Store,
+     pub custody: InstanceCustody,
++    pub controllers: Option<Arc<Mutex<crate::controller_links::Links>>>,
+ }
+ impl Worker {
+     pub(super) fn validate_startup_paths(config: &WorkerConfig, create: bool) -> Result<()> {
+@@ -76,6 +77,22 @@ impl Worker {
+         }
+         Ok(())
+     }
++    pub(super) fn prepare_controllers(
++        config: &WorkerConfig,
++        generation: &str,
++        suspended: bool,
++    ) -> Result<Option<Arc<Mutex<crate::controller_links::Links>>>> {
++        config.worker.topology()?.map(|topology| {
++            let mut links = crate::controller_links::Links::new(&topology, generation.into())?;
++            if suspended {
++                for link in links.links.values_mut() {
++                    link.connection.state = winbridge_protocol::ConnectionState::Disconnected;
++                    link.connection.error = Some("Локальная проверка обновления: соединение с controller ещё не разрешено".into());
++                }
++            }
++            Ok(Arc::new(Mutex::new(links)))
++        }).transpose()
++    }
+     pub(super) fn from_parts(parts: WorkerParts) -> Arc<Self> {
+         let WorkerParts {
+             config,
+@@ -85,24 +102,8 @@ impl Worker {
+             generation,
+             store,
+             custody,
++            controllers,
+         } = parts;
+-        let controller_connection = config.worker.controller_url.as_ref().map(|url| {
+-            winbridge_protocol::ControllerConnection {
+-                url: url.clone(),
+-                state: if local_activation.is_some() {
+-                    winbridge_protocol::ConnectionState::Disconnected
+-                } else {
+-                    winbridge_protocol::ConnectionState::Connecting
+-                },
+-                session_id: None,
+-                controller_node_id: None,
+-                controller_generation: None,
+-                last_confirmed_at_ms: None,
+-                error: local_activation.is_some().then(|| {
+-                    "Локальная проверка обновления: соединение с controller ещё не разрешено".into()
+-                }),
+-            }
+-        });
+         Arc::new(Self {
+             runtime_guard: Mutex::new(None),
+             config_path: Mutex::new(config_path),
+@@ -118,8 +119,7 @@ impl Worker {
+             scheduler_diagnostics: Mutex::new(scheduler_diagnostics::Diagnostics::new()),
+             checks: Mutex::new(HashMap::new()),
+             stop: AtomicBool::new(false),
+-            controller_connection: Mutex::new(controller_connection),
+-            controller_projection: Mutex::new(None),
++            controllers,
+             unreconciled_tasks: Mutex::new(HashMap::new()),
+             inspection,
+             local_activation,
+@@ -248,12 +248,15 @@ impl Worker {
+             store.begin_authority()?;
+             store
+         };
++        let generation = uuid::Uuid::new_v4().to_string();
++        let controllers = Self::prepare_controllers(&config, &generation, false)?;
+         let worker = Self::from_parts(WorkerParts {
+             config,
+             config_path,
+             inspection,
+             local_activation: None,
+-            generation: uuid::Uuid::new_v4().to_string(),
++            generation,
++            controllers,
+             store,
+             custody: InstanceCustody::Ordinary { _lock: lock },
+         });
+diff --git a/apps/worker/src/store/activation_service_open/tests.rs b/apps/worker/src/store/activation_service_open/tests.rs
+index 30f9fbf..c7fdb97 100644
+--- a/apps/worker/src/store/activation_service_open/tests.rs
++++ b/apps/worker/src/store/activation_service_open/tests.rs
+@@ -234,6 +234,15 @@ fn service_transfer_rechecks_authority_after_the_last_external_checkpoint() {
+ // The graph/process metadata stays synthetic. These tests additionally exercise
+ // shared Worker recovery and real local IPC (named pipe on Windows), never TCP.
+ fn service_fixture(root: &Path) -> (PreparedServiceJournal, std::path::PathBuf, String) {
++    service_fixture_with(
++        root,
++        serde_json::json!({"controllerUrl":"ws://127.0.0.1:9","keepRunningOnUiExit":true}),
++    )
++}
++fn service_fixture_with(
++    root: &Path,
++    settings: serde_json::Value,
++) -> (PreparedServiceJournal, std::path::PathBuf, String) {
+     use winbridge_protocol::*;
+     let state = root.join("state");
+     std::fs::create_dir(&state).unwrap();
+@@ -246,7 +255,7 @@ fn service_fixture(root: &Path) -> (PreparedServiceJournal, std::path::PathBuf,
+     std::fs::create_dir(&project).unwrap();
+     let instance = format!("svc-{}", uuid::Uuid::new_v4().simple());
+     let config = serde_json::json!({"schemaVersion":1,"instanceId":instance,"nodeId":"service-test",
+-        "stateDirectory":state,"worker":{"controllerUrl":"ws://127.0.0.1:9","keepRunningOnUiExit":true},
++        "stateDirectory":state,"worker":settings,
+         "projects":[{"id":"source","workspaceRoot":project,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]});
+     let config_path = root.join("worker.json");
+     let config_bytes = serde_json::to_vec(&config).unwrap();
+@@ -689,3 +698,67 @@ async fn service_monitor_observes_listener_exit_and_close_never_polls_a_complete
+     running.close().await.unwrap();
+     assert!(lock_available(&root.path().join("state")));
+ }
++
++#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
++async fn staged_service_preserves_multi_controller_diagnostics_without_network_or_dispatch() {
++    use winbridge_protocol::*;
++    let root = tempfile::tempdir().unwrap();
++    let a = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++    let b = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
++    let settings = serde_json::json!({"keepRunningOnUiExit":true,"controllerTopology":{
++        "schemaVersion":1,"primary":"a","controllers":[
++            {"id":"a","url":format!("ws://{}",a.local_addr().unwrap())},
++            {"id":"b","url":format!("ws://{}",b.local_addr().unwrap())}]}});
++    let (prepared, config, _) = service_fixture_with(root.path(), settings);
++    let service = crate::LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap();
++    let running = service.start().await.unwrap();
++    let endpoint = running.endpoint().unwrap();
++    let LocalResponse::Info { info } =
++        winbridge_transport::supervisor::call(&endpoint, std::process::id(), &LocalRequest::Info)
++            .await
++            .unwrap()
++    else {
++        panic!("Info")
++    };
++    assert!(!info.workflow_available && !info.snapshot_import_available);
++    let context = info.fenced_requests.as_ref().unwrap().context.clone();
++    let query = ControllerConnectionsRequest {
++        context: context.clone(),
++    };
++    let request = controller_connections_envelope(&info, &query).unwrap();
++    let response = winbridge_transport::supervisor::call(&endpoint, std::process::id(), &request)
++        .await
++        .unwrap();
++    let links = decode_controller_connections(response, &info, &query).unwrap();
++    assert_eq!(links.primary.as_deref(), Some("a"));
++    assert_eq!(links.connections.len(), 2);
++    for link in links.connections {
++        assert_eq!(link.attempts, "0");
++        assert!(matches!(
++            link.connection.state,
++            ConnectionState::Disconnected
++        ));
++        assert!(link.connection.error.is_some());
++        assert!(link.connection.session_id.is_none());
++    }
++    let response: LocalResponse = winbridge_transport::supervisor::call(
++        &endpoint,
++        std::process::id(),
++        &LocalRequest::Submit {
++            request: submission("must-not-run"),
++        },
++    )
++    .await
++    .unwrap();
++    assert!(matches!(response, LocalResponse::Error { .. }));
++    assert!(
++        tokio::time::timeout(std::time::Duration::from_millis(120), async {
++            tokio::select! { result=a.accept()=>result,result=b.accept()=>result }
++        })
++        .await
++        .is_err(),
++        "Staged service connected a controller"
++    );
++    running.close().await.unwrap();
++    assert!(lock_available(&root.path().join("state")));
++}
+diff --git a/apps/worker/src/update_control/validation.rs b/apps/worker/src/update_control/validation.rs
+index c2e0cb6..5269850 100644
+--- a/apps/worker/src/update_control/validation.rs
++++ b/apps/worker/src/update_control/validation.rs
+@@ -165,12 +165,8 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
+             .canonicalize()
+             .map_err(|e| e.to_string())?
+             != root.join("state")
+-<<<<<<< HEAD
+-        || worker.config.worker.controller_url.is_some()
+-        || worker.config.worker.controller_topology.is_some()
+-=======
+         || worker.config.worker.controller_url != input.controller_url
+->>>>>>> origin/main
++        || worker.config.worker.controller_topology.is_some()
+         || worker
+             .runtime_guard
+             .lock()
+diff --git a/apps/worker/src/update_control/validation/network.rs b/apps/worker/src/update_control/validation/network.rs
+index 174b49e..559de4a 100644
+--- a/apps/worker/src/update_control/validation/network.rs
++++ b/apps/worker/src/update_control/validation/network.rs
+@@ -22,21 +22,35 @@ fn ready(connection: Option<&ControllerConnection>, url: &str, now: u64) -> bool
+     })
+ }
+
++// Main25 remains a declared single-route fixture. Never silently choose a
++// primary from a production topology when validating its firewall preflight.
++fn connection(worker: &Worker, url: &str) -> Result<Option<ControllerConnection>> {
++    if worker.config.worker.controller_url.as_deref() != Some(url)
++        || worker.config.worker.controller_topology.is_some()
++    {
++        return Err("Frozen Main fixture requires its exact single-route controller URL".into());
++    }
++    worker
++        .controllers
++        .as_ref()
++        .map(|links| {
++            links
++                .lock()
++                .map_err(|_| "Controller connection lock poisoned".to_string())
++                .map(|links| links.primary_connection())
++        })
++        .transpose()
++        .map(Option::flatten)
++}
++
+ pub(super) async fn wait_before_admission(worker: &Worker, input: &Input) -> Result<()> {
+     let Some(url) = input.controller_url.as_deref() else {
+         return Ok(());
+     };
+-    if worker.config.worker.controller_url.as_deref() != Some(url) {
+-        return Err("Frozen Main fixture controller URL differs".into());
+-    }
+     let started = Instant::now();
+     let mut last_progress = None;
+     loop {
+-        let connection = worker
+-            .controller_connection
+-            .lock()
+-            .map_err(|_| "Controller connection lock poisoned")?
+-            .clone();
++        let connection = connection(worker, url)?;
+         if ready(connection.as_ref(), url, crate::store::now_ms()) {
+             publish(
+                 &input.root,
+@@ -75,6 +89,58 @@ mod tests {
+             error: None,
+         }
+     }
++    #[test]
++    fn preflight_reads_legacy_link_but_never_adopts_a_topology_primary() {
++        use winbridge_core::controller_sessions::Peer;
++        let root = tempfile::tempdir().unwrap();
++        let project = root.path().join("project");
++        std::fs::create_dir(&project).unwrap();
++        let url = "ws://127.0.0.1:1144";
++        for topology in [false, true] {
++            let settings = if topology {
++                serde_json::json!({"controllerTopology":{"schemaVersion":1,"primary":"c","controllers":[
++                    {"id":"a","url":"ws://127.0.0.1:1143"},
++                    {"id":"b","url":url},{"id":"c","url":"ws://127.0.0.1:1145"}]},"keepRunningOnUiExit":true})
++            } else {
++                serde_json::json!({"controllerUrl":url,"keepRunningOnUiExit":true})
++            };
++            let worker = Worker::open(serde_json::from_value(serde_json::json!({
++                "schemaVersion":1,"instanceId":"network-preflight","nodeId":"worker",
++                "stateDirectory":root.path().join(if topology {"multi"} else {"legacy"}),"worker":settings,
++                "projects":[{"id":"fixture","workspaceRoot":project,"allowDirectCommands":false,"maxConcurrentMutations":1,"recipes":[]}]
++            })).unwrap()).unwrap();
++            if topology {
++                assert!(connection(&worker, url)
++                    .unwrap_err()
++                    .contains("single-route"));
++            } else {
++                assert!(matches!(
++                    connection(&worker, url).unwrap().unwrap().state,
++                    ConnectionState::Connecting
++                ));
++                assert!(connection(&worker, "ws://127.0.0.1:1143").is_err());
++                let mut links = worker.controllers.as_ref().unwrap().lock().unwrap();
++                let ticket = links.begin("legacy").unwrap();
++                links
++                    .connected(
++                        &ticket,
++                        Peer {
++                            node: "test-controller".into(),
++                            generation: "generation".into(),
++                            session: "session".into(),
++                        },
++                    )
++                    .unwrap();
++                drop(links);
++                assert!(ready(
++                    connection(&worker, url).unwrap().as_ref(),
++                    url,
++                    crate::store::now_ms()
++                ));
++            }
++        }
++    }
++
+     #[test]
+     fn fresh_exact_session_is_required_before_admission() {
+         let c = connected();

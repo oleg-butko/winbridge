@@ -1,7 +1,25 @@
 # WinBridge
 
-**Текущая ветка — main.** Performance-изменения проверены и слиты; worker 0.1.1
-установлен и проверен. Продолжается [реализация апдейтера](docs/plans/worker-self-update/local-service-actor-2026-10-26.md).
+**Ветка `feat/multi-controller`, Debian .204.** Здесь разрабатываются
+[прямые сессии до четырёх Debian controller к одному worker](docs/plans/multi-controller-runtime.md).
+Windows пока переключает пользователь вручную; runtime updater развивается отдельно.
+Сетевой runtime новой функции подключён в feature-ветке и проверяется на Debian;
+Windows gate с4 отдельными controller процессами на.204 пройден; actual deployment
+.203+.204 ещё не выполнялся. Установленный worker0.1.1 новый config не поддерживает.
+Добавлены отдельная readonly диагностика всех соединений и desktop панель с
+primary, ошибками и RPC counters; проверены на Debian с настоящим worker и Chromium.
+Source journal schema19 сохраняет автора первоначального запроса, наследует его
+в workflow children и показывает в task detail. Legacy history остаётся unknown;
+Инициатор первой принятой отмены хранится отдельно, с передачей дочерним операциям.
+Linux migrations17/18→19, retry/restart и UI проверены; Windows cold17→19 и
+четыре controller также проверены. Source19 Main25 остаётся отдельным gate.
+Для агентов добавлены [три readonly CLI/MCP запроса](docs/guides/mcp.md#readonly-диагностика-нескольких-controller):
+все соединения, автор операции и инициатор отмены. Сценарии с2,3 и4 controller
+проверены на Linux; один общий runtime, очередь и история.
+
+Main ba9557b включён в эту feature-ветку с сохранением shared startup и readonly
+local-service границ updater. Добавлены [явные Main25 schema profiles](docs/plans/main25-schema-profiles-2026-10-27.md);
+production worker0.1.1 остаётся прежним, native проверки выполняются в изолированных каталогах.
 
 Локальный проект для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
 

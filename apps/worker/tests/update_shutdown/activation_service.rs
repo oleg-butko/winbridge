@@ -195,7 +195,10 @@ pub(super) fn execute(
             .as_ref(),
         Some(&baseline.shutdown)
     );
-    assert_eq!(preserved_rows(root), baseline.preserved);
+    assert_eq!(
+        preserved_service_rows(root, baseline.authority.epoch, authority.epoch),
+        baseline.preserved
+    );
     let settings: serde_json::Value = serde_json::from_slice(
         &fs::read(root.runtime().join("winbridge-worker.local.json")).unwrap(),
     )
@@ -371,14 +374,17 @@ pub(super) fn execute(
     // normal connector must still never appear before its separate contract.
     std::thread::sleep(Duration::from_secs(6));
     let final_info = info(rt, &saved.command, url);
-    assert_eq!(preserved_rows(root), baseline.preserved);
+    assert_eq!(
+        preserved_service_rows(root, baseline.authority.epoch, authority.epoch),
+        baseline.preserved
+    );
     lock_occupied(&physical.state);
     proof.as_object_mut().unwrap().extend(json!({
         "writerConfirmed":writer_view,"confirmed":view,"duplicate":duplicate,"record":record,"history":physical_history,
         "serviceRecord":saved,"serviceHistory":rows,"writerRecord":writer,"writerHistory":writer_rows,
         "workerAuthorityBefore":baseline.authority,"workerAuthorityAfter":authority,"actualWorkerReceipt":actual_receipt,
         "workerLeaseBefore":baseline.lease,"acceptedShutdownBefore":baseline.shutdown,
-        "preservedRowsBefore":baseline.preserved,"preservedRowsAfter":preserved_rows(root),
+        "preservedRowsBefore":baseline.preserved,"preservedRowsAfter":preserved_service_rows(root, baseline.authority.epoch, authority.epoch),
         "oldCachedAuthorityRefused":true,"actualProcess":actual,"actualJob":actual_job,"actualJobOccupied":true,
         "actualProcessInJob":true,"actualSet":actual_set,"sharing":sharing,"childInstanceLockOccupied":true,"initialInfo":initial_info,"finalInfo":final_info,
         "controllerPreflight":preflight,"userPause":pause,"userResumeRefused":true,"normalHistory":history_proof,"normalObservation":observed,
@@ -386,6 +392,9 @@ pub(super) fn execute(
         "workerLaunchCount":1,"stateHandoffCount":1,"savedWorkerCommandCount":1,"serviceDispatchCount":1,
         "normalServiceStarted":true,"controllerStarted":false,"publicActivationEnabled":false
     }).as_object().unwrap().clone());
+    proof["resourcePolicyReconciliation"] = json!({"schemaVersion":1,
+        "normalizedColumn":"resource_policy.epoch", "beforeEpoch":baseline.authority.epoch,
+        "afterEpoch":authority.epoch, "policyUnchanged":true});
     proof
 }
 
@@ -448,7 +457,14 @@ pub(in super::super) fn after_owned_exit(
         serde_json::to_value(receipt).unwrap(),
         saved["actualWorkerReceipt"]
     );
-    assert_eq!(preserved_rows(root), saved["preservedRowsBefore"]);
+    assert_eq!(
+        preserved_service_rows(
+            root,
+            saved["workerAuthorityBefore"]["epoch"].as_u64().unwrap(),
+            saved["workerAuthorityAfter"]["epoch"].as_u64().unwrap()
+        ),
+        saved["preservedRowsBefore"]
+    );
     assert_eq!(journal_bytes(root), saved["workerBytesAfter"]);
     let pins = winbridge_update::shutdown::ShutdownStatePins::capture(Path::new(
         &record.intent.context.worker_state.state_directory,

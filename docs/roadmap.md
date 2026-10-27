@@ -1,5 +1,55 @@
 # Постепенная реализация и расширение
 
+2026-10-27: выполняются [Main25 profiles и изолированная worker17→19 migration](plans/main25-schema-profiles-2026-10-27.md).
+Main ba9557b переносится в feature; profiles сохраняют17 и добавляют19 без ослабления
+schema/authority checks. Windows slot204 отдельный, installed worker не обновляется.
+После Windows работы пользователь переключит worker обратно на.203.
+
+## Multi-controller: текущая ветка .204
+
+2026-10-27: [main обновлён доba9557b, новое сравнение](plans/multi-controller-review-ba9557b.md).
+Main25/archive/cache fix совместимы по архитектуре; новый preflight требует Links
+adapter, а native audit требует явного переноса worker17→19 schema expectation.
+Подготовлен полный новый integration patch;894 workspace/update-validation tests,
+17 ignored, Clippy/MSVC/contracts/TS/UI passed. Ветки не слиты, Windows не запускался.
+
+2026-10-27: подтверждён source/runtime сценарий3/4 controller, общий limit constant
+и универсальный test harness. [Проверки и границы](plans/multi-controller-runtime.md#три-и-четыре-controller--2026-10-27).
+Native Windows gate19 и интеграция с main остаются отдельными шагами.
+
+2026-10-27: [review и сравнение с main c4b7aea](plans/multi-controller-review-2026-10-27.md).
+Подготовлен source patch для общего startup и readonly service с topology.
+Проверочное объединение879/0/17ignored, Clippy/MSVC/contracts/TS/UI passed;
+ветки не слиты, Windows gate19/updater migration остаются впереди.
+
+В `feat/multi-controller` (.204): [прямые сессии двух controller](plans/multi-controller-runtime.md).
+Git coordination отменена. Pure sessions/origin, WorkerSettings topology и actual
+transport подключены; Linux model и два реальных loopback WebSocket соединения
+проверены с одним Worker/Store (187 passed /5 штатно ignored, Clippy/MSVC check).
+Readonly список связей и RPC counters подключён отдельным контрактом/панелью;
+scope/old-worker/offline проверены на Chromium + Linux worker. Durable creator
+attribution (schema18, workflow inheritance, readonly API/task UI) добавлена:
+819 workspace +3 protocol tests и actual Linux17→18 proof прошли. Затем добавлены
+cancellation actor/propagation/readonly UI в schema19:829 workspace +3 protocol,
+actual Linux17/18→19 proof и Chromium прошли. 2026-10-27 добавлены три readonly
+CLI/MCP query wrappers с pinned context и отдельным IPC envelope: два Linux
+controller, реальные CLI/MCP subprocesses, running-query/no-cancel, stale scope и
+old-component refusal проверены (37 controller/72 protocol tests). Native Windows
+gate19 ещё впереди. Windows переключает пользователь вручную;
+установленный0.1.1 и его config здесь не меняются.
+
+2026-10-26: по новой задаче пользователя выполняются
+[review/merge performance-ветки и выпуск worker0.1.1](plans/run-speed/review-merge-2026-10-26.md).
+Ветка слита в main: CPU fix и build profiles проверены, release harness исправлен. Worker0.1.1
+выпущен: run20261026-182213-6cd81f3e succeeded,140 Rust +6 native policy,
+actual old-controller RPC и source final readback passed. Постоянный runtime-test
+path/port1144/900s approval budget проверены; ZIP готов к ручному применению.
+Installed d052 ещё не заменён; дальше actual installed verification после ответа
+пользователя, затем normal-service updater plan. Public updater/multi-controller
+не включаются.
+
+## Updater: checkpoint main ba9557b
+
 2026-10-27: [Main25 native scenario](plans/worker-self-update/main25-2026-10-27.md)
 подключён в source: pre-admission firewall wait, same-child service, IPC/history/pause,
 cold exit и archive под original lease. Первый actual run:136 prerequisites passed,
@@ -757,3 +807,15 @@ Supervisor v12 / worker control v5 подготавливает logical drain ob
 queue pause/revision и coherent DB snapshot. Local551 tests/doctests, Clippy и UI
 checks passed; native v12/v5 ещё требуется. Нулевые счётчики не подтверждают
 physical quiescence. Durable drain driver и exact shutdown остаются впереди.
+
+
+2026-10-27: в feature готовится worker0.2.0 с topology1–4 и schema19.
+[Native multi-controller gate](plans/multi-controller-native-2026-10-27.md) подготовлен;
+Windows proof/release пока не объявлять. Main25 profiles используют отдельные pins,
+installed0.1.1 остаётся прежним. Новая версия не включает public updater install.
+
+
+2026-10-27: [Windows multi-controller gate](plans/multi-controller-native-2026-10-27.md)
+пройден на0.2.0/source48c834c:4 independent controllers,5 tasks, native cold17→19,
+independent16 negative audits/15 files twice. User разрешил новые TCP ports;
+installed0.1.1 не заменялся. Source19 Main25 и выпуск ZIP ещё впереди.

@@ -166,6 +166,7 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
             .map_err(|e| e.to_string())?
             != root.join("state")
         || worker.config.worker.controller_url != input.controller_url
+        || worker.config.worker.controller_topology.is_some()
         || worker
             .runtime_guard
             .lock()
@@ -478,7 +479,8 @@ pub(crate) fn export_before_copy(
     }
     let input: Input =
         serde_json::from_slice(&raw).map_err(|_| "Invalid export validation fields")?;
-    let root = input.root.canonicalize().map_err(|e| e.to_string())?;
+    let layout = input.fixture_layout()?;
+    let root: &Path = &layout;
     let state = guard
         .worker_configuration()
         .state_directory
@@ -490,10 +492,9 @@ pub(crate) fn export_before_copy(
         .map_err(|e| e.to_string())?;
     if !input.final_backup
         || input.kind != "winbridge_shutdown_main_validation"
-        || input.schema_version != 1
         || path.canonicalize().map_err(|e| e.to_string())? != root.join("input.json")
         || state != root.join("state")
-        || runtime.parent() != Some(root.join("runtime").as_path())
+        || runtime != layout.runtime().join("winbridge-worker.exe")
         || input.worker_config_sha256 != guard.intent().binding.worker_config.sha256
         || input.request.expected.worker_build_id
             != guard
@@ -511,7 +512,7 @@ pub(crate) fn export_before_copy(
     }
     if input.backup_fault != BackupFault::None {
         publish(
-            &root,
+            root,
             "backup-helper-fault.json",
             &serde_json::json!({"fault":input.backup_fault,"attemptId":guard.intent().attempt_id,"process":guard.process()}),
         )?;
@@ -529,7 +530,7 @@ pub(crate) fn export_before_copy(
         }
         BackupFault::HoldBeforeCopy => {
             publish(
-                &root,
+                root,
                 "backup-helper-held.json",
                 &serde_json::json!({"attemptId":guard.intent().attempt_id,"process":guard.process()}),
             )?;

@@ -179,6 +179,11 @@ pub fn tools() -> Result<Vec<Value>, String> {
     tools.push(json!({"name":"winbridge_verify_pair","description":"Explicitly verify the caller-pinned tuple against the installed Windows worker in isolated state, then the actual paired route. Copy identity from contract_readiness when creating the logical operation and retain it with verificationKey on every retry; never rebind it. Returns an operation, not success. First known profile is fixture/RPC-2; no desktop windows or outbound test-worker connection. Exact tested consumer build evidence must already be installed.","inputSchema":schemars::schema_for!(winbridge_protocol::VerifyPairRequest),"annotations":{"readOnlyHint":false,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}}));
     tools.push(json!({"name":"winbridge_get_verification","description":"Read the original verification operation, stage, linked Windows task IDs and receipt. Does not start, retry, rebind or cancel any task.","inputSchema":{"type":"object","properties":{"verificationKey":{"type":"string"}},"required":["verificationKey"],"additionalProperties":false},"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":false}}));
     tools.push(json!({"name":"winbridge_operations","description":"Read a scoped operation page from one SQLite snapshot: task/import/workflow/application state, revision, reason, resources and links. Pin context and cursor; a changed scope/filter requires a new view. Cursor fences admissions, while each page observes current states. Decimal counters retain full precision; no command is accepted and no legacy fallback occurs.","inputSchema":schemars::schema_for!(winbridge_protocol::OperationPageRequest),"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}}));
+    for (name,description,schema) in [
+        ("winbridge_controller_connections","Read a pinned observation of all worker-controller links, primary, last errors/confirmations and network RPC counters. Counters describe handlers, not tasks; old/unsupported workers are refused without fallback. No connection/configuration change or task acceptance.",serde_json::to_value(schemars::schema_for!(winbridge_protocol::ControllerConnectionsRequest)).unwrap()),
+        ("winbridge_operation_attribution","Read the immutable creator of one operation in the caller-pinned journal scope, including workflow inheritance. Legacy unknown stays unknown. Endpoint identity is historical attribution, not authentication or permission. No task is accepted, replayed or cancelled.",serde_json::to_value(schemars::schema_for!(winbridge_protocol::OperationAttributionRequest)).unwrap()),
+        ("winbridge_operation_cancellation","Read the first recorded cancellation initiator/time and parent operation, separately from creator and actual task status. Null intent does not prove no cancellation. This tool never requests cancellation; retain the original operation and journal scope.",serde_json::to_value(schemars::schema_for!(winbridge_protocol::OperationAttributionRequest)).unwrap()),
+    ] {tools.push(json!({"name":name,"description":description,"inputSchema":schema,"annotations":{"readOnlyHint":true,"destructiveHint":false,"idempotentHint":true,"openWorldHint":true}}));}
     tools.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     Ok(tools)
 }
@@ -359,6 +364,36 @@ async fn handle(
                     Err(_) => {
                         json!({"kind":"error","message":"Snapshot publication did not complete; inspect the same commit/package before retrying"})
                     }
+                }
+            } else if matches!(
+                name,
+                "winbridge_controller_connections"
+                    | "winbridge_operation_attribution"
+                    | "winbridge_operation_cancellation"
+            ) {
+                let request =
+                    match super::diagnostics::request(
+                        name.strip_prefix("winbridge_").unwrap(),
+                        args,
+                    ) {
+                        Ok(request) => request,
+                        Err(_) => return Some(error(
+                            id,
+                            -32602,
+                            "Supply the original context and typed diagnostic query; no dispatch",
+                        )),
+                    };
+                #[cfg(unix)]
+                {
+                    match super::diagnostics::call(&super::endpoint(config), &request).await {
+                        Ok(response) => serde_json::to_value(response).unwrap(),
+                        Err(message) => json!({"kind":"error","message":message}),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = request;
+                    json!({"kind":"error","message":"Controller diagnostics require Debian IPC"})
                 }
             } else if name == "winbridge_operations" {
                 let request = match serde_json::from_value::<winbridge_protocol::OperationPageRequest>(

@@ -191,9 +191,17 @@ impl Store {
         c: &Connection,
     ) -> Result<ActivationMigrationBackup> {
         Self::require_update_activation(c)?;
+        Self::backup_schema_migration(path, c, 16)
+    }
+    pub(super) fn backup_schema_migration(
+        path: &Path,
+        c: &Connection,
+        expected_version: u32,
+    ) -> Result<ActivationMigrationBackup> {
+        Self::require_update_activation(c)?;
         let original = Self::read_authority(c)?;
         let backup = path.with_file_name(format!(
-            "journal-v16-{}-{}.sqlite",
+            "journal-v{expected_version}-{}-{}.sqlite",
             now_ms(),
             uuid::Uuid::new_v4()
         ));
@@ -240,7 +248,10 @@ impl Store {
         let integrity: String = snapshot
             .query_row("PRAGMA quick_check", [], |r| r.get(0))
             .map_err(sql)?;
-        if version != 16 || integrity != "ok" || Self::read_authority(&snapshot)? != original {
+        if version != expected_version
+            || integrity != "ok"
+            || Self::read_authority(&snapshot)? != original
+        {
             return Err("Activation migration backup verification failed; source preserved".into());
         }
         drop(snapshot);

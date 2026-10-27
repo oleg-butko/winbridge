@@ -3,6 +3,7 @@ pub mod activation;
 mod artifacts;
 mod attention;
 pub mod compatibility;
+mod controller_links;
 mod domain;
 mod extensions;
 mod history;
@@ -52,9 +53,9 @@ use winbridge_core::config::WorkerConfig;
 use winbridge_core::task::TaskEffect;
 use winbridge_platform::{trace_process, ManagedChild};
 use winbridge_protocol::{
-    FencedRequest, FencedRequestInfo, FencedResponse, LocalRequest, LocalResponse, OutputStream,
-    RequestContext, TaskRecord, TaskStatus, WireRequest, WireResponse, WorkerInfo,
-    FENCED_REQUEST_CONTRACT, PROTOCOL_VERSION,
+    FencedRequest, FencedRequestInfo, FencedResponse, LocalRequest, LocalResponse,
+    OperationCreator, OutputStream, RequestContext, TaskRecord, TaskStatus, WireRequest,
+    WireResponse, WorkerInfo, FENCED_REQUEST_CONTRACT, PROTOCOL_VERSION,
 };
 
 pub type Result<T> = std::result::Result<T, String>;
@@ -137,8 +138,7 @@ pub struct Worker {
     scheduler_diagnostics: Mutex<scheduler_diagnostics::Diagnostics>,
     checks: Mutex<HashMap<String, Option<Result<workflows::CheckResult>>>>,
     stop: AtomicBool,
-    controller_connection: Mutex<Option<winbridge_protocol::ControllerConnection>>,
-    controller_projection: Mutex<Option<projection::CachedProjection>>,
+    controllers: Option<Arc<Mutex<controller_links::Links>>>,
     unreconciled_tasks: Mutex<HashMap<String, String>>,
     inspection: bool,
     local_activation: Option<local_service::LocalServiceScope>,
@@ -166,7 +166,15 @@ impl Worker {
         Ok(store)
     }
     pub fn handle(&self, request: LocalRequest) -> LocalResponse {
-        match self.dispatch(request, false) {
+        self.handle_from(request, &self.local_creator())
+    }
+    fn local_creator(&self) -> OperationCreator {
+        OperationCreator::Local {
+            worker_generation: self.generation.clone(),
+        }
+    }
+    fn handle_from(&self, request: LocalRequest, creator: &OperationCreator) -> LocalResponse {
+        match self.dispatch(request, false, creator) {
             Ok(response) => response,
             Err(message) => LocalResponse::Error { message },
         }
@@ -178,6 +186,13 @@ impl Worker {
         })
     }
     pub fn handle_fenced(&self, request: FencedRequest) -> FencedResponse {
+        self.handle_fenced_from(request, &self.local_creator())
+    }
+    fn handle_fenced_from(
+        &self,
+        request: FencedRequest,
+        creator: &OperationCreator,
+    ) -> FencedResponse {
         let context = self.request_context();
         let mut dispatched = false;
         let result = (|| {
@@ -188,7 +203,7 @@ impl Worker {
                 return Err("Request belongs to another instance/journal incarnation; create a new explicit request after reconnecting. The original logical request was not replayed".into());
             }
             dispatched = true;
-            self.dispatch(request.request, true)
+            self.dispatch(request.request, true, creator)
         })();
         FencedResponse {
             request_contract_version: FENCED_REQUEST_CONTRACT,
@@ -204,14 +219,28 @@ impl Worker {
         }
     }
     pub fn handle_wire(&self, request: WireRequest) -> WireResponse {
+        self.handle_wire_from(request, &self.local_creator())
+    }
+    pub(crate) fn handle_wire_from(
+        &self,
+        request: WireRequest,
+        creator: &OperationCreator,
+    ) -> WireResponse {
         match request {
-            WireRequest::Legacy(request) => WireResponse::Legacy(Box::new(self.handle(request))),
+            WireRequest::Legacy(request) => {
+                WireResponse::Legacy(Box::new(self.handle_from(request, creator)))
+            }
             WireRequest::Fenced(request) => {
-                WireResponse::Fenced(Box::new(self.handle_fenced(*request)))
+                WireResponse::Fenced(Box::new(self.handle_fenced_from(*request, creator)))
             }
         }
     }
-    fn dispatch(&self, request: LocalRequest, fenced: bool) -> Result<LocalResponse> {
+    fn dispatch(
+        &self,
+        request: LocalRequest,
+        fenced: bool,
+        creator: &OperationCreator,
+    ) -> Result<LocalResponse> {
         if self.local_activation.is_some() && !request.is_observation() {
             return Err(local_service::READ_ONLY_REASON.into());
         }
@@ -370,7 +399,11 @@ impl Worker {
                 }
                 let pins = winbridge_core::workflow::recipe_pins(&self.config, &request)?;
                 Ok(LocalResponse::Workflow {
-                    workflow: Box::new(store.accept_workflow_with_pins(*request, Some(pins))?),
+                    workflow: Box::new(store.accept_workflow_attributed(
+                        *request,
+                        Some(pins),
+                        Some(creator),
+                    )?),
                 })
             }
             LocalRequest::ListWorkflows => {
@@ -392,7 +425,9 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_workflow_result(&store.workflow(&workflow_id)?)?;
                 Ok(LocalResponse::Workflow {
-                    workflow: Box::new(store.cancel_workflow(&workflow_id)?),
+                    workflow: Box::new(
+                        store.cancel_workflow_attributed(&workflow_id, Some(creator))?,
+                    ),
                 })
             }
             LocalRequest::ListApplications => {
@@ -412,7 +447,11 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_application_result(&store.application(&application_id)?)?;
                 Ok(LocalResponse::Application {
-                    application: store.stop_application(&application_id)?,
+                    application: store.stop_application_attributed(
+                        &application_id,
+                        Some(creator),
+                        None,
+                    )?,
                 })
             }
             LocalRequest::ReadApplicationLog {
@@ -552,11 +591,9 @@ impl Worker {
                         snapshot_resume_available: !self.inspection && self.local_activation.is_none()
                             && self.config.delivery.is_some(),
                         workflow_available: !self.inspection && self.local_activation.is_none() && self.config.delivery.is_some(),
-                        controller_connection: self
-                            .controller_connection
-                            .lock()
-                            .map_err(|_| "connection state lock poisoned")?
-                            .clone(),
+                        controller_connection: self.controllers.as_ref().map(|c|c.lock()
+                            .map_err(|_| "Controller state lock poisoned")
+                            .map(|c|c.primary_connection())).transpose()?.flatten(),
                     }),
                 })
             }
@@ -578,10 +615,11 @@ impl Worker {
                 let (shared, local) =
                     self.import_paths(&request.project_id, &request.snapshot_id)?;
                 Ok(LocalResponse::Import {
-                    import: Box::new(store.accept_import(
+                    import: Box::new(store.accept_import_attributed(
                         request,
                         shared.to_string_lossy().into(),
                         local.to_string_lossy().into(),
+                        Some(creator),
                     )?),
                 })
             }
@@ -603,7 +641,11 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_committed_result(&import_id)?;
                 Ok(LocalResponse::Import {
-                    import: Box::new(store.cancel_import(&import_id)?),
+                    import: Box::new(store.cancel_import_attributed(
+                        &import_id,
+                        Some(creator),
+                        None,
+                    )?),
                 })
             }
             LocalRequest::PreviewSnapshot {
@@ -633,11 +675,12 @@ impl Worker {
                 let command = self.resolve_task(&request)?;
                 let origin = winbridge_runner::recipe_origin(&self.config, &request)?;
                 Ok(LocalResponse::Task {
-                    task: Box::new(store.accept_with_origin(
+                    task: Box::new(store.accept_attributed(
                         request.clone(),
                         command,
                         self.snapshot_reference(&request)?,
                         origin,
+                        Some(creator),
                     )?),
                 })
             }
@@ -667,7 +710,7 @@ impl Worker {
                 let mut store = self.store()?;
                 self.require_committed_result(&task_id)?;
                 Ok(LocalResponse::Task {
-                    task: Box::new(store.cancel(&task_id)?),
+                    task: Box::new(store.cancel_attributed(&task_id, Some(creator), None)?),
                 })
             }
         }
@@ -1381,12 +1424,6 @@ enum ReadinessOutput {
 }
 
 async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<()> {
-    struct NetworkTask(tokio::task::JoinHandle<()>);
-    impl Drop for NetworkTask {
-        fn drop(&mut self) {
-            self.0.abort();
-        }
-    }
     let address =
         winbridge_transport::endpoint(&worker.config.state_directory, &worker.config.instance_id)
             .map_err(|e| e.to_string())?;
@@ -1440,16 +1477,14 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
     } else {
         update_control::start(Arc::clone(&worker))?
     };
-    let network = (worker.local_activation.is_none())
-        .then_some(&worker)
-        .and_then(|worker| {
-            worker
-                .config
-                .worker
-                .controller_url
-                .as_ref()
-                .map(|_| NetworkTask(tokio::spawn(network::connect(Arc::clone(worker)))))
-        });
+    let network = if worker.local_activation.is_none() {
+        worker
+            .controllers
+            .as_ref()
+            .map(|_| network::start(Arc::clone(&worker)))
+    } else {
+        None
+    };
     if let ReadinessOutput::Local(ready) = readiness {
         ready
             .send(())
@@ -1481,11 +1516,8 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
         }
     }
     if let Some(network) = network {
-        network.0.abort();
-        // Aborting is asynchronous. Join before declaring this service stopped
-        // so the network owner cannot keep the instance lock across a restart.
-        let mut network = network;
-        let _ = (&mut network.0).await;
+        // Stop and join every endpoint before reporting service shutdown.
+        network.close().await;
     }
     if let Some(control) = control {
         control.close().await;

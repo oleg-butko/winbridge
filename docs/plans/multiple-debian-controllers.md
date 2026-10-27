@@ -1,5 +1,9 @@
 # Два Debian controller и один Windows worker
 
+Текущая разработка: [прямые multi-controller sessions](multi-controller-runtime.md)
+в `feat/multi-controller`, только Debian tests. Git coordination отменена пользователем;
+до runtime implementation переключение Windows между .203/.204 остаётся ручным.
+
 Анализ2026-10-26 для worker0.1.1. **Функция не реализована**, в patch release
 её не включать. Windows локальная сеть/ws:// сохраняется; без TLS/relay/VPN/SSH.
 

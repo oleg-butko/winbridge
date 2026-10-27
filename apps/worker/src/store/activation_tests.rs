@@ -224,10 +224,11 @@ fn journal_activation_checks_actual_schema_and_stored_shutdown_before_any_epoch_
         // Deliberate metadata corruption in this owned temporary database.
         store
             .connection
-            .execute_batch(match fault {
-                0 => "DROP TRIGGER worker_shutdown_retained; DELETE FROM worker_shutdown_receipts;",
-                1 => "PRAGMA user_version=16;",
-                _ => "PRAGMA user_version=18;",
+            .execute_batch(&match fault {
+                0 => "DROP TRIGGER worker_shutdown_retained; DELETE FROM worker_shutdown_receipts;"
+                    .into(),
+                1 => "PRAGMA user_version=16;".into(),
+                _ => format!("PRAGMA user_version={};", JOURNAL_SCHEMA_VERSION + 1),
             })
             .unwrap();
         assert!(store
@@ -331,7 +332,7 @@ fn activation_migration_backup_retains_exact_file_identity_until_commit() {
     let path = root.path().join("journal.sqlite");
     let mut store = Store::open(&path).unwrap();
     store.begin_authority().unwrap();
-    store.connection.execute_batch("DROP TABLE worker_journal_activations;PRAGMA user_version=16;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    store.connection.execute_batch("DROP TABLE operation_cancellations; DROP TABLE operation_creators; DROP TABLE worker_journal_activations;PRAGMA user_version=16;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let guard = Store::backup_activation_migration(&path, &store.connection).unwrap();
     guard.revalidate().unwrap();
     #[cfg(windows)]
@@ -414,7 +415,7 @@ fn activation_migration_sixteen_preserves_history_keys_header_and_verified_backu
         )
         .unwrap();
     let old = store.journal_authority().clone();
-    store.connection.execute_batch("DROP TABLE worker_journal_activations;PRAGMA user_version=16;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    store.connection.execute_batch("DROP TABLE operation_cancellations; DROP TABLE operation_creators; DROP TABLE worker_journal_activations;PRAGMA user_version=16;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     drop(store);
     let migrated = Store::open(&path).unwrap();
     assert_eq!(migrated.journal_authority(), &old);
@@ -433,7 +434,7 @@ fn activation_migration_sixteen_preserves_history_keys_header_and_verified_backu
             .connection
             .query_row("PRAGMA user_version", [], |r| r.get::<_, u32>(0))
             .unwrap(),
-        17
+        JOURNAL_SCHEMA_VERSION
     );
     let backups: Vec<_> = std::fs::read_dir(root.path())
         .unwrap()
@@ -470,7 +471,7 @@ fn activation_migration_refuses_active_sixteen_before_any_writable_open() {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().join("journal.sqlite");
     let (store, _, _) = fixture(&path);
-    store.connection.execute_batch("DROP TABLE worker_journal_activations;PRAGMA user_version=16;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    store.connection.execute_batch("DROP TABLE operation_cancellations; DROP TABLE operation_creators; DROP TABLE worker_journal_activations;PRAGMA user_version=16;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     drop(store);
     let before = std::fs::read(&path).unwrap();
     assert!(Store::open(&path).err().unwrap().contains("unfinished"));

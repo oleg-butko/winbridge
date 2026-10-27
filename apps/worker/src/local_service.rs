@@ -168,13 +168,25 @@ impl LocalService {
             Worker::validate_startup_paths(&config, false)?;
             recovery::reject_normal_start(&config)?;
             checkpoint()?;
+            let controllers = Worker::prepare_controllers(
+                &config,
+                &prepared
+                    .command()
+                    .binding
+                    .writer_command
+                    .binding
+                    .physical
+                    .generation,
+                true,
+            )?;
             Ok::<_, String>((
                 config,
+                controllers,
                 pin,
                 config_path.canonicalize().map_err(|e| e.to_string())?,
             ))
         })();
-        let (config, pin, path) = match config {
+        let (config, controllers, pin, path) = match config {
             Ok(value) => value,
             Err(reason) => {
                 return Err(Box::new(LocalServiceFailure {
@@ -196,6 +208,7 @@ impl LocalService {
         let worker = Worker::from_parts(WorkerParts {
             config,
             config_path: Some(path),
+            controllers,
             inspection: false,
             local_activation: Some(LocalServiceScope {
                 command: state.command.clone(),

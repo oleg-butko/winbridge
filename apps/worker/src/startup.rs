@@ -33,6 +33,7 @@ pub(super) struct WorkerParts {
     pub generation: String,
     pub store: Store,
     pub custody: InstanceCustody,
+    pub controllers: Option<Arc<Mutex<crate::controller_links::Links>>>,
 }
 impl Worker {
     pub(super) fn validate_startup_paths(config: &WorkerConfig, create: bool) -> Result<()> {
@@ -76,6 +77,22 @@ impl Worker {
         }
         Ok(())
     }
+    pub(super) fn prepare_controllers(
+        config: &WorkerConfig,
+        generation: &str,
+        suspended: bool,
+    ) -> Result<Option<Arc<Mutex<crate::controller_links::Links>>>> {
+        config.worker.topology()?.map(|topology| {
+            let mut links = crate::controller_links::Links::new(&topology, generation.into())?;
+            if suspended {
+                for link in links.links.values_mut() {
+                    link.connection.state = winbridge_protocol::ConnectionState::Disconnected;
+                    link.connection.error = Some("Локальная проверка обновления: соединение с controller ещё не разрешено".into());
+                }
+            }
+            Ok(Arc::new(Mutex::new(links)))
+        }).transpose()
+    }
     pub(super) fn from_parts(parts: WorkerParts) -> Arc<Self> {
         let WorkerParts {
             config,
@@ -85,24 +102,8 @@ impl Worker {
             generation,
             store,
             custody,
+            controllers,
         } = parts;
-        let controller_connection = config.worker.controller_url.as_ref().map(|url| {
-            winbridge_protocol::ControllerConnection {
-                url: url.clone(),
-                state: if local_activation.is_some() {
-                    winbridge_protocol::ConnectionState::Disconnected
-                } else {
-                    winbridge_protocol::ConnectionState::Connecting
-                },
-                session_id: None,
-                controller_node_id: None,
-                controller_generation: None,
-                last_confirmed_at_ms: None,
-                error: local_activation.is_some().then(|| {
-                    "Локальная проверка обновления: соединение с controller ещё не разрешено".into()
-                }),
-            }
-        });
         Arc::new(Self {
             runtime_guard: Mutex::new(None),
             config_path: Mutex::new(config_path),
@@ -118,8 +119,7 @@ impl Worker {
             scheduler_diagnostics: Mutex::new(scheduler_diagnostics::Diagnostics::new()),
             checks: Mutex::new(HashMap::new()),
             stop: AtomicBool::new(false),
-            controller_connection: Mutex::new(controller_connection),
-            controller_projection: Mutex::new(None),
+            controllers,
             unreconciled_tasks: Mutex::new(HashMap::new()),
             inspection,
             local_activation,
@@ -248,12 +248,15 @@ impl Worker {
             store.begin_authority()?;
             store
         };
+        let generation = uuid::Uuid::new_v4().to_string();
+        let controllers = Self::prepare_controllers(&config, &generation, false)?;
         let worker = Self::from_parts(WorkerParts {
             config,
             config_path,
             inspection,
             local_activation: None,
-            generation: uuid::Uuid::new_v4().to_string(),
+            generation,
+            controllers,
             store,
             custody: InstanceCustody::Ordinary { _lock: lock },
         });

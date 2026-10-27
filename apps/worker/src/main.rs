@@ -194,7 +194,18 @@ async fn run() -> Result<(), String> {
             Ok(())
         }
         [name] if name == "validate" => {
-            println!("Valid config: instance {}, {} project(s); controller connection {}, snapshot import available when delivery is configured", config.instance_id, config.projects.len(), config.worker.controller_url.as_deref().unwrap_or("disabled"));
+            let connections = config
+                .worker
+                .topology()?
+                .map(|t| {
+                    t.controllers
+                        .iter()
+                        .map(|p| format!("{}={}", p.id, p.url))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_else(|| "disabled".into());
+            println!("Valid config: instance {}, {} project(s); controller connections {}; snapshot import available when delivery is configured", config.instance_id, config.projects.len(), connections);
             Ok(())
         }
         [name] if name == "serve" => {

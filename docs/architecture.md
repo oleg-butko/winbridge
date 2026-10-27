@@ -248,6 +248,51 @@ Windows worker устанавливает постоянное соединен�
 
 Worker использует настроенный адрес controller. Controller проверяет instance/node/version/capabilities и показывает подключённый worker в UI. По решению пользователя 2026-10-05 входящие соединения не блокируются по IP; адрес источника записывается в журнал. Listener остаётся на выбранном интерфейсе. Настраиваемый список разрешённых IP можно добавить позднее. Изменения firewall/mounts не выполняются скрытно.
 
+В feature-ветке `.204` `feat/multi-controller` добавлен альтернативный
+`worker.controllerTopology`: 1–4 исходящих соединения с явным primary, независимыми
+attempt tickets/reconnect и readiness caches. Один Worker/SQLite/scheduler обслуживает
+всех доверенных caller; nodeId controller может совпадать, связь различается по
+настроенному endpoint ID. RPC budget общий (32 total/16 per endpoint), timeout
+не освобождает ещё работающий blocking handler. Число endpoints не умножает budget;
+1–4 ограничены общей `MAX_CONTROLLERS` в config и observation decoder. Это пределы,
+а не зарезервированная доля: при заполненном общем budget запрос отклоняется до
+admission. Runtime tests с3/4 controller выбирают primary последним и проверяют
+reconnect, общую очередь и источники запросов. Завершение сетевого supervisor
+отменяет и дожидается всех endpoint tasks. Local Info показывает primary, сетевой
+Info — связь/проекцию своего caller без изменения DTO. Legacy controllerUrl и
+local-only сохраняются, оба режима одновременно отклоняются. Проверяется на
+Debian; установленный0.1.1 новый config не понимает, Windows gate ещё не пройден.
+Отдельная readonly extension `winbridge.controller-connections` v1 предоставляет
+согласованный список всех связей, сохранённые ошибки/attempts и общие/per-peer RPC
+counters без изменения старого Info и без записей в SQLite. SDK проверяет
+schema/context/worker generation. Desktop показывает срез с явным primary,
+ошибками и предупреждением о несвежих данных; для старого worker остаётся прежняя
+сводка. Дополнительного постоянного polling нет. Durable creator attribution
+добавлена в source/schema18 отдельной immutable таблицей: same-transaction fresh
+acceptance, неизменность при duplicate, наследование workflow children. Network
+origin берётся из RPC permit, local entry отмечается без идентификации человека.
+Старые операции остаются unknown; side table не меняет wire task DTO/fingerprint.
+Cold migration17→18 делает verified SQLite backup и отказывает при active update;
+exact-schema activation не получает нового migration разрешения. Readonly
+`winbridge.operation-attribution` v1/SDK и task detail UI читают исторического
+creator с pinned scope/provider. В текущей source/schema19 добавлена отдельная
+immutable cancellation intent таблица. Первый effective cancel/stop атомарно
+связывает initiator и изменение business state; duplicate/terminal no-op не
+переписывает источник и время. Workflow передаёт actor дочерним import/task/app,
+application — managed task; creator при этом не меняется. Legacy отсутствие
+metadata не доказывает отсутствие старой отмены; internal Store вызов может иметь
+unknown actor. Readonly `winbridge.operation-cancellation` v1 и task detail UI
+не выдают intent за подтверждение process cleanup. Cold17/18→19 backup/refusal
+проверены на Linux; active update и exact-schema activation migration не допускают.
+CLI/MCP читают все три readonly extensions через отдельный controller-local
+`controllerDiagnosticsVersion:1` route. Strict typed dispatch принимает только
+список связей, creator и cancellation queries; mixed/command frames отклоняются.
+Контракты старого controller readiness и worker RPC не расширены. Каждый query
+сохраняет caller-pinned context/operation, проходит SDK negotiation и не имеет
+legacy fallback. Локальный activity log отмечает method/outcome без raw payload.
+Installed worker/main17 не менялись; native Windows gate19 ещё впереди.
+Подробности и границы — в [плане](plans/multi-controller-runtime.md).
+
 Handshake: protocolVersion, appVersion, nodeId, instanceId, generation, список реально реализованных capabilities. Несовместимая версия даёт понятную ошибку с дальнейшим действием. AppVersion не заменяет wire version. Session generation меняется после рестарта, durable task/event IDs сохраняются.
 
 Текущая сессия: выбран VMnet8, Debian `192.168.44.203:1143`, Windows `192.168.44.1` (адрес подтверждён пользователем). Strict schema 1 controller config задаёт stateDirectory, listenAddress и workerNodeId; instanceId совпадает у пары. Прежнее allowedWorkerAddresses принимается для совместимости, но игнорируется. Поддерживаются literal private/loopback IPv4 для адреса listener/controllerUrl, без DNS и extra URL path. Controller CLI использует private Unix socket (0700 directory/0600 socket), worker сохраняет прежний SID named pipe для desktop.

@@ -234,6 +234,15 @@ fn service_transfer_rechecks_authority_after_the_last_external_checkpoint() {
 // The graph/process metadata stays synthetic. These tests additionally exercise
 // shared Worker recovery and real local IPC (named pipe on Windows), never TCP.
 fn service_fixture(root: &Path) -> (PreparedServiceJournal, std::path::PathBuf, String) {
+    service_fixture_with(
+        root,
+        serde_json::json!({"controllerUrl":"ws://127.0.0.1:9","keepRunningOnUiExit":true}),
+    )
+}
+fn service_fixture_with(
+    root: &Path,
+    settings: serde_json::Value,
+) -> (PreparedServiceJournal, std::path::PathBuf, String) {
     use winbridge_protocol::*;
     let state = root.join("state");
     std::fs::create_dir(&state).unwrap();
@@ -246,7 +255,7 @@ fn service_fixture(root: &Path) -> (PreparedServiceJournal, std::path::PathBuf, 
     std::fs::create_dir(&project).unwrap();
     let instance = format!("svc-{}", uuid::Uuid::new_v4().simple());
     let config = serde_json::json!({"schemaVersion":1,"instanceId":instance,"nodeId":"service-test",
-        "stateDirectory":state,"worker":{"controllerUrl":"ws://127.0.0.1:9","keepRunningOnUiExit":true},
+        "stateDirectory":state,"worker":settings,
         "projects":[{"id":"source","workspaceRoot":project,"allowDirectCommands":true,"maxConcurrentMutations":1,"recipes":[]}]});
     let config_path = root.join("worker.json");
     let config_bytes = serde_json::to_vec(&config).unwrap();
@@ -686,6 +695,70 @@ async fn service_monitor_observes_listener_exit_and_close_never_polls_a_complete
     // This is retained state, not a handoff: actual close/drain is still needed.
     assert!(!lock_available(&root.path().join("state")));
     running.wait_until_stopped().await.unwrap();
+    running.close().await.unwrap();
+    assert!(lock_available(&root.path().join("state")));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn staged_service_preserves_multi_controller_diagnostics_without_network_or_dispatch() {
+    use winbridge_protocol::*;
+    let root = tempfile::tempdir().unwrap();
+    let a = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let b = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let settings = serde_json::json!({"keepRunningOnUiExit":true,"controllerTopology":{
+        "schemaVersion":1,"primary":"a","controllers":[
+            {"id":"a","url":format!("ws://{}",a.local_addr().unwrap())},
+            {"id":"b","url":format!("ws://{}",b.local_addr().unwrap())}]}});
+    let (prepared, config, _) = service_fixture_with(root.path(), settings);
+    let service = crate::LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap();
+    let running = service.start().await.unwrap();
+    let endpoint = running.endpoint().unwrap();
+    let LocalResponse::Info { info } =
+        winbridge_transport::supervisor::call(&endpoint, std::process::id(), &LocalRequest::Info)
+            .await
+            .unwrap()
+    else {
+        panic!("Info")
+    };
+    assert!(!info.workflow_available && !info.snapshot_import_available);
+    let context = info.fenced_requests.as_ref().unwrap().context.clone();
+    let query = ControllerConnectionsRequest {
+        context: context.clone(),
+    };
+    let request = controller_connections_envelope(&info, &query).unwrap();
+    let response = winbridge_transport::supervisor::call(&endpoint, std::process::id(), &request)
+        .await
+        .unwrap();
+    let links = decode_controller_connections(response, &info, &query).unwrap();
+    assert_eq!(links.primary.as_deref(), Some("a"));
+    assert_eq!(links.connections.len(), 2);
+    for link in links.connections {
+        assert_eq!(link.attempts, "0");
+        assert!(matches!(
+            link.connection.state,
+            ConnectionState::Disconnected
+        ));
+        assert!(link.connection.error.is_some());
+        assert!(link.connection.session_id.is_none());
+    }
+    let response: LocalResponse = winbridge_transport::supervisor::call(
+        &endpoint,
+        std::process::id(),
+        &LocalRequest::Submit {
+            request: submission("must-not-run"),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(matches!(response, LocalResponse::Error { .. }));
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(120), async {
+            tokio::select! { result=a.accept()=>result,result=b.accept()=>result }
+        })
+        .await
+        .is_err(),
+        "Staged service connected a controller"
+    );
     running.close().await.unwrap();
     assert!(lock_available(&root.path().join("state")));
 }
