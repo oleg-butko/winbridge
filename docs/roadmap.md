@@ -1,9 +1,15 @@
 # Постепенная реализация и расширение
 
+2026-10-27, .204: **worker0.2.0 установлен пользователем; controller.204 обновлён
+до0.2.0**. [Actual deployment двух Debian подтверждён](releases/controller-0.2.0-debian204-2026-10-27.md):
+обе связи.203/.204 connected, один прежний worker generation/incarnation,10 tasks
+сохранены, recovery errors=null. Runtime config.204 и controller.203 не менялись.
+Общая readonly диагностика теперь доступна на.204; updater остаётся отдельной работой.
+
 2026-10-27, .204: **[пакет worker0.2.0 для ручной установки](releases/worker-0.2.0.md)
 готов**. Повторно проверены сохранённые native gate/evidence и ZIP; Windows runtime
 не менялся. Далее пользователь устанавливает normal worker по постоянному пути
-и topology.203+.204; actual подключение двух разных Debian ещё надо подтвердить.
+и topology.203+.204; на момент упаковки подключение двух разных Debian ещё не проверялось.
 Завершение updater/controller session/Job lifetime/commit/release — отдельный этап.
 
 2026-10-27: [Main25 после merge](plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)

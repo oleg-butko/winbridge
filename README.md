@@ -3,10 +3,11 @@
 **Текущая ветка — main.** Multi-controller слит после [ревью](docs/analysis/multi-controller-merge-review-2026-10-27.md).
 Реализованы
 [прямые сессии до четырёх Debian controller к одному worker](docs/plans/multi-controller-runtime.md).
-Windows пока переключает пользователь вручную; runtime updater развивается отдельно.
+Worker0.2.0 установлен пользователем; [оба Debian одновременно подключены](docs/releases/controller-0.2.0-debian204-2026-10-27.md).
+Runtime updater развивается отдельно.
 Сетевой runtime новой функции подключён в main и проверен на Debian;
 Windows gate с4 отдельными controller процессами на.204 пройден; actual deployment
-.203+.204 ещё не выполнялся. Установленный worker0.1.1 новый config не поддерживает.
+.203+.204 затем подтверждён через новый readonly connections query.
 Добавлены отдельная readonly диагностика всех соединений и desktop панель с
 primary, ошибками и RPC counters; проверены на Debian с настоящим worker и Chromium.
 Source journal schema19 сохраняет автора первоначального запроса, наследует его
@@ -89,7 +90,8 @@ Windows worker **0.2.0: пакет для ручной установки гот
 к `.203` и `.204`, поддерживается до четырёх controller.
 [ZIP, проверка сумм, сохранение прежнего EXE и настройка двух адресов](docs/releases/worker-0.2.0.md).
 Это проверенный native image source48c834c, normal worker code equivalent main591b471;
-установленный0.1.1 автоматически не заменён. Updater развивается отдельно.
+пользователь затем установил пакет, controller.204 обновлён до0.2.0, обе связи connected.
+Updater развивается отдельно.
 
 Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в простое, добавлена
 диагностика версии, запуска и планировщика. [ZIP, проверки и установка](docs/releases/worker-0.1.1.md).
@@ -107,8 +109,8 @@ Controller session/lifetime transfer/commit/release пока не реализо
 barriers и34 negative audits.** Отдельная [actual retained19→20 copy migration](docs/plans/worker-self-update/retained19-to20-2026-10-27.md)
 также проверена: сохранность истории/backup/old19 refusal,21 negative audit.
 Public install выключен; самообновление целиком ещё не готово.
-Installed worker0.1.1/source59249e6 проверен; новые изменения не установлены.
-Текущий controller слушает192.168.44.203:1143.
+Installed worker0.2.0/source48c834c проверен; оба Debian.203/.204 подключены на1143.
+Controller.204 обновлён до0.2.0 с прежним config/state; controller.203 не менялся.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

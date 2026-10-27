@@ -1,4 +1,20 @@
-# Продолжение апдейтера — worker 0.1.1 установлен и проверен
+# Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
+
+**Установка и deployment подтверждены2026-10-27:** пользователь вручную установил
+worker0.2.0/source48c834c. Затем на.204 обновлён user-process controller0.1.0→0.2.0
+из проверенного Linux image, старый PID5312 штатно остановлен, новый PID166074.
+[Результаты, paths, evidence и команды запуска/rollback](releases/controller-0.2.0-debian204-2026-10-27.md).
+Новый readonly connections query через.204 подтвердил **одновременные connected
+debian-203/.203:1143 и debian-204/.204:1143**, primary203. Это actual разные VMs,
+не только прежний gate четырёх controller-процессов на одной VM.
+Windows worker generation946f1128 и journal incarnation5a8eb173 прежние после
+restart Debian controller; все10 task IDs сохранены, active0/recovery errors=null.
+Config SHA.204 не менялся, Windows worker и controller.203 не перезапускались.
+`.204.lastError` сохраняет исторический reset при restart; текущее connection.error
+null/connected. Старая source config остаётся на прежнем пути; новый controller
+работает из отдельного retained image, не из изменяемого compiler cache.
+Рабочий0.1.1 в следующих checkpoint — история до этой установки. Updater сам по
+себе ещё не завершён; normal shared worker теперь доступен обоим агентам.
 
 **Ручной пакет worker0.2.0 подготовлен на .204,2026-10-27:**
 [инструкция и точные пути](releases/worker-0.2.0.md).
@@ -17,8 +33,8 @@ exact bytes/SHA256. Бинарник не пересобирался, Windows RP
 Scaffold308, Python compile и diff check также прошли.
 Debian free27,039,039,488 / shared Windows volume23,198,097,408 bytes до упаковки;
 это не новая проверка Windows cache диска, тяжёлых сборок не выполнялось.
-Рабочий worker0.1.1 на.203 и оба test slots не менялись. Установка/два настоящих
-Debian одновременно ещё не подтверждены: пользователь вручную заменяет EXE после
+На момент упаковки рабочий worker0.1.1 на.203 и оба test slots не менялись.
+Установка/два настоящих Debian тогда ещё не были подтверждены: пользователь заменяет EXE после
 idle, новый config сохраняет прежние instance/state/projects, topology.203+.204.
 После сообщения об установке проверить оба fresh Info/общие generation/incarnation,
 историю и recovery errors; не replay завершённые native gates. Наличие этого пакета
