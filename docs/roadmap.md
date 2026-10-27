@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-27, .204: **[пакет worker0.2.0 для ручной установки](releases/worker-0.2.0.md)
+готов**. Повторно проверены сохранённые native gate/evidence и ZIP; Windows runtime
+не менялся. Далее пользователь устанавливает normal worker по постоянному пути
+и topology.203+.204; actual подключение двух разных Debian ещё надо подтвердить.
+Завершение updater/controller session/Job lifetime/commit/release — отдельный этап.
+
 2026-10-27: [Main25 после merge](plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)
 **полностью подтверждён**:140 native tests/41 commands/52 files twice,24 core+10
 marker negative audits,3 original barriers и отдельный cold worker17→19.

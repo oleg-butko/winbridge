@@ -1,5 +1,29 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
+**Ручной пакет worker0.2.0 подготовлен на .204,2026-10-27:**
+[инструкция и точные пути](releases/worker-0.2.0.md).
+Shared `WinBridge/releases/20261027-worker-0.2.0-48c834c/` содержит
+`winbridge-worker-0.2.0-48c834c-windows-x64.zip` (6,729,088 bytes),
+SHA256 `ce1eb84bfadae5561b020df6c43e3ac52006b91c685b3c33ba0345a409d38a9e`.
+EXE SHA256 `9dac4060f3abf9a2167ee432b536d9f9ffc9a787730e5d4096ed4a5eda997104`:
+тот же normal image source48c834c/native run20261027-183307-dda61a12, build identity
+не переименована. Сравнение с main591b471 подтвердило отсутствие изменений normal
+worker кода; изменённый updater source module исключён feature-gate update-validation.
+Packaging CLI `scripts/package-worker-0.2.0.py` заново проверил archive/source pins,
+15 ready files twice,16 network negative audits, cold17→19 proof, ZIP CRC/21 entries/
+exact bytes/SHA256. Бинарник не пересобирался, Windows RPC/новых прогонов не было.
+Независимая повторная упаковка дала тот же payload;4 packaging refusal checks
+(existing output/подмена source ZIP/ready manifest/EXE) прошли без публикации.
+Scaffold308, Python compile и diff check также прошли.
+Debian free27,039,039,488 / shared Windows volume23,198,097,408 bytes до упаковки;
+это не новая проверка Windows cache диска, тяжёлых сборок не выполнялось.
+Рабочий worker0.1.1 на.203 и оба test slots не менялись. Установка/два настоящих
+Debian одновременно ещё не подтверждены: пользователь вручную заменяет EXE после
+idle, новый config сохраняет прежние instance/state/projects, topology.203+.204.
+После сообщения об установке проверить оба fresh Info/общие generation/incarnation,
+историю и recovery errors; не replay завершённые native gates. Наличие этого пакета
+не завершает controller/lifetime/commit/release updater. Далее — прежний план ниже.
+
 **Main25 завершён,2026-10-27:** run20261027-195930-24f64ab8,
 task85b38bd5-3a77-4e7f-83ac-b044c25e806f succeeded/0, source e03bb2a,
 explicit worker19/updater20.140 native tests/41 commands,52 files twice,
@@ -59,7 +83,8 @@ Main25 **worker19-updater20** использовал clean archives и explicit
 profile, постоянный `runtime-test-204`, controller.203:1144,
 новые state/instance/report. Legacy runtime-test.203 и его conservation plan
 остаются нетронутыми; прежний pending запрос переноса не выполнялся и для отдельного
-слота204 не требуется. Оба слота не смешивать. Source0.2.0 пока не release/install;
+слота204 не требуется. Оба слота не смешивать. На этом checkpoint Source0.2.0
+ещё не был release/install; manual package подготовлен позднее, см. начало документа.
 Retained updater19→20 copy gate завершён; controller/lifetime/commit/release и
 U2–U4 ещё впереди. Live installed migration этим не разрешается.
 Описание ниже — checkpoints другой VM до слияния, сохраняется как история.
