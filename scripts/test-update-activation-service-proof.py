@@ -1,5 +1,7 @@
 """Report boundary tests, not native execution evidence."""
 import importlib.util
+import hashlib
+import json
 from pathlib import Path
 import unittest
 
@@ -9,6 +11,36 @@ spec.loader.exec_module(proof)
 
 
 class ServiceEvidenceTests(unittest.TestCase):
+    def test_native_markers_bind_the_same_declared_input_process_and_build(self):
+        source = dict(sourceCommit='a' * 40, manifestSha256='b' * 64)
+        build = dict(sourceCommit=source['sourceCommit'], sourceManifestSha256=source['manifestSha256'], sourceDirty=False)
+        saved = dict(updateId='update', launchId='launch', ownerId='owner', ownerEpoch=2,
+                     runtimeIdentity='runtime-id', updaterConfigSha256='c' * 64)
+        context = dict(startupTimeoutMs=240000, supervisor=dict(processId=42), workerState=dict(stateDirectory='K:/state'))
+        intent = dict(source=saved, attemptId='attempt', admittedAtMs=10, context=context)
+        held = dict(intent=intent, revision=5, updatedAtMs=20)
+        owned = dict(held, revision=6, stateOwned=dict(observedAtMs=30))
+        history = [None] * 5 + [held, owned]
+        input_value = dict(saved, schemaVersion=1, kind='winbridge_activation_process_validation', attemptId='attempt', stateTraceOnly=True)
+        encoded = json.dumps(input_value)
+        common = dict(schemaVersion=1, processId=42, build=build, input=input_value, inputEncoded=encoded,
+                      inputSha256=hashlib.sha256(encoded.encode()).hexdigest())
+        files = {}
+        for phase, available, at in (('before_release', False, 21), ('after_release', True, 22)):
+            marker = dict(common, kind='activation_state_lock_boundary', phase=phase, record=held,
+                          lockAvailable=available, observedState=context['workerState'], observedAtMs=at,
+                          recordSha256=proof.digest('winbridge.activation.barrier.record.v1', held),
+                          handoffRecordSha256=proof.digest('winbridge.activation.state-handoff.v1', held))
+            files['None-activation-state-' + phase + '.json'] = proof.canonical(marker)
+        command = dict(commandId='command', issuedAtMs=31)
+        marker = dict(common, kind='activation_writer_before_send', record=owned, observedAtMs=32,
+                      recordSha256=proof.digest('winbridge.activation.barrier.record.v1', owned),
+                      commandId='command', commandSha256=proof.digest('winbridge.activation.writer-command.v1', command))
+        files['None-activation-writer-before-send.json'] = proof.canonical(marker)
+        value = dict(cases=[dict(activationWriter=dict(record=owned, history=history, writerRecord=dict(command=command),
+                                                    actualWorkerReceipt=dict(committedAtMs=33)))])
+        self.assertEqual(proof.audit_auxiliary(files, value, source), dict(nativeMarkersVerified=3, nativeMarkerNegativeAudits=10))
+
     def test_exact_main_selection_accepts_interleaved_output_but_not_another_test(self):
         name = 'actual_main_activates_one_local_service_without_controller_or_replay'
         command = {'arguments': ['test', '-p', 'winbridge-worker', '--features',

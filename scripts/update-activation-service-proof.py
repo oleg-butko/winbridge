@@ -291,17 +291,25 @@ def verify_auxiliary(files, proof, source):
     p = proof['cases'][0]['activationWriter']
     history, context = p['history'], p['record']['intent']['context']
     deadline = p['record']['intent']['admittedAtMs'] + context['startupTimeoutMs']
+    saved = history[5]['intent']['source']
+    expected_input = dict(schemaVersion=1, kind='winbridge_activation_process_validation',
+                          updateId=saved['updateId'], launchId=saved['launchId'], ownerId=saved['ownerId'],
+                          ownerEpoch=saved['ownerEpoch'], attemptId=history[5]['intent']['attemptId'],
+                          runtimeIdentity=saved['runtimeIdentity'], updaterConfigSha256=saved['updaterConfigSha256'],
+                          stateTraceOnly=True)
     markers = []
     for phase, available in (('before_release', False), ('after_release', True)):
         marker = json.loads(files['None-activation-state-'+phase+'.json'].decode('utf-8-sig'))
-        need(marker['kind'] == 'activation_state_lock_boundary' and marker['phase'] == phase
+        strict(marker)
+        need(type(marker['schemaVersion']) is int and marker['schemaVersion'] == 1
+             and marker['kind'] == 'activation_state_lock_boundary' and marker['phase'] == phase
              and marker['record'] == history[5] and marker['lockAvailable'] is available
              and marker['observedState'] == context['workerState']
              and marker['processId'] == context['supervisor']['processId']
              and marker['recordSha256'] == digest('winbridge.activation.barrier.record.v1', history[5])
              and marker['handoffRecordSha256'] == digest('winbridge.activation.state-handoff.v1', history[5]),
              'Original lock boundary differs')
-        need(marker['input'] == json.loads(marker['inputEncoded'])
+        need(canonical(marker['input']) == canonical(json.loads(marker['inputEncoded'])) == canonical(expected_input)
              and hashlib.sha256(marker['inputEncoded'].encode()).hexdigest() == marker['inputSha256']
              and marker['input']['stateTraceOnly'] is True, 'Changed native barrier input')
         need(marker['build']['sourceCommit'] == source['sourceCommit']
@@ -311,14 +319,49 @@ def verify_auxiliary(files, proof, source):
     need(history[5]['updatedAtMs'] <= markers[0]['observedAtMs'] <= markers[1]['observedAtMs']
          <= history[6]['stateOwned']['observedAtMs'] <= deadline, 'Physical handoff chronology differs')
     marker = json.loads(files['None-activation-writer-before-send.json'].decode('utf-8-sig'))
+    strict(marker)
     command = p['writerRecord']['command']
-    need(marker['kind'] == 'activation_writer_before_send' and marker['record'] == history[6]
+    need(type(marker['schemaVersion']) is int and marker['schemaVersion'] == 1
+         and marker['kind'] == 'activation_writer_before_send' and marker['record'] == history[6]
+         and marker['processId'] == context['supervisor']['processId']
+         and all(marker[key] == markers[0][key] == markers[1][key]
+                 for key in ('build', 'input', 'inputEncoded', 'inputSha256'))
          and marker['recordSha256'] == digest('winbridge.activation.barrier.record.v1', history[6])
          and marker['commandId'] == command['commandId']
          and marker['commandSha256'] == digest('winbridge.activation.writer-command.v1', command)
          and command['issuedAtMs'] <= marker['observedAtMs'] <= p['actualWorkerReceipt']['committedAtMs'],
          'Lost writer ACK is not bound to its original single send')
     return {'nativeMarkersVerified': 3}
+
+
+def audit_auxiliary(files, proof, source):
+    result = verify_auxiliary(files, proof, source)
+    mutations = []
+    for phase in ('before_release', 'after_release'):
+        name = 'None-activation-state-' + phase + '.json'
+        mutations.extend([(name, 'processId', 0), (name, 'schemaVersion', True),
+                          (name, 'input/ownerId', 'foreign-owner')])
+    name = 'None-activation-writer-before-send.json'
+    mutations.extend([(name, 'processId', 0), (name, 'schemaVersion', True),
+                      (name, 'build/sourceCommit', '0' * 40), (name, 'input/ownerEpoch', 0)])
+    for name, path, replacement in mutations:
+        changed = json.loads(files[name].decode('utf-8-sig'))
+        node = changed
+        parts = path.split('/')
+        for key in parts[:-1]:
+            node = node[key]
+        need(canonical(node[parts[-1]]) != canonical(replacement), 'No-op native marker mutation')
+        node[parts[-1]] = replacement
+        if path.startswith('input/'):
+            changed['inputEncoded'] = canonical(changed['input']).decode()
+            changed['inputSha256'] = hashlib.sha256(changed['inputEncoded'].encode()).hexdigest()
+        altered = dict(files, **{name: canonical(changed)})
+        try:
+            verify_auxiliary(altered, proof, source)
+        except (ValueError, KeyError, TypeError):
+            continue
+        raise ValueError('Native barrier observer accepted mutation: ' + path)
+    return dict(result, nativeMarkerNegativeAudits=len(mutations))
 
 
 def verify_worker_migration(proof, reference_sha256, source):

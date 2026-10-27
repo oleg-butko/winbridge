@@ -62,6 +62,14 @@ update-validation Clippy (workspace, затем worker после новых ass
 Полный updater library test:251 passed/0 failed/4 штатно ignored, body33.88s.
 Новый actual gate пока не засчитан.
 
+При review independent reader дополнительно связаны input owner/update/attempt/
+runtime/config с history5; writer marker обязан иметь тот же process/build и
+exact input bytes/SHA, что обе lock boundaries. Ранее некоторые скоординированные
+подмены вспомогательных marker fields могли остаться незамеченными. Reader теперь
+имеет10 отдельных negative mutations и portable regression (Python9/0).
+Тот же audit прошёл на трёх retained actual Main24 markers без Windows replay.
+Это усиление readonly проверки, исходные reports не меняются.
+
 ## Отдельный readonly audit завершённого архива
 
 Task `58727e1e-f29b-4234-9b8e-e7c37f329175` succeeded/0. Проверены actual native

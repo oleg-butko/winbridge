@@ -62,7 +62,7 @@ def main():
     checks.verify_main_selection(main_command, log)
     proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
     result = checks.audit(proof, source, target, report['activationReservation'], profile=args.profile)
-    result.update(checks.verify_auxiliary(files, proof, source))
+    result.update(checks.audit_auxiliary(files, proof, source))
     if args.profile == 'worker19-updater20':
         epoch_commands = [c for c in commands if c['name'] == 'service-history-epoch-check']
         checks.need(len(epoch_commands) == 1, 'Missing policy epoch/history corruption regression')
