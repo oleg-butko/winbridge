@@ -1,7 +1,6 @@
 # Reservation for the future full activation gate. This is test infrastructure,
 # not an installation/recovery API. JSON below is evidence, never process custody.
-# Intentionally no reuse/archive/delete: an unfinished reservation is preserved
-# until native process/Job exit and an explicit archive protocol are implemented.
+# An unfinished reservation is preserved; archival requires the original lease.
 . (Join-Path $PSScriptRoot 'test-worker-runtime.ps1')
 
 function Get-ActivationTestLocalPath([string]$Path) {
@@ -59,7 +58,7 @@ function Open-TestWorkerActivationRuntime {
   Write-NewJson $marker $binding
   $ownerPin=[IO.File]::Open($marker,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
   $ownerSha=(Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash.ToLowerInvariant()
-  return [pscustomobject]@{runtime=$runtime;binding=$binding;marker=$marker;markerSha256=$ownerSha;ownerPin=$ownerPin;phase='pinned'}
+  return [pscustomobject]@{runtime=$runtime;binding=$binding;marker=$marker;markerSha256=$ownerSha;ownerPin=$ownerPin;phase='pinned';archive=$null}
  }catch{
   if($null -ne $ownerPin){$ownerPin.Dispose()}
   if($null -ne $runtime){Close-TestWorkerRuntime $runtime}

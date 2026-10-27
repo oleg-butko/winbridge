@@ -1,6 +1,7 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-2026-10-27. Начать с [fixture layout checkpoint](plans/worker-self-update/fixture-layout-2026-10-27.md),
+2026-10-27. Начать с [runtime archive checkpoint](plans/worker-self-update/runtime-archive-2026-10-27.md),
+[fixture layout checkpoint](plans/worker-self-update/fixture-layout-2026-10-27.md),
 [stable runtime reservation checkpoint](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md),
 [actor25/local-root checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md)
 и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
@@ -51,7 +52,11 @@ Windows attrs-only lease inspection/hard-link check добавлен. Source wor
 run20261027-063128-2873e42d/taska9650312-9a20-40a5-b34c-76946f71b090 succeeded/0,
 3 files twice/12 negative audits. Это не full Main25; точные pins в checkpoint.
 Debian старые unused test ELF caches очищены: available22.74GB, controller сохранён.
-Следующий шаг: archive/original slot lease + network preflight → новый Main25
+Archive helper с original slot lease реализован: final29 native policy checks
+(6+11+12), run20261027-074433-9d3bc04c/task90d968a3-f026-4357-b397-9a2d3b45abcc
+succeeded/0. Native retirement hook source/MSVC Clippy готов, но actual Main с ним
+ещё не выполнялся. Cold archive recovery/новое process custody не добавлены.
+Следующий шаг: full gate wiring + network preflight → новый Main25
 и actual19→20/refusal. Старый normal Main тоже открывает configured controller URL;
 поэтому нельзя запускать этот gate из новых hash paths и нельзя подменить URL=None. Нельзя заново открывать Store, получать второй lock,
 прибавлять epoch или обновлять original startup deadline. Maintenance/user pause

@@ -1,5 +1,8 @@
 # Постепенная реализация и расширение
 
+2026-10-27: [runtime archive](plans/worker-self-update/runtime-archive-2026-10-27.md)
+имеет29 native policy checks; retirement hook cross-checked. Full Main25/wiring ещё впереди.
+
 2026-10-27: [FixtureLayout/private input2](plans/worker-self-update/fixture-layout-2026-10-27.md)
 подключён в source; workspace843/0, Linux/MSVC Clippy. Native layout5+2/3 files twice/12 negative audits подтверждён; archive/full Main25 впереди.
 

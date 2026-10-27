@@ -1386,12 +1386,13 @@ fn case(
         working_directory: root.to_string_lossy().into(),
         timeout_ms: 900000,
     };
+    let main_job = format!(
+        "WinBridge-shutdown-main-validation-{}",
+        uuid::Uuid::new_v4()
+    );
     let prepared = winbridge_platform::ManagedChild::prepare_atomic_executable(
         &command,
-        Some(&format!(
-            "WinBridge-shutdown-main-validation-{}",
-            uuid::Uuid::new_v4()
-        )),
+        Some(&main_job),
         None,
     );
     for (k, v) in previous {
@@ -1657,6 +1658,11 @@ fn case(
     assert!(child.tree_is_empty().unwrap());
     fs::write(root.join("stdout.log"), capture.0.join().unwrap()).unwrap();
     fs::write(root.join("stderr.log"), capture.1.join().unwrap()).unwrap();
+    if input.runtime.is_some() {
+        // File archival only, including failed cases after actual Job cleanup.
+        // This never supplies a new process/Store activation permit.
+        retire_runtime(input, &root, &main_job, &child, result.is_ok());
+    }
     let mut proof = match result {
         Ok(proof) => proof,
         Err(panic) => std::panic::resume_unwind(panic),
@@ -1919,6 +1925,57 @@ fn case(
     } else {
         proof
     }
+}
+fn retire_runtime(
+    input: &GateInput,
+    root: &FixtureLayout,
+    main_job: &str,
+    child: &winbridge_platform::ManagedChild,
+    execution_body_completed: bool,
+) {
+    use winbridge_platform::process_identity::{observe_process, ProcessObservation};
+    assert!(child.tree_is_empty().unwrap());
+    let declaration = input.runtime.as_ref().unwrap();
+    let bytes = fs::read(root.runtime().join("winbridge-activation-runtime.json")).unwrap();
+    assert_eq!(winbridge_update::sha256(&bytes), declaration.marker_sha256);
+    let binding: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(
+        Path::new(binding["runDirectory"].as_str().unwrap())
+            .canonicalize()
+            .unwrap(),
+        input.root.canonicalize().unwrap()
+    );
+    let mut jobs = vec![main_job.to_owned()];
+    if root.join("supervisor.json").is_file() {
+        let supervisor: SupervisorRecord =
+            serde_json::from_slice(&fs::read(root.join("supervisor.json")).unwrap()).unwrap();
+        let (activation, _) = observe_after_owned_exit(|| {
+            UpdateJournal::inspect_activation(
+                &root.runtime().join("update-state"),
+                &supervisor.spec.update_id,
+            )
+        })
+        .unwrap();
+        if let Some(record) = activation {
+            let identity = activation_process::job(&record);
+            assert!(
+                matches!(observe_process(&identity), ProcessObservation::Empty(_)),
+                "Actual activation Job exit must be known before retiring test files"
+            );
+            jobs.push(identity.job_name);
+        }
+    }
+    write(
+        &input.root.join("runtime-retirement.json"),
+        &json!({
+            "schemaVersion":1,"kind":"winbridge_activation_runtime_retirement",
+            "scenario":"native-main","reservationId":binding["reservationId"],
+            "markerSha256":declaration.marker_sha256,"sourceCommit":binding["sourceCommit"],
+            "runtimeDirectory":binding["runtimeDirectory"],"runDirectory":binding["runDirectory"],
+            "jobNames":jobs,"nativeExitConfirmed":true,"executionBodyCompleted":execution_body_completed,
+            "archivalOnly":true,"newActivationPermit":false
+        }),
+    );
 }
 #[test]
 #[ignore = "Explicit clean native Main shutdown gate; builds a real candidate and retains case directories"]
