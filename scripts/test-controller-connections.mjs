@@ -100,7 +100,9 @@ import {OperationAttributionPanel} from "/@fs/${root}/ui/src/features/tasks/Oper
 import {OperationCancellationPanel} from "/@fs/${root}/ui/src/features/tasks/OperationCancellationPanel.tsx";
 function Harness(){const [props,setProps]=useState({info:${JSON.stringify(info)},connected:true,cancellationKey:'initial'});window.updateConnectionProps=(change)=>setProps((old)=>({...old,...change}));return <MantineProvider><ControllerConnectionsPanel key={props.info.generation} {...props}/>${attributionMode ? `<OperationAttributionPanel key={'author:'+props.info.generation} {...props} kind="task" operationId=${JSON.stringify(attributionTask)}/>` : ""}${cancellationMode ? `<OperationCancellationPanel key={'cancel:'+props.info.generation} {...props} kind="task" operationId=${JSON.stringify(attributionTask)} updateKey={props.cancellationKey}/>` : ""}</MantineProvider>}
 createRoot(document.getElementById("root")).render(<Harness/>);`);
-  vite = await viteServer({ root, logLevel: "error", server: { host: "127.0.0.1", port: 0, fs: { allow: [root] } } });
+  // This static harness changes state through IPC, never through source edits.
+  // Watching the workspace would include retained Rust caches and exhaust inotify.
+  vite = await viteServer({ root, logLevel: "error", server: { host: "127.0.0.1", port: 0, watch: null, fs: { allow: [root] } } });
   await vite.listen();
   browser = await chromium.launch({ headless: true, chromiumSandbox: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH });
   const page = await browser.newPage(); const errors = [];

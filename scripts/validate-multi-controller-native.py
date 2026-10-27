@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import ipaddress
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import re
 import signal
@@ -42,6 +43,8 @@ def need(value, message):
 def save(path, value):
     with path.open('x') as stream:
         json.dump(value, stream, ensure_ascii=False, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
 
 
 def call(endpoint, request):

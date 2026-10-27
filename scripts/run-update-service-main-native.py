@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import ipaddress
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import re
 import signal
@@ -31,6 +32,8 @@ def load(name, file):
 def write_new(path, value):
     with path.open('x') as file:
         json.dump(value, file, indent=2, ensure_ascii=False)
+        file.flush()
+        os.fsync(file.fileno())
 
 
 def submit_fenced(native, endpoint, request):
