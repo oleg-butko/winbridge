@@ -807,3 +807,9 @@ Supervisor v12 / worker control v5 подготавливает logical drain ob
 queue pause/revision и coherent DB snapshot. Local551 tests/doctests, Clippy и UI
 checks passed; native v12/v5 ещё требуется. Нулевые счётчики не подтверждают
 physical quiescence. Durable drain driver и exact shutdown остаются впереди.
+
+
+2026-10-27: в feature готовится worker0.2.0 с topology1–4 и schema19.
+[Native multi-controller gate](plans/multi-controller-native-2026-10-27.md) подготовлен;
+Windows proof/release пока не объявлять. Main25 profiles используют отдельные pins,
+installed0.1.1 остаётся прежним. Новая версия не включает public updater install.

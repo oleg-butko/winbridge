@@ -4397,7 +4397,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "winbridge-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -4406,7 +4406,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-desktop"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "serde_json",
@@ -4424,7 +4424,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-platform"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fs2",
  "libc",
@@ -4437,7 +4437,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-protocol"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "schemars 0.8.22",
  "serde",
@@ -4447,7 +4447,7 @@ dependencies = [
 
 [[package]]
 name = "winbridge-transport"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "futures-util",
  "libc",

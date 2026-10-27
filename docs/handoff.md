@@ -17,6 +17,15 @@ Input2/stable slot). Исправление и точные run/retirement pins 
 Пользователь разрешил runtime-test-204 EXE в firewall; сохранить постоянный путь,
 не считать Cargo hashed EXE автоматически разрешёнными. Full Main25 ещё не пройден.
 
+## Подготовка worker0.2.0
+
+Версии workspace/desktop/npm согласованы на0.2.0. Нативный сценарий
+[четырёх controller](plans/multi-controller-native-2026-10-27.md) подготовлен:
+normal Windows worker, повтор exact-source cold17→19, отдельные controller процессы,
+shared queue/dedup/creator/cancel/disconnect/restart и descendant absence.
+Это пока source и предстоящий gate, не release/install proof. После terminal Main25
+выполнить его в том же разрешённом runtime-test-204 slot. Installed0.1.1 не менять.
+
 ## Multi-controller: текущая ветка .204
 
 **Новый pull2026-10-27:** main fast-forward c4b7aea→ba9557b,6 commits.
