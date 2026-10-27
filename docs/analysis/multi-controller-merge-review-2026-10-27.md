@@ -63,7 +63,7 @@ maintenance/recovery errors=null. Production controller5103 оставлен р�
 
 ## После слияния
 
-Продолжить полный Main25 на source worker19/updater20. Использовать постоянный
+План review: продолжить полный Main25 на source worker19/updater20. Использовать постоянный
 `K:\_proj-26\winbridge\runtime-test-204\winbridge-worker.exe`, отдельный controller
 на.203:1144 и новые state/instance/report. Подтвердить actual firewall connection;
 разрешение другого IP/порта не выводится из старого gate. Рабочий0.1.1 остаётся
@@ -72,3 +72,26 @@ launcher, desktop не нужен. Старый runtime-test/conservation пла
 
 Multi-controller native proof не заменяет Main25, actual retained updater19→20,
 controller/lifetime/commit/release и U2–U4. Public install остаётся выключенным.
+
+### Выполнено после merge на .203
+
+[Full Main25](../plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)
+подтверждён:140 native tests/52 ready files twice,3 original native barriers,
+24 core+10 marker negatives. Исправлены ошибки validation layout/export при
+external stable slot и libtest selection с interleaved stdout; native case сам
+требует marker evidence. Independent reader дополнительно связывает все marker
+inputs/owner/process/build. Первый неполный run сохранён отдельно и не переименован
+в successful full gate. Архив1000 files/152 directories проверен readonly, Jobs
+пусты, slot освобождён до исходного base lease без удаления Windows directories.
+
+[Actual retained updater19→20](../plans/worker-self-update/retained19-to20-2026-10-27.md)
+также пройден на consistent copy: старые rows/root/writer/keys, epoch fencing,
+backup и old19 init/status refusal,4 files twice/21 negative audits. Источники
+reference восстановлены из retained exact Windows ZIP после SHA match, старые
+файлы не заменялись. Новый readonly CLI verifier прошёл без Windows RPC.
+
+Installed0.1.1 и production controller5103 сохранены/healthy/active0. Desktop и UI
+окон не было; рабочий worker оставить работать. Следующий сценарий — новая
+controller session того же resident child/Store/authority, затем Job lifetime,
+commit/scoped release, U2–U4. Multi-controller production runtime нового release
+ещё не устанавливался. Подробное продолжение — в handoff.

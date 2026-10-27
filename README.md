@@ -13,7 +13,8 @@ Source journal schema19 сохраняет автора первоначальн
 в workflow children и показывает в task detail. Legacy history остаётся unknown;
 Инициатор первой принятой отмены хранится отдельно, с передачей дочерним операциям.
 Linux migrations17/18→19, retry/restart и UI проверены; Windows cold17→19 и
-четыре controller также проверены. Source19 Main25 остаётся отдельным gate.
+четыре controller также проверены. [Main25 на source19](docs/plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)
+подтверждён отдельно:140 native tests/52 files twice,24+10 negative audits.
 Для агентов добавлены [три readonly CLI/MCP запроса](docs/guides/mcp.md#readonly-диагностика-нескольких-controller):
 все соединения, автор операции и инициатор отмены. Сценарии с2,3 и4 controller
 проверены на Linux; один общий runtime, очередь и история.
@@ -89,16 +90,16 @@ Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в 
 Сетевые тесты используют постоянный каталог `runtime-test` и ждут разрешения
 файервола до 15 минут; рабочая версия устанавливается отдельно в `runtime`.
 
-Актуальная точка updater: [Actor25/local service checkpoint](docs/plans/worker-self-update/local-service-actor-2026-10-26.md)
+Актуальная точка updater: [Main25/local service gate](docs/plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source updater20/worker17/supervisor25/view17/private2+writer3+service4.
+Source updater20/worker19/supervisor25/view17/private2+writer3+service4.
 Local Worker использует тот же Store/lock/generation; родитель независимо проверяет
 normal IPC, затем атомарно сохраняет LocalVerified/root AwaitingController.
 Controller session/lifetime transfer/commit/release пока не реализованы.
 **Main24 на updater19 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
-Service4 component gate16+14 также пройден, но не доказывает новый Actor25/full Main25.
-Сценарий [полного Main25](docs/plans/worker-self-update/main25-2026-10-27.md) подключён в source;
-фактическое выполнение и independent proof на Windows ещё впереди.
+**Main25 на updater20/worker19 пройден:140 Windows tests,52 files twice,3 original
+barriers и34 negative audits.** Отдельная [actual retained19→20 copy migration](docs/plans/worker-self-update/retained19-to20-2026-10-27.md)
+также проверена: сохранность истории/backup/old19 refusal,21 negative audit.
 Public install выключен; самообновление целиком ещё не готово.
 Installed worker0.1.1/source59249e6 проверен; новые изменения не установлены.
 Текущий controller слушает192.168.44.203:1143.

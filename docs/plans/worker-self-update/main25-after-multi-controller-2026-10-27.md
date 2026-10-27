@@ -1,5 +1,9 @@
 # Main25 после multi-controller merge — 2026-10-27
 
+**Итог: повтор полностью подтверждён,140 native tests/52 files twice/34 negative
+audits.** Первый неполный run ниже сохранён как история; окончательный результат
+и pins — в конце документа. Actual retained19→20 проверяется отдельно.
+
 ## Контекст и границы
 
 `feat/multi-controller` 9877b9e слит в main (merge 6a0abb6), review fixes
@@ -104,3 +108,58 @@ Debian free13,922,856,960 bytes перед повтором (оба больше
 Ни source0.2.0, ни native success первого прогона не означают release/install
 или готовое самообновление. Рабочий worker0.1.1 оставлять запущенным, desktop
 можно держать закрытым.
+
+## Повтор выполнен: полный Main25 подтверждён
+
+Run `20261027-195930-24f64ab8`, task
+`85b38bd5-3a77-4e7f-83ac-b044c25e806f`: succeeded/0. Native140 tests,
+37 test groups/41 commands, все exit0. Original normal Main/candidate pipeline,
+same-child state/writer/local service, actual normal IPC/history, pause/refusal,
+cold non-replay и owned process/Job retirement проверены. Это local service gate,
+не whole-update commit/release и не установленное самообновление.
+
+| Pin | Значение |
+| --- | --- |
+| Producer | `e03bb2a5c859c6d0236f776183350c55d92fe976` |
+| Producer ZIP | `sources/winbridge-20261027T195915Z-e03bb2a-45f82268.zip` |
+| ZIP SHA | `ed20cb7a7763316f14527f1993c94098b931d975d54d8657f4c5d5b6cdaf338f` |
+| Manifest SHA | `bc5372406c759b8efc99163805afbe5b23d017ce9a056653763b06491a41b9b4` |
+| Target | `48c834c00c658f11feec066c9ae4650a4e6cff7a`, ZIP/SHA выше |
+| Report SHA | `1e7720e6b6cac1e8b86ab6255b87b2a2910de65015f1ebe95f598b785d7bfa02` |
+| Proof SHA | `006458167065a5ed7de616b776431f01132ff73740349ed23be027818bf6e6cf` |
+| Observations SHA | `190b9114e750b768216cec5f1ae2a3c11645829f6621b9852f9e331ee751f9c7` |
+
+Full independent reader1e267f8 принял24 core+10 original marker negative audits,
+все3 native barriers и отдельный cold worker17→19 proof.52 ready files прочитаны
+дважды. Наличие и source/owner/process/input bytes каждого marker проверены;
+нет восстановления пропущенных событий задним числом.1237 controller observations
+связаны с actual preflight session `9c6a0ac8-52db-41b5-968f-084b60d5dccc`.
+Main body660.70s; old exit339.942s/final backup351.350s/replacement497.920s от
+начала fixture; Ready61.606s/StateOwned79.429s от activation. Window240s не продлевался.
+
+Readonly повтор audit, **без Windows исполнения**:
+
+```bash
+python3 scripts/verify-update-service-main-native.py --profile worker19-updater20 \
+  --run-info .winbridge/update-preparation/main25-204-20261027-195930-24f64ab8/run-info.json \
+  --source-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261027T195915Z-e03bb2a-45f82268.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/source-archives/winbridge-20261027T183112Z-48c834c-d7b3d320.zip
+```
+
+Дополнительный postflight task `3f5f3365-16d3-47b6-8a6a-ce5c0b5e6e41` succeeded/0:
+archived10 entries/1000 files/152 directories, actual native identities/bytes,
+issued/done/complete receipts и original marker/retirement pins сверены. Plan SHA
+`48047b3fc3238b61e3482b018a696b07b7b8fd2425a976e8610587db70f031c0`, archive
+`workspaces/snapshot-fixture/workflow-validation/tmp-main25-204-20261027-195930-24f64ab8/shutdown-main-cases/runtime-archive-7c511752-1903-4bcb-8ff8-6bdcb793b554`.
+Все named Jobs пусты, test slot содержит только исходный base lease. Fresh permits
+не выдавались. Test controllerPID125411 остановлен,1144 свободен. Working controller
+PID5103 и installed worker0.1.1/gen9b924962/incarnation5a8eb173 неизменны/active0.
+Windows report free23,724,810,240→23,387,516,928 bytes; postflight23,387,734,016.
+
+Тот же postflight проверил синтаксис нового migration PS (`scriptExecuted=false`)
+и восстановил два exact old ZIP из Windows retained copies в
+`WinBridge/source-archives/recovered-5ad74c42ecb2` (create-new, source SHA unchanged).
+Следующий [actual retained19→20](retained19-to20-2026-10-27.md) тоже завершён;
+далее следующий
+controller/lifetime/commit/release сценарий. Production runtime и public install
+по-прежнему не обновлялись.

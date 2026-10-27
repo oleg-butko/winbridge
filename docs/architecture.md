@@ -5,7 +5,9 @@
 проекции по session ticket. Source worker journal19 хранит creator и первый
 cancellation actor; cold17→19 проверен, active updater migration не разрешена.
 Updater20/actor25 сохраняют consuming custody и явные Main25 profiles17/20 и19/20.
-Native4-controller gate пройден; source19 Main25 ещё нужен. Установленный worker
+Native4-controller gate и [source19 Main25](plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)
+пройдены; [actual retained19→20 copy migration](plans/worker-self-update/retained19-to20-2026-10-27.md)
+сохраняет history/keys/backup и old19 refusal. Это не live migration. Установленный worker
 0.1.1/schema17 не заменён, public install выключен. Следующие датированные записи
 относятся к своим историческим версиям.
 
@@ -257,7 +259,7 @@ Windows worker устанавливает постоянное соединен�
 
 Worker использует настроенный адрес controller. Controller проверяет instance/node/version/capabilities и показывает подключённый worker в UI. По решению пользователя 2026-10-05 входящие соединения не блокируются по IP; адрес источника записывается в журнал. Listener остаётся на выбранном интерфейсе. Настраиваемый список разрешённых IP можно добавить позднее. Изменения firewall/mounts не выполняются скрытно.
 
-В feature-ветке `.204` `feat/multi-controller` добавлен альтернативный
+В main после слияния `.204` `feat/multi-controller` добавлен альтернативный
 `worker.controllerTopology`: 1–4 исходящих соединения с явным primary, независимыми
 attempt tickets/reconnect и readiness caches. Один Worker/SQLite/scheduler обслуживает
 всех доверенных caller; nodeId controller может совпадать, связь различается по

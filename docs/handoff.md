@@ -1,18 +1,49 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
-**Main25 после merge,2026-10-27:** первый native run succeeded/0, но full gate
-не завершён: validation hook пропустил три trace markers при external runtime.
-[Причина, fix, точные pins и продолжение](plans/worker-self-update/main25-after-multi-controller-2026-10-27.md).
-Core audit24 negatives/49 files twice прошёл; отдельный readonly archive audit
-996 files/152 directories подтверждён. Slot204 свободен под исходным base lease,
-рабочий worker0.1.1 неизменён/active0. После trace/export/selection fixes нужен
-свежий actual run; старый результат не объявлять full Main25 success.
+**Main25 завершён,2026-10-27:** run20261027-195930-24f64ab8,
+task85b38bd5-3a77-4e7f-83ac-b044c25e806f succeeded/0, source e03bb2a,
+explicit worker19/updater20.140 native tests/41 commands,52 files twice,
+24 core+10 native marker negatives; все3 original barriers проверены.
+Отдельный cold17→19 passed; active updater migration этим не разрешается.
+[Причина первого неполного run, fixes и окончательные pins](plans/worker-self-update/main25-after-multi-controller-2026-10-27.md).
+Readonly archive audit1000 files/152 directories подтвердил move receipts/пустые
+Jobs/base lease. Test controller125411 завершён, порт1144 свободен. Installed
+worker0.1.1 неизменён/active0/errors=null, production controller5103 сохранён.
 
-Повтор Main25 e03bb2a: run20261027-195930-24f64ab8,
-task85b38bd5-3a77-4e7f-83ac-b044c25e806f принят; до terminal не resubmit.
-Параллельно подготовлен [отдельный actual19→20 copy-only gate](plans/worker-self-update/retained19-to20-2026-10-27.md),
-native proof пока нет. Его запускать после Main25; перед ним восстановить старые
-ZIP только из retained exact bytes, проверить old reference полностью.
+Следом завершён [actual19→20 copy-only gate](plans/worker-self-update/retained19-to20-2026-10-27.md):
+run20261027-202254-71edf097/taskb7242d1a… succeeded/0,4 files twice/21 negatives,
+old Main24 reference60 negatives. Backup/old19 refusal/root/writer/keys/epochs
+сохранены; readonly CLI повтор прошёл без Windows RPC.
+Оба old ZIP восстановлены из retained exact Windows bytes в
+`WinBridge/source-archives/recovered-5ad74c42ecb2`; original paths не менялись.
+Новый PS прошёл native parse-only. Observer/log:
+`.winbridge/review-multi-controller/service-migration-native.log`; terminal задачи
+не повторять. Следующий шаг: новая controller session того же resident child/
+Store/authority, roots остаются закрыты до commit/release; затем Job lifetime,
+remaining U2, U3/U4. Working worker0.1.1 оставить работать, desktop не нужен.
+
+Практическое продолжение после этого checkpoint:
+
+1. Не переигрывать завершённые Main25/migration tasks. Их readonly verify CLI
+   и exact paths/hashes находятся в двух документах выше.
+2. Начать с contracts/FSM/controller-confirmation поверх resident LocalVerified
+   сервиса; учесть все1–4 configured links. Одна connected связь не означает,
+   что остальные доступны. Подтверждаемый endpoint/новая session должны иметь
+   явную привязку к update/config, а не быть произвольным Info.connected=true.
+3. Сохранить тот же child, Store/connection, incarnation/generation/authority и
+   custody; не делать normal Store::open/begin_authority/новый lock. Roots,
+   dispatch и admin остаются закрыты до дальнейшего commit/release.
+4. Новый actual run снова создаёт исходных владельцев и original guards; cold
+   archived Main25 не является источником fresh permits. Stable slot204 и1144
+   сохраняются, pre-admission actual handshake с900s firewall budget остаётся.
+5. Затем durable Job lifetime/commit/scoped release и U2 faults/management,
+   U3 desktop/U4 реальный installed self-update. Public install не включать по
+   одному локальному IPC/network receipt. Рабочий0.1.1 менять только отдельным
+   согласованным действием, не из принадлежащей ему задачи.
+
+Closing checks: fmt/diff/scaffold прошли; Debian free13,914,791,936 bytes,
+Windows after migration23,123,705,856. Чистить caches не потребовалось; Windows
+validation directories/runtime/config/journal и старый slot.203 не удалялись.
 
 **Актуально после review/merge на .203,2026-10-27:** multi-controller слит в main.
 [Ревью, исправления и проверки](analysis/multi-controller-merge-review-2026-10-27.md):
@@ -24,12 +55,13 @@ target caches. Production Rust/UI48c834c→9877b9e не менялся.
 Рабочий0.1.1 уже подключён к.203: generation9b924962/incarnation5a8eb173, active0,
 errors=null, controller5103 сохранён. Не обновлять установленный runtime из его задачи.
 
-Следующий шаг — повтор actual Main25 **worker19-updater20** с clean archives и explicit
-profile. Для него использовать постоянный `runtime-test-204`, controller.203:1144,
+Main25 **worker19-updater20** использовал clean archives и explicit
+profile, постоянный `runtime-test-204`, controller.203:1144,
 новые state/instance/report. Legacy runtime-test.203 и его conservation plan
 остаются нетронутыми; прежний pending запрос переноса не выполнялся и для отдельного
 слота204 не требуется. Оба слота не смешивать. Source0.2.0 пока не release/install;
-Main25, active updater19→20, controller/lifetime/commit/release и U2–U4 ещё впереди.
+Retained updater19→20 copy gate завершён; controller/lifetime/commit/release и
+U2–U4 ещё впереди. Live installed migration этим не разрешается.
 Описание ниже — checkpoints другой VM до слияния, сохраняется как история.
 
 **Текущая задача2026-10-27:** пользователь переключил installed worker0.1.1 на

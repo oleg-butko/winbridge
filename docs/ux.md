@@ -63,7 +63,7 @@ Output: независимые stdout/stderr, поиск, severity filters, paus
 
 Last known status + connection freshness — два независимых поля. Уведомление запроса отмены не превращает running в cancelled раньше подтверждения worker. Retry создаёт новую задачу со ссылкой на прежнюю; повтор request ID возвращает прежнюю запись.
 
-Feature-ветка multi-controller: «Соединения с Debian» показывает все настроенные
+Multi-controller в main (source0.2.0): «Соединения с Debian» показывает все настроенные
 адреса и primary, который используется локальной readiness сводкой.
 Список поддерживает все1–4 controller; primary может быть любым элементом. У каждой связи
 свои состояние, последнее подтверждение, session, attempts и последняя ошибка.
