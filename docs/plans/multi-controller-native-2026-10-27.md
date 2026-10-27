@@ -93,3 +93,36 @@ archive6f01036/96d40329…: taskc7e11b20-2de8-404d-9ef1-c36f3cb2f4e8 succeeded/0
 observation budget900s, сохранил last-bootstrap-observation и оставил только
 owned controller processes; это не terminal Windows task и не cleanup proof.
 Следующая Main25 candidate pin3435f0c остаётся отдельной от нового producer.
+
+## Повторная проверка блокера
+
+Повторный OS probe8e63be38-dfab-4d79-bcc9-3d4fdabe837f succeeded/0 подтвердил
+тот же PID3524/exit4294967295/WAIT_TIMEOUT258; оба parent процесса signaled1.
+CancelRequested остаётсяtrue, original task running/active1. Никакого нового
+network gate, повторного cancel или изменения системных настроек не выполнялось.
+Readonly Application/System event queryc6e2c957-3a64-458b-9af9-f6ce5c382d9e
+succeeded/0: после начала run событий в доступной выборке нет; источник зависания
+это не установило. Raw receipts сохранены в native run рядом с owner metadata.
+Main по origin/main по-прежнемуba9557b; новый fetch не обнаружил изменений.
+
+## Владение controller после завершения observer
+
+Свежая проверка owner PIDs159563/159573/159585/159595 обнаружила все четыре уже
+завершёнными; ss подтвердил свободные1145–1148 и работающий production1143/PID5312.
+Запланированный SIGINT не отправлялся: предварительная проверка остановила teardown
+при отсутствующем первом PID. Предыдущее утверждение о живых четырёх peers снято;
+owner files сами по себе не доказывают liveness.
+
+Выявлен дефект обоих native runners: Popen наследовал process group наблюдателя,
+поэтому инфраструктура exec завершала peers вместе с CLI даже при unknown outcome.
+Теперь controller запускается с stdin=DEVNULL/start_new_session=True. Owner metadata
+остаётся обязательной; её ошибка до submit очищается через finally, а ошибка записи
+owner нового/restarted peer останавливает именно только что созданный процесс.
+
+Двухшаговый реальный эксперимент tools exec: обычный child162783 исчез после exit
+parent, detached162784 сохранился; он затем явно остановлен. Отдельный actual
+controller0.2.0/source3435f0c/PID162810 пережил завершение родителя, ответил через
+свой Unix IPC на controller_status и затем был штатно остановлен SIGINT.
+Receipt /tmp/wb-retain-1uyp2c0f/result.json; не было Windows worker/новых сетевых
+прогонов. Это проверка Unix lifecycle harness, не Windows gate. Windows PID3524
+и original cancellation остаются отдельным текущим блокером.

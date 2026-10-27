@@ -146,9 +146,17 @@ def main():
         suffix = '-restart' if restart else ''
         log = (local / f'controller-{index}{suffix}.log').open('x')
         binary = args.legacy_controller_binary if legacy is not None and index == 0 else args.controller_binary
-        peer['process'] = subprocess.Popen([str(binary.resolve()), '--config', str(peer['config']), 'serve'], stdout=log, stderr=subprocess.STDOUT)
+        # Retain this exact peer if the observer exits before Windows is terminal.
+        peer['process'] = subprocess.Popen([str(binary.resolve()), '--config', str(peer['config']), 'serve'],
+                                           stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         peer['log'] = log
-        save(local / f'controller-{index}{suffix}-owner.json', {'pid': peer['process'].pid, 'config': str(peer['config']), 'endpoint': str(peer['endpoint']), 'url': peer['url']})
+        try:
+            save(local / f'controller-{index}{suffix}-owner.json', {'pid': peer['process'].pid, 'config': str(peer['config']), 'endpoint': str(peer['endpoint']), 'url': peer['url']})
+        except BaseException:
+            # This newly spawned peer has not been returned to the caller. Never
+            # leave a detached process without its durable ownership metadata.
+            stop_peer(index)
+            raise
         wait_for(lambda: (peer['process'].poll(), peer['endpoint'].exists()), lambda x: x == (None, True), 10)
         query(index, {'method': 'controller_status'})
 

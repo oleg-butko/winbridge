@@ -27,10 +27,22 @@ fenced cancel принят/cancelRequested=true. Existing0.1.1 healthy/active1;
 ресурс не освобождать по одному отсутствию root PID. Пары/службы/firewall не менять.
 Обнаружен Outpost Firewall Pro, чтение NetFirewall rules запрещено; причина ещё
 не доказана, вопрос пользователю pending. Сначала проверить тот же task/PID/Job.
-Четыре owned test controller сохраняются; owner files и точные paths в native run.
+Свежая проверка обнаружила все четыре test controller завершёнными,1145–1148 свободны.
+Оба runner исправлены: stdin=DEVNULL/start_new_session=True сохраняют peers при exit
+observer; actual Linux controller пережил parent exit, ответил IPC, затем остановлен.
+Owner files и точные paths сохранены; старые PID не считать живыми по metadata.
 Новый Main25 исправляет только expected resource_policy.epoch metadata (описание
 в [плане](plans/main25-schema-profiles-2026-10-27.md)); positive proof ещё нужен.
 До освобождения Windows не сообщать, что можно переключить worker обратно на.203.
+
+## Локальная проверка history comparator
+
+Пока Windows pending termination, общий SQLite helper для Main25 проверен отдельно
+на Debian:1/0, task1/output1, body0.04s, corruption/epoch/column rejection.
+Windows и Linux используют один implementation в tests/support/journal_history.rs;
+оба integration targets проходят MSVC Clippy, Linux targeted Clippy/Python7 также
+прошли. Дополнительно migration-proof reader отвергает unknown schemaVersion.
+Это не снимает Windows blocker и не заменяет pending Main25/native network gates.
 
 ## Подготовка worker0.2.0
 

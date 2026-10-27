@@ -101,12 +101,15 @@ def main():
               'stateDirectory': str(state), 'controller': {'listenAddress': host + ':1144', 'workerNodeId': 'shutdown-main-test'}, 'projects': []})
     test_endpoint = state / ('controller-' + instance + '.sock')
     log = (local / 'controller.log').open('x')
-    controller = subprocess.Popen([str(args.controller_binary.resolve()), '--config', str(test_config), 'serve'], stdout=log, stderr=subprocess.STDOUT)
-    write_new(local / 'controller-owner.json', {'pid': controller.pid, 'config': str(test_config), 'endpoint': str(test_endpoint), 'instanceId': instance, 'url': url})
+    # Unknown bootstrap acceptance must not kill its fixture when the observer's
+    # command group exits. Ownership remains explicit in controller-owner.json.
+    controller = subprocess.Popen([str(args.controller_binary.resolve()), '--config', str(test_config), 'serve'],
+                                  stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     terminal = False
     submission_sent = False
     task = None
     try:
+        write_new(local / 'controller-owner.json', {'pid': controller.pid, 'config': str(test_config), 'endpoint': str(test_endpoint), 'instanceId': instance, 'url': url})
         until = time.monotonic() + 10
         while not test_endpoint.exists():
             checks.need(controller.poll() is None and time.monotonic() < until, 'Fixture controller startup failed; inspect its log')
