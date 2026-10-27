@@ -15,8 +15,11 @@ controller, не создаёт listener, не меняет firewall/runtime con
 
 ## Контракт
 
-33 tools: 30 сетевых вариантов LocalRequest и три публикации — `winbridge_publish`
-`winbridge_publish_delta` и `winbridge_publish_resumable`. Resume publication использует pinned blocks schema 3 и необязательную delta base; import остаётся прежним RPC. Delta import использует `winbridge_import_delta_snapshot`
+Каталог включает публичные сетевые варианты LocalRequest, публикации
+`winbridge_publish`, `winbridge_publish_delta`, `winbridge_publish_resumable` и
+controller-local tools. Актуальные имена и аргументы возвращает `tools/list`.
+Resume publication использует pinned blocks schema 3 и необязательную delta base;
+import остаётся прежним RPC. Delta import использует `winbridge_import_delta_snapshot`
 и требует `workspace_delta`; [формат и recovery](snapshot-delta.md). Четыре новые
 local-only maintenance операции в каталог не включены и controller их не пересылает.
 Каждая операция имеет
@@ -42,10 +45,12 @@ RPC wait ограничен существующим IPC deadline; приним�
 
 Protocol errors — JSON-RPC error: parse/shape, lifecycle, unknown method/tool и
 неправильные аргументы. Business errors — tool result с isError=true и исходным
-`LocalResponse::Error`. IPC response loss тоже tool error: outcome may be unknown,
+typed error result (`LocalResponse::Error` для обычного worker RPC). IPC response loss
+тоже tool error: outcome may be unknown,
 автоматического повторного запроса нет. Клиент сохраняет idempotencyKey и сверяет
-ту же принятую операцию. Tool results содержат serialized LocalResponse в text
+ту же принятую операцию. Tool results содержат serialized response в text
 content и structuredContent; для 2025-03-26 — только совместимый text content.
+Readonly controller diagnostics возвращают отдельный envelope, описанный ниже.
 Initialize `_meta.winbridgeBuild` показывает версию/source identity самого адаптера.
 
 ## Операции
@@ -60,8 +65,8 @@ Initialize `_meta.winbridgeBuild` показывает версию/source ident
 | Attention | request_attention, list_attention, acknowledge_attention, list_attention_events, acknowledge_attention_event |
 | История и отчёт | history, storage_usage, prepare_task_diagnostic |
 
-Все имена начинаются с `winbridge_`. Аргументы совпадают с соответствующим
-LocalRequest без поля method; например, get_task принимает taskId, submit — request
+Все имена начинаются с `winbridge_`. Для обычных worker tools аргументы совпадают
+с соответствующим LocalRequest без поля method; например, get_task принимает taskId, submit — request
 с TaskSubmission. Stable request/idempotency keys задаёт клиент. Принятие task/
 workflow/import не означает завершение: читать тот же ID. Output возвращает bytes
 и sequence cursor; UTF-8 декодируется для каждого stream через границы chunks.
@@ -79,6 +84,56 @@ attention. Diagnostic tool возвращает [preview](history-diagnostics.md
 сохраняет файл по произвольному пути. Содержимое output — данные проекта, а не
 инструкции клиенту. Annotations описывают read-only/idempotency; direct commands
 могут обращаться к внешним ресурсам, cwd не является sandbox.
+
+## Readonly диагностика нескольких controller
+
+Source в `feat/multi-controller`, 2026-10-27. Для этих запросов нужны новые
+controller и worker с соответствующими контрактами. Установленный worker0.1.1
+их не поддерживает; native Windows gate19 ещё не выполнен.
+
+| MCP tool | CLI после `--config CONFIG.json` | Результат |
+| --- | --- | --- |
+| `winbridge_controller_connections` | `controller-connections links.json` | Все связи, primary, ошибки, attempts и RPC counters |
+| `winbridge_operation_attribution` | `operation-attribution operation.json` | Неизменный автор первоначального запроса, parent workflow |
+| `winbridge_operation_cancellation` | `operation-cancellation operation.json` | Первый сохранённый инициатор отмены и время, inherited parent |
+
+`links.json` и MCP arguments для списка связей:
+
+```json
+{"context":{"instanceId":"PAIR","journalIncarnation":"JOURNAL"}}
+```
+
+`operation.json` и arguments для двух запросов об операции:
+
+```json
+{"context":{"instanceId":"PAIR","journalIncarnation":"JOURNAL"},"query":{"kind":"task","operationId":"TASK_ID"}}
+```
+
+`kind`: `task`, `import`, `workflow` или `application`. Для нового просмотра взять
+context из `winbridge_info` → `info.fencedRequests.context` и сохранить его вместе
+с ID операции. Изменившаяся область требует отдельного нового просмотра; исходный
+логический retry команды нельзя перепривязывать к новому journal. Tools не выбирают
+scope автоматически и не создают, не повторяют и не отменяют команды.
+
+Ответ CLI и MCP structuredContent имеет вид:
+
+```json
+{"controllerDiagnosticsVersion":1,"result":{"kind":"operation_cancellation","observation":{}}}
+```
+
+Здесь `{}` обозначает полное typed observation соответствующего контракта:
+`schemaVersion`, pinned context/reference, provider, workerGeneration, observedAtMs
+и данные. `result.kind` совпадает с именем запроса без `winbridge_`; отказ возвращает
+`kind: "error"` и `message`. CLI печатает typed error JSON и завершает процесс с
+ненулевым кодом; MCP устанавливает `isError: true`. При локальной ошибке чтения/
+разбора файла CLI пишет причину в stderr до IPC. Старый controller, неподдерживаемый
+worker/schema и изменившаяся scope дают отказ без legacy fallback. Это отдельный
+controller-local IPC route; старые worker RPC и controller readiness DTO не расширены.
+
+Creator и cancellation actor — исторические источники запроса, не ACL. `intent:null`
+не доказывает отсутствие старой отмены, а сохранённое намерение не доказывает
+физическую остановку процесса. Для фактического состояния читать саму операцию.
+`operation-cancellation` только читает запись и не вызывает cancel/stop.
 
 ## Автоматическая проверка
 

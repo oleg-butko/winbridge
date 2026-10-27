@@ -9,8 +9,11 @@ scope/old-worker/offline проверены на Chromium + Linux worker. Durabl
 attribution (schema18, workflow inheritance, readonly API/task UI) добавлена:
 819 workspace +3 protocol tests и actual Linux17→18 proof прошли. Затем добавлены
 cancellation actor/propagation/readonly UI в schema19:829 workspace +3 protocol,
-actual Linux17/18→19 proof и Chromium прошли. CLI-MCP query wrappers и Windows
-gate19 впереди. Windows переключает пользователь вручную;
+actual Linux17/18→19 proof и Chromium прошли. 2026-10-27 добавлены три readonly
+CLI/MCP query wrappers с pinned context и отдельным IPC envelope: два Linux
+controller, реальные CLI/MCP subprocesses, running-query/no-cancel, stale scope и
+old-component refusal проверены (37 controller/72 protocol tests). Native Windows
+gate19 ещё впереди. Windows переключает пользователь вручную;
 установленный0.1.1 и его config здесь не меняются.
 
 2026-10-26: по новой задаче пользователя выполняются

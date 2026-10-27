@@ -93,6 +93,12 @@ business status. Offline/ошибка сохраняет прошлый срез
 обновляется при открытии, смене scope/состояния выбранной задачи или вручную;
 постоянного отдельного polling нет. Chromium/Linux IPC прошли, native gate19 впереди.
 
+CLI/MCP агента получают те же readonly сведения о связях, creator и первом
+cancellation actor через [три query tools](guides/mcp.md#readonly-диагностика-нескольких-controller).
+Аргументы явно закрепляют journal context и operation ID; ошибки scope/совместимости
+видны как typed error, без автоматического выбора нового журнала. Запрос об отмене
+не является действием «Отменить». Legacy unknown и intent не заменяют task status.
+
 ## Attention и tray
 
 Popup/звук содержит проект, короткую причину и действие «Открыть задачу», «Открыть workflow» или «Открыть приложение». Нормальная успешная сборка может быть тихой; blocked workflow требует внимания по настройке пользователя. Повторяющиеся события объединяются. Quiet hours, volume, severity, acknowledged и missed attention доступны в UI.

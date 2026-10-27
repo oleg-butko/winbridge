@@ -17,6 +17,8 @@ mod readiness;
 pub use readiness::*;
 mod controller_api;
 pub use controller_api::*;
+mod controller_diagnostics;
+pub use controller_diagnostics::*;
 mod projection;
 pub use projection::*;
 mod operations;

@@ -2,6 +2,17 @@
 
 **Ветка .204:** `feat/multi-controller`, base9b47a9c;
 [прямые multi-controller sessions](plans/multi-controller-runtime.md).
+**2026-10-27, readonly CLI/MCP:** три query tools/CLI команды для всех соединений,
+creator и cancellation actor подключены через отдельный controller-local envelope
+`controllerDiagnosticsVersion:1`. [Аргументы и ошибки](guides/mcp.md#readonly-диагностика-нескольких-controller).
+Pinned context/operation, negotiated worker contracts, fail-closed old components;
+нет legacy fallback/автоперепривязки. Actual два Linux controller + один worker,
+CLI/MCP subprocesses: A создаёт, B отменяет, оба читают одинаковый source; чтение
+running task не отменяет её. 37 controller tests, 72 protocol tests и повтор
+усиленного end-to-end теста прошли (финальный combined run109/0). Workspace
+Clippy all-targets `-D warnings`, MSVC workspace compile check, contracts,
+TypeScript/UI build, fmt и scaffold290 прошли.
+Journal остаётся19, worker execution/installed runtime не меняются. Windows не опрашивался.
 **Текущий source journal schema19:** первый effective cancellation actor хранится
 отдельно от creator, атомарно с отменой task/import/workflow/application. Workflow
 передаёт источник отмены своим children; repeated/terminal cancel не переатрибутирует.
@@ -36,7 +47,7 @@ Chromium sandbox прошли. Старым задачам автор не на�
 Workspace Clippy all-targets, desktop Linux/MSVC worker compile checks,
 contracts/TypeScript/UI, workspace/desktop fmt и scaffold290 прошли.
 Автор не является ACL. Инициатор отмены подключён в schema19 (выше);
-CLI/MCP query wrapper ещё впереди.
+CLI/MCP query wrappers добавлены2026-10-27 (выше).
 Это новая несовместимая для старого worker схема журнала: installed schema17
 не мигрировался. Active updater блокирует normal migration; exact-schema
 activation/updater migration driver17→18 не объявлять готовым. Прежний Windows

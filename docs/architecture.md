@@ -267,6 +267,12 @@ metadata не доказывает отсутствие старой отмен�
 unknown actor. Readonly `winbridge.operation-cancellation` v1 и task detail UI
 не выдают intent за подтверждение process cleanup. Cold17/18→19 backup/refusal
 проверены на Linux; active update и exact-schema activation migration не допускают.
+CLI/MCP читают все три readonly extensions через отдельный controller-local
+`controllerDiagnosticsVersion:1` route. Strict typed dispatch принимает только
+список связей, creator и cancellation queries; mixed/command frames отклоняются.
+Контракты старого controller readiness и worker RPC не расширены. Каждый query
+сохраняет caller-pinned context/operation, проходит SDK negotiation и не имеет
+legacy fallback. Локальный activity log отмечает method/outcome без raw payload.
 Installed worker/main17 не менялись; native Windows gate19 ещё впереди.
 Подробности и границы — в [плане](plans/multi-controller-runtime.md).
 

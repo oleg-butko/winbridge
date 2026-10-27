@@ -382,6 +382,10 @@ export type ContractReadinessQuery = { projectId: string, contract: ContractRef,
 export type ContractReadinessView = { projectId: string, contract: ContractRef, identity: PairIdentity | null, readiness: ContractReadiness, receiptId: string | null, testProfile: string, controllerGeneration: string, sessionId: string | null, detail: string, };
 export type ControllerApiResult = { "kind": "operation_page", page: OperationPage, } | { "kind": "contract_readiness", view: ContractReadinessView, } | { "kind": "verification", view: VerificationView, } | { "kind": "error", message: string, };
 export type ControllerApiResponse = { controllerContractVersion: number, result: ControllerApiResult, };
+export type ControllerDiagnosticsRequest = { controllerDiagnosticsVersion: number, request: ControllerDiagnosticQuery, };
+export type ControllerDiagnosticsResponse = { controllerDiagnosticsVersion: number, result: ControllerDiagnosticResult, };
+export type ControllerDiagnosticQuery = { "method": "controller_connections", request: ControllerConnectionsRequest, } | { "method": "operation_attribution", request: OperationAttributionRequest, } | { "method": "operation_cancellation", request: OperationAttributionRequest, };
+export type ControllerDiagnosticResult = { "kind": "controller_connections", observation: ControllerConnections, } | { "kind": "operation_attribution", observation: OperationAttribution, } | { "kind": "operation_cancellation", observation: OperationCancellation, } | { "kind": "error", message: string, };
 export type VerifyPairRequest = { verificationKey: string,
 /**
  * Copy identity from the readiness observation when creating the operation;

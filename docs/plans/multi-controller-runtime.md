@@ -3,7 +3,8 @@
 2026-10-26, ветка `feat/multi-controller`, base9b47a9c.
 Первый агент192.168.44.203, второй192.168.44.204.
 Текущая source schema19: creator и первый cancellation actor реализованы отдельно;
-проверки и границы миграции описаны в последних разделах. Installed/main schema17
+readonly CLI/MCP wrappers добавлены2026-10-27. Проверки и границы миграции
+описаны в последних разделах. Installed/main schema17
 не мигрировались, Windows gate19 ещё впереди.
 Пользователь отменил Git coordination. Репозиторий остаётся только средством
 совместной разработки: Git claims/очередей/состояния Windows здесь нет.
@@ -422,3 +423,44 @@ CARGO_TARGET_DIR=/home/user1/winbridge/target PLAYWRIGHT_CHROMIUM_EXECUTABLE_PAT
 что в удаляемом канале не было claim/task. Новый branch содержит только полезный
 core commit и дальнейшую прямую multi-controller работу; отвергнутые Git tools,
 state/result indexes не входят в его дерево и не включаются в installed runtime.
+
+## CLI/MCP readonly диагностика — 2026-10-27
+
+Добавлены `controller-connections`, `operation-attribution`, `operation-cancellation`
+и одноимённые MCP tools с префиксом `winbridge_`/underscores.
+[Примеры аргументов и ответов](../guides/mcp.md#readonly-диагностика-нескольких-controller).
+Для всех operation kinds доступны creator/cancellation queries; отдельные detail UI
+для import/workflow/application остаются дальнейшим UI расширением.
+
+Отдельный strict `controllerDiagnosticsVersion:1` envelope обслуживается только
+локальным Debian IPC. В нём нет command/verify route. Не меняются закрытый
+ControllerApiRequest, legacy worker RPC, catalog fingerprints и journal schema19.
+Controller вызывает существующие negotiated readonly SDK; local client проверяет
+версию ответа, kind, scope/operation и schema/generation. Старые компоненты,
+неверная schema и изменившийся context дают ошибку без fallback/rebind. MCP
+annotations readonly подкреплены реальным typed dispatch; CLI error имеет JSON и
+ненулевой exit. Activity log хранит только method/outcome.
+
+Проверки:
+
+- 37 controller tests прошли, включая actual два controller/WebSocket/private IPC,
+  real CLI/MCP subprocesses и один owned Linux task. A создаёт, B отменяет, оба
+  читают одинакового creator A и initiator B. Усиленный тест повторён отдельно:
+  запросы CLI/MCP при running task оставляют её running без cancel flag.
+- 72 protocol tests с jsonschema прошли; закрытые legacy DTO по-прежнему отклоняют
+  новый envelope. Поддержаны только три readonly метода; extra nested fields,
+  mixed diagnostics/cancel/verify frames и будущая version отклоняются.
+- Unit preflight каждого query: missing catalog, неверный fingerprint и чужая scope
+  останавливают запрос после Info; future controller route version не делает даже
+  Info. Ответ старого controller отвергается без legacy переинтерпретации.
+- Финальный combined controller/protocol run: **109 passed /0 ignored**.
+  Workspace Clippy all-targets `-D warnings`, MSVC workspace compile check,
+  contracts generation/check, TypeScript/UI build, fmt и scaffold290 прошли.
+  Cross-target check не выполняет Windows программы.
+- Debian free space перед сборками9.2 GiB, после основных проверок9.0 GiB;
+  CARGO_INCREMENTAL=0 и основной target reused. Windows не опрашивался и не запускался;
+  runtime/config/journal/firewall не менялись. Native gate19 остаётся обязательным.
+
+Исторические пометки «CLI/MCP впереди» в предыдущих slices относятся к тому source;
+текущие wrappers готовы в feature-ветке. Native Windows/updater migration proof
+по-прежнему не объявлены, установленный worker0.1.1 не заменён.
