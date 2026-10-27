@@ -79,7 +79,10 @@ fn external_layout_requires_matching_pins_and_a_real_busy_lease() {
     let pin = f.write(&f.raw);
     let layout = FixtureLayout::bind(&f.root, Some(&pin), &f.build).unwrap();
     assert_eq!(layout.runtime(), f.runtime.canonicalize().unwrap());
-    assert_eq!(layout.join("state"), f.root.join("state"));
+    assert_eq!(
+        layout.join("state"),
+        f.root.canonicalize().unwrap().join("state")
+    );
     assert_eq!(
         layout.initial_worker_sha256(),
         Some("c".repeat(64).as_str())

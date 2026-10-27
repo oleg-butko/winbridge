@@ -73,6 +73,14 @@ identity и результаты независимо. Старые задачи
 backslash/control-character paths. Failed source/task/output сохранены; рабочий
 worker не менялся. Повтор использует новый source pin и новый run, не replay.
 
+Второй attempt20261027-061828-eb0a2a77/taskfa70254f-9ada-42fa-b4db-5e1d0f84873f
+на source403a4fd дошёл до настоящих Windows tests:4 passed/1 failed. Успешный bind
+прошёл, но positive assertion сравнивал canonical root/state с исходным путём без
+\\?\ prefix. Исправлена expected path через canonicalize(root); проверка canonical
+runtime не ослаблялась. Cold no-lease assertion после этого и platform group ещё
+требуют повтора. Исходные source/task/report/ready/logs сохранены, не являются
+положительным gate; установленный worker healthy и неизменён.
+
 ## Disk
 
 Preflight taskdfc4d89f-a200-4eab-bba3-3db4c87f9f6b succeeded/0:
