@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-27: [main обновлён доba9557b, новое сравнение](plans/multi-controller-review-ba9557b.md).
+Main25/archive/cache fix совместимы по архитектуре; новый preflight требует Links
+adapter, а native audit требует явного переноса worker17→19 schema expectation.
+Подготовлен полный новый integration patch;894 workspace/update-validation tests,
+17 ignored, Clippy/MSVC/contracts/TS/UI passed. Ветки не слиты, Windows не запускался.
+
 2026-10-27: подтверждён source/runtime сценарий3/4 controller, общий limit constant
 и универсальный test harness. [Проверки и границы](plans/multi-controller-runtime.md#три-и-четыре-controller--2026-10-27).
 Native Windows gate19 и интеграция с main остаются отдельными шагами.

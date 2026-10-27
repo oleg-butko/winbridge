@@ -1,5 +1,9 @@
 # Review multi-controller и совместимость с main — 2026-10-27
 
+Актуальное сравнение с mainba9557b и feature2ececad находится в
+[следующем review](multi-controller-review-ba9557b.md). Ниже сохранён исторический
+результат для прежних pins; старого patch недостаточно для нового network preflight.
+
 Проверены source `ac9e0cbf4845061fc7ce278383952400b58ba0b7` (`feat/multi-controller`)
 и обновлённый `main` `c4b7aea23d15bda4827d853e4c273354702eb596`.
 Main checkout обновлён `git pull --ff-only origin main` с9b47a9c. Работающая

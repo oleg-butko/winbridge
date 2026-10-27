@@ -1,5 +1,16 @@
 # Продолжение работы — worker 0.1.1 выпущен 2026-10-26
 
+**Новый pull2026-10-27:** main fast-forward c4b7aea→ba9557b,6 commits.
+[Обновлённое сравнение и полный source patch](plans/multi-controller-review-ba9557b.md).
+Сохраняются5 merge conflicts; новый Main25 network preflight требует адаптации
+удалённого singular connection field к Links. Прежнего patch недостаточно для
+update-validation build. Independent Windows audit пока frozen на worker17;
+для feature19 нужна отдельная явная адаптация/positive native proof.
+Main и feature не слиты, code source2ececad; Windows не использовался.
+Исправленное probe:894 workspace/update-validation tests/17 ignored, Clippy и
+MSVC all-targets, contracts/TS/UI/fmt/scaffold301 прошли. Disk/cache recovery
+и начальные space refusals сохранены в review; действующий controller не остановлен.
+
 **Три/четыре controller2026-10-27:** проверена работа полного topology list,
 общая `MAX_CONTROLLERS=4` для config/decoder, test harness переведён на vector.
 Actual Linux3/4 connections с последним primary, shared queue/dedup, caller attribution,

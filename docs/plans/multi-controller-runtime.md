@@ -521,3 +521,17 @@ scaffold291 прошли. DTO fingerprints не менялись; frontend runti
 Debian перед сборками8.8 GiB, CARGO_INCREMENTAL=0, основной target reused. Windows не
 опрашивался, configs/runtime/journal/firewall не менялись. Native Windows gate19
 и реальное объединение с main по предыдущему review всё ещё впереди.
+
+## Повторное сравнение main ba9557b — 2026-10-27
+
+[Новый review и полный source patch](multi-controller-review-ba9557b.md) заменяют
+прежний patch для актуальных source pins. Проверяется вся текущая feature2ececad,
+включая3/4-controller tests. Новый Main25 network preflight напрямую обращался
+к удалённому singular field; в probe он читает Links, сохраняя single-route fixture
+и запрет topology. Windows independent verifier остаётся frozen на worker17;
+Linux/cross-target checks не объявляются доказательством native schema19/Main25.
+Main подтянут fast-forward доba9557b; source branches всё ещё раздельны.
+Исправленное временное объединение:894 workspace/update-validation tests passed,
+17 ignored, Clippy/MSVC all-targets, contracts/TS/UI/fmt/scaffold301 passed.
+Disk threshold отказы первого run устранены только очисткой старых неиспользуемых
+Debian build caches; runtime/space guards не ослаблялись. Полные детали в review.
