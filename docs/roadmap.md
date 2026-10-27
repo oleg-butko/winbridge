@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-27: [Main25 после merge](plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)
+native succeeded, core audit24 negatives/49 files twice; full gate incomplete
+из-за отсутствующих diagnostic markers. External-slot trace layout и exporter
+исправлены, native case теперь требует markers. Архив996 files/152 directories
+проверен readonly; следующий шаг — новый actual Main25, затем retained19→20.
+
 2026-10-27: **multi-controller слит в main** после [ревью](analysis/multi-controller-merge-review-2026-10-27.md).
 895 workspace/17 ignored, Linux/MSVC Clippy,3 browser scenarios, повторный readonly
 audit Windows4 peers/5 tasks/16 negatives/15 files twice прошли. Runtime остаётся

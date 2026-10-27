@@ -59,8 +59,7 @@ def main():
         checks.need(sum(c['name'] == name for c in commands) == 1, 'Missing/repeated full pipeline step: '+name)
     main_command = next(c for c in commands if c['name'] == 'shutdown-main-pipeline')
     log = files[main_command['log']].decode('utf-8-sig')
-    checks.need('actual_main_activates_one_local_service_without_controller_or_replay ... ok' in log
-                and 'test result: ok. 1 passed; 0 failed;' in log, 'Main25 was not selected')
+    checks.verify_main_selection(main_command, log)
     proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
     result = checks.audit(proof, source, target, report['activationReservation'], profile=args.profile)
     result.update(checks.verify_auxiliary(files, proof, source))

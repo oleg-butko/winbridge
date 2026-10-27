@@ -132,7 +132,7 @@ fn execute_inner(
     assert_eq!(prepared.revision, 0);
     let source = &prepared.intent.source;
     write(
-        &root.join("activation-process-validation.json"),
+        &activation_trace_root(root, id).join("activation-process-validation.json"),
         &json!({"schemaVersion":1,"kind":"winbridge_activation_process_validation",
             "updateId":source.update_id,"launchId":source.launch_id,"ownerId":source.owner_id,
             "ownerEpoch":source.owner_epoch,"attemptId":prepared.intent.attempt_id,
@@ -225,11 +225,13 @@ fn execute_inner(
     assert_eq!(journal_bytes(root), bytes);
 
     let held: serde_json::Value = serde_json::from_slice(
-        &fs::read(root.join("activation-state-before_release.json")).unwrap(),
+        &fs::read(activation_trace_root(root, id).join("activation-state-before_release.json"))
+            .unwrap(),
     )
     .unwrap();
     let released: serde_json::Value = serde_json::from_slice(
-        &fs::read(root.join("activation-state-after_release.json")).unwrap(),
+        &fs::read(activation_trace_root(root, id).join("activation-state-after_release.json"))
+            .unwrap(),
     )
     .unwrap();
     assert_eq!(held["record"], released["record"]);

@@ -341,16 +341,20 @@ pub(super) fn execute(
         .unwrap()
         .unwrap();
     let held: serde_json::Value = serde_json::from_slice(
-        &fs::read(root.join("activation-state-before_release.json")).unwrap(),
+        &fs::read(activation_trace_root(root, id).join("activation-state-before_release.json"))
+            .unwrap(),
     )
     .unwrap();
     let released: serde_json::Value = serde_json::from_slice(
-        &fs::read(root.join("activation-state-after_release.json")).unwrap(),
+        &fs::read(activation_trace_root(root, id).join("activation-state-after_release.json"))
+            .unwrap(),
     )
     .unwrap();
-    let before_send: serde_json::Value =
-        serde_json::from_slice(&fs::read(root.join("activation-writer-before-send.json")).unwrap())
-            .unwrap();
+    let before_send: serde_json::Value = serde_json::from_slice(
+        &fs::read(activation_trace_root(root, id).join("activation-writer-before-send.json"))
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(before_send["commandId"], saved.command.command_id);
     assert_eq!(
         before_send["commandSha256"],

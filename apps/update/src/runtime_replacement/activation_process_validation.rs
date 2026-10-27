@@ -27,6 +27,37 @@ struct Input {
 fn is_false(value: &bool) -> bool {
     !value
 }
+fn trace_input(runtime: &Path, update_id: &str) -> Result<Option<PathBuf>> {
+    if !uuid::Uuid::parse_str(update_id).is_ok_and(|v| v.to_string() == update_id) {
+        return Err("Activation trace requires its canonical update ID".into());
+    }
+    let scoped = runtime
+        .join("update")
+        .join(update_id)
+        .join("activation-process-validation.json");
+    // Preserve the original case/runtime fixture, but never infer a sibling
+    // input under the project root from an external stable executable slot.
+    let legacy = (runtime.file_name() == Some(std::ffi::OsStr::new("runtime")))
+        .then(|| {
+            runtime
+                .parent()
+                .map(|p| p.join("activation-process-validation.json"))
+        })
+        .flatten();
+    let scoped_exists = scoped.try_exists().map_err(|e| e.to_string())?;
+    let legacy_exists = legacy
+        .as_ref()
+        .map(|p| p.try_exists())
+        .transpose()
+        .map_err(|e| e.to_string())?
+        .unwrap_or(false);
+    match (scoped_exists, legacy_exists) {
+        (true, true) => Err("Ambiguous activation trace inputs; no namespace adoption".into()),
+        (true, false) => Ok(Some(scoped)),
+        (false, true) => Ok(legacy),
+        (false, false) => Ok(None),
+    }
+}
 struct ValidationInput {
     root: PathBuf,
     pin: crate::artifact::Pinned,
@@ -59,13 +90,13 @@ fn bounded(path: &Path) -> Result<Vec<u8>> {
 }
 fn capture(record: &ActivationRecord) -> Result<Option<ValidationInput>> {
     let source = &record.intent.source;
-    let root = Path::new(&source.runtime_directory)
+    let Some(input_path) = trace_input(Path::new(&source.runtime_directory), &source.update_id)?
+    else {
+        return Ok(None);
+    };
+    let root = input_path
         .parent()
         .ok_or("Activation validation root missing")?;
-    let input_path = root.join("activation-process-validation.json");
-    if !input_path.try_exists().map_err(|e| e.to_string())? {
-        return Ok(None);
-    }
     if !cfg!(windows) || winbridge_protocol::build_identity().source_dirty {
         return Err("Activation validation requires a clean native Windows build".into());
     }
@@ -296,6 +327,36 @@ pub(super) fn writer_before_send(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn external_slot_trace_uses_only_its_update_namespace_and_legacy_is_unambiguous() {
+        let temp = tempfile::tempdir().unwrap();
+        let id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        let runtime = temp.path().join("runtime-test-204");
+        fs::create_dir(&runtime).unwrap();
+        let sibling = temp.path().join("activation-process-validation.json");
+        fs::write(&sibling, b"foreign sibling").unwrap();
+        assert!(trace_input(&runtime, id).unwrap().is_none());
+        let scoped = runtime
+            .join("update")
+            .join(id)
+            .join("activation-process-validation.json");
+        fs::create_dir_all(scoped.parent().unwrap()).unwrap();
+        fs::write(&scoped, b"declared fixture").unwrap();
+        assert_eq!(trace_input(&runtime, id).unwrap(), Some(scoped.clone()));
+        assert!(trace_input(&runtime, "../foreign").is_err());
+        assert!(trace_input(&runtime, "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA").is_err());
+        let legacy = temp.path().join("runtime");
+        fs::create_dir(&legacy).unwrap();
+        assert_eq!(trace_input(&legacy, id).unwrap(), Some(sibling.clone()));
+        let other = legacy
+            .join("update")
+            .join(id)
+            .join("activation-process-validation.json");
+        fs::create_dir_all(other.parent().unwrap()).unwrap();
+        fs::write(other, b"ambiguous").unwrap();
+        assert!(trace_input(&legacy, id).is_err());
+        assert_eq!(fs::read(sibling).unwrap(), b"foreign sibling");
+    }
     #[test]
     fn writer_trace_is_create_new_and_cannot_overwrite_an_earlier_send_attempt() {
         let root = tempfile::tempdir().unwrap();

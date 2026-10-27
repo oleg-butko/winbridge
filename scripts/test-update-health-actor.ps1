@@ -378,6 +378,12 @@ try {
           $diagnosticRuntime=Join-Path $caseDirectory 'runtime'
           if($ActivationServiceGate -and $report.runtimeArchive){$diagnosticRuntime=$report.runtimeArchive.directory}
           elseif($ActivationServiceGate -and $activationReservation){$diagnosticRuntime=$activationReservation.binding.runtimeDirectory}
+          if($ActivationServiceGate){
+            foreach($traceName in @('activation-state-before_release.json','activation-state-after_release.json','activation-writer-before-send.json')){
+              $trace=Join-Path $diagnosticRuntime ('update/'+$updateId+'/'+$traceName)
+              if(Test-Path -LiteralPath $trace -PathType Leaf){[IO.File]::Copy($trace,(Join-Path $ReportDirectory ($caseName+'-'+$traceName)),$false)}
+            }
+          }
           $path=Join-Path $diagnosticRuntime ('update/'+$updateId+'/supervisor/stderr.log')
           if(Test-Path -LiteralPath $path -PathType Leaf){[IO.File]::Copy($path,(Join-Path $ReportDirectory ($caseName+'-supervisor-stderr.log')),$false)}
         }

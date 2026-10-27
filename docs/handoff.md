@@ -1,5 +1,13 @@
 # Продолжение апдейтера — worker 0.1.1 установлен и проверен
 
+**Main25 после merge,2026-10-27:** первый native run succeeded/0, но full gate
+не завершён: validation hook пропустил три trace markers при external runtime.
+[Причина, fix, точные pins и продолжение](plans/worker-self-update/main25-after-multi-controller-2026-10-27.md).
+Core audit24 negatives/49 files twice прошёл; отдельный readonly archive audit
+996 files/152 directories подтверждён. Slot204 свободен под исходным base lease,
+рабочий worker0.1.1 неизменён/active0. После trace/export/selection fixes нужен
+свежий actual run; старый результат не объявлять full Main25 success.
+
 **Актуально после review/merge на .203,2026-10-27:** multi-controller слит в main.
 [Ревью, исправления и проверки](analysis/multi-controller-merge-review-2026-10-27.md):
 895 workspace tests/0 failures/17 ignored, Linux/MSVC Clippy, contracts/TS/UI,
@@ -10,7 +18,7 @@ target caches. Production Rust/UI48c834c→9877b9e не менялся.
 Рабочий0.1.1 уже подключён к.203: generation9b924962/incarnation5a8eb173, active0,
 errors=null, controller5103 сохранён. Не обновлять установленный runtime из его задачи.
 
-Следующий шаг — actual Main25 **worker19-updater20** с clean archives и explicit
+Следующий шаг — повтор actual Main25 **worker19-updater20** с clean archives и explicit
 profile. Для него использовать постоянный `runtime-test-204`, controller.203:1144,
 новые state/instance/report. Legacy runtime-test.203 и его conservation plan
 остаются нетронутыми; прежний pending запрос переноса не выполнялся и для отдельного

@@ -9,6 +9,25 @@ spec.loader.exec_module(proof)
 
 
 class ServiceEvidenceTests(unittest.TestCase):
+    def test_exact_main_selection_accepts_interleaved_output_but_not_another_test(self):
+        name = 'actual_main_activates_one_local_service_without_controller_or_replay'
+        command = {'arguments': ['test', '-p', 'winbridge-worker', '--features',
+                   'bundled-sqlite,update-validation', '--test', 'update_shutdown',
+                   '--locked', '--offline', '--', '--exact', name, '--ignored',
+                   '--test-threads=1', '--nocapture']}
+        compact = f'running 1 test\ntest {name} ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored; finished in 1s\n'
+        interleaved = compact.replace(' ... ok', ' ... progress\n\x1b[31mowned Job closed\x1b[0m\nok')
+        for log in (compact, interleaved):
+            proof.verify_main_selection(command, log)
+        for log in (compact.replace(name, 'unrelated'), compact.replace('1 passed', '0 passed'),
+                    compact.replace('0 ignored', '1 ignored'), compact.replace('running 1 test', 'running 2 tests'),
+                    compact + compact):
+            with self.assertRaises(ValueError):
+                proof.verify_main_selection(command, log)
+        for arguments in ([], command['arguments'][:-1], command['arguments'] + ['--skip', name]):
+            with self.assertRaises(ValueError):
+                proof.verify_main_selection({'arguments': arguments}, compact)
+
     def test_profiles_are_explicit_and_historical_default_stays_worker_seventeen(self):
         self.assertEqual(proof.profile_schemas(proof.DEFAULT_PROFILE), (17, 20))
         self.assertEqual(proof.profile_schemas('worker19-updater20'), (19, 20))

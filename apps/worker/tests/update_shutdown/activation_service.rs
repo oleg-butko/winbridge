@@ -360,6 +360,34 @@ pub(super) fn execute(
     let physical_history = super::super::activation_preparation::history(&directory, id);
     assert_eq!(physical_history.len(), 8);
     assert_eq!(physical_history.last(), Some(&record));
+    // A disabled/misplaced validation hook must fail the native case itself,
+    // before reporting success and exporting the independent barrier evidence.
+    let trace = activation_trace_root(root, id);
+    for (phase, available) in [("before_release", false), ("after_release", true)] {
+        let marker: serde_json::Value = serde_json::from_slice(
+            &fs::read(trace.join(format!("activation-state-{phase}.json"))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            marker["record"],
+            serde_json::to_value(&physical_history[5]).unwrap()
+        );
+        assert_eq!(marker["phase"], phase);
+        assert_eq!(marker["lockAvailable"], available);
+    }
+    let marker: serde_json::Value = serde_json::from_slice(
+        &fs::read(trace.join("activation-writer-before-send.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        marker["record"],
+        serde_json::to_value(&physical_history[6]).unwrap()
+    );
+    assert_eq!(marker["commandId"], writer.command.command_id);
+    assert_eq!(
+        marker["commandSha256"],
+        writer::command_sha256(&writer.command).unwrap()
+    );
     writer::validate_command(&writer.command, &physical_history[6], &baseline.authority).unwrap();
     q.action = SupervisorAction::ActivateLocalService;
     let duplicate = call(rt, sup, &q).expect("Completed service returns its resident observation");

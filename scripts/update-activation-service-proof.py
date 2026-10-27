@@ -20,6 +20,23 @@ def digest(domain, value):
     return hashlib.sha256(domain.encode() + b'\n' + canonical(value)).hexdigest()
 
 
+def verify_main_selection(command, log):
+    """libtest --nocapture may print diagnostics before the final standalone ok."""
+    name = 'actual_main_activates_one_local_service_without_controller_or_replay'
+    arguments = command['arguments']
+    need(arguments == ['test', '-p', 'winbridge-worker', '--features',
+                       'bundled-sqlite,update-validation', '--test', 'update_shutdown',
+                       '--locked', '--offline', '--', '--exact', name, '--ignored',
+                       '--test-threads=1', '--nocapture'], 'Main25 exact test selection differs')
+    text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', log)
+    selected = re.findall(r'^test ' + re.escape(name) + r' \.\.\.', text, re.MULTILINE)
+    summaries = re.findall(r'^test result: ([^\r\n]+)', text, re.MULTILINE)
+    need(len(selected) == 1 and len(summaries) == 1
+         and summaries[0].startswith('ok. 1 passed; 0 failed; 0 ignored;')
+         and re.search(r'^running 1 test\s*$', text, re.MULTILINE),
+         'Main25 did not run exactly once to successful completion')
+
+
 def strict(value):
     flags = {'passed', 'normalMain', 'actualOldRoles', 'actualCandidateBuild',
              'validationFeature', 'runtimeApplied', 'installedRuntimeApplied', 'windowsOpened',

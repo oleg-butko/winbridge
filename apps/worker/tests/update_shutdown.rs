@@ -90,6 +90,13 @@ enum PreparationFault {
     ChangedCandidate,
     HoldBeforeReceipt,
 }
+fn activation_trace_root(root: &FixtureLayout, id: &str) -> PathBuf {
+    if root.runtime() == root.join("runtime") {
+        root.to_path_buf()
+    } else {
+        root.runtime().join("update").join(id)
+    }
+}
 // Cargo may hard-link debug/<bin> to deps/<bin-hash>. This is only a
 // reproducible input under the script build-cache lease, never the runtime
 // authority. FixtureLayout and RuntimeGuard still require single-link images.
