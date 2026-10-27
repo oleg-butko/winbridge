@@ -5,6 +5,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import re
 import socket
@@ -179,6 +180,42 @@ def verify_build_cache_usage(result, requested, local):
         raise RuntimeError('Native build-cache receipt does not match the pinned prior run/fresh fallback')
 
 
+def service_source_test_count(source):
+    # Both synchronous fixtures and real Tokio IPC tests must finish. Fail
+    # closed if a new attribute shape is not recognized by this pinned count.
+    return len(re.findall(rb'(?m)^#\[(?:test|tokio::test(?:\([^\r\n]*\))?)\]\r?\n(?:async )?fn ', source))
+
+
+def verify_service_admission(result, files, counts, manifest_sha256):
+    expected = ['service-history-native', 'service-transfer-native']
+    if (result.get('serviceAdmissionOnly') is not True or result.get('passed') is not True
+            or result.get('platform') != 'windows' or result.get('sourceDirty') is not False
+            or not isinstance(result.get('sourceCommit'), str) or not re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', result['sourceCommit'])
+            or [g['name'] for g in result['commands']] != expected or len(counts) != 2
+            or any(type(n) is not int or n < 1 for n in counts)):
+        raise ValueError('Incomplete service admission/transfer native scope')
+    for group, count, package, selector in zip(result['commands'], counts,
+            ['winbridge-update', 'winbridge-worker'], ['journal::activation_service', 'store::activation_service_open']):
+        arguments = ['test', '-p', package, '--features', 'bundled-sqlite', '--lib', '--locked', '--offline', selector, '--', '--test-threads=1', '--nocapture']
+        if (group.get('arguments') != arguments or group['log'] != group['name'] + '.log'
+                or PureWindowsPath(group.get('executable', '')).name.lower() != 'cargo.exe'):
+            raise ValueError('Service native command/log binding differs')
+        if type(group['exitCode']) is not int or group['exitCode'] != 0:
+            raise ValueError('Service native command failed')
+        raw = files[group['log']].decode('utf-8-sig')
+        markers = re.findall(r'(?m)(?:^|\.\.\. )SERVICE_ADMISSION_BUILD (\{[^\r\n]*\})\s*$', raw)
+        if len(markers) != 1:
+            raise ValueError('Service native compiled build identity missing or duplicated')
+        build = json.loads(markers[0])
+        if (build.get('sourceCommit') != result.get('sourceCommit') or build.get('sourceDirty') is not False
+                or build.get('sourceManifestSha256') != manifest_sha256
+                or not isinstance(build.get('buildId'), str) or not 1 <= len(build['buildId']) <= 128):
+            raise ValueError('Service native compiled source identity differs')
+        summaries = re.findall(r'test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;', raw)
+        if summaries != [('ok', str(count), '0', '0')]:
+            raise ValueError('Service native tests skipped, filtered or failed')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--controller-config', type=Path, required=True)
@@ -188,6 +225,8 @@ def main():
     parser.add_argument('--profiles-only', action='store_true', help='Check two registered projects with a reusable recipe profile, real IPC, cancel and crash/restart; no desktop windows')
     parser.add_argument('--projects-only', action='store_true', help='Publish separate committed Netwatch/WinBridge clones and run both through a common build profile; no desktop or network from test instances')
     parser.add_argument('--identity-only', action='store_true', help='Check protocol/build identity on actual Windows/Git without desktop or test workers')
+    parser.add_argument('--verify-service-admission-run', help='Read-only recheck of an existing terminal service preparation run; never submit or rebuild')
+    parser.add_argument('--service-admission-only', action='store_true', help='Check service history, same-state Worker initialization and readonly local IPC on isolated fixtures; no controller network or UI')
     parser.add_argument('--update-preparation-only', action='store_true', help='Test updater/source transactions on isolated fixtures and build a complete candidate without changing installed runtime or opening windows')
     parser.add_argument('--update-preparation-reuse-run', help='Reuse only compiler caches of a terminal update-preparation run with checksummed successful native groups; always use new source/state/staging')
     parser.add_argument('--update-reference-updater', help='Retained previous updater path for isolated current-schema refusal')
@@ -213,8 +252,12 @@ def main():
     parser.add_argument('--companion-only', action='store_true', help='Build and exercise an isolated native tray/popup desktop and worker')
     parser.add_argument('--netwatch-profile', type=Path, help='Prepared isolated Netwatch workflow; run using the newly built test worker')
     args = parser.parse_args()
-    if args.update_preparation_reuse_run and (not args.update_preparation_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.update_preparation_reuse_run)):
-        parser.error('--update-preparation-reuse-run requires --update-preparation-only and a valid run ID')
+    recheck_run = args.verify_readiness_run or args.verify_service_admission_run
+    read_only_recheck = recheck_run is not None
+    if args.verify_service_admission_run and (not args.service_admission_only or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.verify_service_admission_run)):
+        parser.error('--verify-service-admission-run requires --service-admission-only and a valid saved run ID')
+    if args.update_preparation_reuse_run and (not (args.update_preparation_only or args.service_admission_only) or not re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', args.update_preparation_reuse_run)):
+        parser.error('--update-preparation-reuse-run requires update preparation/service admission and a valid run ID')
     if args.update_reference_worker and not args.update_preparation_only:
         parser.error('--update-reference-worker requires --update-preparation-only')
     if (args.update_reference_updater or args.update_reference_updater_sha256) and (not args.update_preparation_only or not args.update_reference_updater or not re.fullmatch(r'[0-9a-f]{64}', args.update_reference_updater_sha256 or '')):
@@ -223,7 +266,7 @@ def main():
         parser.error('--verify-readiness-run requires --readiness-only and a valid saved run ID')
     if (args.queue_reference_worker or args.resource_reference_worker) and not args.readiness_only:
         parser.error('Queue/resource reference workers require --readiness-only')
-    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only, args.readiness_only, args.update_preparation_only)) > 1:
+    if sum(bool(v) for v in (args.attention_only, args.companion_only, args.workflow_attention_only, args.history_diagnostics_only, args.settings_retention_only, args.netwatch_profile, args.delta_only, args.output_only, args.resume_only, args.profiles_only, args.projects_only, args.identity_only, args.task_fsm_only, args.task_cas_only, args.readiness_only, args.update_preparation_only, args.service_admission_only)) > 1:
         parser.error('Choose exactly one isolated Windows scenario; see --help')
     if args.output_only and not args.output_reference_worker:
         parser.error('--output-only requires --output-reference-worker')
@@ -240,7 +283,8 @@ def main():
     config = json.loads(args.controller_config.read_text())
     endpoint = Path(config['stateDirectory']) / ('controller-' + config['instanceId'] + '.sock')
     info = call(endpoint, {'method': 'info'})['info']
-    if info.get('journalRecoveryRequired') or info.get('maintenanceError') or info.get('activeTaskCount') != 0:
+    if (info.get('journalRecoveryRequired') or info.get('maintenanceError')
+            or (not args.verify_service_admission_run and info.get('activeTaskCount') != 0)):
         raise RuntimeError('Native validation requires a healthy, idle installed worker; do not interrupt user work')
     if info['platform'] != 'windows':
         raise RuntimeError('A connected actual Windows worker is required')
@@ -291,7 +335,7 @@ def main():
         archive_has_source_admission = archive_has_source_transaction and b'pub fn begin_source_apply(' in archive.read('winbridge/apps/update/src/source.rs')
         archive_has_update_coordination = 'winbridge/apps/worker/tests/update_coordination.rs' in archive.namelist()
         archive_checks_work_latency = archive_has_work_scheduling and b'prequeuedStartup' in archive.read('winbridge/apps/worker/tests/work_scheduling.rs')
-    run_id = args.verify_readiness_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
+    run_id = recheck_run or time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:8]
     report = shared / config['delivery']['namespace'] / 'workflow-validation' / run_id
     windows_report = config['delivery']['peerRoot'].rstrip('\\/') + '\\' + str(report.relative_to(shared)).replace('/', '\\')
     local = project['workspaceRoot'].rstrip('\\/') + '\\workflow-validation\\' + run_id
@@ -333,13 +377,13 @@ def main():
         profile_argument = ' -ProfilesOnly'
     if args.identity_only:
         profile_argument = ' -IdentityOnly'
-    if args.update_preparation_only:
-        profile_argument = ' -UpdatePreparationOnly -UpdatePreparationArchivePath $archive'
-        if archive_has_source_transaction:
+    if args.update_preparation_only or args.service_admission_only:
+        profile_argument = ' -ServiceAdmissionOnly' if args.service_admission_only else ' -UpdatePreparationOnly -UpdatePreparationArchivePath $archive'
+        if archive_has_source_transaction and args.update_preparation_only:
             if not args.update_reference_updater or not args.update_reference_updater_sha256:
                 raise RuntimeError('Pinned previous updater reference required')
             profile_argument += ' -UpdateReferenceUpdater ' + ps_string(args.update_reference_updater) + ' -UpdateReferenceUpdaterSha256 ' + ps_string(args.update_reference_updater_sha256)
-        if archive_has_update_coordination:
+        if archive_has_update_coordination and args.update_preparation_only:
             if not args.update_reference_worker:
                 raise RuntimeError('Supply a known schema-14 exe with --update-reference-worker; Info does not attest the installed journal schema')
             profile_argument += ' -UpdateReferenceWorker ' + ps_string(args.update_reference_worker)
@@ -494,7 +538,7 @@ exit $nativeExit
                'command': {'kind': 'direct', 'executable': 'pwsh.exe',
                            'arguments': ['-NoProfile', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()], 'workingDirectory': '.'}}
     local_report = ROOT / '.winbridge' / 'workflow-validation' / run_id
-    if args.verify_readiness_run:
+    if read_only_recheck:
         if local_report.is_symlink() or report.is_symlink():
             raise RuntimeError('Linked saved readiness run refused')
         request = json.loads((local_report / 'request.json').read_text())
@@ -507,11 +551,33 @@ exit $nativeExit
         print(json.dumps({'readOnlyRecheck': True, 'taskId': task_id, 'reportDirectory': str(report)}), flush=True)
     else:
         local_report.mkdir(parents=True)
-        (local_report / 'request.json').write_text(json.dumps(request, indent=2))
+        with (local_report / 'request.json').open('x') as retained:
+            json.dump(request, retained, indent=2)
+            retained.flush()
+            os.fsync(retained.fileno())
         # Preserve the request for reconciliation; stop on an unexpected worker error.
-        accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
+        if args.service_admission_only:
+            envelope = {'requestContractVersion': 2, 'context': info['fencedRequests']['context'],
+                        'request': {'method': 'submit', 'request': request}}
+            with (local_report / 'fenced-request.json').open('x') as retained:
+                json.dump(envelope, retained, indent=2)
+                retained.flush()
+                os.fsync(retained.fileno())
+            spec = importlib.util.spec_from_file_location('fenced_native', ROOT / 'scripts/validate-installed-provider.py')
+            fenced = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(fenced)
+            # Preserve both file data and directory entries before dispatch.
+            for directory in (local_report, local_report.parent):
+                descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+            accepted = fenced.call_fenced(endpoint, envelope)['task']
+        else:
+            accepted = call(endpoint, {'method': 'submit', 'request': request})['task']
         task_id = accepted['taskId']
-        print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest, 'reusedDiagnostic': args.task_cas_reuse_diagnostic, 'reusedBuildCache': cache_receipt}), flush=True)
+        print(json.dumps({'taskId': task_id, 'reportDirectory': str(report), 'windowsReportDirectory': windows_report, 'sourceSha256': digest, 'reusedDiagnostic': args.task_cas_reuse_diagnostic, 'reusedBuildCache': cache_receipt or update_cache_receipt}), flush=True)
         chunks = []
         sequence = 0
         deadline = time.monotonic() + 1850
@@ -548,6 +614,24 @@ exit $nativeExit
     if task['status'] != 'succeeded' or task['exitCode'] != 0 or not result['passed'] or result['platform'] != 'windows' or result['sourceArchiveSha256'] != digest:
         raise RuntimeError({'task': task_id, 'result': result})
     verify_build_cache_usage(result, cache_receipt or update_cache_receipt, local)
+    if args.service_admission_only:
+        if ready.get('passed') is not True or ready.get('schemaVersion') != 1 or ready.get('platform') != 'windows':
+            raise ValueError('Service native ready marker is incomplete')
+        with zipfile.ZipFile(args.archive) as archive:
+            manifest_bytes = archive.read('winbridge/winbridge-source-manifest.json')
+            source_manifest = json.loads(manifest_bytes)
+            if source_manifest.get('dirty') is not False or result['sourceCommit'] != source_manifest['sourceCommit']:
+                raise ValueError('Service native source pin differs from the supplied archive')
+            counts = [service_source_test_count(archive.read('winbridge/' + path)) for path in (
+                'apps/update/src/journal/activation_service/tests.rs',
+                'apps/worker/src/store/activation_service_open/tests.rs')]
+        files = {item['path']: (report / item['path']).read_bytes() for item in ready['files']}
+        verify_service_admission(result, files, counts, hashlib.sha256(manifest_bytes).hexdigest())
+        final_info = call(endpoint, {'method': 'info'})['info']
+        if (final_info['build'] != info['build'] or final_info['generation'] != info['generation']
+                or final_info['fencedRequests']['context'] != info['fencedRequests']['context']
+                or final_info.get('maintenanceError') or final_info.get('journalRecoveryRequired')):
+            raise ValueError('Installed worker changed; native result remains historical')
     if args.update_preparation_only:
         expected = ['update-source-policy-and-fsm', 'update-native-preflight', 'update-legacy-contracts', 'update-verifier-build']
         if archive_has_update_coordination:
@@ -1067,10 +1151,11 @@ exit $nativeExit
         if proof['initialGeneration'] == proof['restartedGeneration'] or proof['child']['recoveredTree']['status'] != 'indeterminate' or proof['child']['success']['status'] != 'succeeded':
             raise RuntimeError('Real-project restart/recovery proof missing')
     final_info = call(endpoint, {'method':'info'})['info']
-    if final_info['generation'] != info['generation'] or final_info.get('journalRecoveryRequired') or final_info.get('maintenanceError') or final_info.get('activeTaskCount') != 0:
+    if (final_info['generation'] != info['generation'] or final_info.get('journalRecoveryRequired') or final_info.get('maintenanceError')
+            or (not args.verify_service_admission_run and final_info.get('activeTaskCount') != 0)):
         raise RuntimeError('Installed worker health/generation changed unexpectedly; inspect retained task/report')
-    proof_name = 'worker-observation-' + uuid.uuid4().hex + '.json' if args.verify_readiness_run else 'worker-proof.json'
-    (local_report / proof_name).write_text(json.dumps({'readOnlyRecheck':bool(args.verify_readiness_run),'initial':{k:v for k,v in info.items() if k!='projects'},'final':{k:v for k,v in final_info.items() if k!='projects'}},indent=2))
+    proof_name = 'worker-observation-' + uuid.uuid4().hex + '.json' if read_only_recheck else 'worker-proof.json'
+    (local_report / proof_name).write_text(json.dumps({'readOnlyRecheck':read_only_recheck,'initial':{k:v for k,v in info.items() if k!='projects'},'final':{k:v for k,v in final_info.items() if k!='projects'}},indent=2))
     print(json.dumps({'passed': True, 'platform': 'windows', 'taskId': task_id, 'reportDirectory': str(report), 'reportSha256': hashlib.sha256((report / 'report.json').read_bytes()).hexdigest(), 'commands': result['commands']}), flush=True)
 
 

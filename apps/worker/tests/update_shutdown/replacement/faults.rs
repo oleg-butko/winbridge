@@ -53,13 +53,13 @@ fn actual_files(
 }
 
 pub(crate) fn execute_fault(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     before: &serde_json::Value,
     fault: ReplacementFault,
 ) -> serde_json::Value {
     use std::os::windows::fs::OpenOptionsExt;
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let preparation = UpdateJournal::inspect_runtime_preparation(&directory, id)
         .unwrap()
@@ -327,14 +327,14 @@ pub(crate) fn execute_fault(
 }
 
 pub(crate) fn after_fault_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     config: &Path,
     worker: &Path,
     id: &str,
     proof: &serde_json::Value,
     fault: ReplacementFault,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let (saved, _) =
         observe_after_owned_exit(|| UpdateJournal::inspect_runtime_replacement(&directory, id))
             .unwrap();

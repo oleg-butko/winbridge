@@ -59,7 +59,8 @@ fn run(production: bool) {
     let prepared = winbridge_platform::ManagedChild::prepare_atomic_executable(
         &ResolvedCommand {
             executable: root
-                .join("runtime/winbridge-worker.exe")
+                .runtime()
+                .join("winbridge-worker.exe")
                 .to_string_lossy()
                 .into(),
             arguments: vec![
@@ -137,7 +138,7 @@ fn run(production: bool) {
         assert_eq!(info.generation, binding.generation);
         assert_eq!(info.build.as_ref(), Some(&binding.build));
         assert!(info.maintenance_error.is_none() && info.journal_recovery_required.is_none());
-        let directory = root.join("runtime/update-state");
+        let directory = root.runtime().join("update-state");
         let record = UpdateJournal::inspect_candidate_support(&directory, &sup.spec.update_id)
             .unwrap()
             .unwrap();
@@ -179,7 +180,7 @@ fn run(production: bool) {
         let image_ids = manifest
             .artifacts
             .iter()
-            .map(|a| inspect_image(&root.join("runtime").join(&a.name)).unwrap())
+            .map(|a| inspect_image(&root.runtime().join(&a.name)).unwrap())
             .collect::<Vec<_>>();
         write(
             &root.join("support-cleanup.request"),
@@ -214,10 +215,7 @@ fn run(production: bool) {
             CandidateSupportViewPhase::Checked
         );
         for (a, pin) in manifest.artifacts.iter().zip(&image_ids) {
-            assert_eq!(
-                inspect_image(&root.join("runtime").join(&a.name)).unwrap(),
-                *pin
-            );
+            assert_eq!(inspect_image(&root.runtime().join(&a.name)).unwrap(), *pin);
         }
         if production {
             let gate = UpdateJournal::inspect_compatible_drain(&directory, &sup.spec.update_id)

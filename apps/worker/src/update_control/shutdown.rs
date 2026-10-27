@@ -65,9 +65,7 @@ pub(super) fn prepare_reply(
 fn state(worker: &Worker) -> Result<ShutdownStatePins> {
     let pins =
         ShutdownStatePins::capture(&worker.config.state_directory).map_err(|e| e.to_string())?;
-    if pins.observation().lock_identity
-        != winbridge_platform::file_identity(&worker._instance_lock).map_err(|e| e.to_string())?
-    {
+    if pins.observation().lock_identity != worker._instance_lock.lock_identity()? {
         return Err(
             "Shutdown state lock differs from the running worker's held instance lock".into(),
         );

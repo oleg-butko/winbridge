@@ -68,32 +68,46 @@ fn wait(
     }
 }
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
 ) -> serde_json::Value {
-    execute_inner(root, sup, replacement, false)
+    execute_inner(root, sup, replacement, Target::State)
 }
 pub(super) fn execute_writer(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
 ) -> serde_json::Value {
-    execute_inner(root, sup, replacement, true)
+    execute_inner(root, sup, replacement, Target::Writer)
+}
+pub(super) fn execute_service(
+    root: &FixtureLayout,
+    sup: &SupervisorRecord,
+    replacement: &serde_json::Value,
+) -> serde_json::Value {
+    execute_inner(root, sup, replacement, Target::Service)
+}
+#[derive(Clone, Copy)]
+enum Target {
+    State,
+    Writer,
+    Service,
 }
 fn execute_inner(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     replacement: &serde_json::Value,
-    writer: bool,
+    target: Target,
 ) -> serde_json::Value {
     let timer = Instant::now();
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
     // All baseline observations precede preparation admission. Do not spend
     // the remaining original window on them after StateOwned.
-    let baseline = writer.then(|| super::activation_writer::Baseline::capture(root, id));
+    let baseline = (!matches!(target, Target::State))
+        .then(|| super::activation_writer::Baseline::capture(root, id));
     let rt = tokio::runtime::Runtime::new().unwrap();
     let mut q: SupervisorRequest =
         serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
@@ -160,6 +174,7 @@ fn execute_inner(
             &rt,
             q,
             baseline,
+            matches!(target, Target::Service),
             json!({"before":before,"preparing":preparing,"preparedView":prepared_view,
                 "prepared":prepared,"binding":binding,"bound":bound,"launching":launching,
                 "ready":ready,"owned":owned,"workerBytesBefore":bytes}),
@@ -280,7 +295,7 @@ fn execute_inner(
         .is_none());
 
     let loaded = winbridge_update::installed_set::pin_installed_set(
-        &root.join("runtime"),
+        root.runtime(),
         &source.installation_id,
         &source.scope_sha256,
     )
@@ -322,7 +337,7 @@ fn execute_inner(
         "writableStoreStarted":false,"publicActivationEnabled":false})
 }
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     id: &str,
     saved: &serde_json::Value,
     pin: &infrastructure::PinnedProcess,
@@ -336,7 +351,7 @@ pub(super) fn after_owned_exit(
         process_identity::observe_process(&job(&record)),
         ProcessObservation::Empty(_)
     ));
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let view = UpdateJournal::activation_state_snapshot(&directory, id, false, None).unwrap();
     let state = view.activation_state.as_ref().unwrap();
     assert_eq!(state.phase, ActivationStatePhase::NotResident);

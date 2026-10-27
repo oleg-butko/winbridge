@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-27: выполняются [Main25 profiles и изолированная worker17→19 migration](plans/main25-schema-profiles-2026-10-27.md).
+Main ba9557b переносится в feature; profiles сохраняют17 и добавляют19 без ослабления
+schema/authority checks. Windows slot204 отдельный, installed worker не обновляется.
+После Windows работы пользователь переключит worker обратно на.203.
+
+## Multi-controller: текущая ветка .204
+
 2026-10-27: [main обновлён доba9557b, новое сравнение](plans/multi-controller-review-ba9557b.md).
 Main25/archive/cache fix совместимы по архитектуре; новый preflight требует Links
 adapter, а native audit требует явного переноса worker17→19 schema expectation.
@@ -41,6 +48,38 @@ Installed d052 ещё не заменён; дальше actual installed verific
 пользователя, затем normal-service updater plan. Public updater/multi-controller
 не включаются.
 
+## Updater: checkpoint main ba9557b
+
+2026-10-27: [Main25 native scenario](plans/worker-self-update/main25-2026-10-27.md)
+подключён в source: pre-admission firewall wait, same-child service, IPC/history/pause,
+cold exit и archive под original lease. Первый actual run:136 prerequisites passed,
+setup отказал на Cargo hard link до Main; fix cross-checked и native regression1/0
+прошёл с2 files twice, test slot сохранён.
+Разовая консервация закрытого slot ожидает отдельного одобрения; positive Main25 впереди.
+
+2026-10-27: [runtime archive](plans/worker-self-update/runtime-archive-2026-10-27.md)
+имеет29 native policy checks; retirement hook cross-checked. Full Main25/wiring ещё впереди.
+
+2026-10-27: [FixtureLayout/private input2](plans/worker-self-update/fixture-layout-2026-10-27.md)
+подключён в source; workspace843/0, Linux/MSVC Clippy. Native layout5+2/3 files twice/12 negative audits подтверждён; archive/full Main25 впереди.
+
+2026-10-26: [activation runtime reservation](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md)
+прошёл6+11 native checks. Full Main25/archive/layout ещё впереди; production не менялся.
+
+2026-10-26: performance-ветка слита в main, worker0.1.1 выпущен и **установлен
+пользователем, actual build/hash/history проверены**. [Проверка и продолжение](plans/worker-self-update/service-ledger-2026-10-26.md).
+Source updater20 содержит intent/history, original-guard admission, shared Worker/
+readonly IPC и trusted V4 sender/receiver с независимым parent normal-IPC probe.
+Actor25/view17, resident service states и атомарные activation7/LocalVerified +
+root AwaitingController реализованы. Source workspace833/0. Следом stable
+activation runtime/network fixture → actual Main25/retained19→20.
+[Checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md).
+Native component gate15429a4:16+14 tests/3 files twice, independent verification
+и readonly recheck; это не actual same-child V4/Job/Main25. Старый1f653b2/13+13
+сохраняет лишь свой historical library scope.
+Public updater/multi-controller не включаются.
+Установленная0.1.1 не заменяется.
+
 ## Завершено: ускорение прогонов и выпуск 0.1.1
 
 2026-10-26: [локальный worker0.1.1](releases/worker-0.1.1.md) с idle CPU fix и
@@ -56,8 +95,8 @@ inventory CLI и legacy-path compatibility. Очистка и перенос cac
 2026-10-26 дополнительный bugfix: [worker idle CPU](plans/run-speed/idle-worker-2026-10-26.md).
 Полная история читалась каждые25ms. Pending-index queries/diagnostics и isolated
 Windows CPU experiment завершены:99.19→1.51% одного ядра на synthetic history,
-52 native tests passed/5 ready files twice. Installed worker ещё старый;
-его замена и проверка на рабочей истории не выполнялись.
+52 native tests passed/5 ready files twice. Затем worker0.1.1 выпущен и установлен;
+проверка build/hash/history завершена в checkpoint выше.
 
 2026-10-26 новая цель: [следующий раунд](plans/run-speed/round2-2026-10-26.md).
 Раунд завершён: desktop rebuild ordinary release118.5625→private local opt0
@@ -95,12 +134,14 @@ Same-child journal writer19/17/actor24/view16/private3 проверен, обе 
 в том же child/Store/lock без повторного owner epoch. Затем новая controller session
 → durable Job lifetime transfer → commit/scoped maintenance release → remaining
 U2 faults/CLI/MCP/opt-in → U3 desktop → U4 actual installed update → возврат к A4.3.
-Проектируемые schema20/private4/actor25/view17 пока не реализованы.
-Source data foundation для service уже добавлена: strict DTO/binding и pure FSM,
-7 portable regressions; durable admission/driver/receiver/actual IPC впереди.
-Public install выключен; working runtime/config/journal не менялись.
+Schema20 format/readback добавлены; private4/actor25/view17 ещё не реализованы.
+Source data foundation для service включает strict DTO/binding, pure FSM и
+журнал и consuming admission/connection transfer preparation. Service4 driver/
+receiver/normal Worker/actual IPC впереди.
+Public install выключен; worker0.1.1 применён вручную, новый updater20 не установлен.
 Старые NEXT/ACTIVE ниже исторические. Точные source/task/proof pins и окружение
-192.168.44.204 — в новом checkpoint; gate не повторять без новой причины.
+192.168.44.204 — историческое окружение writer gate; текущее .203 в новом checkpoint.
+Terminal gate не повторять без новой причины.
 
 ## История предыдущих checkpoints: не текущие задания
 

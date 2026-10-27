@@ -157,14 +157,14 @@ fn retained_files(r: &RuntimeReplacementRecord) -> (Vec<ImageEvidence>, Vec<Imag
     );
     (old, new)
 }
-fn preserved(root: &Path, before: &serde_json::Value) -> serde_json::Value {
+fn preserved(root: &FixtureLayout, before: &serde_json::Value) -> serde_json::Value {
     let images: Vec<ImageEvidence> =
         serde_json::from_value(before["runtimePreparation"]["sourceFiles"].clone()).unwrap();
     for image in &images {
         assert_eq!(inspect_image(Path::new(&image.path)).unwrap(), *image);
     }
     let preimages = UpdateJournal::inspect_runtime_preimages(
-        &root.join("runtime/update-state"),
+        &root.runtime().join("update-state"),
         before["root"]["updateId"].as_str().unwrap(),
     )
     .unwrap()
@@ -185,11 +185,11 @@ fn preserved(root: &Path, before: &serde_json::Value) -> serde_json::Value {
     json!({"sourceFiles":images,"preimages":preimages,"backupFile":image})
 }
 pub(super) fn execute(
-    root: &Path,
+    root: &FixtureLayout,
     sup: &SupervisorRecord,
     before: &serde_json::Value,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
     let bytes = journal_bytes(root);
     let mut request: SupervisorRequest =
@@ -333,8 +333,7 @@ pub(super) fn execute(
     assert_eq!(records.last(), Some(&r));
     let (old, new) = retained_files(&r);
     let actual_manifest: InstalledSetManifest =
-        serde_json::from_slice(&fs::read(root.join("runtime").join(MANIFEST_NAME)).unwrap())
-            .unwrap();
+        serde_json::from_slice(&fs::read(root.runtime().join(MANIFEST_NAME)).unwrap()).unwrap();
     assert_eq!(actual_manifest, r.intent.preparation.plan.manifest);
     let preservation = preserved(root, before);
     assert_eq!(journal_bytes(root), bytes);
@@ -369,7 +368,7 @@ pub(super) fn execute(
         "activationStarted":false,"installedRuntimeApplied":false})
 }
 pub(super) fn after_owned_exit(
-    root: &Path,
+    root: &FixtureLayout,
     config: &Path,
     worker: &Path,
     id: &str,
@@ -382,36 +381,65 @@ pub(super) fn after_owned_exit(
         id,
         proof,
         &proof["workerBytesBefore"],
-        false,
+        None,
     )
 }
 pub(super) fn after_writer_exit(
-    root: &Path,
+    root: &FixtureLayout,
     config: &Path,
     worker: &Path,
     id: &str,
     proof: &serde_json::Value,
     writer_bytes: &serde_json::Value,
 ) -> serde_json::Value {
-    after_exit(root, config, worker, id, proof, writer_bytes, true)
+    after_exit(
+        root,
+        config,
+        worker,
+        id,
+        proof,
+        writer_bytes,
+        Some(UpdatePhase::VerifyingLocal),
+    )
+}
+pub(super) fn after_service_exit(
+    root: &FixtureLayout,
+    config: &Path,
+    worker: &Path,
+    id: &str,
+    proof: &serde_json::Value,
+    service_bytes: &serde_json::Value,
+) -> serde_json::Value {
+    after_exit(
+        root,
+        config,
+        worker,
+        id,
+        proof,
+        service_bytes,
+        Some(UpdatePhase::AwaitingController),
+    )
 }
 fn after_exit(
-    root: &Path,
+    root: &FixtureLayout,
     config: &Path,
     worker: &Path,
     id: &str,
     proof: &serde_json::Value,
     expected_bytes: &serde_json::Value,
-    activation_started: bool,
+    activation_phase: Option<UpdatePhase>,
 ) -> serde_json::Value {
-    let directory = root.join("runtime/update-state");
+    let directory = root.runtime().join("update-state");
     let (r, _) =
         observe_after_owned_exit(|| UpdateJournal::inspect_runtime_replacement(&directory, id))
             .unwrap();
     let r = r.unwrap();
     assert_eq!(serde_json::to_value(&r).unwrap(), proof["record"]);
     let view = UpdateJournal::runtime_replacement_snapshot(&directory, id, false, None).unwrap();
-    assert_eq!(view.update.phase, UpdatePhase::VerifyingLocal);
+    assert_eq!(
+        view.update.phase,
+        activation_phase.unwrap_or(UpdatePhase::VerifyingLocal)
+    );
     assert_eq!(
         view.runtime_replacement.as_ref().unwrap().phase,
         RuntimeReplacementPhase::FilesMoved
@@ -438,5 +466,5 @@ fn after_exit(
     assert_eq!(&bytes, expected_bytes);
     json!({"record":r,"view":view,"normalStartupRefused":true,"workerBytesUnchanged":true,
         "workerBytesBeforeStartup":bytes,"workerBytesAfterStartup":journal_bytes(root),
-        "ownedJobEmpty":true,"activationStarted":activation_started})
+        "ownedJobEmpty":true,"activationStarted":activation_phase.is_some()})
 }

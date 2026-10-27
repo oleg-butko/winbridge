@@ -30,6 +30,14 @@ impl Worker {
                     "Queue command belongs to another journal; no rebind",
                 ));
             }
+            if self.local_activation.is_some()
+                && matches!(request.command, QueueControlCommand::Set { .. })
+            {
+                return Ok(rejected(
+                    QueueControlError::Unavailable,
+                    crate::local_service::READ_ONLY_REASON,
+                ));
+            }
             if matches!(request.command, QueueControlCommand::Set { .. })
                 && (self.stop.load(Ordering::Acquire)
                     || self.journal_recovery_required()?.is_some())
@@ -39,7 +47,10 @@ impl Worker {
                     "Worker stopping/recovery required; no queue change",
                 ));
             }
-            let result = store.queue_control(context.clone(), request.command)?;
+            let mut result = store.queue_control(context.clone(), request.command)?;
+            if self.local_activation.is_some() {
+                crate::local_service::readonly_queue_result(&mut result);
+            }
             Ok::<_, String>(QueueControlResponse {
                 queue_control_version: 1,
                 context: Some(context),

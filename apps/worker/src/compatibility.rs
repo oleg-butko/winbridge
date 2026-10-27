@@ -4,6 +4,15 @@ use std::{io::Read, path::Path};
 use winbridge_protocol::{artifact_descriptor, ArtifactRole, WorkerConfigCheckReport};
 
 pub fn check_config(path: &Path, expected_sha256: &str) -> Result<WorkerConfigCheckReport> {
+    load_checked_config(path, expected_sha256).map(|(_, report)| report)
+}
+pub(crate) fn load_checked_config(
+    path: &Path,
+    expected_sha256: &str,
+) -> Result<(
+    winbridge_core::config::WorkerConfig,
+    WorkerConfigCheckReport,
+)> {
     std::hint::black_box(winbridge_protocol::WORKER_CONFIG_CHECK_MARKER);
     if !winbridge_core::update::valid_hash(expected_sha256, &[64]) {
         return Err("Expected lowercase worker config SHA-256".into());
@@ -29,7 +38,7 @@ pub fn check_config(path: &Path, expected_sha256: &str) -> Result<WorkerConfigCh
     if winbridge_update::artifact::inspect_image(path)? != before {
         return Err("Worker config identity changed; no journal opened".into());
     }
-    Ok(WorkerConfigCheckReport {
+    let report = WorkerConfigCheckReport {
         schema_version: 1,
         kind: "worker_config_check".into(),
         descriptor: artifact_descriptor(ArtifactRole::Worker),
@@ -37,10 +46,11 @@ pub fn check_config(path: &Path, expected_sha256: &str) -> Result<WorkerConfigCh
             .map_err(|e| e.to_string())?,
         config: before,
         worker_config_schema: config.schema_version,
-        instance_id: config.instance_id,
+        instance_id: config.instance_id.clone(),
         worker_journal_opened: false,
         scheduler_started: false,
         candidate_verified: false,
         runtime_applied: false,
-    })
+    };
+    Ok((config, report))
 }

@@ -19,6 +19,7 @@ pub struct ActivationJournal {
     command: WorkerJournalActivationCommand,
     shutdown: WorkerShutdownReceipt,
     attempted: bool,
+    deadline: std::time::Instant,
 }
 
 /// No writable connection escapes on preparation failure. Keep the same lock
@@ -100,6 +101,7 @@ fn existing_connection(path: &Path, writable: bool) -> Result<Store> {
         read_only: !writable,
         work_scheduling: None,
         queue_policy: None,
+        service_startup: None,
     })
 }
 
@@ -188,6 +190,96 @@ fn prepare(
 }
 
 impl ActivationJournal {
+    #[cfg(any(windows, test))]
+    pub(crate) fn constrain_startup_deadline(&mut self, deadline: std::time::Instant) {
+        self.deadline = self.deadline.min(deadline);
+    }
+    pub(super) fn require_window(&self) -> Result<()> {
+        if std::time::Instant::now() >= self.deadline {
+            return Err("Original activation monotonic window expired; no service startup".into());
+        }
+        activation::window(&self.command)
+    }
+    pub(super) fn into_service_parts(
+        self,
+    ) -> (
+        Store,
+        LockedShutdownState,
+        WorkerShutdownReceipt,
+        std::time::Instant,
+    ) {
+        (self.store, self.state, self.shutdown, self.deadline)
+    }
+    pub(super) fn check_service_continuation(
+        &self,
+        command: &winbridge_protocol::update::WorkerServiceActivationCommand,
+    ) -> Result<()> {
+        self.require_window()?;
+        if command.binding.writer_command != self.command {
+            return Err("Service continuation changed the original writer command".into());
+        }
+        filesystem(&self.state)?;
+        self.check_service_writer_receipt(&command.binding.writer_receipt)
+    }
+    pub(super) fn revalidate_state(&self) -> Result<()> {
+        filesystem(&self.state)
+    }
+
+    /// Same held connection, header, immutable receipt and Quiesced lease.
+    /// No CREATE/open/migration/begin_authority/checkpoint-mode change.
+    pub(super) fn check_service_transfer(
+        &self,
+        fresh: &super::JournalActivationPermit,
+        command: &winbridge_protocol::update::WorkerServiceActivationCommand,
+        checkpoint: &mut impl FnMut() -> Result<()>,
+    ) -> Result<()> {
+        winbridge_update::activation::service::validate_command_envelope(command)?;
+        if !self.attempted
+            || command.binding.writer_command != self.command
+            || &command.binding.writer_receipt != fresh.receipt()
+        {
+            return Err(
+                "Service transfer requires the same fresh activation command/receipt".into(),
+            );
+        }
+        filesystem(&self.state)?;
+        checkpoint()?;
+        self.require_window()?;
+        if super::now_ms() < command.issued_at_ms {
+            return Err("Service transfer clock precedes the admitted service command".into());
+        }
+        self.check_service_writer(fresh)?;
+        filesystem(&self.state)?;
+        checkpoint()?;
+        self.require_window()?;
+        if super::now_ms() < command.issued_at_ms {
+            return Err("Service transfer clock moved before admission".into());
+        }
+        // The external checkpoint may observe a concurrent owner/root change.
+        // Recheck the worker header/receipt after it, not just before it.
+        self.check_service_writer(fresh)?;
+        filesystem(&self.state)
+    }
+
+    fn check_service_writer(&self, fresh: &super::JournalActivationPermit) -> Result<()> {
+        self.check_service_writer_receipt(fresh.receipt())
+    }
+    fn check_service_writer_receipt(&self, receipt: &WorkerJournalActivationReceipt) -> Result<()> {
+        let tx = self.store.connection.unchecked_transaction().map_err(sql)?;
+        if self.store.state_backup_authority()? != receipt.authority
+            || activation::read(&tx, &self.command)?.as_ref() != Some(receipt)
+            || super::update::read(&tx, &self.shutdown.update_id)? != self.shutdown.lease
+            || super::shutdown::read(&tx, &self.shutdown.update_id, &self.shutdown.command)?
+                .as_ref()
+                != Some(&self.shutdown)
+        {
+            return Err(
+                "Service transfer authority/receipt/quiesced lease/shutdown changed".into(),
+            );
+        }
+        tx.commit().map_err(sql)
+    }
+
     /// Consumes the actual already held lock. The checkpoint must reject stale
     /// graph/parent/runtime/child or expired original monotonic custody. This
     /// constructor alone is not an authenticated runtime startup permission.
@@ -197,6 +289,11 @@ impl ActivationJournal {
         shutdown: WorkerShutdownReceipt,
         mut checkpoint: impl FnMut() -> Result<()>,
     ) -> std::result::Result<Self, Box<ActivationJournalOpenFailure>> {
+        let remaining = command
+            .deadline_at_ms
+            .saturating_sub(super::now_ms())
+            .min(300_000);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(remaining);
         match prepare(&state, &command, &shutdown, &mut checkpoint) {
             Ok(store) => Ok(Self {
                 store,
@@ -204,6 +301,7 @@ impl ActivationJournal {
                 command,
                 shutdown,
                 attempted: false,
+                deadline,
             }),
             Err(reason) => Err(Box::new(ActivationJournalOpenFailure { reason, state })),
         }
@@ -227,13 +325,24 @@ impl ActivationJournal {
                 });
         }
         self.attempted = true;
+        self.require_window()?;
         filesystem(&self.state)?;
         let state = &self.state;
+        let deadline = self.deadline;
         self.store
             .activate_journal_authority_checked(&self.command, &self.shutdown, || {
+                if std::time::Instant::now() >= deadline {
+                    return Err("Original activation window expired; no writer".into());
+                }
                 filesystem(state)?;
                 checkpoint()?;
-                filesystem(state)
+                filesystem(state)?;
+                if std::time::Instant::now() >= deadline {
+                    return Err(
+                        "Original activation window expired after checkpoint; no writer".into(),
+                    );
+                }
+                Ok(())
             })
     }
     /// Historical receipt only, including after an uncertain transaction.
@@ -244,4 +353,4 @@ impl ActivationJournal {
 
 #[cfg(test)]
 #[path = "activation_open_tests.rs"]
-mod tests;
+pub(super) mod tests;

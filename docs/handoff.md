@@ -1,4 +1,18 @@
-# Продолжение работы — worker 0.1.1 выпущен 2026-10-26
+# Продолжение апдейтера — worker 0.1.1 установлен и проверен
+
+**Текущая задача2026-10-27:** пользователь переключил installed worker0.1.1 на
+.204 и разрешил реализацию [Main25 profiles/cold migration плана](plans/main25-schema-profiles-2026-10-27.md).
+Main ba9557b интегрируется в feature с проверенным source adapter. Profiles17/20
+и19/20 явные; expected schemas сверяются с обоими verified archives, не выводятся
+из proof. Historical17 default и frozen view17 сохранены. Native worker17→19
+cold migration test добавлен отдельно, active updater migration этим не разрешается.
+Worker0.1.1 остаётся установленным. Native test slot:runtime-test-204, чужой
+runtime-test/conservation files не трогать. После последнего native task агент
+обязан сообщить пользователю, что worker можно переключить обратно на.203.
+Preflight a0c6924a-360e-4e38-98d4-0993fcee6857 succeeded/0; Windows free31,514,517,504.
+Linux workspace894/0/17ignored и Python6/0 прошли; native результаты ещё впереди.
+
+## Multi-controller: текущая ветка .204
 
 **Новый pull2026-10-27:** main fast-forward c4b7aea→ba9557b,6 commits.
 [Обновлённое сравнение и полный source patch](plans/multi-controller-review-ba9557b.md).
@@ -90,39 +104,102 @@ merge50ceb0d, review fixes2b3734c. [Review](plans/run-speed/review-merge-2026-10
 Source workspace794/0/17ignored, Linux/MSVC Clippy, TS/UI/contracts, safety probe1,
 Python profile5/desktop3/publication4 passed. Runtime CPU fix принят.
 
-**Worker0.1.1 выпущен:** [пакет, proof и установка](releases/worker-0.1.1.md).
-Run20261026-182213-6cd81f3e/taskbf07a5ed-aa0d-4d94-b780-e524e66d269e
-**succeeded/0,140 Rust +6 Windows policy checks**,10 ready files twice;
-old-controller0.1.0/new-worker0.1.1 RPC/dedup/stale/Unicode и source-final-readback
-passed. CPU matched history98.8823→1.9404% одного ядра. ZIP worker0.1.1-59249e6
-опубликован в K:/VMs/shared/WinBridge/releases/20261026-182213-6cd81f3e.
-Source59249e6/manifestf7497e8..., ZIP2356cef5..., worker536d8637... — полные pins
-в release note. Metadata/verified.json/source archive указаны там; не replay.
+## Updater: checkpoint main ba9557b
 
-Постоянный network exe `K:\_proj-26\winbridge\runtime-test\winbridge-worker.exe`,
-порт1144, default900s на firewall/connection, RPC120s отдельно. Повтор использовал
-тот же executable path и подтвердил reuse; lease/ownership/read pin/live-process/
-production overlap guards пройдены. В AGENTS.md закреплено это требование.
-State/config/instance/report per-run, рабочий runtime отдельно. Updater startup240s
-и старые120s intents не менялись; автоматические firewall rules не создавались.
+2026-10-27. Начать с [Main25 checkpoint](plans/worker-self-update/main25-2026-10-27.md),
+затем [runtime archive checkpoint](plans/worker-self-update/runtime-archive-2026-10-27.md),
+[fixture layout checkpoint](plans/worker-self-update/fixture-layout-2026-10-27.md),
+[stable runtime reservation checkpoint](plans/worker-self-update/activation-runtime-reservation-2026-10-26.md),
+[actor25/local-root checkpoint](plans/worker-self-update/local-service-actor-2026-10-26.md)
+и [плана локального сервиса](plans/worker-self-update/local-service-activation.md).
+**Main25 первый полный run остановился до Main** на hard link в Cargo cache;
+136 подготовительных native tests passed, это не activation proof. Cache comparison
+исправлен без ослабления runtime checks. `runtime-test` сохранён с закрытой lease;
+подготовлен readonly-проверенный разовый conservation plan, **-Execute требует
+отдельного одобрения пользователя**. Точные2 files/пути/SHA/tasks — в Main25 checkpoint.
+Cache fix **38dfe85** прошёл настоящий Windows regression1/0,2 files twice;
+independent verifier готов, actual positive Main25 ещё впереди. Ответ на разовую
+консервацию2 files пока не получен; -Execute не выполнялся.
 
-**Следующее внешнее действие — ручное применение ZIP пользователем.** Working
-worker оставлен d052/0.1.0/generation301be6ea connected/active0/errors=null;
-application stopped, workflow succeeded. Desktop не нужен. Его exe/config/state
-не заменялись. Пользователь останавливает старый worker, заменяет exe в runtime
-и запускает с прежним winbridge-worker.snapshot.local_203.json; полная команда
-и migration16→17/rollback ограничения в release note. До сообщения об обновлении
-не выполнять зависимые Windows updater gates/не останавливать working worker.
-После ответа сверить actual0.1.1/source59249e6/manifestf749..., новый generation/
-session, health и прежнюю историю. Затем продолжить normal local-service plan
-в том же activated child/Store/lock; DTO/FSM foundation есть, journal20/driver/
-receiver/local IPC ещё не реализованы. Public update/U3/U4 off.
+Performance-ветка слита в main; её прежний запрет продолжать updater устарел.
 
-Current controller .203:1143/PID5103 оставлен. Native observer50035, isolated
-controller и тестовые child завершены. Source checks794/0/17ignored, Linux/MSVC,
-TS/UI/contracts, safety probe1 прежнего review и Python publication4 актуальны;
-эта итерация меняла PS/Python/docs, Rust не менялся. Native test140 добавлен выше.
-История старых failed/cancelled прогонов ниже и в release note; они не passed.
+Пользователь установил worker **0.1.1/source59249e6**, SHA exe `536d8637…` совпал
+с выпущенным пакетом. Проверочная Windows task
+`ca8c7760-8bd0-4680-b4d2-d7fdaa19b325` — succeeded/0. Generation
+`936909c6-d148-40cd-abf6-a0d996935994`, session `c1a7e0b6-edb6-46e2-85ba-2f0fc6461c76`;
+incarnation и actual config `_203` сохранены. Connected/active0, maintenance/recovery
+errors отсутствуют, прежние task/output/workflow/application читаются.
+Полные hashes/evidence/process/disk measurements — в checkpoint.
+CPU24.37% измерен во время принятой задачи, **это не idle benchmark**.
+
+Controller `ws://192.168.44.203:1143`, PID5103, оставлен работать. Рабочий worker
+PID21776 в `K:\_proj-26\winbridge\runtime\winbridge-worker.exe`; desktop не нужен,
+тестовых окон нет. Не обновлять его повторно без необходимости. В каждом новом
+Windows gate заранее сообщать какие процессы/окна нужны. Постоянный network test
+slot `runtime-test/winbridge-worker.exe`, wait900s, отдельный controller1144;
+state/config/instance/report каждого run изолированы. Firewall rules не менять.
+
+**Source updater20/worker17, supervisor25/view17, private2+writer3+service4.** Добавлены
+service intent/current/history и согласованное чтение под schema20. Native consuming
+admission от original process guard подключён как trusted Rust API; duplicate
+даёт только историю, свежий permit появляется после commit. Parent удерживает
+ActivationServicePreparation, child может передать тот же connection/full state
+в PreparedServiceJournal. Общие constructor/reconciliation и library local IPC
+реализованы через LocalService: тот же Store/full lock/generation, временная
+startup scope, затем readonly IPC. Controller/scheduler/mutations не включаются.
+Trusted V4 sender/receiver и readonly normal-IPC identity query добавлены;
+родитель независимо читает обычный IPC перед service confirmation. Actor25/view17
+подключены: один resident Written guard, busy/confirmed/uncertain states и cold
+no-adoption. После service confirmation activation7/LocalVerified и root
+AwaitingController записываются атомарно. Actual same-child Main25 ещё не пройден.
+Schema19→20 имеет verified consistent backup и fencing updater owner; это не
+новая worker authority. Сохранённые факты не дают разрешения открыть Store или
+повторить send. Public install/advertised activation/controller/desktop выключены.
+
+Новый slot reservation helper прошёл6+11 native checks,
+run20261026-210824-6ce141b3/task354d9f95-6d9c-4066-ad0f-612c9ce7e17e succeeded/0.
+Image pin снимается отдельно; lease/marker остаются, cold reservation не принимается.
+Это не reusable archive/layout/full Main25. Первый failed path-policy test и
+его test-only relative slot сохранены; scope/hashes/storage — в checkpoint.
+Explicit FixtureLayout/private input2 подключён в source всех Main helpers и
+feature-only validation Main; legacy input1/root-runtime/no-controller сохранён.
+Windows attrs-only lease inspection/hard-link check добавлен. Source workspace843/0
+(17 ignored), оба all-targets Clippy прошли; native layout component5+2 подтверждён на sourcec4b7aea:
+run20261027-063128-2873e42d/taska9650312-9a20-40a5-b34c-76946f71b090 succeeded/0,
+3 files twice/12 negative audits. Это не full Main25; точные pins в checkpoint.
+Debian старые unused test ELF caches очищены: available22.74GB, controller сохранён.
+Archive helper с original slot lease реализован: final29 native policy checks
+(6+11+12), run20261027-074433-9d3bc04c/task90d968a3-f026-4357-b397-9a2d3b45abcc
+succeeded/0. Native retirement hook source/MSVC Clippy готов, но actual Main с ним
+ещё не выполнялся. Cold archive recovery/новое process custody не добавлены.
+Следующий шаг: full gate wiring + network preflight → новый Main25
+и actual19→20/refusal. Старый normal Main тоже открывает configured controller URL;
+поэтому нельзя запускать этот gate из новых hash paths и нельзя подменить URL=None. Нельзя заново открывать Store, получать второй lock,
+прибавлять epoch или обновлять original startup deadline. Maintenance/user pause
+сохраняются, local-only service не подключается к controller. Затем controller
+session/lifetime transfer/commit/release, remaining U2/U3/U4 и возврат к A4.3.
+
+Прежний Main24 writer proof и release140+6 остаются действительны для своих
+исторических source pins, не доказывают normal service/schema20. Full replacement service/Main25
+ещё не проверялся. Текущие source checks: **workspace833/0, 17 ignored**,
+updater246/0 (4 ignored), mailbox25/1, worker15/0, TS typecheck.
+Linux/MSVC Clippy all-targets/update-validation `-D warnings`, generated
+contracts-check/fmt/scaffold295 прошли. Точные logs и source pins — в checkpoint. Старый event_log
+WouldBlock повторился при actor25 workspace. [Найден механизм retained FD и исправлен
+Unix Drop log writer](plans/worker-self-update/review-actor25-2026-10-26.md):5 focused
+tests/OS experiment passed. Первый failed workspace не считается успешным;
+полный повтор после fix прошёл833/0.
+Новый `--service-admission-only` **component gate пройден**:
+run20261026-200828-7bcf7834/task52e8eda0-e7a4-4623-a967-d747ae637bcc succeeded/0,
+**16 updater +14 worker Windows tests**. Producer15429a4;3 files verified twice,
+compiled source/manifest bound, independent proof и readonly recheck прошли.
+Parent probe здесь положительно проверен через OS IPC к mock provider; это НЕ
+same-child V4/installed-set/Job/Main25 proof. Точные pins/команда/storage в
+service4 checkpoint. Эти tests не доказывают новый actor25/atomic root/monitor;
+полный Main25 остаётся обязательным, updater не считается готовым.
+Working0.1.1/source592 healthy/active0/generation936909c6/incarnation5a8eb173 прежние;
+controller5103 оставлен, test processes завершены. Desktop не нужен; worker оставить.
+Исторические1f653b2/13+13 иf145b62/13+6 gates сохранены в прежних checkpoints.
 
 ## История подготовки и прежние checkpoints
 

@@ -1,5 +1,7 @@
 //! The live binding actor owns exactly one phase; data never reconstructs it.
 use super::*;
+#[path = "activation_service.rs"]
+mod service;
 enum State {
     Idle,
     #[cfg(windows)]
@@ -28,16 +30,26 @@ enum State {
     WriterUnconfirmed(Box<crate::activation::ActivationProcessGuard>),
     #[cfg(windows)]
     WriterFailed(Box<crate::activation::ActivationLaunchFailure>),
+    #[cfg(windows)]
+    StartingService(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
+    Serviced(Box<crate::activation::ActivationProcessGuard>),
+    #[cfg(windows)]
+    ServiceUnconfirmed(Box<crate::activation::ActivationProcessGuard>),
+    #[cfg(windows)]
+    ServiceFailed(Box<crate::activation::ActivationLaunchFailure>),
 }
 pub(super) struct FilesActor {
     state: State,
     writer_key: Option<String>,
+    service_key: Option<String>,
 }
 impl Default for FilesActor {
     fn default() -> Self {
         Self {
             state: State::Idle,
             writer_key: None,
+            service_key: None,
         }
     }
 }
@@ -105,11 +117,14 @@ impl FilesActor {
             #[cfg(windows)]
             State::HandoffFailed(e) => Some(e.record()),
             #[cfg(windows)]
-            State::Writing(r) => Some(r),
+            State::Writing(r) | State::StartingService(r) => Some(r),
             #[cfg(windows)]
-            State::Written(g) | State::WriterUnconfirmed(g) => Some(g.record()),
+            State::Written(g)
+            | State::WriterUnconfirmed(g)
+            | State::Serviced(g)
+            | State::ServiceUnconfirmed(g) => Some(g.record()),
             #[cfg(windows)]
-            State::WriterFailed(e) => Some(e.record()),
+            State::WriterFailed(e) | State::ServiceFailed(e) => Some(e.record()),
         };
         if let Some(record) = record {
             if record.intent.source.update_id != _s.spec.update_id
@@ -148,6 +163,10 @@ impl FilesActor {
                     | State::Written(_)
                     | State::WriterUnconfirmed(_)
                     | State::WriterFailed(_)
+                    | State::StartingService(_)
+                    | State::Serviced(_)
+                    | State::ServiceUnconfirmed(_)
+                    | State::ServiceFailed(_)
             )
         }
         #[cfg(not(windows))]
@@ -177,6 +196,10 @@ impl FilesActor {
                     | State::Written(_)
                     | State::WriterUnconfirmed(_)
                     | State::WriterFailed(_)
+                    | State::StartingService(_)
+                    | State::Serviced(_)
+                    | State::ServiceUnconfirmed(_)
+                    | State::ServiceFailed(_)
             )
         }
         #[cfg(not(windows))]
@@ -203,6 +226,10 @@ impl FilesActor {
                     | State::Written(_)
                     | State::WriterUnconfirmed(_)
                     | State::WriterFailed(_)
+                    | State::StartingService(_)
+                    | State::Serviced(_)
+                    | State::ServiceUnconfirmed(_)
+                    | State::ServiceFailed(_)
             )
         }
         #[cfg(not(windows))]
@@ -453,20 +480,30 @@ impl FilesActor {
                 process.phase = ActivationProcessPhase::Indeterminate;
                 process.reason = Some(failure.reason.chars().take(1000).collect());
             }
-            State::Writing(_) => {
+            State::Writing(_) | State::StartingService(_) => {
                 process.phase = ActivationProcessPhase::Indeterminate;
                 process.process_custody_held = None;
                 process.reason = Some("Journal activation in progress; inspect internal24".into());
             }
-            State::Written(g) | State::WriterUnconfirmed(g) => {
+            State::Written(g)
+            | State::WriterUnconfirmed(g)
+            | State::Serviced(g)
+            | State::ServiceUnconfirmed(g) => {
                 diagnostics(process, g.diagnostics());
                 process.resident_process = g.resident_process();
                 process.process_alive = g.process_alive();
                 process.process_custody_held = Some(process.resident_process.is_some());
                 process.phase = ActivationProcessPhase::Indeterminate;
-                process.reason = Some("Journal activation progressed; inspect internal24".into());
+                process.reason = Some(
+                    if self.service_started() {
+                        "Local service progressed; inspect internal25"
+                    } else {
+                        "Journal activation progressed; inspect internal24"
+                    }
+                    .into(),
+                );
             }
-            State::WriterFailed(f) => {
+            State::WriterFailed(f) | State::ServiceFailed(f) => {
                 diagnostics(process, f.diagnostics());
                 process.resident_process = f.resident_process();
                 process.process_alive = f.process_alive();
@@ -532,19 +569,29 @@ impl FilesActor {
                 state.process_alive = failure.process_alive();
                 state.reason = Some(failure.reason.chars().take(1000).collect());
             }
-            State::Writing(_) => {
+            State::Writing(_) | State::StartingService(_) => {
                 state.phase = ActivationStatePhase::Indeterminate;
                 state.original_lock_held = None;
                 state.reason = Some("Journal activation in progress; inspect internal24".into());
             }
-            State::Written(g) | State::WriterUnconfirmed(g) => {
+            State::Written(g)
+            | State::WriterUnconfirmed(g)
+            | State::Serviced(g)
+            | State::ServiceUnconfirmed(g) => {
                 state.phase = ActivationStatePhase::Indeterminate;
                 state.original_lock_held = g.original_lock_held();
                 state.resident_process = g.resident_process();
                 state.process_alive = g.process_alive();
-                state.reason = Some("Journal activation progressed; inspect internal24".into());
+                state.reason = Some(
+                    if self.service_started() {
+                        "Local service progressed; inspect internal25"
+                    } else {
+                        "Journal activation progressed; inspect internal24"
+                    }
+                    .into(),
+                );
             }
-            State::WriterFailed(f) => {
+            State::WriterFailed(f) | State::ServiceFailed(f) => {
                 state.phase = ActivationStatePhase::Indeterminate;
                 state.original_lock_held = f.original_lock_held();
                 state.resident_process = f.resident_process();
@@ -568,6 +615,10 @@ impl FilesActor {
         self.patch_files(&mut view, signal)?;
         self.patch_process(&mut view, signal)?;
         self.patch_state(&mut view, signal)?;
+        self.patch_writer(&mut view, active)?;
+        Ok(view)
+    }
+    fn patch_writer(&self, view: &mut UpdatePreparationView, _active: bool) -> Result<()> {
         let writer = view
             .activation_writer
             .as_mut()
@@ -590,8 +641,8 @@ impl FilesActor {
                     );
                 }
             }
-            State::Writing(_) => {
-                writer.phase = if active && view.driver_error.is_none() {
+            State::Writing(_) | State::StartingService(_) => {
+                writer.phase = if _active && view.driver_error.is_none() {
                     ActivationWriterPhase::Activating
                 } else {
                     ActivationWriterPhase::Indeterminate
@@ -600,22 +651,25 @@ impl FilesActor {
                     "Original writer dispatch staged; durable admission/commit not inferred".into(),
                 );
             }
-            State::Written(g) | State::WriterUnconfirmed(g) => {
+            State::Written(g)
+            | State::WriterUnconfirmed(g)
+            | State::Serviced(g)
+            | State::ServiceUnconfirmed(g) => {
                 writer.resident_process = g.resident_process();
                 writer.process_alive = g.process_alive();
-                if matches!(self.state, State::Written(_))
+                if matches!(self.state, State::Written(_) | State::Serviced(_))
                     && writer.durable_phase == Some(ActivationWriterDurablePhase::Confirmed)
                     && writer.process_alive == Some(true)
                     && view.driver_error.is_none()
                 {
                     writer.phase = ActivationWriterPhase::Confirmed;
-                    writer.reason=Some("Journal commit confirmed; normal worker service/controller/lifetime are not verified".into());
+                    writer.reason=Some("Journal commit confirmed; service progress belongs to internal25 and does not imply controller/lifetime readiness".into());
                 } else {
                     writer.phase = ActivationWriterPhase::Indeterminate;
                     writer.reason=view.driver_error.clone().or_else(||Some("Saved commit is history; current writer residency/liveness unconfirmed".into()));
                 }
             }
-            State::WriterFailed(f) => {
+            State::WriterFailed(f) | State::ServiceFailed(f) => {
                 writer.phase = ActivationWriterPhase::Indeterminate;
                 writer.resident_process = f.resident_process();
                 writer.process_alive = f.process_alive();
@@ -631,7 +685,7 @@ impl FilesActor {
                 );
             }
         }
-        Ok(view)
+        Ok(())
     }
     fn patch_files(
         &self,
@@ -676,11 +730,14 @@ impl FilesActor {
             #[cfg(windows)]
             State::HandoffFailed(failure) => held_source(files, failure.record()),
             #[cfg(windows)]
-            State::Writing(record) => held_source(files, record),
+            State::Writing(record) | State::StartingService(record) => held_source(files, record),
             #[cfg(windows)]
-            State::Written(g) | State::WriterUnconfirmed(g) => held_source(files, g.record()),
+            State::Written(g)
+            | State::WriterUnconfirmed(g)
+            | State::Serviced(g)
+            | State::ServiceUnconfirmed(g) => held_source(files, g.record()),
             #[cfg(windows)]
-            State::WriterFailed(f) => held_source(files, f.record()),
+            State::WriterFailed(f) | State::ServiceFailed(f) => held_source(files, f.record()),
             #[cfg(windows)]
             State::Failed(failure) => {
                 files.phase = ActivationFilesPhase::Indeterminate;

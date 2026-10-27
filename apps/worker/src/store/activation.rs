@@ -47,7 +47,7 @@ fn one(n: usize) -> Result<()> {
 fn encode(value: &impl serde::Serialize) -> Result<String> {
     serde_json::to_string(value).map_err(|e| e.to_string())
 }
-fn stamp(authority: &JournalAuthority) -> Result<StateBackupAuthority> {
+pub(super) fn stamp(authority: &JournalAuthority) -> Result<StateBackupAuthority> {
     let mut raw = b"winbridge.worker-state-authority.v1\n".to_vec();
     raw.extend(
         serde_json::to_vec(&(
@@ -99,7 +99,7 @@ pub(super) fn window(command: &WorkerJournalActivationCommand) -> Result<()> {
         Ok(())
     }
 }
-fn read(
+pub(super) fn read(
     c: &Connection,
     command: &WorkerJournalActivationCommand,
 ) -> Result<Option<WorkerJournalActivationReceipt>> {

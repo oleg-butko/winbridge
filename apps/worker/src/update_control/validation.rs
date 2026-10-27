@@ -10,6 +10,9 @@ use std::{
     time::{Duration, Instant},
 };
 use winbridge_update::shutdown::ShutdownDeliveryState;
+mod layout;
+mod network;
+pub use layout::{FixtureLayout, FixtureRuntimePin};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -49,6 +52,34 @@ pub struct Input {
     pub candidate_support: bool,
     #[serde(default)]
     pub compatible_drain: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<FixtureRuntimePin>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub controller_url: Option<String>,
+}
+impl Input {
+    pub fn fixture_layout(&self) -> Result<FixtureLayout> {
+        self.validate_layout_contract()?;
+        FixtureLayout::bind(&self.root, self.runtime.as_ref(), &build_identity())
+    }
+    fn validate_layout_contract(&self) -> Result<()> {
+        match (self.schema_version, self.runtime.as_ref()) {
+            (1, None) if self.controller_url.is_none() => {}
+            (2, Some(_)) => {
+                if let Some(url) = &self.controller_url {
+                    let address = winbridge_core::controller_config::validate_controller_url(url)
+                        .map_err(|e| e.to_string())?;
+                    if address.port() != 1144 {
+                        return Err(
+                            "Fixture network requires its separate controller port1144".into()
+                        );
+                    }
+                }
+            }
+            _ => return Err("Main fixture version/layout/controller declaration differs".into()),
+        }
+        Ok(())
+    }
 }
 fn publish(root: &Path, name: &str, value: &impl Serialize) -> Result<()> {
     let mut file = fs::OpenOptions::new()
@@ -95,8 +126,9 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
         return Err("Main validation input SHA changed".into());
     }
     let input: Input = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    let root = input.root.canonicalize().map_err(|e| e.to_string())?;
-    let runtime = root.join("runtime");
+    let layout = input.fixture_layout()?;
+    let root: &Path = &layout;
+    let runtime = layout.runtime();
     let config = runtime.join("winbridge-update.local.json");
     let cfg = winbridge_update::load_config(&config)?;
     let actual_config = worker
@@ -105,8 +137,7 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
         .map_err(|_| "Config lock poisoned")?
         .clone()
         .ok_or("Main validation requires file-backed startup")?;
-    if input.schema_version != 1
-        || input.kind != "winbridge_shutdown_main_validation"
+    if input.kind != "winbridge_shutdown_main_validation"
         || path.canonicalize().map_err(|e| e.to_string())? != root.join("input.json")
         || std::env::current_exe()
             .map_err(|e| e.to_string())?
@@ -134,7 +165,7 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
             .canonicalize()
             .map_err(|e| e.to_string())?
             != root.join("state")
-        || worker.config.worker.controller_url.is_some()
+        || worker.config.worker.controller_url != input.controller_url
         || worker.config.worker.controller_topology.is_some()
         || worker
             .runtime_guard
@@ -145,9 +176,15 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
         || input.request.expected.worker_config_sha256 != input.worker_config_sha256
     {
         return Err(
-            "Main validation requires its own exact copied runtime/source/state and no controller"
-                .into(),
+            "Main validation requires its exact declared runtime/source/state/controller".into(),
         );
+    }
+    if let Some(expected) = layout.initial_worker_sha256() {
+        if winbridge_update::supervisor::image_sha256(&runtime.join("winbridge-worker.exe"))?
+            != expected
+        {
+            return Err("Main fixture initial worker image differs from reservation".into());
+        }
     }
     let image_sha =
         winbridge_update::supervisor::image_sha256(&runtime.join("winbridge-update.exe"))?;
@@ -163,6 +200,7 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
     let worker = worker.clone();
     let weak = Arc::downgrade(&worker);
     Ok(Some(tokio::spawn(async move {
+        let _layout = layout; // Keep the declaration pinned through this fixture driver.
         let result = drive(worker, &reg, &input).await;
         if let Err(error) = &result {
             let _ = publish(
@@ -211,6 +249,9 @@ async fn drive(worker: Arc<Worker>, reg: &Arc<Registration>, input: &Input) -> R
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+    // Firewall admission belongs to the old normal runtime, before any
+    // supervisor/update/startup grant. It never renews an activation deadline.
+    network::wait_before_admission(&worker, input).await?;
     let weak: Weak<Worker> = Arc::downgrade(&worker);
     let WorkerSupervisorLaunch::Started(mut h) =
         worker.launch_supervisor_inner(&input.request, true).await?

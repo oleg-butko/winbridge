@@ -9,11 +9,14 @@ use std::{
 };
 use winbridge_platform::{infrastructure, ManagedChild, OutputReader};
 use winbridge_transport::supervisor as ipc;
+#[path = "activation_service.rs"]
+mod service;
 #[cfg(feature = "update-validation")]
 #[path = "activation_process_validation.rs"]
 mod validation;
 #[path = "activation_writer.rs"]
 mod writer;
+pub use service::ActivationServicePreparation;
 
 #[derive(Default)]
 struct Capture {

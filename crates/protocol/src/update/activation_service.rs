@@ -1,4 +1,4 @@
-//! Local-service proposals only. No advertised RPC, receiver marker or grant.
+//! Local-service data and readonly normal-IPC observations, never a writer grant.
 use super::{StateBackupAuthority, WorkerJournalActivationCommand, WorkerJournalActivationReceipt};
 use crate::{LoadedWorkerIdentity, WorkerRuntimeCompatibility};
 use serde::{Deserialize, Serialize};
@@ -44,4 +44,29 @@ pub struct WorkerServiceActivationReceipt {
     pub command_sha256: String,
     pub authority: StateBackupAuthority,
     pub compatibility: WorkerRuntimeCompatibility,
+}
+
+/// Only a staged local service recognizes this envelope on its normal IPC.
+/// Re-reading is safe; the command must equal its resident sealed binding.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationServiceQuery {
+    pub service_observation_version: u16,
+    pub command: WorkerServiceActivationCommand,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationServiceObservation {
+    pub service_observation_version: u16,
+    pub result: ActivationServiceObservationResult,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ActivationServiceObservationResult {
+    Observed {
+        receipt: Box<WorkerServiceActivationReceipt>,
+    },
+    Rejected {
+        message: String,
+    },
 }

@@ -15,6 +15,10 @@ Linux migrations17/18→19, retry/restart и UI проверены; отдель
 все соединения, автор операции и инициатор отмены. Сценарии с2,3 и4 controller
 проверены на Linux; один общий runtime, очередь и история.
 
+Main ba9557b включён в эту feature-ветку с сохранением shared startup и readonly
+local-service границ updater. Добавлены [явные Main25 schema profiles](docs/plans/main25-schema-profiles-2026-10-27.md);
+production worker0.1.1 остаётся прежним, native проверки выполняются в изолированных каталогах.
+
 Локальный проект для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
 
 Название выбрано пользователем. Репозиторий отделён от Netwatch. Rust отвечает за runtime, React/Mantine — за UI, Tauri — за native WebView shell и tray. Node.js нужен для сборки UI, а не для runtime.
@@ -82,21 +86,19 @@ Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в 
 Сетевые тесты используют постоянный каталог `runtime-test` и ждут разрешения
 файервола до 15 минут; рабочая версия устанавливается отдельно в `runtime`.
 
-Актуальная точка updater: [checkpoint](docs/plans/worker-self-update/resume-2026-10-25-writer-verified.md),
-[review/latency](docs/plans/worker-self-update/review-2026-10-25-latency.md)
+Актуальная точка updater: [Actor25/local service checkpoint](docs/plans/worker-self-update/local-service-actor-2026-10-26.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source updater19/worker17/supervisor24/view16/private2+writer3.
-**Main24 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
-Both actual migrations, same-child epoch+1/receipt/fencing и actual Job exit
-подтверждены. Verifier исправлен и тот же terminal report проверен readonly.
-Новые startup admissions240s разрешены пользователем; старые120s intents неизменны.
-[Подробные замеры](docs/plans/worker-self-update/review-2026-10-25-latency.md)
-отделяют сборку target, replacement, hashing, graph checks и writer delivery.
-**Normal service/reconciliation/local/controller/lifetime, remaining U2 и U3/U4
-впереди. Public install выключен; самообновление целиком ещё не готово.**
-Service strict DTO и pure binding/FSM добавлены как foundation; runtime admission,
-Store/lock transfer и normal IPC пока не подключены.
-Installed runtime не менялся. Controller теперь слушает192.168.44.204:1143.
+Source updater20/worker17/supervisor25/view17/private2+writer3+service4.
+Local Worker использует тот же Store/lock/generation; родитель независимо проверяет
+normal IPC, затем атомарно сохраняет LocalVerified/root AwaitingController.
+Controller session/lifetime transfer/commit/release пока не реализованы.
+**Main24 на updater19 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
+Service4 component gate16+14 также пройден, но не доказывает новый Actor25/full Main25.
+Сценарий [полного Main25](docs/plans/worker-self-update/main25-2026-10-27.md) подключён в source;
+фактическое выполнение и independent proof на Windows ещё впереди.
+Public install выключен; самообновление целиком ещё не готово.
+Installed worker0.1.1/source59249e6 проверен; новые изменения не установлены.
+Текущий controller слушает192.168.44.203:1143.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

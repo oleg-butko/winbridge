@@ -179,6 +179,16 @@ impl RollingFile {
         Ok(())
     }
 }
+#[cfg(unix)]
+impl Drop for RollingFile {
+    fn drop(&mut self) {
+        // A concurrent fork can briefly retain this open file description,
+        // even with CLOEXEC. Closing our FD alone then leaves flock held.
+        // The writer has finished: close its log before explicitly unlocking.
+        self.file.take();
+        let _ = FileExt::unlock(&self._lock);
+    }
+}
 fn repair_tail(file: &mut File) -> io::Result<u64> {
     let bytes = file.metadata()?.len();
     let mut end = bytes;
@@ -236,6 +246,22 @@ mod tests {
         assert!(fs::read_to_string(path)
             .unwrap()
             .ends_with("{\"restarted\":true}\n"));
+    }
+    #[cfg(unix)]
+    #[test]
+    fn finished_writer_releases_flock_even_while_a_duplicate_description_is_retained() {
+        let temp = tempfile::tempdir().unwrap();
+        let writer = RollingFile::open(temp.path(), 8192, 2).unwrap();
+        // dup shares the open description exactly as an inherited fork FD does.
+        let inherited = writer._lock.try_clone().unwrap();
+        assert!(RollingFile::open(temp.path(), 8192, 2).is_err());
+        drop(writer);
+        let next = RollingFile::open(temp.path(), 8192, 2).unwrap();
+        drop(inherited);
+        // Releasing an old alias must not unlock the new writer's description.
+        assert!(RollingFile::open(temp.path(), 8192, 2).is_err());
+        drop(next);
+        RollingFile::open(temp.path(), 8192, 2).unwrap();
     }
     #[test]
     fn producers_drop_when_writer_queue_is_full_instead_of_blocking() {

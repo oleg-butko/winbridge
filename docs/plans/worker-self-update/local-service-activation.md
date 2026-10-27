@@ -1,6 +1,13 @@
 # Следующий сценарий: normal local service после writer
 
-2026-10-25. **Data foundation реализована; runtime service ещё отсутствует.**
+2026-10-26: [private V4 sender/receiver и independent normal-IPC probe](service-v4-2026-10-26.md)
+добавлены. Следом actor25/view17 и full Main25; описания «ещё впереди» ниже
+сохраняют исторический порядок реализации.
+
+2026-10-26. **Общий Worker/reconciliation и library local IPC реализованы**:
+[актуальный checkpoint и оставшаяся интеграция](local-service-runtime-2026-10-26.md).
+Service4/parent validation/actor25/Main25 ещё впереди. Записи ниже сохраняют
+первоначальный порядок реализации и исторические результаты.
 Реализация начата после полного положительного Main24 и независимого review.
 [Текущий run и результаты](review-2026-10-25-latency.md).
 
@@ -11,12 +18,19 @@ receipt DTO, binding к confirmed writer/физическому6 и pure FSM Iss
 либо Issued→Indeterminate→Confirmed реализованы;7 portable regressions passed.
 Дополнительный epoch, чужие PID/build/config/generation, refresh deadline и reissue
 отклоняются. Late receipt — сохранённый факт, не новый grant.
-**Journal20/admission/native driver/receiver4/actor25/view17/actual service пока нет.**
-Ни Store, ни IPC этот код не открывает; private capability marker не добавлен.
-Следующий source шаг — durable service intent/history/readback под original guard.
-Финальные source checks: workspace791/0 (16 ignored), focused service7/0,
+**Journal20 format/readback добавлен**: [подробный checkpoint](service-ledger-2026-10-26.md).
+Original-guard admission и closed connection/state transfer реализованы в
+[следующем checkpoint](service-admission-2026-10-26.md). Service4 send/receiver,
+actor25/view17 пока отсутствуют. Исторический admission gate прошёл19 Windows
+fixture checks; новый library Worker/IPC описан в актуальном checkpoint выше.
+Private capability marker не добавлен.
+Следующий source шаг — service4 receiver и подключение LocalService;
+admission пишет journal20 только под consuming original guard, не из JSON.
+Проверки первоначальной data foundation2026-10-25: workspace791/0 (16 ignored), focused service7/0,
 Linux/MSVC workspace all-target validation Clippy, TypeScript feature и generated
-UI contracts/fmt/scaffold281 passed. Native Main25 не запускался: runtime не добавлен.
+UI contracts/fmt/scaffold281 passed. После journal20: workspace804/0 (17 ignored),
+Linux/MSVC all-target Clippy/fmt/scaffold290 passed. Native Main25 не запускался:
+runtime не добавлен.
 
 ## Граница сценария
 
@@ -27,7 +41,8 @@ UI contracts/fmt/scaffold281 passed. Native Main25 не запускался: ru
 LocalVerified не означает Committed или готовое самообновление.
 
 Для этого выбран отдельный service intent/history в **updater20**, private
-service4, actor25/view17. Это проектируемые номера, не текущие CLI actions или
+service4, actor25/view17. Schema20 формат реализован; остальные номера пока
+проектируемые, не текущие CLI actions или
 advertised capabilities. Worker journal остаётся17: локальный service не требует
 новой authority или миграции active worker state. Существующие views1–16 и
 private1/2/3 сохраняют формы и семантику.

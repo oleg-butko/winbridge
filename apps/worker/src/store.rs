@@ -12,11 +12,13 @@ use winbridge_protocol::{
 
 mod activation;
 mod activation_open;
+mod activation_service_open;
 mod admission;
 mod attribution;
 mod cancellation;
 pub use activation::{JournalActivationAcceptance, JournalActivationPermit};
 pub use activation_open::{ActivationJournal, ActivationJournalOpenFailure};
+pub use activation_service_open::{PreparedServiceJournal, ServiceJournalPreparationFailure};
 mod archive;
 mod inspection;
 mod leases;
@@ -63,6 +65,7 @@ pub struct Store {
     read_only: bool,
     work_scheduling: Option<winbridge_protocol::WorkSchedulingPolicy>,
     queue_policy: Option<winbridge_protocol::QueuePolicy>,
+    service_startup: Option<activation_service_open::ServiceStartupFence>,
 }
 
 impl Store {
@@ -503,6 +506,7 @@ impl Store {
             read_only: false,
             work_scheduling: None,
             queue_policy: None,
+            service_startup: None,
         })
     }
     fn fingerprint(request: &TaskSubmission) -> Result<String> {

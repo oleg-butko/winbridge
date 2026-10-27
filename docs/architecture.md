@@ -1,5 +1,18 @@
 # Архитектура WinBridge
 
+2026-10-26: worker0.1.1 установлен и проверен. [Продолжение updater](plans/worker-self-update/service-ledger-2026-10-26.md):
+source journal20 хранит service intent/history и читает их в одном snapshot с
+writer/activation graph. [Consuming admission/transfer preparation](plans/worker-self-update/service-admission-2026-10-26.md)
+подключены как trusted API. [Общий Worker и library local readonly IPC](plans/worker-self-update/local-service-runtime-2026-10-26.md)
+потребляют тот же connection/full custody/generation. Startup reconciliation имеет
+временную transaction fence; root/dispatch/admin остаются закрыты, перед IPC
+восстанавливается обычная write freeze. [Trusted V4 sender/receiver и normal-IPC
+probe](plans/worker-self-update/service-v4-2026-10-26.md) добавлены. Новый формат
+не установлен. [Actor25/view17 и атомарный local proof/root AwaitingController](plans/worker-self-update/local-service-actor-2026-10-26.md)
+реализованы; full Main25 ещё впереди. Worker schema17/updater20 прежние,
+public install не включён. Статусы ниже
+относятся к своим историческим source/gates.
+
 Дополнение2026-10-25: [Main24 writer gate подтверждён](plans/worker-self-update/resume-2026-10-25-writer-verified.md)
 на19/17/actor24/view16/private3:193 tests,56 files twice,44+16+18 negative audits.
 Новые startup admissions240s разрешены пользователем, старые intents не меняются.

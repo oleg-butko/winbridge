@@ -214,11 +214,19 @@ pub(crate) mod tests {
     use std::{fs, path::Path};
     // Store-only metadata fixture: no physical exit or updater authority claimed.
     pub(crate) fn ready(path: &Path) -> (Store, WorkerShutdownReceipt, WorkerUpdateCommand) {
+        ready_with(path, "shutdown-test", |_| {})
+    }
+    pub(crate) fn ready_with(
+        path: &Path,
+        instance: &str,
+        seed: impl FnOnce(&mut Store),
+    ) -> (Store, WorkerShutdownReceipt, WorkerUpdateCommand) {
         let mut s = Store::open(path).unwrap();
         s.begin_authority().unwrap();
+        seed(&mut s);
         let spec = WorkerUpdateSpec {
             update_id: uuid::Uuid::new_v4().to_string(),
-            instance_id: "shutdown-test".into(),
+            instance_id: instance.into(),
             journal_incarnation: s.journal_authority().incarnation.clone(),
             worker_generation: uuid::Uuid::new_v4().to_string(),
             updater_owner_id: uuid::Uuid::new_v4().to_string(),

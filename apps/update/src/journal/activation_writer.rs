@@ -115,7 +115,25 @@ fn backup_binding(
     }
     Ok(backup)
 }
-fn physical_prefix(c: &Connection, current: &ActivationRecord) -> Result<ActivationRecord> {
+/// The caller already checked the full physical graph in this transaction.
+/// Do not repeat its recursive backup/replacement audit for each service edge.
+#[cfg(windows)]
+pub(super) fn bound_record(
+    c: &Connection,
+    physical: &ActivationRecord,
+) -> Result<ActivationWriterRecord> {
+    let backup = backup_binding(c, physical)?;
+    let authority = &backup
+        .report
+        .as_ref()
+        .ok_or_else(|| bad("Writer report missing"))?
+        .source_authority;
+    ledger(c, &physical.intent.source.update_id, physical, authority)
+}
+pub(super) fn physical_prefix(
+    c: &Connection,
+    current: &ActivationRecord,
+) -> Result<ActivationRecord> {
     // The full causal graph/current was validated in this same snapshot.
     // Observation after Indeterminate/LocalVerified still binds to immutable6;
     // this helper is not used to issue a new command from a progressed state.
@@ -142,7 +160,7 @@ fn physical_prefix(c: &Connection, current: &ActivationRecord) -> Result<Activat
     }
     Ok(physical)
 }
-fn load(
+pub(super) fn load(
     c: &Connection,
     id: &str,
 ) -> Result<
@@ -251,6 +269,41 @@ pub(super) fn persist(
     }
     Ok(())
 }
+pub(super) fn require_receiver_custody(
+    c: &Connection,
+    id: &str,
+    attempt: &str,
+    actual: &winbridge_protocol::update::SupervisorProcess,
+    snapshot: &crate::activation::ActivationWriterSnapshot,
+) -> Result<()> {
+    crate::activation::channel::require_writer_receiver(&snapshot.activation, actual, attempt)
+        .map_err(bad)?;
+    let source = &snapshot.activation.intent.source;
+    let root = record(c, id)?;
+    let installation = info(c)?;
+    let owner: String = c
+        .query_row(
+            "SELECT owner FROM installation WHERE singleton=1",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(storage)?;
+    let s = supervisor::read(c, &source.launch_id)?;
+    if root.phase != UpdatePhase::VerifyingLocal
+        || root.revision != source.parent_revision
+        || installation.active_update_id.as_deref() != Some(id)
+        || installation.owner_epoch != source.owner_epoch
+        || owner != source.owner_id
+        || s.phase != winbridge_protocol::update::SupervisorPhase::Active
+        || s.owner_id.as_deref() != Some(source.owner_id.as_str())
+        || s.owner_epoch != Some(source.owner_epoch)
+        || s.spec.update_id != id
+        || s.process.as_ref() != Some(&snapshot.activation.intent.context.supervisor)
+    {
+        return Err(bad("Activation child has stale owner/root/supervisor"));
+    }
+    Ok(())
+}
 impl UpdateJournal {
     pub fn activation_writer(&mut self, id: &str) -> Result<Option<ActivationWriterRecord>> {
         let tx = self.connection.transaction().map_err(storage)?;
@@ -271,37 +324,12 @@ impl UpdateJournal {
         schema(&c)?;
         let tx = c.transaction().map_err(storage)?;
         let (_, snapshot) = load(&tx, id)?.ok_or_else(|| bad("Writer admission missing"))?;
-        crate::activation::channel::require_writer_receiver(&snapshot.activation, actual, attempt)
-            .map_err(bad)?;
-        let source = &snapshot.activation.intent.source;
-        let root = record(&tx, id)?;
-        let installation = info(&tx)?;
-        let owner: String = tx
-            .query_row(
-                "SELECT owner FROM installation WHERE singleton=1",
-                [],
-                |r| r.get(0),
-            )
-            .map_err(storage)?;
-        let s = supervisor::read(&tx, &source.launch_id)?;
-        if root.phase != UpdatePhase::VerifyingLocal
-            || root.revision != source.parent_revision
-            || installation.active_update_id.as_deref() != Some(id)
-            || installation.owner_epoch != source.owner_epoch
-            || owner != source.owner_id
-            || s.phase != winbridge_protocol::update::SupervisorPhase::Active
-            || s.owner_id.as_deref() != Some(source.owner_id.as_str())
-            || s.owner_epoch != Some(source.owner_epoch)
-            || s.spec.update_id != id
-            || s.process.as_ref() != Some(&snapshot.activation.intent.context.supervisor)
-            || !matches!(
-                snapshot.writer.state,
-                crate::activation::ActivationWriterState::Issued {}
-            )
-        {
-            return Err(bad(
-                "Writer child has stale owner/root/supervisor or non-issued delivery",
-            ));
+        require_receiver_custody(&tx, id, attempt, actual, &snapshot)?;
+        if !matches!(
+            snapshot.writer.state,
+            crate::activation::ActivationWriterState::Issued {}
+        ) {
+            return Err(bad("Writer delivery is not Issued"));
         }
         tx.commit().map_err(storage)?;
         Ok(snapshot)

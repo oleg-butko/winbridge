@@ -17,10 +17,13 @@ pub use recovery::RECOVERY_MARKER;
 pub use recovery_pair::{
     activate_recovery, prepare_recovery, PreparationStage, RecoveryActivation, RecoveryPreparation,
 };
+mod local_service;
 pub mod rehearsal;
 mod retention;
 pub mod runtime_guard;
 mod scheduler_diagnostics;
+mod startup;
+pub use local_service::{LocalService, LocalServiceFailure, RunningLocalService};
 mod settings;
 pub mod shutdown_inspection;
 pub mod state_backup_export;
@@ -138,10 +141,11 @@ pub struct Worker {
     controllers: Option<Arc<Mutex<controller_links::Links>>>,
     unreconciled_tasks: Mutex<HashMap<String, String>>,
     inspection: bool,
+    local_activation: Option<local_service::LocalServiceScope>,
     execution_domain: Mutex<Option<winbridge_platform::execution_domain::ExecutionDomain>>,
     update_control: Mutex<Option<Arc<update_control::Registration>>>,
     coverage: Mutex<Option<winbridge_protocol::RecoveryCoverageInfo>>,
-    _instance_lock: File,
+    _instance_lock: startup::InstanceCustody,
 }
 impl Worker {
     pub fn open(config: WorkerConfig) -> Result<Arc<Self>> {
@@ -150,176 +154,10 @@ impl Worker {
     pub fn open_recovery(config: WorkerConfig) -> Result<Arc<Self>> {
         Self::open_inner(config, None, true)
     }
-    fn open_inner(
-        config: WorkerConfig,
-        config_path: Option<std::path::PathBuf>,
-        inspection: bool,
-    ) -> Result<Arc<Self>> {
-        config.validate()?;
-        ensure_local_state(&config.state_directory)?;
-        winbridge_platform::require_local_disk(&config.state_directory)
-            .map_err(|e| e.to_string())?;
-        for project in &config.projects {
-            winbridge_platform::require_local_disk(&project.workspace_root)
-                .map_err(|e| format!("project {}: {e}", project.id))?;
-        }
-        if !config.state_directory.exists() {
-            let mut builder = fs::DirBuilder::new();
-            builder.recursive(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::DirBuilderExt;
-                builder.mode(0o700);
-            }
-            builder
-                .create(&config.state_directory)
-                .map_err(|e| format!("stateDirectory: {e}"))?;
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::{MetadataExt, PermissionsExt};
-            let metadata =
-                fs::symlink_metadata(&config.state_directory).map_err(|e| e.to_string())?;
-            if metadata.file_type().is_symlink() || metadata.uid() != unsafe { libc_uid() } {
-                return Err("stateDirectory must be a real directory owned by this user".into());
-            }
-            // Reject a shared directory; avoid changing permissions of user-maintained state.
-            if metadata.permissions().mode() & 0o077 != 0 {
-                return Err(
-                    "stateDirectory must have mode 0700; choose/create a private directory".into(),
-                );
-            }
-        }
-        if !inspection {
-            recovery::reject_normal_start(&config)?;
-            update::reject_start(&config.state_directory)?;
-        }
-        let lock_path = config.state_directory.join("worker.lock");
-        reject_symlink(&lock_path)?;
-        let lock = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(lock_path)
-            .map_err(|e| e.to_string())?;
-        lock.try_lock_exclusive()
-            .map_err(|e| format!("stateDirectory is already owned by another worker: {e}"))?;
-        if !inspection {
-            // Recheck under the instance lock: an updater may have installed
-            // the barrier after the first readonly check, before this lock.
-            update::reject_start(&config.state_directory)?;
-        }
-        let db_path = config.state_directory.join("journal.sqlite");
-        let fresh_journal = !db_path.try_exists().map_err(|e| e.to_string())?;
-        for suffix in ["", "-wal", "-shm"] {
-            reject_symlink(
-                &config
-                    .state_directory
-                    .join(format!("journal.sqlite{suffix}")),
-            )?;
-        }
-        let mut store = if inspection {
-            if !db_path.is_file() {
-                return Err("Read-only recovery requires an existing journal.sqlite; no journal was created".into());
-            }
-            recovery::latch_source(&config.state_directory)?;
-            Store::open_read_only(&db_path)?
-        } else {
-            recovery::reject_normal_start(&config)?;
-            let mut store = Store::open(&db_path)?;
-            if config
-                .state_directory
-                .join(domain::WITNESS)
-                .try_exists()
-                .map_err(|e| e.to_string())?
-            {
-                domain::load(&config.state_directory, &domain::context(&config, &store))?;
-            }
-            store.begin_authority()?;
-            store.recover_resource_leases()?;
-            store.capture_legacy_resources().map_err(|e| {
-                format!("{e}; use --config PATH serve-recovery to inspect without dispatch")
-            })?;
-            store.reconcile_process_resources()?;
-            store.recover()?;
-            store
-        };
-        store.configure_work_scheduling(config.work_scheduling.clone())?;
-        store.configure_queue_policy(config.queue_policy.clone())?;
-        store.configure_resource_scheduling(config.resource_scheduling.clone())?;
-        let generation = uuid::Uuid::new_v4().to_string();
-        let controllers = config
-            .worker
-            .topology()?
-            .map(|t| {
-                controller_links::Links::new(&t, generation.clone())
-                    .map(|l| Arc::new(Mutex::new(l)))
-            })
-            .transpose()?;
-        let worker = Arc::new(Self {
-            runtime_guard: Mutex::new(None),
-            config_path: Mutex::new(config_path),
-            maintenance: Mutex::new((0, None)),
-            maintenance_running: AtomicBool::new(false),
-            config,
-            generation,
-            store: Mutex::new(store),
-            active_projects: Mutex::new(HashMap::new()),
-            active_jobs: AtomicUsize::new(0),
-            readiness_scans: Mutex::new(HashMap::new()),
-            recovery_scan: Mutex::new(Instant::now()),
-            scheduler_diagnostics: Mutex::new(scheduler_diagnostics::Diagnostics::new()),
-            checks: Mutex::new(HashMap::new()),
-            stop: AtomicBool::new(false),
-            controllers,
-            unreconciled_tasks: Mutex::new(HashMap::new()),
-            inspection,
-            execution_domain: Mutex::new(None),
-            update_control: Mutex::new(None),
-            coverage: Mutex::new(None),
-            _instance_lock: lock,
-        });
-        if !inspection {
-            worker.recover_imports()?;
-            worker.store()?.release_stopped_import_resources()?;
-            // Observe application/task consistency before the first IPC response,
-            // without advancing workflows or creating any new process.
-            let result = {
-                let mut store = worker.store()?;
-                worker.reconcile_applications(&mut store)
-            };
-            if let Err(error) = result {
-                if worker.journal_recovery_required()?.is_none() {
-                    return Err(error);
-                }
-            }
-            let (owner, info) =
-                domain::initialize(&worker.config, &*worker.store()?, fresh_journal)?;
-            *worker
-                .execution_domain
-                .lock()
-                .map_err(|_| "execution domain lock poisoned")? = owner;
-            *worker
-                .coverage
-                .lock()
-                .map_err(|_| "execution coverage lock poisoned")? = Some(info);
-        } else {
-            let context = domain::context(&worker.config, &*worker.store()?);
-            let info = domain::load(&worker.config.state_directory, &context)
-                .map(|witness| witness.info())
-                .unwrap_or_else(|reason| winbridge_protocol::RecoveryCoverageInfo {
-                    complete: false,
-                    reason,
-                });
-            *worker
-                .coverage
-                .lock()
-                .map_err(|_| "execution coverage lock poisoned")? = Some(info);
-        }
-        Ok(worker)
-    }
     fn store(&self) -> Result<std::sync::MutexGuard<'_, Store>> {
+        if self.local_activation.is_some() {
+            self._instance_lock.revalidate()?;
+        }
         let store = self
             .store
             .lock()
@@ -403,6 +241,9 @@ impl Worker {
         fenced: bool,
         creator: &OperationCreator,
     ) -> Result<LocalResponse> {
+        if self.local_activation.is_some() && !request.is_observation() {
+            return Err(local_service::READ_ONLY_REASON.into());
+        }
         let requires_fenced = self.store()?.requires_fenced_requests()?;
         if !fenced && !request.is_observation() && requires_fenced {
             return Err("This recovered instance requires request contract 2 with a caller-pinned journal incarnation. Legacy mutation was rejected; do not automatically retry in a new scope".into());
@@ -677,22 +518,15 @@ impl Worker {
                                 journal_incarnation: store.journal_authority().incarnation.clone(),
                             };
                             let mut catalog = self.projection_catalog(&context)?;
-                            catalog.work_scheduling = Some(
-                                serde_json::to_value(
-                                    store.work_scheduling_observation(context.clone())?,
-                                )
-                                .map_err(|e| e.to_string())?,
-                            );
-                            catalog.queue_control = Some(
-                                serde_json::to_value(store.queue_observation(context.clone())?)
-                                    .map_err(|e| e.to_string())?,
-                            );
-                            catalog.resource_scheduling = Some(
-                                serde_json::to_value(
-                                    store.resource_scheduling_observation(context.clone())?,
-                                )
-                                .map_err(|e| e.to_string())?,
-                            );
+                            let mut observation = store.work_scheduling_observation(context.clone())?;
+                            observation.read_only |= self.local_activation.is_some();
+                            catalog.work_scheduling = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
+                            let mut observation = store.queue_observation(context.clone())?;
+                            observation.read_only |= self.local_activation.is_some();
+                            catalog.queue_control = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
+                            let mut observation = store.resource_scheduling_observation(context.clone())?;
+                            observation.read_only |= self.local_activation.is_some();
+                            catalog.resource_scheduling = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
                             serde_json::to_value(catalog).map_err(|e| e.to_string())?
                         }),
                         recovery_coverage: self
@@ -706,7 +540,7 @@ impl Worker {
                                 instance_id: self.config.instance_id.clone(),
                                 journal_incarnation: store.journal_authority().incarnation.clone(),
                             },
-                            legacy_mutations_allowed: !self.inspection
+                            legacy_mutations_allowed: !self.inspection && self.local_activation.is_none()
                                 && !store.requires_fenced_requests()?,
                         }),
                         resource_recovery: if self.inspection {
@@ -721,12 +555,12 @@ impl Worker {
                             }
                         }),
                         build: Some(winbridge_protocol::build_identity()),
-                        update_coordination: store.active_worker_update()?.map(|lease|serde_json::json!({"schemaVersion":1,"lease":lease,"readOnly":self.inspection,"observedAtMs":store::now_ms()})),
+                        update_coordination: store.active_worker_update()?.map(|lease|serde_json::json!({"schemaVersion":1,"lease":lease,"readOnly":self.inspection || self.local_activation.is_some(),"observedAtMs":store::now_ms()})),
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
                         attention_targets_available: true,
                         history_available: true,
-                        maintenance_available: !self.inspection,
+                        maintenance_available: !self.inspection && self.local_activation.is_none(),
                         maintenance_error: self
                             .maintenance
                             .lock()
@@ -740,7 +574,9 @@ impl Worker {
                         node_id: self.config.node_id.clone(),
                         generation: self.generation.clone(),
                         platform: std::env::consts::OS.into(),
-                        runtime_validation: if cfg!(windows) {
+                        runtime_validation: if self.local_activation.is_some() {
+                            local_service::READ_ONLY_REASON
+                        } else if cfg!(windows) {
                             "Локальное выполнение, отмена и восстановление проверены на Windows"
                         } else {
                             "Локальное выполнение через Unix adapter разработки"
@@ -748,13 +584,13 @@ impl Worker {
                         .into(),
                         projects: self.config.public_projects()?,
                         command_handlers: Some(winbridge_runner::metadata()),
-                        snapshot_import_available: !self.inspection
+                        snapshot_import_available: !self.inspection && self.local_activation.is_none()
                             && self.config.delivery.is_some(),
-                        snapshot_delta_available: !self.inspection
+                        snapshot_delta_available: !self.inspection && self.local_activation.is_none()
                             && self.config.delivery.is_some(),
-                        snapshot_resume_available: !self.inspection
+                        snapshot_resume_available: !self.inspection && self.local_activation.is_none()
                             && self.config.delivery.is_some(),
-                        workflow_available: !self.inspection && self.config.delivery.is_some(),
+                        workflow_available: !self.inspection && self.local_activation.is_none() && self.config.delivery.is_some(),
                         controller_connection: self.controllers.as_ref().map(|c|c.lock()
                             .map_err(|_| "Controller state lock poisoned")
                             .map(|c|c.primary_connection())).transpose()?.flatten(),
@@ -880,6 +716,9 @@ impl Worker {
         }
     }
     pub fn schedule(self: &Arc<Self>) -> Result<()> {
+        if self.local_activation.is_some() {
+            return Ok(());
+        }
         let mut timing = scheduler_diagnostics::Tick::new(&self.scheduler_diagnostics);
         if self.stop.load(Ordering::Acquire) || self.journal_recovery_required()?.is_some() {
             return Ok(());
@@ -1581,6 +1420,7 @@ pub async fn serve(worker: Arc<Worker>) -> Result<()> {
 enum ReadinessOutput {
     Console,
     Report,
+    Local(tokio::sync::oneshot::Sender<()>),
 }
 
 async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<()> {
@@ -1632,14 +1472,32 @@ async fn serve_inner(worker: Arc<Worker>, readiness: ReadinessOutput) -> Result<
         eprintln!("WinBridge scheduler diagnostics: 30s windows; automatic slow-window reports; set WINBRIDGE_SCHEDULER_DIAGNOSTICS=1 for all windows (wall timings include lock waits; not process CPU)");
     }
     let permits = Arc::new(tokio::sync::Semaphore::new(32));
-    let control = update_control::start(Arc::clone(&worker))?;
-    let network = worker
-        .controllers
-        .as_ref()
-        .map(|_| network::start(Arc::clone(&worker)));
+    let control = if worker.local_activation.is_some() {
+        None
+    } else {
+        update_control::start(Arc::clone(&worker))?
+    };
+    let network = if worker.local_activation.is_none() {
+        worker
+            .controllers
+            .as_ref()
+            .map(|_| network::start(Arc::clone(&worker)))
+    } else {
+        None
+    };
+    if let ReadinessOutput::Local(ready) = readiness {
+        ready
+            .send(())
+            .map_err(|_| "Local-service readiness observer closed")?;
+    }
     let mut interval = tokio::time::interval(Duration::from_millis(25));
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-    let shutdown = tokio::signal::ctrl_c();
+    let shutdown = async {
+        if worker.local_activation.is_some() {
+            std::future::pending::<()>().await;
+        }
+        tokio::signal::ctrl_c().await
+    };
     tokio::pin!(shutdown);
     loop {
         tokio::select! {
@@ -1701,6 +1559,26 @@ where
         let _permit = permit;
         let operation = async {
             let bytes = winbridge_transport::read_frame(&mut stream).await?;
+            if serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .is_some_and(|v| v.get("serviceObservationVersion").is_some())
+            {
+                let response = match serde_json::from_slice(&bytes) {
+                    Ok(request) => tokio::task::spawn_blocking(move || {
+                        worker.handle_service_observation(request)
+                    })
+                    .await
+                    .map_err(std::io::Error::other)?,
+                    Err(_) => local_service::rejected_observation(
+                        "Invalid service observation envelope".into(),
+                    ),
+                };
+                return winbridge_transport::write_frame(
+                    &mut stream,
+                    &serde_json::to_vec(&response)?,
+                )
+                .await;
+            }
             if serde_json::from_slice::<serde_json::Value>(&bytes)
                 .ok()
                 .is_some_and(|v| v.get("queueControlVersion").is_some())
