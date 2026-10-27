@@ -104,7 +104,9 @@ exit $LASTEXITCODE
     request = dict(requestContractVersion=2, context=context, request=dict(method='submit', request=submission))
     runner.write_new(local / 'request.json', request)
     runner.write_new(local / 'info-before.json', before)
+    runner.write_new(local / 'reference-terminal.json', old_task)
     runner.write_new(local / 'run-info.json', dict(run=run, source=source, reference=reference,
+                     referenceSource=old_source, referenceTarget=old_target, referenceTaskId=old_task['taskId'],
                      referenceNegativeAudits=old_audits, reportDirectory=str(shared / 'result'),
                      requestSha256=hashlib.sha256((local / 'request.json').read_bytes()).hexdigest(),
                      debianFreeBytesBefore=shutil.disk_usage(ROOT).free))
@@ -137,24 +139,8 @@ exit $LASTEXITCODE
     after = native.call(endpoint, {'method': 'info'})['info']
     runner.write_new(local / 'info-after.json', after)
     checks.need(task['status'] == 'succeeded' and task['exitCode'] == 0 and task['submission'] == submission, 'Native migration failed; preserve original/copy')
-    result_files = legacy.support.ready_files(shared / 'result')
-    checks.need(result_files == legacy.support.ready_files(shared / 'result'), 'Migration result changed')
-    report = json.loads(result_files['report.json'].decode('utf-8-sig'))
-    checks.need(report['kind'] == 'activation_service_migration_native_gate'
-                and report['passed'] is True and report['error'] is None and report['sourceCommit'] == source['sourceCommit']
-                and report['sourceArchiveSha256'] == source['archiveSha256'] and report['referenceSha256'] == reference_sha
-                and all(report[k] is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened'))
-                and hashlib.sha256(result_files['reference.json']).hexdigest() == reference_sha, 'Native report/reference changed')
-    evidence.verify_selection(report['command'], result_files['migration.log'].decode('utf-8-sig'))
-    proof = json.loads(result_files['activation-service-migration-proof.json'].decode('utf-8-sig'))
-    rejected = evidence.audit(proof, source, reference, checks)
-    checks.need(after['generation'] == before['generation'] and after['build'] == before['build']
-                and after['fencedRequests']['context'] == context and after['activeTaskCount'] == 0
-                and not after.get('maintenanceError') and not after.get('journalRecoveryRequired'), 'Installed worker changed/unhealthy')
-    result = dict(passed=True, taskId=task['taskId'], filesVerifiedTwice=len(result_files), negativeAudits=rejected,
-                  referenceNegativeAudits=old_audits, installedUnchanged=True,
-                  reportSha256=hashlib.sha256(result_files['report.json']).hexdigest(),
-                  proofSha256=hashlib.sha256(result_files['activation-service-migration-proof.json']).hexdigest())
+    verifier = load('service_migration_independent', 'verify-update-service-migration-native.py')
+    result = verifier.verify(local / 'run-info.json', args.source_archive, args.reference_source_archive, args.reference_target_archive)
     runner.write_new(local / 'verified.json', result)
     print(json.dumps(result), flush=True)
 
