@@ -5,7 +5,8 @@ param(
  [Parameter(Mandatory)][string]$SharedReportDirectory,
  [Parameter(Mandatory)][string]$TestRuntimeDirectory,
  [Parameter(Mandatory)][string]$SourceCommit,
- [Parameter(Mandatory)][string]$ManifestSha256
+ [Parameter(Mandatory)][string]$ManifestSha256,
+ [ValidateRange(60,900)][int]$ConnectionWaitSeconds=240
 )
 $ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue'
 $PSNativeCommandUseErrorActionPreference=$false
@@ -24,8 +25,15 @@ Assert-SessionFile (Join-Path $cache '.winbridge-build-cache.lock')
 $lease=[IO.File]::Open((Join-Path $cache '.winbridge-build-cache.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
 $report=[ordered]@{schemaVersion=1;kind='multi_controller_native_windows';passed=$false;sourceCommit=$SourceCommit;manifestSha256=$ManifestSha256;
  installedRuntimeChanged=$false;windowsOpened=$false;commands=@();isolatedWorkerExitConfirmed=$false;remainingFixtureProcesses=$null;error=$null;
- freeBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($work)).AvailableFreeSpace}
-$slot=$null;$child=$null;$out=$null;$err=$null;$outFile=$null;$errFile=$null
+ diagnosticWriteFailures=0;freeBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($work)).AvailableFreeSpace}
+$slot=$null;$child=$null;$out=$null;$err=$null;$outFile=$null;$errFile=$null;$traceWriter=$null
+$runClock=[Diagnostics.Stopwatch]::StartNew()
+function Trace-Gate([string]$Event,$Data){
+ $row=@{atUtc=[DateTime]::UtcNow.ToString('o');elapsedMs=$runClock.ElapsedMilliseconds;bootstrapPid=$PID;event=$Event;data=$Data}
+ $line=$row|ConvertTo-Json -Depth 16 -Compress
+ try{if($null -ne $traceWriter){$traceWriter.WriteLine($line)}}catch{$report.diagnosticWriteFailures++;$report.lastDiagnosticError=$_.Exception.Message}
+ try{[Console]::WriteLine($line)}catch{}
+}
 $oldLocation=Get-Location;$oldIncremental=$env:CARGO_INCREMENTAL;$oldMigration=$env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT
 function Worker-Json([string[]]$Arguments){
  $si=[Diagnostics.ProcessStartInfo]::new($slot.executable)
@@ -35,7 +43,10 @@ function Worker-Json([string[]]$Arguments){
  $p=[Diagnostics.Process]::new();$p.StartInfo=$si
  try{
   [void]$p.Start();$stdout=$p.StandardOutput.ReadToEndAsync();$stderr=$p.StandardError.ReadToEndAsync()
-  if(-not $p.WaitForExit(15000)){$p.Kill();[void]$p.WaitForExit(5000);throw 'Readonly client timeout'}
+  Trace-Gate 'readonly-cli-started' @{clientPid=$p.Id;operation=$Arguments[-1]}
+  $clientClock=[Diagnostics.Stopwatch]::StartNew()
+  if(-not $p.WaitForExit(15000)){Trace-Gate 'readonly-cli-timeout' @{clientPid=$p.Id;elapsedMs=$clientClock.ElapsedMilliseconds};$p.Kill();$stopped=$p.WaitForExit(5000);Trace-Gate 'readonly-cli-stop' @{clientPid=$p.Id;waitConfirmed=$stopped};throw 'Readonly client timeout'}
+  Trace-Gate 'readonly-cli-finished' @{clientPid=$p.Id;elapsedMs=$clientClock.ElapsedMilliseconds;exitCode=$p.ExitCode}
   if($p.ExitCode -ne 0){throw $stderr.GetAwaiter().GetResult()}
   return ($stdout.GetAwaiter().GetResult()|ConvertFrom-Json -Depth 60)
  }finally{$p.Dispose()}
@@ -47,15 +58,22 @@ function Verify-Source([string]$Log){
  if($v.kind -cne 'source_verified' -or $v.sourceCommit -cne $SourceCommit){throw 'Source commit differs'}
 }
 try{
+ $traceStream=[IO.File]::Open((Join-Path $SharedReportDirectory 'diagnostics.jsonl'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read)
+ $traceWriter=[IO.StreamWriter]::new($traceStream,[Text.UTF8Encoding]::new($false));$traceWriter.AutoFlush=$true
+ Trace-Gate 'gate-start' @{sourceCommit=$SourceCommit;freeBytes=$report.freeBytesBefore;testExecutable=(Join-Path $TestRuntimeDirectory 'winbridge-worker.exe');powershellVersion=$PSVersionTable.PSVersion.ToString()}
  if($report.freeBytesBefore -lt 6GB){throw 'Less than 6 GiB; no build'}
+ Trace-Gate 'source-verification-start' @{}
  Verify-Source 'source-before.log'
+ Trace-Gate 'source-verification-complete' @{}
  $env:CARGO_INCREMENTAL='0';Set-Location -LiteralPath $source
  $cargoArguments=@('build','-p','winbridge-worker','--bins','--locked','--offline','--features','bundled-sqlite','--target-dir',$cache)
  Write-Output ('Native multi-controller: build normal worker; cache '+$cache)
+ Trace-Gate 'build-start' @{arguments=$cargoArguments}
  $timer=[Diagnostics.Stopwatch]::StartNew()
  & cargo.exe @cargoArguments 2>&1|ForEach-Object {$_.ToString()}|Set-Content -LiteralPath (Join-Path $SharedReportDirectory 'worker-build.log') -Encoding utf8
  $code=$LASTEXITCODE;$timer.Stop()
  $report.commands+=@(@{name='worker-build';arguments=$cargoArguments;exitCode=$code;elapsedMs=$timer.ElapsedMilliseconds})
+ Trace-Gate 'build-complete' @{elapsedMs=$timer.ElapsedMilliseconds;exitCode=$code}
  if($code -ne 0){throw 'Native worker build failed'}
  $installed='K:\_proj-26\winbridge\runtime\winbridge-worker.exe'
  $migrationInput=Join-Path $work 'worker-migration-input.json'
@@ -66,10 +84,12 @@ try{
  $migrationArguments=@('test','-p','winbridge-worker','--locked','--offline','--features','bundled-sqlite','--target-dir',$cache,
   '--test','attribution_migration','actual_seventeen_history_migrates_to_nineteen_without_replay_or_old_worker_write','--','--ignored','--exact','--nocapture')
  Write-Output 'Native multi-controller: cold journal17-to19 migration; local IPC only'
+ Trace-Gate 'cold-migration-start' @{}
  $timer=[Diagnostics.Stopwatch]::StartNew()
  & cargo.exe @migrationArguments 2>&1|ForEach-Object {$_.ToString()}|Set-Content -LiteralPath (Join-Path $SharedReportDirectory 'worker-migration.log') -Encoding utf8
  $code=$LASTEXITCODE;$timer.Stop()
  $report.commands+=@(@{name='worker17-to19';arguments=$migrationArguments;exitCode=$code;elapsedMs=$timer.ElapsedMilliseconds})
+ Trace-Gate 'cold-migration-complete' @{elapsedMs=$timer.ElapsedMilliseconds;exitCode=$code}
  if($code -ne 0){throw 'Released worker17 cold migration failed'}
  $env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$oldMigration
  $image=Join-Path $cache 'debug/winbridge-worker.exe';$sha=(Get-FileHash -LiteralPath $image).Hash.ToLowerInvariant()
@@ -89,23 +109,27 @@ try{
  foreach($a in @('--config',$config,'serve')){$si.ArgumentList.Add($a)}
  Write-Output ('Native multi-controller: start fixed network EXE '+$slot.executable)
  $child=[Diagnostics.Process]::new();$child.StartInfo=$si;[void]$child.Start()
+ Trace-Gate 'test-worker-started' @{processId=$child.Id;executable=$slot.executable;workerSha256=$sha;configPath=$config}
  Write-NewJson (Join-Path $SharedReportDirectory 'worker-process.json') @{processId=$child.Id;startedAtUtc=$child.StartTime.ToUniversalTime().ToString('o');executable=$slot.executable;workerSha256=$sha}
  # Write bytes as they arrive. A stalled process/pipe must leave partial logs;
  # retaining an unfinished ReadToEnd task must never hide startup diagnostics.
  $outFile=[IO.FileStream]::new((Join-Path $SharedReportDirectory 'worker-stdout.log'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,1,$true)
  $errFile=[IO.FileStream]::new((Join-Path $SharedReportDirectory 'worker-stderr.log'),[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::Read,1,$true)
  $out=$child.StandardOutput.BaseStream.CopyToAsync($outFile);$err=$child.StandardError.BaseStream.CopyToAsync($errFile)
- $until=[DateTime]::UtcNow.AddSeconds(90);$info=$null
+ $report.connectionWaitSeconds=$ConnectionWaitSeconds
+ $until=[DateTime]::UtcNow.AddSeconds($ConnectionWaitSeconds);$info=$null;$lastInfoTrace=-1L
  do{
   if($child.HasExited){throw 'Test worker exited before readiness'}
-  try{$info=(Worker-Json @('--config',$config,'info')).info}catch{Start-Sleep -Milliseconds 200;continue}
+  try{$info=(Worker-Json @('--config',$config,'info')).info}catch{Trace-Gate 'local-info-error' @{message=$_.Exception.Message};Start-Sleep -Seconds 1;continue}
+  if($runClock.ElapsedMilliseconds - $lastInfoTrace -ge 3000){Trace-Gate 'local-info' @{processId=$child.Id;generation=$info.generation;primary=$info.controllerConnection};$lastInfoTrace=$runClock.ElapsedMilliseconds}
   if($info.controllerConnection.state -ceq 'connected'){break}
-  Start-Sleep -Milliseconds 200
+  Start-Sleep -Seconds 2
  }while([DateTime]::UtcNow -lt $until)
  if($null -eq $info -or $info.controllerConnection.state -cne 'connected'){
   if($null -ne $info){Write-NewJson (Join-Path $SharedReportDirectory 'network-last-info.json') $info}
   throw 'Fixed-path worker connection failed; inspect partial stderr and last Info; no automatic firewall changes'
  }
+ Trace-Gate 'primary-connected' @{processId=$child.Id;connection=$info.controllerConnection}
  Write-NewJson (Join-Path $SharedReportDirectory 'network-ready.json') @{context=$info.fencedRequests.context;generation=$info.generation;processId=$child.Id;build=$info.build}
  $donePath=Join-Path $SharedReportDirectory 'network-complete.json';$until=[DateTime]::UtcNow.AddSeconds(240)
  while(-not (Test-Path -LiteralPath $donePath)){
@@ -126,16 +150,18 @@ try{
  $remaining=@(Get-CimInstance Win32_Process -Filter "Name='winbridge-fixture.exe'"|Where-Object {$_.ExecutablePath -and $_.ExecutablePath.StartsWith($work+'\',[StringComparison]::OrdinalIgnoreCase)})
  $report.remainingFixtureProcesses=$remaining.Count
  if($remaining.Count){throw 'Cancelled fixture descendant is still alive'}
- $child.Kill();if(-not $child.WaitForExit(15000)){throw 'Isolated worker exit unconfirmed'}
+ Trace-Gate 'test-worker-stop-request' @{processId=$child.Id;hasExited=$child.HasExited}
+ $child.Kill();$stopped=$child.WaitForExit(15000);Trace-Gate 'test-worker-stop-result' @{processId=$child.Id;waitConfirmed=$stopped;hasExited=$child.HasExited}
+ if(-not $stopped){throw 'Isolated worker exit unconfirmed'}
  $report.isolatedWorkerExitConfirmed=$true
  Verify-Source 'source-after.log'
  [IO.File]::Copy($image,(Join-Path $SharedReportDirectory 'winbridge-worker.exe'),$false)
  if((Get-FileHash -LiteralPath (Join-Path $SharedReportDirectory 'winbridge-worker.exe')).Hash.ToLowerInvariant() -cne $sha){throw 'Exported worker differs'}
  $report.passed=$true
-}catch{$report.error=$_.Exception.Message;Write-Output ('Multi-controller native gate failed: '+$report.error)}
+}catch{$report.error=$_.Exception.Message;Trace-Gate 'gate-error' @{message=$report.error};Write-Output ('Multi-controller native gate failed: '+$report.error)}
 finally{
  if($null -ne $child){
-  try{if(-not $child.HasExited){$child.Kill()};if($child.WaitForExit(15000)){$report.isolatedWorkerExitConfirmed=$true}else{$report.passed=$false;$report.error+='; worker exit unconfirmed'}}catch{$report.passed=$false;$report.error+='; worker cleanup unconfirmed'}
+  try{Trace-Gate 'cleanup-worker' @{processId=$child.Id;hasExited=$child.HasExited};if(-not $child.HasExited){$child.Kill()};$stopped=$child.WaitForExit(15000);Trace-Gate 'cleanup-worker-wait' @{processId=$child.Id;waitConfirmed=$stopped};if($stopped){$report.isolatedWorkerExitConfirmed=$true}else{$report.passed=$false;$report.error+='; worker exit unconfirmed'}}catch{$report.passed=$false;$report.error+='; worker cleanup unconfirmed';Trace-Gate 'cleanup-worker-error' @{message=$_.Exception.Message}}
   $report.stdoutCaptureComplete=$false;$report.stderrCaptureComplete=$false
   foreach($pair in @(@($out,$outFile,'stdoutCaptureComplete'),@($err,$errFile,'stderrCaptureComplete'))){
    try{if($null -ne $pair[0] -and $pair[0].Wait(5000)){
@@ -150,6 +176,9 @@ finally{
  Close-TestWorkerRuntime $slot
  Set-Location -LiteralPath $oldLocation;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_ATTRIBUTION_MIGRATION_INPUT=$oldMigration;$lease.Dispose()
  $report.freeBytesAfter=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($work)).AvailableFreeSpace
+ Trace-Gate 'gate-finished' @{passed=$report.passed;error=$report.error;workerExitConfirmed=$report.isolatedWorkerExitConfirmed;freeBytes=$report.freeBytesAfter}
+ if($report.diagnosticWriteFailures -gt 0){$report.passed=$false;$report.error+='; diagnostic log write failed'}
+ if($null -ne $traceWriter){$traceWriter.Dispose()}
  Write-NewJson (Join-Path $SharedReportDirectory 'report.json') $report
  $files=@(Get-ChildItem -LiteralPath $SharedReportDirectory -File|Sort-Object Name|ForEach-Object {@{path=$_.Name;bytes=$_.Length;sha256=(Get-FileHash -LiteralPath $_.FullName).Hash.ToLowerInvariant()}})
  Write-NewJson (Join-Path $SharedReportDirectory 'report.ready.json') @{schemaVersion=1;files=$files}

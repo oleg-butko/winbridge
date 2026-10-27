@@ -115,6 +115,7 @@ def main():
     bootstrap = None
     transcript = (local / 'requests.jsonl').open('x')
     count = 0
+    observations = None
 
     def query(index, request):
         return call(peers[index]['endpoint'], request)
@@ -212,7 +213,52 @@ exit $LASTEXITCODE
         save(local / 'bootstrap-task.json', bootstrap)
         print(json.dumps({'taskId': bootstrap['taskId'], 'runInfo': str(local / 'run-info.json')}), flush=True)
 
+        observations = (local / 'startup-observations.jsonl').open('x')
+        last_summary = None
+        last_printed = 0.0
+        offsets = {}
+
+        def startup_progress():
+            nonlocal last_summary, last_printed
+            rows = []
+            for index, peer in enumerate(peers):
+                alive = peer['process'].poll() is None
+                try:
+                    status = query(index, {'method': 'controller_status'})['status'] if alive else None
+                    rows.append({'peer': index, 'pid': peer['process'].pid, 'pidAlive': alive, 'status': status})
+                except (OSError, RuntimeError) as error:
+                    rows.append({'peer': index, 'pid': peer['process'].pid, 'pidAlive': alive, 'error': str(error)})
+            observations.write(json.dumps({'atMs': int(time.time()*1000), 'controllers': rows}) + '\n'); observations.flush()
+            summary = [(r['peer'], r['pidAlive'], (r.get('status') or {}).get('connected', False)) for r in rows]
+            now = time.monotonic()
+            if summary != last_summary or now - last_printed >= 5:
+                print(json.dumps({'event': 'controller-observation', 'connections': summary}), flush=True)
+                for name in ('diagnostics.jsonl', 'worker-stdout.log', 'worker-stderr.log'):
+                    path = shared / name
+                    if path.exists():
+                        with path.open('rb') as stream:
+                            stream.seek(offsets.get(name, 0)); data = stream.read(65536); offsets[name] = stream.tell()
+                        if data:
+                            print('[' + name + '] ' + data.decode('utf-8', errors='replace'), flush=True)
+                # Any connected current controller can report all worker links,
+                # including errors of peers that have not established a session.
+                for row in rows:
+                    if (row.get('status') or {}).get('connected') and not (legacy and row['peer'] == 0):
+                        try:
+                            observed_info = query(row['peer'], {'method': 'info'})['info']
+                            request = {'controllerDiagnosticsVersion': 1, 'request': {'method': 'controller_connections',
+                                       'request': {'context': observed_info['fencedRequests']['context']}}}
+                            links = query(row['peer'], request)
+                            observations.write(json.dumps({'atMs': int(time.time()*1000), 'workerLinks': links}) + '\n'); observations.flush()
+                            print(json.dumps({'event': 'worker-links', 'response': links}), flush=True)
+                        except (OSError, RuntimeError, KeyError) as error:
+                            print(json.dumps({'event': 'worker-links-unavailable', 'error': str(error)}), flush=True)
+                        break
+                last_summary, last_printed = summary, now
+            return rows
+
         def ready():
+            startup_progress()
             task = call(production, {'method': 'get_task', 'taskId': bootstrap['taskId']})['task']
             need(task['status'] in ('queued', 'running'), 'Bootstrap stopped before network ready; inspect original task/report')
             return (shared / 'network-ready.json').exists()
@@ -220,8 +266,8 @@ exit $LASTEXITCODE
         wait_for(ready, bool, 900, interval=1)
         ready_data = json.loads((shared / 'network-ready.json').read_text(encoding='utf-8-sig'))
         context = ready_data['context']
-        wait_for(lambda: [query(i, {'method': 'controller_status'})['status'] for i in range(4)],
-                 lambda xs: all(x['connected'] is True for x in xs), 30)
+        wait_for(startup_progress, lambda rows: all((r.get('status') or {}).get('connected') is True for r in rows), 240)
+        observations.close()
         infos = [query(i, {'method': 'info'})['info'] for i in range(4)]
         need(all(x['fencedRequests']['context'] == context and x['generation'] == infos[0]['generation'] for x in infos), 'Different worker authority/generation')
         need(all(x['build']['sourceCommit'] == pin['sourceCommit'] and x['build']['sourceManifestSha256'] == pin['manifestSha256'] and x['build']['sourceDirty'] is False for x in infos), 'Worker build differs from source')
@@ -322,6 +368,8 @@ exit $LASTEXITCODE
                     stop_peer(i)
         else:
             print('Bootstrap may continue; saved controller owners retained; do not replay', flush=True)
+        if observations is not None:
+            observations.close()
         transcript.close()
 
 

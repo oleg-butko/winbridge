@@ -140,3 +140,18 @@ Late terminal сохранён отдельно, старые диагности
 Связь сбоя с Outpost не доказана. Следующий network run должен опираться на новые
 partial logs/last Info и проверять readiness всех связей; никаких firewall changes.
 Это не положительный native network proof, новый worker в этой проверке не запускался.
+
+## Повтор по просьбе пользователя с наблюдением на Windows
+
+Пользователь попросил больше диагностики и повторный run. Добавлены UTF-8
+ diagnostics.jsonl с UTC/elapsed/bootstrap PID, source/build/migration boundaries,
+PID каждого readonly CLI, отдельный server PID/image/config/SHA, primary Info
+каждые несколько секунд и точный waitConfirmed при завершении. Ошибки Info
+не замалчиваются. Ошибка записи диагностики не прерывает cleanup и исключает
+успешный report. Connection budget240s записывается отдельно от updater deadlines.
+
+Coordinator сохраняет startup-observations.jsonl с фактическими PID/status всех
+четырёх controller, печатает изменения и хвосты stdout/stderr/diagnostics до ready.
+При любой доступной новой связи читает readonly список всех worker links с их
+ошибками. Это диагностические запросы; мутации остаются после подтверждения всех
+связей. Новый run только с новым request/key/state после terminal прежней попытки.
