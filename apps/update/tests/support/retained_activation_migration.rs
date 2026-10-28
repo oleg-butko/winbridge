@@ -35,6 +35,7 @@ struct Reference {
     root_sha256: String,
     writer_sha256: String,
     service_sha256: Option<String>,
+    controller_sha256: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -127,12 +128,14 @@ fn info(c: &Connection) -> UpdateJournalInfo {
 pub enum Profile {
     Service19To20,
     Controller20To21,
+    Lifetime21To22,
 }
 impl Profile {
     fn source_schema(self) -> u32 {
         match self {
             Self::Service19To20 => 19,
             Self::Controller20To21 => 20,
+            Self::Lifetime21To22 => 21,
         }
     }
     fn target_schema(self) -> u32 {
@@ -150,12 +153,25 @@ impl Profile {
                 "activation_controller_records",
                 "activation_controller_history",
             ],
+            Self::Lifetime21To22 => [
+                "activation_lifetime_intents",
+                "activation_lifetime_records",
+                "activation_lifetime_history",
+            ],
         }
     }
     fn kind(self) -> &'static str {
         match self {
             Self::Service19To20 => "activation_schema19_reference",
             Self::Controller20To21 => "activation_schema20_reference",
+            Self::Lifetime21To22 => "activation_schema21_reference",
+        }
+    }
+    fn environment(self) -> &'static str {
+        match self {
+            Self::Service19To20 => "WINBRIDGE_SERVICE_MIGRATION_INPUT",
+            Self::Controller20To21 => "WINBRIDGE_CONTROLLER_MIGRATION_INPUT",
+            Self::Lifetime21To22 => "WINBRIDGE_LIFETIME_MIGRATION_INPUT",
         }
     }
 }
@@ -166,15 +182,7 @@ pub fn run(profile: Profile) {
         "Use the exact pinned SDK for this historical profile; never relabel a migration"
     );
     let input: Input = serde_json::from_slice(
-        &fs::read(
-            std::env::var_os(if profile == Profile::Service19To20 {
-                "WINBRIDGE_SERVICE_MIGRATION_INPUT"
-            } else {
-                "WINBRIDGE_CONTROLLER_MIGRATION_INPUT"
-            })
-            .unwrap(),
-        )
-        .unwrap(),
+        &fs::read(std::env::var_os(profile.environment()).unwrap()).unwrap(),
     )
     .unwrap();
     let r = &input.reference;
@@ -249,14 +257,14 @@ pub fn run(profile: Profile) {
     );
     let retained_service =
         UpdateJournal::inspect_activation_service(&source, &r.update_id).unwrap();
-    if profile == Profile::Controller20To21 {
+    if profile.source_schema() >= 20 {
         let saved = retained_service
             .as_ref()
-            .expect("Actual20 service confirmation missing");
+            .expect("Retained service confirmation missing");
         let winbridge_update::activation::service::ActivationServiceState::Confirmed { receipt } =
             &saved.state
         else {
-            panic!("Actual20 service is not confirmed")
+            panic!("Retained service is not confirmed")
         };
         assert_eq!(activation.local.as_ref(), Some(&receipt.compatibility));
         assert_eq!(
@@ -266,13 +274,33 @@ pub fn run(profile: Profile) {
             )),
             r.service_sha256
         );
+    } else {
+        assert!(retained_service.is_none() && r.service_sha256.is_none());
+    }
+    let retained_controller =
+        UpdateJournal::inspect_activation_controller(&source, &r.update_id).unwrap();
+    if profile == Profile::Lifetime21To22 {
+        let saved = retained_controller
+            .as_ref()
+            .expect("Actual21 controller history missing");
+        assert!(matches!(
+            saved.state,
+            winbridge_update::activation::controller::ActivationControllerState::Confirmed { .. }
+        ));
+        assert_eq!(
+            Some(sha256(
+                &winbridge_protocol::canonical_evidence_json(&serde_json::to_value(saved).unwrap())
+                    .unwrap()
+            )),
+            r.controller_sha256
+        );
         assert!(
-            UpdateJournal::inspect_activation_controller(&source, &r.update_id)
+            UpdateJournal::inspect_activation_lifetime(&source, &r.update_id)
                 .unwrap()
                 .is_none()
         );
     } else {
-        assert!(retained_service.is_none() && r.service_sha256.is_none());
+        assert!(retained_controller.is_none() && r.controller_sha256.is_none());
     }
     let activation_value = serde_json::to_value(&activation).unwrap();
     assert_eq!(
@@ -354,9 +382,13 @@ pub fn run(profile: Profile) {
         UpdateJournal::inspect_activation_service(&copy, &r.update_id).unwrap(),
         retained_service
     );
-    if profile == Profile::Controller20To21 {
+    assert_eq!(
+        UpdateJournal::inspect_activation_controller(&copy, &r.update_id).unwrap(),
+        retained_controller
+    );
+    if profile == Profile::Lifetime21To22 {
         assert!(
-            UpdateJournal::inspect_activation_controller(&copy, &r.update_id)
+            UpdateJournal::inspect_activation_lifetime(&copy, &r.update_id)
                 .unwrap()
                 .is_none()
         );
@@ -428,9 +460,13 @@ pub fn run(profile: Profile) {
         UpdateJournal::inspect_activation_service(&copy, &r.update_id).unwrap(),
         retained_service
     );
-    if profile == Profile::Controller20To21 {
+    assert_eq!(
+        UpdateJournal::inspect_activation_controller(&copy, &r.update_id).unwrap(),
+        retained_controller
+    );
+    if profile == Profile::Lifetime21To22 {
         assert!(
-            UpdateJournal::inspect_activation_controller(&copy, &r.update_id)
+            UpdateJournal::inspect_activation_lifetime(&copy, &r.update_id)
                 .unwrap()
                 .is_none()
         );
@@ -443,6 +479,18 @@ pub fn run(profile: Profile) {
         after_cold_observation.active_update_id,
         after.active_update_id
     );
+    if profile == Profile::Lifetime21To22 {
+        assert!(
+            UpdateJournal::inspect_activation_controller_receiver(
+                &copy,
+                &r.update_id,
+                &activation.intent.attempt_id,
+                &activation.created.as_ref().unwrap().process,
+            )
+            .is_err(),
+            "Retained21 metadata must not become a current22 receiver snapshot"
+        );
+    }
     drop(owner);
     drop(journal);
     drop(inspected);
@@ -474,7 +522,12 @@ pub fn run(profile: Profile) {
         artifact::inspect_image(&manifest_file).unwrap(),
         manifest_evidence
     );
-    let mut proof = serde_json::json!({"schemaVersion":1,"kind":if profile==Profile::Service19To20 {"activation_service_schema_migration_proof"}else{"activation_controller_schema_migration_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),
+    let proof_kind = match profile {
+        Profile::Service19To20 => "activation_service_schema_migration_proof",
+        Profile::Controller20To21 => "activation_controller_schema_migration_proof",
+        Profile::Lifetime21To22 => "activation_lifetime_schema_migration_proof",
+    };
+    let mut proof = serde_json::json!({"schemaVersion":1,"kind":proof_kind,"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),
         "referenceProofSha256":r.proof_sha256,"referenceReportSha256":r.report_sha256,"referenceImage":r.image,"referenceManifestSha256":r.manifest_sha256,
         "before":before,"after":after,"afterColdObservation":after_cold_observation,"backupInfo":backup_info,"retainedActivation":activation_value,"retainedRoot":root_value,"retainedWriter":writer_value,
         "rowsBefore":rows_before,"rowsAfter":rows_after,"backupRows":backup_rows,"gateRows":gate_rows,
@@ -484,11 +537,18 @@ pub fn run(profile: Profile) {
         proof["oldNineteenInitRefused"] = true.into();
         proof["oldNineteenStatusRefused"] = true.into();
         proof["noFreshServiceIntent"] = true.into();
-    } else {
+    } else if profile == Profile::Controller20To21 {
         proof["oldTwentyInitRefused"] = true.into();
         proof["oldTwentyStatusRefused"] = true.into();
         proof["noFreshControllerIntent"] = true.into();
         proof["retainedService"] = serde_json::to_value(&retained_service).unwrap();
+    } else {
+        proof["oldTwentyOneInitRefused"] = true.into();
+        proof["oldTwentyOneStatusRefused"] = true.into();
+        proof["noFreshLifetimeIntent"] = true.into();
+        proof["oldControllerReceiverRefused"] = true.into();
+        proof["retainedService"] = serde_json::to_value(&retained_service).unwrap();
+        proof["retainedController"] = serde_json::to_value(&retained_controller).unwrap();
     }
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -502,7 +562,11 @@ pub fn run(profile: Profile) {
 
 #[test]
 fn wrong_fixed_profile_refuses_before_loading_reference_or_touching_runtime() {
-    for profile in [Profile::Service19To20, Profile::Controller20To21] {
+    for profile in [
+        Profile::Service19To20,
+        Profile::Controller20To21,
+        Profile::Lifetime21To22,
+    ] {
         if UPDATE_SCHEMA_VERSION != profile.target_schema() {
             let error = std::panic::catch_unwind(|| run(profile))
                 .expect_err("Historical profile must refuse this SDK");

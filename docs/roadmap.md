@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+**Retained21→22 harness готов к native run:** fixed profile, archived Main26
+controller/local7/root, consistent copy, backup/epoch/old21 refusal и24 observer
+mutations. [План](plans/worker-self-update/retained21-to22-2026-10-28.md).
+MSVC/16 Python и Windows syntax/image/storage preflight прошли; actual migration
+ещё не проверена. Public install off. Следом clean export/run/reread, затем fresh
+lifetime admission/receiver, keeper/commit/release и U2–U4.
+
 **Lifetime ledger22:** immutable intent/current/history, CAS/causal readback
 и readonly full-graph queries реализованы.11 SQL tests/946 workspace passed,
 17 ignored. [Границы и продолжение](plans/worker-self-update/lifetime-ledger-2026-10-28.md).

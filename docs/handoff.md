@@ -1,5 +1,15 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Retained21→22 harness подготовлен:** отдельный fixed Lifetime21To22 profile,
+actual Main26 reference derivation/controller SHA, consistent copy/old21 refusal,
+receiver schema fence и независимый reader/24 negative audits. [План и exact args](plans/worker-self-update/retained21-to22-2026-10-28.md).
+16 Python tests/MSVC cross-Clippy/UI build/scaffold passed. Actual Main26 и
+20→21 заново прочитаны readonly с прежними SHA; Windows parser/storage/image
+preflight passed, installed worker прежний. **Actual21→22 ещё не выполнен**:
+clean commit/export с built UI, затем один copy-only run и independent reread.
+Source22/private5/actor26/view18; task worker0.2.0 оставить, desktop не нужен,
+новых UI/network exe/Runtime204 replacement в этом gate нет.
+
 **Lifetime ledger22,2026-10-28:** immutable intent/current/causal history и
 transactional full-graph readback добавлены. Production API только read/inspect,
 SQL writers cfg(test); нет нового owner/dispatch/runtime grant.11 новых SQL tests,

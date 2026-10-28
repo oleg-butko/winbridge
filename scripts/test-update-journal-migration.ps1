@@ -3,7 +3,7 @@
 Verify one fixed-profile retained journal migration on a copy; never install or launch a worker.
 #>
 param(
-  [Parameter(Mandatory)][ValidateSet('Service19To20','Controller20To21')][string]$Profile,
+  [Parameter(Mandatory)][ValidateSet('Service19To20','Controller20To21','Lifetime21To22')][string]$Profile,
   [Parameter(Mandatory)][string]$SourceDirectory,
   [Parameter(Mandatory)][string]$SourceArchiveSha256,
   [Parameter(Mandatory)][string]$ReferenceFile,
@@ -13,8 +13,13 @@ param(
 )
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
-$Profile=if($Profile -eq 'Service19To20'){'Service19To20'}else{'Controller20To21'}
-$case=if($Profile -ceq 'Service19To20'){@{schema=20;referenceKind='activation_schema19_reference';reportKind='activation_service_migration_native_gate';target='activation_service_migration';test='actual_nineteen_writer_history_survives_twenty_and_old_nineteen_refuses';environment='WINBRIDGE_SERVICE_MIGRATION_INPUT';prefix='service';proof='activation-service-migration-proof.json'}}else{@{schema=21;referenceKind='activation_schema20_reference';reportKind='activation_controller_migration_native_gate';target='activation_controller_migration';test='actual_twenty_local_service_history_survives_twenty_one_and_old_twenty_refuses';environment='WINBRIDGE_CONTROLLER_MIGRATION_INPUT';prefix='controller';proof='activation-controller-migration-proof.json'}}
+$case=switch -Exact ($Profile) {
+  'Service19To20' {@{profile='Service19To20';schema=20;referenceKind='activation_schema19_reference';reportKind='activation_service_migration_native_gate';target='activation_service_migration';test='actual_nineteen_writer_history_survives_twenty_and_old_nineteen_refuses';environment='WINBRIDGE_SERVICE_MIGRATION_INPUT';prefix='service';proof='activation-service-migration-proof.json'}}
+  'Controller20To21' {@{profile='Controller20To21';schema=21;referenceKind='activation_schema20_reference';reportKind='activation_controller_migration_native_gate';target='activation_controller_migration';test='actual_twenty_local_service_history_survives_twenty_one_and_old_twenty_refuses';environment='WINBRIDGE_CONTROLLER_MIGRATION_INPUT';prefix='controller';proof='activation-controller-migration-proof.json'}}
+  'Lifetime21To22' {@{profile='Lifetime21To22';schema=22;referenceKind='activation_schema21_reference';reportKind='activation_lifetime_migration_native_gate';target='activation_lifetime_migration';test='actual_twenty_one_controller_history_survives_twenty_two_and_old_twenty_one_refuses';environment='WINBRIDGE_LIFETIME_MIGRATION_INPUT';prefix='lifetime';proof='activation-lifetime-migration-proof.json'}}
+  default {throw 'Unknown fixed migration profile'}
+}
+$Profile=$case.profile
 
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
 . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')

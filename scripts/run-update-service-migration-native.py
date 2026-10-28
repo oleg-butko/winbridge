@@ -22,25 +22,25 @@ def load(name, file):
 
 
 def main(profile='Service19To20'):
-    if profile not in ('Service19To20', 'Controller20To21'):
-        raise ValueError('Unknown fixed migration profile')
-    controller = profile == 'Controller20To21'
-    prefix = 'controller' if controller else 'service'
-    parser = argparse.ArgumentParser(description=f'One actual{20 if controller else 19} ->{21 if controller else 20} consistent-copy gate; never install.')
+    fixed = load('migration_profiles', 'update-migration-profiles.py').get(profile)
+    retained = fixed['reference_helper'] is not None
+    prefix = fixed['prefix']
+    parser = argparse.ArgumentParser(description=f"One actual{fixed['schemas'][1]} ->{fixed['schemas'][0]} consistent-copy gate; never install.")
     for name in ('source-archive', 'reference-source-archive', 'reference-target-archive', 'controller-config'):
         parser.add_argument('--' + name, required=True, type=Path)
-    for name in (('cache-run',) if controller else ('reference-run', 'reference-task-id', 'reference-report-sha256', 'reference-proof-sha256', 'cache-run')):
+    for name in (('cache-run',) if retained else ('reference-run', 'reference-task-id', 'reference-report-sha256', 'reference-proof-sha256', 'cache-run')):
         parser.add_argument('--' + name, required=True)
-    if controller:
+    if retained:
         parser.add_argument('--reference-run-info', required=True, type=Path)
     args = parser.parse_args()
     runner = load('service_migration_transport', 'run-update-service-main-native.py')
     legacy = load('service_migration_legacy', 'validate-update-activation-preparation-native.py')
     evidence = load('service_migration_evidence', 'update-activation-service-migration-proof.py')
     native, health, checks = legacy.native, legacy.health, legacy.checks
-    if controller:
-        evidence = load('controller_migration_evidence', 'update-activation-controller-migration-proof.py')
-        reference, archive_location, reference_audit, old_meta = evidence.reference_from_main25(
+    if retained:
+        module, function = fixed['reference_helper']
+        evidence = load('retained_migration_evidence', module)
+        reference, archive_location, reference_audit, old_meta = getattr(evidence, function)(
             args.reference_run_info, args.reference_source_archive, args.reference_target_archive)
         args.reference_run, args.reference_task_id = old_meta['run'], old_meta['taskId']
         args.reference_report_sha256, args.reference_proof_sha256 = reference['reportSha256'], reference['proofSha256']
@@ -50,7 +50,7 @@ def main(profile='Service19To20'):
         checks.need(re.fullmatch(r'[0-9a-f]{64}', sha), 'Explicit retained SHA required')
     checks.need(str(uuid.UUID(args.reference_task_id)) == args.reference_task_id, 'Canonical reference task required')
     source, old_source, old_target = map(health.archive_pin, (args.source_archive, args.reference_source_archive, args.reference_target_archive))
-    schemas = (21, 20, 20) if controller else (20, 19, 19)
+    schemas = fixed['schemas']
     for path, expected in zip((args.source_archive, args.reference_source_archive, args.reference_target_archive), schemas):
         with zipfile.ZipFile(path) as package:
             checks.need(native.updater_schema_from_source(package.read('winbridge/apps/update/src/journal.rs')) == expected,
@@ -69,19 +69,19 @@ def main(profile='Service19To20'):
                 and hashlib.sha256(files['candidate-health-actor-proof.json']).hexdigest() == args.reference_proof_sha256,
                 'Reference report/proof SHA differs')
     old_report = json.loads(files['report.json'].decode('utf-8-sig'))
-    checks.need(old_report['kind'] == ('activation_service_main_native_gate' if controller else 'activation_writer_main_native_gate') and old_report['passed'] is True
+    checks.need(old_report['kind'] == fixed['reference_report_kind'] and old_report['passed'] is True
                 and old_report['error'] is None and old_report['sourceCommit'] == old_source['sourceCommit']
                 and old_report['sourceArchiveSha256'] == old_source['archiveSha256'] and old_report['target'] == old_target,
-                'Not the pinned successful Main24 report')
+                'Not the pinned successful reference report')
     old_task = native.call(endpoint, {'method': 'get_task', 'taskId': args.reference_task_id})['task']
     checks.need(old_task['status'] == 'succeeded' and old_task['exitCode'] == 0
                 and old_task['submission']['projectId'] == project['id']
-                and old_task['submission']['idempotencyKey'] == ('native-main25-204-' if controller else 'native-activation-writer-') + args.reference_run,
+                and old_task['submission']['idempotencyKey'] == fixed['task_prefix'] + args.reference_run,
                 'Reference terminal task differs')
     old_proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
     root = str(PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / args.reference_run)
-    if controller:
-        old_audits = reference_audit['negativeAudits'] + reference_audit['nativeMarkerNegativeAudits']
+    if retained:
+        old_audits = sum(reference_audit[name] for name in fixed['reference_audits'])
     else:
         old_audits = legacy.writer_checks.audit(old_proof, old_source, old_target, root, checks, legacy.state_checks,
                                                health, startup_timeout_ms=legacy.startup_budget(args.reference_source_archive))
@@ -109,6 +109,7 @@ if((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant(
 if([IO.DriveInfo]::new('K:\\').AvailableFreeSpace -lt 6GB){{throw 'Less than 6 GiB; no build'}}
 New-Item -ItemType Directory -Path $work|Out-Null
 [IO.File]::Copy($archive,(Join-Path $work 'source.zip'),$false)
+if((Get-FileHash -LiteralPath (Join-Path $work 'source.zip') -Algorithm SHA256).Hash.ToLowerInvariant() -cne {ps(source['archiveSha256'])}){{throw 'Local source copy changed; no extraction'}}
 Expand-Archive -LiteralPath (Join-Path $work 'source.zip') -DestinationPath $work
 & pwsh.exe -NoProfile -NonInteractive -File (Join-Path $work 'winbridge/scripts/test-update-{prefix}-migration.ps1') -SourceDirectory (Join-Path $work 'winbridge') -SourceArchiveSha256 {ps(source['archiveSha256'])} -ReferenceFile {ps(str(peer/'reference-input.json'))} -ReferenceSha256 {ps(reference_sha)} -ValidationCacheDirectory {ps(str(cache))} -ReportDirectory {ps(str(peer/'result'))}
 exit $LASTEXITCODE
@@ -126,7 +127,7 @@ exit $LASTEXITCODE
                      referenceNegativeAudits=old_audits, reportDirectory=str(shared / 'result'),
                      requestSha256=hashlib.sha256((local / 'request.json').read_bytes()).hexdigest(),
                      debianFreeBytesBefore=shutil.disk_usage(ROOT).free)
-    if controller:
+    if retained:
         metadata.update(profile=profile, referenceRunInfo=str(args.reference_run_info.resolve()), referenceArchiveLocation=archive_location)
     runner.write_new(local / 'run-info.json', metadata)
     reply = runner.submit_fenced(native, endpoint, request)

@@ -19,21 +19,21 @@ def load(name, file):
 
 
 def verify(run_info, source_archive, reference_source_archive, reference_target_archive, *, profile='Service19To20'):
-    if profile not in ('Service19To20', 'Controller20To21'):
-        raise ValueError('Unknown fixed migration profile')
-    controller = profile == 'Controller20To21'
-    prefix = 'controller' if controller else 'service'
+    fixed = load('migration_profiles', 'update-migration-profiles.py').get(profile)
+    retained = fixed['reference_helper'] is not None
+    prefix = fixed['prefix']
     legacy = load('retained_service_migration_legacy', 'validate-update-activation-preparation-native.py')
     evidence = load('retained_service_migration_evidence', 'update-activation-service-migration-proof.py')
-    if controller:
-        evidence = load('retained_controller_migration_evidence', 'update-activation-controller-migration-proof.py')
+    if retained:
+        evidence = load('retained_migration_evidence', fixed['reference_helper'][0])
+    parse = getattr(evidence, 'parse_json', json.loads)
     checks, native, health = legacy.checks, legacy.native, legacy.health
-    meta = json.loads(run_info.read_text())
+    meta = parse(run_info.read_text())
     local = run_info.resolve().parent
     source, old_source, old_target = map(health.archive_pin, (source_archive, reference_source_archive, reference_target_archive))
     checks.need(meta['source'] == source and meta['referenceSource'] == old_source and meta['referenceTarget'] == old_target,
                 'Archive pins differ from retained run')
-    schemas = (21, 20, 20) if controller else (20, 19, 19)
+    schemas = fixed['schemas']
     for path, version in zip((source_archive, reference_source_archive, reference_target_archive), schemas):
         with zipfile.ZipFile(path) as package:
             checks.need(native.updater_schema_from_source(package.read('winbridge/apps/update/src/journal.rs')) == version, 'Wrong migration schema')
@@ -42,13 +42,13 @@ def verify(run_info, source_archive, reference_source_archive, reference_target_
     checks.need(re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}', reference['referenceRun']), 'Invalid old run')
     reports = Path('/mnt/hgfs/shared/WinBridge/workflow-validation')
     checks.need(Path(meta['reportDirectory']) == reports / meta['run'] / 'result', 'Wrong report namespace')
-    before, after = (json.loads((local / name).read_text()) for name in ('info-before.json', 'info-after.json'))
+    before, after = (parse((local / name).read_text()) for name in ('info-before.json', 'info-after.json'))
     context = before['fencedRequests']['context']
     request_raw = (local / 'request.json').read_bytes()
     checks.need(hashlib.sha256(request_raw).hexdigest() == meta['requestSha256'], 'Saved request changed')
-    request = json.loads(request_raw)
-    task = json.loads((local / 'terminal.json').read_text())
-    accepted = json.loads((local / 'acceptance.json').read_text())
+    request = parse(request_raw)
+    task = parse((local / 'terminal.json').read_text())
+    accepted = parse((local / 'acceptance.json').read_text())
     checks.need(request['requestContractVersion'] == 2 and request['context'] == context
                 and accepted['requestContractVersion'] == 2 and accepted['context'] == context
                 and accepted['outcome'] == 'responded' and accepted['response']['kind'] == 'task'
@@ -56,28 +56,28 @@ def verify(run_info, source_archive, reference_source_archive, reference_target_
                 and task['status'] == 'succeeded' and type(task['exitCode']) is int and task['exitCode'] == 0
                 and task['submission'] == request['request']['request']
                 and task['submission']['idempotencyKey'] == 'native-' + prefix + '-migration-' + meta['run'], 'Wrong terminal task or request')
-    old_task = json.loads((local / 'reference-terminal.json').read_text())
+    old_task = parse((local / 'reference-terminal.json').read_text())
     checks.need(old_task['taskId'] == meta['referenceTaskId'] and old_task['status'] == 'succeeded'
                 and type(old_task['exitCode']) is int and old_task['exitCode'] == 0
                 and old_task['submission']['projectId'] == 'snapshot-fixture'
-                and old_task['submission']['idempotencyKey'] == ('native-main25-204-' if controller else 'native-activation-writer-') + reference['referenceRun'], 'Wrong retained reference task')
+                and old_task['submission']['idempotencyKey'] == fixed['task_prefix'] + reference['referenceRun'], 'Wrong retained reference task')
     old_files = legacy.support.ready_files(reports / reference['referenceRun'])
     checks.need(old_files == legacy.support.ready_files(reports / reference['referenceRun']), 'Old files changed')
     checks.need(hashlib.sha256(old_files['report.json']).hexdigest() == reference['reportSha256']
                 and hashlib.sha256(old_files['candidate-health-actor-proof.json']).hexdigest() == reference['proofSha256'], 'Old report/proof SHA differs')
-    old_report = json.loads(old_files['report.json'].decode('utf-8-sig'))
-    checks.need(old_report['kind'] == ('activation_service_main_native_gate' if controller else 'activation_writer_main_native_gate') and old_report['passed'] is True
+    old_report = parse(old_files['report.json'].decode('utf-8-sig'))
+    checks.need(old_report['kind'] == fixed['reference_report_kind'] and old_report['passed'] is True
                 and old_report['error'] is None and old_report['sourceCommit'] == old_source['sourceCommit']
                 and old_report['sourceArchiveSha256'] == old_source['archiveSha256'] and old_report['target'] == old_target, 'Old report source/result differs')
-    old_proof = json.loads(old_files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
+    old_proof = parse(old_files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
     project = next(p for p in before['projects'] if p['id'] == 'snapshot-fixture')
     root = str(PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / reference['referenceRun'])
-    if controller:
+    if retained:
         checks.need(meta['profile'] == profile, 'Wrong fixed profile')
-        derived, location, audit, old_meta = evidence.reference_from_main25(Path(meta['referenceRunInfo']), reference_source_archive, reference_target_archive)
+        derived, location, audit, old_meta = getattr(evidence, fixed['reference_helper'][1])(Path(meta['referenceRunInfo']), reference_source_archive, reference_target_archive)
         checks.need(old_meta['run'] == reference['referenceRun'] and old_meta['taskId'] == meta['referenceTaskId']
-                    and location == meta['referenceArchiveLocation'], 'Old20 runtime archive/task changed')
-        old_audits = audit['negativeAudits'] + audit['nativeMarkerNegativeAudits']
+                    and location == meta['referenceArchiveLocation'], 'Retained runtime archive/task changed')
+        old_audits = sum(audit[name] for name in fixed['reference_audits'])
     else:
         old_audits = legacy.writer_checks.audit(old_proof, old_source, old_target, root, checks, legacy.state_checks,
                                                health, startup_timeout_ms=legacy.startup_budget(reference_source_archive))
@@ -88,16 +88,16 @@ def verify(run_info, source_archive, reference_source_archive, reference_target_
     files = legacy.support.ready_files(Path(meta['reportDirectory']))
     checks.need(files == legacy.support.ready_files(Path(meta['reportDirectory'])), 'Result files changed')
     reference_sha = hashlib.sha256((reports / meta['run'] / 'reference-input.json').read_bytes()).hexdigest()
-    report = json.loads(files['report.json'].decode('utf-8-sig'))
+    report = parse(files['report.json'].decode('utf-8-sig'))
     checks.need(report['kind'] == 'activation_' + prefix + '_migration_native_gate'
                 and report['passed'] is True and report['error'] is None and report['sourceCommit'] == source['sourceCommit']
                 and report['sourceArchiveSha256'] == source['archiveSha256'] and report['referenceSha256'] == reference_sha
                 and all(report[k] is False for k in ('runtimeApplied', 'installedRuntimeApplied', 'windowsOpened'))
                 and hashlib.sha256(files['reference.json']).hexdigest() == reference_sha
-                and json.loads(files['reference.json'].decode('utf-8-sig')) == reference, 'Migration report/reference differs')
+                and parse(files['reference.json'].decode('utf-8-sig')) == reference, 'Migration report/reference differs')
     evidence.verify_selection(report['command'], files['migration.log'].decode('utf-8-sig'))
     proof_file = 'activation-' + prefix + '-migration-proof.json'
-    proof = json.loads(files[proof_file].decode('utf-8-sig'))
+    proof = parse(files[proof_file].decode('utf-8-sig'))
     rejected = evidence.audit(proof, source, reference, checks)
     checks.need(before['platform'] == after['platform'] == 'windows' and before['activeTaskCount'] == after['activeTaskCount'] == 0
                 and after['generation'] == before['generation'] and after['build'] == before['build']
@@ -110,7 +110,8 @@ def verify(run_info, source_archive, reference_source_archive, reference_target_
 
 
 def main(profile='Service19To20'):
-    parser = argparse.ArgumentParser(description=f'Readonly audit of an actual{20 if profile == "Controller20To21" else 19} ->{21 if profile == "Controller20To21" else 20} copy migration; no Windows RPC.')
+    fixed = load('migration_profiles', 'update-migration-profiles.py').get(profile)
+    parser = argparse.ArgumentParser(description=f"Readonly audit of an actual{fixed['schemas'][1]} ->{fixed['schemas'][0]} copy migration; no Windows RPC.")
     for name in ('run-info', 'source-archive', 'reference-source-archive', 'reference-target-archive'):
         parser.add_argument('--' + name, required=True, type=Path)
     args = parser.parse_args()
