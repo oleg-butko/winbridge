@@ -1,5 +1,12 @@
 # Архитектура WinBridge
 
+2026-10-28: установлен worker0.2.0/schema19 и оба controller0.2.0. В source
+updater21/private5/supervisor26/view18; [Main26](plans/worker-self-update/main26-native-2026-10-28.md)
+подтвердил same-child controller session при закрытых root commit/release.
+Public install off. [Lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md)
+пока OS experiment: отдельные helper processes не являются готовыми keeper actors.
+Ниже сохранены датированные исторические checkpoints предыдущих версий.
+
 2026-10-27: [multi-controller review/merge](analysis/multi-controller-merge-review-2026-10-27.md)
 в main: до4 независимых связей, один Worker/Store/scheduler,32 RPC всего/16 на peer,
 проекции по session ticket. Source worker journal19 хранит creator и первый

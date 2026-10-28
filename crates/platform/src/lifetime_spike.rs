@@ -212,7 +212,7 @@ fn task_cancellation(root: &Path, meta: &Value) -> ExecutionDomain {
     publish(
         root,
         "cancelled-task.json",
-        json!({"process":task_pin.identity(),"leaf":leaf_pin.identity(),"taskJob":task.owner.identity(),"domain":identity,"domainLimits":limits(&domain.job),"taskLimits":limits(&task.owner.job),"empty":true}),
+        json!({"process":task_pin.identity(),"leaf":leaf_pin.identity(),"taskJob":task.owner.identity(),"domain":identity,"domainLimits":limits(&domain.job),"taskLimits":limits(&task.owner.job),"rootExited":true,"leafExited":true,"empty":true}),
     );
     task.join_readers();
     domain
@@ -257,10 +257,17 @@ fn old_keeper(root: &Path, meta: &Value) {
         Some(&domain),
     )
     .unwrap();
+    // The recipient becomes independent BEFORE a command can be accepted.
+    // Lost readiness evidence must not revoke an accepted next generation.
+    next.detached();
+    publish(
+        root,
+        "start-next-keeper.json",
+        json!({"process":next.identity,"requester":old["process"]}),
+    );
     let ready = read(root, "new-keeper.json");
     assert_eq!(stamp(&ready["process"]), next.identity);
     assert_eq!(ready["inOldJob"], false);
-    next.detached();
     publish(root, "stop-old-worker.json", json!({"stop":true}));
     child.exited();
     assert!(child.owner.tree_is_empty().unwrap());
@@ -272,6 +279,9 @@ fn old_keeper(root: &Path, meta: &Value) {
     );
 }
 fn new_keeper(root: &Path, meta: &Value) {
+    let start = read(root, "start-next-keeper.json");
+    assert_eq!(stamp(&start["process"]), own());
+    assert_eq!(start["requester"], read(root, "old-worker.json")["process"]);
     assert!(!member(&name(meta, "old")));
     let old_domain = read(root, "task-domain.json");
     assert!(!member(old_domain["jobName"].as_str().unwrap()));
@@ -284,7 +294,7 @@ fn new_keeper(root: &Path, meta: &Value) {
     publish(
         root,
         "new-keeper.json",
-        json!({"process":own(),"worker":worker,"job":child.owner.identity(),"limits":limits(&child.owner.job),"inOldJob":false}),
+        json!({"process":own(),"worker":worker,"job":child.owner.identity(),"limits":limits(&child.owner.job),"inOldJob":false,"inOldDomain":false}),
     );
     wait(|| previous.exited().unwrap());
     assert!(child.owner.try_wait().unwrap().is_none());
@@ -309,8 +319,10 @@ fn new_keeper(root: &Path, meta: &Value) {
 #[ignore = "Private local-process helper for explicit lifetime spike only"]
 fn helper() {
     let cwd = std::env::current_dir().unwrap();
-    let root = cwd.parent().unwrap();
+    let actual_root = cwd.parent().unwrap().canonicalize().unwrap();
+    let root = actual_root.as_path();
     let meta = read(root, "metadata.json");
+    assert_eq!(Path::new(meta["root"].as_str().unwrap()), root);
     match cwd.file_name().unwrap().to_str().unwrap() {
         "old-keeper" => old_keeper(root, &meta),
         "old-worker" => {
@@ -321,6 +333,12 @@ fn helper() {
                 "old-worker.json",
                 json!({"process":own(),"domain":domain.identity()}),
             );
+            if meta["mode"] == "keeper-loss" {
+                // Longer than both enclosing 45s observation windows. Its own
+                // timeout cannot be mistaken for OS last-handle termination.
+                thread::sleep(Duration::from_secs(300));
+                panic!("Keeper loss did not terminate its waiting worker");
+            }
             read(root, "start-next.json");
             publish(root, "request-next.json", json!({"requester":own()}));
             read(root, "stop-old-worker.json");
@@ -383,7 +401,7 @@ fn fixture(mode: &str) -> (PathBuf, Value) {
     let root = root.canonicalize().unwrap();
     use sha2::{Digest, Sha256};
     let scope = format!("{:x}", Sha256::digest(root.to_str().unwrap().as_bytes()));
-    let meta = json!({"schemaVersion":1,"mode":mode,"scopeId":scope,"ownerId":format!("00000000-0000-4000-8000-{}",&scope[..12])});
+    let meta = json!({"schemaVersion":1,"mode":mode,"root":root,"scopeId":scope,"ownerId":format!("00000000-0000-4000-8000-{}",&scope[..12])});
     publish(&root, "metadata.json", meta.clone());
     for role in [
         "old-keeper",
@@ -433,7 +451,7 @@ fn resident_keeper_launches_next_updater_outside_old_worker_job_without_breakawa
     publish(
         &root,
         "proof.json",
-        json!({"schemaVersion":1,"kind":"activation_lifetime_keeper_os_spike","passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"old":old,"next":next,"survived":survived,"oldDone":read(&root,"old-keeper-done.json"),"newDone":done,"taskCancellation":read(&root,"cancelled-task.json"),"allHelpersExited":true,"limitsChanged":false,"breakawayUsed":false,"networkStarted":false,"runtimeApplied":false,"installedRuntimeApplied":false,"windowsOpened":false}),
+        json!({"schemaVersion":1,"kind":"activation_lifetime_keeper_os_spike","passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"driver":own(),"transportJob":external.owner.identity(),"old":old,"next":next,"survived":survived,"oldDone":read(&root,"old-keeper-done.json"),"newDone":done,"taskCancellation":read(&root,"cancelled-task.json"),"allHelpersExited":true,"limitsChanged":false,"breakawayUsed":false,"networkStarted":false,"runtimeApplied":false,"installedRuntimeApplied":false,"windowsOpened":false}),
     );
 }
 
@@ -459,6 +477,6 @@ fn keeper_process_loss_kills_waiting_worker_without_recovery_or_limit_changes() 
     publish(
         &root,
         "proof.json",
-        json!({"schemaVersion":1,"kind":"activation_lifetime_keeper_loss_os_spike","platform":"windows","passed":true,"build":winbridge_protocol::build_identity(),"old":old,"keeperExitCode":73,"workerExited":true,"allHelpersExited":true,"limitsChanged":false,"breakawayUsed":false,"networkStarted":false,"automaticRecoveryCount":0,"runtimeApplied":false,"installedRuntimeApplied":false,"windowsOpened":false}),
+        json!({"schemaVersion":1,"kind":"activation_lifetime_keeper_loss_os_spike","platform":"windows","passed":true,"build":winbridge_protocol::build_identity(),"driver":own(),"transportJob":external.owner.identity(),"old":old,"keeperExitCode":73,"workerExited":true,"allHelpersExited":true,"limitsChanged":false,"breakawayUsed":false,"networkStarted":false,"automaticRecoveryCount":0,"runtimeApplied":false,"installedRuntimeApplied":false,"windowsOpened":false}),
     );
 }

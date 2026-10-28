@@ -14,12 +14,17 @@ production controller131887 прежний. Test controller178034 и test proces
 Root AwaitingController/local7; lifetime/whole commit/scoped release/public
 activation и U2–U4 ещё не готовы. Следом lifetime OS spike, Main26 не replay.
 
-**Lifetime source spike подготовлен:**2 explicit ignored Windows OS cases
-(two generations + keeper-loss73), real task/grandchild cancellation, unchanged
-Job limits/no network. MSVC Clippy/Linux check passed; native runner/independent
-observer и actual execution ещё отсутствуют. [Порядок и границы](plans/worker-self-update/activation-lifetime-2026-10-28.md).
-Main26 producer d288b0f/taskc5f23f8b прошёл отдельно; не считать spike проверенным по
-результату Main26 и не подключать keeper role к production до native proof.
+**Lifetime OS spike — следующий native gate:**2 explicit ignored Windows cases
+(two generations + keeper-loss73), task/grandchild cancellation и unchanged
+limits/no network. PS/Python runner + independent reader подготовлены;
+MSVC Clippy/Linux check/8 observer tests/36 negatives passed. Native execution
+ещё нет. [Команды, проверяемые границы и continuation](plans/worker-self-update/activation-lifetime-2026-10-28.md).
+Review перенёс next-keeper detach ДО start command; metadata/root/domain и
+strict counters связаны, нет constructor из archive JSON или новых прав.
+Main26 d288b0f проверен отдельно; не считать spike проверенным по его результату.
+Нужны clean export/pinned parser/storage → один actual OS run → readonly audit.
+Installed worker оставить; desktop не нужен. Whole keeper actor/ledger/private
+contract/commit/release ещё не реализованы. State/config/system settings прежние.
 
 ## История предыдущих checkpoint
 

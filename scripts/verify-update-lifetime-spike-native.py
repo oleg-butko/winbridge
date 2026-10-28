@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Audit retained OS-spike results twice without Windows RPC or process adoption."""
+import argparse
+import hashlib
+import importlib.util
+from pathlib import Path, PureWindowsPath
+import re
+
+ROOT=Path(__file__).resolve().parents[1]
+
+
+def load(name,file):
+    spec=importlib.util.spec_from_file_location(name,ROOT/'scripts'/file)
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
+
+
+def verify(run_info,archive):
+    c=load('keeper_proof','update-lifetime-spike-proof.py')
+    health=load('keeper_pin','validate-update-health-actor-native.py')
+    reader=load('keeper_ready','summarize-update-timings.py')
+    local=run_info.resolve().parent;meta=c.decode(run_info.read_bytes());source=health.archive_pin(archive)
+    c.need(meta['source']==source and re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}',meta['run']),'Saved source/run changed')
+    c.need(Path(meta['reportDirectory'])==Path('/mnt/hgfs/shared/WinBridge/workflow-validation')/meta['run']/'result','Wrong report namespace')
+    raw=(local/'request.json').read_bytes();c.need(hashlib.sha256(raw).hexdigest()==meta['requestSha256'],'Request changed')
+    request=c.decode(raw);ack=c.decode((local/'acceptance.json').read_bytes());task=c.decode((local/'terminal.json').read_bytes())
+    before,after=(c.decode((local/name).read_bytes()) for name in ('info-before.json','info-after.json'))
+    context=before['fencedRequests']['context']
+    c.need(request['requestContractVersion']==ack['requestContractVersion']==2 and request['context']==ack['context']==context
+        and ack['outcome']=='responded' and ack['response']['kind']=='task' and task['taskId']==ack['response']['task']['taskId']
+        and task['status']=='succeeded' and type(task['exitCode'])is int and task['exitCode']==0
+        and task['submission']==request['request']['request']
+        and task['submission']['idempotencyKey']=='native-lifetime-spike-'+meta['run']
+        and task['submission']['projectId']=='snapshot-fixture','Wrong terminal task/context')
+    project=next(p for p in before['projects']if p['id']=='snapshot-fixture')
+    base=str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/('tmp-lifetime-spike-'+meta['run'])/'cases')
+    c.need(meta['windowsBase']==base,'Wrong case namespace')
+    files=reader.verified_files(Path(meta['reportDirectory']));report=c.decode(files['report.json'])
+    c.need(report['kind']=='activation_lifetime_keeper_native_gate' and report['passed']is True and report['error']is None
+        and report['sourceCommit']==source['sourceCommit'] and report['sourceArchiveSha256']==source['archiveSha256']
+        and report['sourceManifestSha256']==source['manifestSha256'] and report['platform']=='windows'
+        and all(report[k]is False for k in ('runtimeApplied','installedRuntimeApplied','windowsOpened','networkStarted')),'Wrong native report')
+    c.need(len(report['commands'])==2,'Wrong native command count')
+    for command,mode in zip(report['commands'],c.MODES):
+        c.need(command['name']==mode and command['log']==mode+'.log','Wrong command order/log')
+        c.selection(command,files[command['log']].decode('utf-8-sig'),mode)
+    result=c.audit(files,source,base)
+    for info in (before,after):c.integer(info['activeTaskCount'])
+    c.need(before['build']==after['build'] and before['generation']==after['generation']
+        and after['fencedRequests']['context']==context and before['activeTaskCount']==after['activeTaskCount']==0
+        and all(not i.get(k)for i in (before,after)for k in ('maintenanceError','journalRecoveryRequired')),
+        'Installed worker changed or unhealthy')
+    c.need(reader.verified_files(Path(meta['reportDirectory']))==files,'Report changed on repeated read')
+    return dict(result,run=meta['run'],taskId=task['taskId'],filesVerifiedTwice=len(files),installedUnchanged=True,
+        reportSha256=hashlib.sha256(files['report.json']).hexdigest(),
+        proofSha256={mode:hashlib.sha256(files[mode+'-proof.json']).hexdigest() for mode in c.MODES},storage=report['storage'])
+
+
+if __name__=='__main__':
+    import json
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--run-info',required=True,type=Path);parser.add_argument('--source-archive',required=True,type=Path)
+    args=parser.parse_args();print(json.dumps(verify(args.run_info,args.source_archive),indent=2))

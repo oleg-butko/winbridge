@@ -30,14 +30,46 @@ Job/domain. Сохраняются flags KILL_ON_JOB_CLOSE, чтение обо�
 bounded local waits, positive empty/exit observations. Никакого breakaway, changes
 limits, network, installed worker или удаления Windows validation directories.
 
-Пока **нужны PS runner + independent readonly audit**. После Main26, с idle
-installed worker (desktop закрыт/окон нет), экспортировать clean source; выполнить
-pinned parser/storage check и два exact native tests через approved scenario.
-Hashed platform helper не подключается к сети, стабильный networking slot не нужен.
-`WINBRIDGE_LIFETIME_SPIKE_INPUT` — test-only JSON `{"schemaVersion":1,"root":"<fresh existing local test base>"}`.
-Каждый test создаёт собственный create-only child directory `two-generation` или
-`keeper-loss`; существующий case отказывает. Source/target runtime не меняются.
-JSON/ready/log files сохраняются в fixture для audit; это не updater journal.
+PS runner `scripts/test-update-lifetime-spike.ps1` и
+`scripts/run-update-lifetime-spike-native.py` подготовлены. Они проверяют source
+archive/manifest,≥6GiB, берут exclusive retained build-cache lease и выполняют два
+exact native tests. Source сначала копируется локально и повторно хешируется до
+распаковки; существующий case/report сохраняется. Build/test output читается,
+ограниченные helper logs и опубликованные JSON/ready копируются в отдельный report.
+
+`verify-update-lifetime-spike-native.py` не делает Windows RPC: saved fenced2
+request/ACK/terminal, source pin, namespace, native selection, обе OS-цепочки,
+PID/birth/host/session/Job/domain/exit/unchanged limits и health installed worker
+проверяются отдельно.36 negative data mutations и8 synthetic observer tests
+passed; historical PID reuse допустим при другой birth, concurrent PID alias
+отклоняется. Эти Python tests не являются OS proof. Native execution ещё впереди.
+
+Перед запуском — clean source export с `--include-built-ui` для существующего
+строгого archive verifier (UI не собирается/не запускается), pinned PS parser и
+storage check. Installed worker оставить, desktop не нужен/окон нет. Hashed
+platform helper не подключается к сети, networking slot204 не нужен.
+
+```bash
+python3 scripts/run-update-lifetime-spike-native.py \
+  --source-archive <clean-reviewed-source-with-built-ui.zip> \
+  --cache-run 20261017-061527-f4639971 \
+  --controller-config .winbridge/controller-snapshot.local.json
+```
+
+Сохраняется run-info в `.winbridge/update-preparation/lifetime-spike-<run>/`;
+unknown acceptance/timeout наблюдается по **тому же** context/key/task, без resubmit.
+При verifier-only ошибке исправлять reader и перечитывать artifacts; Windows
+команды не повторять. Финальный report — `WinBridge/workflow-validation/<run>/result`.
+
+`WINBRIDGE_LIFETIME_SPIKE_INPUT` — test-only JSON
+`{"schemaVersion":1,"root":"<fresh existing local test base>"}`. Каждый test
+создаёт create-only child directory `two-generation`/`keeper-loss`; существующий
+case отказывает. Helper root canonicalize-ится и сверяется с metadata, original
+Domain живёт до выхода old worker. Next keeper detach происходит **до** отправки
+одноразового start marker, чтобы потерянное readiness evidence не убило accepted
+child. Keeper-loss worker собственным timer не завершится ранее300s, больше
+45s+45s окон наблюдения parent; его timeout не подменяет last-handle closure.
+Source/target runtime, updater journal/schema и installed worker не меняются.
 
 Пример exact selection (только внутри подготовленного native runner):
 

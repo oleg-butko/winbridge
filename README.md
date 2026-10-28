@@ -22,7 +22,8 @@ Linux migrations17/18→19, retry/restart и UI проверены; Windows cold
 
 Слияние сохраняет shared startup и readonly
 local-service границ updater. Добавлены [явные Main25 schema profiles](docs/plans/main25-schema-profiles-2026-10-27.md);
-production worker0.1.1 остаётся прежним, native проверки выполняются в изолированных каталогах.
+на момент подготовки этих profiles production worker0.1.1 оставался прежним.
+Сейчас установлен0.2.0; дальнейшие native проверки updater выполняются изолированно.
 
 Локальный проект для связи Debian VM и Windows host: выполнять команды в зарегистрированных проектах, доставлять исходники, собирать и запускать приложения, читать логи и показывать пользователю ход работы.
 

@@ -6,8 +6,9 @@ Same child/authority/new session, lost ACK и cold no replay подтвержд�
 240s не продлены. Installed0.2.0 здоров/прежний, desktop не нужен. Root
 AwaitingController/local7; lifetime/commit/release/public install ещё закрыты.
 
-Lifetime OS spike: test-only source2 cases подготовлен, MSVC Clippy/Linux check
-passed. Windows execution/runner/independent audit pending после Main26; schemas,
+Lifetime OS spike: source2 cases + PS/Python runner/independent reader готовы,
+MSVC Clippy/Linux check/8 observer tests/36 negatives passed. Actual Windows run
+pending после clean export/pinned parser/storage; schemas,
 capabilities, original kill-on-close/breakaway и installed runtime неизменны.
 
 ## История предыдущих checkpoint
