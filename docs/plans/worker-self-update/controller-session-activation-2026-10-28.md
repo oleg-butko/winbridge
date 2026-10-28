@@ -11,8 +11,11 @@ Public install/whole update остаётся выключенным.
 bindings. Pure activation/controller связывает frozen physical6/writer/service
 с exact LocalVerified7, сохраняет original deadline и typed history
 Issued→Confirmed либо Issued→Indeterminate→Confirmed.10 focused tests прошли.
-Это data foundation: network send/runtime/SQL ledger/capability ещё не добавлены,
-updater20/actor25/view17/service4 и installed worker не меняются.
+Это первый data foundation checkpoint: network send/runtime/SQL ledger/capability
+тогда ещё не добавлены, updater20/actor25/view17/service4 оставались прежними.
+Следом добавлен ledger21/read-only graph (workspace914/17 ignored,10 SQL cases),
+см. [actual20→21 план](retained20-to21-2026-10-28.md). Native migration и production
+fresh admission пока впереди; actor25/view17/service4 и installed worker прежние.
 
 Review foundation выявил, что projection сам по себе не содержит Welcome nodeId:
 добавлена отдельная проверка current normal-IPC link/attempt/node/session и

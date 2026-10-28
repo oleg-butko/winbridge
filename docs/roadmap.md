@@ -1,11 +1,15 @@
 # Постепенная реализация и расширение
 
+2026-10-28: source updater schema21 содержит controller ledger/read-only graph,
+10 SQL tests/workspace914/17 ignored/MSVC Clippy passed. Production fresh admission
+и same-child network пока отсутствуют. Следом [actual20→21 copy gate](plans/worker-self-update/retained20-to21-2026-10-28.md),
+затем original owner/receiver/actor и native full run; public install закрыт.
+
 2026-10-28: [controller-session DTO/FSM foundation](plans/worker-self-update/controller-session-activation-2026-10-28.md)
 реализована и reviewed:10 focused tests,255 updater/75 protocol, Linux/MSVC
 Clippy/TS/generated contracts passed. Выбранные endpoint/normal link/projection
-связаны с тем же LocalVerified7/service/authority. Network send и ledger ещё
-не подключены; source schema20/actor25 прежние. Следующий шаг — durable21 ledger
-и original guarded admission, затем same-child network/actor/native gate.
+связаны с тем же LocalVerified7/service/authority. На этом checkpoint network send
+и ledger ещё не были подключены; далее ledger21 выше. Actor25 прежний.
 
 2026-10-28,.203: [controller0.2.0 установлен](releases/controller-0.2.0-debian203-2026-10-28.md)
 после review remote f069697 и18 actual controller tests. Worker0.2.0/две real VM

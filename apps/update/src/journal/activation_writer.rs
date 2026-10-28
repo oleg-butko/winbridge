@@ -117,7 +117,6 @@ fn backup_binding(
 }
 /// The caller already checked the full physical graph in this transaction.
 /// Do not repeat its recursive backup/replacement audit for each service edge.
-#[cfg(windows)]
 pub(super) fn bound_record(
     c: &Connection,
     physical: &ActivationRecord,

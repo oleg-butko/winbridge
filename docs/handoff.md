@@ -14,11 +14,26 @@ installed worker либо непредвиденного поведения по
 Продолжается [controller-session foundation](plans/worker-self-update/controller-session-activation-2026-10-28.md):
 strict DTO/TS и pure FSM добавлены,10 focused tests passed; updater255/4ignored,
 protocol75 all-target, Linux/MSVC workspace Clippy/TS/contracts/scaffold passed.
-Новая network send/ledger/runtime ещё отсутствуют. Использовать validated
+Новая network send/runtime ещё отсутствуют. Использовать validated
 projection + current link/ticket, default confirmation=primary с отдельным
 frozen selection. Receipt не коммитит root до Job lifetime. Следом review и
-durable updater21 foundation/admission (пока это proposed schema, не current).
+durable updater21 foundation/admission.
 Подробные SQL/root/duplicate guards следующего шага записаны в новом плане.
+
+**Journal21 foundation,2026-10-28:** добавлены controller intent/current/history,
+immutable/CAS/readback всего physical6→writer→service→local7 graph в одной read
+transaction. Production API пока только data-only read/inspect; SQL writers
+остаются cfg(test), fresh admission/network/actor26 не реализованы. Current
+source updater schema21; installed worker/schema19 и retained updater20 прежние.
+10 SQL tests и workspace914/17 ignored passed; MSVC all-target Clippy passed.
+Review закрыл revision index/JSON mismatch; duplicate с другим selection/key
+отклоняется, cold read не восстанавливает permission. Реальные старые19→20
+артефакты заново проверены readonly:4 files twice/21+60 negatives passed.
+Следом [actual20→21 copy-only gate](plans/worker-self-update/retained20-to21-2026-10-28.md):
+реальный Main25 archive, исходная identity/image неизменны, shared harness с
+фиксированными profiles отказывается выдавать старую миграцию за новую. Пока
+этот новый native gate не выполнен. Затем original guarded admission и same-child
+network из плана controller-session; receipt не коммитит root до Job transfer.
 
 **Ревью после установки,2026-10-27:** ветка `refactor/multi-controller-review`,
 [находки, покрытие и направление рефакторинга](analysis/multi-controller-post-install-review-2026-10-27.md).

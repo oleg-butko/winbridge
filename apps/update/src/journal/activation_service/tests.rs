@@ -91,7 +91,7 @@ fn read_value(
     p: &ActivationRecord,
     w: &ActivationWriterRecord,
 ) -> Result<ActivationServiceRecord> {
-    ledger(c, &p.intent.source.update_id, p, w)
+    bound_record(c, &p.intent.source.update_id, p, w)
 }
 
 #[test]
@@ -202,7 +202,7 @@ fn service_readback_rejects_foreign_physical_or_changed_writer_confirmation() {
     let (c, p, w, v) = fixture();
     seed(&c, &v, &p, &w).unwrap();
     let (_, foreign, _, _) = fixture();
-    assert!(ledger(&c, &p.intent.source.update_id, &foreign, &w).is_err());
+    assert!(bound_record(&c, &p.intent.source.update_id, &foreign, &w).is_err());
     let mut changed = w.clone();
     changed.updated_at_ms += 1;
     changed.validate().unwrap();
@@ -290,7 +290,7 @@ fn cold_sqlite_reopen_keeps_saved_facts_without_offering_another_delivery() {
 #[test]
 fn service_migration_preserves_confirmed_writer_rows_and_worker_authority() {
     let (c, p, w, _) = fixture();
-    c.execute_batch("DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;PRAGMA user_version=19;").unwrap();
+    c.execute_batch("DROP TABLE IF EXISTS activation_controller_history;DROP TABLE IF EXISTS activation_controller_records;DROP TABLE IF EXISTS activation_controller_intents;DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;PRAGMA user_version=19;").unwrap();
     let before: String = c
         .query_row("SELECT record FROM activation_writer_records", [], |r| {
             r.get(0)
@@ -315,7 +315,7 @@ fn service_migration_preserves_confirmed_writer_rows_and_worker_authority() {
 }
 
 #[test]
-fn updater_nineteen_to_twenty_backs_up_fences_owner_and_retains_root_dedup() {
+fn updater_nineteen_to_current_backs_up_fences_owner_and_retains_root_dedup() {
     let directory = tempfile::tempdir().unwrap();
     let scope = "a".repeat(64);
     let mut old = UpdateJournal::open(directory.path(), &scope).unwrap();
@@ -339,7 +339,7 @@ fn updater_nineteen_to_twenty_backs_up_fences_owner_and_retains_root_dedup() {
         },
     };
     let saved = old.accept(&owner, &request, &request.expected).unwrap();
-    old.connection.execute_batch("DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;PRAGMA user_version=19;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    old.connection.execute_batch("DROP TABLE IF EXISTS activation_controller_history;DROP TABLE IF EXISTS activation_controller_records;DROP TABLE IF EXISTS activation_controller_intents;DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;PRAGMA user_version=19;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let before = old.info().unwrap();
     assert_eq!(
         UpdateJournal::open(directory.path(), &scope)
@@ -357,7 +357,7 @@ fn updater_nineteen_to_twenty_backs_up_fences_owner_and_retains_root_dedup() {
     fs2::FileExt::unlock(&owner.lock).unwrap();
     let mut new = UpdateJournal::open(directory.path(), &scope).unwrap();
     let after = new.info().unwrap();
-    assert_eq!(after.schema_version, 20);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.last_sequence, before.last_sequence);
@@ -400,7 +400,7 @@ fn failed_service_migration_keeps_prior_schema_owner_and_foreign_table() {
     let directory = tempfile::tempdir().unwrap();
     let scope = "a".repeat(64);
     let mut old = UpdateJournal::open(directory.path(), &scope).unwrap();
-    old.connection.execute_batch("DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;CREATE TABLE activation_service_history(user_data TEXT);INSERT INTO activation_service_history VALUES('preserve');PRAGMA user_version=19;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    old.connection.execute_batch("DROP TABLE IF EXISTS activation_controller_history;DROP TABLE IF EXISTS activation_controller_records;DROP TABLE IF EXISTS activation_controller_intents;DROP TABLE activation_service_history;DROP TABLE activation_service_records;DROP TABLE activation_service_intents;CREATE TABLE activation_service_history(user_data TEXT);INSERT INTO activation_service_history VALUES('preserve');PRAGMA user_version=19;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let before = old.info().unwrap();
     assert_eq!(
         UpdateJournal::open(directory.path(), &scope)

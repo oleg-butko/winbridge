@@ -2,14 +2,14 @@ use super::*;
 use serde_json::json;
 use winbridge_protocol::{ControllerReadinessProjection, WorkerRuntimeCompatibility};
 
-struct Fixture {
-    physical: ActivationRecord,
-    writer: ActivationWriterRecord,
-    service: ActivationServiceRecord,
-    local: ActivationRecord,
-    command: WorkerControllerActivationCommand,
-    receipt: WorkerControllerActivationReceipt,
-    projection: ControllerReadinessProjection,
+pub(crate) struct Fixture {
+    pub(crate) physical: ActivationRecord,
+    pub(crate) writer: ActivationWriterRecord,
+    pub(crate) service: ActivationServiceRecord,
+    pub(crate) local: ActivationRecord,
+    pub(crate) command: WorkerControllerActivationCommand,
+    pub(crate) receipt: WorkerControllerActivationReceipt,
+    pub(crate) projection: ControllerReadinessProjection,
 }
 fn topology(count: usize) -> WorkerControllerActivationTopology {
     WorkerControllerActivationTopology {
@@ -24,7 +24,7 @@ fn topology(count: usize) -> WorkerControllerActivationTopology {
             .collect(),
     }
 }
-fn fixture() -> Fixture {
+pub(crate) fn fixture() -> Fixture {
     let (physical, writer, service_command, service_receipt) = service::test_fixture();
     let at = service_receipt.compatibility.observed_at_ms;
     let mut local = physical.clone();

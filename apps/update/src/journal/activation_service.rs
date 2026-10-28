@@ -25,7 +25,7 @@ PRAGMA user_version=20;
 "#).map_err(storage)
 }
 
-fn ledger(
+pub(super) fn bound_record(
     c: &Connection,
     id: &str,
     physical: &ActivationRecord,
@@ -104,12 +104,12 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationServiceR
     let (writer, snapshot) = activation_writer::load(c, id)?
         .ok_or_else(|| bad("Service confirmed writer graph missing"))?;
     let physical = activation_writer::physical_prefix(c, &snapshot.activation)?;
-    ledger(c, id, &physical, &writer).map(Some)
+    bound_record(c, id, &physical, &writer).map(Some)
 }
 
 // No caller-JSON write route. Native admission proves original custody first.
 #[cfg(any(windows, test))]
-fn seed(
+pub(super) fn seed(
     c: &Connection,
     value: &ActivationServiceRecord,
     physical: &ActivationRecord,
@@ -139,7 +139,7 @@ fn seed(
             params![id, encode(value)?],
         )
         .map_err(storage)?)?;
-    if ledger(c, id, physical, writer)? != *value {
+    if bound_record(c, id, physical, writer)? != *value {
         return Err(bad("Service admission/readback differs"));
     }
     Ok(())
@@ -175,7 +175,7 @@ fn existing_for_key(
 }
 
 #[cfg(any(windows, test))]
-fn persist(
+pub(super) fn persist(
     c: &Connection,
     old: &ActivationServiceRecord,
     next: &ActivationServiceRecord,
@@ -184,7 +184,7 @@ fn persist(
 ) -> Result<()> {
     old.advance(next).map_err(bad)?;
     let id = &old.command.binding.writer_command.binding.update_id;
-    if ledger(c, id, physical, writer)? != *old {
+    if bound_record(c, id, physical, writer)? != *old {
         return Err(fail(
             JournalErrorCode::RevisionConflict,
             "Service revision changed",
@@ -198,7 +198,7 @@ fn persist(
             params![id, next.revision as i64, raw],
         )
         .map_err(storage)?)?;
-    if ledger(c, id, physical, writer)? != *next {
+    if bound_record(c, id, physical, writer)? != *next {
         return Err(bad("Service append/readback differs"));
     }
     Ok(())
@@ -273,7 +273,7 @@ impl UpdateJournal {
         let tx = self.connection.unchecked_transaction().map_err(storage)?;
         activation::owned_current(&tx, a, s, preparation, physical)?;
         let writer = activation_writer::bound_record(&tx, physical)?;
-        if ledger(&tx, &s.spec.update_id, physical, &writer)? != permit.record
+        if bound_record(&tx, &s.spec.update_id, physical, &writer)? != permit.record
             || !matches!(
                 permit.record.state,
                 service::ActivationServiceState::Issued {}
@@ -304,7 +304,7 @@ impl UpdateJournal {
         activation::owned_current(&tx, a, s, preparation, current)?;
         let physical = activation_writer::physical_prefix(&tx, current)?;
         let writer = activation_writer::bound_record(&tx, &physical)?;
-        let old = ledger(&tx, &s.spec.update_id, &physical, &writer)?;
+        let old = bound_record(&tx, &s.spec.update_id, &physical, &writer)?;
         if old == *next {
             return Ok(old);
         }
@@ -346,7 +346,7 @@ impl UpdateJournal {
                 "Service receiver cannot adopt a pre-migration activation scope",
             ));
         }
-        let service = ledger(&tx, id, &writer.activation, &writer.writer)?;
+        let service = bound_record(&tx, id, &writer.activation, &writer.writer)?;
         if !matches!(service.state, service::ActivationServiceState::Issued {}) {
             return Err(bad(
                 "Service delivery is not Issued; no startup from history",
