@@ -1,5 +1,9 @@
 # Постепенная реализация и расширение
 
+Main26 native harness подготовлен (SDK19/21/stable204), но ещё не исполнен.
+Следом clean producer/PS parser/storage → actual Windows → independent reread;
+source code/native compile/synthetic observer tests не заменяют этот gate.
+
 2026-10-28/latest: supervisor26/view18 реализованы в source;927 workspace/17 ignored,
 Linux/MSVC Clippy/TS/UI passed. Old views frozen, Observed отделён от current
 connection и cold history. Следом full native Main26/stable204/SDK21; distinct

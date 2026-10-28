@@ -75,6 +75,8 @@ struct GateInput {
     #[serde(default)]
     activation_service: bool,
     #[serde(default)]
+    activation_controller: bool,
+    #[serde(default)]
     runtime: Option<FixtureRuntimePin>,
     #[serde(default)]
     controller_url: Option<String>,
@@ -1426,6 +1428,7 @@ fn case(
     let handoff_state = input.activation_state;
     let activate_writer = input.activation_writer;
     let activate_service = input.activation_service;
+    let connect_controller = input.activation_controller;
     let worker = root.runtime().join("winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -1705,6 +1708,10 @@ fn case(
                     serde_json::from_value(result["record"]["created"]["process"].clone()).unwrap();
                 activation_child =
                     Some(winbridge_platform::infrastructure::PinnedProcess::live(&actual).unwrap());
+                if connect_controller {
+                    proof["activationController"] =
+                        activation_writer::controller::execute(&root, &sup, &result);
+                }
                 proof[if activate_writer {
                     "activationWriter"
                 } else if handoff_state {
@@ -1983,6 +1990,13 @@ fn case(
             activation_state::after_owned_exit(&root, id, p, activation_child.as_ref().unwrap())
         });
         let writer = proof.as_object_mut().unwrap().remove("activationWriter");
+        let controller = proof
+            .as_object_mut()
+            .unwrap()
+            .remove("activationController");
+        let cold_controller = controller
+            .as_ref()
+            .map(|p| activation_writer::controller::after_owned_exit(&root, id, p));
         let cold_writer = writer.as_ref().map(|p| {
             if input.activation_service {
                 activation_writer::service::after_owned_exit(
@@ -2017,6 +2031,10 @@ fn case(
         if let Some(writer) = writer {
             result["activationWriter"] = writer;
             result["coldActivationWriter"] = cold_writer.unwrap();
+        }
+        if let Some(controller) = controller {
+            result["activationController"] = controller;
+            result["coldActivationController"] = cold_controller.unwrap();
         }
         if let Some(activation) = activation {
             result["activationPreparation"] = activation;
@@ -2145,6 +2163,7 @@ fn run_gate(
             writer_requested,
         ],
         false,
+        false,
         path,
     );
 }
@@ -2154,13 +2173,43 @@ fn actual_main_activates_one_local_service_without_controller_or_replay() {
     let path = PathBuf::from(
         std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
     );
-    run_gate_inner([true, false, true, true, true, true, true], true, path);
+    run_gate_inner(
+        [true, false, true, true, true, true, true],
+        true,
+        false,
+        path,
+    );
 }
-fn run_gate_inner(requested: [bool; 7], service_requested: bool, path: PathBuf) {
+#[test]
+#[ignore = "Explicit Main26 same-child network/controller gate in stable runtime; never installed update"]
+fn actual_main_connects_same_verified_worker_to_controller_without_commit_or_replay() {
+    let path = PathBuf::from(
+        std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
+    );
+    assert_eq!(
+        winbridge_update::journal::UPDATE_SCHEMA_VERSION,
+        21,
+        "Use the exact Main26 SDK, never relabel this gate"
+    );
+    run_gate_inner(
+        [true, false, true, true, true, true, true],
+        true,
+        true,
+        path,
+    );
+}
+fn run_gate_inner(
+    requested: [bool; 7],
+    service_requested: bool,
+    controller_requested: bool,
+    path: PathBuf,
+) {
     let [replacement_requested, faults_requested, activation_requested, files_requested, process_requested, state_requested, writer_requested] =
         requested;
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     assert_eq!(input.activation_service, service_requested);
+    assert_eq!(input.activation_controller, controller_requested);
+    assert!(!controller_requested || service_requested);
     assert!(
         !service_requested
             || (writer_requested
@@ -2304,6 +2353,6 @@ fn run_gate_inner(requested: [bool; 7], service_requested: bool, path: PathBuf) 
             }
         }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.activation_service {"activation_service_main_native_proof"} else if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.activation_controller {"activation_controller_main_native_proof"} else if input.activation_service {"activation_service_main_native_proof"} else if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

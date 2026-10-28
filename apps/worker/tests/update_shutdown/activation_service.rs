@@ -24,7 +24,7 @@ fn service_history(directory: &Path, id: &str) -> Vec<ActivationServiceRecord> {
         .map(|r| serde_json::from_str(&r.unwrap()).unwrap())
         .collect()
 }
-fn normal<T: serde::de::DeserializeOwned>(
+pub(super) fn normal<T: serde::de::DeserializeOwned>(
     rt: &tokio::runtime::Runtime,
     command: &WorkerServiceActivationCommand,
     request: &impl serde::Serialize,

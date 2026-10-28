@@ -1,5 +1,7 @@
 //! Main24 writer effect on the original child; no normal service or lease release.
 use super::*;
+#[path = "activation_controller.rs"]
+pub(super) mod controller;
 #[path = "activation_service.rs"]
 pub(super) mod service;
 use rusqlite::{Connection, OpenFlags};
@@ -100,7 +102,12 @@ fn call(
     if let Some(v) = &r.preparation {
         assert_eq!(
             v.schema_version,
-            if q.contract_version == 25 { 17 } else { 16 }
+            match q.contract_version {
+                24 => 16,
+                25 => 17,
+                26 => 18,
+                _ => panic!("Unknown native activation fixture contract"),
+            }
         );
         assert_eq!(v.update.update_id, sup.spec.update_id);
     }

@@ -7,6 +7,51 @@ Public install/whole update остаётся выключенным.
 
 ## Текущая реализация
 
+**Main26 harness подготовлен, ещё не выполнен.** Exact native test
+`actual_main_connects_same_verified_worker_to_controller_without_commit_or_replay`
+добавляет V5 после прежнего local-service prefix, теряет только volatile dispatch
+ACK, проверяет same PID/authority/root/history и cold NotResident/no replay.
+PowerShell `-ActivationControllerGate` требует source и target19/21 до build;
+old Main25 flags/profiles остаются прежними. Shared local-prefix verifier получает
+фиксированные kind/schema от каждого gate, никогда не переписывает reported SDK.
+Actual Main25 был заново проверен readonly после refactor:52 files twice,
+24+10 negative audits/3 native markers passed, новых Windows команд не было.
+
+Новые scripts: `run-update-controller-main-native.py`,
+`verify-update-controller-main-native.py`, `update-activation-controller-proof.py`.
+Runner требует ровно approved `K:\_proj-26\winbridge\runtime-test-204`, фиксирует
+fenced request/ACK, оставляет controller при unknown task acceptance и после
+terminal останавливает только свой known test controller. Existing rotating
+activity log сохраняется после stop, чтобы доказать actual NEW session даже
+короче interval status polling, без дополнительных sleeps/window renewal.
+Installed worker/context/build должен остаться прежним. Native Rust MSVC check
+прошёл без bundled SQLite (на Debian нет MSVC lib.exe для C); на Windows gate
+собирает bundled штатным native toolchain. Python synthetic tests покрывают27
+controller mutations, типы/unknown counters и actual activity event binding;
+они не являются native evidence. Full Main26 и fault matrix остаются впереди.
+
+После clean producer commit/export запустить:
+
+```bash
+python3 scripts/run-update-controller-main-native.py \
+  --source-archive <новый-clean-producer21.zip> \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261028T094607Z-b149eed-a3228347.zip \
+  --cache-run 20261017-061527-f4639971 \
+  --worker17-reference 'K:\VMs\shared\WinBridge\releases\20261026-182213-6cd81f3e\winbridge-worker.exe' \
+  --worker17-reference-sha256 536d86378b5c5adfc98b135c404e322d1dc9cc7dd19fb20941ca9b3f6686a712 \
+  --test-runtime-directory 'K:\_proj-26\winbridge\runtime-test-204' \
+  --controller-config .winbridge/controller-snapshot.local.json \
+  --controller-binary .winbridge/controller-runtime-updates/20261028T071841Z-203/winbridge-controller-0.2.0
+```
+
+Перед submit сообщить: installed worker0.2.0 оставить, desktop закрыт, UI окон
+нет; test networking только stable204/отдельный controller1144. Проверить≥6GiB
+на Debian/Windows и pinned PS parser. Preflight firewall900s до admission,
+original window240s неизменен. При unknown acceptance не replay: сохранённые
+request/key/task ID — единственный источник продолжения. Legacy runtime-test
+по-прежнему не трогать. По успеху reread independent proof, review→commit,
+затем Job lifetime/whole commit/release/U2–U4.
+
 **Supervisor26/view18 реализованы в source.** Typed connect/observe используют
 одного resident Serviced owner, отдельный StartingController и одноразовый key;
 completion сохраняет того же guard либо original failure custody. Старые actions

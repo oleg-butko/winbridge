@@ -94,9 +94,28 @@ def require_resource_policy_reconciliation(value, before, after):
 
 
 def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
-    profile_schemas(profile)
+    result = verify_local_prefix(proof, source, target, reservation, profile=profile,
+                  expected_schemas=profile_schemas(profile), proof_kind='activation_service_main_native_proof')
+    return dict(result, kind='main25_independent_audit')
+
+
+def verify_local_prefix(proof, source, target, reservation, *, profile, expected_schemas, proof_kind):
+    """Shared factual prefix, with a fixed kind/schema pair supplied by each gate.
+
+    Main25's public verifier still accepts only its original20 SDK profiles.
+    Main26 may reuse the actual local-service prefix at21, never rewrite a
+    reported schema or turn its later controller phase into a Main25 run.
+    """
+    need((expected_schemas, proof_kind) in (((17,20),'activation_service_main_native_proof'),
+         ((19,20),'activation_service_main_native_proof'),((19,21),'activation_controller_main_native_proof')),
+         'Unsupported explicit local-prefix kind/schema pair')
+    worker_schema, updater_schema = expected_schemas
+    def require_scope(value):
+        need(type(value.get('workerJournalSchema')) is int and value['workerJournalSchema'] == worker_schema
+             and type(value.get('updaterJournalSchema')) is int and value['updaterJournalSchema'] == updater_schema,
+             'Journal schema differs from the fixed local-prefix scope')
     strict(proof)
-    need(proof['schemaVersion'] == 1 and proof['kind'] == 'activation_service_main_native_proof'
+    need(proof['schemaVersion'] == 1 and proof['kind'] == proof_kind
          and proof['passed'] is True and proof['platform'] == 'windows', 'Not a completed Main25 proof')
     for key in ('normalMain', 'actualOldRoles', 'actualCandidateBuild', 'validationFeature', 'runtimeApplied'):
         need(proof[key] is True, 'Missing real pipeline evidence: ' + key)
@@ -113,7 +132,7 @@ def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
     need(len(history) == 8 and history[0] == p['prepared'] and history[-1] == record, 'Incomplete activation history')
     intent, context = record['intent'], record['intent']['context']
     deadline = intent['admittedAtMs'] + context['startupTimeoutMs']
-    require_schema_binding(context, profile)
+    require_scope(context)
     need(context['startupTimeoutMs'] == 240000, 'Unreviewed startup window')
     previous = intent['admittedAtMs']
     for index, entry in enumerate(history):
@@ -163,7 +182,7 @@ def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
          'Writer changed incarnation or advanced epoch more than once')
     w, s = p['writerRecord'], p['serviceRecord']
     wc, sc = w['command'], s['command']
-    require_schema_binding(wc['binding'], profile)
+    require_scope(wc['binding'])
     need(wc['binding']['physical'] == physical and wc['binding']['expectedAuthority'] == old
          and wc['binding']['activationRecordSha256'] == digest('winbridge.activation.writer-binding.v1', history[6])
          and wc['binding']['workerConfigSha256'] == context['workerConfig']['sha256'], 'Writer binding differs')
@@ -187,7 +206,7 @@ def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
          and history[6]['updatedAtMs'] <= wc['issuedAtMs'] <= receipt['committedAtMs'] < deadline
          and receipt['committedAtMs'] <= sc['issuedAtMs'] < deadline, 'Startup grant renewed or reordered')
     need(record['local'] == sr['compatibility'], 'LocalVerified/root do not use the confirmed normal IPC evidence')
-    require_schema_binding(sr['compatibility'], profile)
+    require_scope(sr['compatibility'])
     need(sr['compatibility']['identity'] == record['ready']['identity']
          and sr['compatibility']['context'] == physical['context']
          and sr['compatibility']['generation'] == physical['generation']
@@ -213,7 +232,7 @@ def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
              and info['build']['sourceCommit'] == target['sourceCommit'] and info['build']['sourceManifestSha256'] == target['manifestSha256']
              and info['updateCoordination']['readOnly'] is True and info['updateCoordination']['lease']['phase'] == 'quiesced',
              'Normal IPC identity/maintenance differs')
-    if profile == 'worker19-updater20' or 'resourcePolicyReconciliation' in p:
+    if worker_schema == 19 or 'resourcePolicyReconciliation' in p:
         require_resource_policy_reconciliation(p.get('resourcePolicyReconciliation'),
                                               p['workerAuthorityBefore']['epoch'], p['workerAuthorityAfter']['epoch'])
     need(p['preservedRowsBefore'] == p['preservedRowsAfter'] and p['preservedRowsBefore']['tasks'] > 0
@@ -237,13 +256,19 @@ def verify(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
          == case['afterOwnedExit']['workerBytesAfterStartup'], 'Cold path changed bytes/launched another worker')
     need(reservation['sourceCommit'] == source['sourceCommit']
          and reservation['sourceManifestSha256'] == source['manifestSha256'], 'Original reservation source differs')
-    return {'passed': True, 'schemaVersion': 1, 'kind': 'main25_independent_audit', 'updateId': wc['binding']['updateId'],
+    return {'passed': True, 'schemaVersion': 1, 'kind': 'local_service_prefix_independent_audit', 'updateId': wc['binding']['updateId'],
             'serviceCommandId': sc['commandId'], 'source': source, 'target': target, 'migrationChecked': False,
-            'profile': profile, 'workerJournalSchema': profile_schemas(profile)[0], 'updaterJournalSchema': profile_schemas(profile)[1]}
+            'profile': profile, 'workerJournalSchema': worker_schema, 'updaterJournalSchema': updater_schema}
 
 
 def audit(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
-    result = verify(proof, source, target, reservation, profile=profile)
+    result = audit_local_prefix(proof, source, target, reservation, profile=profile,
+                 expected_schemas=profile_schemas(profile), proof_kind='activation_service_main_native_proof')
+    return dict(result, kind='main25_independent_audit')
+
+
+def audit_local_prefix(proof, source, target, reservation, *, profile, expected_schemas, proof_kind):
+    result = verify_local_prefix(proof, source, target, reservation, profile=profile, expected_schemas=expected_schemas, proof_kind=proof_kind)
     base = 'cases/0/activationWriter/'
     mutations = [
         ('kind', 'activation_writer_main_native_proof'),
@@ -279,7 +304,7 @@ def audit(proof, source, target, reservation, *, profile=DEFAULT_PROFILE):
         need(canonical(node[key]) != canonical(replacement), 'No-op negative audit')
         node[key] = replacement
         try:
-            verify(bad, source, target, reservation, profile=profile)
+            verify_local_prefix(bad, source, target, reservation, profile=profile, expected_schemas=expected_schemas, proof_kind=proof_kind)
         except (ValueError, KeyError, IndexError, TypeError):
             continue
         raise ValueError('Accepted negative audit: ' + path)

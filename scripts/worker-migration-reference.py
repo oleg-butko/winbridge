@@ -19,7 +19,7 @@ def worker17_reference(value):
 
 
 def reference_for_profile(profile, value, digest):
-    if profile == 'worker19-updater20':
+    if profile in ('worker19-updater20','worker19-updater21'):
         if not re.fullmatch(r'[0-9a-f]{64}', digest or ''):
             raise RuntimeError('Explicit released worker17 hash required for separate cold migration gate')
         return worker17_reference(value)

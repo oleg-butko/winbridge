@@ -17,14 +17,14 @@ def load(name, path):
     return module
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--profile', choices=('worker17-updater20', 'worker19-updater20'), default='worker17-updater20')
+def main(controller=False):
+    parser = argparse.ArgumentParser(description='Readonly native audit; no Windows commands or replay.')
+    parser.add_argument('--profile', choices=(('worker19-updater21',) if controller else ('worker17-updater20', 'worker19-updater20')), default=('worker19-updater21' if controller else 'worker17-updater20'))
     parser.add_argument('--run-info', required=True, type=Path)
     parser.add_argument('--source-archive', required=True, type=Path)
     parser.add_argument('--target-archive', required=True, type=Path)
     args = parser.parse_args()
-    checks = load('service_checks', 'update-activation-service-proof.py')
+    checks = load('main_gate_checks', 'update-activation-controller-proof.py' if controller else 'update-activation-service-proof.py')
     health = load('service_archive', 'validate-update-health-actor-native.py')
     reader = load('service_reports', 'summarize-update-timings.py')
     local = args.run_info.resolve().parent
@@ -46,9 +46,18 @@ def main():
     task = json.loads((local/'terminal.json').read_text())
     checks.need(task['taskId'] == meta['taskId'] and task['status'] == 'succeeded' and task['exitCode'] == 0
                 and task['submission'] == request['request']['request'], 'Task is not the saved terminal submission')
+    if controller:
+        before=json.loads((local/'info-before.json').read_text())
+        acceptance=json.loads((local/'acceptance.json').read_text())
+        checks.need(meta['profile']==args.profile and request['requestContractVersion']==acceptance['requestContractVersion']==2
+                    and request['context']==acceptance['context']==before['fencedRequests']['context']
+                    and acceptance['outcome']=='responded' and acceptance['response']['kind']=='task'
+                    and acceptance['response']['task']['taskId']==task['taskId']
+                    and type(task['exitCode']) is int and task['submission']['projectId']=='snapshot-fixture'
+                    and task['submission']['idempotencyKey']=='native-main26-204-'+meta['run'], 'Main26 admission/context/task identity changed')
     files = reader.verified_files(Path(meta['reportDirectory']))
     report = json.loads(files['report.json'].decode('utf-8-sig'))
-    checks.need(report['kind'] == 'activation_service_main_native_gate' and report['passed'] is True
+    checks.need(report['kind'] == ('activation_controller_main_native_gate' if controller else 'activation_service_main_native_gate') and report['passed'] is True
                 and report['error'] is None and report['sourceCommit'] == source['sourceCommit']
                 and report['sourceArchiveSha256'] == source['archiveSha256'] and report['target'] == target
                 and report['installedRuntimeApplied'] is False and report['windowsOpened'] is False
@@ -63,7 +72,7 @@ def main():
     proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
     result = checks.audit(proof, source, target, report['activationReservation'], profile=args.profile)
     result.update(checks.audit_auxiliary(files, proof, source))
-    if args.profile == 'worker19-updater20':
+    if args.profile in ('worker19-updater20','worker19-updater21'):
         epoch_commands = [c for c in commands if c['name'] == 'service-history-epoch-check']
         checks.need(len(epoch_commands) == 1, 'Missing policy epoch/history corruption regression')
         epoch_log = files[epoch_commands[0]['log']].decode('utf-8-sig')
@@ -82,10 +91,25 @@ def main():
     observations_raw = (local/'controller-observations.jsonl').read_bytes()
     observations = [json.loads(line) for line in observations_raw.splitlines()]
     preflight = proof['cases'][0]['activationWriter']['controllerPreflight']
+    activity=[]
+    if controller:
+        activity_raw=(local/'controller-activity.jsonl').read_bytes()
+        receipt=proof['cases'][0]['activationController']['record']['state']['receipt']
+        activity=checks.verify_activity(activity_raw,json.loads((local/'controller-activity-sources.json').read_text()),
+                    json.loads((local/'controller-final-status.json').read_text()),json.loads((local/'controller-exit.json').read_text()),meta,receipt)
+    preflight_seen=any(x['response']['status']['connected'] is True
+                        and x['response']['status']['sessionId'] == preflight['connection']['sessionId'] for x in observations)
+    if controller:
+        preflight_seen=preflight_seen or any(r.get('event')=='worker_connected'
+                      and r.get('sessionId')==preflight['connection']['sessionId']
+                      and r.get('generation')==preflight['workerGeneration'] for r in activity)
     checks.need(observations and all(x['pidAlive'] is True and x['response']['status']['instanceId'] == meta['instanceId'] for x in observations)
-                and any(x['response']['status']['connected'] is True
-                        and x['response']['status']['sessionId'] == preflight['connection']['sessionId'] for x in observations),
+                and preflight_seen,
                 'Isolated controller availability/session not observed')
+    if controller:
+        checks.need(report['profile']==args.profile,'Wrong Main26 report profile')
+        checks.need((local/'controller-activity.jsonl').read_bytes()==activity_raw,'Controller activity changed on second read')
+        result.update(controllerActivitySha256=hashlib.sha256(activity_raw).hexdigest(),controllerActivityRecords=len(activity))
     before, after = (json.loads((local/name).read_text()) for name in ('info-before.json', 'info-after.json'))
     checks.need(before['build'] == after['build'] and before['generation'] == after['generation']
                 and before['fencedRequests']['context'] == after['fencedRequests']['context']

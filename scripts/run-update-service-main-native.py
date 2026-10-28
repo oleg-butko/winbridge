@@ -48,21 +48,24 @@ def submit_fenced(native, endpoint, request):
         return json.loads(native.exact(stream, length))
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(controller=False):
+    controller_gate=controller
+    mode='Main26' if controller_gate else 'Main25'
+    namespace='main26-204' if controller_gate else 'main25-204'
+    parser = argparse.ArgumentParser(description=f'Run one pinned {mode} fixture through the installed worker; never install.')
     parser.add_argument('--source-archive', required=True, type=Path)
     parser.add_argument('--target-archive', required=True, type=Path)
     parser.add_argument('--cache-run', required=True)
     parser.add_argument('--worker17-reference-sha256')
     parser.add_argument('--worker17-reference', help='Retained worker17 EXE, independent of the installed worker (absolute K: path)')
     parser.add_argument('--test-runtime-directory', required=True)
-    parser.add_argument('--profile', choices=('worker17-updater20', 'worker19-updater20'), default='worker17-updater20')
+    parser.add_argument('--profile', choices=(('worker19-updater21',) if controller_gate else ('worker17-updater20', 'worker19-updater20')), default=('worker19-updater21' if controller_gate else 'worker17-updater20'))
     parser.add_argument('--controller-config', required=True, type=Path)
     parser.add_argument('--controller-binary', required=True, type=Path)
     args = parser.parse_args()
     native = load('main25_native', 'validate-workflow-native.py')
     health = load('main25_archive', 'validate-update-health-actor-native.py')
-    checks = load('main25_checks', 'update-activation-service-proof.py')
+    checks = load('main_gate_checks', 'update-activation-controller-proof.py' if controller_gate else 'update-activation-service-proof.py')
     reference = load('main25_references', 'worker-migration-reference.py').reference_for_profile(
         args.profile, args.worker17_reference, args.worker17_reference_sha256)
     source, target = map(health.archive_pin, (args.source_archive, args.target_archive))
@@ -85,21 +88,24 @@ def main():
     runtime = PureWindowsPath(args.test_runtime_directory)
     checks.need(runtime.is_absolute() and runtime.drive.lower() == 'k:' and '..' not in runtime.parts,
                 'Explicit owned local WinBridge test runtime required')
+    if controller_gate:
+        checks.need(runtime==PureWindowsPath(r'K:\_proj-26\winbridge\runtime-test-204'),
+                    'Main26 requires approved stable runtime-test-204; legacy slot is not authorized')
     project = next(p for p in before['projects'] if p['id'] == 'snapshot-fixture')
     run = time.strftime('%Y%m%d-%H%M%S', time.gmtime()) + '-' + uuid.uuid4().hex[:8]
-    local = ROOT / '.winbridge/update-preparation' / ('main25-204-' + run)
+    local = ROOT / '.winbridge/update-preparation' / (namespace+'-' + run)
     local.mkdir(parents=True)
     shared = Path('/mnt/hgfs/shared/WinBridge/workflow-validation') / run
     shared.mkdir()
-    work = PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / ('tmp-main25-204-' + run)
+    work = PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / ('tmp-'+namespace+'-' + run)
     cache = PureWindowsPath(project['workspaceRoot']) / 'workflow-validation' / args.cache_run
     windows_report = PureWindowsPath('K:/VMs/shared/WinBridge/workflow-validation') / run
-    instance = 'main25-204-' + uuid.uuid4().hex[:12]
+    instance = namespace+'-' + uuid.uuid4().hex[:12]
     url = 'ws://' + host + ':1144'
     # Keep Unix socket paths short; never change a persistent controller config.
-    state = Path(tempfile.mkdtemp(prefix='wb25-'))
+    state = Path(tempfile.mkdtemp(prefix='wb26-' if controller_gate else 'wb25-'))
     test_config = state / 'controller.json'
-    write_new(test_config, {'schemaVersion': 1, 'instanceId': instance, 'nodeId': 'main25-debian-204',
+    write_new(test_config, {'schemaVersion': 1, 'instanceId': instance, 'nodeId': ('main26-debian-'+host.rsplit('.',1)[-1] if controller_gate else 'main25-debian-204'),
               'stateDirectory': str(state), 'controller': {'listenAddress': host + ':1144', 'workerNodeId': 'shutdown-main-test'}, 'projects': []})
     test_endpoint = state / ('controller-' + instance + '.sock')
     log = (local / 'controller.log').open('x')
@@ -122,6 +128,7 @@ def main():
                     for path in (args.source_archive, args.target_archive)]
         migration_arg = (' -Worker17Reference ' + ps(str(reference))
                          + ' -Worker17ReferenceSha256 ' + ps(args.worker17_reference_sha256)) if reference else ''
+        gate_switch='ActivationControllerGate' if controller_gate else 'ActivationServiceGate'
         script = f'''$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $local={ps(str(work))};$archive={ps(archives[0])};$target={ps(archives[1])}
@@ -132,17 +139,19 @@ if([IO.DriveInfo]::new([IO.Path]::GetPathRoot($local)).AvailableFreeSpace -lt 6G
 New-Item -ItemType Directory -Path $local|Out-Null
 $copy=Join-Path $local 'source.zip';[IO.File]::Copy($archive,$copy,$false)
 Expand-Archive -LiteralPath $copy -DestinationPath $local
-& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $local 'winbridge/scripts/test-update-health-actor.ps1') -SourceDirectory (Join-Path $local 'winbridge') -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath $target -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(str(cache))} -ReportDirectory {ps(str(windows_report))} -ActivationServiceGate -FixtureInstanceId {ps(instance)} -FixtureControllerUrl {ps(url)} -TestRuntimeDirectory {ps(str(runtime))}{migration_arg}
+& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $local 'winbridge/scripts/test-update-health-actor.ps1') -SourceDirectory (Join-Path $local 'winbridge') -SourceArchiveSha256 {ps(source['archiveSha256'])} -TargetArchivePath $target -TargetArchiveSha256 {ps(target['archiveSha256'])} -ValidationCacheDirectory {ps(str(cache))} -ReportDirectory {ps(str(windows_report))} -{gate_switch} -FixtureInstanceId {ps(instance)} -FixtureControllerUrl {ps(url)} -TestRuntimeDirectory {ps(str(runtime))}{migration_arg}
 exit $LASTEXITCODE
 '''
         submission = {'protocolVersion': 1, 'requestId': str(uuid.uuid4()), 'projectId': 'snapshot-fixture',
-                      'idempotencyKey': 'native-main25-204-' + run, 'timeoutMs': 3600000,
+                      'idempotencyKey': 'native-'+namespace+'-' + run, 'timeoutMs': 3600000,
                       'command': {'kind': 'direct', 'executable': 'pwsh.exe', 'arguments': ['-NoProfile', '-NonInteractive', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()], 'workingDirectory': '.'}}
         request = {'requestContractVersion': 2, 'context': context, 'request': {'method': 'submit', 'request': submission}}
         write_new(local / 'request.json', request)
         write_new(local / 'info-before.json', before)
         submission_sent = True
         reply = submit_fenced(native, endpoint, request)
+        if controller_gate:
+            write_new(local/'acceptance.json',reply)
         if reply.get('requestContractVersion') == 2 and reply.get('outcome') == 'rejected_before_dispatch':
             terminal = True
         checks.need(reply.get('requestContractVersion') == 2 and reply.get('context') == context and reply.get('outcome') == 'responded' and reply['response'].get('kind') == 'task', 'Task ACK unavailable; inspect same saved context/key, never resubmit')
@@ -179,21 +188,40 @@ exit $LASTEXITCODE
         write_new(local / 'terminal.json', task)
         after = native.call(endpoint, {'method': 'info'})['info']
         write_new(local / 'info-after.json', after)
-        checks.need(task['status'] == 'succeeded' and task['exitCode'] == 0, 'Main25 failed; preserve slot and observe original attempt, no automatic replay')
-        result = subprocess.run([sys.executable, str(ROOT/'scripts/verify-update-service-main-native.py'), '--profile', args.profile,
+        checks.need(task['status'] == 'succeeded' and task['exitCode'] == 0, mode+' failed; preserve slot and observe original attempt, no automatic replay')
+        if controller_gate:
+            # A short successful session may fall between the 1s status samples.
+            # Use the existing rotating controller activity log as independent
+            # evidence, without extending the worker startup window or adding a
+            # fixed sleep. Stop only this known fixture after its task ends.
+            final_status=native.call(test_endpoint,{'method':'controller_status'})
+            checks.need(controller.poll() is None, 'Fixture controller exited unexpectedly')
+            write_new(local/'controller-final-status.json',final_status)
+            controller.send_signal(signal.SIGINT);code=controller.wait(timeout=12);log.close()
+            write_new(local/'controller-exit.json',dict(pid=controller.pid,exitCode=code))
+            checks.need(code==0,'Fixture controller shutdown failed')
+            names=['activity.jsonl.'+str(i) for i in range(5,0,-1)]+['activity.jsonl']
+            captured={name:(state/name).read_bytes() for name in names if (state/name).is_file()}
+            checks.need(captured and captured=={name:(state/name).read_bytes() for name in captured},'Controller activity changed after shutdown')
+            with (local/'controller-activity.jsonl').open('xb') as saved_activity:
+                saved_activity.write(b''.join(captured.values()));saved_activity.flush();os.fsync(saved_activity.fileno())
+            write_new(local/'controller-activity-sources.json',{name:dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()) for name,raw in captured.items()})
+        verifier='verify-update-controller-main-native.py' if controller_gate else 'verify-update-service-main-native.py'
+        result = subprocess.run([sys.executable, str(ROOT/'scripts'/verifier), '--profile', args.profile,
                     '--run-info', str(local/'run-info.json'), '--source-archive', str(args.source_archive), '--target-archive', str(args.target_archive)], capture_output=True, text=True)
         (local / 'independent-audit.stdout').write_text(result.stdout)
         (local / 'independent-audit.stderr').write_text(result.stderr)
-        checks.need(result.returncode == 0, 'Independent Main25 audit refused; inspect saved audit output')
+        checks.need(result.returncode == 0, 'Independent '+mode+' audit refused; inspect saved audit output')
         print(result.stdout, flush=True)
         checks.need(after['generation'] == before['generation'] and after['build'] == before['build']
                     and after['fencedRequests']['context'] == context and after['activeTaskCount'] == 0, 'Installed worker changed or still has work')
         print(json.dumps({'passed': True, 'installedUnchanged': True, 'runInfo': str(local/'run-info.json')}), flush=True)
     finally:
         if terminal or not submission_sent:
-            controller.send_signal(signal.SIGINT)
-            controller.wait(timeout=12)
-            log.close()
+            if controller.poll() is None:
+                controller.send_signal(signal.SIGINT)
+                controller.wait(timeout=12)
+            if not log.closed:log.close()
         else:
             print('Observation interrupted; leave the recorded fixture controller alive until the same task terminates', file=sys.stderr)
 

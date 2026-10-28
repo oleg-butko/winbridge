@@ -16,7 +16,7 @@ fn write_root(
     if old.phase != UpdatePhase::VerifyingLocal || record(c, &old.update_id)? != *old {
         return Err(bad("Local proof requires the exact VerifyingLocal root"));
     }
-    let command=UpdateCommand { idempotency_key:format!("local-service-verified-{key}"),expected_revision:old.revision,event:winbridge_protocol::update::UpdateEvent::LocalHealthVerified,reason:"Локальный Worker и IPC проверены; соединение controller и передача lifetime ещё не выполнены".into() };
+    let command=UpdateCommand { idempotency_key:format!("local-service-verified-{key}"),expected_revision:old.revision,event:winbridge_protocol::update::UpdateEvent::LocalHealthVerified,reason:"Локальный Worker и IPC проверены; состояние controller и передачи владения показано отдельно, обновление ещё не завершено".into() };
     supervisor::require_driver(c, a, &old.update_id, command.event)?;
     let mut root = old.clone();
     root.phase = advance_update(root.phase, command.event).map_err(bad)?;

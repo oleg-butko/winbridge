@@ -3135,7 +3135,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 }
                 if !files_actor.can_connect_controller() || work.is_some() || driver_error.is_some()
                 {
-                    return Err("Controller needs the idle original confirmed writer guard; no replay/adoption".into());
+                    return Err("Controller needs the idle original confirmed local-service owner; no replay/adoption".into());
                 }
                 start = true;
                 Ok(None) // Do not spend the remaining original window on a status audit.
