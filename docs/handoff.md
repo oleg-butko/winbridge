@@ -31,11 +31,20 @@ Review закрыл revision index/JSON mismatch; duplicate с другим sele
 артефакты заново проверены readonly:4 files twice/21+60 negatives passed.
 Следом [actual20→21 copy-only gate](plans/worker-self-update/retained20-to21-2026-10-28.md):
 реальный Main25 archive, исходная identity/image неизменны, shared harness с
-фиксированными profiles отказывается выдавать старую миграцию за новую. Пока
+фиксированными profiles отказывается выдавать старую миграцию за новую.
 этот новый native gate **пройден**:20261028-085258-adbe629d/taskd5a75306 succeeded0,
 actual1 test/4 files twice/21+34 negatives, повторный readonly audit passed.
 Installed worker/build/context и original archive/DB/WAL сохранены. Затем original guarded admission и same-child
 network из плана controller-session; receipt не коммитит root до Job transfer.
+
+**Original controller preparation:** factory/receiver snapshot добавлены;269
+updater tests/4 ignored,13 SQL/root cases и MSVC Clippy passed. Native consuming
+owner держит config pin, same child/channel/Job и one fresh permit; current root
+должен быть exact atomic AwaitingController, а не старый VerifyingLocal. Deadline
+и physical custody проверяются до/после intent; Existing — только данные. Пока
+нет network sender/private5 receiver/actor26/view18, marker5 не advertised,
+installed worker не менялся. Следом same-child network/independent normal IPC
+и полный native gate; подготовку не считать успешным controller confirmation.
 
 **Ревью после установки,2026-10-27:** ветка `refactor/multi-controller-review`,
 [находки, покрытие и направление рефакторинга](analysis/multi-controller-post-install-review-2026-10-27.md).

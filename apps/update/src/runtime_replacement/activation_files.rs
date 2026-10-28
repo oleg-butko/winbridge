@@ -10,7 +10,8 @@ use winbridge_platform::runtime_files::{RuntimeReadHandoffFailure, RuntimeReadPi
 #[path = "activation_process.rs"]
 mod activation_process;
 pub use activation_process::{
-    ActivationLaunchFailure, ActivationProcessGuard, ActivationServicePreparation,
+    ActivationControllerPreparation, ActivationLaunchFailure, ActivationProcessGuard,
+    ActivationServicePreparation,
 };
 
 /// Only a successful consuming factory can construct this object. Its installed

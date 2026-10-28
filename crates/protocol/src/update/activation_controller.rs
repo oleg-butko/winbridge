@@ -3,6 +3,10 @@ use super::{StateBackupAuthority, WorkerServiceActivationCommand, WorkerServiceA
 use crate::{BuildIdentity, RequestContext, WorkerRuntimeCompatibility};
 use serde::{Deserialize, Serialize};
 
+/// Recognized only after the private receiver is implemented; defining this
+/// marker does not advertise it from the current worker binary.
+pub const ACTIVATION_CONTROLLER_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_CONTROLLER_SESSION_V5";
+
 macro_rules! dto { ($($item:item)*) => {$ (
     #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
     #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

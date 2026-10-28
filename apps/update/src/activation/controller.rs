@@ -13,6 +13,32 @@ use winbridge_protocol::{
 mod record;
 pub use record::{ActivationControllerRecord, ActivationControllerState};
 
+/// Fresh admission only, never reconstructed from journal JSON or an Existing
+/// result. It authorizes one consuming preparation, not a cold connection.
+pub struct ActivationControllerPermit {
+    pub(crate) record: ActivationControllerRecord,
+}
+impl ActivationControllerPermit {
+    pub fn record(&self) -> &ActivationControllerRecord {
+        &self.record
+    }
+}
+pub enum ActivationControllerAdmission {
+    Issued(Box<ActivationControllerPermit>),
+    Existing(Box<ActivationControllerRecord>),
+}
+
+/// Validated data for the already authenticated resident child. It does not
+/// recreate custody, permission, the startup window or a network manager.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivationControllerSnapshot {
+    pub physical: ActivationRecord,
+    pub writer: ActivationWriterRecord,
+    pub service: ActivationServiceRecord,
+    pub local: ActivationRecord,
+    pub controller: ActivationControllerRecord,
+}
+
 fn uuid(value: &str) -> bool {
     uuid::Uuid::parse_str(value).is_ok_and(|v| v.to_string() == value)
 }

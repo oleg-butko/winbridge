@@ -9,6 +9,9 @@ use std::{
 };
 use winbridge_platform::{infrastructure, ManagedChild, OutputReader};
 use winbridge_transport::supervisor as ipc;
+#[path = "activation_controller.rs"]
+mod controller;
+pub use controller::ActivationControllerPreparation;
 #[path = "activation_service.rs"]
 mod service;
 #[cfg(feature = "update-validation")]

@@ -1,6 +1,6 @@
 //! Schema21: immutable controller intent/current/causal history, data only.
-//! Production guarded admission/dispatch is added as a separate step. These
-//! readbacks never construct a connector, original owner or startup permit.
+//! Fresh admission additionally needs the original native owner/nonce/window.
+//! Readbacks never construct a connector, original owner or startup permit.
 use super::*;
 use crate::activation::{
     controller::{self, ActivationControllerRecord},
@@ -161,9 +161,7 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationControll
     ledger(c, id, &graph).map(Some)
 }
 
-// SQL primitive regression seam only. There is deliberately no production JSON
-// writer or fresh permit factory until the original-custody driver is wired.
-#[cfg(test)]
+#[cfg(any(windows, test))]
 fn seed(c: &Connection, value: &ActivationControllerRecord, graph: &Graph) -> Result<()> {
     value.validate().map_err(bad)?;
     graph.validate(&value.command)?;
@@ -195,7 +193,19 @@ fn seed(c: &Connection, value: &ActivationControllerRecord, graph: &Graph) -> Re
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(any(windows, test))]
+fn seed_checked(
+    c: &Connection,
+    value: &ActivationControllerRecord,
+    graph: &Graph,
+    mut checkpoint: impl FnMut() -> Result<()>,
+) -> Result<()> {
+    checkpoint()?;
+    seed(c, value, graph)?;
+    checkpoint()
+}
+
+#[cfg(any(windows, test))]
 fn existing_for_key(
     value: ActivationControllerRecord,
     key: &str,
@@ -210,7 +220,7 @@ fn existing_for_key(
     Ok(value)
 }
 
-#[cfg(test)]
+#[cfg(any(windows, test))]
 fn persist(
     c: &Connection,
     old: &ActivationControllerRecord,
@@ -264,6 +274,10 @@ impl UpdateJournal {
         Ok(value)
     }
 }
+
+#[cfg(windows)]
+mod admission;
+mod custody;
 
 #[cfg(test)]
 mod tests;

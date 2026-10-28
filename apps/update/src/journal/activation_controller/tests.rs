@@ -228,6 +228,39 @@ fn same_key_returns_only_data_and_another_frozen_selection_is_a_key_conflict() {
         JournalErrorCode::KeyConflict
     );
 }
+
+#[test]
+fn expired_original_checkpoint_before_or_after_insert_cannot_commit_an_intent() {
+    for fail_at in [1, 2] {
+        let (mut c, g, v, _) = fixture();
+        let mut calls = 0;
+        {
+            let tx = c.transaction().unwrap();
+            let result = seed_checked(&tx, &v, &g, || {
+                calls += 1;
+                if calls == fail_at {
+                    Err(bad("Original monotonic window or custody ended"))
+                } else {
+                    Ok(())
+                }
+            });
+            assert!(result.is_err());
+        }
+        assert_eq!(calls, fail_at);
+        for table in [
+            "activation_controller_intents",
+            "activation_controller_records",
+            "activation_controller_history",
+        ] {
+            assert_eq!(
+                c.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r
+                    .get::<_, i64>(0))
+                    .unwrap(),
+                0
+            );
+        }
+    }
+}
 #[test]
 fn cold_sqlite_observation_retains_uncertainty_without_reissuing() {
     let (mut c, g, v, _) = fixture();

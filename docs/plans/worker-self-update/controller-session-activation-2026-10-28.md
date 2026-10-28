@@ -14,8 +14,22 @@ Issued→Confirmed либо Issued→Indeterminate→Confirmed.10 focused tests 
 Это первый data foundation checkpoint: network send/runtime/SQL ledger/capability
 тогда ещё не добавлены, updater20/actor25/view17/service4 оставались прежними.
 Следом добавлен ledger21/read-only graph (workspace914/17 ignored,10 SQL cases),
-см. [actual20→21 план](retained20-to21-2026-10-28.md). Native migration и production
-fresh admission пока впереди; actor25/view17/service4 и installed worker прежние.
+см. [actual20→21 результат](retained20-to21-2026-10-28.md): native copy gate пройден.
+
+Следом добавлена **original guarded preparation**: native consuming
+`prepare_controller_blocking` сохраняет child/Job/channel/files, pin конфигурации
+и единственный Issued permit после подтверждённого SQL commit. Fresh factory
+сверяет exact LocalVerified7/atomic AwaitingController edge, owner/epoch/current
+supervisor/nonce/schema21 и original monotonic window до/после записи. Same key
+возвращает только Existing data; другой selection/key — KeyConflict. Native
+sender/network/private5 receiver пока не реализованы, marker5 не advertised:
+старый child отвергается до intent. Actor25/view17/service4 и installed worker
+прежние; public install закрыт. Подготовка отдельно не означает подключение.
+269 updater library tests passed/4 ignored;13 controller SQL/root cases включают
+18 root-edge подмен и rollback при завершении window до/после INSERT. MSVC
+workspace/all-target/update-validation Clippy passed. Новый original preparation
+на Windows ещё не исполнялся: следующий runtime gate должен проверить весь graph,
+не только SQL primitives или уже пройденную миграцию с empty controller tables.
 
 Review foundation выявил, что projection сам по себе не содержит Welcome nodeId:
 добавлена отдельная проверка current normal-IPC link/attempt/node/session и

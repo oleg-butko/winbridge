@@ -6,6 +6,11 @@
 пройден:taskd5a75306/4 files twice/21+34 negatives, installed0.2.0 неизменён.
 Следом original owner/receiver/actor и native full run; public install закрыт.
 
+Original controller preparation реализована в source: consuming native factory,
+current local7/root/owner/nonce/window guards, pinned configured topology и
+data-only receiver snapshot.269 updater tests/4 ignored и MSVC Clippy passed;
+network send/private5 receiver/actor26/view18 и native runtime proof ещё впереди.
+
 2026-10-28: [controller-session DTO/FSM foundation](plans/worker-self-update/controller-session-activation-2026-10-28.md)
 реализована и reviewed:10 focused tests,255 updater/75 protocol, Linux/MSVC
 Clippy/TS/generated contracts passed. Выбранные endpoint/normal link/projection
