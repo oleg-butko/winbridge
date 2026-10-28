@@ -8,6 +8,8 @@ use winbridge_protocol::ResolvedCommand;
 pub mod event_log;
 pub mod execution_domain;
 pub mod infrastructure;
+#[cfg(all(windows, test))]
+mod lifetime_spike;
 pub mod process_identity;
 pub mod reports;
 #[cfg(windows)]

@@ -6,6 +6,10 @@ Main26 first native run failed before baseline (test-only worker stack overflow)
 reread/review → [lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md).
 Ни old failure, ни локальная компиляция не являются passing gate.
 
+Lifetime OS spike: test-only source2 cases подготовлен, MSVC Clippy/Linux check
+passed. Windows execution/runner/independent audit pending после Main26; schemas,
+capabilities, original kill-on-close/breakaway и installed runtime неизменны.
+
 ## История предыдущих checkpoint
 
 2026-10-28/latest: supervisor26/view18 реализованы в source;927 workspace/17 ignored,

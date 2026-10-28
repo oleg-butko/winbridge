@@ -5,6 +5,53 @@
 Main26 доказывает session того же resident child, но оставляет root
 AwaitingController/local7 и автоматическое завершение child вместе с updater.
 
+## Подготовлен test-only OS spike
+
+`crates/platform/src/lifetime_spike.rs` добавлен только под `cfg(windows,test)`.
+MSVC Clippy и Linux check прошли; **настоящего Windows execution ещё нет**.
+Production platform/process APIs, updater schemas/private contracts и limits не
+менялись. Это lower-level process experiment, не работающие keeper actors.
+
+Два explicit ignored tests:
+
+- `lifetime_spike::resident_keeper_launches_next_updater_outside_old_worker_job_without_breakaway`:
+  original keeper удерживает worker Job, worker инициирует следующий запрос,
+  keeper запускает следующий independent process вне старой worker Job/domain;
+  следующий worker и keeper живы после штатного выхода старого keeper. Две
+  worker Job остаются соседними, transport Job охватывает всех helpers до cleanup.
+- `lifetime_spike::keeper_process_loss_kills_waiting_worker_without_recovery_or_limit_changes`:
+  original keeper вызывает exit73 **без Rust destructors**; last-handle closure
+  исходной Job завершает worker, автоматического восстановления нет.
+
+До смены поколения выполняется отдельная реальная отмена task+grandchild в
+execution domain. Original keeper/worker и next keeper/worker связаны actual
+PID/birth/host/session; следующий keeper query-ит отсутствие членства в старой
+Job/domain. Сохраняются flags KILL_ON_JOB_CLOSE, чтение обоих output потоков,
+bounded local waits, positive empty/exit observations. Никакого breakaway, changes
+limits, network, installed worker или удаления Windows validation directories.
+
+Пока **нужны PS runner + independent readonly audit**. После Main26, с idle
+installed worker (desktop закрыт/окон нет), экспортировать clean source; выполнить
+pinned parser/storage check и два exact native tests через approved scenario.
+Hashed platform helper не подключается к сети, стабильный networking slot не нужен.
+`WINBRIDGE_LIFETIME_SPIKE_INPUT` — test-only JSON `{"schemaVersion":1,"root":"<fresh existing local test base>"}`.
+Каждый test создаёт собственный create-only child directory `two-generation` или
+`keeper-loss`; существующий case отказывает. Source/target runtime не меняются.
+JSON/ready/log files сохраняются в fixture для audit; это не updater journal.
+
+Пример exact selection (только внутри подготовленного native runner):
+
+```powershell
+cargo test -p winbridge-platform --lib --locked --offline -- --exact lifetime_spike::resident_keeper_launches_next_updater_outside_old_worker_job_without_breakaway --ignored --test-threads=1 --nocapture
+cargo test -p winbridge-platform --lib --locked --offline -- --exact lifetime_spike::keeper_process_loss_kills_waiting_worker_without_recovery_or_limit_changes --ignored --test-threads=1 --nocapture
+```
+
+На ревью до native run исправлены две ошибки самого spike: query уже уничтоженной
+empty old Job трактуется как absence только при ERROR_FILE_NOT_FOUND, а transport
+pipe readers join-ятся лишь после завершения всех helpers. Original execution
+Domain handle удерживается в old worker до его выхода, чтобы следующая проверка
+не могла случайно открыть заново пустую Job под прежним именем.
+
 ## Проблема, которую надо решить до нового DTO
 
 `ActivationProcessGuard::drop` вызывает `ManagedChild::close_unconfirmed`:

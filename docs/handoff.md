@@ -10,6 +10,13 @@ ordinary worker/runtime/deadline. Следом clean export/new isolated Main26,
 [lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md).
 Не повторять старый task/key и не считать gate пройденным.
 
+**Lifetime source spike подготовлен:**2 explicit ignored Windows OS cases
+(two generations + keeper-loss73), real task/grandchild cancellation, unchanged
+Job limits/no network. MSVC Clippy/Linux check passed; native runner/independent
+observer и actual execution ещё отсутствуют. [Порядок и границы](plans/worker-self-update/activation-lifetime-2026-10-28.md).
+Main26 repeat d288b0f/taskc5f23f8b идёт отдельно; не считать spike проверенным по
+результату Main26 и не подключать keeper role к production до native proof.
+
 ## История предыдущих checkpoint
 
 **Latest source supervisor26/view18:** connect/observe и typed controller view
