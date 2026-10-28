@@ -194,6 +194,12 @@ export type ActivationServiceView = { phase: ActivationServicePhase, attemptId: 
 export type WorkerServiceActivationBinding = { writerCommand: WorkerJournalActivationCommand, writerReceipt: WorkerJournalActivationReceipt, writerRecordSha256: string, expectedWorker: LoadedWorkerIdentity, workerConfigSchema: number, protocolVersion: number, };
 export type WorkerServiceActivationCommand = { schemaVersion: number, commandId: string, binding: WorkerServiceActivationBinding, issuedAtMs: number, deadlineAtMs: number, };
 export type WorkerServiceActivationReceipt = { schemaVersion: number, commandId: string, updateId: string, attemptId: string, commandSha256: string, authority: StateBackupAuthority, compatibility: WorkerRuntimeCompatibility, };
+export type WorkerControllerActivationEndpoint = { id: string, url: string, };
+export type WorkerControllerActivationTopology = { schemaVersion: number, primary: string, confirmationEndpointId: string, controllers: Array<WorkerControllerActivationEndpoint>, };
+export type WorkerControllerActivationBinding = { serviceCommand: WorkerServiceActivationCommand, serviceReceipt: WorkerServiceActivationReceipt, serviceRecordSha256: string, localRecordSha256: string, topology: WorkerControllerActivationTopology, };
+export type WorkerControllerActivationCommand = { schemaVersion: number, commandId: string, binding: WorkerControllerActivationBinding, issuedAtMs: number, deadlineAtMs: number, };
+export type WorkerControllerSessionEvidence = { controllerId: string, controllerUrl: string, controllerNodeId: string, controllerGeneration: string, sessionId: string, controllerBuild: BuildIdentity, workerContext: RequestContext, workerGeneration: string, workerBuild: BuildIdentity, connectionAttempt: number, projectionSequence: number, projectionSha256: string, connectedAtMs: number, };
+export type WorkerControllerActivationReceipt = { schemaVersion: number, commandId: string, updateId: string, attemptId: string, commandSha256: string, authority: StateBackupAuthority, compatibility: WorkerRuntimeCompatibility, session: WorkerControllerSessionEvidence, };
 export type CandidateDrainPhase = "not_admitted" | "starting" | "waiting_accepted" | "closing_dispatch" | "confirming_quiescence" | "quiesced" | "indeterminate" | "aborted";
 export type CandidateDrainView = { phase: CandidateDrainPhase, attemptId: string | null, confirmedCommands: number, quiescedRevision: number | null,
 /**

@@ -11,6 +11,15 @@ retained19→20 terminal gates не переигрывать. Рабочий wor
 desktop не нужен. Цикл review→fix→следующий этап активен до необходимости нового
 installed worker либо непредвиденного поведения по инструкции пользователя.
 
+Продолжается [controller-session foundation](plans/worker-self-update/controller-session-activation-2026-10-28.md):
+strict DTO/TS и pure FSM добавлены,10 focused tests passed; updater255/4ignored,
+protocol75 all-target, Linux/MSVC workspace Clippy/TS/contracts/scaffold passed.
+Новая network send/ledger/runtime ещё отсутствуют. Использовать validated
+projection + current link/ticket, default confirmation=primary с отдельным
+frozen selection. Receipt не коммитит root до Job lifetime. Следом review и
+durable updater21 foundation/admission (пока это proposed schema, не current).
+Подробные SQL/root/duplicate guards следующего шага записаны в новом плане.
+
 **Ревью после установки,2026-10-27:** ветка `refactor/multi-controller-review`,
 [находки, покрытие и направление рефакторинга](analysis/multi-controller-post-install-review-2026-10-27.md).
 Native multi-controller и Main25 cold17→19 больше не используют installed EXE

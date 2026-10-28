@@ -12,6 +12,7 @@ type Result<T> = std::result::Result<T, String>;
 mod lifecycle;
 pub use lifecycle::*;
 pub mod channel;
+pub mod controller;
 mod process_view;
 pub mod service;
 mod service_view;

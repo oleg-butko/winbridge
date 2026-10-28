@@ -1,6 +1,6 @@
 use super::*;
 
-fn fixture() -> (
+pub(crate) fn fixture() -> (
     ActivationRecord,
     ActivationWriterRecord,
     WorkerServiceActivationCommand,
