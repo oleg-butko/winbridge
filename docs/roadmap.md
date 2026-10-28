@@ -6,6 +6,10 @@ Same child/authority/new session, lost ACK и cold no replay подтвержд�
 240s не продлены. Installed0.2.0 здоров/прежний, desktop не нужен. Root
 AwaitingController/local7; lifetime/commit/release/public install ещё закрыты.
 
+Lifetime first native run failed на immediate Job.empty после successful root
+exit;40 files twice, installed unchanged. Bounded original-Job wait добавлен;
+повтор pending, при timeout — диагностика counters/handles, без ослабления cleanup.
+
 Lifetime OS spike: source2 cases + PS/Python runner/independent reader готовы,
 MSVC Clippy/Linux check/8 observer tests/36 negatives passed. Actual Windows run
 pending после clean export/pinned parser/storage; schemas,

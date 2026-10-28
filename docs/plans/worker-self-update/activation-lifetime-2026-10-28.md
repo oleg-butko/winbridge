@@ -84,6 +84,30 @@ pipe readers join-ятся лишь после завершения всех hel
 Domain handle удерживается в old worker до его выхода, чтобы следующая проверка
 не могла случайно открыть заново пустую Job под прежним именем.
 
+## Первый native run: отказ на ранней проверке empty
+
+Run20261028-185609-72461f1f/task5a4d3123-501b-465d-be2d-26da47b0a829,
+producer8f527fbb19799d36b24119be6e96805cba47ac1d, failed/exit1.
+Archive `WinBridge/sources/winbridge-20261028T160915Z-8f527fb-c839a452.zip`,
+SHA6ec5b5f03b3beceb96f838433a0bf684f52c0c64fe2f23d2f5330d7acf42bcdc,
+manifest39a0cbfefd2d8aafabe78a3f1476182811aa434a1ec3e594201165ee5232a48a.
+Первый exact native test failed после1.07s, второй не запускался; partial
+survived marker не считается успешным gate.40 ready files перечитаны и сверены
+дважды, исходные report/logs сохранены в `.../workflow-validation/<run>/result`.
+
+Old worker вернул exit0, но old keeper немедленно проверил Job accounting.empty
+и получил false (`old-keeper.stderr`, line273). Ошибок в stderr old worker/new
+keeper/new worker нет. Добавлено bounded ожидание **того же original Job.empty**
+в обоих keeper cleanup: process exit сам по себе не заменяет empty observation.
+Это гипотеза об асинхронной границе учёта, не объявление установленной причины
+или разрешение ослабить cleanup. При повторном timeout сначала исследовать
+счётчик/membership/retained handles; не увеличивать timeout автоматически.
+
+Installed worker build/generation/context прежний, active0/errors=null.
+Windows free25,125,421,056 before/25,114,943,488 after. Source/helper artifacts
+не удалялись, Windows runtime/config/journal и network не менялись. После MSVC
+Clippy/fmt/diff нужен новый clean isolated run; старый task/key не replay.
+
 ## Проблема, которую надо решить до нового DTO
 
 `ActivationProcessGuard::drop` вызывает `ManagedChild::close_unconfirmed`:

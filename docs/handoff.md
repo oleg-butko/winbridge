@@ -14,6 +14,13 @@ production controller131887 прежний. Test controller178034 и test proces
 Root AwaitingController/local7; lifetime/whole commit/scoped release/public
 activation и U2–U4 ещё не готовы. Следом lifetime OS spike, Main26 не replay.
 
+**Lifetime first native failed:**run20261028-185609-72461f1f/task5a4d3123,
+40 files twice; old worker exit0 предшествовал immediate Job.empty=false.
+Producer8f527fb. Добавлено bounded ожидание той же original Job (не новая Job,
+не вывод из PID); MSVC Clippy passed. Installed worker прежний/idle/healthy.
+Повтор после clean export/parser/storage; если timeout сохранится — исследовать
+accounting/membership/retained handles, не продлевать budget. [Evidence](plans/worker-self-update/activation-lifetime-2026-10-28.md).
+
 **Lifetime OS spike — следующий native gate:**2 explicit ignored Windows cases
 (two generations + keeper-loss73), task/grandchild cancellation и unchanged
 limits/no network. PS/Python runner + independent reader подготовлены;

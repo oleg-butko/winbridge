@@ -270,7 +270,10 @@ fn old_keeper(root: &Path, meta: &Value) {
     assert_eq!(ready["inOldJob"], false);
     publish(root, "stop-old-worker.json", json!({"stop":true}));
     child.exited();
-    assert!(child.owner.tree_is_empty().unwrap());
+    // A signalled root is not an atomic Job accounting update. Observe the
+    // SAME original Job until it is positively empty; never infer emptiness
+    // from process exit and never substitute a new Job under its old name.
+    wait(|| child.owner.tree_is_empty().unwrap());
     child.join_readers();
     publish(
         root,
@@ -306,7 +309,7 @@ fn new_keeper(root: &Path, meta: &Value) {
     );
     read(root, "stop-new-worker.json");
     child.exited();
-    assert!(child.owner.tree_is_empty().unwrap());
+    wait(|| child.owner.tree_is_empty().unwrap());
     child.join_readers();
     publish(
         root,
