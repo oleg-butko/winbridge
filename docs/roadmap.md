@@ -1,10 +1,10 @@
 # Постепенная реализация и расширение
 
-Main26 first native run failed before baseline (test-only worker stack overflow).
-172 preparation tests passed; installed0.2.0 unchanged/healthy. [Evidence и fix](plans/worker-self-update/main26-native-2026-10-28.md).
-Следом bounded original-IO driver → clean export/new isolated Main26 → independent
-reread/review → [lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md).
-Ни old failure, ни локальная компиляция не являются passing gate.
+**Main26 passed:**175 tests/46 commands,57 files twice/24+27+10 negatives,
+3 actual markers; independent readonly reread совпал. [Pins/результат](plans/worker-self-update/main26-native-2026-10-28.md).
+Same child/authority/new session, lost ACK и cold no replay подтверждены; original
+240s не продлены. Installed0.2.0 здоров/прежний, desktop не нужен. Root
+AwaitingController/local7; lifetime/commit/release/public install ещё закрыты.
 
 Lifetime OS spike: test-only source2 cases подготовлен, MSVC Clippy/Linux check
 passed. Windows execution/runner/independent audit pending после Main26; schemas,

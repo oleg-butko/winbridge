@@ -7,14 +7,15 @@ Public install/whole update остаётся выключенным.
 
 ## Текущая реализация
 
-**Main26 first run failed; repeat pending.** [Run/evidence/diagnosis/fix](main26-native-2026-10-28.md):
-172 preparation tests passed, test-only worker stack overflow до baseline/V5.
-Installed0.2.0 здоров и неизменён; root/public readiness не объявлять. Bounded
-original-IO owner для whole fixture driver добавлен;2 tests/Linux+MSVC Clippy
-passed. Далее clean export и новый изолированный run.
-Предыдущие статусы ниже — checkpoints подготовки. После gate перейти к
-[lifetime двух поколений](activation-lifetime-2026-10-28.md), пока это проект.
-
+**Main26 passed:** [actual result/pins и readonly reread](main26-native-2026-10-28.md).
+175 tests/46 commands,57 files twice/24+27+10 negatives/3 actual markers.
+Source d288b0f, target b149eed/SDK19+21; same process/authority/session и no replay
+подтверждены, original240s сохранён. Первый failure9b6be2d — история test-only
+stack bug, исправленного bounded original-IO driver. Installed worker0.2.0 прежний,
+все test processes/controller завершены. Whole update не завершён: root всё ещё
+AwaitingController/local7; дальше [lifetime двух поколений](activation-lifetime-2026-10-28.md),
+затем trusted commit/scoped release/U2–U4. Оставшиеся ниже статусы подготовки —
+**исторические checkpoints**, они не отменяют результат этого native run.
 
 **Main26 harness подготовлен, ещё не выполнен.** Exact native test
 `actual_main_connects_same_verified_worker_to_controller_without_commit_or_replay`

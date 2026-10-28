@@ -1,20 +1,24 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
-**Main26: первый native run failed до baseline; test-only исправление в source.**
-172 подготовительных tests passed; в source9b6be2d diagnostic worker произошёл
-stack overflow, updater увидел EOF. Installed0.2.0 здоров/прежний, active0;
-worker оставить, desktop не нужен. [Run, hashes, причина и продолжение](plans/worker-self-update/main26-native-2026-10-28.md).
-Fixture driver перенесён на bounded8MiB owner с original IO (2 tests/Linux+MSVC
-Clippy passed), без изменения
-ordinary worker/runtime/deadline. Следом clean export/new isolated Main26, затем
-[lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md).
-Не повторять старый task/key и не считать gate пройденным.
+**Main26 passed,2026-10-28:** run20261028-152239-0a6abd07/taskc5f23f8b,
+producer d288b0f → target b149eed/SDK19+21.175 native tests/46 commands,
+57 files twice/24+27+10 negatives/3 markers; independent readonly reread identical.
+Actual same child24156/Store/authority/new controller session подтверждены,
+75,202ms оставалось от original240s; duplicate/cold no replay/history/output
+проверены. [Полный результат, pins и команда reader](plans/worker-self-update/main26-native-2026-10-28.md).
+First failure9b6be2d сохранён; причиной был test-only driver stack overflow.
+Bounded owner d288b0f исправил его без изменения ordinary worker или window.
+Installed0.2.0/gen946f1128/incarnation5a8eb173 прежний/active0/errors=null,
+production controller131887 прежний. Test controller178034 и test processes
+завершены, runtime204 archived. Worker оставить; desktop/тестовых окон нет.
+Root AwaitingController/local7; lifetime/whole commit/scoped release/public
+activation и U2–U4 ещё не готовы. Следом lifetime OS spike, Main26 не replay.
 
 **Lifetime source spike подготовлен:**2 explicit ignored Windows OS cases
 (two generations + keeper-loss73), real task/grandchild cancellation, unchanged
 Job limits/no network. MSVC Clippy/Linux check passed; native runner/independent
 observer и actual execution ещё отсутствуют. [Порядок и границы](plans/worker-self-update/activation-lifetime-2026-10-28.md).
-Main26 repeat d288b0f/taskc5f23f8b идёт отдельно; не считать spike проверенным по
+Main26 producer d288b0f/taskc5f23f8b прошёл отдельно; не считать spike проверенным по
 результату Main26 и не подключать keeper role к production до native proof.
 
 ## История предыдущих checkpoint
