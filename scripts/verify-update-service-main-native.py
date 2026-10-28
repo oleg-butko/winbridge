@@ -64,6 +64,13 @@ def main(controller=False):
                 and report['migrationChecked'] is False, 'Wrong or incomplete native report')
     commands = report['commands']
     checks.need(all(type(c['exitCode']) is int and c['exitCode'] == 0 for c in commands), 'A native command failed')
+    if controller:
+        stack_commands=[c for c in commands if c['name']=='main-driver-owner-stack']
+        checks.need(len(stack_commands)==1,'Missing/repeated original IO owner-stack regression')
+        stack_log=files[stack_commands[0]['log']].decode('utf-8-sig')
+        checks.need('update_control::validation::owner_stack::tests' in stack_commands[0]['arguments']
+                    and 'test result: ok. 2 passed; 0 failed;' in stack_log,
+                    'Original IO owner-stack regressions not selected')
     for name in ('shutdown-old-real-set', 'service-validation-worker-build', 'shutdown-main-pipeline'):
         checks.need(sum(c['name'] == name for c in commands) == 1, 'Missing/repeated full pipeline step: '+name)
     main_command = next(c for c in commands if c['name'] == 'shutdown-main-pipeline')

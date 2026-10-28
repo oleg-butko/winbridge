@@ -313,6 +313,7 @@ try {
   }
   if($ActivationControllerGate){
     $commands=@(
+      @{name='main-driver-owner-stack';minimum=2;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::validation::owner_stack::tests','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='controller-model-ledger';minimum=28;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','controller','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='controller-v26-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::tests::activation_controller_v26_observes_but_never_starts_from_cold_history_or_old_contract','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
       @{name='controller-view-contract';minimum=2;arguments=@('test','-p','winbridge-protocol','--test','update_activation_controller_view','--locked','--offline','--','--test-threads=1','--nocapture')},

@@ -1,14 +1,16 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
-**Main26 next:** native Rust/PS/Python harness готов, Windows ещё не запускался.
-Exact SDK19/21, distinct clean target b149eed, stable slot204/1144; command/pins
-в [controller-session плане](plans/worker-self-update/controller-session-activation-2026-10-28.md).
-Сначала clean producer export + pinned PS parse/storage, затем automated gate.
-Подготовленный observer проверяет27 controller mutations и actual Debian
-activity event (short sessions не требуют sleep); archived Main25 заново passed
-readonly52 files/24+10 negatives. MSVC native-test Rust check passed; bundled C
-build выполнять настоящим Windows toolchain, не устанавливать lib.exe в Debian.
-Installed worker0.2.0/production controller131887 прежние. Файлы `.winbridge/review-2026-10-28/`.
+**Main26: первый native run failed до baseline; test-only исправление в source.**
+172 подготовительных tests passed; в source9b6be2d diagnostic worker произошёл
+stack overflow, updater увидел EOF. Installed0.2.0 здоров/прежний, active0;
+worker оставить, desktop не нужен. [Run, hashes, причина и продолжение](plans/worker-self-update/main26-native-2026-10-28.md).
+Fixture driver перенесён на bounded8MiB owner с original IO (2 tests/Linux+MSVC
+Clippy passed), без изменения
+ordinary worker/runtime/deadline. Следом clean export/new isolated Main26, затем
+[lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md).
+Не повторять старый task/key и не считать gate пройденным.
+
+## История предыдущих checkpoint
 
 **Latest source supervisor26/view18:** connect/observe и typed controller view
 добавлены;927 workspace/update-validation passed/17 ignored, final Linux/MSVC

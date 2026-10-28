@@ -1,8 +1,12 @@
 # Постепенная реализация и расширение
 
-Main26 native harness подготовлен (SDK19/21/stable204), но ещё не исполнен.
-Следом clean producer/PS parser/storage → actual Windows → independent reread;
-source code/native compile/synthetic observer tests не заменяют этот gate.
+Main26 first native run failed before baseline (test-only worker stack overflow).
+172 preparation tests passed; installed0.2.0 unchanged/healthy. [Evidence и fix](plans/worker-self-update/main26-native-2026-10-28.md).
+Следом bounded original-IO driver → clean export/new isolated Main26 → independent
+reread/review → [lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md).
+Ни old failure, ни локальная компиляция не являются passing gate.
+
+## История предыдущих checkpoint
 
 2026-10-28/latest: supervisor26/view18 реализованы в source;927 workspace/17 ignored,
 Linux/MSVC Clippy/TS/UI passed. Old views frozen, Observed отделён от current

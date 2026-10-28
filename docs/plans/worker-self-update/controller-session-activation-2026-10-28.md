@@ -7,6 +7,15 @@ Public install/whole update остаётся выключенным.
 
 ## Текущая реализация
 
+**Main26 first run failed; repeat pending.** [Run/evidence/diagnosis/fix](main26-native-2026-10-28.md):
+172 preparation tests passed, test-only worker stack overflow до baseline/V5.
+Installed0.2.0 здоров и неизменён; root/public readiness не объявлять. Bounded
+original-IO owner для whole fixture driver добавлен;2 tests/Linux+MSVC Clippy
+passed. Далее clean export и новый изолированный run.
+Предыдущие статусы ниже — checkpoints подготовки. После gate перейти к
+[lifetime двух поколений](activation-lifetime-2026-10-28.md), пока это проект.
+
+
 **Main26 harness подготовлен, ещё не выполнен.** Exact native test
 `actual_main_connects_same_verified_worker_to_controller_without_commit_or_replay`
 добавляет V5 после прежнего local-service prefix, теряет только volatile dispatch

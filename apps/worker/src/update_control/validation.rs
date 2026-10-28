@@ -12,6 +12,7 @@ use std::{
 use winbridge_update::shutdown::ShutdownDeliveryState;
 mod layout;
 mod network;
+mod owner_stack;
 pub use layout::{FixtureLayout, FixtureRuntimePin};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -199,7 +200,7 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
     }
     let worker = worker.clone();
     let weak = Arc::downgrade(&worker);
-    Ok(Some(tokio::spawn(async move {
+    Ok(Some(owner_stack::spawn(move || async move {
         let _layout = layout; // Keep the declaration pinned through this fixture driver.
         let result = drive(worker, &reg, &input).await;
         if let Err(error) = &result {
@@ -213,7 +214,7 @@ pub fn attach(worker: &Arc<Worker>) -> Result<Option<tokio::task::JoinHandle<Res
             }
         }
         result
-    })))
+    })?))
 }
 async fn idle(
     h: &SupervisorHandle,
