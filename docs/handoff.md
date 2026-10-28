@@ -32,7 +32,9 @@ Review закрыл revision index/JSON mismatch; duplicate с другим sele
 Следом [actual20→21 copy-only gate](plans/worker-self-update/retained20-to21-2026-10-28.md):
 реальный Main25 archive, исходная identity/image неизменны, shared harness с
 фиксированными profiles отказывается выдавать старую миграцию за новую. Пока
-этот новый native gate не выполнен. Затем original guarded admission и same-child
+этот новый native gate **пройден**:20261028-085258-adbe629d/taskd5a75306 succeeded0,
+actual1 test/4 files twice/21+34 negatives, повторный readonly audit passed.
+Installed worker/build/context и original archive/DB/WAL сохранены. Затем original guarded admission и same-child
 network из плана controller-session; receipt не коммитит root до Job transfer.
 
 **Ревью после установки,2026-10-27:** ветка `refactor/multi-controller-review`,

@@ -2,8 +2,9 @@
 
 2026-10-28: source updater schema21 содержит controller ledger/read-only graph,
 10 SQL tests/workspace914/17 ignored/MSVC Clippy passed. Production fresh admission
-и same-child network пока отсутствуют. Следом [actual20→21 copy gate](plans/worker-self-update/retained20-to21-2026-10-28.md),
-затем original owner/receiver/actor и native full run; public install закрыт.
+и same-child network пока отсутствуют. [Actual20→21 copy gate](plans/worker-self-update/retained20-to21-2026-10-28.md)
+пройден:taskd5a75306/4 files twice/21+34 negatives, installed0.2.0 неизменён.
+Следом original owner/receiver/actor и native full run; public install закрыт.
 
 2026-10-28: [controller-session DTO/FSM foundation](plans/worker-self-update/controller-session-activation-2026-10-28.md)
 реализована и reviewed:10 focused tests,255 updater/75 protocol, Linux/MSVC
