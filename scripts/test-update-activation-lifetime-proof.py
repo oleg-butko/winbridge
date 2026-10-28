@@ -59,7 +59,7 @@ class LifetimeEvidenceTests(unittest.TestCase):
     def test_causal_binding_and_all_negative_audits(self):
         key, count = p.audit_lifetime_case(fixture())
         self.assertEqual(key, uid(20))
-        self.assertEqual(count, 30)
+        self.assertEqual(count, 31)
 
     def test_previous_profiles_remain_frozen(self):
         self.assertEqual(p.profile_schemas(p.PROFILE), (19, 22))

@@ -85,7 +85,7 @@ def verify_lifetime(case):
     need(p['afterExpiry']['activationLifetime']['observedAtMs'] > command['deadlineAtMs']
          and p['duplicate']['activationLifetime'] == p['afterExpiry']['activationLifetime'], 'Post-expiry observation missing or duplicate changed mode')
     observation = p['normalObservation']
-    need(observation['lifetimeObservationVersion'] == 1 and observation['result']['kind'] == 'observed'
+    need(type(observation['lifetimeObservationVersion']) is int and observation['lifetimeObservationVersion'] == 1 and observation['result']['kind'] == 'observed'
          and observation['result']['receipt'] == receipt and observation['result']['observedAtMs'] > command['deadlineAtMs'], 'Actual normal IPC did not observe the same late quarantine')
     info = p['normalInfo']
     need(info['generation'] == b['compatibility']['generation'] and info['build'] == b['compatibility']['identity']['descriptor']['build']
@@ -116,7 +116,7 @@ def audit_lifetime_case(case):
                ('afterExpiry/schemaVersion', 18), ('afterExpiry/update/phase', 'committed'),
                ('afterExpiry/activationLifetime/processAlive', None), ('afterExpiry/activationLifetime/originalCustodyHeld', None),
                ('afterExpiry/activationLifetime/observedAtMs', 0), ('afterExpiry/activationLifetime/observedReceipt/mode', 'normal'),
-               ('normalObservation/result/observedAtMs', 0), ('normalInfo/maintenanceAvailable', True),
+               ('normalObservation/result/observedAtMs', 0), ('normalObservation/lifetimeObservationVersion', True), ('normalInfo/maintenanceAvailable', True),
                ('normalInfo/fencedRequests/legacyMutationsAllowed', True), ('savedLifetimeCommandCount', 2),
                ('savedLifetimeCommandCount', True), ('submitRefusedAfterExpiry', False), ('sameJobVerified', False),
                ('rootCommitted', True), ('maintenanceReleased', True), ('privateReadyLossTested', True)]

@@ -6,6 +6,28 @@ use winbridge_protocol::update::{
 };
 
 impl UpdateJournal {
+    /// A current owned snapshot for observation, not a delivery grant. In
+    /// particular, the controller prefix is already Confirmed, not Issued.
+    pub(crate) fn activation_lifetime_owned_current(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        preparation: &ActivationPreparation,
+        local: &ActivationRecord,
+        key: &str,
+    ) -> Result<ActivationLifetimeSnapshot> {
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        let controller = activation_controller::owned_snapshot(&tx, a, s, preparation, local)?;
+        let lifetime = ledger(&tx, &s.spec.update_id, &controller)?;
+        let snapshot = ActivationLifetimeSnapshot {
+            controller,
+            lifetime,
+        };
+        super::custody::require_observation_key(&snapshot, key)?;
+        tx.commit().map_err(storage)?;
+        Ok(snapshot)
+    }
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn admit_activation_lifetime(
         &mut self,

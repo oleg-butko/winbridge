@@ -35,7 +35,7 @@ Linux/MSVC workspace all-target Clippy с update-validation/`-D warnings`,
 TypeScript/UI build прошли. Полные локальные logs:
 `.winbridge/lifetime-actor-xxkz63ch/`.
 
-Python lifetime reader имеет4 synthetic tests/30 negative mutations. Прежние
+Python lifetime reader имеет4 synthetic tests/31 negative mutations. Прежние
 Main25/Main26 profiles frozen; новый Main27 явно требует worker19/updater22 и
 новый proof kind. Controller/service reader regressions и multi-controller
 inputs passed. Native proof не выводится из cross-compilation/synthetic metadata.

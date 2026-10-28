@@ -40,6 +40,22 @@ fn require_continuation(
     Ok(())
 }
 
+/// Observation of an already admitted command is distinct from either the V5
+/// controller delivery or the initial V6 delivery. All causal lifetime states
+/// are data here; no returned snapshot is a send permit.
+#[cfg(any(windows, test))]
+pub(super) fn require_observation_key(
+    snapshot: &ActivationLifetimeSnapshot,
+    key: &str,
+) -> Result<()> {
+    snapshot.lifetime.validate().map_err(bad)?;
+    lifetime::validate_command(&snapshot.lifetime.command, &snapshot.controller).map_err(bad)?;
+    if snapshot.lifetime.command.command_id != key {
+        return Err(bad("Lifetime observation changed original command key"));
+    }
+    Ok(())
+}
+
 impl UpdateJournal {
     /// Continuation of a resident mode only. Unlike initial delivery, a lost
     /// ACK may already be Indeterminate/Confirmed. No record recreates custody.
@@ -99,6 +115,32 @@ impl UpdateJournal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn lifetime_observer_requires_confirmed_controller_and_same_key_in_all_outcomes() {
+        let (graph, command, receipt) = lifetime::test_fixture();
+        assert!(matches!(
+            graph.controller.state,
+            ActivationControllerState::Confirmed { .. }
+        ));
+        let issued = ActivationLifetimeRecord::issued(command.clone()).unwrap();
+        let unknown = issued
+            .indeterminate("ACK unknown".into(), command.deadline_at_ms + 1)
+            .unwrap();
+        let confirmed = unknown
+            .confirmed(receipt, unknown.updated_at_ms + 1)
+            .unwrap();
+        for record in [issued, unknown, confirmed] {
+            let snapshot = ActivationLifetimeSnapshot {
+                controller: graph.clone(),
+                lifetime: record,
+            };
+            require_observation_key(&snapshot, &command.command_id).unwrap();
+            assert!(require_observation_key(&snapshot, &uuid::Uuid::new_v4().to_string()).is_err());
+            let mut bad = snapshot;
+            bad.controller.controller.updated_at_ms += 1;
+            assert!(require_observation_key(&bad, &command.command_id).is_err());
+        }
+    }
     #[test]
     fn resident_continuation_keeps_same_command_after_lost_ack_or_confirmation() {
         let (graph, command, receipt) = lifetime::test_fixture();

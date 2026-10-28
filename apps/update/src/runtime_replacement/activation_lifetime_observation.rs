@@ -42,33 +42,23 @@ impl ActivationProcessGuard {
             Some(self.files.preparation.deadline),
         );
         self.require_lifetime_custody(false)?;
-        let saved = j
-            .activation_lifetime(&s.spec.update_id)
-            .map_err(|e| e.to_string())?
-            .ok_or("No original lifetime intent to observe")?;
-        if saved.command.command_id != key {
-            return Err("Lifetime observation changed original key".into());
-        }
+        let snapshot = Box::new(
+            j.activation_lifetime_owned_current(a, s, &self.files.preparation, &self.record, key)
+                .map_err(|e| e.to_string())?,
+        );
+        let saved = &snapshot.lifetime;
         let process = self
             .resident_process()
             .ok_or("Original lifetime process missing")?;
         let live = infrastructure::PinnedProcess::live(&process).map_err(|e| e.to_string())?;
-        let directory =
-            Path::new(&self.record.intent.source.runtime_directory).join("update-state");
-        let graph = UpdateJournal::inspect_activation_controller_receiver(
-            &directory,
-            &s.spec.update_id,
-            &self.record.intent.attempt_id,
-            &process,
-        )
-        .map_err(|e| e.to_string())?;
-        lifetime::validate_command(&saved.command, &graph)?;
+        let graph = &snapshot.controller;
+        lifetime::validate_command(&saved.command, graph)?;
         let controller = self
             .controller_observation
             .as_ref()
             .ok_or("Original controller observation missing")?;
         let topology = &graph.controller.command.binding.topology;
-        lifetime::validate_controller_prefix(&graph, topology, controller)?;
+        lifetime::validate_controller_prefix(graph, topology, controller)?;
         let expected = match &saved.state {
             ActivationLifetimeState::Confirmed { receipt } => Some(receipt.as_ref()),
             _ => None,
@@ -79,9 +69,9 @@ impl ActivationProcessGuard {
             live.require_job_membership(&saved.command.binding.job_name)
                 .map_err(|e| e.to_string())?;
             let actual = j
-                .activation_lifetime(&s.spec.update_id)
+                .activation_lifetime_owned_current(a, s, &self.files.preparation, &self.record, key)
                 .map_err(|e| e.to_string())?;
-            if actual.as_ref() != Some(&saved) {
+            if actual != *snapshot {
                 return Err("Lifetime graph changed during observation".into());
             }
             Ok(())
@@ -124,7 +114,7 @@ impl ActivationProcessGuard {
                 &self.record,
                 controller,
                 topology,
-                &saved,
+                saved,
             )
             .map_err(|e| e.to_string())?;
         }
