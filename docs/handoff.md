@@ -1,5 +1,18 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Actual21→22 passed:**run20261028-201224-538a7897/taskd34454d3, producerd2c3a1b.
+1 native test/4 files twice/26+61 negative audits; readonly reread identical.
+Original21 local7/writer/service/controller/root/history/backup сохранены,
+epoch2→3→4, old21 init/status и current22 receiver metadata refusal проверены.
+[Pins, результат и продолжение](plans/worker-self-update/retained21-to22-2026-10-28.md).
+Native succeeded0; первый independent reader исправлен для network UUID vs OS
+numeric sessionId без повторного Windows run.46 Python regressions passed,
+old20→21 reread сохранил прежние SHA. Installed0.2.0/gen946f1128 прежний/idle/errors=null,
+desktop не нужен, working worker оставить. Source19/22/private5/actor26/view18.
+Следом consuming original lifetime factory/admission + receiver/normal IPC,
+keeper role/commit/scoped release/U2–U4. No cold adoption, no deadline renewal;
+public activation off. Gate terminal, не replay Main26/OS/migration ради продолжения.
+
 **Retained21→22 harness подготовлен:** отдельный fixed Lifetime21To22 profile,
 actual Main26 reference derivation/controller SHA, consistent copy/old21 refusal,
 receiver schema fence и независимый reader/24 negative audits. [План и exact args](plans/worker-self-update/retained21-to22-2026-10-28.md).

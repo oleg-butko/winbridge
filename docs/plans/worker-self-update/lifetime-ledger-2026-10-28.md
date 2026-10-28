@@ -50,8 +50,9 @@ Synthetic migration tests прежних версий удаляют тепер�
 операция очистки настоящих journals и не способ построить native reference.
 
 Unit migration доказывает SQL/backup/fence на синтетической БД. **Actual retained
-21→22 и old21 executable refusal пока не проверены на Windows.** Для них нужен
-отдельный copy-only gate от сохранённого [Main26](main26-native-2026-10-28.md):
+21→22 и old21 executable refusal отдельно проверены на Windows**:
+[native result/pins и readonly reader](retained21-to22-2026-10-28.md).
+Этот copy-only gate использует сохранённый [Main26](main26-native-2026-10-28.md):
 проверенный archive/runtime target b149eed/19+21, source/image/manifest pins,
 согласованная копия original updater DB и SHA всех retained rows. Требуется
 сохранить root AwaitingController, local7, writer/service/controller records,
@@ -99,8 +100,8 @@ active0/maintenanceError=null/journalRecoveryRequired=null. Runtime204 не ме
 
 ## Продолжение
 
-1. Подготовить actual retained21→22 copy/refusal gate и независимый reader;
-   выполнить автоматически через installed worker, без network/UI тестовых exe.
+1. Actual retained21→22 copy/refusal gate завершён, independent reread совпал.
+   Для аудита читать сохранённые артефакты; новый Windows run не требуется.
 2. Fresh lifetime admission — только original resident controller-verified owner:
    current root/epoch/config/nonce/schema, immutable full graph, original live
    monotonic window до/после commit. Existing возвращает только data record.

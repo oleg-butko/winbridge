@@ -11,8 +11,11 @@ flat digests связывают полный retained graph с original keeper/J
 private marker/receiver, root commit или maintenance release.
 [Lifetime ledger22](plans/worker-self-update/lifetime-ledger-2026-10-28.md) добавляет
 immutable intent/current/history и transactional readback полного retained graph.
-Production API пока readonly; writers только test-only, fresh admission и actual
-retained21→22 gate впереди. Main26 native относится к source19/21, не к новому22.
+Production API пока readonly; writers только test-only, fresh admission впереди.
+[Actual retained21→22](plans/worker-self-update/retained21-to22-2026-10-28.md)
+проверен copy-only: controller/local7/root сохранены, epoch/backup/old21 refusal
+подтверждены. Keeper runtime/commit/release не реализованы. Main26 native относится
+к source19/21, не к новому22 lifetime runtime.
 Ниже сохранены датированные исторические checkpoints предыдущих версий.
 
 2026-10-27: [multi-controller review/merge](analysis/multi-controller-merge-review-2026-10-27.md)

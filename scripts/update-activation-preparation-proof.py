@@ -16,7 +16,7 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(',', ':')).encode()
 
 
-def strict(value):
+def strict(value, *, uuid_session_paths=frozenset(), path=()):
     if isinstance(value, dict):
         counters = {'schemaVersion', 'contractVersion', 'queryContract', 'revision', 'ownerEpoch',
                     'parentRevision', 'expectedRevision', 'processId', 'sessionId', 'bytes',
@@ -28,12 +28,16 @@ def strict(value):
             if key in ('originalStateHeld','physicalCustodyHeld','readOnly','driverActive','querySupported','sourceDirty'):
                 need(type(item) is bool,'Invalid boolean observation: '+key)
             if key in counters or key.endswith('AtMs'):
-                need(item is None or type(item) is int and 0 <= item <= 9007199254740991,
-                     'Invalid counter: '+key)
-            strict(item)
+                if key == 'sessionId' and path + (key,) in uuid_session_paths:
+                    need(type(item) is str and re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', item),
+                         'Invalid controller session UUID')
+                else:
+                    need(item is None or type(item) is int and 0 <= item <= 9007199254740991,
+                         'Invalid counter: '+key)
+            strict(item, uuid_session_paths=uuid_session_paths, path=path + (key,))
     elif isinstance(value, list):
-        for item in value:
-            strict(item)
+        for index, item in enumerate(value):
+            strict(item, uuid_session_paths=uuid_session_paths, path=path + (index,))
     elif type(value) is float:
         raise ValueError('Floating evidence is not a typed contract counter')
 

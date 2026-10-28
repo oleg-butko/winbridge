@@ -10,6 +10,7 @@ import sys
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+NETWORK_SESSION_PATH = ('retainedController', 'state', 'receipt', 'session', 'sessionId')
 
 
 def need(ok, message):
@@ -117,7 +118,9 @@ def verify_selection(command, log):
 
 
 def verify(proof, source, reference, checks):
-    checks.strict(proof)
+    # Only this exact controller DTO leaf is a UUID. All OS process sessionId
+    # counters keep the original numeric validation; no records are rewritten.
+    checks.strict(proof, uuid_session_paths=frozenset({NETWORK_SESSION_PATH}))
     load('lifetime_migration_strict', 'update-activation-service-proof.py').strict(proof)
     def no_grants(value):
         if isinstance(value, dict):
@@ -174,6 +177,8 @@ def audit(proof, source, reference, checks):
         ('gateRows', True), ('gateRows', 1), ('retainedActivation/revision', 6), ('retainedRoot/phase', 'committed'),
         ('retainedWriter/state/phase', 'issued'), ('retainedService/state/phase', 'issued'),
         ('retainedController/state/phase', 'issued'), ('retainedController/revision', 0),
+        ('retainedController/state/receipt/session/sessionId', 1),
+        ('retainedController/state/receipt/compatibility/identity/process/sessionId', '00000000-0000-0000-0000-000000000001'),
         ('rowsAfter', '0' * 64), ('backupRows', '0' * 64), ('oldTwentyOneInitRefused', False),
         ('oldTwentyOneStatusRefused', False), ('sourceBytesUnchanged', False), ('copyBytesUnchangedByOld', False),
         ('noFreshReplacementPermit', False), ('noFreshLifetimeIntent', False), ('oldControllerReceiverRefused', False), ('installedRuntimeApplied', True)]

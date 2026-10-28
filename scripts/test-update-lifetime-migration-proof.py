@@ -25,7 +25,9 @@ def fixture():
     physical, service = proof['retainedActivation'], proof['retainedService']
     physical['intent']['context']['updaterJournalSchema'] = 21
     saved = dict(revision=1, command=dict(binding=dict(serviceCommand=service['command'],
-                 serviceReceipt=service['state']['receipt'])), state=dict(phase='confirmed'))
+                 serviceReceipt=service['state']['receipt'])), state=dict(phase='confirmed', receipt=dict(
+                 session=dict(sessionId=controller.service.old.uid(77)),
+                 compatibility=dict(identity=dict(process=dict(sessionId=1))))))
     proof.update(kind='activation_lifetime_schema_migration_proof', retainedController=saved,
                  oldTwentyOneInitRefused=True, oldTwentyOneStatusRefused=True, noFreshLifetimeIntent=True, oldControllerReceiverRefused=True)
     for key in ('oldTwentyInitRefused', 'oldTwentyStatusRefused', 'noFreshControllerIntent'):
@@ -65,7 +67,7 @@ def reference_fixture():
 class LifetimeMigrationEvidenceTests(unittest.TestCase):
     def test_all_correlated_history_and_negative_mutations(self):
         proof, source, reference = fixture()
-        self.assertEqual(lifetime.audit(proof, source, reference, checks), 24)
+        self.assertEqual(lifetime.audit(proof, source, reference, checks), 26)
 
     def test_selection_refuses_skipped_duplicate_other_profile_and_boolean_exit(self):
         name = 'actual_twenty_one_controller_history_survives_twenty_two_and_old_twenty_one_refuses'
@@ -146,6 +148,23 @@ class LifetimeMigrationEvidenceTests(unittest.TestCase):
         self.assertEqual(profiles.get('Lifetime21To22')['schemas'], (22, 21, 21))
         with self.assertRaises(ValueError):
             profiles.get('Lifetime21To23')
+
+    def test_controller_uuid_and_os_process_session_counter_have_distinct_paths(self):
+        proof, _, _ = fixture()
+        allowed = frozenset({lifetime.NETWORK_SESSION_PATH})
+        checks.strict(proof, uuid_session_paths=allowed)
+        with self.assertRaises(ValueError):
+            checks.strict(proof)  # Historical/default validators stay numeric.
+        for bad in (True, None, 1, 'not-a-uuid'):
+            value = copy.deepcopy(proof)
+            value['retainedController']['state']['receipt']['session']['sessionId'] = bad
+            with self.subTest(network=bad), self.assertRaises(ValueError):
+                checks.strict(value, uuid_session_paths=allowed)
+        for bad in (True, 1.0, controller.service.old.uid(77)):
+            value = copy.deepcopy(proof)
+            value['retainedController']['state']['receipt']['compatibility']['identity']['process']['sessionId'] = bad
+            with self.subTest(os=bad), self.assertRaises(ValueError):
+                checks.strict(value, uuid_session_paths=allowed)
 
 
 if __name__ == '__main__':

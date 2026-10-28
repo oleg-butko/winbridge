@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+**Actual21→22 copy gate passed:**1 native/4 files twice/26+61 negatives,
+readonly reread identical. [Результат и границы](plans/worker-self-update/retained21-to22-2026-10-28.md).
+Original controller/local7/root/rows сохранены; epoch2→3→4/backup/old21 refusal
+подтверждены. Reader sessionId type fix проверил тот же native result,46 Python
+regressions passed. Installed worker прежний. Следом fresh consuming original
+lifetime admission/receiver → keeper/commit/scoped release/U2–U4. Public install off.
+
 **Retained21→22 harness готов к native run:** fixed profile, archived Main26
 controller/local7/root, consistent copy, backup/epoch/old21 refusal и24 observer
 mutations. [План](plans/worker-self-update/retained21-to22-2026-10-28.md).

@@ -7,7 +7,8 @@
 [нового lifetime контракта](lifetime-contract-2026-10-28.md).
 Source19/22/private5/supervisor26/view18; lifetime DTO/FSM и
 [journal22](lifetime-ledger-2026-10-28.md) пока data-only/read-only.
-Следом retained21 copy/refusal gate и fresh admission → same-child supervised quarantine → final commit/scoped
+[Retained21 copy/refusal gate](retained21-to22-2026-10-28.md) пройден.
+Следом fresh admission → same-child supervised quarantine → final commit/scoped
 release → U2 faults/U3 UI/U4 actual update. Public install off; installed worker
 оставить работать, desktop не нужен. Ниже — история предыдущих checkpoints.
 
