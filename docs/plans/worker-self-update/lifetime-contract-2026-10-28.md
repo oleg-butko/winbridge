@@ -3,6 +3,8 @@
 2026-10-28. Продолжение [native OS spike](windows-lifetime-spike-2026-10-28.md)
 и [плана lifetime](activation-lifetime-2026-10-28.md). Это data-only foundation:
 receiver, runtime keeper, SQL admission и public install этим шагом не включаются.
+Следующий [ledger22](lifetime-ledger-2026-10-28.md) реализуется отдельно;
+упомянутые ниже schema21 и935 tests относятся к этому DTO/FSM checkpoint.
 
 ## Контракт
 

@@ -5,8 +5,9 @@
 [Main26 результата](main26-native-2026-10-28.md),
 [lifetime OS proof](windows-lifetime-spike-2026-10-28.md) и
 [нового lifetime контракта](lifetime-contract-2026-10-28.md).
-Source19/21/private5/supervisor26/view18; lifetime DTO/FSM пока data-only.
-Следом ledger/admission → same-child supervised quarantine → final commit/scoped
+Source19/22/private5/supervisor26/view18; lifetime DTO/FSM и
+[journal22](lifetime-ledger-2026-10-28.md) пока data-only/read-only.
+Следом retained21 copy/refusal gate и fresh admission → same-child supervised quarantine → final commit/scoped
 release → U2 faults/U3 UI/U4 actual update. Public install off; installed worker
 оставить работать, desktop не нужен. Ниже — история предыдущих checkpoints.
 

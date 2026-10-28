@@ -1,14 +1,18 @@
 # Архитектура WinBridge
 
 2026-10-28: установлен worker0.2.0/schema19 и оба controller0.2.0. В source
-updater21/private5/supervisor26/view18; [Main26](plans/worker-self-update/main26-native-2026-10-28.md)
+updater22/private5/supervisor26/view18; [Main26](plans/worker-self-update/main26-native-2026-10-28.md)
 подтвердил same-child controller session при закрытых root commit/release.
 Public install off. [Lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md)
 пока OS experiment: отдельные helper processes не являются готовыми keeper actors.
 Добавлен [compact lifetime DTO/FSM](plans/worker-self-update/lifetime-contract-2026-10-28.md):
 flat digests связывают полный retained graph с original keeper/Job/authority/window,
 единственный proposed mode — supervised quarantine. Это только данные, без нового
-private marker/receiver, root commit или maintenance release; updater21 прежний.
+private marker/receiver, root commit или maintenance release.
+[Lifetime ledger22](plans/worker-self-update/lifetime-ledger-2026-10-28.md) добавляет
+immutable intent/current/history и transactional readback полного retained graph.
+Production API пока readonly; writers только test-only, fresh admission и actual
+retained21→22 gate впереди. Main26 native относится к source19/21, не к новому22.
 Ниже сохранены датированные исторические checkpoints предыдущих версий.
 
 2026-10-27: [multi-controller review/merge](analysis/multi-controller-merge-review-2026-10-27.md)

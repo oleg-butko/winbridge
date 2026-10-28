@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+**Lifetime ledger22:** immutable intent/current/history, CAS/causal readback
+и readonly full-graph queries реализованы.11 SQL tests/946 workspace passed,
+17 ignored. [Границы и продолжение](plans/worker-self-update/lifetime-ledger-2026-10-28.md).
+Writers только cfg(test), private5/actor26/view18 прежние, public install off.
+Следом actual21→22 consistent-copy/refusal → fresh original admission/receiver →
+supervised keeper/commit/scoped release/U2–U4. Native22 runtime пока не проверен.
+
 **Lifetime DTO/FSM:** compact contract и чистые causal transitions реализованы;
 6 focused/935 workspace tests passed,17 ignored. [Контракт и продолжение](plans/worker-self-update/lifetime-contract-2026-10-28.md).
 Никаких новых advertised support/private/schema версий или runtime permissions.

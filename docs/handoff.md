@@ -1,5 +1,19 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Lifetime ledger22,2026-10-28:** immutable intent/current/causal history и
+transactional full-graph readback добавлены. Production API только read/inspect,
+SQL writers cfg(test); нет нового owner/dispatch/runtime grant.11 новых SQL tests,
+946 workspace/update-validation passed/17 ignored. Review закрыл nullable TEXT PK
+и partial-ledger-as-absence; synthetic legacy setup включает новые пустые таблицы.
+Linux/MSVC workspace all-target Clippy, contracts/fmt/diff/scaffold318 passed.
+[Контракты, проверки и следующий gate](plans/worker-self-update/lifetime-ledger-2026-10-28.md).
+Source worker19/updater22/private5/supervisor26/view18; installed worker прежний.
+Следом actual retained21→22 copy/refusal на Main26 archive b149eed, затем fresh
+original lifetime admission/receiver/normal IPC, keeper role/commit/scoped release,
+U2–U4. Старые Main26 и OS spike не replay. **Новый native22 gate ещё не выполнен**.
+Readonly Info: прежние build/gen946f1128, active0/errors=null. Рабочий worker
+оставить, desktop не нужен; Windows task/build/UI в этом шаге не запускались.
+
 **Lifetime DTO/FSM,2026-10-28:** добавлены compact mode/binding/command/receipt
 и чистые causal transitions Issued→Confirmed либо Issued→Indeterminate→Confirmed.
 Original controller/local7 graph, keeper/Job/authority/root revision и deadline

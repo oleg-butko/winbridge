@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 
-fn fixture() -> (
+pub(crate) fn fixture() -> (
     ActivationControllerSnapshot,
     WorkerLifetimeActivationCommand,
     WorkerLifetimeActivationReceipt,

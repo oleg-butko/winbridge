@@ -302,3 +302,5 @@ impl ActivationLifetimeRecord {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::fixture as test_fixture;

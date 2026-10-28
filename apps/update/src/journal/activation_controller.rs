@@ -161,6 +161,23 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationControll
     ledger(c, id, &graph).map(Some)
 }
 
+/// Historical data from the caller's existing read transaction. This is not
+/// receiver admission or proof of live custody/config/authority.
+pub(super) fn snapshot(
+    c: &Connection,
+    id: &str,
+) -> Result<controller::ActivationControllerSnapshot> {
+    let graph = Graph::load(c, id)?;
+    let controller = ledger(c, id, &graph)?;
+    Ok(controller::ActivationControllerSnapshot {
+        physical: graph.physical,
+        writer: graph.writer,
+        service: graph.service,
+        local: graph.local,
+        controller,
+    })
+}
+
 #[cfg(any(windows, test))]
 fn seed(c: &Connection, value: &ActivationControllerRecord, graph: &Graph) -> Result<()> {
     value.validate().map_err(bad)?;
