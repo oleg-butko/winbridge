@@ -617,6 +617,9 @@ pub enum SupervisorAction {
     /// Internal26: one same-child network start; no lifetime/commit grant.
     ConnectActivationController,
     ObserveActivationController,
+    /// Internal27: same-child supervised quarantine; no final commit/release.
+    EnterActivationLifetime,
+    ObserveActivationLifetime,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -710,6 +713,9 @@ pub struct UpdatePreparationView {
     /// Internal26/view18 only. Historical connection evidence grants no startup.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_controller: Option<ActivationControllerView>,
+    /// Internal27/view19 only. Saved entry and current observation are separate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_lifetime: Option<ActivationLifetimeView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1144,3 +1150,5 @@ mod activation_service_view;
 pub use activation_service_view::*;
 mod activation_controller_view;
 pub use activation_controller_view::*;
+mod activation_lifetime_view;
+pub use activation_lifetime_view::*;

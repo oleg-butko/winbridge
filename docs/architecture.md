@@ -1,5 +1,11 @@
 # Архитектура WinBridge
 
+2026-10-28, .204: [supervisor27/view19](plans/worker-self-update/lifetime-actor-2026-10-28.md)
+подключён к V6 source runtime: original guard потребляется один раз; subsequent
+Observe читает actual mode и может сохранить поздний факт, не создавая permit.
+Saved receipt/current observation/physical custody разделены; root commit и
+maintenance release закрыты. Native Main27 подготовлен отдельно от old gates.
+
 2026-10-28, .204: [V6 lifetime runtime](plans/worker-self-update/lifetime-runtime-2026-10-28.md)
 подключён в source: Verification→SupervisedQuarantine на том же child/Store/
 authority/Job, только внутри original window и под original pinned keeper.

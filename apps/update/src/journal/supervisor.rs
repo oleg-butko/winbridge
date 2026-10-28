@@ -255,6 +255,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 18)
     }
+    pub fn activation_lifetime_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 19)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -359,6 +367,13 @@ impl UpdateJournal {
             None
         };
         let view = UpdatePreparationView {
+            activation_lifetime: if view_schema >= 19 {
+                Some(crate::activation::lifetime_view(
+                    super::activation_lifetime::read(&tx, id)?.as_ref(),
+                ))
+            } else {
+                None
+            },
             activation_controller: if view_schema >= 18 {
                 Some(crate::activation::controller_view(
                     super::activation_controller::read(&tx, id)?.as_ref(),

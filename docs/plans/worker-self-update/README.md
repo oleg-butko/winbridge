@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-28/.204:** [supervisor27/view19 и Main27](lifetime-actor-2026-10-28.md)
+подключают source entry/readonly reconciliation на исходном owner. Новый native
+gate подготовлен; его результат пока не подтверждён. Keeper role/commit/release
+и whole updater остаются впереди; installed worker не меняется.
+
 **2026-10-28/.204:** [V6 runtime](lifetime-runtime-2026-10-28.md) реализован в source
 поверх original lifetime admission. Same-child quarantine/normal IPC/single sender
 не открывают roots или public activation. Далее actor27/view19 и новый native gate,

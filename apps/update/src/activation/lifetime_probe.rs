@@ -8,9 +8,22 @@ pub(crate) async fn probe(
     signal: &WorkerLifetimeActivationReceipt,
     service: &WorkerServiceActivationCommand,
     deadline: Instant,
-    mut checkpoint: impl FnMut() -> Result<()>,
+    checkpoint: impl FnMut() -> Result<()>,
 ) -> Result<ActivationLifetimeObservation> {
     lifetime::validate_receipt(signal, command)?;
+    observe(command, Some(signal), service, deadline, checkpoint).await
+}
+
+/// A bounded read can outlive the entry window. It creates no execution grant
+/// and never sends on the private activation channel.
+pub(crate) async fn observe(
+    command: &WorkerLifetimeActivationCommand,
+    expected_entry: Option<&WorkerLifetimeActivationReceipt>,
+    service: &WorkerServiceActivationCommand,
+    deadline: Instant,
+    mut checkpoint: impl FnMut() -> Result<()>,
+) -> Result<ActivationLifetimeObservation> {
+    lifetime::validate_command_envelope(command)?;
     let physical = &service.binding.writer_command.binding.physical;
     if physical.context != command.binding.compatibility.context
         || physical.generation != command.binding.compatibility.generation
@@ -42,7 +55,13 @@ pub(crate) async fn probe(
         )
         .await
         .map_err(|e| e.to_string())?;
-    validate_observation(&observed, command, signal)?;
+    let ActivationLifetimeObservationResult::Observed { receipt, .. } = &observed.result else {
+        return Err(match &observed.result {
+            ActivationLifetimeObservationResult::Rejected { message } => message.clone(),
+            _ => unreachable!(),
+        });
+    };
+    validate_observation(&observed, command, expected_entry.unwrap_or(receipt))?;
     let info: LocalResponse = winbridge_transport::supervisor::call_with_timeout(
         &endpoint,
         physical.process.process_id,

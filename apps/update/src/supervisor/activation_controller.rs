@@ -97,6 +97,18 @@ impl FilesActor {
         self.patch_state(&mut view, signal)?;
         self.patch_writer(&mut view, active)?;
         self.patch_service(&mut view, active)?;
+        self.patch_controller(&mut view, active, directory, id)?;
+        Ok(view)
+    }
+    pub(in crate::supervisor) fn patch_controller(
+        &self,
+        view: &mut UpdatePreparationView,
+        active: bool,
+        directory: &Path,
+        id: &str,
+    ) -> Result<()> {
+        #[cfg(not(windows))]
+        let _ = (active, directory, id);
         let controller = view
             .activation_controller
             .as_mut()
@@ -167,7 +179,7 @@ impl FilesActor {
             }
             _ => {}
         }
-        Ok(view)
+        Ok(())
     }
 }
 

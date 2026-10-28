@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-28, .204: [supervisor27/view19](plans/worker-self-update/lifetime-actor-2026-10-28.md)
+подключает original lifetime entry и readonly reconciliation. Source готов к
+новому Main27/19+22; native gate ещё не выполнен. Затем private Ready fault,
+keeper role/final commit/scoped release/U2–U4. Старые checkpoints ниже исторические.
+
 2026-10-28, .204: [lifetime V6 source runtime](plans/worker-self-update/lifetime-runtime-2026-10-28.md)
 продолжает original admission: same-child receiver, typed quarantine, single-send
 и normal IPC observation; roots/dispatch закрыты. Остаток original deadline теперь

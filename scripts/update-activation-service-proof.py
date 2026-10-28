@@ -107,7 +107,8 @@ def verify_local_prefix(proof, source, target, reservation, *, profile, expected
     reported schema or turn its later controller phase into a Main25 run.
     """
     need((expected_schemas, proof_kind) in (((17,20),'activation_service_main_native_proof'),
-         ((19,20),'activation_service_main_native_proof'),((19,21),'activation_controller_main_native_proof')),
+         ((19,20),'activation_service_main_native_proof'),((19,21),'activation_controller_main_native_proof'),
+         ((19,22),'activation_lifetime_main_native_proof')),
          'Unsupported explicit local-prefix kind/schema pair')
     worker_schema, updater_schema = expected_schemas
     def require_scope(value):

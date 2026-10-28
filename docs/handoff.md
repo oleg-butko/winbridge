@@ -1,5 +1,14 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204,2026-10-28: supervisor27/view19 реализованы в source.**
+[Lifetime actor и Main27](plans/worker-self-update/lifetime-actor-2026-10-28.md):
+single entry на original guard, fresh readonly normal reconciliation после
+unknown ACK/verification expiry, отдельные saved/observed/custody diagnostics,
+без resend/cold adoption/deadline renewal. Source19/22/private6; old views1–18
+frozen.963 workspace tests/17 ignored, Linux/MSVC Clippy и UI build passed.
+Новый native Main27 подготовлен, ещё не исполнен; whole commit/release и
+permanent keeper role впереди. Installed worker/production controllers прежние.
+
 **Продолжение на .204,2026-10-28:** main fast-forward до94629b2, ветка
 `feat/updater-lifetime-runtime-204`. [V6 source runtime и ревью](plans/worker-self-update/lifetime-runtime-2026-10-28.md):
 same-child decoder, typed supervised quarantine, consuming sender и independent

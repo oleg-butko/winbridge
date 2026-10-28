@@ -25,6 +25,7 @@ param(
   [switch]$ActivationWriterGate,
   [switch]$ActivationServiceGate,
   [switch]$ActivationControllerGate,
+  [switch]$ActivationLifetimeGate,
   [string]$Worker17ReferenceSha256,
   [string]$Worker17Reference,
   [string]$FixtureInstanceId,
@@ -37,6 +38,7 @@ param(
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ActivationLifetimeGate){if($ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main27 explicitly'};$ActivationControllerGate=$true}
 if($ActivationControllerGate){if($ActivationServiceGate){throw 'Select Main25 or Main26 explicitly, not both'};$ActivationServiceGate=$true}
 if([bool]$Worker17Reference -ne [bool]$Worker17ReferenceSha256){throw 'Retained worker17 reference requires both path and SHA256'}
 if($ActivationServiceGate){if($ActivationWriterGate -or $ActivationStateGate -or $ActivationProcessGate -or $ActivationFilesGate -or $ActivationPreparationGate){throw 'Select one native gate mode'};$ActivationWriterGate=$true}
@@ -93,8 +95,8 @@ try {
   if($targetManifest.dirty -or -not $targetManifest.includesBuiltUi -or $targetManifest.sourceCommit -ceq $manifest.sourceCommit){throw 'Distinct clean target generation with built UI required'}
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
   if($ActivationControllerGate){
-    # This distinct Main26 profile is fixed at19/21, never inferred from proof.
-    $checks=@(@{path='apps/worker/src/store.rs';pattern='(?m)^pub const JOURNAL_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=19},@{path='apps/update/src/journal.rs';pattern='(?m)^pub const UPDATE_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=21})
+    # Distinct profiles Main26=19/21 and Main27=19/22, never inferred from proof.
+    $checks=@(@{path='apps/worker/src/store.rs';pattern='(?m)^pub const JOURNAL_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=19},@{path='apps/update/src/journal.rs';pattern='(?m)^pub const UPDATE_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=$(if($ActivationLifetimeGate){22}else{21})})
     $zip=[IO.Compression.ZipFile]::OpenRead($TargetArchivePath)
     try {
       foreach($check in $checks){
@@ -103,11 +105,11 @@ try {
         $reader=[IO.StreamReader]::new($entry.Open());try{$targetText=$reader.ReadToEnd()}finally{$reader.Dispose()}
         foreach($text in @($localText,$targetText)){
           $found=[regex]::Matches($text,$check.pattern)
-          if($found.Count -ne 1 -or [int]$found[0].Groups[1].Value -ne $check.version){throw 'Main26 requires the exact worker19/updater21 SDK before any build'}
+          if($found.Count -ne 1 -or [int]$found[0].Groups[1].Value -ne $check.version){throw 'Selected Main26/Main27 SDK differs before any build'}
         }
       }
     }finally{$zip.Dispose()}
-    $report.profile='worker19-updater21'
+    $report.profile=if($ActivationLifetimeGate){'worker19-updater22'}else{'worker19-updater21'}
   }
   if($ActivationPreparationGate -and -not $ActivationServiceGate){
     Assert-SessionFile $MigrationReferenceFile
@@ -187,6 +189,7 @@ try {
     if($ActivationWriterGate){$shutdownArguments.activationWriter=$true;$report.kind='activation_writer_main_native_gate'}
     if($ActivationServiceGate){$shutdownArguments.activationService=$true;$shutdownArguments.controllerUrl=$FixtureControllerUrl;$shutdownArguments.instanceId=$FixtureInstanceId;$report.kind='activation_service_main_native_gate'}
     if($ActivationControllerGate){$shutdownArguments.activationController=$true;$report.kind='activation_controller_main_native_gate'}
+    if($ActivationLifetimeGate){$shutdownArguments.activationLifetime=$true;$report.kind='activation_lifetime_main_native_gate'}
     if(-not $ActivationServiceGate){Write-NewJson $shutdownInput $shutdownArguments}
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
@@ -197,6 +200,7 @@ try {
     if($ActivationWriterGate){$mainTest='actual_main_activates_one_journal_writer_without_service_or_replay'}
     if($ActivationServiceGate){$mainTest='actual_main_activates_one_local_service_without_controller_or_replay'}
     if($ActivationControllerGate){$mainTest='actual_main_connects_same_verified_worker_to_controller_without_commit_or_replay'}
+    if($ActivationLifetimeGate){$mainTest='actual_main_enters_same_child_lifetime_and_observes_after_original_deadline_without_replay'}
     # The Main fixture copies its supervisor from validationUpdater. Building a
     # validation test harness alone does not enable diagnostics in that process.
     $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
@@ -320,6 +324,14 @@ try {
       @{name='controller-local-lifecycle';minimum=2;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite','--lib','store::activation_service_open::tests::controller','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($ActivationLifetimeGate){
+    $report.migrationScope='Main27 lifetime only; retained21-to22 migration is separately verified'
+    $commands=@(
+      @{name='lifetime-model-and-actor';minimum=12;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','lifetime','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='lifetime-v27-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::tests::activation_lifetime_v27_observes_but_never_starts_from_cold_history_or_old_contract','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
+      @{name='lifetime-view-contract';minimum=2;arguments=@('test','-p','winbridge-protocol','--test','update_activation_lifetime_view','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
@@ -398,6 +410,7 @@ try {
   if($ActivationWriterGate){$expectedKind='activation_writer_main_native_proof'}
   if($ActivationServiceGate){$expectedKind='activation_service_main_native_proof'}
   if($ActivationControllerGate){$expectedKind='activation_controller_main_native_proof'}
+  if($ActivationLifetimeGate){$expectedKind='activation_lifetime_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}

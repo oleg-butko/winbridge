@@ -14,6 +14,8 @@ mod controller;
 pub use controller::ActivationControllerPreparation;
 #[path = "activation_lifetime.rs"]
 mod lifetime;
+#[path = "activation_lifetime_observation.rs"]
+mod lifetime_observation;
 pub use lifetime::ActivationLifetimePreparation;
 #[path = "activation_service.rs"]
 mod service;
@@ -88,6 +90,11 @@ impl std::fmt::Display for ActivationLaunchFailure {
 }
 impl std::error::Error for ActivationLaunchFailure {}
 impl ActivationLaunchFailure {
+    /// Move the actual retained owner into a read-only reconciliation. This
+    /// does not recreate a permit or allow a second private delivery.
+    pub(crate) fn into_custody(self) -> Box<ActivationProcessGuard> {
+        self.custody
+    }
     pub fn record(&self) -> &ActivationRecord {
         &self.custody.record
     }

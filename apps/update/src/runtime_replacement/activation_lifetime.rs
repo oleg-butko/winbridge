@@ -68,6 +68,9 @@ impl ActivationLifetimePreparation {
 }
 
 impl ActivationProcessGuard {
+    pub(crate) fn lifetime_custody_held(&self) -> bool {
+        self.require_lifetime_custody(false).is_ok()
+    }
     pub fn lifetime_observation(
         &self,
     ) -> Option<&winbridge_protocol::update::ActivationLifetimeObservation> {
@@ -81,7 +84,12 @@ impl ActivationProcessGuard {
         s: &SupervisorRecord,
         permit: &ActivationLifetimePermit,
     ) -> Result<()> {
+        let mut timing = crate::activation::ActivationTiming::new(
+            "lifetime_entry",
+            Some(self.files.preparation.deadline),
+        );
         self.require_lifetime_owner()?;
+        timing.mark("original_owner_checked", None, None);
         let observed = self
             .controller_observation
             .as_ref()
@@ -115,6 +123,7 @@ impl ActivationProcessGuard {
         if snapshot.lifetime != *permit.record() {
             return Err("Lifetime receiver graph differs from original permit".into());
         }
+        timing.mark("issued_graph_and_job_checked", None, None);
         let deadline = self.files.preparation.deadline;
         let remaining = || {
             deadline
@@ -138,6 +147,7 @@ impl ActivationProcessGuard {
         .await?;
         let ready: channel::LifetimeReady = channel::read(stream, remaining()?).await?;
         channel::validate_lifetime_ready(&ready, command)?;
+        timing.mark("private_ready_verified", None, None);
         let observation = crate::activation::lifetime_probe::probe(
             command,
             &ready.receipt,
@@ -159,6 +169,7 @@ impl ActivationProcessGuard {
             },
         )
         .await?;
+        timing.mark("normal_mode_verified", None, None);
         let winbridge_protocol::update::ActivationLifetimeObservationResult::Observed {
             receipt,
             ..
@@ -181,6 +192,7 @@ impl ActivationProcessGuard {
         )
         .map_err(|e| e.to_string())?;
         self.lifetime_observation = Some(observation);
+        timing.mark("lifetime_fact_confirmed", None, None);
         Ok(())
     }
 
@@ -210,7 +222,11 @@ impl ActivationProcessGuard {
         }
     }
 
-    fn require_lifetime_owner(&self) -> Result<()> {
+    pub(super) fn require_lifetime_owner(&self) -> Result<()> {
+        self.require_lifetime_custody(true)
+    }
+
+    pub(super) fn require_lifetime_custody(&self, entry: bool) -> Result<()> {
         let expected = self.record.intent.job_name()?;
         let identity = self
             .child
@@ -233,7 +249,7 @@ impl ActivationProcessGuard {
             );
         }
         self.require_lifetime_config_pin()?;
-        self.require_fixed_custody(true)
+        self.require_fixed_custody(entry)
     }
 
     fn require_lifetime_config_pin(&self) -> Result<&std::fs::File> {
