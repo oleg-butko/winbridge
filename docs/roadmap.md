@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-28,.203: [controller0.2.0 установлен](releases/controller-0.2.0-debian203-2026-10-28.md)
+после review remote f069697 и18 actual controller tests. Worker0.2.0/две real VM
+связи/прежняя история подтверждены; config неизменён. Следом updater подтверждение
+новой controller session, затем Job lifetime/commit/release и U2–U4.
+
 2026-10-27, .204: [post-install review](analysis/multi-controller-post-install-review-2026-10-27.md)
 устраняет привязку native migration tests к installed0.1.1, удаляет superseded model
 integration target и объединяет controller diagnostics metadata lookup. Реальные

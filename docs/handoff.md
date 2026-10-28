@@ -1,5 +1,16 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**2026-10-28,.203:** remote `refactor/multi-controller-review` f069697 проверена
+и fast-forward включена в main. [Controller.203 обновлён до0.2.0](releases/controller-0.2.0-debian203-2026-10-28.md):
+clean f069697, retained image, PID131887; старый5103 штатно завершён и image
+сохранён для rollback.18 controller tests/Python6 passed; обе actual связи
+.203/.204 connected, worker946f1128/incarnation5a8eb173 прежний/active0/errors=null,
+10 прежних tasks сохранены. Config/state/system settings не менялись.
+Продолжать controller-session контракт/ledger поверх LocalVerified; Main25 и
+retained19→20 terminal gates не переигрывать. Рабочий worker0.2.0 оставить,
+desktop не нужен. Цикл review→fix→следующий этап активен до необходимости нового
+installed worker либо непредвиденного поведения по инструкции пользователя.
+
 **Ревью после установки,2026-10-27:** ветка `refactor/multi-controller-review`,
 [находки, покрытие и направление рефакторинга](analysis/multi-controller-post-install-review-2026-10-27.md).
 Native multi-controller и Main25 cold17→19 больше не используют installed EXE
