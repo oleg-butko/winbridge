@@ -1,5 +1,19 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Latest source supervisor26/view18:** connect/observe и typed controller view
+добавлены;927 workspace/update-validation passed/17 ignored, final Linux/MSVC
+Clippy/generated TS/typecheck/UI build/scaffold313 passed. Old view1–17 не
+получают activationController. Cold history не восстанавливает owner/connection;
+live Observed — сохранённый fact + resident custody, current links отдельны.
+Root AwaitingController/local7, Job/commit/release/public activation закрыты.
+Native нового actor/runtime ещё нет. Следом реализовать и выполнить Main26
+на stable slot204 с отдельным instance/state и.203:1144/preflight900s, old worker17
+reference явно retained. Distinct target b149eed/private5/schema19+21 уже экспортирован:
+`WinBridge/sources/winbridge-20261028T094607Z-b149eed-a3228347.zip`,
+SHA cb3ec31a823be380a21caf170b26c80764b0070200307724cb0c2b68a46b817d;
+полные pins/план в [controller-session](plans/worker-self-update/controller-session-activation-2026-10-28.md).
+Installed worker0.2.0 и controller131887 прежние; оставлять worker, desktop не нужен.
+
 **2026-10-28/latest source:** same-child network/private5 sender+receiver и
 readonly normal IPC Waiting/Observed/Rejected реализованы. Один original owner,
 один dispatch, неизменные Store/epoch/Job/window; полный accepted frame + current

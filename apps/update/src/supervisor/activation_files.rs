@@ -1,5 +1,7 @@
 //! The live binding actor owns exactly one phase; data never reconstructs it.
 use super::*;
+#[path = "activation_controller.rs"]
+mod controller;
 #[path = "activation_service.rs"]
 mod service;
 enum State {
@@ -33,6 +35,8 @@ enum State {
     #[cfg(windows)]
     StartingService(Box<crate::activation::ActivationRecord>),
     #[cfg(windows)]
+    StartingController(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
     Serviced(Box<crate::activation::ActivationProcessGuard>),
     #[cfg(windows)]
     ServiceUnconfirmed(Box<crate::activation::ActivationProcessGuard>),
@@ -43,6 +47,7 @@ pub(super) struct FilesActor {
     state: State,
     writer_key: Option<String>,
     service_key: Option<String>,
+    controller_key: Option<String>,
 }
 impl Default for FilesActor {
     fn default() -> Self {
@@ -50,6 +55,7 @@ impl Default for FilesActor {
             state: State::Idle,
             writer_key: None,
             service_key: None,
+            controller_key: None,
         }
     }
 }
@@ -117,7 +123,7 @@ impl FilesActor {
             #[cfg(windows)]
             State::HandoffFailed(e) => Some(e.record()),
             #[cfg(windows)]
-            State::Writing(r) | State::StartingService(r) => Some(r),
+            State::Writing(r) | State::StartingService(r) | State::StartingController(r) => Some(r),
             #[cfg(windows)]
             State::Written(g)
             | State::WriterUnconfirmed(g)
@@ -164,6 +170,7 @@ impl FilesActor {
                     | State::WriterUnconfirmed(_)
                     | State::WriterFailed(_)
                     | State::StartingService(_)
+                    | State::StartingController(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -197,6 +204,7 @@ impl FilesActor {
                     | State::WriterUnconfirmed(_)
                     | State::WriterFailed(_)
                     | State::StartingService(_)
+                    | State::StartingController(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -227,6 +235,7 @@ impl FilesActor {
                     | State::WriterUnconfirmed(_)
                     | State::WriterFailed(_)
                     | State::StartingService(_)
+                    | State::StartingController(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -480,7 +489,7 @@ impl FilesActor {
                 process.phase = ActivationProcessPhase::Indeterminate;
                 process.reason = Some(failure.reason.chars().take(1000).collect());
             }
-            State::Writing(_) | State::StartingService(_) => {
+            State::Writing(_) | State::StartingService(_) | State::StartingController(_) => {
                 process.phase = ActivationProcessPhase::Indeterminate;
                 process.process_custody_held = None;
                 process.reason = Some("Journal activation in progress; inspect internal24".into());
@@ -569,7 +578,7 @@ impl FilesActor {
                 state.process_alive = failure.process_alive();
                 state.reason = Some(failure.reason.chars().take(1000).collect());
             }
-            State::Writing(_) | State::StartingService(_) => {
+            State::Writing(_) | State::StartingService(_) | State::StartingController(_) => {
                 state.phase = ActivationStatePhase::Indeterminate;
                 state.original_lock_held = None;
                 state.reason = Some("Journal activation in progress; inspect internal24".into());
@@ -641,7 +650,7 @@ impl FilesActor {
                     );
                 }
             }
-            State::Writing(_) | State::StartingService(_) => {
+            State::Writing(_) | State::StartingService(_) | State::StartingController(_) => {
                 writer.phase = if _active && view.driver_error.is_none() {
                     ActivationWriterPhase::Activating
                 } else {
@@ -730,7 +739,9 @@ impl FilesActor {
             #[cfg(windows)]
             State::HandoffFailed(failure) => held_source(files, failure.record()),
             #[cfg(windows)]
-            State::Writing(record) | State::StartingService(record) => held_source(files, record),
+            State::Writing(record)
+            | State::StartingService(record)
+            | State::StartingController(record) => held_source(files, record),
             #[cfg(windows)]
             State::Written(g)
             | State::WriterUnconfirmed(g)

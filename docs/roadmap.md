@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-28/latest: supervisor26/view18 реализованы в source;927 workspace/17 ignored,
+Linux/MSVC Clippy/TS/UI passed. Old views frozen, Observed отделён от current
+connection и cold history. Следом full native Main26/stable204/SDK21; distinct
+target b149eed сохранён. Runtime пока не проверен, whole updater не завершён.
+
 2026-10-28/latest: same-child network/private5 + independent readonly normal IPC
 реализованы в source, workspace921/17 ignored +26 focused controller tests,
 Linux/MSVC Clippy passed. Новый runtime на Windows пока не исполнен. Следом

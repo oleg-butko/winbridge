@@ -7,6 +7,37 @@ Public install/whole update остаётся выключенным.
 
 ## Текущая реализация
 
+**Supervisor26/view18 реализованы в source.** Typed connect/observe используют
+одного resident Serviced owner, отдельный StartingController и одноразовый key;
+completion сохраняет того же guard либо original failure custody. Старые actions
+и view1–17 не получают нового поля; cold view18 показывает NotResident и saved
+fact без текущего projection/link/permission. Live phase называется Observed:
+это факт независимого normal IPC наблюдения с resident owner, а не обещание,
+что соединение никогда не разорвётся. Actual current links остаются отдельной
+диагностикой worker. Root всё ещё AwaitingController, physical7 без изменений.
+Нет caller URL/topology/command/receipt в новом supervisor request; default
+selection — pinned configured primary. Public updater capabilities по-прежнему
+не объявляют activation/controller whole-update readiness.
+
+Review добавил exact source owner/epoch/launch/config/schema checks при completion,
+сверку snapshot saved receipt с resident observation и сохранение old local
+service view после network phase.927 workspace/update-validation tests passed,
+17 штатно ignored; cold real supervisor/14 invalid envelopes, unknown fields,
+cold view и12 completion mutations покрыты. Final Linux/MSVC all-target Clippy,
+generated TS/typecheck/UI build/scaffold313 прошли. Новый actor/native Windows
+runtime пока **не исполнен**; следующий шаг — отдельный Main26 harness/run.
+
+Для distinct target уже зафиксирован clean b149eed/private5/schema19+21:
+shared `WinBridge/sources/winbridge-20261028T094607Z-b149eed-a3228347.zip`,
+archiveSHA `cb3ec31a823be380a21caf170b26c80764b0070200307724cb0c2b68a46b817d`,
+manifestSHA `fff5fb118c61b186ec9ec6dd0927fa091710be4a59ed5f96e3451471ba59c8b0`.
+Экспорт сделан из detached worktree
+`.winbridge/source-exports/controller-target-b149eed`, main WIP не подменялся.
+Producer Main26 должен быть новым clean source после native harness commit;
+source/target разные, оба updater21/worker19. Не использовать старый20 SDK как21
+и не выдавать новый run за historical Main25. Installed worker48c834c прежний;
+desktop не нужен, networking только из approved stable runtime-test-204.
+
 **Same-child network/private5 реализованы в source.** Consuming preparation
 передаёт один ControllerCommand по прежнему authenticated pipe; receiver связывает
 exact controller intent с original RunningLocalService и запускает обычный manager

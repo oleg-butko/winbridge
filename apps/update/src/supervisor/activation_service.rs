@@ -7,6 +7,7 @@ impl FilesActor {
             matches!(
                 self.state,
                 State::StartingService(_)
+                    | State::StartingController(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -105,6 +106,16 @@ impl FilesActor {
         self.patch_process(&mut view, signal)?;
         self.patch_state(&mut view, signal)?;
         self.patch_writer(&mut view, active)?;
+        self.patch_service(&mut view, active)?;
+        Ok(view)
+    }
+    pub(in crate::supervisor) fn patch_service(
+        &self,
+        view: &mut UpdatePreparationView,
+        active: bool,
+    ) -> Result<()> {
+        #[cfg(not(windows))]
+        let _ = active;
         let service = view
             .activation_service
             .as_mut()
@@ -139,7 +150,7 @@ impl FilesActor {
                     && view.update.phase == UpdatePhase::AwaitingController
                 {
                     service.phase = ActivationServicePhase::Confirmed;
-                    service.reason=Some("Local IPC verified and original owner resident; controller/lifetime/commit are still pending".into());
+                    service.reason=Some("Local IPC verified and original owner resident; controller status is separate, lifetime/commit remain pending".into());
                 } else {
                     service.phase = ActivationServicePhase::Indeterminate;
                     service.reason = view.driver_error.clone().or_else(|| {
@@ -158,7 +169,7 @@ impl FilesActor {
             }
             _ => {}
         }
-        Ok(view)
+        Ok(())
     }
 }
 #[cfg(any(windows, test))]

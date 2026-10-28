@@ -614,6 +614,9 @@ pub enum SupervisorAction {
     /// Internal25: one local service activation; no controller/lifetime grant.
     ActivateLocalService,
     ObserveLocalService,
+    /// Internal26: one same-child network start; no lifetime/commit grant.
+    ConnectActivationController,
+    ObserveActivationController,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -704,6 +707,9 @@ pub struct UpdatePreparationView {
     /// Internal25/view17. Historical confirmations alone imply no live service.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_service: Option<ActivationServiceView>,
+    /// Internal26/view18 only. Historical connection evidence grants no startup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_controller: Option<ActivationControllerView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -1134,3 +1140,5 @@ pub use activation_controller::*;
 
 mod activation_service_view;
 pub use activation_service_view::*;
+mod activation_controller_view;
+pub use activation_controller_view::*;

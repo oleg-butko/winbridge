@@ -15,6 +15,8 @@ pub mod channel;
 pub mod controller;
 #[cfg(any(windows, test))]
 pub(crate) mod controller_probe;
+mod controller_view;
+pub(crate) use controller_view::view as controller_view;
 mod process_view;
 pub mod service;
 mod service_view;
