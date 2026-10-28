@@ -5,6 +5,12 @@
 Main26 доказывает session того же resident child, но оставляет root
 AwaitingController/local7 и автоматическое завершение child вместе с updater.
 
+**Actual OS spike passed:** [2 native tests/73 files twice/36 negatives и readonly reread](windows-lifetime-spike-2026-10-28.md).
+Source1bfaa32, run20261028-190435-5d9b4e86/task5b90e6fb. Installed worker прежний,
+helper processes завершены. Следом compact DTO/FSM → durable ledger/admission →
+private same-child receiver/quarantine → final commit/release. Это ещё не keeper
+runtime; ниже сохранена история подготовки и первого failure.
+
 ## Подготовлен test-only OS spike
 
 `crates/platform/src/lifetime_spike.rs` добавлен только под `cfg(windows,test)`.

@@ -14,24 +14,18 @@ production controller131887 прежний. Test controller178034 и test proces
 Root AwaitingController/local7; lifetime/whole commit/scoped release/public
 activation и U2–U4 ещё не готовы. Следом lifetime OS spike, Main26 не replay.
 
-**Lifetime first native failed:**run20261028-185609-72461f1f/task5a4d3123,
-40 files twice; old worker exit0 предшествовал immediate Job.empty=false.
-Producer8f527fb. Добавлено bounded ожидание той же original Job (не новая Job,
-не вывод из PID); MSVC Clippy passed. Installed worker прежний/idle/healthy.
-Повтор после clean export/parser/storage; если timeout сохранится — исследовать
-accounting/membership/retained handles, не продлевать budget. [Evidence](plans/worker-self-update/activation-lifetime-2026-10-28.md).
-
-**Lifetime OS spike — следующий native gate:**2 explicit ignored Windows cases
-(two generations + keeper-loss73), task/grandchild cancellation и unchanged
-limits/no network. PS/Python runner + independent reader подготовлены;
-MSVC Clippy/Linux check/8 observer tests/36 negatives passed. Native execution
-ещё нет. [Команды, проверяемые границы и continuation](plans/worker-self-update/activation-lifetime-2026-10-28.md).
-Review перенёс next-keeper detach ДО start command; metadata/root/domain и
-strict counters связаны, нет constructor из archive JSON или новых прав.
-Main26 d288b0f проверен отдельно; не считать spike проверенным по его результату.
-Нужны clean export/pinned parser/storage → один actual OS run → readonly audit.
-Installed worker оставить; desktop не нужен. Whole keeper actor/ledger/private
-contract/commit/release ещё не реализованы. State/config/system settings прежние.
+**Lifetime OS spike passed:**run20261028-190435-5d9b4e86/task5b90e6fb,
+source1bfaa32.2 native cases/73 files twice/36 negatives, readonly reread identical.
+Next keeper запускается вне old worker Job/domain и переживает old keeper exit;
+keeper loss73 завершает child без Rust cleanup, task+grandchild cancellation и
+unchanged limits/positive empty подтверждены. First8f527 failure сохранён; wait
+за той же Job вместо premature instant assert прошёл. [Pins, scope, reader](plans/worker-self-update/windows-lifetime-spike-2026-10-28.md).
+Installed0.2.0/gen946f1128/incarnation5a8eb173 прежний/idle/errors=null. Desktop
+не нужен, test processes завершены, worker оставить. **Это OS helpers, не keeper
+runtime.** Следующий шаг: compact typed lifetime DTO/FSM поверх confirmed controller
+и local7; затем durable intent/admission/readback, same-child receiver+normal IPC,
+keeper role/quarantine, final commit/scoped release, U2–U4. Startup240s не обновлять,
+не переносить файловый mailbox spike в runtime; public activation None.
 
 ## История предыдущих checkpoint
 

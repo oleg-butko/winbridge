@@ -6,14 +6,11 @@ Same child/authority/new session, lost ACK и cold no replay подтвержд�
 240s не продлены. Installed0.2.0 здоров/прежний, desktop не нужен. Root
 AwaitingController/local7; lifetime/commit/release/public install ещё закрыты.
 
-Lifetime first native run failed на immediate Job.empty после successful root
-exit;40 files twice, installed unchanged. Bounded original-Job wait добавлен;
-повтор pending, при timeout — диагностика counters/handles, без ослабления cleanup.
-
-Lifetime OS spike: source2 cases + PS/Python runner/independent reader готовы,
-MSVC Clippy/Linux check/8 observer tests/36 negatives passed. Actual Windows run
-pending после clean export/pinned parser/storage; schemas,
-capabilities, original kill-on-close/breakaway и installed runtime неизменны.
+**Lifetime OS spike passed:**2 cases/73 files twice/36 negative audits,
+readonly reread identical. [Evidence и scope](plans/worker-self-update/windows-lifetime-spike-2026-10-28.md).
+Installed worker прежний. Следом compact DTO/FSM → ledger/admission → same-child
+receiver/quarantine → final commit/scoped release/U2–U4. OS helper proof не даёт
+production keeper/capabilities, original startup window и Job limits прежние.
 
 ## История предыдущих checkpoint
 
