@@ -1,5 +1,18 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**2026-10-28/latest source:** same-child network/private5 sender+receiver и
+readonly normal IPC Waiting/Observed/Rejected реализованы. Один original owner,
+один dispatch, неизменные Store/epoch/Job/window; полный accepted frame + current
+link проверяются независимо parent normal IPC/PID/Info. Workspace921/17 ignored,
+26 focused controller tests и final Linux/MSVC all-target Clippy passed. Review
+закрыл stopped-IPC startup и frame-before-runtime-check race; waiting poll100ms
+не повторяет expensive graph/image проверки. Runtime на Windows **ещё не проверен**,
+installed0.2.0 прежний, desktop не нужен. Следом supervisor26/view18 и отдельный
+Main26 на stable slot204/порт1144; actual retained20→21 уже passed и не replay.
+Подробности/ограничения в [controller-session плане](plans/worker-self-update/controller-session-activation-2026-10-28.md).
+Controller confirmation не даёт Job transfer/root commit/maintenance release;
+эти шаги и U2–U4 впереди. Старые checkpoint ниже — история реализации.
+
 **2026-10-28,.203:** remote `refactor/multi-controller-review` f069697 проверена
 и fast-forward включена в main. [Controller.203 обновлён до0.2.0](releases/controller-0.2.0-debian203-2026-10-28.md):
 clean f069697, retained image, PID131887; старый5103 штатно завершён и image

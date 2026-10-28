@@ -1,4 +1,6 @@
 //! Real SQLite/instance locks; synthetic runtime identity, never native readiness.
+#[path = "controller_tests.rs"]
+mod controller;
 use super::*;
 use crate::store::{
     activation_open::tests::{bytes, fixture, lock_available},

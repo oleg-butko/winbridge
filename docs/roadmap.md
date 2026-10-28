@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-28/latest: same-child network/private5 + independent readonly normal IPC
+реализованы в source, workspace921/17 ignored +26 focused controller tests,
+Linux/MSVC Clippy passed. Новый runtime на Windows пока не исполнен. Следом
+supervisor26/view18 и отдельный Main26 в stable204, затем Job lifetime/commit/
+release и U2–U4. Installed worker не меняется; public whole update закрыт.
+
 2026-10-28: source updater schema21 содержит controller ledger/read-only graph,
 10 SQL tests/workspace914/17 ignored/MSVC Clippy passed. Production fresh admission
 и same-child network пока отсутствуют. [Actual20→21 copy gate](plans/worker-self-update/retained20-to21-2026-10-28.md)

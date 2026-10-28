@@ -131,6 +131,38 @@ fn controller_confirmation_preserves_same_child_authority_config_and_selected_se
         .is_err());
     assert!(confirmed.advance(&issued).is_err());
 }
+
+#[test]
+fn private_controller_v5_is_strict_and_never_accepts_local_only_or_rebound_messages() {
+    let f = fixture();
+    let command = super::super::channel::ControllerCommand {
+        contract_version: super::super::channel::CONTROLLER_CONTRACT,
+        command: f.command.clone(),
+    };
+    let ready = super::super::channel::ControllerReady {
+        contract_version: super::super::channel::CONTROLLER_CONTRACT,
+        receipt: f.receipt,
+    };
+    super::super::channel::validate_controller_command(&command, &f.command).unwrap();
+    super::super::channel::validate_controller_ready(&ready, &f.command).unwrap();
+    for version in [0, 1, 2, 3, 4, 6] {
+        let mut bad = command.clone();
+        bad.contract_version = version;
+        assert!(super::super::channel::validate_controller_command(&bad, &f.command).is_err());
+        let mut bad = ready.clone();
+        bad.contract_version = version;
+        assert!(super::super::channel::validate_controller_ready(&bad, &f.command).is_err());
+    }
+    let mut bad = command.clone();
+    bad.command.binding.topology.confirmation_endpoint_id = "peer1".into();
+    assert!(super::super::channel::validate_controller_command(&bad, &f.command).is_err());
+    let mut raw = serde_json::to_value(command).unwrap();
+    raw["lifetimeTransferred"] = true.into();
+    assert!(serde_json::from_value::<super::super::channel::ControllerCommand>(raw).is_err());
+    let mut raw = serde_json::to_value(ready).unwrap();
+    raw["canReleaseMaintenance"] = true.into();
+    assert!(serde_json::from_value::<super::super::channel::ControllerReady>(raw).is_err());
+}
 #[test]
 fn topology_uses_configured_one_to_four_peers_with_separate_confirmation_selection() {
     for count in 1..=4 {

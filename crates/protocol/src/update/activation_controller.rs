@@ -6,6 +6,49 @@ use serde::{Deserialize, Serialize};
 /// Recognized only after the private receiver is implemented; defining this
 /// marker does not advertise it from the current worker binary.
 pub const ACTIVATION_CONTROLLER_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_CONTROLLER_SESSION_V5";
+pub const ACTIVATION_CONTROLLER_CONTRACT: u16 = 5;
+
+/// Private delivery on the original authenticated parent/child channel.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverControllerCommand {
+    pub contract_version: u16,
+    pub command: WorkerControllerActivationCommand,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverControllerReady {
+    pub contract_version: u16,
+    pub receipt: WorkerControllerActivationReceipt,
+}
+/// Readonly normal IPC; recognition requires the resident private binding.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationControllerQuery {
+    pub controller_observation_version: u16,
+    pub command: WorkerControllerActivationCommand,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationControllerObservation {
+    pub controller_observation_version: u16,
+    pub result: ActivationControllerObservationResult,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ActivationControllerObservationResult {
+    Observed {
+        receipt: Box<WorkerControllerActivationReceipt>,
+        projection: Box<crate::ControllerReadinessProjection>,
+        link: Box<crate::ControllerLinkObservation>,
+    },
+    Waiting {
+        message: String,
+    },
+    Rejected {
+        message: String,
+    },
+}
 
 macro_rules! dto { ($($item:item)*) => {$ (
     #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

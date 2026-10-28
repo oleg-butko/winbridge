@@ -4,10 +4,7 @@ use crate::{
     store::{ActivationJournal, JournalActivationPermit},
     LocalService, Result,
 };
-use std::{
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+use std::{path::PathBuf, time::Instant};
 use winbridge_platform::infrastructure::PinnedProcess;
 use winbridge_protocol::update::*;
 use winbridge_update::{
@@ -95,24 +92,51 @@ impl Receiver {
         timing.mark("local_ipc_bound", None, None);
         let result = async {
             checkpoint()?;
-            let query = ActivationServiceQuery { service_observation_version:1, command:request.command.clone() };
-            let observed: ActivationServiceObservation = winbridge_transport::supervisor::call_with_timeout(&running.endpoint()?, process.process_id, &query, deadline.saturating_duration_since(Instant::now())).await.map_err(|e|e.to_string())?;
-            let ActivationServiceObservationResult::Observed { receipt } = observed.result else { return Err("Local IPC did not confirm actual staged runtime".into()); };
-            if observed.service_observation_version != 1 { return Err("Local IPC service observation version differs".into()); }
+            let query = ActivationServiceQuery {
+                service_observation_version: 1,
+                command: request.command.clone(),
+            };
+            let observed: ActivationServiceObservation =
+                winbridge_transport::supervisor::call_with_timeout(
+                    &running.endpoint()?,
+                    process.process_id,
+                    &query,
+                    deadline.saturating_duration_since(Instant::now()),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            let ActivationServiceObservationResult::Observed { receipt } = observed.result else {
+                return Err("Local IPC did not confirm actual staged runtime".into());
+            };
+            if observed.service_observation_version != 1 {
+                return Err("Local IPC service observation version differs".into());
+            }
             timing.mark("local_ipc_observed", None, None);
-            let ready = channel::ServiceReady { contract_version:channel::SERVICE_CONTRACT, receipt:*receipt };
+            let ready = channel::ServiceReady {
+                contract_version: channel::SERVICE_CONTRACT,
+                receipt: *receipt,
+            };
             channel::validate_service_ready(&ready, &request.command)?;
             checkpoint()?;
-            channel::write(&mut stream, &ready, deadline.saturating_duration_since(Instant::now())).await?;
+            channel::write(
+                &mut stream,
+                &ready,
+                deadline.saturating_duration_since(Instant::now()),
+            )
+            .await?;
             timing.mark("service_ready_sent", None, None);
-            // Verification ownership is resident. A later contract must grant
-            // controller/lifetime transfer; channel closure never grants them.
-            tokio::select! {
-                outcome=running.wait_until_stopped() => Err(format!("Local IPC stopped during resident verification: {outcome:?}; no lifetime transfer")),
-                _=channel::read::<_,serde::de::IgnoredAny>(&mut stream,Duration::from_millis(writer.activation.intent.context.startup_timeout_ms)) => Err("Local verification parent channel closed or unsupported next phase; no lifetime transfer".into()),
-                outcome=super::native::parent_alive(&parent,Duration::from_millis(writer.activation.intent.context.startup_timeout_ms)) => outcome,
-            }
-        }.await;
+            // V5 still retains the same local owner and original window.
+            super::controller::receive(
+                &directory,
+                &snapshot,
+                &parent,
+                deadline,
+                &mut stream,
+                &mut running,
+            )
+            .await
+        }
+        .await;
         let stopped = running.close().await.map_err(|e| e.to_string());
         match (result, stopped) {
             (Err(reason), Err(cleanup)) => Err(format!(

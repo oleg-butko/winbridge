@@ -188,7 +188,11 @@ impl Links {
             }
         }
     }
-    fn observe(&self, context: RequestContext, generation: String) -> ControllerConnections {
+    pub(crate) fn observe(
+        &self,
+        context: RequestContext,
+        generation: String,
+    ) -> ControllerConnections {
         ControllerConnections {
             schema_version: 1,
             context,

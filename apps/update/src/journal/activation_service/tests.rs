@@ -574,6 +574,13 @@ fn service_parent_probe_rejects_stale_mutable_or_connected_normal_info() {
             crate::activation::service_probe::validate_info(&value.command, &bad).is_err(),
             "mutation {n}"
         );
+        // A controller phase permits a connected/connecting primary (selected
+        // confirmation can be secondary), while all readonly fences still hold.
+        assert_eq!(
+            crate::activation::service_probe::validate_readonly_info(&value.command, &bad).is_ok(),
+            n == 9,
+            "common readonly mutation {n}"
+        );
     }
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

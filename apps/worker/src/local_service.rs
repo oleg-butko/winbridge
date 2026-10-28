@@ -8,6 +8,9 @@ use crate::{
 };
 use std::{path::Path, time::Instant};
 use winbridge_protocol::update::WorkerServiceActivationCommand;
+#[path = "controller_service.rs"]
+mod controller;
+use controller::ControllerStartup;
 
 pub(crate) const READ_ONLY_REASON: &str = "Локальная проверка обновления: доступны только чтение журнала и диагностика; новые команды ещё не разрешены";
 
@@ -15,6 +18,8 @@ pub(crate) const READ_ONLY_REASON: &str = "Локальная проверка �
 pub(super) struct LocalServiceScope {
     command: WorkerServiceActivationCommand,
     shutdown: winbridge_protocol::update::WorkerShutdownReceipt,
+    controller: Mutex<Option<winbridge_protocol::update::WorkerControllerActivationCommand>>,
+    deadline: Instant,
 }
 
 enum FailureOwner {
@@ -76,6 +81,7 @@ pub struct RunningLocalService {
     service: LocalService,
     task: Option<tokio::task::JoinHandle<Result<()>>>,
     exit: Option<Result<()>>,
+    controller: ControllerStartup,
 }
 impl LocalService {
     /// Trusted private receiver must supply the original graph/liveness/window
@@ -213,6 +219,8 @@ impl LocalService {
             local_activation: Some(LocalServiceScope {
                 command: state.command.clone(),
                 shutdown: state.shutdown.clone(),
+                controller: Mutex::new(None),
+                deadline: state.deadline,
             }),
             generation: state
                 .command
@@ -270,6 +278,9 @@ impl LocalService {
         .map_err(|e| e.to_string())
     }
     fn check_ready(&self) -> Result<()> {
+        if self.worker.stop.load(Ordering::Acquire) {
+            return Err("Local verification service is stopping; no new startup action".into());
+        }
         self.worker._instance_lock.revalidate()?;
         if let Some(guard) = self
             .worker
@@ -298,6 +309,7 @@ impl LocalService {
         let mut running = RunningLocalService {
             service: self,
             exit: None,
+            controller: ControllerStartup::NotStarted,
             task: Some(tokio::spawn(serve_inner(
                 worker,
                 ReadinessOutput::Local(ready),
@@ -357,6 +369,7 @@ impl RunningLocalService {
         self.service.worker.stop();
     }
     pub async fn close(mut self) -> std::result::Result<(), Box<LocalServiceFailure>> {
+        self.close_controller().await;
         self.service.worker.stop();
         if let Err(reason) = self.wait_until_stopped().await {
             return Err(LocalServiceFailure::worker(

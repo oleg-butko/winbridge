@@ -90,8 +90,7 @@ pub(crate) fn validate_info(
     command: &WorkerServiceActivationCommand,
     info: &winbridge_protocol::WorkerInfo,
 ) -> Result<()> {
-    let b = &command.binding;
-    let physical = &b.writer_command.binding.physical;
+    validate_readonly_info(command, info)?;
     let connection_valid = info.controller_connection.as_ref().is_none_or(|c| {
         matches!(c.state, winbridge_protocol::ConnectionState::Disconnected)
             && c.session_id.is_none()
@@ -99,6 +98,21 @@ pub(crate) fn validate_info(
             && c.controller_node_id.is_none()
             && c.controller_generation.is_none()
     });
+    if !connection_valid {
+        return Err("Local-only service unexpectedly connected to a controller".into());
+    }
+    Ok(())
+}
+
+/// Shared readonly/runtime/maintenance invariants. A later controller phase
+/// validates its selected link separately; local-only V4 retains its stricter
+/// no-connection check above.
+pub(crate) fn validate_readonly_info(
+    command: &WorkerServiceActivationCommand,
+    info: &winbridge_protocol::WorkerInfo,
+) -> Result<()> {
+    let b = &command.binding;
+    let physical = &b.writer_command.binding.physical;
     if info.instance_id != physical.context.instance_id
         || info.generation != physical.generation
         || info.platform != b.expected_worker.descriptor.target_os
@@ -111,7 +125,6 @@ pub(crate) fn validate_info(
         || info.resource_recovery.is_some()
         || (info.platform == "windows"
             && !info.recovery_coverage.as_ref().is_some_and(|r| r.complete))
-        || !connection_valid
         || info.maintenance_available
         || info.snapshot_import_available
         || info.snapshot_delta_available

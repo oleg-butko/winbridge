@@ -1561,6 +1561,20 @@ where
             let bytes = winbridge_transport::read_frame(&mut stream).await?;
             if serde_json::from_slice::<serde_json::Value>(&bytes)
                 .ok()
+                .is_some_and(|v| v.get("controllerObservationVersion").is_some())
+            {
+                let response=match serde_json::from_slice(&bytes) {
+                    Ok(query)=>tokio::task::spawn_blocking(move||worker.handle_controller_observation(query)).await.map_err(std::io::Error::other)?,
+                    Err(_)=>winbridge_protocol::update::ActivationControllerObservation { controller_observation_version:1,result:winbridge_protocol::update::ActivationControllerObservationResult::Rejected {message:"Invalid controller observation envelope".into()}},
+                };
+                return winbridge_transport::write_frame(
+                    &mut stream,
+                    &serde_json::to_vec(&response)?,
+                )
+                .await;
+            }
+            if serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
                 .is_some_and(|v| v.get("serviceObservationVersion").is_some())
             {
                 let response = match serde_json::from_slice(&bytes) {

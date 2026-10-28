@@ -61,6 +61,8 @@ pub struct ActivationProcessGuard {
     captures: [Arc<Mutex<Capture>>; 2],
     readers: Vec<thread::JoinHandle<()>>,
     released: Option<crate::shutdown::ReleasedExitCustody>,
+    _controller_config_pin: Option<std::fs::File>,
+    controller_observation: Option<winbridge_protocol::update::ActivationControllerObservation>,
 }
 /// Retain the same OS resources after error, including an uncertain live child.
 /// No method converts this object into a second creation attempt.
@@ -160,6 +162,8 @@ impl ActivationProcessGuard {
             ],
             readers: Vec::new(),
             released: None,
+            _controller_config_pin: None,
+            controller_observation: None,
         })
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {

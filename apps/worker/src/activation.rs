@@ -2,6 +2,9 @@
 use crate::Result;
 use std::path::Path;
 #[cfg(windows)]
+#[path = "activation_controller.rs"]
+mod controller;
+#[cfg(windows)]
 #[path = "activation_service.rs"]
 mod service;
 
@@ -40,6 +43,7 @@ pub async fn receive(config: &Path, update_id: &str, attempt_id: &str) -> Result
     std::hint::black_box(winbridge_update::activation::channel::HANDOFF_MARKER);
     std::hint::black_box(winbridge_update::activation::channel::WRITER_MARKER);
     std::hint::black_box(winbridge_update::activation::channel::SERVICE_MARKER);
+    std::hint::black_box(winbridge_update::activation::channel::CONTROLLER_MARKER);
     #[cfg(not(windows))]
     {
         let _ = (config, update_id, attempt_id);

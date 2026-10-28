@@ -14,6 +14,50 @@ pub struct ActivationControllerPreparation {
     _config_pin: File,
 }
 impl ActivationControllerPreparation {
+    /// Exactly one private delivery, then an independent normal IPC observation.
+    /// This records a fact only: Job lifetime and final root commit stay closed.
+    pub fn start_controller_blocking(
+        self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+    ) -> std::result::Result<Box<ActivationProcessGuard>, ActivationLaunchFailure> {
+        let Self {
+            mut owner,
+            permit,
+            _config_pin,
+        } = self;
+        owner._controller_config_pin = Some(_config_pin);
+        let key = permit.record().command.command_id.clone();
+        let journal = &mut *j;
+        let result = crate::activation::on_original_io(owner, move |mut owner| async move {
+            match owner.deliver_controller(journal, a, s, &permit).await {
+                Ok(()) => Ok(owner),
+                Err(reason) => {
+                    owner.record_controller_uncertainty(
+                        journal,
+                        a,
+                        s,
+                        &permit.record().command.command_id,
+                    );
+                    Err(ActivationLaunchFailure {
+                        reason,
+                        custody: owner,
+                    })
+                }
+            }
+        });
+        match result {
+            Ok(value) => value,
+            Err((owner, reason)) => {
+                owner.record_controller_uncertainty(j, a, s, &key);
+                Err(ActivationLaunchFailure {
+                    reason: reason.into(),
+                    custody: owner,
+                })
+            }
+        }
+    }
     pub fn record(&self) -> &controller::ActivationControllerRecord {
         self.permit.record()
     }
@@ -26,6 +70,81 @@ impl ActivationControllerPreparation {
 }
 
 impl ActivationProcessGuard {
+    pub fn controller_observation(
+        &self,
+    ) -> Option<&winbridge_protocol::update::ActivationControllerObservation> {
+        self.controller_observation.as_ref()
+    }
+
+    async fn deliver_controller(
+        &mut self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        permit: &ActivationControllerPermit,
+    ) -> Result<()> {
+        j.require_activation_controller_issued(a, s, &self.files.preparation, &self.record, permit)
+            .map_err(|e| e.to_string())?;
+        self.require_fixed_custody(true)?;
+        let live = infrastructure::PinnedProcess::live(
+            &self.resident_process().ok_or("Controller child missing")?,
+        )
+        .map_err(|e| e.to_string())?;
+        let deadline = self.files.preparation.deadline;
+        let remaining = || {
+            deadline
+                .checked_duration_since(std::time::Instant::now())
+                .filter(|d| !d.is_zero())
+                .ok_or_else(|| {
+                    "Original controller startup window expired before delivery".to_string()
+                })
+        };
+        let command = &permit.record().command;
+        let stream = self
+            .channel
+            .as_mut()
+            .ok_or("Original controller channel missing")?;
+        channel::write(
+            stream,
+            &channel::ControllerCommand {
+                contract_version: channel::CONTROLLER_CONTRACT,
+                command: command.clone(),
+            },
+            remaining()?,
+        )
+        .await?;
+        let ready: channel::ControllerReady = channel::read(stream, remaining()?).await?;
+        channel::validate_controller_ready(&ready, command)?;
+        let observed =
+            crate::activation::controller_probe::probe(command, &ready.receipt, deadline, || {
+                self.require_fixed_custody(false)?;
+                live.require_live().map_err(|e| e.to_string())?;
+                j.require_activation_controller_issued(
+                    a,
+                    s,
+                    &self.files.preparation,
+                    &self.record,
+                    permit,
+                )
+                .map_err(|e| e.to_string())
+            })
+            .await?;
+        let winbridge_protocol::update::ActivationControllerObservationResult::Observed {
+            receipt,
+            ..
+        } = &observed.result
+        else {
+            return Err("Normal controller observation not confirmed".into());
+        };
+        let next = permit.record().confirmed(
+            receipt.as_ref().clone(),
+            self.at()?.max(receipt.compatibility.observed_at_ms),
+        )?;
+        j.append_activation_controller_owned(a, s, &self.files.preparation, &self.record, &next)
+            .map_err(|e| e.to_string())?;
+        self.controller_observation = Some(observed);
+        Ok(())
+    }
     /// Preparation only. No network command is sent here. The future consuming
     /// sender must recheck this original owner and use its remaining window.
     pub fn prepare_controller_blocking(

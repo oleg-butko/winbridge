@@ -10,6 +10,48 @@ pub(crate) struct CachedProjection {
 }
 const MAX_AGE: Duration = Duration::from_secs(10);
 impl Worker {
+    /// Capture frame and Welcome/attempt under the same links lock. Only the
+    /// current registry's accepted, still fresh projection can be returned.
+    pub(crate) fn activation_controller_frame(
+        &self,
+        id: &str,
+        context: &RequestContext,
+    ) -> Result<(ControllerReadinessProjection, ControllerLinkObservation), String> {
+        let links = self
+            .controllers
+            .as_ref()
+            .ok_or("Controller topology missing")?
+            .lock()
+            .map_err(|_| "Controller state lock poisoned")?;
+        let link = links.links.get(id).ok_or("Selected controller missing")?;
+        let cache = link
+            .projection
+            .as_ref()
+            .ok_or("No accepted controller projection yet")?;
+        let now = links
+            .clock
+            .elapsed()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX);
+        if cache.received.elapsed() > MAX_AGE
+            || cache.projection.context != *context
+            || links.registry.projection_sequence(id, now) != Some(cache.projection.sequence)
+            || !matches!(link.connection.state, ConnectionState::Connected)
+            || link.connection.session_id.as_ref() != Some(&cache.projection.session_id)
+            || link.connection.controller_generation.as_ref()
+                != Some(&cache.projection.controller_generation)
+        {
+            return Err("Selected controller projection is stale or disconnected".into());
+        }
+        let observed = links
+            .observe(context.clone(), self.generation.clone())
+            .connections
+            .into_iter()
+            .find(|l| l.id == id)
+            .ok_or("Selected controller observation missing")?;
+        Ok((cache.projection.clone(), observed))
+    }
     pub(crate) fn accept_projection(
         &self,
         ticket: &Ticket,
@@ -216,6 +258,11 @@ mod tests {
         assert!(worker.accept_projection(&a, pa.clone()).unwrap());
         assert!(!worker.accept_projection(&b, pa).unwrap());
         assert!(worker.accept_projection(&b, pb).unwrap());
+        let context = worker.request_context().unwrap();
+        let (frame, link) = worker.activation_controller_frame("b", &context).unwrap();
+        assert_eq!(frame.controller_generation, "generation-b");
+        assert_eq!(link.id, "b");
+        assert_eq!(link.attempts, "1");
         let observed = |ticket: Option<&Ticket>| {
             let request = WireRequest::Legacy(LocalRequest::Info);
             let response = match ticket {
@@ -245,12 +292,15 @@ mod tests {
             "generation-b"
         );
         links.lock().unwrap().disconnected(&a, "lost a".into());
+        assert!(worker.activation_controller_frame("a", &context).is_err());
+        assert!(worker.activation_controller_frame("b", &context).is_ok());
         assert!(observed(None).1.is_none());
         assert_eq!(
             observed(Some(&b)).1.unwrap().controller_generation,
             "generation-b"
         );
         let fresh = links.lock().unwrap().begin("a").unwrap();
+        assert!(worker.activation_controller_frame("a", &context).is_err());
         links
             .lock()
             .unwrap()
@@ -268,6 +318,9 @@ mod tests {
             .accept_projection(&a, fresh_projection.clone())
             .unwrap());
         assert!(worker.accept_projection(&fresh, fresh_projection).unwrap());
+        let (frame, link) = worker.activation_controller_frame("a", &context).unwrap();
+        assert_eq!(frame.controller_generation, "new-generation");
+        assert_eq!(link.attempts, "2");
         links
             .lock()
             .unwrap()

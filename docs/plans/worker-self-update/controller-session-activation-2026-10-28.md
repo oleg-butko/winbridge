@@ -7,6 +7,37 @@ Public install/whole update остаётся выключенным.
 
 ## Текущая реализация
 
+**Same-child network/private5 реализованы в source.** Consuming preparation
+передаёт один ControllerCommand по прежнему authenticated pipe; receiver связывает
+exact controller intent с original RunningLocalService и запускает обычный manager
+на том же Arc/Store/lock/generation/authority. FSM NotStarted→Attempted→Running
+не разрешает retry даже после ошибки checkpoint.1–4 endpoints работают независимо;
+close останавливает и join-ит network до закрытия IPC/освобождения state.
+Новый readonly normal IPC возвращает Waiting/Observed/Rejected; Observed содержит
+actual compatibility, full accepted projection и atomic current link/attempt.
+Parent независимо проверяет normal IPC/PID/Info/frame после private Ready;
+original240s не обновляются. Controller ledger Confirmed не меняет root local7/
+AwaitingController, не передаёт Job и не открывает dispatch/maintenance.
+
+Review: нельзя начинать сеть после stop/завершения IPC; нельзя использовать frame,
+полученный до затратной проверки runtime, после смены ticket. Обе ситуации закрыты.
+Ожидание projection не хеширует EXE и не перечитывает полный updater graph в каждом
+цикле; poll100ms, expensive verification после появления accepted frame. Это важно
+после прежнего CPU regression. Metadata fixtures не выдают native proof.
+Debian tests1–4 actual TCP attempts/real IPC + unchanged authority/history/queue/
+closed dispatch/duplicate refusal/network join прошли; ещё2 cases проверяют
+pre-effect topology/checkpoint failure и stopped IPC. Workspace921/17 ignored
+passed; после него26 focused controller tests (включая дополнительный normal IPC
+probe refusal) passed. Final Linux/MSVC workspace all-target/update-validation
+Clippy passed; evidence `.winbridge/review-2026-10-28/controller-network-*`.
+
+**Новый Windows runtime пока не исполнялся.** Private5 marker теперь объявляется
+из source receiver; installed48c834c остаётся private4 и не менялся. Следом
+typed supervisor26/view18, где saved controller fact отделён от current residency,
+и отдельный Main26 в stable slot204. Прежние Main25/retained20→21 не replay-ить.
+Job lifetime/whole commit/release и U2–U4 остаются впереди. Ниже сохранены
+foundation checkpoints и план guards, а не заявление готовности всего updater.
+
 Добавлены strict DTO в protocol/update/activation_controller.rs и TypeScript
 bindings. Pure activation/controller связывает frozen physical6/writer/service
 с exact LocalVerified7, сохраняет original deadline и typed history
@@ -21,8 +52,8 @@ Issued→Confirmed либо Issued→Indeterminate→Confirmed.10 focused tests 
 и единственный Issued permit после подтверждённого SQL commit. Fresh factory
 сверяет exact LocalVerified7/atomic AwaitingController edge, owner/epoch/current
 supervisor/nonce/schema21 и original monotonic window до/после записи. Same key
-возвращает только Existing data; другой selection/key — KeyConflict. Native
-sender/network/private5 receiver пока не реализованы, marker5 не advertised:
+возвращает только Existing data; другой selection/key — KeyConflict. На этом
+checkpoint sender/network/private5 receiver ещё не были реализованы, marker5 не advertised:
 старый child отвергается до intent. Actor25/view17/service4 и installed worker
 прежние; public install закрыт. Подготовка отдельно не означает подключение.
 269 updater library tests passed/4 ignored;13 controller SQL/root cases включают

@@ -7,11 +7,15 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 use winbridge_protocol::update::SupervisorProcess;
 
 pub use winbridge_protocol::update::{
-    ActivationReceiverChallenge as Challenge, ActivationReceiverReady as Ready,
+    ActivationReceiverChallenge as Challenge,
+    ActivationReceiverControllerCommand as ControllerCommand,
+    ActivationReceiverControllerReady as ControllerReady, ActivationReceiverReady as Ready,
     ActivationReceiverServiceCommand as ServiceCommand,
     ActivationReceiverServiceReady as ServiceReady, ActivationReceiverStateHandoff as StateHandoff,
     ActivationReceiverStateOwned as StateOwned, ActivationReceiverWriterCommand as WriterCommand,
-    ActivationReceiverWriterReceipt as WriterReceipt, ACTIVATION_RECEIVER_CONTRACT as CONTRACT,
+    ActivationReceiverWriterReceipt as WriterReceipt,
+    ACTIVATION_CONTROLLER_CONTRACT as CONTROLLER_CONTRACT,
+    ACTIVATION_CONTROLLER_MARKER as CONTROLLER_MARKER, ACTIVATION_RECEIVER_CONTRACT as CONTRACT,
     ACTIVATION_RECEIVER_MARKER as RECEIVER_MARKER, ACTIVATION_SERVICE_CONTRACT as SERVICE_CONTRACT,
     ACTIVATION_SERVICE_MARKER as SERVICE_MARKER,
     ACTIVATION_STATE_HANDOFF_CONTRACT as HANDOFF_CONTRACT,
@@ -19,6 +23,25 @@ pub use winbridge_protocol::update::{
     ACTIVATION_WRITER_CONTRACT as WRITER_CONTRACT, ACTIVATION_WRITER_MARKER as WRITER_MARKER,
 };
 const MAX_BYTES: usize = 32768;
+
+pub fn validate_controller_command(
+    message: &ControllerCommand,
+    expected: &winbridge_protocol::update::WorkerControllerActivationCommand,
+) -> Result<()> {
+    if message.contract_version != CONTROLLER_CONTRACT || &message.command != expected {
+        return Err("Private controller command differs from durable intent".into());
+    }
+    super::controller::validate_command_envelope(expected)
+}
+pub fn validate_controller_ready(
+    message: &ControllerReady,
+    command: &winbridge_protocol::update::WorkerControllerActivationCommand,
+) -> Result<()> {
+    if message.contract_version != CONTROLLER_CONTRACT {
+        return Err("Private controller Ready contract differs".into());
+    }
+    super::controller::validate_receipt(&message.receipt, command)
+}
 
 pub fn require_writer_receiver(
     record: &ActivationRecord,

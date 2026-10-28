@@ -13,6 +13,8 @@ mod lifecycle;
 pub use lifecycle::*;
 pub mod channel;
 pub mod controller;
+#[cfg(any(windows, test))]
+pub(crate) mod controller_probe;
 mod process_view;
 pub mod service;
 mod service_view;
