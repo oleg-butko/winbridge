@@ -1,5 +1,26 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Продолжение на .204,2026-10-28:** main fast-forward до94629b2, ветка
+`feat/updater-lifetime-runtime-204`. [V6 source runtime и ревью](plans/worker-self-update/lifetime-runtime-2026-10-28.md):
+same-child decoder, typed supervised quarantine, consuming sender и independent
+normal IPC добавлены. Private6 marker удерживает реализованный receiver; source
+worker19/updater22, actor26/view18 прежние. Atomic entry внутри original window;
+lost Ready ACK сохраняет quarantine под original keeper. Queries не создают mode,
+roots/dispatch/admin остаются закрыты, Job limits/Store/authority не меняются.
+Ревью исправило повторное использование полного startup budget в ранних V1–V3 IO:
+теперь каждый connect/read/write получает остаток исходного frozen deadline.
+Actor27/view19 и новый native Main27, consuming keeper role, final commit/scoped
+release и U2–U4 ещё впереди. Нового V6 Windows execution proof пока нет; old gates
+не replay. Installed worker0.2.0 и production controller не обновлялись.
+
+958 workspace/update-validation tests passed/17 ignored; 45 Python regressions,
+Linux/MSVC workspace all-target Clippy, TypeScript/UI build,
+contracts/fmt/diff/scaffold321 passed. Полные результаты — в linked checkpoint. Readonly
+проверка подтверждает обе связи .203/.204 с прежним worker/gen946f1128, текущие
+ошибки соединений отсутствуют.
+
+## История предыдущих checkpoint
+
 **Lifetime original admission/preparation реализованы в source,2026-10-28.**
 Consuming factory сохраняет Issued только из original controller-verified owner;
 точные root/epoch/nonce/config pin/Job/child/window проверяются до/после commit.
@@ -15,8 +36,6 @@ normal-IPC lifetime observation, actor27/view19, keeper role/commit/scoped relea
 новый native gate. Main26/OS/actual21→22 terminal, не replay. Installed0.2.0
 build/gen946f1128 прежний/active0/errors=null; Windows tasks/UI не запускались.
 Рабочий worker оставить, desktop не нужен; public activation/install off.
-
-## История предыдущих checkpoint
 
 **Actual21→22 passed:**run20261028-201224-538a7897/taskd34454d3, producerd2c3a1b.
 1 native test/4 files twice/26+61 negative audits; readonly reread identical.

@@ -235,7 +235,7 @@ fn service_transfer_rechecks_authority_after_the_last_external_checkpoint() {
 
 // The graph/process metadata stays synthetic. These tests additionally exercise
 // shared Worker recovery and real local IPC (named pipe on Windows), never TCP.
-fn service_fixture(root: &Path) -> (PreparedServiceJournal, std::path::PathBuf, String) {
+pub(crate) fn service_fixture(root: &Path) -> (PreparedServiceJournal, std::path::PathBuf, String) {
     service_fixture_with(
         root,
         serde_json::json!({"controllerUrl":"ws://127.0.0.1:9","keepRunningOnUiExit":true}),

@@ -17,6 +17,8 @@ pub mod controller;
 pub(crate) mod controller_probe;
 mod controller_view;
 pub mod lifetime;
+#[cfg(any(windows, test))]
+pub(crate) mod lifetime_probe;
 pub(crate) use controller_view::view as controller_view;
 mod process_view;
 pub mod service;

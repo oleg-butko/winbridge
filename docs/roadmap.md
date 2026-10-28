@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-28, .204: [lifetime V6 source runtime](plans/worker-self-update/lifetime-runtime-2026-10-28.md)
+продолжает original admission: same-child receiver, typed quarantine, single-send
+и normal IPC observation; roots/dispatch закрыты. Остаток original deadline теперь
+соблюдается и в раннем verification IO. Source19/22/private6/actor26/view18;
+actor27/view19 + fresh native gate, keeper role/commit/scoped release и U2–U4 впереди.
+Windows runtime в этом source шаге не заменяется, native proof не объявлен.
+
 **Lifetime original admission/preparation — source checkpoint:** consuming
 original guard → durable Issued → повторный current custody/readback; readonly
 receiver data и strict proposed private6 packets добавлены. [Границы, ревью, далее](plans/worker-self-update/lifetime-admission-2026-10-28.md).

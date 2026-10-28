@@ -96,6 +96,54 @@ impl PinnedProcess {
             Ok(())
         }
     }
+    /// Query-only membership in an existing Job. Never create a Job, retain a
+    /// child-side Job handle, alter limits, or infer ownership from its name.
+    pub fn require_job_membership(&self, name: &str) -> io::Result<()> {
+        self.require_live()?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+            use windows_sys::Win32::System::{
+                JobObjects::{IsProcessInJob, OpenJobObjectW},
+                SystemServices::JOB_OBJECT_QUERY,
+            };
+            let wide: Vec<_> = name.encode_utf16().chain(Some(0)).collect();
+            if name.is_empty() || name.contains('\0') {
+                return Err(io::Error::other("Invalid Job observation name"));
+            }
+            let raw = unsafe { OpenJobObjectW(JOB_OBJECT_QUERY, 0, wide.as_ptr()) };
+            if raw.is_null() {
+                return Err(io::Error::last_os_error());
+            }
+            let job = unsafe { OwnedHandle::from_raw_handle(raw) };
+            let mut member = 0;
+            if unsafe {
+                IsProcessInJob(
+                    self.handle.as_raw_handle(),
+                    job.as_raw_handle(),
+                    &mut member,
+                )
+            } == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+            if member == 0 {
+                return Err(io::Error::other(
+                    "Pinned process is outside the original activation Job",
+                ));
+            }
+            drop(job);
+            self.require_live()
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = name;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "Exact Job membership requires Windows",
+            ))
+        }
+    }
     /// Only the retained kernel object decides this result. Access denied and
     /// an invalid wait never become positive evidence of exit.
     pub fn exited(&self) -> io::Result<bool> {
@@ -410,6 +458,16 @@ mod tests {
         let pin = PinnedProcess::live(&identity).unwrap();
         assert_eq!(pin.identity(), &identity);
         assert!(!pin.exited().unwrap());
+        let job = child.identity().unwrap().job_name.clone();
+        pin.require_job_membership(&job).unwrap();
+        assert!(pin
+            .require_job_membership(&format!(
+                "Global\\WinBridge-Missing-{}-{}",
+                identity.process_id, identity.birth
+            ))
+            .is_err());
+        // Query failure does not alter the original membership or limits.
+        pin.require_job_membership(&job).unwrap();
         child.resume().unwrap();
         pin.require_live().unwrap();
         child.terminate_tree().unwrap();

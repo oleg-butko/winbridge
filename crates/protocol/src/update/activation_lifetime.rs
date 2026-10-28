@@ -1,4 +1,4 @@
-//! Proposed V6 data only. Defining a contract does not advertise a receiver.
+//! V6 lifetime transition and independent readonly normal-IPC observation.
 use super::{StateBackupAuthority, SupervisorProcess};
 use crate::WorkerRuntimeCompatibility;
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct ActivationReceiverLifetimeReady {
     pub receipt: WorkerLifetimeActivationReceipt,
 }
 
-/// The only proposed mode keeps command dispatch frozen. Normal service and
+/// The implemented mode keeps command dispatch frozen. Normal service and
 /// maintenance release require separate, independently checked contracts.
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -49,6 +49,14 @@ macro_rules! dto { ($($item:item)*) => {$ (
 )*}; }
 
 dto! {
+    pub struct ActivationLifetimeQuery {
+        pub lifetime_observation_version: u16,
+        pub command: WorkerLifetimeActivationCommand,
+    }
+    pub struct ActivationLifetimeObservation {
+        pub lifetime_observation_version: u16,
+        pub result: ActivationLifetimeObservationResult,
+    }
     /// Flat references to exact retained records, not another recursive copy
     /// of the service/controller command graph. Data never reconstructs custody.
     pub struct WorkerLifetimeActivationBinding {
@@ -88,4 +96,23 @@ dto! {
         pub authority: StateBackupAuthority,
         pub mode: WorkerLifetimeActivationMode,
     }
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ActivationLifetimeObservationResult {
+    Observed {
+        receipt: Box<WorkerLifetimeActivationReceipt>,
+        observed_at_ms: u64,
+    },
+    Rejected {
+        message: String,
+    },
 }

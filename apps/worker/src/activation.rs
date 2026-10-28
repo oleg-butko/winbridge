@@ -1,9 +1,32 @@
 //! Private startup before Store/instance lock/dispatch. Ready grants no writer.
 use crate::Result;
 use std::path::Path;
+#[cfg(any(windows, test))]
+fn verification_remaining(
+    deadline: std::time::Instant,
+    now: std::time::Instant,
+    wall_ms: u64,
+    admitted_ms: u64,
+    timeout_ms: u64,
+) -> Result<std::time::Duration> {
+    let end = admitted_ms
+        .checked_add(timeout_ms)
+        .ok_or("Activation deadline overflow")?;
+    if wall_ms < admitted_ms || wall_ms >= end {
+        return Err("Original activation window expired or clock moved backwards".into());
+    }
+    let monotonic = deadline
+        .checked_duration_since(now)
+        .filter(|d| !d.is_zero())
+        .ok_or_else(|| "Original monotonic activation window expired".to_string())?;
+    Ok(monotonic.min(std::time::Duration::from_millis(end - wall_ms)))
+}
 #[cfg(windows)]
 #[path = "activation_controller.rs"]
 mod controller;
+#[cfg(windows)]
+#[path = "activation_lifetime.rs"]
+mod lifetime;
 #[cfg(windows)]
 #[path = "activation_service.rs"]
 mod service;
@@ -44,6 +67,8 @@ pub async fn receive(config: &Path, update_id: &str, attempt_id: &str) -> Result
     std::hint::black_box(winbridge_update::activation::channel::WRITER_MARKER);
     std::hint::black_box(winbridge_update::activation::channel::SERVICE_MARKER);
     std::hint::black_box(winbridge_update::activation::channel::CONTROLLER_MARKER);
+    #[cfg(windows)]
+    std::hint::black_box(winbridge_protocol::update::ACTIVATION_LIFETIME_MARKER);
     #[cfg(not(windows))]
     {
         let _ = (config, update_id, attempt_id);
@@ -139,6 +164,7 @@ mod native {
         // Freeze the child's remaining original window once. Receiving another
         // message or a wall-clock rollback must not start another timeout.
         let handoff_deadline = original_handoff_deadline(&record)?;
+        let remaining = || remaining_handoff(&record, handoff_deadline);
         timing.observe_deadline(handoff_deadline);
         timing.mark("initial_graph_checked", None, None);
         let check = crate::compatibility::check_config(
@@ -157,13 +183,15 @@ mod native {
         let parent =
             PinnedProcess::live(&record.intent.context.supervisor).map_err(|e| e.to_string())?;
         let address = channel::endpoint(&directory, attempt_id)?;
-        let mut stream =
-            winbridge_transport::supervisor::connect(&address, parent.identity().process_id)
-                .await
-                .map_err(|_| "Private activation parent connection rejected")?;
+        let mut stream = tokio::time::timeout(
+            remaining()?,
+            winbridge_transport::supervisor::connect(&address, parent.identity().process_id),
+        )
+        .await
+        .map_err(|_| "Original activation window expired during parent connection")?
+        .map_err(|_| "Private activation parent connection rejected")?;
         parent.require_live().map_err(|e| e.to_string())?;
-        let timeout = Duration::from_millis(record.intent.context.startup_timeout_ms);
-        let challenge: channel::Challenge = channel::read(&mut stream, timeout).await?;
+        let challenge: channel::Challenge = channel::read(&mut stream, remaining()?).await?;
         channel::validate_challenge(&challenge, &record)?;
         timing.mark("challenge_received", None, None);
         // Expensive verification precedes Ready. Never reopen the worker Store.
@@ -196,13 +224,13 @@ mod native {
             },
         };
         channel::validate_ready(&ready, &record)?;
-        channel::write(&mut stream, &ready, timeout).await?;
+        channel::write(&mut stream, &ready, remaining()?).await?;
         timing.mark("ready_sent", None, None);
         // One bounded read remains live while checking the original parent.
         // V1 Ready is unchanged; V2 is a separate typed handoff, never a writer.
         let request: channel::StateHandoff = tokio::select! {
-            value=channel::read(&mut stream,timeout) => value?,
-            outcome=parent_alive(&parent, timeout) => return outcome,
+            value=channel::read(&mut stream,remaining()?) => value?,
+            outcome=parent_alive(&parent, remaining()?) => return outcome,
         };
         timing.mark("handoff_received", None, None);
         let snapshot = UpdateJournal::inspect_activation_state_handoff(
@@ -276,12 +304,12 @@ mod native {
             },
         };
         channel::validate_state_owned(&owned, issued)?;
-        channel::write(&mut stream, &owned, timeout).await?;
+        channel::write(&mut stream, &owned, remaining()?).await?;
         timing.mark("state_owned_sent", None, None);
         // V3 is a separate private command, not permission inferred from V2.
         let request: channel::WriterCommand = tokio::select! {
-            value=channel::read(&mut stream,timeout)=>value?,
-            outcome=parent_alive(&parent,timeout)=>return outcome,
+            value=channel::read(&mut stream,remaining()?)=>value?,
+            outcome=parent_alive(&parent,remaining()?)=>return outcome,
         };
         timing.mark("writer_received", None, None);
         let writer_snapshot = UpdateJournal::inspect_activation_writer_receiver(
@@ -345,7 +373,7 @@ mod native {
             receipt: fresh.receipt().clone(),
         };
         channel::validate_writer_receipt(&response, &request.command)?;
-        channel::write(&mut stream, &response, timeout).await?;
+        channel::write(&mut stream, &response, remaining()?).await?;
         service::Receiver {
             config,
             directory,
@@ -387,15 +415,16 @@ mod native {
         record: &ActivationRecord,
         deadline: Instant,
     ) -> Result<()> {
-        let end = record
-            .intent
-            .admitted_at_ms
-            .checked_add(record.intent.context.startup_timeout_ms)
-            .ok_or("State handoff deadline overflow")?;
-        if Instant::now() >= deadline || now()? >= end {
-            return Err("Original state handoff window expired; no lock acquisition".into());
-        }
-        Ok(())
+        remaining_handoff(record, deadline).map(|_| ())
+    }
+    fn remaining_handoff(record: &ActivationRecord, deadline: Instant) -> Result<Duration> {
+        super::verification_remaining(
+            deadline,
+            Instant::now(),
+            now()?,
+            record.intent.admitted_at_ms,
+            record.intent.context.startup_timeout_ms,
+        )
     }
     pub(super) async fn parent_alive(parent: &PinnedProcess, timeout: Duration) -> Result<()> {
         let until = Instant::now()
@@ -416,6 +445,38 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn verification_io_uses_remaining_original_budget_and_refuses_clock_rollback() {
+        use std::time::{Duration, Instant};
+        let now = Instant::now();
+        let deadline = now + Duration::from_secs(10);
+        assert_eq!(
+            verification_remaining(deadline, now, 240500, 1000, 240000).unwrap(),
+            Duration::from_millis(500),
+            "A forward wall-clock jump must reduce IO budget too"
+        );
+        assert!(
+            verification_remaining(deadline, now, 121000, 1000, 120000).is_err(),
+            "A retained 120-second attempt must not receive a new 240-second budget"
+        );
+        assert_eq!(
+            verification_remaining(deadline, now, 1001, 1000, 240000).unwrap(),
+            Duration::from_secs(10)
+        );
+        assert_eq!(
+            verification_remaining(deadline, now + Duration::from_secs(3), 4001, 1000, 240000)
+                .unwrap(),
+            Duration::from_secs(7)
+        );
+        for (at, wall, admitted, budget) in [
+            (deadline, 1001, 1000, 240000),
+            (now, 999, 1000, 240000),
+            (now, 241000, 1000, 240000),
+            (now, u64::MAX, u64::MAX, 1),
+        ] {
+            assert!(verification_remaining(deadline, at, wall, admitted, budget).is_err());
+        }
+    }
     use crate::store::{shutdown_metadata_fixture, ShutdownAcceptance, JOURNAL_SCHEMA_VERSION};
     use winbridge_protocol::RequestContext;
 
