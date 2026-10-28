@@ -1137,6 +1137,8 @@ mod activation_service;
 pub use activation_service::*;
 mod activation_controller;
 pub use activation_controller::*;
+mod activation_lifetime;
+pub use activation_lifetime::*;
 
 mod activation_service_view;
 pub use activation_service_view::*;

@@ -5,6 +5,10 @@ updater21/private5/supervisor26/view18; [Main26](plans/worker-self-update/main26
 подтвердил same-child controller session при закрытых root commit/release.
 Public install off. [Lifetime двух поколений](plans/worker-self-update/activation-lifetime-2026-10-28.md)
 пока OS experiment: отдельные helper processes не являются готовыми keeper actors.
+Добавлен [compact lifetime DTO/FSM](plans/worker-self-update/lifetime-contract-2026-10-28.md):
+flat digests связывают полный retained graph с original keeper/Job/authority/window,
+единственный proposed mode — supervised quarantine. Это только данные, без нового
+private marker/receiver, root commit или maintenance release; updater21 прежний.
 Ниже сохранены датированные исторические checkpoints предыдущих версий.
 
 2026-10-27: [multi-controller review/merge](analysis/multi-controller-merge-review-2026-10-27.md)

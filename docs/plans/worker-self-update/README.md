@@ -1,5 +1,15 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-28: Main26 и lifetime OS spike пройдены.** Worker0.2.0 установлен,
+оба Debian controller подключены. Начать с [handoff](../../handoff.md),
+[Main26 результата](main26-native-2026-10-28.md),
+[lifetime OS proof](windows-lifetime-spike-2026-10-28.md) и
+[нового lifetime контракта](lifetime-contract-2026-10-28.md).
+Source19/21/private5/supervisor26/view18; lifetime DTO/FSM пока data-only.
+Следом ledger/admission → same-child supervised quarantine → final commit/scoped
+release → U2 faults/U3 UI/U4 actual update. Public install off; installed worker
+оставить работать, desktop не нужен. Ниже — история предыдущих checkpoints.
+
 **2026-10-26: performance-ветка слита в main, worker0.1.1 установлен.**
 Начать с [runtime archive checkpoint](runtime-archive-2026-10-27.md)
 и [fixture layout checkpoint](fixture-layout-2026-10-27.md)
@@ -17,7 +27,7 @@ Archive policy6+11+12 native checks пройдены; full gate/network/Main25 �
 Самообновление не считается готовым до U4. Каждому пакету нужны автоматические
 проверки; ручная работа на Windows — первоначальная установка новой capability.
 
-## Текущий checkpoint — writer24 подтверждён 2026-10-25
+## Исторический checkpoint — writer24 подтверждён 2026-10-25
 
 Начать с [актуального checkpoint](resume-2026-10-25-writer-verified.md)
 и [review/latency](review-2026-10-25-latency.md).

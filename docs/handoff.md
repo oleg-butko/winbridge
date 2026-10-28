@@ -1,5 +1,18 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Lifetime DTO/FSM,2026-10-28:** добавлены compact mode/binding/command/receipt
+и чистые causal transitions Issued→Confirmed либо Issued→Indeterminate→Confirmed.
+Original controller/local7 graph, keeper/Job/authority/root revision и deadline
+immutable; late fact не создаёт permission.6 focused tests и935 workspace tests
+прошли/17 ignored; Linux/MSVC all-target Clippy, TS/contracts/fmt/scaffold317 passed.
+[Контракт и порядок подключения](plans/worker-self-update/lifetime-contract-2026-10-28.md).
+Новых private/RPC/support/schema версий нет: source19/21/private5/actor26/view18.
+Это data-only; receiver/keeper runtime/commit/release не подключены.
+Следом updater22 lifetime intent/current/history/readback, затем fresh original
+admission, actual retained21→22 copy/refusal gate, same-child receiver/normal IPC,
+keeper role/final commit/scoped release/U2–U4. Прежние native gates не replay.
+Installed0.2.0/gen946f1128 прежний/idle/errors=null; desktop не нужен, worker оставить.
+
 **Main26 passed,2026-10-28:** run20261028-152239-0a6abd07/taskc5f23f8b,
 producer d288b0f → target b149eed/SDK19+21.175 native tests/46 commands,
 57 files twice/24+27+10 negatives/3 markers; independent readonly reread identical.

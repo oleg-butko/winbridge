@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+**Lifetime DTO/FSM:** compact contract и чистые causal transitions реализованы;
+6 focused/935 workspace tests passed,17 ignored. [Контракт и продолжение](plans/worker-self-update/lifetime-contract-2026-10-28.md).
+Никаких новых advertised support/private/schema версий или runtime permissions.
+Следом updater22 ledger/readback → fresh original admission → actual retained21
+copy/refusal gate → same-child supervised runtime/normal IPC → commit/release/U2–U4.
+
 **Main26 passed:**175 tests/46 commands,57 files twice/24+27+10 negatives,
 3 actual markers; independent readonly reread совпал. [Pins/результат](plans/worker-self-update/main26-native-2026-10-28.md).
 Same child/authority/new session, lost ACK и cold no replay подтверждены; original
