@@ -12,7 +12,8 @@ use winbridge_protocol::update::SupervisorRecord;
 mod activation_files;
 pub use activation_files::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
-    ActivationLaunchFailure, ActivationProcessGuard, ActivationServicePreparation,
+    ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
+    ActivationServicePreparation,
 };
 fn exact_names(
     path: &Path,

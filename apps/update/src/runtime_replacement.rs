@@ -65,8 +65,8 @@ mod physical;
 #[cfg(windows)]
 pub use physical::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
-    ActivationLaunchFailure, ActivationProcessGuard, ActivationServicePreparation,
-    RuntimeReplacementFailure, RuntimeReplacementGuard,
+    ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
+    ActivationServicePreparation, RuntimeReplacementFailure, RuntimeReplacementGuard,
 };
 pub enum RuntimeReplacementAdmission {
     Fresh(Box<RuntimeReplacementPermit>),

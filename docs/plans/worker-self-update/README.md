@@ -4,11 +4,15 @@
 оба Debian controller подключены. Начать с [handoff](../../handoff.md),
 [Main26 результата](main26-native-2026-10-28.md),
 [lifetime OS proof](windows-lifetime-spike-2026-10-28.md) и
-[нового lifetime контракта](lifetime-contract-2026-10-28.md).
-Source19/22/private5/supervisor26/view18; lifetime DTO/FSM и
-[journal22](lifetime-ledger-2026-10-28.md) пока data-only/read-only.
+[lifetime контракта](lifetime-contract-2026-10-28.md) и
+[original admission/preparation](lifetime-admission-2026-10-28.md).
+Source19/22/private5/supervisor26/view18; DTO/FSM,
+[journal22](lifetime-ledger-2026-10-28.md), original consuming admission и
+readonly receiver data реализованы. Proposed private6 пока без worker decoder;
+новых advertised support/runtime permissions нет.
 [Retained21 copy/refusal gate](retained21-to22-2026-10-28.md) пройден.
-Следом fresh admission → same-child supervised quarantine → final commit/scoped
+Следом receiver6/sender/normal IPC → same-child supervised quarantine → keeper
+role → final commit/scoped
 release → U2 faults/U3 UI/U4 actual update. Public install off; installed worker
 оставить работать, desktop не нужен. Ниже — история предыдущих checkpoints.
 

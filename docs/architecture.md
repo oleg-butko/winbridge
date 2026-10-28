@@ -7,11 +7,16 @@ Public install off. [Lifetime двух поколений](plans/worker-self-upd
 пока OS experiment: отдельные helper processes не являются готовыми keeper actors.
 Добавлен [compact lifetime DTO/FSM](plans/worker-self-update/lifetime-contract-2026-10-28.md):
 flat digests связывают полный retained graph с original keeper/Job/authority/window,
-единственный proposed mode — supervised quarantine. Это только данные, без нового
-private marker/receiver, root commit или maintenance release.
+единственный proposed mode — supervised quarantine. Private6 packets — proposed contract, не advertised support;
+receiver, root commit и maintenance release пока отсутствуют.
 [Lifetime ledger22](plans/worker-self-update/lifetime-ledger-2026-10-28.md) добавляет
 immutable intent/current/history и transactional readback полного retained graph.
-Production API пока readonly; writers только test-only, fresh admission впереди.
+[Original admission/preparation](plans/worker-self-update/lifetime-admission-2026-10-28.md)
+теперь сохраняет fresh Issued из того же controller-verified owner; writers
+доступны только trusted Windows пути и tests. Receiver snapshot — только данные.
+Current config pin/path/bytes и original child/Job/root/nonce/epoch/window
+проверяются до/после commit; Existing не восстанавливает permit. Same-child V6
+decoder/sender и typed supervised runtime ещё не реализованы.
 [Actual retained21→22](plans/worker-self-update/retained21-to22-2026-10-28.md)
 проверен copy-only: controller/local7/root сохранены, epoch/backup/old21 refusal
 подтверждены. Keeper runtime/commit/release не реализованы. Main26 native относится

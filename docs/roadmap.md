@@ -1,5 +1,16 @@
 # Постепенная реализация и расширение
 
+**Lifetime original admission/preparation — source checkpoint:** consuming
+original guard → durable Issued → повторный current custody/readback; readonly
+receiver data и strict proposed private6 packets добавлены. [Границы, ревью, далее](plans/worker-self-update/lifetime-admission-2026-10-28.md).
+950 workspace tests/17 ignored, Linux/MSVC Clippy и contracts/fmt/scaffold passed.
+Implemented private5/actor26/view18 прежние; receiver6, sender, typed quarantine,
+normal IPC, actor27/view19 и native positive gate — следующий незавершённый шаг.
+Далее keeper role/commit/scoped release/U2–U4; public install off. Installed
+worker неизменён, новый Windows run не выполнялся.
+
+## История предыдущих checkpoint
+
 **Actual21→22 copy gate passed:**1 native/4 files twice/26+61 negatives,
 readonly reread identical. [Результат и границы](plans/worker-self-update/retained21-to22-2026-10-28.md).
 Original controller/local7/root/rows сохранены; epoch2→3→4/backup/old21 refusal
@@ -38,8 +49,6 @@ readonly reread identical. [Evidence и scope](plans/worker-self-update/windows-
 Installed worker прежний. Следом compact DTO/FSM → ledger/admission → same-child
 receiver/quarantine → final commit/scoped release/U2–U4. OS helper proof не даёт
 production keeper/capabilities, original startup window и Job limits прежние.
-
-## История предыдущих checkpoint
 
 2026-10-28/latest: supervisor26/view18 реализованы в source;927 workspace/17 ignored,
 Linux/MSVC Clippy/TS/UI passed. Old views frozen, Observed отделён от current

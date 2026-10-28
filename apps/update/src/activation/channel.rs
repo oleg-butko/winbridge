@@ -9,13 +9,16 @@ use winbridge_protocol::update::SupervisorProcess;
 pub use winbridge_protocol::update::{
     ActivationReceiverChallenge as Challenge,
     ActivationReceiverControllerCommand as ControllerCommand,
-    ActivationReceiverControllerReady as ControllerReady, ActivationReceiverReady as Ready,
+    ActivationReceiverControllerReady as ControllerReady,
+    ActivationReceiverLifetimeCommand as LifetimeCommand,
+    ActivationReceiverLifetimeReady as LifetimeReady, ActivationReceiverReady as Ready,
     ActivationReceiverServiceCommand as ServiceCommand,
     ActivationReceiverServiceReady as ServiceReady, ActivationReceiverStateHandoff as StateHandoff,
     ActivationReceiverStateOwned as StateOwned, ActivationReceiverWriterCommand as WriterCommand,
     ActivationReceiverWriterReceipt as WriterReceipt,
     ACTIVATION_CONTROLLER_CONTRACT as CONTROLLER_CONTRACT,
-    ACTIVATION_CONTROLLER_MARKER as CONTROLLER_MARKER, ACTIVATION_RECEIVER_CONTRACT as CONTRACT,
+    ACTIVATION_CONTROLLER_MARKER as CONTROLLER_MARKER,
+    ACTIVATION_LIFETIME_CONTRACT as LIFETIME_CONTRACT, ACTIVATION_RECEIVER_CONTRACT as CONTRACT,
     ACTIVATION_RECEIVER_MARKER as RECEIVER_MARKER, ACTIVATION_SERVICE_CONTRACT as SERVICE_CONTRACT,
     ACTIVATION_SERVICE_MARKER as SERVICE_MARKER,
     ACTIVATION_STATE_HANDOFF_CONTRACT as HANDOFF_CONTRACT,
@@ -23,6 +26,25 @@ pub use winbridge_protocol::update::{
     ACTIVATION_WRITER_CONTRACT as WRITER_CONTRACT, ACTIVATION_WRITER_MARKER as WRITER_MARKER,
 };
 const MAX_BYTES: usize = 32768;
+
+pub fn validate_lifetime_command(
+    message: &LifetimeCommand,
+    expected: &winbridge_protocol::update::WorkerLifetimeActivationCommand,
+) -> Result<()> {
+    if message.contract_version != LIFETIME_CONTRACT || &message.command != expected {
+        return Err("Private lifetime command differs from durable intent".into());
+    }
+    super::lifetime::validate_command_envelope(expected)
+}
+pub fn validate_lifetime_ready(
+    message: &LifetimeReady,
+    command: &winbridge_protocol::update::WorkerLifetimeActivationCommand,
+) -> Result<()> {
+    if message.contract_version != LIFETIME_CONTRACT {
+        return Err("Private lifetime Ready contract differs".into());
+    }
+    super::lifetime::validate_receipt(&message.receipt, command)
+}
 
 pub fn validate_controller_command(
     message: &ControllerCommand,

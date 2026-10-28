@@ -168,6 +168,13 @@ pub(super) fn snapshot(
     id: &str,
 ) -> Result<controller::ActivationControllerSnapshot> {
     let graph = Graph::load(c, id)?;
+    snapshot_from_graph(c, id, graph)
+}
+fn snapshot_from_graph(
+    c: &Connection,
+    id: &str,
+    graph: Graph,
+) -> Result<controller::ActivationControllerSnapshot> {
     let controller = ledger(c, id, &graph)?;
     Ok(controller::ActivationControllerSnapshot {
         physical: graph.physical,
@@ -176,6 +183,31 @@ pub(super) fn snapshot(
         local: graph.local,
         controller,
     })
+}
+
+/// Current root/owner/local7 scope for data needed by an already authenticated
+/// resident receiver. Never an OS owner or a renewed startup grant.
+pub(super) fn current_snapshot(
+    c: &Connection,
+    id: &str,
+    attempt: &str,
+    actual: &winbridge_protocol::update::SupervisorProcess,
+) -> Result<controller::ActivationControllerSnapshot> {
+    let graph = Graph::load(c, id)?;
+    custody::receiver_scope(c, id, attempt, actual, &graph)?;
+    snapshot_from_graph(c, id, graph)
+}
+
+#[cfg(windows)]
+pub(super) fn owned_snapshot(
+    c: &Connection,
+    a: &UpdateAuthority,
+    s: &winbridge_protocol::update::SupervisorRecord,
+    preparation: &crate::activation::ActivationPreparation,
+    local: &ActivationRecord,
+) -> Result<controller::ActivationControllerSnapshot> {
+    let graph = custody::owned_local(c, a, s, preparation, local)?;
+    snapshot_from_graph(c, &s.spec.update_id, graph)
 }
 
 #[cfg(any(windows, test))]

@@ -302,6 +302,30 @@ fn lifetime_same_key_is_retained_data_and_changed_graph_cannot_rebind() {
 }
 
 #[test]
+fn lifetime_existing_key_cannot_silently_change_controller_policy_selection() {
+    let (_, g, v, _) = fixture();
+    let topology = g.controller.command.binding.topology.clone();
+    assert_eq!(
+        existing_for_request(v.clone(), &v.command.command_id, &topology, &g).unwrap(),
+        v
+    );
+    let mut changed = topology;
+    changed.confirmation_endpoint_id = "peer1".into();
+    assert_eq!(
+        existing_for_request(v.clone(), &v.command.command_id, &changed, &g)
+            .unwrap_err()
+            .code,
+        JournalErrorCode::KeyConflict
+    );
+    assert_eq!(
+        existing_for_request(v, "another-key", &changed, &g)
+            .unwrap_err()
+            .code,
+        JournalErrorCode::KeyConflict
+    );
+}
+
+#[test]
 fn cold_lifetime_copy_keeps_unknown_outcome_without_recreating_permission() {
     let (mut c, g, v, _) = fixture();
     seed(&c, &v, &g).unwrap();

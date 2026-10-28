@@ -1,5 +1,5 @@
 //! Schema22: retained lifetime decisions, never restored keeper/OS custody.
-//! SQL writers are test-only until original-owner admission is implemented.
+//! Fresh writes require original custody; readbacks never reconstruct it.
 use super::*;
 use crate::activation::{
     controller::ActivationControllerSnapshot,
@@ -131,7 +131,7 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<ActivationLifetime
     ledger(c, id, &graph).map(Some)
 }
 
-#[cfg(test)]
+#[cfg(any(windows, test))]
 fn seed(
     c: &Connection,
     value: &ActivationLifetimeRecord,
@@ -167,7 +167,7 @@ fn seed(
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(any(windows, test))]
 fn seed_checked(
     c: &Connection,
     value: &ActivationLifetimeRecord,
@@ -179,7 +179,7 @@ fn seed_checked(
     checkpoint()
 }
 
-#[cfg(test)]
+#[cfg(any(windows, test))]
 fn existing_for_key(
     value: ActivationLifetimeRecord,
     key: &str,
@@ -193,7 +193,24 @@ fn existing_for_key(
     Ok(value)
 }
 
-#[cfg(test)]
+#[cfg(any(windows, test))]
+fn existing_for_request(
+    value: ActivationLifetimeRecord,
+    key: &str,
+    topology: &winbridge_protocol::update::WorkerControllerActivationTopology,
+    graph: &ActivationControllerSnapshot,
+) -> Result<ActivationLifetimeRecord> {
+    lifetime::validate_command(&value.command, graph).map_err(bad)?;
+    if graph.controller.command.binding.topology != *topology {
+        return Err(fail(
+            JournalErrorCode::KeyConflict,
+            "Lifetime key has another frozen controller topology/selection",
+        ));
+    }
+    existing_for_key(value, key)
+}
+
+#[cfg(any(windows, test))]
 fn persist(
     c: &Connection,
     old: &ActivationLifetimeRecord,
@@ -247,3 +264,7 @@ impl UpdateJournal {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(windows)]
+mod admission;
+mod custody;

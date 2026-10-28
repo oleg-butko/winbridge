@@ -109,7 +109,8 @@ pub struct ActivationServiceSnapshot {
 #[cfg(windows)]
 pub use crate::runtime_replacement::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
-    ActivationLaunchFailure, ActivationProcessGuard, ActivationServicePreparation,
+    ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
+    ActivationServicePreparation,
 };
 
 pub(crate) fn view(

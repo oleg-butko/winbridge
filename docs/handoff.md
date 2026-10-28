@@ -1,5 +1,23 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Lifetime original admission/preparation реализованы в source,2026-10-28.**
+Consuming factory сохраняет Issued только из original controller-verified owner;
+точные root/epoch/nonce/config pin/Job/child/window проверяются до/после commit.
+Existing/cold возвращают данные, не новый permit. Readonly receiver snapshot
+проверяет current schema22 и полный causal prefix. [Код, ревью и продолжение](plans/worker-self-update/lifetime-admission-2026-10-28.md).
+950 workspace/update-validation tests passed/17 ignored; Linux/MSVC all-target
+Clippy, generated contracts/fmt/diff/scaffold passed. Source worker19/updater22,
+**implemented private5/actor26/view18**; proposed private6 command/ready определены,
+но marker не удерживается worker до реального decoder. Sender/runtime entry,
+normal-IPC lifetime observation, actor27/view19, keeper role/commit/scoped release
+и U2–U4 ещё не подключены. Следующий шаг — typed same-child supervised quarantine
+на original stream/Store/authority/Job/window и независимое normal IPC; затем
+новый native gate. Main26/OS/actual21→22 terminal, не replay. Installed0.2.0
+build/gen946f1128 прежний/active0/errors=null; Windows tasks/UI не запускались.
+Рабочий worker оставить, desktop не нужен; public activation/install off.
+
+## История предыдущих checkpoint
+
 **Actual21→22 passed:**run20261028-201224-538a7897/taskd34454d3, producerd2c3a1b.
 1 native test/4 files twice/26+61 negative audits; readonly reread identical.
 Original21 local7/writer/service/controller/root/history/backup сохранены,
@@ -76,8 +94,6 @@ runtime.** Следующий шаг: compact typed lifetime DTO/FSM повер�
 и local7; затем durable intent/admission/readback, same-child receiver+normal IPC,
 keeper role/quarantine, final commit/scoped release, U2–U4. Startup240s не обновлять,
 не переносить файловый mailbox spike в runtime; public activation None.
-
-## История предыдущих checkpoint
 
 **Latest source supervisor26/view18:** connect/observe и typed controller view
 добавлены;927 workspace/update-validation passed/17 ignored, final Linux/MSVC

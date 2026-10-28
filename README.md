@@ -99,19 +99,17 @@ Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в 
 Сетевые тесты используют постоянный каталог `runtime-test` и ждут разрешения
 файервола до 15 минут; рабочая версия устанавливается отдельно в `runtime`.
 
-Актуальная точка updater: [Main25/local service gate](docs/plans/worker-self-update/main25-after-multi-controller-2026-10-27.md)
+Актуальная точка updater: [Main26/controller gate](docs/plans/worker-self-update/main26-native-2026-10-28.md),
+[lifetime preparation](docs/plans/worker-self-update/lifetime-admission-2026-10-28.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source updater20/worker19/supervisor25/view17/private2+writer3+service4.
-Local Worker использует тот же Store/lock/generation; родитель независимо проверяет
-normal IPC, затем атомарно сохраняет LocalVerified/root AwaitingController.
-Controller session/lifetime transfer/commit/release пока не реализованы.
-**Main24 на updater19 пройден:193 Windows tests,56 ready files twice,44+16+18 negative audits.**
-**Main25 на updater20/worker19 пройден:140 Windows tests,52 files twice,3 original
-barriers и34 negative audits.** Отдельная [actual retained19→20 copy migration](docs/plans/worker-self-update/retained19-to20-2026-10-27.md)
-также проверена: сохранность истории/backup/old19 refusal,21 negative audit.
+Source worker19/updater22/supervisor26/view18/implemented private5.
+Local service и controller используют тот же child/Store/lock/authority; Main26
+проверен на Windows. Actual retained21→22 migration/cold refusal также проверены.
+Original lifetime admission сохраняет намерение до отправки, но receiver6,
+supervised keeper runtime, final commit/scoped release и U2–U4 ещё впереди.
 Public install выключен; самообновление целиком ещё не готово.
-Installed worker0.2.0/source48c834c проверен; оба Debian.203/.204 подключены на1143.
-Controller.204 обновлён до0.2.0 с прежним config/state; controller.203 не менялся.
+Installed worker0.2.0/source48c834c и оба controller0.2.0 работают на1143;
+этот source checkpoint рабочие binaries не заменяет.
 
 **После распаковки обновления на Windows:** закрыть desktop, остановить прежний worker
 через Ctrl+C и из папки исходников выполнить `.\scripts\prepare-windows-snapshot.ps1`.

@@ -5,6 +5,66 @@ use serde::{Deserialize, Serialize};
 use winbridge_core::update::{valid_hash, MAX_UPDATE_COUNTER};
 use winbridge_protocol::{update::*, ArtifactRole};
 
+/// Only fresh original-guard admission constructs this non-Serde, non-Clone
+/// permit. Existing records and receiver snapshots below are data only.
+pub struct ActivationLifetimePermit {
+    pub(crate) record: ActivationLifetimeRecord,
+    pub(crate) topology: WorkerControllerActivationTopology,
+}
+impl ActivationLifetimePermit {
+    pub fn record(&self) -> &ActivationLifetimeRecord {
+        &self.record
+    }
+    pub fn topology(&self) -> &WorkerControllerActivationTopology {
+        &self.topology
+    }
+}
+pub enum ActivationLifetimeAdmission {
+    Issued(Box<ActivationLifetimePermit>),
+    Existing(Box<ActivationLifetimeRecord>),
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivationLifetimeSnapshot {
+    pub controller: ActivationControllerSnapshot,
+    pub lifetime: ActivationLifetimeRecord,
+}
+
+/// A retained independent observation must exactly match the confirmed prefix.
+/// This does not promise that the network link is still live; fresh liveness
+/// and original custody/config/window are separately enforced by the owner.
+#[cfg(any(windows, test))]
+pub(crate) fn validate_controller_prefix(
+    s: &ActivationControllerSnapshot,
+    topology: &WorkerControllerActivationTopology,
+    observed: &ActivationControllerObservation,
+) -> Result<()> {
+    s.controller.validate()?;
+    controller::validate_command(
+        &s.controller.command,
+        &s.physical,
+        &s.writer,
+        &s.service,
+        &s.local,
+        topology,
+    )?;
+    let ActivationControllerState::Confirmed { receipt } = &s.controller.state else {
+        return Err("Lifetime requires original confirmed controller prefix".into());
+    };
+    let ActivationControllerObservationResult::Observed {
+        receipt: actual,
+        projection,
+        link,
+    } = &observed.result
+    else {
+        return Err("Lifetime requires original independent controller observation".into());
+    };
+    if observed.controller_observation_version != 1 || actual != receipt {
+        return Err("Lifetime controller observation differs from the exact saved fact".into());
+    }
+    controller::validate_projection_evidence(receipt, &s.controller.command, projection)?;
+    controller::validate_link_evidence(receipt, &s.controller.command, link)
+}
+
 fn uuid(value: &str) -> bool {
     uuid::Uuid::parse_str(value).is_ok_and(|v| v.to_string() == value)
 }

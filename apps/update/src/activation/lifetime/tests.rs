@@ -1,12 +1,43 @@
 use super::*;
 use serde_json::json;
 
-pub(crate) fn fixture() -> (
+fn observed_fixture() -> (
     ActivationControllerSnapshot,
-    WorkerLifetimeActivationCommand,
-    WorkerLifetimeActivationReceipt,
+    ActivationControllerObservation,
 ) {
     let f = controller::test_fixture();
+    let session = &f.receipt.session;
+    let link = winbridge_protocol::ControllerLinkObservation {
+        id: session.controller_id.clone(),
+        attempts: session.connection_attempt.to_string(),
+        connection: winbridge_protocol::ControllerConnection {
+            url: session.controller_url.clone(),
+            state: winbridge_protocol::ConnectionState::Connected,
+            session_id: Some(session.session_id.clone()),
+            controller_node_id: Some(session.controller_node_id.clone()),
+            controller_generation: Some(session.controller_generation.clone()),
+            last_confirmed_at_ms: Some(session.connected_at_ms),
+            error: None,
+        },
+        last_connected_at_ms: Some(session.connected_at_ms),
+        last_disconnected_at_ms: None,
+        last_error: None,
+        rpc: winbridge_protocol::NetworkRpcObservation {
+            in_flight: 0,
+            limit: winbridge_protocol::CONTROLLER_RPC_LIMIT,
+            admitted: "0".into(),
+            completed: "0".into(),
+            rejected: "0".into(),
+        },
+    };
+    let observed = ActivationControllerObservation {
+        controller_observation_version: 1,
+        result: ActivationControllerObservationResult::Observed {
+            receipt: Box::new(f.receipt.clone()),
+            projection: Box::new(f.projection),
+            link: Box::new(link),
+        },
+    };
     let at = f.receipt.compatibility.observed_at_ms;
     let controller = controller::ActivationControllerRecord::issued(f.command)
         .unwrap()
@@ -19,6 +50,15 @@ pub(crate) fn fixture() -> (
         local: f.local,
         controller,
     };
+    (snapshot, observed)
+}
+pub(crate) fn fixture() -> (
+    ActivationControllerSnapshot,
+    WorkerLifetimeActivationCommand,
+    WorkerLifetimeActivationReceipt,
+) {
+    let (snapshot, _) = observed_fixture();
+    let at = snapshot.controller.updated_at_ms;
     let command = prepare_command(&snapshot, &uuid::Uuid::new_v4().to_string(), at + 1).unwrap();
     let mut compatibility = command.binding.compatibility.clone();
     compatibility.observed_at_ms = command.issued_at_ms + 1;
@@ -35,6 +75,98 @@ pub(crate) fn fixture() -> (
         mode: command.mode,
     };
     (snapshot, command, receipt)
+}
+
+#[test]
+fn fresh_lifetime_prefix_requires_exact_saved_observation_and_pinned_topology() {
+    let (snapshot, observed) = observed_fixture();
+    let topology = &snapshot.controller.command.binding.topology;
+    validate_controller_prefix(&snapshot, topology, &observed).unwrap();
+    for mutation in 0..9 {
+        let mut changed = observed.clone();
+        let mut t = topology.clone();
+        let mut s = snapshot.clone();
+        match mutation {
+            0 => changed.controller_observation_version = 2,
+            1 => {
+                changed.result = ActivationControllerObservationResult::Waiting {
+                    message: "No accepted frame".into(),
+                }
+            }
+            2 => {
+                changed.result = ActivationControllerObservationResult::Rejected {
+                    message: "Stale scope".into(),
+                }
+            }
+            3 => t.primary = "unconfigured".into(),
+            4 => t.confirmation_endpoint_id = "peer1".into(),
+            5 => {
+                s.controller =
+                    controller::ActivationControllerRecord::issued(s.controller.command.clone())
+                        .unwrap()
+            }
+            _ => {
+                let ActivationControllerObservationResult::Observed {
+                    receipt,
+                    projection,
+                    link,
+                } = &mut changed.result
+                else {
+                    unreachable!()
+                };
+                match mutation {
+                    6 => receipt.compatibility.observed_at_ms += 1,
+                    7 => projection.sequence += 1,
+                    _ => link.attempts = "999".into(),
+                }
+            }
+        }
+        assert!(
+            validate_controller_prefix(&s, &t, &changed).is_err(),
+            "mutation {mutation}"
+        );
+    }
+}
+
+#[test]
+fn proposed_v6_frames_are_strict_and_never_accept_v5_or_rebound_lifetime() {
+    use crate::activation::channel;
+    let (_, command, receipt) = fixture();
+    assert_eq!(
+        activation_lifetime_marker_pattern(),
+        ACTIVATION_LIFETIME_MARKER
+    );
+    assert_ne!(ACTIVATION_LIFETIME_MARKER, ACTIVATION_CONTROLLER_MARKER);
+    let frame = channel::LifetimeCommand {
+        contract_version: channel::LIFETIME_CONTRACT,
+        command: command.clone(),
+    };
+    let ready = channel::LifetimeReady {
+        contract_version: channel::LIFETIME_CONTRACT,
+        receipt,
+    };
+    channel::validate_lifetime_command(&frame, &command).unwrap();
+    channel::validate_lifetime_ready(&ready, &command).unwrap();
+    for version in [0, 1, 2, 3, 4, 5, 7] {
+        let mut wrong = frame.clone();
+        wrong.contract_version = version;
+        assert!(channel::validate_lifetime_command(&wrong, &command).is_err());
+        let mut wrong = ready.clone();
+        wrong.contract_version = version;
+        assert!(channel::validate_lifetime_ready(&wrong, &command).is_err());
+    }
+    let mut wrong = frame.clone();
+    wrong.command.binding.root_revision += 1;
+    assert!(channel::validate_lifetime_command(&wrong, &command).is_err());
+    let mut wrong = ready.clone();
+    wrong.receipt.authority.epoch += 1;
+    assert!(channel::validate_lifetime_ready(&wrong, &command).is_err());
+    let mut raw = serde_json::to_value(frame).unwrap();
+    raw["canCommit"] = true.into();
+    assert!(serde_json::from_value::<channel::LifetimeCommand>(raw).is_err());
+    let mut raw = serde_json::to_value(ready).unwrap();
+    raw["keeperHandle"] = true.into();
+    assert!(serde_json::from_value::<channel::LifetimeReady>(raw).is_err());
 }
 
 #[test]

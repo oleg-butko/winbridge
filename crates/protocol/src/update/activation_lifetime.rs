@@ -1,7 +1,34 @@
-//! Lifetime proposals only. No receiver marker, RPC action or advertised support.
+//! Proposed V6 data only. Defining a contract does not advertise a receiver.
 use super::{StateBackupAuthority, SupervisorProcess};
 use crate::WorkerRuntimeCompatibility;
 use serde::{Deserialize, Serialize};
+
+pub const ACTIVATION_LIFETIME_CONTRACT: u16 = 6;
+pub const ACTIVATION_LIFETIME_MARKER: &[u8] = b"WINBRIDGE_PRIVATE_LIFETIME_V6";
+
+/// A sender must not embed the receiver marker merely by checking support:
+/// the updater library is also linked into worker binaries. Only the actual
+/// implemented receiver should retain ACTIVATION_LIFETIME_MARKER verbatim.
+pub fn activation_lifetime_marker_pattern() -> Vec<u8> {
+    format!(
+        "WINBRIDGE_PRIVATE_LIFETIME_V{}",
+        std::hint::black_box(ACTIVATION_LIFETIME_CONTRACT)
+    )
+    .into_bytes()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverLifetimeCommand {
+    pub contract_version: u16,
+    pub command: WorkerLifetimeActivationCommand,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationReceiverLifetimeReady {
+    pub contract_version: u16,
+    pub receipt: WorkerLifetimeActivationReceipt,
+}
 
 /// The only proposed mode keeps command dispatch frozen. Normal service and
 /// maintenance release require separate, independently checked contracts.

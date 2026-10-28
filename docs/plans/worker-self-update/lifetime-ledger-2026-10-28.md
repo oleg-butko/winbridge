@@ -1,5 +1,10 @@
 # Lifetime ledger: schema22
 
+**Checkpoint ниже описывает первоначальный data-only ledger.** Теперь
+[original consuming admission и receiver data snapshot](lifetime-admission-2026-10-28.md)
+добавлены; SQL writers доступны trusted Windows factory и tests, публичного JSON
+writer нет. Actual21→22 copy/refusal gate пройден; runtime receiver6/keeper впереди.
+
 2026-10-28. Продолжение [контракта](lifetime-contract-2026-10-28.md) и
 [native OS proof](windows-lifetime-spike-2026-10-28.md). Этот шаг сохраняет
 историю; production fresh admission и смена lifetime режима ещё не реализованы.
@@ -102,9 +107,9 @@ active0/maintenanceError=null/journalRecoveryRequired=null. Runtime204 не ме
 
 1. Actual retained21→22 copy/refusal gate завершён, independent reread совпал.
    Для аудита читать сохранённые артефакты; новый Windows run не требуется.
-2. Fresh lifetime admission — только original resident controller-verified owner:
-   current root/epoch/config/nonce/schema, immutable full graph, original live
-   monotonic window до/после commit. Existing возвращает только data record.
+2. Fresh lifetime admission реализован в
+   [consuming original factory](lifetime-admission-2026-10-28.md). Native positive
+   proof требует следующего receiver6 gate; Existing остаётся data only.
 3. Same-child private receiver и independent normal IPC, затем actor/view
    нового режима supervised quarantine. Не открывать dispatch на подтверждении.
 4. Consuming keeper role, release file pins/journal authority для следующего
