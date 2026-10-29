@@ -1,5 +1,18 @@
 # Постепенная реализация и расширение
 
+**Main28 Windows passed,2026-10-29:** run20261029-091025-be7fc543/task393a8003,
+producer0426a13 → target90fc5b4.213 native tests/50 commands/63 files twice,
+24+27+37+15+10 negative audits/4 markers; independent readonly reread identical.
+[Результат и pins](plans/worker-self-update/main28-native-2026-10-29.md).
+Actual header4/body0, Issued→Indeterminate→Confirmed после original expiry,
+same child22096/Job/Store/authority, no private resend/cold adoption, closed roots
+подтверждены. Runtime204 archived, test controller247140 exited0, installed0.2.0/
+gen946f1128 прежний/active0/errors=null. Desktop можно закрыть, worker оставить.
+Следом [physical custody/keeper finalization](plans/worker-self-update/keeper-finalization-review-2026-10-29.md):
+выделить owned handles из verification pins; old stream после partial Ready
+retire, не переиспользовать; отдельный authenticated control и root/release/Active
+FSM, затем two generations/U2–U4. Public install off. Main28 terminal, не replay.
+
 **Main28 запущен, ещё не завершён:** run20261029-091025-be7fc543,
 task393a8003-e229-4b41-93c7-b65eea2fa992; clean producer0426a13 → target90fc5b4.
 [Команды, source pins и границы](plans/worker-self-update/lifetime-ready-loss-2026-10-29.md).

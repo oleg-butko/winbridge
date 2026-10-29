@@ -1,5 +1,9 @@
 # Main28: неполный private Ready и позднее подтверждение
 
+**Gate завершён:** [Main28 native](main28-native-2026-10-29.md) passed:
+213 tests/63 files twice/independent reread identical. Ниже сохранён source и
+исторический running checkpoint; run terminal, повторять submit не нужно.
+
 2026-10-29. Следующий source шаг после [Main27](main27-native-2026-10-29.md).
 Source worker19/updater22/private6/supervisor27/view19 сохраняются. Новых public
 RPC/support/schema/actor версий нет. Installed worker0.2.0 не меняется.

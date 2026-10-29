@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29: [Main28 native passed](main28-native-2026-10-29.md).**
+Далее [physical keeper/finalization review](keeper-finalization-review-2026-10-29.md),
+root/scoped release/Active и два поколения; public install off. Старые gates
+terminal, не replay вместо нового эффекта. Working worker оставить, desktop не нужен.
+
 **2026-10-29: [Main28 source partial-Ready gate](lifetime-ready-loss-2026-10-29.md)**
 подготовлен после passed Main27. Native новый fault пока не выполнен; далее
 clean export/run/reread и permanent keeper/commit/release/U2–U4. Public install off.
