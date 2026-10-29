@@ -11,6 +11,7 @@ use winbridge_protocol::{
 };
 
 mod activation;
+pub(crate) mod activation_finalization;
 mod activation_open;
 mod activation_service_open;
 mod admission;

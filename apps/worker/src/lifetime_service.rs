@@ -11,7 +11,15 @@ pub(crate) enum ServiceLifetime {
     Verification,
     #[cfg_attr(not(windows), allow(dead_code))]
     Supervised(Arc<ResidentLifetime>),
+    #[cfg_attr(not(windows), allow(dead_code))]
+    ReleasePending(Arc<PendingLifetime>),
 }
+pub(crate) struct PendingLifetime {
+    resident: Arc<ResidentLifetime>,
+    command: WorkerFinalizationCommand,
+}
+#[path = "finalization_service.rs"]
+mod finalization_service;
 pub(crate) struct ResidentLifetime {
     command: WorkerLifetimeActivationCommand,
     receipt: WorkerLifetimeActivationReceipt,
@@ -49,30 +57,43 @@ impl Worker {
             .local_activation
             .as_ref()
             .ok_or("Resident service binding missing")?;
-        let resident = {
+        // Serialize the mode snapshot with the lease check. Otherwise a
+        // watchdog that copied Supervised before a release could wait for the
+        // Store, then incorrectly reject the now legitimately Released lease.
+        let state = self.store()?;
+        let (resident, pending) = {
             let mode = scope
                 .lifetime
                 .lock()
                 .map_err(|_| "Lifetime mode lock poisoned")?;
             match &*mode {
-                ServiceLifetime::Verification => None,
-                ServiceLifetime::Supervised(resident) => Some(Arc::clone(resident)),
+                ServiceLifetime::Verification => (None, None),
+                ServiceLifetime::Supervised(resident) => (Some(Arc::clone(resident)), None),
+                ServiceLifetime::ReleasePending(pending) => (
+                    Some(Arc::clone(&pending.resident)),
+                    Some(Arc::clone(pending)),
+                ),
             }
         };
         if let Some(resident) = resident {
             resident.keeper.require_live()?;
-            self.store()?
-                .check_supervised_service_identity(&scope.command, &scope.shutdown)?;
+            if let Some(pending) = pending {
+                // The SQL/mode gap accepts ONLY the original Quiesced lease
+                // or this exact release receipt. A query does not seal Active.
+                state.observe_service_finalization_release(
+                    &scope.command,
+                    &scope.shutdown,
+                    &pending.command,
+                )?;
+            } else {
+                state.check_supervised_service_identity(&scope.command, &scope.shutdown)?;
+            }
             resident.keeper.require_live()
         } else {
             if now >= scope.deadline {
                 return Err("Original verification window expired".into());
             }
-            self.store()?.check_local_service_identity(
-                &scope.command,
-                &scope.shutdown,
-                scope.deadline,
-            )
+            state.check_local_service_identity(&scope.command, &scope.shutdown, scope.deadline)
         }
     }
 
@@ -99,6 +120,11 @@ impl Worker {
                     )
                 }
                 ServiceLifetime::Supervised(resident) => Arc::clone(resident),
+                ServiceLifetime::ReleasePending(_) => {
+                    return Err(
+                        "Finalization pending; old lifetime query cannot confirm Active".into(),
+                    );
+                }
             }
         };
         if query.command != resident.command {

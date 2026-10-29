@@ -70,6 +70,203 @@ fn fixture(root: &Path) -> LocalService {
     LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap()
 }
 
+fn finalization_proposal(
+    running: &RunningLocalService,
+    old: WorkerLifetimeActivationCommand,
+) -> WorkerFinalizationCommand {
+    let shutdown = &running
+        .service
+        .worker
+        .local_activation
+        .as_ref()
+        .unwrap()
+        .shutdown;
+    WorkerFinalizationCommand {
+        schema_version: 1,
+        command_id: uuid::Uuid::new_v4().to_string(),
+        issued_at_ms: store::now_ms(),
+        binding: ActivationFinalizationBinding {
+            committed_root_revision: old.binding.root_revision + 1,
+            lifetime_command: old,
+            lifetime_record_sha256: "1".repeat(64),
+            shutdown_record_sha256: "2".repeat(64),
+            installation_id: uuid::Uuid::new_v4().to_string(),
+            scope_sha256: "3".repeat(64),
+            expected_lease_revision: shutdown.lease.revision,
+            source_manifest_sha256: shutdown.lease.spec.target_manifest_sha256.clone(),
+            resident_request_id: uuid::Uuid::new_v4().to_string(),
+            resident_observation_sha256: "4".repeat(64),
+        },
+    }
+}
+
+#[test]
+fn finalization_rejects_registry_content_and_contention_without_waiting_under_store_lock() {
+    use super::finalization_service::require_quiet_registries;
+    let root = tempfile::tempdir().unwrap();
+    let service = fixture(root.path());
+    let worker = &service.worker;
+    let _state = worker.store().unwrap();
+    require_quiet_registries(worker).unwrap();
+    worker.active_jobs.store(1, Ordering::Release);
+    assert!(require_quiet_registries(worker).is_err());
+    worker.active_jobs.store(0, Ordering::Release);
+    worker.maintenance_running.store(true, Ordering::Release);
+    assert!(require_quiet_registries(worker).is_err());
+    worker.maintenance_running.store(false, Ordering::Release);
+    let mut active = worker.active_projects.lock().unwrap();
+    assert!(require_quiet_registries(worker)
+        .unwrap_err()
+        .contains("busy/poisoned"));
+    active.insert("source".into(), "synthetic-never-run".into());
+    drop(active);
+    assert!(require_quiet_registries(worker).is_err());
+    worker.active_projects.lock().unwrap().clear();
+    worker
+        .checks
+        .lock()
+        .unwrap()
+        .insert("synthetic-check".into(), None);
+    assert!(require_quiet_registries(worker).is_err());
+    worker.checks.lock().unwrap().clear();
+    worker
+        .unreconciled_tasks
+        .lock()
+        .unwrap()
+        .insert("synthetic".into(), "unknown".into());
+    assert!(require_quiet_registries(worker).is_err());
+    worker.unreconciled_tasks.lock().unwrap().clear();
+    worker.maintenance.lock().unwrap().1 = Some("synthetic".into());
+    assert!(require_quiet_registries(worker).is_err());
+    worker.maintenance.lock().unwrap().1 = None;
+    require_quiet_registries(worker).unwrap();
+}
+
+#[tokio::test]
+async fn pending_watchdog_accepts_exact_sql_release_without_opening_dispatch_or_minting_active() {
+    let root = tempfile::tempdir().unwrap();
+    let service = fixture(root.path());
+    let (old, entry) = proposal(&service);
+    let mut running = service.start().await.unwrap();
+    running
+        .seal_supervised_lifetime(
+            old.clone(),
+            entry,
+            LifetimeKeeper::Fixture(Arc::new(AtomicBool::new(true))),
+        )
+        .unwrap();
+    let worker = Arc::clone(&running.service.worker);
+    let scope = worker.local_activation.as_ref().unwrap();
+    let resident = match &*scope.lifetime.lock().unwrap() {
+        ServiceLifetime::Supervised(value) => Arc::clone(value),
+        _ => panic!("Supervised"),
+    };
+    let command = finalization_proposal(&running, old.clone());
+    running
+        .seal_finalization_pending(command.clone(), &resident)
+        .unwrap();
+    let late = scope.deadline + Duration::from_secs(1);
+    worker.check_local_service_scope_at(late).unwrap();
+    let before = worker.request_context().unwrap();
+    let release = worker
+        .store()
+        .unwrap()
+        .release_activated_service(&scope.command, &scope.shutdown, &command, || Ok(()))
+        .unwrap();
+    assert!(matches!(
+        release,
+        store::activation_finalization::ActivatedReleaseAdmission::Committed(_)
+    ));
+    // This was the crucial SQL/mode gap: the old exact-Quiesced watchdog would
+    // fail here, despite this process still owning the same Store and keeper.
+    worker.check_local_service_scope_at(late).unwrap();
+    assert_eq!(worker.request_context().unwrap(), before);
+    assert!(matches!(
+        worker
+            .handle_lifetime_observation(ActivationLifetimeQuery {
+                lifetime_observation_version: 1,
+                command: old,
+            })
+            .result,
+        ActivationLifetimeObservationResult::Rejected { .. }
+    ));
+    let winbridge_protocol::LocalResponse::Info { info } =
+        worker.handle(winbridge_protocol::LocalRequest::Info)
+    else {
+        panic!("Info")
+    };
+    assert!(
+        !info.maintenance_available && !info.workflow_available && !info.snapshot_import_available
+    );
+    assert!(!info.fenced_requests.unwrap().legacy_mutations_allowed);
+    assert!(matches!(
+        *scope.lifetime.lock().unwrap(),
+        ServiceLifetime::ReleasePending(_)
+    ));
+    drop(worker);
+    running.close().await.unwrap();
+}
+
+#[tokio::test]
+async fn pending_mode_refuses_foreign_owner_replay_or_dead_keeper_and_never_reopens_state() {
+    for fault in 0..4 {
+        let root = tempfile::tempdir().unwrap();
+        let service = fixture(root.path());
+        let (old, entry) = proposal(&service);
+        let mut running = service.start().await.unwrap();
+        let live = Arc::new(AtomicBool::new(true));
+        running
+            .seal_supervised_lifetime(
+                old.clone(),
+                entry,
+                LifetimeKeeper::Fixture(Arc::clone(&live)),
+            )
+            .unwrap();
+        let worker = Arc::clone(&running.service.worker);
+        let scope = worker.local_activation.as_ref().unwrap();
+        let resident = match &*scope.lifetime.lock().unwrap() {
+            ServiceLifetime::Supervised(value) => Arc::clone(value),
+            _ => panic!("Supervised"),
+        };
+        let mut command = finalization_proposal(&running, old);
+        let expected = if fault == 0 {
+            Arc::new(ResidentLifetime {
+                command: resident.command.clone(),
+                receipt: resident.receipt.clone(),
+                keeper: LifetimeKeeper::Fixture(Arc::clone(&live)),
+            })
+        } else {
+            Arc::clone(&resident)
+        };
+        if fault == 1 {
+            command.binding.expected_lease_revision += 1;
+        }
+        if fault == 2 {
+            live.store(false, Ordering::Release);
+        }
+        if fault == 3 {
+            running
+                .seal_finalization_pending(command.clone(), &resident)
+                .unwrap();
+        }
+        assert!(running
+            .seal_finalization_pending(command, &expected)
+            .is_err());
+        assert_eq!(
+            worker.store().unwrap().active_worker_update().unwrap(),
+            Some(scope.shutdown.lease.clone())
+        );
+        if fault != 3 {
+            assert!(matches!(
+                *scope.lifetime.lock().unwrap(),
+                ServiceLifetime::Supervised(_)
+            ));
+        }
+        drop(worker);
+        running.close().await.unwrap();
+    }
+}
+
 #[tokio::test]
 async fn resident_queries_cannot_enter_a_mode_spoof_a_keeper_or_change_store_authority() {
     for supervised in [false, true] {

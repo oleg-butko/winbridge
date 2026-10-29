@@ -1,5 +1,15 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Same-Store release/ReleasePending source,2026-10-29:** internal worker transaction
+сохраняет schema19 shutdown history и освобождает exact lease только после readback/
+COMMIT; Existing — данные, не новый permit. Новый pending watchdog допускает exact
+SQL/mode gap, mutations закрыты. Исправлен Store/mode race; native checkpoints
+проверяют registries/Empty domain без инверсии lock order.144 worker tests/3 ignored,
+9 новых; Linux/MSVC all-target Clippy/fmt passed. [Контракт и продолжение](plans/worker-self-update/finalization-worker-release-2026-10-29.md).
+Source19/23; mutable V8 decoder/marker/factory/Active/keeper ещё нет. Windows этого
+кода пока не запускали; installed source48/gen946 connected/error=null прежний.
+Рабочий worker оставить запущенным, desktop не нужен, public install off.
+
 **Pending finalization receiver data source,2026-10-29:** отдельный readonly
 scope после root Committed сверяет same resident command/entry/child/keeper,
 current updater owner/coordinator/schema и exact unconfirmed decision. Старые

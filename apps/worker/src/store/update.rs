@@ -337,7 +337,7 @@ impl Store {
         }
         Self::update_receipt_on(&self.connection, spec, command)
     }
-    fn update_receipt_on(
+    pub(super) fn update_receipt_on(
         c: &Connection,
         spec: &WorkerUpdateSpec,
         command: &WorkerUpdateCommand,

@@ -33,22 +33,35 @@ impl ServiceStartupFence {
         command: &WorkerServiceActivationCommand,
         shutdown: &winbridge_protocol::update::WorkerShutdownReceipt,
     ) -> Result<()> {
-        let schema: u32 = c
-            .query_row("PRAGMA user_version", [], |r| r.get(0))
-            .map_err(sql)?;
-        if schema != super::JOURNAL_SCHEMA_VERSION
-            || activation::stamp(&Store::read_authority(c)?)?
-                != command.binding.writer_receipt.authority
-            || activation::read(c, &command.binding.writer_command)?.as_ref()
-                != Some(&command.binding.writer_receipt)
-            || super::update::read(c, &shutdown.update_id)? != shutdown.lease
-            || super::shutdown::read(c, &shutdown.update_id, &shutdown.command)?.as_ref()
-                != Some(shutdown)
-        {
-            return Err("Service initialization authority/receipt/lease/schema changed".into());
+        require_service_history(c, command, shutdown)?;
+        if super::update::read(c, &shutdown.update_id)? != shutdown.lease {
+            return Err("Service initialization lease changed".into());
         }
         Ok(())
     }
+}
+
+/// Retained ownership prefix, also valid after this exact lease was released.
+/// This alone does not authorize a release, enter a mode or reopen a Store.
+pub(super) fn require_service_history(
+    c: &rusqlite::Connection,
+    command: &WorkerServiceActivationCommand,
+    shutdown: &winbridge_protocol::update::WorkerShutdownReceipt,
+) -> Result<()> {
+    let schema: u32 = c
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .map_err(sql)?;
+    if schema != super::JOURNAL_SCHEMA_VERSION
+        || activation::stamp(&Store::read_authority(c)?)?
+            != command.binding.writer_receipt.authority
+        || activation::read(c, &command.binding.writer_command)?.as_ref()
+            != Some(&command.binding.writer_receipt)
+        || super::shutdown::read(c, &shutdown.update_id, &shutdown.command)?.as_ref()
+            != Some(shutdown)
+    {
+        return Err("Service authority/receipt/schema history changed".into());
+    }
+    Ok(())
 }
 pub(crate) struct ServiceRuntimeState {
     pub(crate) store: Store,

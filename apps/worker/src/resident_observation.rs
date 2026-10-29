@@ -44,6 +44,11 @@ impl Worker {
                     )
                 }
                 ServiceLifetime::Supervised(value) => Arc::clone(value),
+                ServiceLifetime::ReleasePending(_) => {
+                    return Err(
+                        "Finalization pending; V7 remains observation of quarantine only".into(),
+                    );
+                }
             }
         };
         if query.command != resident.command

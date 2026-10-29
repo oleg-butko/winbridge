@@ -1,5 +1,11 @@
 # Архитектура WinBridge
 
+**Same-Store finalization source,2026-10-29:** worker19/updater23. Internal
+ReleasePending owner удерживает original keeper и exact command; worker SQL release
+и Active — разные факты. Store/mode checks сериализованы одним порядком блокировок.
+[Транзакция, проверки и ещё не подключённые границы](plans/worker-self-update/finalization-worker-release-2026-10-29.md).
+Mutable V8 route, Active и permanent keeper пока выключены; installed worker прежний.
+
 **Finalization foundation source,2026-10-29:** updater23/worker19. Root Committed
 и ReleasePending intent связаны одной SQLite transaction; pending блокирует
 следующий admission, Known-runtime serve отказывает до worker Store. Proposed V8
