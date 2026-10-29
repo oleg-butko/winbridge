@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29: [physical custody source](process-custody-owner-2026-10-29.md)**
+отделена после passed Main28. Новая permanent conversion ещё не подключена;
+дальше typed resident control/finalization, root/release/Active и native proof.
+Public install off; installed worker не меняется.
+
 **2026-10-29: [Main28 native passed](main28-native-2026-10-29.md).**
 Далее [physical keeper/finalization review](keeper-finalization-review-2026-10-29.md),
 root/scoped release/Active и два поколения; public install off. Старые gates

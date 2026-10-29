@@ -103,8 +103,10 @@ verification/runtime/config pins, сохранив physical Job owner. Пока 
 не окончена, journal authority остаётся у coordinating actor. Parent и child
 config pins должны быть освобождены до объявления обычных settings/mutations
 доступными; иначе «сохранить настройки с ручным restart» получит sharing violation.
-После independently observed Active/release fact отпустить updater connection и
-**все** Arc<UpdateAuthority>, не сохраняя stale writer в background keeper.
+После independently observed Active/release fact сначала закрыть write connection
+при ещё удерживаемой authority, затем отпустить **все** Arc<UpdateAuthority>
+и file lock. Не оставлять stale writer/checkpoint после передачи следующему
+owner. Background keeper удерживает только physical custody и свои control data.
 
 Диагностика разделяет update completed, live keeper, current worker и historical
 receipts. Keeper loss по-прежнему закрывает именно его Job. Отдельный manual stop

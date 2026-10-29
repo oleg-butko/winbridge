@@ -1,5 +1,19 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Physical custody source отделена,2026-10-29:** private `ProcessCustody` владеет
+original child/Job/channel/captures/readers, verification pins остаются в guard.
+Drop запрашивает original tree cleanup до отпускания pins, без detach/unsafe/
+новых grants. [Структура, проверки, ограничения](plans/worker-self-update/process-custody-owner-2026-10-29.md).
+972 workspace tests/17 ignored/126 groups, Linux/MSVC all-target Clippy/fmt/diff
+passed.3 новых IO tests проверяют concurrent1MiB drain/64KiB cap, move, error,
+Unicode EOF. Нового native gate на refactor нет: Main28 относится к0426a13.
+Source19/22/private6/actor27/view19 прежние; permanent conversion/root commit/
+release пока отсутствуют. Следом typed OS-authenticated resident control/current
+connection/finalization intent, затем consuming keeper/Active/new full native/
+two generations/U2–U4. Working worker прежний, desktop не нужен, public install off.
+
+## История предыдущих checkpoint
+
 **Main28 Windows passed,2026-10-29:** run20261029-091025-be7fc543/task393a8003,
 producer0426a13 → target90fc5b4.213 native tests/50 commands/63 files twice,
 24+27+37+15+10 negative audits/4 markers; independent readonly reread identical.
@@ -88,8 +102,6 @@ Linux/MSVC workspace all-target Clippy, TypeScript/UI build,
 contracts/fmt/diff/scaffold321 passed. Полные результаты — в linked checkpoint. Readonly
 проверка подтверждает обе связи .203/.204 с прежним worker/gen946f1128, текущие
 ошибки соединений отсутствуют.
-
-## История предыдущих checkpoint
 
 **Lifetime original admission/preparation реализованы в source,2026-10-28.**
 Consuming factory сохраняет Issued только из original controller-verified owner;

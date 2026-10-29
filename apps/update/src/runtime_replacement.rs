@@ -7,6 +7,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 type Result<T> = std::result::Result<T, String>;
 mod driver;
+// Portable checks of the same physical-owner/output source; actual Windows
+// custody/keeper conversion still requires the native original-owner gate.
+#[cfg(all(test, not(windows)))]
+#[path = "runtime_replacement/activation_process_custody.rs"]
+#[allow(dead_code)]
+mod activation_process_custody_tests;
 // Execute the portable kernel-probe regressions from the same native-hook
 // source on Unix. Only the Windows driver calls the remaining hook functions.
 #[cfg(all(test, not(windows), feature = "update-validation"))]

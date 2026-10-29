@@ -115,7 +115,7 @@ impl ActivationProcessGuard {
         if self.record.state != (ActivationState::StateOwned {})
             || self.record.revision != 6
             || self.released.is_none()
-            || self.channel.is_none()
+            || self.physical.channel.is_none()
             || self.resident_process().as_ref()
                 != self.record.state_owned.as_ref().map(|p| &p.process)
         {
@@ -186,6 +186,7 @@ impl ActivationProcessGuard {
         }
         let command = &permit.record().command;
         let stream = self
+            .physical
             .channel
             .as_mut()
             .ok_or("Original service channel missing")?;

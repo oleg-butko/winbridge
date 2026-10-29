@@ -49,7 +49,7 @@ impl ActivationProcessGuard {
         if !matches!(self.record.state, ActivationState::StateOwned {})
             || self.record.revision != 6
             || self.released.is_none()
-            || self.channel.is_none()
+            || self.physical.channel.is_none()
             || self.resident_process().as_ref()
                 != self.record.state_owned.as_ref().map(|r| &r.process)
         {
@@ -137,6 +137,7 @@ impl ActivationProcessGuard {
             command: permit.record().command.clone(),
         };
         let stream = self
+            .physical
             .channel
             .as_mut()
             .ok_or("Original writer channel missing")?;

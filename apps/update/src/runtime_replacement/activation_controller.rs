@@ -101,6 +101,7 @@ impl ActivationProcessGuard {
         };
         let command = &permit.record().command;
         let stream = self
+            .physical
             .channel
             .as_mut()
             .ok_or("Original controller channel missing")?;
@@ -190,7 +191,7 @@ impl ActivationProcessGuard {
         if self.record.revision != 7
             || self.record.state != (ActivationState::LocalVerified {})
             || self.released.is_none()
-            || self.channel.is_none()
+            || self.physical.channel.is_none()
             || self.resident_process().as_ref()
                 != self.record.state_owned.as_ref().map(|p| &p.process)
         {

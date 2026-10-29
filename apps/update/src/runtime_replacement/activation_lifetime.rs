@@ -7,7 +7,7 @@ use crate::activation::{
         self, ActivationLifetimeAdmission, ActivationLifetimePermit, ActivationLifetimeState,
     },
 };
-use std::io::{Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use winbridge_protocol::update::WorkerControllerActivationTopology;
 
 #[must_use = "Dropping lifetime preparation closes the original managed child"]
@@ -135,6 +135,7 @@ impl ActivationProcessGuard {
         #[cfg(feature = "update-validation")]
         let ready_loss = validation::prepare_lifetime_ready_loss(&self.record, command)?;
         let stream = self
+            .physical
             .channel
             .as_mut()
             .ok_or("Original lifetime channel missing")?;
@@ -237,6 +238,7 @@ impl ActivationProcessGuard {
     pub(super) fn require_lifetime_custody(&self, entry: bool) -> Result<()> {
         let expected = self.record.intent.job_name()?;
         let identity = self
+            .physical
             .child
             .as_ref()
             .and_then(ManagedChild::identity)
@@ -244,7 +246,7 @@ impl ActivationProcessGuard {
         if self.record.revision != 7
             || self.record.state != (ActivationState::LocalVerified {})
             || self.released.is_none()
-            || self.channel.is_none()
+            || self.physical.channel.is_none()
             || self._controller_config_pin.is_none()
             || self.resident_process().as_ref()
                 != self.record.state_owned.as_ref().map(|p| &p.process)

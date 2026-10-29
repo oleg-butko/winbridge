@@ -1,14 +1,12 @@
 //! Consuming suspended launch. Ready retains original state; no writer handoff.
 use super::*;
 use crate::activation::{channel, ActivationCreated, ActivationRecord, ActivationState};
-use std::{
-    io::Read,
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-};
-use winbridge_platform::{infrastructure, ManagedChild, OutputReader};
+use std::time::Duration;
+use winbridge_platform::{infrastructure, ManagedChild};
 use winbridge_transport::supervisor as ipc;
+#[path = "activation_process_custody.rs"]
+mod process_custody;
+use process_custody::{drain, ProcessCustody};
 #[path = "activation_controller.rs"]
 mod controller;
 pub use controller::ActivationControllerPreparation;
@@ -26,45 +24,14 @@ mod validation;
 mod writer;
 pub use service::ActivationServicePreparation;
 
-#[derive(Default)]
-struct Capture {
-    bytes: Vec<u8>,
-    incomplete: bool,
-}
-fn drain(reader: OutputReader, capture: Arc<Mutex<Capture>>) -> Result<thread::JoinHandle<()>> {
-    thread::Builder::new()
-        .name("activation-output".into())
-        .spawn(move || {
-            let mut reader = reader;
-            let mut chunk = [0; 4096];
-            loop {
-                let result = reader.read(&mut chunk);
-                let mut state = capture.lock().unwrap_or_else(|p| p.into_inner());
-                match result {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let keep = n.min(65536usize.saturating_sub(state.bytes.len()));
-                        state.bytes.extend_from_slice(&chunk[..keep]);
-                        state.incomplete |= keep != n;
-                    }
-                    Err(_) => {
-                        state.incomplete = true;
-                        break;
-                    }
-                }
-            }
-        })
-        .map_err(|_| "Activation output reader could not start".into())
-}
 /// Original file/state custody, one actual process/Job and its private channel.
 /// Cannot be deserialized, cloned, or constructed from a saved Created receipt.
 pub struct ActivationProcessGuard {
+    // Rust drops fields in declaration order. Request original Job cleanup before
+    // releasing verification pins, preserving the former outer Drop ordering.
+    physical: ProcessCustody,
     files: Box<ActivationFilesGuard>,
     record: ActivationRecord,
-    child: Option<ManagedChild>,
-    channel: Option<ipc::Stream>,
-    captures: [Arc<Mutex<Capture>>; 2],
-    readers: Vec<thread::JoinHandle<()>>,
     released: Option<crate::shutdown::ReleasedExitCustody>,
     _controller_config_pin: Option<std::fs::File>,
     controller_observation: Option<winbridge_protocol::update::ActivationControllerObservation>,
@@ -99,7 +66,7 @@ impl ActivationLaunchFailure {
         &self.custody.record
     }
     pub fn process_id(&self) -> Option<u32> {
-        self.custody.child.as_ref().map(ManagedChild::id)
+        self.custody.physical.child.as_ref().map(ManagedChild::id)
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {
         self.custody.resident_process()
@@ -114,15 +81,7 @@ impl ActivationLaunchFailure {
         self.custody.original_lock_held()
     }
 }
-impl Drop for ActivationProcessGuard {
-    fn drop(&mut self) {
-        // This requests kill-on-close without an unbounded ManagedChild::drop
-        // wait. Dropping is not positive evidence of process/tree cleanup.
-        if let Some(child) = self.child.take() {
-            child.close_unconfirmed();
-        }
-    }
-}
+
 impl ActivationFilesGuard {
     /// Poll on a dedicated stack using the ORIGINAL supervisor IO driver. A
     /// temporary Runtime would strand the retained named pipe on its shutdown.
@@ -165,13 +124,7 @@ impl ActivationProcessGuard {
         Box::new(Self {
             record: files.preparation().clone(),
             files,
-            child: None,
-            channel: None,
-            captures: [
-                Arc::new(Mutex::new(Capture::default())),
-                Arc::new(Mutex::new(Capture::default())),
-            ],
-            readers: Vec::new(),
+            physical: ProcessCustody::new(),
             released: None,
             _controller_config_pin: None,
             controller_observation: None,
@@ -179,7 +132,7 @@ impl ActivationProcessGuard {
         })
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {
-        let identity = self.child.as_ref()?.identity()?;
+        let identity = self.physical.child.as_ref()?.identity()?;
         Some(winbridge_protocol::update::SupervisorProcess {
             process_id: identity.process_id,
             birth: identity.creation_time.to_string(),
@@ -201,7 +154,7 @@ impl ActivationProcessGuard {
         &self.record
     }
     pub fn process_id(&self) -> Option<u32> {
-        self.child.as_ref().map(ManagedChild::id)
+        self.physical.child.as_ref().map(ManagedChild::id)
     }
     pub(crate) fn original_lock_held(&self) -> Option<bool> {
         self.released.as_ref().map_or_else(
@@ -238,8 +191,12 @@ impl ActivationProcessGuard {
     }
     /// Bounded diagnostics. The private challenge is never written to stdout.
     pub fn output(&self) -> (Vec<u8>, Vec<u8>, bool) {
-        let stdout = self.captures[0].lock().unwrap_or_else(|p| p.into_inner());
-        let stderr = self.captures[1].lock().unwrap_or_else(|p| p.into_inner());
+        let stdout = self.physical.captures[0]
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let stderr = self.physical.captures[1]
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
         (
             stdout.bytes.clone(),
             stderr.bytes.clone(),
@@ -262,7 +219,8 @@ impl ActivationProcessGuard {
             stdout,
             stderr,
             incomplete || cut_out || cut_err,
-            self.readers.len() == 2 && self.readers.iter().all(|r| r.is_finished()),
+            self.physical.readers.len() == 2
+                && self.physical.readers.iter().all(|r| r.is_finished()),
         )
     }
     fn at(&self) -> Result<u64> {
@@ -328,7 +286,7 @@ impl ActivationProcessGuard {
         if self.released.is_some()
             || !matches!(self.record.state, ActivationState::ReadyForState {})
             || self.record.revision != 4
-            || self.channel.is_none()
+            || self.physical.channel.is_none()
             || self.resident_process().as_ref() != self.record.created.as_ref().map(|c| &c.process)
         {
             return Err(
@@ -407,6 +365,7 @@ impl ActivationProcessGuard {
             .saturating_duration_since(std::time::Instant::now());
         let timeout = Duration::from_millis(self.record.intent.context.startup_timeout_ms);
         let stream = self
+            .physical
             .channel
             .as_mut()
             .ok_or("Original state handoff channel missing")?;
@@ -504,9 +463,10 @@ impl ActivationProcessGuard {
                 return Err(format!("Activation process creation stopped: {error}"));
             }
         };
-        self.child = Some(child); // Retain ownership before any fallible receipt.
+        self.physical.child = Some(child); // Retain ownership before any fallible receipt.
         timing.mark("child_created_suspended", None, None);
         let identity = self
+            .physical
             .child
             .as_ref()
             .unwrap()
@@ -534,13 +494,17 @@ impl ActivationProcessGuard {
             self.files.preparation.require_live_window()?;
             j.check_source_authority(a).map_err(|e| e.to_string())
         })?;
-        self.readers.push(drain(stdout, self.captures[0].clone())?);
-        self.readers.push(drain(stderr, self.captures[1].clone())?);
+        self.physical
+            .readers
+            .push(drain(stdout, self.physical.captures[0].clone())?);
+        self.physical
+            .readers
+            .push(drain(stderr, self.physical.captures[1].clone())?);
         self.require_custody(j, a, s, true)?;
         let next = self.record.grant_resume(self.at()?, &r)?;
         self.save(j, a, s, next)?;
         self.require_custody(j, a, s, true)?;
-        let child = self.child.as_mut().unwrap();
+        let child = self.physical.child.as_mut().unwrap();
         if child.try_wait().map_err(|e| e.to_string())?.is_some() {
             return Err("Suspended activation child exited; no resume".into());
         }
@@ -583,7 +547,7 @@ impl ActivationProcessGuard {
         self.require_custody(j, a, s, false)?;
         let next = self.record.ready(ready.ready, self.at()?, &r)?;
         self.save(j, a, s, next)?;
-        self.channel = Some(stream);
+        self.physical.channel = Some(stream);
         timing.mark("ready_saved", None, None);
         Ok(())
     }
