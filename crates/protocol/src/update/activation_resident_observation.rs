@@ -14,6 +14,8 @@ pub fn resident_observation_marker_pattern() -> Vec<u8> {
     .into_bytes()
 }
 
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActivationResidentQuery {
@@ -22,6 +24,8 @@ pub struct ActivationResidentQuery {
     pub request_id: String,
     pub command: WorkerLifetimeActivationCommand,
 }
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActivationResidentObservation {
@@ -31,6 +35,8 @@ pub struct ActivationResidentObservation {
 }
 /// Bounded header of the actually accepted frame. The full projection may carry
 /// large project/workflow views; its canonical digest binds those omitted bytes.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ActivationResidentFrame {
@@ -44,6 +50,8 @@ pub struct ActivationResidentFrame {
     pub sequence: u64,
     pub projection_sha256: String,
 }
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(
     tag = "kind",
@@ -64,4 +72,30 @@ pub enum ActivationResidentObservationResult {
     Rejected {
         message: String,
     },
+}
+
+/// Internal28/view20. An observed connection is a timestamped fact, no permit.
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivationResidentPhase {
+    NotResident,
+    Observing,
+    Observed,
+    Unconfirmed,
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivationResidentView {
+    pub phase: ActivationResidentPhase,
+    pub lifetime_command_id: Option<String>,
+    pub resident_process: Option<super::SupervisorProcess>,
+    pub process_alive: Option<bool>,
+    pub original_custody_held: Option<bool>,
+    pub observation: Option<ActivationResidentObservation>,
+    pub reason: Option<String>,
 }

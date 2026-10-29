@@ -4,6 +4,8 @@ use super::*;
 mod controller;
 #[path = "activation_lifetime.rs"]
 mod lifetime;
+#[path = "activation_resident.rs"]
+mod resident;
 #[path = "activation_service.rs"]
 mod service;
 enum State {
@@ -43,6 +45,8 @@ enum State {
     #[cfg(windows)]
     ObservingLifetime(Box<crate::activation::ActivationRecord>),
     #[cfg(windows)]
+    ObservingResident(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
     Serviced(Box<crate::activation::ActivationProcessGuard>),
     #[cfg(windows)]
     ServiceUnconfirmed(Box<crate::activation::ActivationProcessGuard>),
@@ -55,6 +59,7 @@ pub(super) struct FilesActor {
     service_key: Option<String>,
     controller_key: Option<String>,
     lifetime_key: Option<String>,
+    resident_error: Option<String>,
 }
 impl Default for FilesActor {
     fn default() -> Self {
@@ -64,6 +69,7 @@ impl Default for FilesActor {
             service_key: None,
             controller_key: None,
             lifetime_key: None,
+            resident_error: None,
         }
     }
 }
@@ -135,7 +141,8 @@ impl FilesActor {
             | State::StartingService(r)
             | State::StartingController(r)
             | State::StartingLifetime(r)
-            | State::ObservingLifetime(r) => Some(r),
+            | State::ObservingLifetime(r)
+            | State::ObservingResident(r) => Some(r),
             #[cfg(windows)]
             State::Written(g)
             | State::WriterUnconfirmed(g)
@@ -185,6 +192,7 @@ impl FilesActor {
                     | State::StartingController(_)
                     | State::StartingLifetime(_)
                     | State::ObservingLifetime(_)
+                    | State::ObservingResident(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -221,6 +229,7 @@ impl FilesActor {
                     | State::StartingController(_)
                     | State::StartingLifetime(_)
                     | State::ObservingLifetime(_)
+                    | State::ObservingResident(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -254,6 +263,7 @@ impl FilesActor {
                     | State::StartingController(_)
                     | State::StartingLifetime(_)
                     | State::ObservingLifetime(_)
+                    | State::ObservingResident(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -511,7 +521,8 @@ impl FilesActor {
             | State::StartingService(_)
             | State::StartingController(_)
             | State::StartingLifetime(_)
-            | State::ObservingLifetime(_) => {
+            | State::ObservingLifetime(_)
+            | State::ObservingResident(_) => {
                 process.phase = ActivationProcessPhase::Indeterminate;
                 process.process_custody_held = None;
                 process.reason = Some("Journal activation in progress; inspect internal24".into());
@@ -604,7 +615,8 @@ impl FilesActor {
             | State::StartingService(_)
             | State::StartingController(_)
             | State::StartingLifetime(_)
-            | State::ObservingLifetime(_) => {
+            | State::ObservingLifetime(_)
+            | State::ObservingResident(_) => {
                 state.phase = ActivationStatePhase::Indeterminate;
                 state.original_lock_held = None;
                 state.reason = Some("Journal activation in progress; inspect internal24".into());
@@ -680,7 +692,8 @@ impl FilesActor {
             | State::StartingService(_)
             | State::StartingController(_)
             | State::StartingLifetime(_)
-            | State::ObservingLifetime(_) => {
+            | State::ObservingLifetime(_)
+            | State::ObservingResident(_) => {
                 writer.phase = if _active && view.driver_error.is_none() {
                     ActivationWriterPhase::Activating
                 } else {
@@ -773,7 +786,8 @@ impl FilesActor {
             | State::StartingService(record)
             | State::StartingController(record)
             | State::StartingLifetime(record)
-            | State::ObservingLifetime(record) => held_source(files, record),
+            | State::ObservingLifetime(record)
+            | State::ObservingResident(record) => held_source(files, record),
             #[cfg(windows)]
             State::Written(g)
             | State::WriterUnconfirmed(g)

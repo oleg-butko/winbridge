@@ -1,14 +1,15 @@
 use super::*;
 use winbridge_protocol::{ControllerConnection, NetworkRpcObservation};
 
-fn fixture() -> (
+pub(crate) fn fixture() -> (
     ActivationResidentQuery,
     WorkerControllerActivationTopology,
     WorkerLifetimeActivationReceipt,
     ActivationResidentObservation,
+    controller::ActivationControllerSnapshot,
 ) {
     let (graph, command, entry) = lifetime::test_fixture();
-    let topology = graph.controller.command.binding.topology;
+    let topology = graph.controller.command.binding.topology.clone();
     let at = command.deadline_at_ms + 10_000;
     let session = uuid::Uuid::new_v4().to_string();
     let generation = uuid::Uuid::new_v4().to_string();
@@ -74,12 +75,12 @@ fn fixture() -> (
             observed_at_ms: at,
         },
     };
-    (query, topology, entry, observed)
+    (query, topology, entry, observed, graph)
 }
 
 #[test]
 fn current_reconnected_session_outlives_entry_window_without_rewriting_the_receipt() {
-    let (query, topology, entry, observed) = fixture();
+    let (query, topology, entry, observed, _) = fixture();
     validate_observation(&query, &entry, &topology, &observed).unwrap();
     assert_eq!(
         resident_observation_marker_pattern(),
@@ -99,7 +100,7 @@ fn current_reconnected_session_outlives_entry_window_without_rewriting_the_recei
 
 #[test]
 fn responses_cannot_rebind_scope_time_provider_or_selected_current_session() {
-    let (query, topology, entry, observed) = fixture();
+    let (query, topology, entry, observed, _) = fixture();
     for mutation in 0..26 {
         let mut changed = observed.clone();
         match mutation {
@@ -164,7 +165,7 @@ fn responses_cannot_rebind_scope_time_provider_or_selected_current_session() {
 
 #[test]
 fn query_is_strict_readonly_and_has_separate_correlation() {
-    let (query, _, _, observed) = fixture();
+    let (query, _, _, observed, _) = fixture();
     for mutation in 0..4 {
         let mut q = query.clone();
         match mutation {

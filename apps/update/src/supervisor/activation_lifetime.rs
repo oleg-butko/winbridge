@@ -137,6 +137,10 @@ impl FilesActor {
         }
         #[cfg(windows)]
         match &self.state {
+            State::ObservingResident(_) => {
+                lifetime.phase = ActivationLifetimePhase::Indeterminate;
+                lifetime.reason = Some("Readonly current connection request holds original handles; the saved lifetime receipt remains historical".into());
+            }
             State::StartingLifetime(_) | State::ObservingLifetime(_) => {
                 lifetime.phase = if active && view.driver_error.is_none() {
                     if matches!(self.state, State::ObservingLifetime(_)) {
@@ -227,7 +231,7 @@ impl FilesActor {
 }
 
 #[cfg(any(windows, test))]
-fn validate_saved_lifetime(
+pub(super) fn validate_saved_lifetime(
     saved: &ActivationLifetimeRecord,
     local: &crate::activation::ActivationRecord,
     key: &str,

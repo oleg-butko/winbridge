@@ -1,5 +1,9 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29: [resident actor28/view20](resident-actor-2026-10-29.md)**
+подключён в source поверх V7, без root/release/Active. Следом actual Main29 на
+новом target; старые gates terminal. Installed worker прежний, public install off.
+
 **2026-10-29: [readonly resident V7 source](resident-observation-2026-10-29.md)**
 добавлен с actual peer/current connection и compact response. Actor27/view19
 прежние; actual native V7 ещё впереди, public install off. Следом actor/view/gate,

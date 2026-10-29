@@ -118,6 +118,12 @@ impl FilesActor {
         }
         #[cfg(windows)]
         match &self.state {
+            State::StartingLifetime(_)
+            | State::ObservingLifetime(_)
+            | State::ObservingResident(_) => {
+                controller.phase = ActivationControllerPhase::Indeterminate;
+                controller.reason = Some("Original owner is handling lifetime/current-connection diagnostics; historical session evidence is not a concurrent handle observation".into());
+            }
             State::StartingController(_) => {
                 controller.phase = if active && view.driver_error.is_none() {
                     ActivationControllerPhase::Connecting

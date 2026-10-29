@@ -620,6 +620,8 @@ pub enum SupervisorAction {
     /// Internal27: same-child supervised quarantine; no final commit/release.
     EnterActivationLifetime,
     ObserveActivationLifetime,
+    /// Internal28: fresh readonly original-resident connection; no finalization.
+    ObserveResidentConnection,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -716,6 +718,9 @@ pub struct UpdatePreparationView {
     /// Internal27/view19 only. Saved entry and current observation are separate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_lifetime: Option<ActivationLifetimeView>,
+    /// Internal28/view20 only. Old replies omit this volatile observation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_resident: Option<ActivationResidentView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

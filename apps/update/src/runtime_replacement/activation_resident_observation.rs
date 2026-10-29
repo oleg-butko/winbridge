@@ -7,6 +7,9 @@ use crate::activation::{
 use winbridge_protocol::update::*;
 
 impl ActivationProcessGuard {
+    pub fn resident_query(&self) -> Option<&ActivationResidentQuery> {
+        self.resident_query.as_ref()
+    }
     pub fn resident_observation(&self) -> Option<&ActivationResidentObservation> {
         self.resident_observation.as_ref()
     }
@@ -19,6 +22,7 @@ impl ActivationProcessGuard {
         key: &str,
     ) -> std::result::Result<Box<Self>, ActivationLaunchFailure> {
         self.resident_observation = None;
+        self.resident_query = None;
         match crate::activation::on_original_io(self, move |mut owner| async move {
             match owner.observe_resident(j, a, s, key).await {
                 Ok(()) => Ok(owner),
@@ -102,6 +106,7 @@ impl ActivationProcessGuard {
         .await?;
         // No append, new admission, root transition, private read or release.
         self.resident_observation = Some(observed);
+        self.resident_query = Some(query);
         Ok(())
     }
 }

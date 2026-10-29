@@ -163,6 +163,7 @@ fn activation_view(
 }
 
 mod activation_files;
+mod resident_control;
 
 fn local(path: &Path) -> Result<PathBuf> {
     winbridge_platform::require_safe_path(path).map_err(error)?;
@@ -1839,6 +1840,7 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveActivationController
                 | SupervisorAction::EnterActivationLifetime
                 | SupervisorAction::ObserveActivationLifetime
+                | SupervisorAction::ObserveResidentConnection
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -2072,6 +2074,13 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 crate::activation::ActivationLaunchFailure,
             >,
         ),
+        #[cfg(windows)]
+        ActivationResident(
+            std::result::Result<
+                Box<crate::activation::ActivationProcessGuard>,
+                crate::activation::ActivationLaunchFailure,
+            >,
+        ),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -2086,6 +2095,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut activation_preparing = false;
     let mut activation_reply: Option<ipc::Stream> = None;
     let mut lifetime_reply: Option<ipc::Stream> = None;
+    let mut resident_reply: Option<ipc::Stream> = None;
     let files_actor = activation_files::FilesActor::default();
     #[cfg(windows)]
     let mut files_actor = files_actor;
@@ -2250,6 +2260,10 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                             .map_err(error);
                     files_actor.complete_lifetime(result, saved)
                 }
+                #[cfg(windows)]
+                DriverCompletion::ActivationResident(result) => {
+                    files_actor.complete_resident(result, &directory, &r.spec.update_id)
+                }
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -2286,6 +2300,27 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some(mut stream) = resident_reply.take() {
+                let snapshot = files_actor.resident_view(
+                    &directory,
+                    &r.spec.update_id,
+                    false,
+                    driver_error.clone(),
+                );
+                let (preparation, error) = match snapshot {
+                    Ok(v) => (Some(v), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 28,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
             if let Some(mut stream) = lifetime_reply.take() {
                 let snapshot = files_actor.lifetime_view(
                     &directory,
@@ -3177,6 +3212,64 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             };
             let response = SupervisorResponse {
                 contract_version: 24,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                worker_control: None,
+                preparation,
+                error,
+            };
+            let _ = ipc::write(&mut stream, &response).await;
+            continue;
+        }
+        if request.action == SupervisorAction::ObserveResidentConnection {
+            let mut dispatch = false;
+            let outcome = (|| -> Result<Option<UpdatePreparationView>> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 28
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err(
+                        "Resident observation requires exact Active bound v28 supervisor".into(),
+                    );
+                }
+                if work.is_some() {
+                    return Ok(None);
+                }
+                if !files_actor.can_observe_resident() {
+                    return files_actor
+                        .resident_view(&directory, &r.spec.update_id, false, driver_error.clone())
+                        .map(Some);
+                }
+                dispatch = true;
+                Ok(None)
+            })();
+            if dispatch && outcome.is_ok() {
+                #[cfg(windows)]
+                {
+                    let (mut journal, owner) =
+                        idle.take().ok_or("Resident observation owner missing")?;
+                    let (guard, key) = files_actor.take_for_resident()?;
+                    let spec = r.clone();
+                    driver_error = None;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result =
+                            guard.observe_resident_blocking(&mut journal, &owner, &spec, &key);
+                        (journal, owner, DriverCompletion::ActivationResident(result))
+                    }));
+                    resident_reply = Some(stream);
+                    continue;
+                }
+            }
+            let (preparation, error) = match outcome {
+                Ok(v) => (v, None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 28,
                 launch_id: r.spec.launch_id.clone(),
                 record: None,
                 worker_control: None,
@@ -4756,7 +4849,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 | SupervisorAction::ActivateJournalWriter | SupervisorAction::ObserveJournalWriter
                 | SupervisorAction::ActivateLocalService | SupervisorAction::ObserveLocalService
                 | SupervisorAction::ConnectActivationController | SupervisorAction::ObserveActivationController
-                | SupervisorAction::EnterActivationLifetime | SupervisorAction::ObserveActivationLifetime => Err("Action needs its separate handler".into()),
+                | SupervisorAction::EnterActivationLifetime | SupervisorAction::ObserveActivationLifetime
+                | SupervisorAction::ObserveResidentConnection => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",
@@ -4843,6 +4937,8 @@ mod tests {
             UpdateJournal::activation_state_snapshot,
             UpdateJournal::activation_writer_snapshot,
             UpdateJournal::activation_service_snapshot,
+            UpdateJournal::activation_controller_snapshot,
+            UpdateJournal::activation_lifetime_snapshot,
         ];
         for (index, snapshot) in snapshots.into_iter().enumerate() {
             let view = snapshot(&directory, &f.id, false, None).unwrap();
@@ -4855,6 +4951,9 @@ mod tests {
             assert_eq!(value.get("activationState").is_some(), index >= 14);
             assert_eq!(value.get("activationWriter").is_some(), index >= 15);
             assert_eq!(value.get("activationService").is_some(), index >= 16);
+            assert_eq!(value.get("activationController").is_some(), index >= 17);
+            assert_eq!(value.get("activationLifetime").is_some(), index >= 18);
+            assert!(value.get("activationResident").is_none());
             if index < 9 {
                 assert!(value.get("candidateSupport").is_none());
             } else {
@@ -4872,6 +4971,36 @@ mod tests {
                 assert!(replacement.attempt_id.is_none());
             }
         }
+    }
+    #[test]
+    fn resident_cold_view20_is_separate_bounded_readonly_data_without_a_prefix_grant() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut f = Fixture::new(temp.path());
+        let before = f.journal.get(&f.id).unwrap();
+        let actor = activation_files::FilesActor::default();
+        let view = actor.resident_view(&f.state(), &f.id, false, None).unwrap();
+        assert_eq!(view.schema_version, 20);
+        assert_eq!(view.update, before);
+        let resident = view.activation_resident.as_ref().unwrap();
+        assert_eq!(resident.phase, ActivationResidentPhase::NotResident);
+        assert!(
+            resident.observation.is_none()
+                && resident.resident_process.is_none()
+                && resident.original_custody_held.is_none()
+        );
+        let raw = serde_json::to_value(&view).unwrap();
+        for key in [
+            "activationLifetime",
+            "activationController",
+            "activationService",
+            "activationWriter",
+            "runtimeReplacement",
+            "compatibleDrain",
+        ] {
+            assert!(raw.get(key).is_none(), "unexpected historical prefix {key}");
+        }
+        assert_eq!(f.journal.get(&f.id).unwrap(), before);
+        assert!(serde_json::to_vec(&view).unwrap().len() < 32768);
     }
     struct Fixture {
         root: PathBuf,
@@ -5159,6 +5288,52 @@ mod tests {
             fs::read(f.root.join("source/Cargo.toml")).unwrap(),
             b"fixture"
         );
+    }
+    #[tokio::test]
+    async fn resident_mailbox_rejects_unbound_or_rebound_requests_without_a_worker_launch() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut f = Fixture::new(temp.path());
+        let mut handle = f.spawn();
+        handle.wait_ready().await.unwrap();
+        assert!(handle.observe_resident_connection().await.is_err());
+        handle.command(SupervisorAction::Handoff).await.unwrap();
+        let before = f.journal.get(&f.id).unwrap();
+        for mutation in 0..5 {
+            let mut request = SupervisorRequest {
+                contract_version: 28,
+                launch_id: handle.record.spec.launch_id.clone(),
+                expected_revision: handle.record.revision,
+                action: SupervisorAction::ObserveResidentConnection,
+                token: handle.token.clone(),
+                worker_command: None,
+            };
+            match mutation {
+                0 => {}
+                1 => request.contract_version = 27,
+                2 => request.launch_id = uuid::Uuid::new_v4().to_string(),
+                3 => request.expected_revision += 1,
+                _ => request.token = "0".repeat(64),
+            }
+            let response: SupervisorResponse = ipc::call(
+                &handle.record.spec.endpoint,
+                handle.child.identity.process_id,
+                &request,
+            )
+            .await
+            .unwrap();
+            assert_eq!(response.contract_version, 28);
+            assert!(response.error.is_some() && response.preparation.is_none());
+        }
+        assert_eq!(f.journal.get(&f.id).unwrap(), before);
+        assert!(UpdateJournal::inspect_activation(&f.state(), &f.id)
+            .unwrap()
+            .is_none());
+        assert!(
+            UpdateJournal::inspect_activation_lifetime(&f.state(), &f.id)
+                .unwrap()
+                .is_none()
+        );
+        stopped(&mut handle).await;
     }
     #[tokio::test]
     async fn lost_handoff_ack_is_observed_without_replay_or_killing_supervisor() {

@@ -39,6 +39,7 @@ pub struct ActivationProcessGuard {
     controller_observation: Option<winbridge_protocol::update::ActivationControllerObservation>,
     lifetime_observation: Option<winbridge_protocol::update::ActivationLifetimeObservation>,
     resident_observation: Option<winbridge_protocol::update::ActivationResidentObservation>,
+    resident_query: Option<winbridge_protocol::update::ActivationResidentQuery>,
 }
 /// Retain the same OS resources after error, including an uncertain live child.
 /// No method converts this object into a second creation attempt.
@@ -133,6 +134,7 @@ impl ActivationProcessGuard {
             controller_observation: None,
             lifetime_observation: None,
             resident_observation: None,
+            resident_query: None,
         })
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {

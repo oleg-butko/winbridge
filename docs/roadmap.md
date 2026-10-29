@@ -1,5 +1,16 @@
 # Постепенная реализация и расширение
 
+**Resident actor28/view20 source,2026-10-29:** отдельный readonly query/client/
+mailbox подключён поверх V7, original guard/query/correlation сохранены. Ошибка
+чтения не переписывает V6 history; observed — датированный факт, не commit/release.
+[Контракт, проверки и Main29](plans/worker-self-update/resident-actor-2026-10-29.md).
+Workspace982/17 ignored +1 новый bound-mailbox test =983 distinct passed;
+Linux/MSVC all-target Clippy/contracts/typecheck/fmt прошли. Native V7 пока нет.
+Исправлен service_started для pending lifetime; views1–19 не получают новых полей.
+Следом Main29 на distinct target944a39c/stable runtime-test-204, затем durable
+finalization/root/release/Active/permanent keeper/U2–U4. Source19/22 прежние,
+public install off; installed worker0.2.0 не меняется, desktop не нужен.
+
 **Readonly resident V7 source,2026-10-29:** actual OS peer связан с original live
 keeper; current accepted frame/link проверяется после expiry/reconnect, отдельно
 от historical V5/V6. Compact header+SHA полного projection и local readonly Info

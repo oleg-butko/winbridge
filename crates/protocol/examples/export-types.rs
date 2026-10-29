@@ -9,6 +9,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        ActivationResidentQuery::decl(&config),
+        ActivationResidentObservation::decl(&config),
+        ActivationResidentObservationResult::decl(&config),
+        ActivationResidentFrame::decl(&config),
+        ActivationResidentPhase::decl(&config),
+        ActivationResidentView::decl(&config),
         ActivationLifetimePhase::decl(&config),
         ActivationLifetimeDurablePhase::decl(&config),
         ActivationLifetimeView::decl(&config),

@@ -8,6 +8,9 @@ impl FilesActor {
                 self.state,
                 State::StartingService(_)
                     | State::StartingController(_)
+                    | State::StartingLifetime(_)
+                    | State::ObservingLifetime(_)
+                    | State::ObservingResident(_)
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
@@ -125,6 +128,12 @@ impl FilesActor {
         }
         #[cfg(windows)]
         match &self.state {
+            State::StartingLifetime(_)
+            | State::ObservingLifetime(_)
+            | State::ObservingResident(_) => {
+                service.phase = ActivationServicePhase::Indeterminate;
+                service.reason = Some("Original owner is handling lifetime/current-connection diagnostics; historical service receipt is not a concurrent handle observation".into());
+            }
             State::StartingService(_) => {
                 service.phase = if active && view.driver_error.is_none() {
                     ActivationServicePhase::Activating

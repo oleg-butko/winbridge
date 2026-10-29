@@ -1,4 +1,14 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type ActivationResidentQuery = { residentObservationVersion: number,
+/**
+ * Fresh correlation for one observation, not an idempotency/execution key.
+ */
+requestId: string, command: WorkerLifetimeActivationCommand, };
+export type ActivationResidentObservation = { residentObservationVersion: number, requestId: string | null, result: ActivationResidentObservationResult, };
+export type ActivationResidentObservationResult = { "kind": "observed", entry: WorkerLifetimeActivationReceipt, frame: ActivationResidentFrame, link: ControllerLinkObservation, observedAtMs: number, } | { "kind": "unavailable", message: string, } | { "kind": "rejected", message: string, };
+export type ActivationResidentFrame = { schemaVersion: number, controllerBuild: BuildIdentity, controllerGeneration: string, sessionId: string, providerBuild: BuildIdentity, providerGeneration: string, context: RequestContext, sequence: number, projectionSha256: string, };
+export type ActivationResidentPhase = "not_resident" | "observing" | "observed" | "unconfirmed";
+export type ActivationResidentView = { phase: ActivationResidentPhase, lifetimeCommandId: string | null, residentProcess: SupervisorProcess | null, processAlive: boolean | null, originalCustodyHeld: boolean | null, observation: ActivationResidentObservation | null, reason: string | null, };
 export type ActivationLifetimePhase = "not_started" | "entering" | "observing" | "observed" | "indeterminate" | "not_resident";
 export type ActivationLifetimeDurablePhase = "issued" | "confirmed" | "indeterminate";
 export type ActivationLifetimeView = { phase: ActivationLifetimePhase, attemptId: string | null, commandId: string | null, revision: number | null, durablePhase: ActivationLifetimeDurablePhase | null, savedReceipt: WorkerLifetimeActivationReceipt | null, residentProcess: SupervisorProcess | null, processAlive: boolean | null,
@@ -72,7 +82,7 @@ export type ActivationLifetimeObservationResult = { "kind": "observed", receipt:
 export type SupervisorPhase = "intent" | "spawned" | "ready" | "active" | "stopped" | "indeterminate";
 export type SupervisorSpec = { launchId: string, updateId: string, parent: SupervisorProcess, parentOwnerId: string, parentEpoch: number, tokenSha256: string, configPath: string, configSha256: string, runtimeDirectory: string, imagePath: string, imageSha256: string, imageIdentity: string, excludedDomain: string | null, endpoint: string, acceptedAtMs: number, worker?: SupervisorWorkerBinding | null, };
 export type SupervisorRecord = { schemaVersion: number, spec: SupervisorSpec, phase: SupervisorPhase, revision: number, process: SupervisorProcess | null, ownerId: string | null, ownerEpoch: number | null, updatedAtMs: number, reason: string, };
-export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain" | "drain_candidate" | "observe_candidate_drain" | "shutdown_candidate" | "observe_candidate_shutdown" | "shutdown_candidate_for_backup" | "backup_worker_state" | "observe_state_backup" | "prepare_runtime_files" | "observe_runtime_files" | "replace_runtime" | "observe_runtime_replacement" | "capture_candidate_support" | "observe_candidate_support" | "drain_compatible_candidate" | "observe_compatible_drain" | "prepare_activation" | "observe_activation_preparation" | "bind_activation_files" | "observe_activation_files" | "launch_activation_receiver" | "observe_activation_process" | "handoff_activation_state" | "observe_activation_state" | "activate_journal_writer" | "observe_journal_writer" | "activate_local_service" | "observe_local_service" | "connect_activation_controller" | "observe_activation_controller" | "enter_activation_lifetime" | "observe_activation_lifetime";
+export type SupervisorAction = "observe" | "handoff" | "stop" | "worker_control" | "prepare_source" | "observe_preparation" | "build_candidate" | "abort_before_cutover" | "verify_candidate_artifacts" | "observe_worker_runtime" | "capture_runtime_baseline" | "observe_runtime_baseline" | "archive_runtime_preimages" | "observe_runtime_preimages" | "observe_worker_compatibility" | "validate_candidate_health" | "observe_candidate_health" | "observe_worker_receipt" | "observe_worker_drain" | "drain_candidate" | "observe_candidate_drain" | "shutdown_candidate" | "observe_candidate_shutdown" | "shutdown_candidate_for_backup" | "backup_worker_state" | "observe_state_backup" | "prepare_runtime_files" | "observe_runtime_files" | "replace_runtime" | "observe_runtime_replacement" | "capture_candidate_support" | "observe_candidate_support" | "drain_compatible_candidate" | "observe_compatible_drain" | "prepare_activation" | "observe_activation_preparation" | "bind_activation_files" | "observe_activation_files" | "launch_activation_receiver" | "observe_activation_process" | "handoff_activation_state" | "observe_activation_state" | "activate_journal_writer" | "observe_journal_writer" | "activate_local_service" | "observe_local_service" | "connect_activation_controller" | "observe_activation_controller" | "enter_activation_lifetime" | "observe_activation_lifetime" | "observe_resident_connection";
 export type SupervisorRequest = { contractVersion: number, launchId: string, expectedRevision: number, action: SupervisorAction, token: string, workerCommand?: WorkerUpdateControlCommand | null, };
 export type SupervisorResponse = { contractVersion: number, launchId: string, record: SupervisorRecord | null, error: string | null, workerControl?: WorkerUpdateControlResponse | null, preparation?: UpdatePreparationView | null, };
 export type UpdatePreparationView = { schemaVersion: number, observedAtMs: number, update: UpdateRecord, source: SourceTransactionRecord | null, sourceAppliedFiles: number, build: UpdateBuildRecord | null,
@@ -147,7 +157,11 @@ activationController?: ActivationControllerView | null,
 /**
  * Internal27/view19 only. Saved entry and current observation are separate.
  */
-activationLifetime?: ActivationLifetimeView | null, };
+activationLifetime?: ActivationLifetimeView | null,
+/**
+ * Internal28/view20 only. Old replies omit this volatile observation.
+ */
+activationResident?: ActivationResidentView | null, };
 export type RuntimePreparationPhase = "not_admitted" | "admitting" | "admitted" | "creating_directory" | "preparing_files" | "prepared" | "indeterminate" | "blocked";
 export type RuntimePreparationView = { phase: RuntimePreparationPhase, attemptId: string | null, revision: number | null, directory: string | null, preparedFiles: number, totalFiles: number, issuedFile: string | null, totalBytes: number | null, reason: string | null, };
 export type RuntimeReplacementPhase = "not_admitted" | "admitting" | "acquiring" | "creating_directory" | "moving_files" | "files_moved" | "indeterminate" | "blocked";

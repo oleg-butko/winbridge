@@ -137,3 +137,5 @@ pub fn validate_observation(
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::fixture as test_fixture;

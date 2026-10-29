@@ -367,6 +367,7 @@ impl UpdateJournal {
             None
         };
         let view = UpdatePreparationView {
+            activation_resident: None,
             activation_lifetime: if view_schema >= 19 {
                 Some(crate::activation::lifetime_view(
                     super::activation_lifetime::read(&tx, id)?.as_ref(),
