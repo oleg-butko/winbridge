@@ -15,6 +15,25 @@ pub struct RuntimeGuard {
     worker_config: PathBuf,
 }
 impl RuntimeGuard {
+    #[cfg(windows)]
+    pub(crate) fn resident_updater_source(&self) -> Result<(PathBuf, String)> {
+        self.revalidate()?;
+        let updater = self
+            .pin
+            .observation()
+            .manifest
+            .artifacts
+            .iter()
+            .find(|a| a.descriptor.role == winbridge_protocol::ArtifactRole::Updater)
+            .ok_or("Loaded installed set has no updater image")?;
+        let directory = Path::new(&self.identity.image.path)
+            .parent()
+            .ok_or("Runtime parent missing")?;
+        Ok((
+            directory.join("winbridge-update.local.json"),
+            updater.sha256.clone(),
+        ))
+    }
     pub fn identity(&self) -> &LoadedWorkerIdentity {
         &self.identity
     }

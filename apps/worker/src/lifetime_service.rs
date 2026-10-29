@@ -13,6 +13,12 @@ pub(crate) enum ServiceLifetime {
     Supervised(Arc<ResidentLifetime>),
     #[cfg_attr(not(windows), allow(dead_code))]
     ReleasePending(Arc<PendingLifetime>),
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Active(Arc<ActiveLifetime>),
+}
+pub(crate) struct ActiveLifetime {
+    resident: Arc<ResidentLifetime>,
+    receipt: WorkerFinalizationReceipt,
 }
 pub(crate) struct PendingLifetime {
     resident: Arc<ResidentLifetime>,
@@ -48,6 +54,14 @@ impl LifetimeKeeper {
 }
 
 impl Worker {
+    /// Origin is immutable; permissions follow the sealed runtime mode. This
+    /// short lock is released before callers acquire Store (Info already owns
+    /// Store). Poisoning must never accidentally open command admission.
+    pub(crate) fn activation_read_only(&self) -> bool {
+        self.local_activation.as_ref().is_some_and(|scope| {
+            scope.lifetime.lock().map(|mode| !matches!(&*mode, ServiceLifetime::Active(v) if v.receipt.compatibility.generation == self.generation)).unwrap_or(true)
+        })
+    }
     pub(crate) fn check_local_service_scope(&self) -> Result<()> {
         self.check_local_service_scope_at(Instant::now())
     }
@@ -61,23 +75,29 @@ impl Worker {
         // watchdog that copied Supervised before a release could wait for the
         // Store, then incorrectly reject the now legitimately Released lease.
         let state = self.store()?;
-        let (resident, pending) = {
+        let (resident, pending, active) = {
             let mode = scope
                 .lifetime
                 .lock()
                 .map_err(|_| "Lifetime mode lock poisoned")?;
             match &*mode {
-                ServiceLifetime::Verification => (None, None),
-                ServiceLifetime::Supervised(resident) => (Some(Arc::clone(resident)), None),
+                ServiceLifetime::Verification => (None, None, false),
+                ServiceLifetime::Supervised(resident) => (Some(Arc::clone(resident)), None, false),
                 ServiceLifetime::ReleasePending(pending) => (
                     Some(Arc::clone(&pending.resident)),
                     Some(Arc::clone(pending)),
+                    false,
                 ),
+                ServiceLifetime::Active(value) => (Some(Arc::clone(&value.resident)), None, true),
             }
         };
         if let Some(resident) = resident {
             resident.keeper.require_live()?;
-            if let Some(pending) = pending {
+            if active {
+                // The same Store/instance/keeper remain authoritative. A later
+                // update or saved config must not revalidate the old release.
+                state.check_authority()?;
+            } else if let Some(pending) = pending {
                 // The SQL/mode gap accepts ONLY the original Quiesced lease
                 // or this exact release receipt. A query does not seal Active.
                 state.observe_service_finalization_release(
@@ -120,6 +140,9 @@ impl Worker {
                     )
                 }
                 ServiceLifetime::Supervised(resident) => Arc::clone(resident),
+                ServiceLifetime::Active(_) => {
+                    return Err("Worker is Active; V6 cannot re-enter quarantine".into())
+                }
                 ServiceLifetime::ReleasePending(_) => {
                     return Err(
                         "Finalization pending; old lifetime query cannot confirm Active".into(),
@@ -362,6 +385,8 @@ impl RunningLocalService {
                 .lock()
                 .map_err(|_| "Lifetime mode lock poisoned")?,
             ServiceLifetime::Supervised(_)
+                | ServiceLifetime::ReleasePending(_)
+                | ServiceLifetime::Active(_)
         ) {
             return Err("Supervised hold requires an actual resident entry".into());
         }
@@ -379,3 +404,7 @@ impl RunningLocalService {
 #[cfg(test)]
 #[path = "lifetime_service/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lifetime_service/active_tests.rs"]
+mod active_tests;

@@ -78,13 +78,14 @@ pub struct LocalService {
     worker: Arc<Worker>,
     command: WorkerServiceActivationCommand,
     deadline: Instant,
-    _config_pin: File,
+    _config_pin: Option<File>,
 }
 pub struct RunningLocalService {
     service: LocalService,
     task: Option<tokio::task::JoinHandle<Result<()>>>,
     exit: Option<Result<()>>,
     controller: ControllerStartup,
+    active_control: Option<crate::update_control::ControlServer>,
 }
 impl LocalService {
     /// Trusted private receiver must supply the original graph/liveness/window
@@ -267,7 +268,7 @@ impl LocalService {
             worker,
             command: state.command,
             deadline: state.deadline,
-            _config_pin: pin,
+            _config_pin: Some(pin),
         })
     }
     /// Retire only the original receiver's duplicate AFTER the same config is
@@ -276,8 +277,12 @@ impl LocalService {
     pub(crate) fn retire_receiver_config_pin(&self, receiver_pin: File) -> Result<()> {
         let incoming =
             winbridge_platform::file_identity(&receiver_pin).map_err(|e| e.to_string())?;
-        let retained =
-            winbridge_platform::file_identity(&self._config_pin).map_err(|e| e.to_string())?;
+        let retained = winbridge_platform::file_identity(
+            self._config_pin
+                .as_ref()
+                .ok_or("Verification config pin already retired")?,
+        )
+        .map_err(|e| e.to_string())?;
         if incoming != retained {
             return Err(
                 "Receiver config pin differs from retained LocalService config; no handoff".into(),
@@ -325,6 +330,7 @@ impl LocalService {
             service: self,
             exit: None,
             controller: ControllerStartup::NotStarted,
+            active_control: None,
             task: Some(tokio::spawn(serve_inner(
                 worker,
                 ReadinessOutput::Local(ready),
@@ -384,8 +390,11 @@ impl RunningLocalService {
         self.service.worker.stop();
     }
     pub async fn close(mut self) -> std::result::Result<(), Box<LocalServiceFailure>> {
-        self.close_controller().await;
         self.service.worker.stop();
+        if let Some(control) = self.active_control.take() {
+            control.close().await;
+        }
+        self.close_controller().await;
         if let Err(reason) = self.wait_until_stopped().await {
             return Err(LocalServiceFailure::worker(
                 reason,

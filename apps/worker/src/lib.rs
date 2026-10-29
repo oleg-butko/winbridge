@@ -241,7 +241,7 @@ impl Worker {
         fenced: bool,
         creator: &OperationCreator,
     ) -> Result<LocalResponse> {
-        if self.local_activation.is_some() && !request.is_observation() {
+        if self.activation_read_only() && !request.is_observation() {
             return Err(local_service::READ_ONLY_REASON.into());
         }
         let requires_fenced = self.store()?.requires_fenced_requests()?;
@@ -519,13 +519,13 @@ impl Worker {
                             };
                             let mut catalog = self.projection_catalog(&context)?;
                             let mut observation = store.work_scheduling_observation(context.clone())?;
-                            observation.read_only |= self.local_activation.is_some();
+                            observation.read_only |= self.activation_read_only();
                             catalog.work_scheduling = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
                             let mut observation = store.queue_observation(context.clone())?;
-                            observation.read_only |= self.local_activation.is_some();
+                            observation.read_only |= self.activation_read_only();
                             catalog.queue_control = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
                             let mut observation = store.resource_scheduling_observation(context.clone())?;
-                            observation.read_only |= self.local_activation.is_some();
+                            observation.read_only |= self.activation_read_only();
                             catalog.resource_scheduling = Some(serde_json::to_value(observation).map_err(|e| e.to_string())?);
                             serde_json::to_value(catalog).map_err(|e| e.to_string())?
                         }),
@@ -540,7 +540,7 @@ impl Worker {
                                 instance_id: self.config.instance_id.clone(),
                                 journal_incarnation: store.journal_authority().incarnation.clone(),
                             },
-                            legacy_mutations_allowed: !self.inspection && self.local_activation.is_none()
+                            legacy_mutations_allowed: !self.inspection && !self.activation_read_only()
                                 && !store.requires_fenced_requests()?,
                         }),
                         resource_recovery: if self.inspection {
@@ -555,12 +555,12 @@ impl Worker {
                             }
                         }),
                         build: Some(winbridge_protocol::build_identity()),
-                        update_coordination: store.active_worker_update()?.map(|lease|serde_json::json!({"schemaVersion":1,"lease":lease,"readOnly":self.inspection || self.local_activation.is_some(),"observedAtMs":store::now_ms()})),
+                        update_coordination: store.active_worker_update()?.map(|lease|serde_json::json!({"schemaVersion":1,"lease":lease,"readOnly":self.inspection || self.activation_read_only(),"observedAtMs":store::now_ms()})),
                         workflow_features: vec!["artifacts".into(), "netwatch_health".into()],
                         attention_available: true,
                         attention_targets_available: true,
                         history_available: true,
-                        maintenance_available: !self.inspection && self.local_activation.is_none(),
+                        maintenance_available: !self.inspection && !self.activation_read_only(),
                         maintenance_error: self
                             .maintenance
                             .lock()
@@ -574,7 +574,7 @@ impl Worker {
                         node_id: self.config.node_id.clone(),
                         generation: self.generation.clone(),
                         platform: std::env::consts::OS.into(),
-                        runtime_validation: if self.local_activation.is_some() {
+                        runtime_validation: if self.activation_read_only() {
                             local_service::READ_ONLY_REASON
                         } else if cfg!(windows) {
                             "Локальное выполнение, отмена и восстановление проверены на Windows"
@@ -584,13 +584,13 @@ impl Worker {
                         .into(),
                         projects: self.config.public_projects()?,
                         command_handlers: Some(winbridge_runner::metadata()),
-                        snapshot_import_available: !self.inspection && self.local_activation.is_none()
+                        snapshot_import_available: !self.inspection && !self.activation_read_only()
                             && self.config.delivery.is_some(),
-                        snapshot_delta_available: !self.inspection && self.local_activation.is_none()
+                        snapshot_delta_available: !self.inspection && !self.activation_read_only()
                             && self.config.delivery.is_some(),
-                        snapshot_resume_available: !self.inspection && self.local_activation.is_none()
+                        snapshot_resume_available: !self.inspection && !self.activation_read_only()
                             && self.config.delivery.is_some(),
-                        workflow_available: !self.inspection && self.local_activation.is_none() && self.config.delivery.is_some(),
+                        workflow_available: !self.inspection && !self.activation_read_only() && self.config.delivery.is_some(),
                         controller_connection: self.controllers.as_ref().map(|c|c.lock()
                             .map_err(|_| "Controller state lock poisoned")
                             .map(|c|c.primary_connection())).transpose()?.flatten(),
@@ -716,7 +716,7 @@ impl Worker {
         }
     }
     pub fn schedule(self: &Arc<Self>) -> Result<()> {
-        if self.local_activation.is_some() {
+        if self.activation_read_only() {
             return Ok(());
         }
         let mut timing = scheduler_diagnostics::Tick::new(&self.scheduler_diagnostics);

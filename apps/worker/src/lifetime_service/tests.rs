@@ -2,7 +2,7 @@
 //! fixtures do not claim Windows authentication, Job membership or native V6.
 use super::*;
 
-fn proposal(
+pub(super) fn proposal(
     service: &LocalService,
 ) -> (
     WorkerLifetimeActivationCommand,
@@ -65,12 +65,12 @@ fn proposal(
     (command, receipt)
 }
 
-fn fixture(root: &Path) -> LocalService {
+pub(super) fn fixture(root: &Path) -> LocalService {
     let (prepared, config, _) = crate::store::lifetime_fixture(root);
     LocalService::prepare_fixture(prepared, &config, || Ok(())).unwrap()
 }
 
-fn finalization_proposal(
+pub(super) fn finalization_proposal(
     running: &RunningLocalService,
     old: WorkerLifetimeActivationCommand,
 ) -> WorkerFinalizationCommand {
@@ -594,14 +594,14 @@ fn receiver_config_pin_handoff_retains_the_real_service_pin_until_service_drop()
     let initial = options.open(&path).unwrap();
     let id = winbridge_platform::file_identity(&initial).unwrap();
     assert_eq!(
-        winbridge_platform::file_identity(&service._config_pin).unwrap(),
+        winbridge_platform::file_identity(service._config_pin.as_ref().unwrap()).unwrap(),
         id
     );
     #[cfg(windows)]
     assert!(std::fs::OpenOptions::new().write(true).open(&path).is_err());
     service.retire_receiver_config_pin(initial).unwrap();
     assert_eq!(
-        winbridge_platform::file_identity(&service._config_pin).unwrap(),
+        winbridge_platform::file_identity(service._config_pin.as_ref().unwrap()).unwrap(),
         id
     );
     assert!(matches!(
@@ -634,7 +634,8 @@ fn receiver_config_pin_handoff_refuses_a_foreign_file_without_releasing_service_
     let path = temp.path().join("foreign-config.json");
     std::fs::write(&path, b"{}\n").unwrap();
     let foreign = std::fs::File::open(&path).unwrap();
-    let retained = winbridge_platform::file_identity(&service._config_pin).unwrap();
+    let retained =
+        winbridge_platform::file_identity(service._config_pin.as_ref().unwrap()).unwrap();
     assert_ne!(
         retained,
         winbridge_platform::file_identity(&foreign).unwrap()
@@ -642,7 +643,7 @@ fn receiver_config_pin_handoff_refuses_a_foreign_file_without_releasing_service_
     assert!(service.retire_receiver_config_pin(foreign).is_err());
     assert_eq!(
         retained,
-        winbridge_platform::file_identity(&service._config_pin).unwrap()
+        winbridge_platform::file_identity(service._config_pin.as_ref().unwrap()).unwrap()
     );
     assert_eq!(
         service

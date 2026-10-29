@@ -1,5 +1,11 @@
 # Архитектура WinBridge
 
+2026-10-29/.204: [Active core](plans/worker-self-update/finalization-active-2026-10-29.md)
+отделяет startup origin от permissions. Известный SQL commit и original readiness
+потребляются при Store→mode seal; worker config pin отпускается только после
+последних проверок. Network/Store/instance/domain не создаются повторно. V8 route,
+parent pin retirement и permanent keeper ещё не подключены; install off.
+
 **Same-Store finalization source,2026-10-29:** worker19/updater23. Internal
 ReleasePending owner удерживает original keeper и exact command; worker SQL release
 и Active — разные факты. Store/mode checks сериализованы одним порядком блокировок.

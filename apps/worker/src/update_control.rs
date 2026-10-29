@@ -87,6 +87,24 @@ impl Worker {
         config_path: &Path,
         image_sha256: &str,
     ) -> Result<SupervisorWorkerBinding> {
+        self.configure_update_control(config_path, image_sha256, false)
+    }
+    /// The original coordinator already owns the current journal. Preparing
+    /// its successor listener must never open/migrate or claim that journal.
+    #[cfg(windows)]
+    pub(crate) fn enable_resident_update_control(
+        &self,
+        config_path: &Path,
+        image_sha256: &str,
+    ) -> Result<SupervisorWorkerBinding> {
+        self.configure_update_control(config_path, image_sha256, true)
+    }
+    fn configure_update_control(
+        &self,
+        config_path: &Path,
+        image_sha256: &str,
+        resident: bool,
+    ) -> Result<SupervisorWorkerBinding> {
         let mut slot = self
             .update_control
             .lock()
@@ -141,7 +159,14 @@ impl Worker {
         };
         let scope = winbridge_update::installation_scope(&cfg)?;
         let directory = runtime.join("update-state");
-        UpdateJournal::open(&directory, &scope).map_err(|e| e.to_string())?;
+        if resident {
+            let info = UpdateJournal::inspect(&directory).map_err(|e| e.to_string())?;
+            if info.scope_sha256 != scope {
+                return Err("Resident updater scope changed".into());
+            }
+        } else {
+            UpdateJournal::open(&directory, &scope).map_err(|e| e.to_string())?;
+        }
         *slot = Some(Arc::new(Registration {
             config_sha256: hash_config(&config_path)?,
             config_path,
@@ -194,6 +219,9 @@ impl Worker {
         request: &UpdateRequest,
         fixture: bool,
     ) -> Result<WorkerSupervisorLaunch> {
+        if self.activation_read_only() {
+            return Err("Activated worker is not Active; no new updater launch".into());
+        }
         let reg = self.control_registration()?;
         // Historical lookup needs neither owner lock nor fresh effect permission.
         if let Some(update) =
@@ -671,6 +699,10 @@ impl Drop for ControlServer {
     }
 }
 impl ControlServer {
+    #[cfg(windows)]
+    pub(crate) fn is_ready(&self) -> bool {
+        self.reg.ready.load(Ordering::Acquire) && !self.task.is_finished()
+    }
     pub(crate) async fn close(mut self) {
         self.reg.ready.store(false, Ordering::Release);
         self.task.abort();

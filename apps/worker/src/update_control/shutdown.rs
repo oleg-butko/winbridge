@@ -33,6 +33,9 @@ pub(super) fn prepare_reply(
     q: &WorkerUpdateControlRequest,
     peer: u32,
 ) -> Result<ControlReply> {
+    if worker.activation_read_only() {
+        return Err("Activated update-control listener is staged; worker is not Active".into());
+    }
     if let WorkerUpdateControlCommand::RequestShutdown { command } = &q.command {
         let acceptance = accept(&worker, reg, q, peer, command)?;
         let (receipt, stop_after_reply) = match acceptance {

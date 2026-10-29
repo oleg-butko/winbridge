@@ -1,5 +1,15 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-29: Active core реализован в source.**
+[Ревью, проверки и границы](plans/worker-self-update/finalization-active-2026-10-29.md).
+Retained native release gate .203 перечитан:6+10 tests/5 файлов twice, passed.
+Новый typed seal потребляет known SQL commit и original readiness, освобождает
+worker config pin, открывает dynamic permissions без нового Store/network.
+Ошибка сохраняет commit/listener owner; saved receipt не даёт Active.1017 full
+workspace tests/17 ignored, Linux Clippy passed. Новый20-test native unit gate
+подготовлен; V8 decoder/mailbox/factory/Active observation/permanent keeper ещё
+впереди. Установленный worker и production controllers не менялись.
+
 **Same-Store release/ReleasePending source,2026-10-29:** internal worker transaction
 сохраняет schema19 shutdown history и освобождает exact lease только после readback/
 COMMIT; Existing — данные, не новый permit. Новый pending watchdog допускает exact

@@ -7,7 +7,8 @@ param(
   [Parameter(Mandatory)][string]$SourceDirectory,
   [Parameter(Mandatory)][string]$SourceArchiveSha256,
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
-  [Parameter(Mandatory)][string]$ReportDirectory
+  [Parameter(Mandatory)][string]$ReportDirectory,
+  [switch]$ActiveGate
 )
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
@@ -20,6 +21,7 @@ New-Item -ItemType Directory -Path $ReportDirectory|Out-Null
 $source=[IO.Path]::GetFullPath($SourceDirectory)
 $work=Split-Path $source -Parent
 $report=[ordered]@{schemaVersion=1;kind='worker_finalization_release_unit_native_gate';platform='windows';passed=$false;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;installedRuntimeApplied=$false;windowsOpened=$false;physicalV8Proved=$false;error=$null;commands=@();storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+if($ActiveGate){$report.kind='worker_finalization_active_unit_native_gate';$report.activeCoreProved=$false;$report.syntheticRuntimeMetadata=$true}
 $lease=$null;$location=Get-Location
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP
@@ -63,7 +65,9 @@ try {
   if(-not $exe.StartsWith(([IO.Path]::GetFullPath($env:CARGO_TARGET_DIR).TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)){throw 'Test artifact escaped owned cache'}
   $exeSha=(Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
   $report.testArtifact=@{path=$exe;sha256=$exeSha;bytes=(Get-Item -LiteralPath $exe).Length}
-  foreach($case in @(@{filter='store::activation_finalization::tests::';count=6;log='sql-release.log'},@{filter='local_service::lifetime::tests::';count=10;log='lifetime.log'})){
+  $cases=@(@{filter='store::activation_finalization::tests::';count=6;log='sql-release.log'},@{filter='local_service::lifetime::tests::';count=10;log='lifetime.log'})
+  if($ActiveGate){$cases+=@{filter='local_service::lifetime::active_tests::';count=4;log='active.log'}}
+  foreach($case in $cases){
     $arguments=@($case.filter,'--test-threads=1','--nocapture')
     $started=[DateTimeOffset]::UtcNow
     & $exe @arguments 2>&1|Tee-Object -FilePath (Join-Path $ReportDirectory $case.log)|Out-Host
@@ -74,6 +78,7 @@ try {
   }
   if((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant() -cne $exeSha){throw 'Native artifact changed across execution'}
   $report.passed=$true
+  if($ActiveGate){$report.activeCoreProved=$true}
 } catch {$report.error=$_.Exception.Message;throw}
 finally {
   Set-Location -LiteralPath $location

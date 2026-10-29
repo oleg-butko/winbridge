@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29/.204/main:** [Active core и ревью](finalization-active-2026-10-29.md).
+SQL release gate .203 verified16; source known-commit Active seal/dynamic gates/
+worker config retirement/staged control реализованы. Новый native20 unit gate
+подготовлен; actual V8/factory/observation/keeper/two generations ещё впереди.
+
 **Native retained22→23 passed,2026-10-29:** run20261029-202033-a2132bf8,
 task18e1625b-d2bc-44d8-9b0b-949446ab685c succeeded0, producerfcc49dd.
 Actual Windows copy/backup/old22 init+status refusal/cold20 passed;4 result files

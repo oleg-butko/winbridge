@@ -2,6 +2,9 @@
 //! Keep SQL release separate from Active and retain every owner on failure.
 #![cfg_attr(not(test), allow(dead_code))]
 use super::*;
+#[cfg(any(windows, test))]
+#[path = "active_service.rs"]
+pub(super) mod active;
 
 #[cfg(any(windows, test))]
 pub(super) fn require_quiet_registries(worker: &Worker) -> Result<()> {
@@ -112,7 +115,7 @@ impl RunningLocalService {
         self.seal_finalization_pending(command.clone(), &resident)?;
         // Failure retains ReleasePending and its original keeper; no SQL
         // release, second launch, deadline extension or Active seal follows.
-        require_pending_runtime(&self.service.worker, &resident, &command, peer)
+        require_pending_runtime(&self.service.worker, &resident, &command, peer).map(|_| ())
     }
 
     #[cfg(windows)]
@@ -145,7 +148,7 @@ impl RunningLocalService {
             }
         };
         state.release_activated_service(&scope.command, &scope.shutdown, &pending.command, || {
-            require_pending_runtime(worker, &pending.resident, &pending.command, peer)
+            require_pending_runtime(worker, &pending.resident, &pending.command, peer).map(|_| ())
         })
     }
 }
@@ -157,7 +160,7 @@ fn require_pending_runtime(
     resident: &ResidentLifetime,
     command: &WorkerFinalizationCommand,
     peer: &winbridge_transport::local_peer::LocalPeer,
-) -> Result<()> {
+) -> Result<winbridge_update::journal::RetainedFinalizationSnapshot> {
     if peer.process_id() != resident.command.binding.keeper.process_id
         || command.binding.lifetime_command != resident.command
         || worker.stop.load(Ordering::Acquire)
@@ -180,6 +183,10 @@ fn require_pending_runtime(
         .clone()
         .ok_or("No actual loaded runtime guard for finalization")?;
     guard.revalidate()?;
+    guard.require_installation(
+        &command.binding.installation_id,
+        &command.binding.scope_sha256,
+    )?;
     if guard.identity() != &resident.command.binding.compatibility.identity {
         return Err("Finalization loaded runtime differs".into());
     }
@@ -245,5 +252,6 @@ fn require_pending_runtime(
         .map_err(|e| e.to_string())?;
     worker._instance_lock.revalidate()?;
     require_quiet_registries(worker)?;
-    resident.keeper.require_live()
+    resident.keeper.require_live()?;
+    Ok(graph)
 }

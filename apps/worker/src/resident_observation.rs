@@ -44,6 +44,9 @@ impl Worker {
                     )
                 }
                 ServiceLifetime::Supervised(value) => Arc::clone(value),
+                ServiceLifetime::Active(_) => {
+                    return Err("Worker is Active; V7 observes quarantine only".into())
+                }
                 ServiceLifetime::ReleasePending(_) => {
                     return Err(
                         "Finalization pending; V7 remains observation of quarantine only".into(),
