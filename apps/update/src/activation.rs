@@ -20,6 +20,9 @@ pub mod lifetime;
 #[cfg(all(feature = "update-validation", any(windows, test)))]
 pub(crate) mod lifetime_ready_loss;
 mod lifetime_view;
+pub mod resident_observation;
+#[cfg(any(windows, test))]
+pub(crate) mod resident_probe;
 pub(crate) use lifetime_view::view as lifetime_view;
 #[cfg(any(windows, test))]
 pub(crate) mod lifetime_probe;

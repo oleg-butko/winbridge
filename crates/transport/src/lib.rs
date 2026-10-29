@@ -5,6 +5,7 @@ use winbridge_protocol::{
     FencedRequest, FencedResponse, LocalRequest, LocalResponse, WireRequest, WireResponse,
 };
 
+pub mod local_peer;
 mod readiness;
 pub mod supervisor;
 pub mod websocket;

@@ -13,7 +13,7 @@ mod controller;
 use controller::ControllerStartup;
 #[path = "lifetime_service.rs"]
 mod lifetime;
-pub(crate) use lifetime::{rejected_lifetime, ServiceLifetime};
+pub(crate) use lifetime::{rejected_lifetime, rejected_resident, ServiceLifetime};
 
 pub(crate) const READ_ONLY_REASON: &str = "Локальная проверка обновления: доступны только чтение журнала и диагностика; новые команды ещё не разрешены";
 

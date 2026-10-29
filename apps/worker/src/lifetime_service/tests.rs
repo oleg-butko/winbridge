@@ -71,6 +71,91 @@ fn fixture(root: &Path) -> LocalService {
 }
 
 #[tokio::test]
+async fn resident_queries_cannot_enter_a_mode_spoof_a_keeper_or_change_store_authority() {
+    for supervised in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let service = fixture(root.path());
+        let (command, entry) = proposal(&service);
+        let mut running = service.start().await.unwrap();
+        let authority = running
+            .service
+            .worker
+            .store()
+            .unwrap()
+            .state_backup_authority()
+            .unwrap();
+        let context = running.service.worker.request_context().unwrap();
+        if supervised {
+            running
+                .seal_supervised_lifetime(
+                    command.clone(),
+                    entry,
+                    LifetimeKeeper::Fixture(Arc::new(AtomicBool::new(true))),
+                )
+                .unwrap();
+        }
+        let query = ActivationResidentQuery {
+            resident_observation_version: ACTIVATION_RESIDENT_OBSERVATION_CONTRACT,
+            request_id: uuid::Uuid::new_v4().to_string(),
+            command,
+        };
+        for mutation in 0..5 {
+            let mut raw = serde_json::to_value(&query).unwrap();
+            match mutation {
+                0 => {}
+                1 => raw["residentObservationVersion"] = 6.into(),
+                2 => raw["release"] = true.into(),
+                3 => raw["processId"] = query.command.binding.keeper.process_id.into(),
+                _ => raw["requestId"] = "x".repeat(4096).into(),
+            }
+            let observed: ActivationResidentObservation = winbridge_transport::supervisor::call(
+                &running.endpoint().unwrap(),
+                std::process::id(),
+                &raw,
+            )
+            .await
+            .unwrap();
+            let ActivationResidentObservationResult::Rejected { message } = observed.result else {
+                panic!("query must not adopt resident mode");
+            };
+            if mutation == 0 {
+                assert!(
+                    message.contains(if supervised {
+                        "actual original keeper peer"
+                    } else {
+                        "already supervised runtime"
+                    }),
+                    "{message}"
+                );
+            }
+            if mutation >= 2 {
+                assert!(observed.request_id.is_none());
+            }
+        }
+        assert_eq!(running.service.worker.request_context().unwrap(), context);
+        assert_eq!(
+            running
+                .service
+                .worker
+                .store()
+                .unwrap()
+                .state_backup_authority()
+                .unwrap(),
+            authority
+        );
+        assert_eq!(
+            running
+                .service
+                .worker
+                .check_local_service_scope_at(running.service.deadline + Duration::from_secs(1))
+                .is_ok(),
+            supervised
+        );
+        running.close().await.unwrap();
+    }
+}
+
+#[tokio::test]
 async fn original_window_still_gates_entry_and_a_query_cannot_arm_a_mode() {
     let root = tempfile::tempdir().unwrap();
     let service = fixture(root.path());

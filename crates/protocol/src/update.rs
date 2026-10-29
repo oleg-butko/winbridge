@@ -1145,6 +1145,8 @@ mod activation_controller;
 pub use activation_controller::*;
 mod activation_lifetime;
 pub use activation_lifetime::*;
+mod activation_resident_observation;
+pub use activation_resident_observation::*;
 
 mod activation_service_view;
 pub use activation_service_view::*;

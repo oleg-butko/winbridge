@@ -1550,7 +1550,12 @@ async fn accept_local(
 }
 fn accept_connection<S>(mut stream: S, worker: Arc<Worker>, permits: Arc<tokio::sync::Semaphore>)
 where
-    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+    S: tokio::io::AsyncRead
+        + tokio::io::AsyncWrite
+        + winbridge_transport::local_peer::LocalPeerStream
+        + Unpin
+        + Send
+        + 'static,
 {
     let Ok(permit) = permits.try_acquire_owned() else {
         return;
@@ -1559,6 +1564,36 @@ where
         let _permit = permit;
         let operation = async {
             let bytes = winbridge_transport::read_frame(&mut stream).await?;
+            if serde_json::from_slice::<serde_json::Value>(&bytes)
+                .ok()
+                .is_some_and(|v| v.get("residentObservationVersion").is_some())
+            {
+                let response = match (
+                    serde_json::from_slice::<winbridge_protocol::update::ActivationResidentQuery>(
+                        &bytes,
+                    ),
+                    stream.local_peer(),
+                ) {
+                    (Ok(query), Ok(peer)) => tokio::task::spawn_blocking(move || {
+                        worker.handle_resident_observation(query, peer)
+                    })
+                    .await
+                    .map_err(std::io::Error::other)?,
+                    (Ok(query), Err(_)) => local_service::rejected_resident(
+                        Some(query.request_id),
+                        "Resident observation peer could not be authenticated".into(),
+                    ),
+                    (Err(_), _) => local_service::rejected_resident(
+                        None,
+                        "Invalid resident observation envelope".into(),
+                    ),
+                };
+                return winbridge_transport::write_frame(
+                    &mut stream,
+                    &serde_json::to_vec(&response)?,
+                )
+                .await;
+            }
             if serde_json::from_slice::<serde_json::Value>(&bytes)
                 .ok()
                 .is_some_and(|v| v.get("lifetimeObservationVersion").is_some())

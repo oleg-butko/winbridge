@@ -14,6 +14,8 @@ pub use controller::ActivationControllerPreparation;
 mod lifetime;
 #[path = "activation_lifetime_observation.rs"]
 mod lifetime_observation;
+#[path = "activation_resident_observation.rs"]
+mod resident_observation;
 pub use lifetime::ActivationLifetimePreparation;
 #[path = "activation_service.rs"]
 mod service;
@@ -36,6 +38,7 @@ pub struct ActivationProcessGuard {
     _controller_config_pin: Option<std::fs::File>,
     controller_observation: Option<winbridge_protocol::update::ActivationControllerObservation>,
     lifetime_observation: Option<winbridge_protocol::update::ActivationLifetimeObservation>,
+    resident_observation: Option<winbridge_protocol::update::ActivationResidentObservation>,
 }
 /// Retain the same OS resources after error, including an uncertain live child.
 /// No method converts this object into a second creation attempt.
@@ -129,6 +132,7 @@ impl ActivationProcessGuard {
             _controller_config_pin: None,
             controller_observation: None,
             lifetime_observation: None,
+            resident_observation: None,
         })
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {

@@ -5,7 +5,9 @@ use super::{
 };
 use winbridge_core::update::{valid_hash, MAX_UPDATE_COUNTER};
 use winbridge_protocol::{update::*, ArtifactRole};
+mod info;
 mod record;
+pub use info::validate_readonly_info;
 pub use record::{ActivationServiceRecord, ActivationServiceState};
 
 /// Fresh durable admission only. Never deserialized or reconstructed by readback.

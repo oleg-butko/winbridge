@@ -215,7 +215,7 @@ pub fn command_sha256(command: &WorkerControllerActivationCommand) -> Result<Str
     digest(b"winbridge.activation.controller-command.v1\n", command)
 }
 
-fn valid_build(build: &BuildIdentity) -> bool {
+pub(super) fn valid_build(build: &BuildIdentity) -> bool {
     let text = |s: &str| !s.is_empty() && s.len() <= 128 && !s.chars().any(char::is_control);
     text(&build.version)
         && text(&build.build_id)

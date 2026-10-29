@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29: [readonly resident V7 source](resident-observation-2026-10-29.md)**
+добавлен с actual peer/current connection и compact response. Actor27/view19
+прежние; actual native V7 ещё впереди, public install off. Следом actor/view/gate,
+затем durable finalization/root/release/Active и permanent keeper.
+
 **2026-10-29: [physical custody source](process-custody-owner-2026-10-29.md)**
 отделена после passed Main28. Новая permanent conversion ещё не подключена;
 дальше typed resident control/finalization, root/release/Active и native proof.

@@ -1,5 +1,16 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Readonly resident V7 source,2026-10-29:** actual OS peer связан с original live
+keeper; current accepted frame/link проверяется после expiry/reconnect, отдельно
+от historical V5/V6. Compact header+SHA полного projection и local readonly Info
+predicate сохраняют bounded wire; strict query не меняет mode/journal/permissions.
+[Контракт, source checks, disk cleanup и продолжение](plans/worker-self-update/resident-observation-2026-10-29.md).
+978 distinct Linux tests/17 ignored (workspace969 +9 дополнительных worker validation).
+Linux/MSVC all-target Clippy/fmt/scaffold прошли; нового native V7 gate пока нет. Worker19/
+updater22/actor27/view19 прежние, public install off. Следом actor/current-view и
+actual native V7 target, потом durable finalization/keeper/Active/U2–U4.
+Working0.2.0/source48c834c/active0/errors=null прежний; desktop не нужен.
+
 **Physical custody source отделена,2026-10-29:** private `ProcessCustody` владеет
 original child/Job/channel/captures/readers, verification pins остаются в guard.
 Drop запрашивает original tree cleanup до отпускания pins, без detach/unsafe/

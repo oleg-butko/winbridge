@@ -3,6 +3,9 @@
 use super::*;
 use winbridge_protocol::update::*;
 use winbridge_update::activation::lifetime;
+#[path = "resident_observation.rs"]
+mod resident_observation;
+pub(crate) use resident_observation::rejected_resident;
 
 pub(crate) enum ServiceLifetime {
     Verification,
