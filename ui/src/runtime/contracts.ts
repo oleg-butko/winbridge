@@ -1,4 +1,11 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type ActivationFinalizationBinding = { lifetimeCommand: WorkerLifetimeActivationCommand, lifetimeRecordSha256: string, shutdownRecordSha256: string, installationId: string, scopeSha256: string, committedRootRevision: number, expectedLeaseRevision: number, sourceManifestSha256: string, residentRequestId: string, residentObservationSha256: string, };
+export type WorkerFinalizationCommand = { schemaVersion: number, commandId: string, binding: ActivationFinalizationBinding, issuedAtMs: number, };
+export type WorkerFinalizationReceipt = { schemaVersion: number, commandId: string, commandSha256: string, compatibility: WorkerRuntimeCompatibility, authority: StateBackupAuthority, releasedLease: WorkerUpdateLease, mode: WorkerFinalizationMode, releasedAtMs: number, };
+export type WorkerFinalizationMode = "active";
+export type ActivationFinalizationQuery = { finalizationObservationVersion: number, requestId: string, command: WorkerFinalizationCommand, };
+export type ActivationFinalizationObservation = { finalizationObservationVersion: number, requestId: string | null, result: ActivationFinalizationObservationResult, };
+export type ActivationFinalizationObservationResult = { "kind": "observed", receipt: WorkerFinalizationReceipt, observedAtMs: number, } | { "kind": "pending", commandId: string, message: string, } | { "kind": "unavailable", message: string, } | { "kind": "rejected", message: string, };
 export type ActivationResidentQuery = { residentObservationVersion: number,
 /**
  * Fresh correlation for one observation, not an idempotency/execution key.

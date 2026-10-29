@@ -1,11 +1,21 @@
-//! Proposed finalization data. No decoder, marker, discovery or mutation route
-//! is registered by declaring these types. V7 remains strictly readonly.
+//! Finalization data and a distinct readonly observation. The mutable V8
+//! operation remains proposed; observing a fact never authorizes its execution.
 use super::{StateBackupAuthority, WorkerLifetimeActivationCommand, WorkerUpdateLease};
 use crate::WorkerRuntimeCompatibility;
 use serde::{Deserialize, Serialize};
 
 /// Reserved for the future authenticated normal-IPC effect, not advertised.
 pub const PROPOSED_ACTIVATION_FINALIZATION_CONTRACT: u16 = 8;
+pub const ACTIVATION_FINALIZATION_OBSERVATION_CONTRACT: u16 = 1;
+pub const ACTIVATION_FINALIZATION_OBSERVATION_MARKER: &[u8] = b"WINBRIDGE_FINALIZATION_OBSERVE_V1";
+/// Sender pattern must not advertise a receiver in linked worker images.
+pub fn finalization_observation_marker_pattern() -> Vec<u8> {
+    format!(
+        "WINBRIDGE_FINALIZATION_OBSERVE_V{}",
+        std::hint::black_box(ACTIVATION_FINALIZATION_OBSERVATION_CONTRACT)
+    )
+    .into_bytes()
+}
 
 macro_rules! dto { ($($item:item)*) => {$ (
     #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
@@ -16,6 +26,17 @@ macro_rules! dto { ($($item:item)*) => {$ (
 )*}; }
 
 dto! {
+    /// Readonly correlation, never a delivery key or an Active permit.
+    pub struct ActivationFinalizationQuery {
+        pub finalization_observation_version: u16,
+        pub request_id: String,
+        pub command: WorkerFinalizationCommand,
+    }
+    pub struct ActivationFinalizationObservation {
+        pub finalization_observation_version: u16,
+        pub request_id: Option<String>,
+        pub result: ActivationFinalizationObservationResult,
+    }
     /// Flat causal references plus the original bounded V6 command. No nested
     /// service/controller history, serialized OS handles or execution permit.
     pub struct ActivationFinalizationBinding {
@@ -38,7 +59,7 @@ dto! {
         pub binding: ActivationFinalizationBinding,
         pub issued_at_ms: u64,
     }
-    /// A fact the future receiver may produce only after SQL release AND the
+    /// A fact the resident owner may produce only after SQL release AND the
     /// in-memory Active seal on the same Store. It never reconstructs custody.
     pub struct WorkerFinalizationReceipt {
         pub schema_version: u16,
@@ -50,6 +71,32 @@ dto! {
         pub mode: WorkerFinalizationMode,
         pub released_at_ms: u64,
     }
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ActivationFinalizationObservationResult {
+    Observed {
+        receipt: Box<WorkerFinalizationReceipt>,
+        observed_at_ms: u64,
+    },
+    Pending {
+        command_id: String,
+        message: String,
+    },
+    Unavailable {
+        message: String,
+    },
+    Rejected {
+        message: String,
+    },
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

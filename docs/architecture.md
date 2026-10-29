@@ -1,5 +1,11 @@
 # Архитектура WinBridge
 
+2026-10-29/.204: [Active observation](plans/worker-self-update/finalization-observation-2026-10-29.md)
+читает sealed in-memory факт через normal IPC с настоящими OS peer PID обеих сторон.
+Текущая Store authority обязательна; старый config SHA/updater epoch/empty domain
+после Active не проверяются. Readonly query не восстанавливает release permit и
+не выполняет mutable V8. Parent read budget не продлевает startup grant.
+
 2026-10-29/.204: [Active core](plans/worker-self-update/finalization-active-2026-10-29.md)
 отделяет startup origin от permissions. Известный SQL commit и original readiness
 потребляются при Store→mode seal; worker config pin отпускается только после

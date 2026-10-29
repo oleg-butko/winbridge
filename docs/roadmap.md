@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-29/.204/main: [readonly Active observation](plans/worker-self-update/finalization-observation-2026-10-29.md)
+добавлена как отдельный authenticated normal-IPC read, без release/SQL writes/
+mode adoption/startup renewal. Положительный native proof — часть будущего V8 gate;
+далее bounded mutable mailbox и consuming physical factory, затем permanent keeper.
+
 2026-10-29/.204/main: [source Active core](plans/worker-self-update/finalization-active-2026-10-29.md)
 после same-Store release. Dynamic dispatch/Info/queue/scheduler, worker config-pin
 retirement и staged listener readiness реализованы;1017 tests/17 ignored passed.

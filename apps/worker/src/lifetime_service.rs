@@ -6,6 +6,9 @@ use winbridge_update::activation::lifetime;
 #[path = "resident_observation.rs"]
 mod resident_observation;
 pub(crate) use resident_observation::rejected_resident;
+#[path = "finalization_observation.rs"]
+mod finalization_observation;
+pub(crate) use finalization_observation::rejected_finalization_observation;
 
 pub(crate) enum ServiceLifetime {
     Verification,
@@ -408,3 +411,7 @@ mod tests;
 #[cfg(test)]
 #[path = "lifetime_service/active_tests.rs"]
 mod active_tests;
+
+#[cfg(test)]
+#[path = "lifetime_service/finalization_observation_tests.rs"]
+mod finalization_observation_tests;

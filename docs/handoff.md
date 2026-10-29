@@ -1,5 +1,15 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-29: readonly Active observation.**
+[Контракт, ревью и продолжение](plans/worker-self-update/finalization-observation-2026-10-29.md).
+Отдельный normal-IPC query с OS peer/current authority читает typed Active;
+Pending/сохранённый receipt не дают release или permission. Parent probe проверяет
+original endpoint/receipt/correlation и ограничивает только бюджет чтения.
+V8 mutation/factory/permanent keeper ещё не подключены; installed worker прежний.
+Full workspace/update-validation1022/17 ignored; Linux/MSVC all-target Clippy
+passed. Native positive observation пока не доказан; прежний native20 source73063db
+не повторять и не переименовывать.
+
 **.204/main,2026-10-29: Active core реализован в source.**
 [Ревью, проверки и границы](plans/worker-self-update/finalization-active-2026-10-29.md).
 Retained native release gate .203 перечитан:6+10 tests/5 файлов twice, passed.

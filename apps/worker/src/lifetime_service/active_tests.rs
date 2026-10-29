@@ -5,7 +5,9 @@ use super::*;
 use crate::store::activation_finalization::{ActivatedReleaseAdmission, ActivatedReleaseCommit};
 use winbridge_protocol::*;
 
-async fn pending(root: &Path) -> (RunningLocalService, Arc<PendingLifetime>, Arc<AtomicBool>) {
+pub(super) async fn pending(
+    root: &Path,
+) -> (RunningLocalService, Arc<PendingLifetime>, Arc<AtomicBool>) {
     let service = super::tests::fixture(root);
     let (old, entry) = super::tests::proposal(&service);
     let mut running = service.start().await.unwrap();
@@ -36,7 +38,10 @@ async fn pending(root: &Path) -> (RunningLocalService, Arc<PendingLifetime>, Arc
     };
     (running, owner, live)
 }
-fn commit(running: &RunningLocalService, owner: &PendingLifetime) -> Box<ActivatedReleaseCommit> {
+pub(super) fn commit(
+    running: &RunningLocalService,
+    owner: &PendingLifetime,
+) -> Box<ActivatedReleaseCommit> {
     let worker = &running.service.worker;
     let scope = worker.local_activation.as_ref().unwrap();
     match worker

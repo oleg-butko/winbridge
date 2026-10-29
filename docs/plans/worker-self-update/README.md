@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29/.204/main:** [readonly Active observation](finalization-observation-2026-10-29.md)
+после потери ответа использует отдельный authenticated normal IPC, typed owner и
+current Store authority. Нет повторного release/SQL writes/cold adoption. Далее
+bounded mutable V8 mailbox/consuming physical factory/native proof/permanent keeper.
+
 **2026-10-29/.204/main:** [Active core и ревью](finalization-active-2026-10-29.md).
 SQL release gate .203 verified16; source known-commit Active seal/dynamic gates/
 worker config retirement/staged control реализованы. Native20 unit gate passed,
