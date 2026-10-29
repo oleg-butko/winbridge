@@ -1264,16 +1264,37 @@ fn attention_application_write_failure_is_not_reported_as_fresh_ready() {
 fn attention_startup_application_write_failure_blocks_both_related_records() {
     let (_temp, config, request) = setup();
     let worker = WorkerOwner(Worker::open(config.clone()).unwrap());
-    let id = accept(&worker, request).workflow_id;
-    until(&worker, || flow(&worker, &id).application_id.is_some());
-    let app_id = flow(&worker, &id).application_id.unwrap();
+    // Install the exact fault before any async task writes. Concurrent DDL can
+    // instead fail output persistence with SQLITE_BUSY and never reach Ready.
     let db = rusqlite::Connection::open(config.state_directory.join("journal.sqlite")).unwrap();
     db.execute_batch("CREATE TRIGGER reject_ready BEFORE UPDATE ON applications WHEN NEW.status='ready' BEGIN SELECT RAISE(ABORT,'expected startup application journal failure'); END;").unwrap();
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while worker.schedule().is_ok() {
-        assert!(Instant::now() < deadline);
+    let id = accept(&worker, request).workflow_id;
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let error = loop {
+        if let Err(error) = worker.schedule() {
+            break error;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Expected Ready transaction failure"
+        );
         thread::sleep(Duration::from_millis(10));
-    }
+    };
+    assert!(
+        error.contains("expected startup application journal failure"),
+        "Wrong injected failure: {error}"
+    );
+    // After the failed transaction the public projection is deliberately stale;
+    // inspect only the already committed workflow to identify its application.
+    let raw: String = db
+        .query_row("SELECT record FROM workflows WHERE id=?1", [&id], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    let app_id = serde_json::from_str::<WorkflowRecord>(&raw)
+        .unwrap()
+        .application_id
+        .unwrap();
     for request in [
         LocalRequest::GetWorkflow {
             workflow_id: id.clone(),

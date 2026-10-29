@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-29/.204/main: [V8 owner mailbox](plans/worker-self-update/finalization-mailbox-2026-10-29.md)
+соединяет normal-IPC decoder с original Pending/readiness/SQL/Active coordinator.
+Bounded delivery, caller-loss semantics, retained uncertain/known commit и phase
+timings реализованы. Далее native26 unit audit, physical factory/одно delivery/
+independent Active observation/confirmation ledger/permanent keeper/two generations.
+
 2026-10-29/.204/main: [readonly Active observation](plans/worker-self-update/finalization-observation-2026-10-29.md)
 добавлена как отдельный authenticated normal-IPC read, без release/SQL writes/
 mode adoption/startup renewal. Положительный native proof — часть будущего V8 gate;

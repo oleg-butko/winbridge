@@ -1,6 +1,5 @@
-//! Internal coordinator operations; no decoder or mutable V8 marker yet.
+//! Internal operations consumed by the original normal-IPC V8 coordinator.
 //! Keep SQL release separate from Active and retain every owner on failure.
-#![cfg_attr(not(test), allow(dead_code))]
 use super::*;
 #[cfg(any(windows, test))]
 #[path = "active_service.rs"]
@@ -80,10 +79,9 @@ impl RunningLocalService {
         Ok(())
     }
 
-    /// Future mailbox receiver supplies the sealed OS peer, never a JSON PID.
+    /// The mailbox receiver supplies the sealed OS peer, never a JSON PID.
     /// A durable command alone cannot enter this mode on a fresh process.
     #[cfg(windows)]
-    #[cfg_attr(test, allow(dead_code))] // No mutable V8 receiver in native tests yet.
     pub(super) fn enter_finalization_pending(
         &mut self,
         command: WorkerFinalizationCommand,
@@ -119,7 +117,6 @@ impl RunningLocalService {
     }
 
     #[cfg(windows)]
-    #[cfg_attr(test, allow(dead_code))] // No mutable V8 receiver in native tests yet.
     pub(super) fn release_pending_finalization(
         &mut self,
         peer: &winbridge_transport::local_peer::LocalPeer,
@@ -154,7 +151,6 @@ impl RunningLocalService {
 }
 
 #[cfg(windows)]
-#[cfg_attr(test, allow(dead_code))] // Actual OS proof cannot use metadata fixtures.
 fn require_pending_runtime(
     worker: &Worker,
     resident: &ResidentLifetime,

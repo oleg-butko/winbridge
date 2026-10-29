@@ -1,11 +1,20 @@
-//! Finalization data and a distinct readonly observation. The mutable V8
-//! operation remains proposed; observing a fact never authorizes its execution.
+//! Separate mutable V8 delivery and readonly observation. DTO data never
+//! reconstructs the original process/Job or authorizes a cold activation.
 use super::{StateBackupAuthority, WorkerLifetimeActivationCommand, WorkerUpdateLease};
 use crate::WorkerRuntimeCompatibility;
 use serde::{Deserialize, Serialize};
 
-/// Reserved for the future authenticated normal-IPC effect, not advertised.
-pub const PROPOSED_ACTIVATION_FINALIZATION_CONTRACT: u16 = 8;
+pub const ACTIVATION_FINALIZATION_CONTRACT: u16 = 8;
+/// Compatibility name for code that only manipulates the data-only proposal.
+pub const PROPOSED_ACTIVATION_FINALIZATION_CONTRACT: u16 = ACTIVATION_FINALIZATION_CONTRACT;
+pub const ACTIVATION_FINALIZATION_MARKER: &[u8] = b"WINBRIDGE_ACTIVATION_FINALIZATION_V8";
+pub fn activation_finalization_marker_pattern() -> Vec<u8> {
+    format!(
+        "WINBRIDGE_ACTIVATION_FINALIZATION_V{}",
+        std::hint::black_box(ACTIVATION_FINALIZATION_CONTRACT)
+    )
+    .into_bytes()
+}
 pub const ACTIVATION_FINALIZATION_OBSERVATION_CONTRACT: u16 = 1;
 pub const ACTIVATION_FINALIZATION_OBSERVATION_MARKER: &[u8] = b"WINBRIDGE_FINALIZATION_OBSERVE_V1";
 /// Sender pattern must not advertise a receiver in linked worker images.
@@ -26,6 +35,15 @@ macro_rules! dto { ($($item:item)*) => {$ (
 )*}; }
 
 dto! {
+    pub struct ActivationFinalizationRequest {
+        pub finalization_version: u16,
+        pub command: WorkerFinalizationCommand,
+    }
+    pub struct ActivationFinalizationResponse {
+        pub finalization_version: u16,
+        pub command_id: Option<String>,
+        pub result: ActivationFinalizationResult,
+    }
     /// Readonly correlation, never a delivery key or an Active permit.
     pub struct ActivationFinalizationQuery {
         pub finalization_observation_version: u16,
@@ -71,6 +89,22 @@ dto! {
         pub mode: WorkerFinalizationMode,
         pub released_at_ms: u64,
     }
+}
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ActivationFinalizationResult {
+    Active {
+        receipt: Box<WorkerFinalizationReceipt>,
+    },
+    Indeterminate {
+        message: String,
+    },
+    Rejected {
+        message: String,
+    },
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

@@ -14,7 +14,8 @@ use controller::ControllerStartup;
 #[path = "lifetime_service.rs"]
 mod lifetime;
 pub(crate) use lifetime::{
-    rejected_finalization_observation, rejected_lifetime, rejected_resident, ServiceLifetime,
+    rejected_finalization, rejected_finalization_observation, rejected_lifetime, rejected_resident,
+    ServiceLifetime,
 };
 
 pub(crate) const READ_ONLY_REASON: &str = "Локальная проверка обновления: доступны только чтение журнала и диагностика; новые команды ещё не разрешены";
@@ -26,6 +27,7 @@ pub(super) struct LocalServiceScope {
     controller: Mutex<Option<winbridge_protocol::update::WorkerControllerActivationCommand>>,
     deadline: Instant,
     lifetime: Mutex<ServiceLifetime>,
+    finalization_sender: Mutex<Option<tokio::sync::mpsc::Sender<lifetime::FinalizationDelivery>>>,
 }
 
 enum FailureOwner {
@@ -88,6 +90,9 @@ pub struct RunningLocalService {
     exit: Option<Result<()>>,
     controller: ControllerStartup,
     active_control: Option<crate::update_control::ControlServer>,
+    finalization_receiver: Option<tokio::sync::mpsc::Receiver<lifetime::FinalizationDelivery>>,
+    #[cfg(windows)]
+    finalization_recovery: lifetime::FinalizationRecovery,
 }
 impl LocalService {
     /// Trusted private receiver must supply the original graph/liveness/window
@@ -228,6 +233,7 @@ impl LocalService {
                 controller: Mutex::new(None),
                 deadline: state.deadline,
                 lifetime: Mutex::new(ServiceLifetime::Verification),
+                finalization_sender: Mutex::new(None),
             }),
             generation: state
                 .command
@@ -328,11 +334,29 @@ impl LocalService {
         }
         let (ready, observed) = tokio::sync::oneshot::channel();
         let worker = Arc::clone(&self.worker);
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        let registered = worker
+            .local_activation
+            .as_ref()
+            .expect("LocalService origin")
+            .finalization_sender
+            .lock()
+            .map(|mut slot| *slot = Some(sender))
+            .map_err(|_| ());
+        if registered.is_err() {
+            return Err(LocalServiceFailure::worker(
+                "Finalization mailbox lock poisoned".into(),
+                worker,
+            ));
+        }
         let mut running = RunningLocalService {
             service: self,
             exit: None,
             controller: ControllerStartup::NotStarted,
             active_control: None,
+            finalization_receiver: Some(receiver),
+            #[cfg(windows)]
+            finalization_recovery: Default::default(),
             task: Some(tokio::spawn(serve_inner(
                 worker,
                 ReadinessOutput::Local(ready),
@@ -393,6 +417,11 @@ impl RunningLocalService {
     }
     pub async fn close(mut self) -> std::result::Result<(), Box<LocalServiceFailure>> {
         self.service.worker.stop();
+        self.finalization_receiver.take();
+        #[cfg(windows)]
+        std::mem::take(&mut self.finalization_recovery)
+            .close()
+            .await;
         if let Some(control) = self.active_control.take() {
             control.close().await;
         }

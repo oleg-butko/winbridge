@@ -1,5 +1,12 @@
 # Архитектура WinBridge
 
+2026-10-29/.204: [mutable V8 mailbox](plans/worker-self-update/finalization-mailbox-2026-10-29.md)
+передаёт strict OS-authenticated request исходному RunningLocalService. IPC task
+не владеет SQL/режимом: bounded queued1, original coordinator serializes effects,
+caller loss не отменяет accepted delivery. Unknown COMMIT остаётся Pending, known
+commit/readiness удерживаются; data/duplicate не создают нового SQL permit.
+Physical factory/sender и permanent keeper ещё не подключены, install off.
+
 2026-10-29/.204: [Active observation](plans/worker-self-update/finalization-observation-2026-10-29.md)
 читает sealed in-memory факт через normal IPC с настоящими OS peer PID обеих сторон.
 Текущая Store authority обязательна; старый config SHA/updater epoch/empty domain

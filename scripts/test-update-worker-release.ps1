@@ -8,7 +8,8 @@ param(
   [Parameter(Mandatory)][string]$SourceArchiveSha256,
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
   [Parameter(Mandatory)][string]$ReportDirectory,
-  [switch]$ActiveGate
+  [switch]$ActiveGate,
+  [switch]$MailboxGate
 )
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
@@ -16,12 +17,14 @@ $PSNativeCommandUseErrorActionPreference=$false
 . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
 foreach($path in @($SourceDirectory,$ValidationCacheDirectory,$ReportDirectory)){Assert-SessionDirectory $path}
 if($SourceArchiveSha256 -cnotmatch '^[0-9a-f]{64}$'){throw 'Exact source archive SHA required'}
+if($ActiveGate -and $MailboxGate){throw 'Choose one fixed gate profile'}
 if(Test-Path -LiteralPath $ReportDirectory){throw 'Existing report preserved'}
 New-Item -ItemType Directory -Path $ReportDirectory|Out-Null
 $source=[IO.Path]::GetFullPath($SourceDirectory)
 $work=Split-Path $source -Parent
 $report=[ordered]@{schemaVersion=1;kind='worker_finalization_release_unit_native_gate';platform='windows';passed=$false;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;installedRuntimeApplied=$false;windowsOpened=$false;physicalV8Proved=$false;error=$null;commands=@();storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 if($ActiveGate){$report.kind='worker_finalization_active_unit_native_gate';$report.activeCoreProved=$false;$report.syntheticRuntimeMetadata=$true}
+if($MailboxGate){$report.kind='worker_finalization_mailbox_unit_native_gate';$report.activeCoreProved=$false;$report.mailboxBoundaryProved=$false;$report.authenticatedActiveProved=$false;$report.syntheticRuntimeMetadata=$true}
 $lease=$null;$location=Get-Location
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP
@@ -66,7 +69,8 @@ try {
   $exeSha=(Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
   $report.testArtifact=@{path=$exe;sha256=$exeSha;bytes=(Get-Item -LiteralPath $exe).Length}
   $cases=@(@{filter='store::activation_finalization::tests::';count=6;log='sql-release.log'},@{filter='local_service::lifetime::tests::';count=10;log='lifetime.log'})
-  if($ActiveGate){$cases+=@{filter='local_service::lifetime::active_tests::';count=4;log='active.log'}}
+  if($ActiveGate -or $MailboxGate){$cases+=@{filter='local_service::lifetime::active_tests::';count=4;log='active.log'}}
+  if($MailboxGate){$cases+=@(@{filter='local_service::lifetime::finalization_observation_tests::';count=2;log='observation.log'},@{filter='local_service::lifetime::finalization_mailbox_tests::';count=4;log='mailbox.log'})}
   foreach($case in $cases){
     $arguments=@($case.filter,'--test-threads=1','--nocapture')
     $started=[DateTimeOffset]::UtcNow
@@ -78,7 +82,8 @@ try {
   }
   if((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant() -cne $exeSha){throw 'Native artifact changed across execution'}
   $report.passed=$true
-  if($ActiveGate){$report.activeCoreProved=$true}
+  if($ActiveGate -or $MailboxGate){$report.activeCoreProved=$true}
+  if($MailboxGate){$report.mailboxBoundaryProved=$true}
 } catch {$report.error=$_.Exception.Message;throw}
 finally {
   Set-Location -LiteralPath $location

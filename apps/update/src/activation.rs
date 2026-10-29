@@ -20,6 +20,7 @@ pub mod finalization;
 pub mod finalization_observation;
 #[cfg(any(windows, test))]
 pub(crate) mod finalization_probe;
+pub mod finalization_wire;
 pub mod lifetime;
 #[cfg(all(feature = "update-validation", any(windows, test)))]
 pub(crate) mod lifetime_ready_loss;

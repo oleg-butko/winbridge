@@ -1,6 +1,6 @@
-//! Same-connection release beneath the future authenticated V8 coordinator.
-//! No IPC route calls this yet. SQL completion is not an Active-mode receipt.
-#![cfg_attr(not(test), allow(dead_code))]
+//! Same-connection release beneath the authenticated original V8 coordinator.
+//! SQL completion is not an Active-mode receipt.
+#![cfg_attr(not(any(windows, test)), allow(dead_code))]
 
 use super::{activation_service_open::require_service_history, now_ms, sql, Result, Store};
 use rusqlite::{params, Connection};

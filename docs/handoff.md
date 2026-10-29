@@ -1,5 +1,17 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-29: V8 receiver подключён к исходному координатору.**
+[Ревью, диагностика и границы](plans/worker-self-update/finalization-mailbox-2026-10-29.md).
+Strict normal IPC/OS keeper peer → bounded original RunningLocalService mailbox →
+native Pending/readiness/same-Store SQL/Active. Потеря ответа не отменяет принятое;
+unknown SQL не повторяется, known COMMIT/readiness сохраняются для того же seal.
+Source19/23; physical factory/sender, parent pins retirement, positive native V8/
+Active observation, confirmation ledger и permanent keeper ещё впереди. Install off.
+Full workspace/update-validation1027/17 ignored, Linux/MSVC all-target Clippy и
+Rust/TS contracts/typecheck/fmt/diff/scaffold338 passed. Исправлены post-accept
+Indeterminate semantics и workflow-test DDL/output race; initial failure сохранён.
+Native26 unit profile `-MailboxGate` подготовлен, результат Windows пока не заявлен.
+
 **.204/main,2026-10-29: readonly Active observation.**
 [Контракт, ревью и продолжение](plans/worker-self-update/finalization-observation-2026-10-29.md).
 Отдельный normal-IPC query с OS peer/current authority читает typed Active;

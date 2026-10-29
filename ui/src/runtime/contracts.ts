@@ -1,4 +1,7 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type ActivationFinalizationRequest = { finalizationVersion: number, command: WorkerFinalizationCommand, };
+export type ActivationFinalizationResponse = { finalizationVersion: number, commandId: string | null, result: ActivationFinalizationResult, };
+export type ActivationFinalizationResult = { "kind": "active", receipt: WorkerFinalizationReceipt, } | { "kind": "indeterminate", message: string, } | { "kind": "rejected", message: string, };
 export type ActivationFinalizationBinding = { lifetimeCommand: WorkerLifetimeActivationCommand, lifetimeRecordSha256: string, shutdownRecordSha256: string, installationId: string, scopeSha256: string, committedRootRevision: number, expectedLeaseRevision: number, sourceManifestSha256: string, residentRequestId: string, residentObservationSha256: string, };
 export type WorkerFinalizationCommand = { schemaVersion: number, commandId: string, binding: ActivationFinalizationBinding, issuedAtMs: number, };
 export type WorkerFinalizationReceipt = { schemaVersion: number, commandId: string, commandSha256: string, compatibility: WorkerRuntimeCompatibility, authority: StateBackupAuthority, releasedLease: WorkerUpdateLease, mode: WorkerFinalizationMode, releasedAtMs: number, };

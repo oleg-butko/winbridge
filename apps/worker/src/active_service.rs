@@ -1,4 +1,4 @@
-//! Same-process Active seal. No V8 decoder/marker or public mutation route.
+//! Same-process Active seal, consumed by the owning V8 coordinator.
 use super::*;
 use crate::update_control::ControlServer;
 use store::activation_finalization::ActivatedReleaseCommit;
@@ -38,6 +38,12 @@ enum ReadyControl {
     Fixture,
 }
 impl ActiveReadiness {
+    #[cfg(windows)]
+    pub(in crate::local_service::lifetime) async fn close(self) {
+        if let Some(server) = self.into_server() {
+            server.close().await;
+        }
+    }
     #[cfg(test)]
     pub(in crate::local_service::lifetime) fn fixture(pending: Arc<PendingLifetime>) -> Self {
         Self {
@@ -79,7 +85,6 @@ impl RunningLocalService {
     /// Stage a listener while all public admissions remain closed. The
     /// caller must retain this owner across the existing SQL release call.
     #[cfg(windows)]
-    #[cfg_attr(test, allow(dead_code))] // V8 coordinator route is a later step.
     pub(in crate::local_service::lifetime) fn prepare_active_readiness(
         &mut self,
         peer: &winbridge_transport::local_peer::LocalPeer,
@@ -133,7 +138,6 @@ impl RunningLocalService {
     /// Native owner only: the new listener and exact known SQL commit are both
     /// consumed. No caller may substitute a saved receipt for this commit.
     #[cfg(windows)]
-    #[cfg_attr(test, allow(dead_code))] // No mutable V8 receiver advertises this yet.
     pub(in crate::local_service::lifetime) fn finish_active_release(
         &mut self,
         commit: Box<ActivatedReleaseCommit>,

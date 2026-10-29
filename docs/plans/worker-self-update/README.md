@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29/.204/main:** [V8 owner mailbox](finalization-mailbox-2026-10-29.md)
+связывает strict normal IPC с тем же Pending/readiness/SQL/Active owner. Queued1,
+accepted survives caller loss, unknown SQL не повторяется. Physical factory,
+parent pin retirement, actual V8 proof/confirmation/permanent keeper ещё впереди.
+
 **2026-10-29/.204/main:** [readonly Active observation](finalization-observation-2026-10-29.md)
 после потери ответа использует отдельный authenticated normal IPC, typed owner и
 current Store authority. Нет повторного release/SQL writes/cold adoption. Далее

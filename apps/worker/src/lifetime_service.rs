@@ -9,6 +9,12 @@ pub(crate) use resident_observation::rejected_resident;
 #[path = "finalization_observation.rs"]
 mod finalization_observation;
 pub(crate) use finalization_observation::rejected_finalization_observation;
+#[path = "finalization_mailbox.rs"]
+mod finalization_mailbox;
+pub(crate) use finalization_mailbox::rejected_finalization;
+pub(super) use finalization_mailbox::FinalizationDelivery;
+#[cfg(windows)]
+pub(super) use finalization_mailbox::FinalizationRecovery;
 
 pub(crate) enum ServiceLifetime {
     Verification,
@@ -393,9 +399,17 @@ impl RunningLocalService {
         ) {
             return Err("Supervised hold requires an actual resident entry".into());
         }
+        let mut finalizations = self
+            .finalization_receiver
+            .take()
+            .ok_or("Original finalization mailbox missing")?;
         loop {
             tokio::select! {
                 result = self.wait_until_stopped() => return Err(format!("Supervised local IPC stopped: {result:?}")),
+                delivery = finalizations.recv() => {
+                    let delivery = delivery.ok_or("Original finalization mailbox closed")?;
+                    self.process_finalization_delivery(delivery);
+                }
                 _ = tokio::time::sleep(Duration::from_millis(250)) => {
                     worker.check_local_service_scope()?;
                 }
@@ -415,3 +429,7 @@ mod active_tests;
 #[cfg(test)]
 #[path = "lifetime_service/finalization_observation_tests.rs"]
 mod finalization_observation_tests;
+
+#[cfg(test)]
+#[path = "lifetime_service/finalization_mailbox_tests.rs"]
+mod finalization_mailbox_tests;
