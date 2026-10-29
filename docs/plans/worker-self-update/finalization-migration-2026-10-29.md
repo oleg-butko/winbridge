@@ -1,5 +1,18 @@
 # Retained Main29: отдельный copy-only gate 22→23
 
+**Native22→23 running,2026-10-29:** run20261029-202033-a2132bf8,
+task18e1625b-d2bc-44d8-9b0b-949446ab685c, producerfcc49dd; installed worker
+исполняет copy-only migration, без test worker/supervisor/окон. Run-info
+`.winbridge/update-preparation/finalization-migration-20261029-202033-a2132bf8/run-info.json`,
+log `.winbridge/review-2026-10-29/finalization-migration-native-run.log`, runner322089/
+tool69943. Native build начат; **не pass**, наблюдать тот же task до terminal/reread,
+не submit повторно. Source ZIP winbridge-20261029T201912Z-fcc49dd-36dd97a6.zip,
+SHA9c69630ffe168e584dfc4b38f01a3d3f2fd5c9d91c24ce846c3833dda81e4d97,
+manifest2d7a419646fdbe4e95d9c5a0da56db6a803a087b4f9190c7c92d3726c72d0f37.
+Reference Main29 frozen7ca206f→944a39c, native cache20261017-061527-f4639971.
+Production controller131887/installed0.2.0/source48/gen946 прежние; worker оставить,
+desktop не нужен, public install off. [Сценарий](finalization-ledger-2026-10-29.md).
+
 2026-10-29. [Ledger23 source](finalization-ledger-2026-10-29.md) проверен на Linux
 и компиляцией MSVC. Следующая проверка — миграция consistent copy настоящего
 [Main29](main29-native-2026-10-29.md), без нового worker, UI или установки.
