@@ -113,6 +113,16 @@ impl PreparedServiceJournal {
 }
 
 impl Store {
+    /// Readonly binding after an authenticated lifetime transition. This does
+    /// not remove the verification deadline or turn it into a new grant.
+    pub(crate) fn check_supervised_service_identity(
+        &self,
+        command: &WorkerServiceActivationCommand,
+        shutdown: &winbridge_protocol::update::WorkerShutdownReceipt,
+    ) -> Result<()> {
+        self.observe_local_service_binding(command, shutdown)
+            .map(|_| ())
+    }
     pub(crate) fn observe_local_service_binding(
         &self,
         command: &WorkerServiceActivationCommand,
@@ -218,3 +228,5 @@ impl ActivationJournal {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::service_fixture as lifetime_fixture;

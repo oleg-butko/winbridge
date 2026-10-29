@@ -9,6 +9,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        ActivationLifetimePhase::decl(&config),
+        ActivationLifetimeDurablePhase::decl(&config),
+        ActivationLifetimeView::decl(&config),
         ArtifactRole::decl(&config),
         ArtifactDescriptor::decl(&config),
         RuntimeImageEvidence::decl(&config),
@@ -49,6 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         UpdateCompilerOutputPage::decl(&config),
         UpdateBuildRecord::decl(&config),
         SupervisorProcess::decl(&config),
+        ActivationLifetimeQuery::decl(&config),
+        ActivationLifetimeObservation::decl(&config),
+        ActivationLifetimeObservationResult::decl(&config),
         SupervisorPhase::decl(&config),
         SupervisorSpec::decl(&config),
         SupervisorRecord::decl(&config),

@@ -1,5 +1,16 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-28/.204:** [supervisor27/view19 и Main27](lifetime-actor-2026-10-28.md)
+подключают source entry/readonly reconciliation на исходном owner. Новый native
+gate подготовлен; его результат пока не подтверждён. Keeper role/commit/release
+и whole updater остаются впереди; installed worker не меняется.
+
+**2026-10-28/.204:** [V6 runtime](lifetime-runtime-2026-10-28.md) реализован в source
+поверх original lifetime admission. Same-child quarantine/normal IPC/single sender
+не открывают roots или public activation. Далее actor27/view19 и новый native gate,
+потом keeper role/final commit/scoped release; прежние версии/checkpoints ниже
+не выдаются за proof нового runtime. Installed worker оставить запущенным.
+
 **2026-10-28: Main26 и lifetime OS spike пройдены.** Worker0.2.0 установлен,
 оба Debian controller подключены. Начать с [handoff](../../handoff.md),
 [Main26 результата](main26-native-2026-10-28.md),

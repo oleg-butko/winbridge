@@ -77,6 +77,8 @@ struct GateInput {
     #[serde(default)]
     activation_controller: bool,
     #[serde(default)]
+    activation_lifetime: bool,
+    #[serde(default)]
     runtime: Option<FixtureRuntimePin>,
     #[serde(default)]
     controller_url: Option<String>,
@@ -1429,6 +1431,7 @@ fn case(
     let activate_writer = input.activation_writer;
     let activate_service = input.activation_service;
     let connect_controller = input.activation_controller;
+    let enter_lifetime = input.activation_lifetime;
     let worker = root.runtime().join("winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -1711,6 +1714,10 @@ fn case(
                 if connect_controller {
                     proof["activationController"] =
                         activation_writer::controller::execute(&root, &sup, &result);
+                    if enter_lifetime {
+                        proof["activationLifetime"] =
+                            activation_writer::lifetime::execute(&root, &sup);
+                    }
                 }
                 proof[if activate_writer {
                     "activationWriter"
@@ -1997,6 +2004,10 @@ fn case(
         let cold_controller = controller
             .as_ref()
             .map(|p| activation_writer::controller::after_owned_exit(&root, id, p));
+        let lifetime = proof.as_object_mut().unwrap().remove("activationLifetime");
+        let cold_lifetime = lifetime
+            .as_ref()
+            .map(|p| activation_writer::lifetime::after_owned_exit(&root, id, p));
         let cold_writer = writer.as_ref().map(|p| {
             if input.activation_service {
                 activation_writer::service::after_owned_exit(
@@ -2035,6 +2046,10 @@ fn case(
         if let Some(controller) = controller {
             result["activationController"] = controller;
             result["coldActivationController"] = cold_controller.unwrap();
+        }
+        if let Some(lifetime) = lifetime {
+            result["activationLifetime"] = lifetime;
+            result["coldActivationLifetime"] = cold_lifetime.unwrap();
         }
         if let Some(activation) = activation {
             result["activationPreparation"] = activation;
@@ -2164,6 +2179,7 @@ fn run_gate(
         ],
         false,
         false,
+        false,
         path,
     );
 }
@@ -2176,6 +2192,7 @@ fn actual_main_activates_one_local_service_without_controller_or_replay() {
     run_gate_inner(
         [true, false, true, true, true, true, true],
         true,
+        false,
         false,
         path,
     );
@@ -2195,6 +2212,26 @@ fn actual_main_connects_same_verified_worker_to_controller_without_commit_or_rep
         [true, false, true, true, true, true, true],
         true,
         true,
+        false,
+        path,
+    );
+}
+#[test]
+#[ignore = "Explicit Main27 original-custody lifetime entry and observation past verification expiry; never installed update"]
+fn actual_main_enters_same_child_lifetime_and_observes_after_original_deadline_without_replay() {
+    let path = PathBuf::from(
+        std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
+    );
+    assert_eq!(
+        winbridge_update::journal::UPDATE_SCHEMA_VERSION,
+        22,
+        "Use the exact Main27 SDK"
+    );
+    run_gate_inner(
+        [true, false, true, true, true, true, true],
+        true,
+        true,
+        true,
         path,
     );
 }
@@ -2202,6 +2239,7 @@ fn run_gate_inner(
     requested: [bool; 7],
     service_requested: bool,
     controller_requested: bool,
+    lifetime_requested: bool,
     path: PathBuf,
 ) {
     let [replacement_requested, faults_requested, activation_requested, files_requested, process_requested, state_requested, writer_requested] =
@@ -2209,6 +2247,8 @@ fn run_gate_inner(
     let input: GateInput = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     assert_eq!(input.activation_service, service_requested);
     assert_eq!(input.activation_controller, controller_requested);
+    assert_eq!(input.activation_lifetime, lifetime_requested);
+    assert!(!lifetime_requested || controller_requested);
     assert!(!controller_requested || service_requested);
     assert!(
         !service_requested
@@ -2353,6 +2393,6 @@ fn run_gate_inner(
             }
         }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.activation_controller {"activation_controller_main_native_proof"} else if input.activation_service {"activation_service_main_native_proof"} else if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.activation_lifetime {"activation_lifetime_main_native_proof"} else if input.activation_controller {"activation_controller_main_native_proof"} else if input.activation_service {"activation_service_main_native_proof"} else if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

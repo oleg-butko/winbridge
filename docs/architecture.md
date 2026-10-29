@@ -1,5 +1,20 @@
 # Архитектура WinBridge
 
+2026-10-28, .204: [supervisor27/view19](plans/worker-self-update/lifetime-actor-2026-10-28.md)
+подключён к V6 source runtime: original guard потребляется один раз; subsequent
+Observe читает actual mode и может сохранить поздний факт, не создавая permit.
+Saved receipt/current observation/physical custody разделены; root commit и
+maintenance release закрыты. Native Main27 подготовлен отдельно от old gates.
+
+2026-10-28, .204: [V6 lifetime runtime](plans/worker-self-update/lifetime-runtime-2026-10-28.md)
+подключён в source: Verification→SupervisedQuarantine на том же child/Store/
+authority/Job, только внутри original window и под original pinned keeper.
+Normal IPC наблюдает resident mode отдельно от immutable entry receipt; cold
+read не создаёт owner. Private6 sender/receiver реализованы, actor26/view18 пока
+прежние; actor27/native V6 gate/keeper role/commit/release не завершены.
+Source worker19/updater22; installed worker не меняется. Следующие записи —
+предыдущие checkpoints с их собственной областью готовности.
+
 2026-10-28: установлен worker0.2.0/schema19 и оба controller0.2.0. В source
 updater22/private5/supervisor26/view18; [Main26](plans/worker-self-update/main26-native-2026-10-28.md)
 подтвердил same-child controller session при закрытых root commit/release.

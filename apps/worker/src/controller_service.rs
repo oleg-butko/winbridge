@@ -117,11 +117,7 @@ impl Worker {
                 "Controller observation contract/resident binding differs; no rebind".into(),
             );
         }
-        self.store()?.check_local_service_identity(
-            &scope.command,
-            &scope.shutdown,
-            scope.deadline,
-        )?;
+        self.check_local_service_scope()?;
         let command = &query.command;
         match self.activation_controller_frame(
             &command.binding.topology.confirmation_endpoint_id,
@@ -178,11 +174,7 @@ impl Worker {
         controller::validate_link_evidence(&receipt, command, &link)?;
         // This remains readonly and never creates an update/root/dispatch grant.
         self._instance_lock.revalidate()?;
-        self.store()?.check_local_service_identity(
-            &scope.command,
-            &scope.shutdown,
-            scope.deadline,
-        )?;
+        self.check_local_service_scope()?;
         Ok(ActivationControllerObservationResult::Observed {
             receipt: Box::new(receipt),
             projection: Box::new(projection),

@@ -2,6 +2,8 @@
 use super::*;
 #[path = "activation_controller.rs"]
 pub(super) mod controller;
+#[path = "activation_lifetime.rs"]
+pub(super) mod lifetime;
 #[path = "activation_service.rs"]
 pub(super) mod service;
 use rusqlite::{Connection, OpenFlags};
@@ -106,6 +108,7 @@ fn call(
                 24 => 16,
                 25 => 17,
                 26 => 18,
+                27 => 19,
                 _ => panic!("Unknown native activation fixture contract"),
             }
         );

@@ -1577,6 +1577,81 @@ Write-Output 'Four fixture executables built and queried; no WinBridge runtime h
         );
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+    async fn activation_lifetime_v27_observes_but_never_starts_from_cold_history_or_old_contract() {
+        let mut f = Fixture::new(None).await;
+        f.launch().await;
+        let h = f.supervisor.as_ref().unwrap();
+        let directory = Path::new(&h.record.spec.runtime_directory).join("update-state");
+        let before =
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap();
+        let view = h
+            .activation_lifetime(false)
+            .await
+            .unwrap()
+            .expect("Idle controller view");
+        assert_eq!(view.schema_version, 19);
+        let controller = view.activation_lifetime.unwrap();
+        assert_eq!(controller.phase, ActivationLifetimePhase::NotStarted);
+        assert!(
+            controller.saved_receipt.is_none()
+                && controller.resident_process.is_none()
+                && controller.process_alive.is_none()
+        );
+        assert!(
+            controller.observed_receipt.is_none()
+                && controller.observed_at_ms.is_none()
+                && controller.original_custody_held.is_none()
+        );
+        for _ in 0..2 {
+            assert!(h.activation_lifetime(true).await.is_err());
+        }
+        #[cfg(feature = "update-validation")]
+        {
+            let base = h.validation_private_client().unwrap();
+            let pid = h.record.process.as_ref().unwrap().process_id;
+            for action in [
+                SupervisorAction::EnterActivationLifetime,
+                SupervisorAction::ObserveActivationLifetime,
+            ] {
+                for invalid in 0..7 {
+                    let mut q = base.clone();
+                    q.action = action;
+                    q.contract_version = 27;
+                    match invalid {
+                        0 => q.contract_version = 1,
+                        1 => q.contract_version = 26,
+                        2 => q.contract_version = 28,
+                        3 => q.launch_id = uuid::Uuid::new_v4().to_string(),
+                        4 => q.expected_revision += 1,
+                        5 => q.worker_command = Some(WorkerUpdateControlCommand::BeginSource),
+                        _ => q.token = "0".repeat(64),
+                    }
+                    let response: SupervisorResponse =
+                        winbridge_transport::supervisor::call(&h.record.spec.endpoint, pid, &q)
+                            .await
+                            .unwrap();
+                    assert_eq!(response.contract_version, 27);
+                    assert!(response.error.is_some() && response.preparation.is_none());
+                }
+            }
+        }
+        let old = h.activation_controller(false).await.unwrap().unwrap();
+        assert_eq!(old.schema_version, 18);
+        assert!(serde_json::to_value(old)
+            .unwrap()
+            .get("activationLifetime")
+            .is_none());
+        assert_eq!(
+            UpdateJournal::read_snapshot(&directory, Some(&h.record.spec.update_id)).unwrap(),
+            before
+        );
+        assert!(
+            UpdateJournal::inspect_activation_lifetime(&directory, &h.record.spec.update_id)
+                .unwrap()
+                .is_none()
+        );
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn activation_state_v23_observes_but_never_releases_from_saved_data() {
         let mut f = Fixture::new(None).await;
         f.launch().await;

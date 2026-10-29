@@ -1248,6 +1248,53 @@ impl SupervisorHandle {
             Ok(None)
         }
     }
+    /// Internal27: None is volatile dispatch/busy, never admission or readiness.
+    pub async fn activation_lifetime(&self, start: bool) -> Result<Option<UpdatePreparationView>> {
+        if !infrastructure::matches(&self.child.identity).map_err(error)? {
+            return Err("Supervisor exact process changed".into());
+        }
+        let request = SupervisorRequest {
+            contract_version: 27,
+            launch_id: self.record.spec.launch_id.clone(),
+            expected_revision: self.record.revision,
+            action: if start {
+                SupervisorAction::EnterActivationLifetime
+            } else {
+                SupervisorAction::ObserveActivationLifetime
+            },
+            token: self.token.clone(),
+            worker_command: None,
+        };
+        let response: SupervisorResponse = ipc::call_with_timeout(
+            &self.record.spec.endpoint,
+            self.child.identity.process_id,
+            &request,
+            ipc::CONTROL_TIMEOUT,
+        )
+        .await
+        .map_err(error)?;
+        if response.contract_version != 27
+            || response.launch_id != request.launch_id
+            || response.record.is_some()
+            || response.worker_control.is_some()
+        {
+            return Err("Lifetime reply scope/version changed; no fallback".into());
+        }
+        if let Some(error) = response.error {
+            return Err(error);
+        }
+        if let Some(view) = response.preparation {
+            if view.schema_version != 19
+                || view.activation_lifetime.is_none()
+                || view.update.update_id != self.record.spec.update_id
+            {
+                return Err("Lifetime view belongs to another contract/update".into());
+            }
+            Ok(Some(view))
+        } else {
+            Ok(None)
+        }
+    }
     /// V19 is the production prerequisite route; there is no fallback to v13.
     pub async fn compatible_drain(&self, start: bool) -> Result<UpdatePreparationView> {
         if !infrastructure::matches(&self.child.identity).map_err(error)? {
@@ -1790,6 +1837,8 @@ impl SupervisorHandle {
                 | SupervisorAction::ObserveLocalService
                 | SupervisorAction::ConnectActivationController
                 | SupervisorAction::ObserveActivationController
+                | SupervisorAction::EnterActivationLifetime
+                | SupervisorAction::ObserveActivationLifetime
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -2016,6 +2065,13 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 crate::activation::ActivationLaunchFailure,
             >,
         ),
+        #[cfg(windows)]
+        ActivationLifetime(
+            std::result::Result<
+                Box<crate::activation::ActivationProcessGuard>,
+                crate::activation::ActivationLaunchFailure,
+            >,
+        ),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -2029,6 +2085,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut compatible_reply: Option<ipc::Stream> = None;
     let mut activation_preparing = false;
     let mut activation_reply: Option<ipc::Stream> = None;
+    let mut lifetime_reply: Option<ipc::Stream> = None;
     let files_actor = activation_files::FilesActor::default();
     #[cfg(windows)]
     let mut files_actor = files_actor;
@@ -2186,6 +2243,13 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                             .map_err(error);
                     files_actor.complete_controller(result, saved)
                 }
+                #[cfg(windows)]
+                DriverCompletion::ActivationLifetime(result) => {
+                    let saved =
+                        UpdateJournal::inspect_activation_lifetime(&directory, &r.spec.update_id)
+                            .map_err(error);
+                    files_actor.complete_lifetime(result, saved)
+                }
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -2222,6 +2286,28 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some(mut stream) = lifetime_reply.take() {
+                let snapshot = files_actor.lifetime_view(
+                    &directory,
+                    &r.spec.update_id,
+                    false,
+                    driver_error.clone(),
+                    &replacement_signal,
+                );
+                let (preparation, error) = match snapshot {
+                    Ok(v) => (Some(v), None),
+                    Err(e) => (None, Some(e)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 27,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
             if let Some(mut stream) = activation_reply.take() {
                 let snapshot = activation_view(
                     &directory,
@@ -3091,6 +3177,90 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             };
             let response = SupervisorResponse {
                 contract_version: 24,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                worker_control: None,
+                preparation,
+                error,
+            };
+            let _ = ipc::write(&mut stream, &response).await;
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::EnterActivationLifetime | SupervisorAction::ObserveActivationLifetime
+        ) {
+            let observe = request.action == SupervisorAction::ObserveActivationLifetime;
+            let mut dispatch = false;
+            let outcome = (|| -> Result<Option<UpdatePreparationView>> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 27
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Lifetime requires exact Active bound v27 supervisor".into());
+                }
+                if work.is_some() {
+                    return Ok(None);
+                }
+                if (!observe && files_actor.lifetime_started())
+                    || (observe && !files_actor.can_observe_lifetime())
+                {
+                    return files_actor
+                        .lifetime_view(
+                            &directory,
+                            &r.spec.update_id,
+                            false,
+                            driver_error.clone(),
+                            &replacement_signal,
+                        )
+                        .map(Some);
+                }
+                if !observe && (!files_actor.can_enter_lifetime() || driver_error.is_some()) {
+                    return Err(
+                        "Lifetime needs original confirmed controller custody; no replay/adoption"
+                            .into(),
+                    );
+                }
+                dispatch = true;
+                Ok(None)
+            })();
+            if dispatch && outcome.is_ok() {
+                #[cfg(windows)]
+                {
+                    let (mut journal, owner) = idle.take().ok_or("Lifetime owner missing")?;
+                    let (guard, key) = files_actor.take_for_lifetime(observe)?;
+                    let spec = r.clone();
+                    driver_error = None;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let result = if observe {
+                            guard.observe_lifetime_blocking(&mut journal, &owner, &spec, &key)
+                        } else {
+                            guard
+                                .prepare_lifetime_blocking(&mut journal, &owner, &spec, &key)
+                                .and_then(|prepared| {
+                                    prepared.enter_lifetime_blocking(&mut journal, &owner, &spec)
+                                })
+                        };
+                        (journal, owner, DriverCompletion::ActivationLifetime(result))
+                    }));
+                    if observe {
+                        // Return the fresh observation when this same driver is
+                        // collected. A disconnected caller cannot cancel it.
+                        lifetime_reply = Some(stream);
+                        continue;
+                    }
+                }
+            }
+            let (preparation, error) = match outcome {
+                Ok(v) => (v, None),
+                Err(e) => (None, Some(e)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 27,
                 launch_id: r.spec.launch_id.clone(),
                 record: None,
                 worker_control: None,
@@ -4585,7 +4755,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 | SupervisorAction::HandoffActivationState | SupervisorAction::ObserveActivationState
                 | SupervisorAction::ActivateJournalWriter | SupervisorAction::ObserveJournalWriter
                 | SupervisorAction::ActivateLocalService | SupervisorAction::ObserveLocalService
-                | SupervisorAction::ConnectActivationController | SupervisorAction::ObserveActivationController => Err("Action needs its separate handler".into()),
+                | SupervisorAction::ConnectActivationController | SupervisorAction::ObserveActivationController
+                | SupervisorAction::EnterActivationLifetime | SupervisorAction::ObserveActivationLifetime => Err("Action needs its separate handler".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

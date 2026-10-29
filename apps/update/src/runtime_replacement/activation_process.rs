@@ -14,6 +14,8 @@ mod controller;
 pub use controller::ActivationControllerPreparation;
 #[path = "activation_lifetime.rs"]
 mod lifetime;
+#[path = "activation_lifetime_observation.rs"]
+mod lifetime_observation;
 pub use lifetime::ActivationLifetimePreparation;
 #[path = "activation_service.rs"]
 mod service;
@@ -66,6 +68,7 @@ pub struct ActivationProcessGuard {
     released: Option<crate::shutdown::ReleasedExitCustody>,
     _controller_config_pin: Option<std::fs::File>,
     controller_observation: Option<winbridge_protocol::update::ActivationControllerObservation>,
+    lifetime_observation: Option<winbridge_protocol::update::ActivationLifetimeObservation>,
 }
 /// Retain the same OS resources after error, including an uncertain live child.
 /// No method converts this object into a second creation attempt.
@@ -87,6 +90,11 @@ impl std::fmt::Display for ActivationLaunchFailure {
 }
 impl std::error::Error for ActivationLaunchFailure {}
 impl ActivationLaunchFailure {
+    /// Move the actual retained owner into a read-only reconciliation. This
+    /// does not recreate a permit or allow a second private delivery.
+    pub(crate) fn into_custody(self) -> Box<ActivationProcessGuard> {
+        self.custody
+    }
     pub fn record(&self) -> &ActivationRecord {
         &self.custody.record
     }
@@ -167,6 +175,7 @@ impl ActivationProcessGuard {
             released: None,
             _controller_config_pin: None,
             controller_observation: None,
+            lifetime_observation: None,
         })
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {

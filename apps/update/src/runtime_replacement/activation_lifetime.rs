@@ -1,5 +1,5 @@
 //! Consuming lifetime preparation on the original controller-verified owner.
-//! No private send, role change, root commit or maintenance release here.
+//! One private send and independent observation; root commit/release stay closed.
 use super::*;
 use crate::activation::{
     controller,
@@ -16,6 +16,46 @@ pub struct ActivationLifetimePreparation {
     permit: Box<ActivationLifetimePermit>,
 }
 impl ActivationLifetimePreparation {
+    /// Consume the fresh permit once. A Ready alone never confirms lifetime:
+    /// the same actual normal IPC/PID must independently observe quarantine.
+    pub fn enter_lifetime_blocking(
+        self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+    ) -> std::result::Result<Box<ActivationProcessGuard>, ActivationLaunchFailure> {
+        let Self { owner, permit } = self;
+        let key = permit.record().command.command_id.clone();
+        let topology = permit.topology().clone();
+        let journal = &mut *j;
+        match crate::activation::on_original_io(owner, move |mut owner| async move {
+            match owner.deliver_lifetime(journal, a, s, &permit).await {
+                Ok(()) => Ok(owner),
+                Err(reason) => {
+                    owner.record_lifetime_uncertainty(
+                        journal,
+                        a,
+                        s,
+                        &permit.record().command.command_id,
+                        permit.topology(),
+                    );
+                    Err(ActivationLaunchFailure {
+                        reason,
+                        custody: owner,
+                    })
+                }
+            }
+        }) {
+            Ok(result) => result,
+            Err((owner, reason)) => {
+                owner.record_lifetime_uncertainty(j, a, s, &key, &topology);
+                Err(ActivationLaunchFailure {
+                    reason: reason.into(),
+                    custody: owner,
+                })
+            }
+        }
+    }
     pub fn record(&self) -> &lifetime::ActivationLifetimeRecord {
         self.permit.record()
     }
@@ -28,8 +68,136 @@ impl ActivationLifetimePreparation {
 }
 
 impl ActivationProcessGuard {
+    pub(crate) fn lifetime_custody_held(&self) -> bool {
+        self.require_lifetime_custody(false).is_ok()
+    }
+    pub fn lifetime_observation(
+        &self,
+    ) -> Option<&winbridge_protocol::update::ActivationLifetimeObservation> {
+        self.lifetime_observation.as_ref()
+    }
+
+    async fn deliver_lifetime(
+        &mut self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        permit: &ActivationLifetimePermit,
+    ) -> Result<()> {
+        let mut timing = crate::activation::ActivationTiming::new(
+            "lifetime_entry",
+            Some(self.files.preparation.deadline),
+        );
+        self.require_lifetime_owner()?;
+        timing.mark("original_owner_checked", None, None);
+        let observed = self
+            .controller_observation
+            .as_ref()
+            .ok_or("Original controller observation missing")?;
+        j.require_activation_lifetime_issued(
+            a,
+            s,
+            &self.files.preparation,
+            &self.record,
+            observed,
+            permit,
+        )
+        .map_err(|e| e.to_string())?;
+        let process = self
+            .resident_process()
+            .ok_or("Original lifetime child missing")?;
+        let live = infrastructure::PinnedProcess::live(&process).map_err(|e| e.to_string())?;
+        live.require_job_membership(&permit.record().command.binding.job_name)
+            .map_err(|e| e.to_string())?;
+        let snapshot = Box::new(
+            UpdateJournal::inspect_activation_lifetime_receiver(
+                Path::new(&self.record.intent.source.runtime_directory)
+                    .join("update-state")
+                    .as_path(),
+                &s.spec.update_id,
+                &self.record.intent.attempt_id,
+                &process,
+            )
+            .map_err(|e| e.to_string())?,
+        );
+        if snapshot.lifetime != *permit.record() {
+            return Err("Lifetime receiver graph differs from original permit".into());
+        }
+        timing.mark("issued_graph_and_job_checked", None, None);
+        let deadline = self.files.preparation.deadline;
+        let remaining = || {
+            deadline
+                .checked_duration_since(std::time::Instant::now())
+                .filter(|d| !d.is_zero())
+                .ok_or_else(|| "Original lifetime delivery window expired".to_string())
+        };
+        let command = &permit.record().command;
+        let stream = self
+            .channel
+            .as_mut()
+            .ok_or("Original lifetime channel missing")?;
+        channel::write(
+            stream,
+            &channel::LifetimeCommand {
+                contract_version: channel::LIFETIME_CONTRACT,
+                command: command.clone(),
+            },
+            remaining()?,
+        )
+        .await?;
+        let ready: channel::LifetimeReady = channel::read(stream, remaining()?).await?;
+        channel::validate_lifetime_ready(&ready, command)?;
+        timing.mark("private_ready_verified", None, None);
+        let observation = crate::activation::lifetime_probe::probe(
+            command,
+            &ready.receipt,
+            &snapshot.controller.service.command,
+            deadline,
+            || {
+                self.require_lifetime_owner()?;
+                live.require_job_membership(&command.binding.job_name)
+                    .map_err(|e| e.to_string())?;
+                j.require_activation_lifetime_issued(
+                    a,
+                    s,
+                    &self.files.preparation,
+                    &self.record,
+                    observed,
+                    permit,
+                )
+                .map_err(|e| e.to_string())
+            },
+        )
+        .await?;
+        timing.mark("normal_mode_verified", None, None);
+        let winbridge_protocol::update::ActivationLifetimeObservationResult::Observed {
+            receipt,
+            ..
+        } = &observation.result
+        else {
+            return Err("Lifetime normal IPC did not confirm resident quarantine".into());
+        };
+        let next = permit.record().confirmed(
+            receipt.as_ref().clone(),
+            self.at()?.max(receipt.compatibility.observed_at_ms),
+        )?;
+        j.append_activation_lifetime_owned(
+            a,
+            s,
+            &self.files.preparation,
+            &self.record,
+            observed,
+            permit.topology(),
+            &next,
+        )
+        .map_err(|e| e.to_string())?;
+        self.lifetime_observation = Some(observation);
+        timing.mark("lifetime_fact_confirmed", None, None);
+        Ok(())
+    }
+
     /// One fresh durable intent under the original owner; Existing is never a
-    /// reconstructed preparation. The future sender must consume this value.
+    /// reconstructed preparation. The sender must consume this value once.
     pub fn prepare_lifetime_blocking(
         self: Box<Self>,
         j: &mut UpdateJournal,
@@ -54,7 +222,11 @@ impl ActivationProcessGuard {
         }
     }
 
-    fn require_lifetime_owner(&self) -> Result<()> {
+    pub(super) fn require_lifetime_owner(&self) -> Result<()> {
+        self.require_lifetime_custody(true)
+    }
+
+    pub(super) fn require_lifetime_custody(&self, entry: bool) -> Result<()> {
         let expected = self.record.intent.job_name()?;
         let identity = self
             .child
@@ -77,7 +249,7 @@ impl ActivationProcessGuard {
             );
         }
         self.require_lifetime_config_pin()?;
-        self.require_fixed_custody(true)
+        self.require_fixed_custody(entry)
     }
 
     fn require_lifetime_config_pin(&self) -> Result<&std::fs::File> {

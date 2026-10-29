@@ -1,5 +1,46 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Ревью .203 ветки lifetime-runtime-204,2026-10-28:** commits90fc5b4/2a0bee6/49b6d7b
+проверены вместе с пользовательским WIP. [Разбор и продолжение](analysis/updater-lifetime-runtime-204-review-2026-10-28.md).
+964 workspace tests/17 ignored и45 Python regressions passed; TS/UI/fmt/scaffold,
+Linux/MSVC all-target Clippy и generated contracts прошли. Исходный Main27 run20261028-224638-3e951af3 failed: entry confirmed, но
+позднее наблюдение вызывало V5 Issued-only reader. Fix использует original owned
+lifetime snapshot до/после normal IPC; регрессионный тест passed. Для Windows
+подтверждения нужен один новый Main27 с fixed supervisor, distinct V6 target90fc5b4,
+stable runtime-test-204 и test controller.203:1144. До terminal passed + independent
+reread native V6 не объявлять завершённым. Installed worker прежний; preflight
+PID2532/slot processes0/24GB свободно. Worker оставить, desktop/окон нет.
+
+**.204,2026-10-28: supervisor27/view19 реализованы в source.**
+[Lifetime actor и Main27](plans/worker-self-update/lifetime-actor-2026-10-28.md):
+single entry на original guard, fresh readonly normal reconciliation после
+unknown ACK/verification expiry, отдельные saved/observed/custody diagnostics,
+без resend/cold adoption/deadline renewal. Source19/22/private6; old views1–18
+frozen.963 workspace tests/17 ignored, Linux/MSVC Clippy и UI build passed.
+Новый native Main27 подготовлен, ещё не исполнен; whole commit/release и
+permanent keeper role впереди. Installed worker/production controllers прежние.
+
+**Продолжение на .204,2026-10-28:** main fast-forward до94629b2, ветка
+`feat/updater-lifetime-runtime-204`. [V6 source runtime и ревью](plans/worker-self-update/lifetime-runtime-2026-10-28.md):
+same-child decoder, typed supervised quarantine, consuming sender и independent
+normal IPC добавлены. Private6 marker удерживает реализованный receiver; source
+worker19/updater22, actor26/view18 прежние. Atomic entry внутри original window;
+lost Ready ACK сохраняет quarantine под original keeper. Queries не создают mode,
+roots/dispatch/admin остаются закрыты, Job limits/Store/authority не меняются.
+Ревью исправило повторное использование полного startup budget в ранних V1–V3 IO:
+теперь каждый connect/read/write получает остаток исходного frozen deadline.
+Actor27/view19 и новый native Main27, consuming keeper role, final commit/scoped
+release и U2–U4 ещё впереди. Нового V6 Windows execution proof пока нет; old gates
+не replay. Installed worker0.2.0 и production controller не обновлялись.
+
+958 workspace/update-validation tests passed/17 ignored; 45 Python regressions,
+Linux/MSVC workspace all-target Clippy, TypeScript/UI build,
+contracts/fmt/diff/scaffold321 passed. Полные результаты — в linked checkpoint. Readonly
+проверка подтверждает обе связи .203/.204 с прежним worker/gen946f1128, текущие
+ошибки соединений отсутствуют.
+
+## История предыдущих checkpoint
+
 **Lifetime original admission/preparation реализованы в source,2026-10-28.**
 Consuming factory сохраняет Issued только из original controller-verified owner;
 точные root/epoch/nonce/config pin/Job/child/window проверяются до/после commit.
@@ -15,8 +56,6 @@ normal-IPC lifetime observation, actor27/view19, keeper role/commit/scoped relea
 новый native gate. Main26/OS/actual21→22 terminal, не replay. Installed0.2.0
 build/gen946f1128 прежний/active0/errors=null; Windows tasks/UI не запускались.
 Рабочий worker оставить, desktop не нужен; public activation/install off.
-
-## История предыдущих checkpoint
 
 **Actual21→22 passed:**run20261028-201224-538a7897/taskd34454d3, producerd2c3a1b.
 1 native test/4 files twice/26+61 negative audits; readonly reread identical.

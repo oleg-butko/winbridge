@@ -1,5 +1,5 @@
-//! Same-state local verification service. No controller connection, dispatch,
-//! coordinator registration, maintenance release or process-lifetime transfer.
+//! Same-state local verification and supervised quarantine. Controller/lifetime
+//! entry are separate trusted transitions; dispatch and maintenance stay frozen.
 use crate::{
     runtime_guard::RuntimeGuard,
     startup::{InstanceCustody, WorkerParts},
@@ -11,6 +11,9 @@ use winbridge_protocol::update::WorkerServiceActivationCommand;
 #[path = "controller_service.rs"]
 mod controller;
 use controller::ControllerStartup;
+#[path = "lifetime_service.rs"]
+mod lifetime;
+pub(crate) use lifetime::{rejected_lifetime, ServiceLifetime};
 
 pub(crate) const READ_ONLY_REASON: &str = "Локальная проверка обновления: доступны только чтение журнала и диагностика; новые команды ещё не разрешены";
 
@@ -20,6 +23,7 @@ pub(super) struct LocalServiceScope {
     shutdown: winbridge_protocol::update::WorkerShutdownReceipt,
     controller: Mutex<Option<winbridge_protocol::update::WorkerControllerActivationCommand>>,
     deadline: Instant,
+    lifetime: Mutex<ServiceLifetime>,
 }
 
 enum FailureOwner {
@@ -73,7 +77,6 @@ impl LocalServiceFailure {
 pub struct LocalService {
     worker: Arc<Worker>,
     command: WorkerServiceActivationCommand,
-    shutdown: winbridge_protocol::update::WorkerShutdownReceipt,
     deadline: Instant,
     _config_pin: File,
 }
@@ -221,6 +224,7 @@ impl LocalService {
                 shutdown: state.shutdown.clone(),
                 controller: Mutex::new(None),
                 deadline: state.deadline,
+                lifetime: Mutex::new(ServiceLifetime::Verification),
             }),
             generation: state
                 .command
@@ -262,7 +266,6 @@ impl LocalService {
         Ok(Self {
             worker,
             command: state.command,
-            shutdown: state.shutdown,
             deadline: state.deadline,
             _config_pin: pin,
         })
@@ -291,11 +294,7 @@ impl LocalService {
         {
             guard.revalidate()?;
         }
-        self.worker.store()?.check_local_service_identity(
-            &self.command,
-            &self.shutdown,
-            self.deadline,
-        )
+        self.worker.check_local_service_scope()
     }
     pub async fn start(self) -> std::result::Result<RunningLocalService, Box<LocalServiceFailure>> {
         if let Err(reason) = self.check_ready() {

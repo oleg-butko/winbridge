@@ -100,13 +100,15 @@ Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в 
 файервола до 15 минут; рабочая версия устанавливается отдельно в `runtime`.
 
 Актуальная точка updater: [Main26/controller gate](docs/plans/worker-self-update/main26-native-2026-10-28.md),
-[lifetime preparation](docs/plans/worker-self-update/lifetime-admission-2026-10-28.md)
+[lifetime runtime/review](docs/analysis/updater-lifetime-runtime-204-review-2026-10-28.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source worker19/updater22/supervisor26/view18/implemented private5.
+Source worker19/updater22/supervisor27/view19/private6.
 Local service и controller используют тот же child/Store/lock/authority; Main26
 проверен на Windows. Actual retained21→22 migration/cold refusal также проверены.
-Original lifetime admission сохраняет намерение до отправки, но receiver6,
-supervised keeper runtime, final commit/scoped release и U2–U4 ещё впереди.
+Lifetime admission, same-child V6 quarantine и independent normal IPC реализованы
+в source. Первый Main27 выявил ошибку последующего чтения; source fix reviewed,
+новый Windows gate ещё впереди. Permanent keeper role, final commit/scoped release
+и U2–U4 не завершены.
 Public install выключен; самообновление целиком ещё не готово.
 Installed worker0.2.0/source48c834c и оба controller0.2.0 работают на1143;
 этот source checkpoint рабочие binaries не заменяет.

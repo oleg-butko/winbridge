@@ -18,6 +18,8 @@ mod attribution;
 mod cancellation;
 pub use activation::{JournalActivationAcceptance, JournalActivationPermit};
 pub use activation_open::{ActivationJournal, ActivationJournalOpenFailure};
+#[cfg(test)]
+pub(crate) use activation_service_open::lifetime_fixture;
 pub use activation_service_open::{PreparedServiceJournal, ServiceJournalPreparationFailure};
 mod archive;
 mod inspection;

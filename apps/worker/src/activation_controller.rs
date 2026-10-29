@@ -101,13 +101,12 @@ pub(super) async fn receive(
                     deadline.saturating_duration_since(Instant::now()),
                 )
                 .await?;
-                // Still verification-owned. No transfer, release, dispatch or
-                // final root commit follows from a controller acknowledgement.
-                return tokio::select! {
-                    value=running.wait_until_stopped()=>Err(format!("Controller verification IPC stopped: {value:?}")),
-                    _=channel::read::<_,serde::de::IgnoredAny>(stream,deadline.saturating_duration_since(Instant::now()))=>Err("Controller parent channel closed or unsupported next phase; no lifetime transfer".into()),
-                    outcome=super::native::parent_alive(parent,deadline.saturating_duration_since(Instant::now()))=>outcome,
-                };
+                // Controller Ready itself grants no lifetime. V6 must arrive
+                // on this same authenticated channel inside the original window.
+                return Box::pin(super::lifetime::receive(
+                    directory, &snapshot, parent, deadline, stream, running,
+                ))
+                .await;
             }
             ActivationControllerObservationResult::Rejected { message } => return Err(message),
             ActivationControllerObservationResult::Waiting { .. } => {}
