@@ -4,6 +4,8 @@ use super::*;
 pub(super) mod controller;
 #[path = "activation_lifetime.rs"]
 pub(super) mod lifetime;
+#[path = "activation_resident.rs"]
+pub(super) mod resident;
 #[path = "activation_service.rs"]
 pub(super) mod service;
 use rusqlite::{Connection, OpenFlags};

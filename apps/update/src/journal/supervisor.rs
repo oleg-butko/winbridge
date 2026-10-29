@@ -263,6 +263,15 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 19)
     }
+    /// Compact current-resident view. A journal read can only say NotResident.
+    pub fn activation_resident_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 20)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -271,6 +280,7 @@ impl UpdateJournal {
         view_schema: u16,
     ) -> Result<UpdatePreparationView> {
         check_files(directory)?;
+        let detailed_schema = if view_schema == 20 { 1 } else { view_schema };
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
         if schema(&c)? != UPDATE_SCHEMA_VERSION {
             return Err(fail(
@@ -304,7 +314,7 @@ impl UpdateJournal {
             Err(e) if e.code == JournalErrorCode::NotFound => None,
             Err(e) => return Err(e),
         };
-        let candidate_drain = if view_schema >= 5 {
+        let candidate_drain = if detailed_schema >= 5 {
             let released = if matches!(
                 update.phase,
                 UpdatePhase::Aborting | UpdatePhase::Deferred | UpdatePhase::FailedBeforeCutover
@@ -322,7 +332,7 @@ impl UpdateJournal {
         } else {
             None
         };
-        let candidate_shutdown = if view_schema >= 6 {
+        let candidate_shutdown = if detailed_schema >= 6 {
             Some(crate::shutdown::view(
                 super::shutdown::read(&tx, id)?.as_ref(),
                 driver_active,
@@ -332,7 +342,7 @@ impl UpdateJournal {
         } else {
             None
         };
-        let candidate_state_backup = if view_schema >= 7 {
+        let candidate_state_backup = if detailed_schema >= 7 {
             Some(crate::state_backup::view(
                 super::state_backup::read(&tx, id)?.as_ref(),
                 driver_active,
@@ -341,7 +351,7 @@ impl UpdateJournal {
         } else {
             None
         };
-        let runtime_preparation = if view_schema >= 8 {
+        let runtime_preparation = if detailed_schema >= 8 {
             Some(crate::runtime_preparation::view(
                 super::runtime_preparation::read(&tx, id)?.as_ref(),
                 driver_active,
@@ -350,7 +360,7 @@ impl UpdateJournal {
         } else {
             None
         };
-        let runtime_replacement = if view_schema >= 9 {
+        let runtime_replacement = if detailed_schema >= 9 {
             Some(crate::runtime_replacement::view(
                 super::runtime_replacement::read(&tx, id)?.as_ref(),
                 driver_active,
@@ -361,47 +371,62 @@ impl UpdateJournal {
             None
         };
         let parent_phase = update.phase;
-        let activation = if view_schema >= 12 {
+        let activation = if detailed_schema >= 12 {
             super::activation::read(&tx, id)?
         } else {
             None
         };
         let view = UpdatePreparationView {
-            activation_resident: None,
-            activation_lifetime: if view_schema >= 19 {
+            activation_resident: if view_schema == 20 {
+                Some(ActivationResidentView {
+                    phase: ActivationResidentPhase::NotResident,
+                    lifetime_command_id: super::activation_lifetime::read(&tx, id)?
+                        .map(|r| r.command.command_id),
+                    resident_process: None,
+                    process_alive: None,
+                    original_custody_held: None,
+                    observation: None,
+                    reason: Some(
+                        "No original resident owner; saved records do not recreate it".into(),
+                    ),
+                })
+            } else {
+                None
+            },
+            activation_lifetime: if detailed_schema >= 19 {
                 Some(crate::activation::lifetime_view(
                     super::activation_lifetime::read(&tx, id)?.as_ref(),
                 ))
             } else {
                 None
             },
-            activation_controller: if view_schema >= 18 {
+            activation_controller: if detailed_schema >= 18 {
                 Some(crate::activation::controller_view(
                     super::activation_controller::read(&tx, id)?.as_ref(),
                 ))
             } else {
                 None
             },
-            activation_service: if view_schema >= 17 {
+            activation_service: if detailed_schema >= 17 {
                 Some(crate::activation::service_view(
                     super::activation_service::read(&tx, id)?.as_ref(),
                 ))
             } else {
                 None
             },
-            activation_writer: if view_schema >= 16 {
+            activation_writer: if detailed_schema >= 16 {
                 Some(crate::activation::writer_view(
                     super::activation_writer::read(&tx, id)?.as_ref(),
                 ))
             } else {
                 None
             },
-            activation_state: if view_schema >= 15 {
+            activation_state: if detailed_schema >= 15 {
                 Some(crate::activation::state_view(activation.as_ref()))
             } else {
                 None
             },
-            activation_process: if view_schema >= 14 {
+            activation_process: if detailed_schema >= 14 {
                 Some(crate::activation::process_view(activation.as_ref()))
             } else {
                 None
@@ -419,7 +444,7 @@ impl UpdateJournal {
             candidate_state_backup,
             runtime_preparation,
             runtime_replacement,
-            activation_files: if view_schema >= 13 {
+            activation_files: if detailed_schema >= 13 {
                 Some(winbridge_protocol::update::ActivationFilesView {
                     phase: winbridge_protocol::update::ActivationFilesPhase::NotBound,
                     attempt_id: activation.as_ref().map(|v| v.intent.attempt_id.clone()),
@@ -433,12 +458,12 @@ impl UpdateJournal {
             } else {
                 None
             },
-            activation_preparation: if view_schema >= 12 {
+            activation_preparation: if detailed_schema >= 12 {
                 Some(crate::activation::view(activation.as_ref()))
             } else {
                 None
             },
-            compatible_drain: if view_schema >= 11 {
+            compatible_drain: if detailed_schema >= 11 {
                 Some(crate::compatible_drain::view(
                     super::compatible_drain::read(&tx, id)?.as_ref(),
                     super::candidate_support::read(&tx, id)?.as_ref(),
@@ -461,7 +486,7 @@ impl UpdateJournal {
             } else {
                 None
             },
-            candidate_support: if view_schema >= 10 {
+            candidate_support: if detailed_schema >= 10 {
                 Some(crate::candidate_support::view(
                     super::candidate_support::read(&tx, id)?.as_ref(),
                     driver_active,
@@ -469,17 +494,17 @@ impl UpdateJournal {
             } else {
                 None
             },
-            runtime_baseline: if view_schema >= 2 {
+            runtime_baseline: if detailed_schema >= 2 {
                 Some(super::runtime_baseline::read(&tx, id)?.view())
             } else {
                 None
             },
-            runtime_preimages: if view_schema >= 3 {
+            runtime_preimages: if detailed_schema >= 3 {
                 Some(super::runtime_preimages::read(&tx, id)?.view())
             } else {
                 None
             },
-            candidate_health: if view_schema >= 4 {
+            candidate_health: if detailed_schema >= 4 {
                 Some(crate::health::view(super::health::read(&tx, id)?.as_ref()))
             } else {
                 None

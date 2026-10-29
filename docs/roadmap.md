@@ -1,5 +1,15 @@
 # Постепенная реализация и расширение
 
+**Main29 source подготовлен,2026-10-29:** actual original keeper/current V7
+connection после lost Ready/expiry, foreign OS peer/JSON spoof/version refusal,
+unchanged snapshots и cold20 включены в отдельный native gate. Пока **не запускали**.
+[Сценарий, target944a39c, команда и проверки](plans/worker-self-update/resident-native-gate-2026-10-29.md).
+983 workspace/17 ignored/126 groups, Linux/MSVC Clippy/fmt,58 Python checks passed;
+Main27/Main28 reread identical. Windows parser/slot/storage preflight9a18f07c passed,
+slot204 свободен,20.3GB free, installed0.2.0/source48 прежний. Дальше clean producer
+export/один Main29/independent reread, затем finalization/root/release/Active/
+permanent keeper/U2–U4. Public install off, working worker оставить, desktop не нужен.
+
 **Resident actor28/view20 source,2026-10-29:** отдельный readonly query/client/
 mailbox подключён поверх V7, original guard/query/correlation сохранены. Ошибка
 чтения не переписывает V6 history; observed — датированный факт, не commit/release.

@@ -106,18 +106,13 @@ impl FilesActor {
     ) -> Result<UpdatePreparationView> {
         // New view20 deliberately carries no recursive historical prefix. V27
         // remains the separate historical/lifetime view; keep control bounded.
-        let mut view = UpdateJournal::preparation_snapshot(directory, id, active, error)
+        let mut view = UpdateJournal::activation_resident_snapshot(directory, id, active, error)
             .map_err(super::super::error)?;
-        view.schema_version = 20;
-        let mut resident = ActivationResidentView {
-            phase: ActivationResidentPhase::NotResident,
-            lifetime_command_id: self.lifetime_key.clone(),
-            resident_process: None,
-            process_alive: None,
-            original_custody_held: None,
-            observation: None,
-            reason: Some("No original resident owner; saved records do not recreate it".into()),
-        };
+        let mut resident = view
+            .activation_resident
+            .take()
+            .ok_or("Resident base missing")?;
+        resident.lifetime_command_id = self.lifetime_key.clone().or(resident.lifetime_command_id);
         #[cfg(windows)]
         match &self.state {
             State::ObservingResident(_) => {

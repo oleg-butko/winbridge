@@ -27,6 +27,7 @@ param(
   [switch]$ActivationControllerGate,
   [switch]$ActivationLifetimeGate,
   [switch]$ActivationLifetimeReadyLossGate,
+  [switch]$ResidentConnectionGate,
   [string]$Worker17ReferenceSha256,
   [string]$Worker17Reference,
   [string]$FixtureInstanceId,
@@ -39,6 +40,7 @@ param(
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ResidentConnectionGate){if($ActivationLifetimeReadyLossGate -or $ActivationLifetimeGate -or $ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main29 explicitly'};$ActivationLifetimeReadyLossGate=$true}
 if($ActivationLifetimeReadyLossGate){if($ActivationLifetimeGate){throw 'Select Main28 explicitly'};$ActivationLifetimeGate=$true}
 if($ActivationLifetimeGate){if($ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main27 explicitly'};$ActivationControllerGate=$true}
 if($ActivationControllerGate){if($ActivationServiceGate){throw 'Select Main25 or Main26 explicitly, not both'};$ActivationServiceGate=$true}
@@ -193,6 +195,7 @@ try {
     if($ActivationControllerGate){$shutdownArguments.activationController=$true;$report.kind='activation_controller_main_native_gate'}
     if($ActivationLifetimeGate){$shutdownArguments.activationLifetime=$true;$report.kind='activation_lifetime_main_native_gate'}
     if($ActivationLifetimeReadyLossGate){$shutdownArguments.lifetimeReadyLoss=$true;$report.kind='activation_lifetime_ready_loss_main_native_gate'}
+    if($ResidentConnectionGate){$shutdownArguments.residentConnection=$true;$report.kind='activation_resident_main_native_gate'}
     if(-not $ActivationServiceGate){Write-NewJson $shutdownInput $shutdownArguments}
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
@@ -205,6 +208,7 @@ try {
     if($ActivationControllerGate){$mainTest='actual_main_connects_same_verified_worker_to_controller_without_commit_or_replay'}
     if($ActivationLifetimeGate){$mainTest='actual_main_enters_same_child_lifetime_and_observes_after_original_deadline_without_replay'}
     if($ActivationLifetimeReadyLossGate){$mainTest='actual_main_reconciles_partial_lifetime_ready_after_original_deadline_without_replay'}
+    if($ResidentConnectionGate){$mainTest='actual_main_observes_resident_connection_after_partial_ready_without_replay'}
     # The Main fixture copies its supervisor from validationUpdater. Building a
     # validation test harness alone does not enable diagnostics in that process.
     $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
@@ -329,7 +333,7 @@ try {
     )+$commands
   }
   if($ActivationLifetimeGate){
-    $report.migrationScope=if($ActivationLifetimeReadyLossGate){'Main28 partial Ready only; retained21-to22 migration is separately verified'}else{'Main27 lifetime only; retained21-to22 migration is separately verified'}
+    $report.migrationScope=if($ResidentConnectionGate){'Main29 readonly V7; retained21-to22 migration is separately verified'}elseif($ActivationLifetimeReadyLossGate){'Main28 partial Ready only; retained21-to22 migration is separately verified'}else{'Main27 lifetime only; retained21-to22 migration is separately verified'}
     $commands=@(
       @{name='lifetime-model-and-actor';minimum=12;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','lifetime','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='lifetime-v27-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::tests::activation_lifetime_v27_observes_but_never_starts_from_cold_history_or_old_contract','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
@@ -339,6 +343,13 @@ try {
   if($ActivationLifetimeReadyLossGate){
     $commands=@(
       @{name='lifetime-ready-loss-native-boundaries';minimum=5;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','lifetime_ready_loss','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
+  if($ResidentConnectionGate){
+    $commands=@(
+      @{name='resident-model-and-actor';minimum=13;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','resident','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='resident-v28-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::tests::resident_connection_v28_cannot_adopt_cold_history_or_change_legacy_views','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
+      @{name='resident-os-peer';minimum=1;arguments=@('test','-p','winbridge-transport','--lib','local_peer','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})
@@ -421,6 +432,7 @@ try {
   if($ActivationControllerGate){$expectedKind='activation_controller_main_native_proof'}
   if($ActivationLifetimeGate){$expectedKind='activation_lifetime_main_native_proof'}
   if($ActivationLifetimeReadyLossGate){$expectedKind='activation_lifetime_ready_loss_main_native_proof'}
+  if($ResidentConnectionGate){$expectedKind='activation_resident_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}

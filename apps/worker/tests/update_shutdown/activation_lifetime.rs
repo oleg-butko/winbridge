@@ -2,7 +2,7 @@
 use super::*;
 use winbridge_update::activation::lifetime::{ActivationLifetimeRecord, ActivationLifetimeState};
 
-fn history(directory: &Path, id: &str) -> Vec<ActivationLifetimeRecord> {
+pub(super) fn history(directory: &Path, id: &str) -> Vec<ActivationLifetimeRecord> {
     let c = Connection::open_with_flags(
         directory.join("updates.sqlite"),
         OpenFlags::SQLITE_OPEN_READ_ONLY,

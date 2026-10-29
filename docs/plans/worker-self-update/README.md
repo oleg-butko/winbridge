@@ -1,5 +1,9 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29: [Main29 source gate](resident-native-gate-2026-10-29.md)**
+подготовлен, native ещё не запускали. Target944a39c pinned, следующий clean producer
+и один actual run/reread; installed worker прежний, public install off.
+
 **2026-10-29: [resident actor28/view20](resident-actor-2026-10-29.md)**
 подключён в source поверх V7, без root/release/Active. Следом actual Main29 на
 новом target; старые gates terminal. Installed worker прежний, public install off.
