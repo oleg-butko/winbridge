@@ -3,7 +3,7 @@ use super::*;
 use crate::activation::controller::{ActivationControllerSnapshot, ActivationControllerState};
 use winbridge_protocol::update::{SupervisorPhase, SupervisorProcess};
 
-fn local_edge(
+pub(super) fn local_edge(
     local: &ActivationRecord,
     service: &ActivationServiceRecord,
     root: &UpdateRecord,

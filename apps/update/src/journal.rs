@@ -23,7 +23,12 @@ use winbridge_protocol::update::{
 mod abort;
 mod activation;
 mod activation_controller;
+mod activation_finalization;
 mod activation_lifetime;
+pub use activation_finalization::{
+    ActivationFinalizationIntent, FinalizationDecisionAdmission, FinalizationDecisionPermit,
+    FinalizationReleasePermit,
+};
 mod activation_local;
 mod activation_service;
 mod activation_writer;
@@ -44,7 +49,7 @@ mod shutdown;
 mod source;
 mod state_backup;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 22;
+pub const UPDATE_SCHEMA_VERSION: u32 = 23;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -251,7 +256,7 @@ fn connection(path: &Path, readonly: bool) -> Result<Connection> {
         .map_err(storage)?;
     Ok(connection)
 }
-fn info(connection: &Connection) -> Result<UpdateJournalInfo> {
+fn installation_info(connection: &Connection) -> Result<UpdateJournalInfo> {
     let (installation_id, scope_sha256, owner_epoch): (String, String, i64) = connection
         .query_row(
             "SELECT installation,scope,epoch FROM installation WHERE singleton=1",
@@ -292,6 +297,25 @@ fn info(connection: &Connection) -> Result<UpdateJournalInfo> {
         active_update_id,
         last_sequence,
     })
+}
+// Historical graph readers use installation_info to avoid recursively reading
+// their own finalization descendants. Public readiness/admission uses this view.
+fn info(connection: &Connection) -> Result<UpdateJournalInfo> {
+    let mut value = installation_info(connection)?;
+    if let Some(pending) = activation_finalization::blocking(connection)? {
+        if value
+            .active_update_id
+            .as_ref()
+            .is_some_and(|id| id != &pending)
+        {
+            return Err(fail(
+                JournalErrorCode::Corrupt,
+                "Active update overlaps an unresolved finalization",
+            ));
+        }
+        value.active_update_id = Some(pending);
+    }
+    Ok(value)
 }
 fn record(connection: &Connection, id: &str) -> Result<UpdateRecord> {
     let row: Option<(String, i64, String, bool, String, String, String)> = connection
@@ -514,6 +538,7 @@ impl UpdateJournal {
             activation_service::migrate(&tx)?;
             activation_controller::migrate(&tx)?;
             activation_lifetime::migrate(&tx)?;
+            activation_finalization::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -596,6 +621,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 21 {
                 activation_lifetime::migrate(&tx)?;
+            }
+            if schema(&tx)? == 22 {
+                activation_finalization::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(

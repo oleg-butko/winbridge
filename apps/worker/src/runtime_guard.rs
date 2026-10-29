@@ -33,6 +33,15 @@ impl RuntimeGuard {
 /// binaries without this marker retain normal serve, with no update authority.
 /// Keep this guard alive for the complete worker lifetime.
 pub fn prepare_runtime_guard(worker_config: &Path) -> Result<Option<RuntimeGuard>> {
+    prepare_guard(worker_config, false)
+}
+/// Ordinary CLI serve must not cold-start through the SQL-release/Active-ACK
+/// gap. Verification/private activation only bind identity and use their own
+/// original custody; they must not call this normal-start factory.
+pub fn prepare_normal_runtime_guard(worker_config: &Path) -> Result<Option<RuntimeGuard>> {
+    prepare_guard(worker_config, true)
+}
+fn prepare_guard(worker_config: &Path, normal_start: bool) -> Result<Option<RuntimeGuard>> {
     let exe = std::env::current_exe()
         .map_err(|e| e.to_string())?
         .canonicalize()
@@ -77,6 +86,9 @@ pub fn prepare_runtime_guard(worker_config: &Path) -> Result<Option<RuntimeGuard
     let scope = winbridge_update::installation_scope(&cfg)?;
     if info.scope_sha256 != scope {
         return Err("Known runtime updater installation scope differs; no journal opened".into());
+    }
+    if normal_start && info.active_update_id.is_some() {
+        return Err(format!("Обычный запуск worker заблокирован: обновление WinBridge {} ещё не завершено, включая подтверждение release/Active; worker journal не открыт. Проверьте updater journal status, не удаляйте guards", info.active_update_id.as_deref().unwrap_or("unknown")));
     }
     let pin =
         winbridge_update::installed_set::pin_installed_set(runtime, &info.installation_id, &scope)?;

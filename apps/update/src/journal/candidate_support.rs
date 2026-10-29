@@ -84,7 +84,7 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<CandidateSupportRe
     let intent: CandidateSupportIntent = decode(&raw)?;
     intent.validate().map_err(bad)?;
     let parent = record(c, id)?;
-    let installation = info(c)?;
+    let installation = installation_info(c)?;
     let sup = supervisor::read(c, &intent.launch_id)?;
     let health = health::read(c, id)?.ok_or_else(|| bad("Support health missing"))?;
     crate::health::validate_success(&health).map_err(bad)?;

@@ -16,6 +16,7 @@ pub mod controller;
 #[cfg(any(windows, test))]
 pub(crate) mod controller_probe;
 mod controller_view;
+pub mod finalization;
 pub mod lifetime;
 #[cfg(all(feature = "update-validation", any(windows, test)))]
 pub(crate) mod lifetime_ready_loss;

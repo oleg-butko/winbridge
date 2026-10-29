@@ -1,5 +1,12 @@
 # Следующий keeper/finalization: ревью границ после lifetime
 
+2026-10-29, продолжение: [Main29](main29-native-2026-10-29.md) подтвердил readonly
+V7/actor28 и original physical custody. [Ledger23 foundation](finalization-ledger-2026-10-29.md)
+добавляет pure finalization contract, atomic SQL decision и pending startup/admission
+barrier; consuming factory/V8/worker Active/keeper conversion пока не подключены.
+Это следующая обязательная часть, исходный roadmap U2–U4 остаётся открытым.
+
+
 2026-10-29. Design checkpoint по фактическому source19/22/private6/actor27.
 [Main27](main27-native-2026-10-29.md) пройден; [Main28](main28-native-2026-10-29.md)
 также пройден: partial body/late reconciliation подтверждены. Этот документ не включает новые runtime capabilities, root

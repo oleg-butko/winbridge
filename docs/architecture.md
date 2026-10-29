@@ -1,5 +1,17 @@
 # Архитектура WinBridge
 
+**Finalization foundation source,2026-10-29:** updater23/worker19. Root Committed
+и ReleasePending intent связаны одной SQLite transaction; pending блокирует
+следующий admission, Known-runtime serve отказывает до worker Store. Proposed V8
+не advertised; physical factory/receiver/delivery/Active/keeper conversion ещё нет.
+[Контракт, review, проверки и продолжение](plans/worker-self-update/finalization-ledger-2026-10-29.md).
+Full workspace999/17 ignored +после review13 targeted/4 CLI startup =1000 distinct;
+Linux/MSVC all-target Clippy/fmt/scaffold passed. Actual Linux CLI22→23/backup/
+old22 refusal passed; Windows23 gate ещё не выполнялся. Main29 ниже — frozen19/22.
+Далее actual retained Main29 copy22→23, затем original factory/V8/release/Active/
+keeper/two generations/U2–U4. Installed0.2.0/source48/gen946 прежний/active0/errors=null;
+worker оставить, desktop не нужен, public install off.
+
 **Main29 Windows passed,2026-10-29:** run20261029-155738-d847446d,
 task2cd973db-9769-4695-b601-9d75344ab0ad, producer7ca206f→target944a39c.
 235 native test executions/54 commands/67 files twice; independent audit и

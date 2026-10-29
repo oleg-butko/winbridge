@@ -177,7 +177,7 @@ pub(super) fn read_graph(
     let value = ledger(c, &r)?;
     let source = &value.intent.source;
     let current = record(c, id)?;
-    let info = info(c)?;
+    let info = installation_info(c)?;
     let (raw, transition): (String, String) = c
         .query_row(
             "SELECT record,transition FROM transitions WHERE update_id=?1 AND revision=?2",

@@ -211,7 +211,7 @@ async fn run() -> Result<(), String> {
         [name] if name == "serve" => {
             // Known-runtime validation precedes opening/migrating the worker journal.
             let guard =
-                winbridge_worker::runtime_guard::prepare_runtime_guard(Path::new(&args[1]))?;
+                winbridge_worker::runtime_guard::prepare_normal_runtime_guard(Path::new(&args[1]))?;
             let worker = winbridge_worker::Worker::open_file(Path::new(&args[1]))?;
             if let Some(guard) = guard {
                 worker.attach_runtime_guard(guard)?;

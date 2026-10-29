@@ -204,3 +204,44 @@ fn correct_file_hashes_cannot_bind_a_fabricated_loaded_worker_descriptor() {
         "foreign-worker"
     );
 }
+
+#[test]
+fn ordinary_known_runtime_cannot_open_state_while_updater_decision_is_unfinished() {
+    use winbridge_protocol::update::*;
+    let f = Fixture::new();
+    f.write_manifest();
+    let mut j =
+        UpdateJournal::open(&f.runtime.join("update-state"), &f.manifest.scope_sha256).unwrap();
+    let a = j.acquire_owner().unwrap();
+    let request = UpdateRequest {
+        contract_version: 1,
+        idempotency_key: "normal-start-barrier".into(),
+        source: UpdateSourcePin {
+            archive_name: "source.zip".into(),
+            archive_sha256: "a".repeat(64),
+            manifest_sha256: "b".repeat(64),
+            source_commit: "c".repeat(40),
+        },
+        expected: UpdateInstallationPin {
+            installation_id: f.manifest.installation_id.clone(),
+            scope_sha256: f.manifest.scope_sha256.clone(),
+            worker_build_id: "old-build".into(),
+            worker_config_sha256: "d".repeat(64),
+            baseline_manifest_sha256: "e".repeat(64),
+        },
+    };
+    let root = j.accept(&a, &request, &request.expected).unwrap();
+    drop(a);
+    drop(j);
+    // Real CLI must refuse BEFORE Store creation even though the worker-side
+    // journal, lease and startup-marker file do not exist at all. A pending
+    // finalization uses the same validated info.active_update_id barrier;
+    // actual Committed/Released/Active fault boundaries belong to native V8.
+    f.reject("serve", "включая подтверждение release/Active");
+    let after =
+        UpdateJournal::read_snapshot(&f.runtime.join("update-state"), Some(&root.update_id))
+            .unwrap();
+    assert_eq!(after.1, Some(root));
+    // The effect-free verifier retains its former identity-only semantics.
+    f.reject("verify-runtime", "Loaded worker path/build does not match");
+}

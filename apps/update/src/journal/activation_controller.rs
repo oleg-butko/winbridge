@@ -330,3 +330,12 @@ mod custody;
 
 #[cfg(test)]
 mod tests;
+
+pub(super) fn validate_local_root_edge(
+    local: &ActivationRecord,
+    service: &ActivationServiceRecord,
+    root: &UpdateRecord,
+    edge: &UpdateTransition,
+) -> Result<()> {
+    custody::local_edge(local, service, root, edge)
+}

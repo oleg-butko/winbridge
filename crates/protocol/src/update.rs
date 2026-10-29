@@ -1159,3 +1159,6 @@ mod activation_controller_view;
 pub use activation_controller_view::*;
 mod activation_lifetime_view;
 pub use activation_lifetime_view::*;
+
+mod activation_finalization;
+pub use activation_finalization::*;
