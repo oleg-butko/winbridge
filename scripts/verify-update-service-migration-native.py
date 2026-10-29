@@ -98,7 +98,10 @@ def verify(run_info, source_archive, reference_source_archive, reference_target_
     evidence.verify_selection(report['command'], files['migration.log'].decode('utf-8-sig'))
     proof_file = 'activation-' + prefix + '-migration-proof.json'
     proof = parse(files[proof_file].decode('utf-8-sig'))
-    rejected = evidence.audit(proof, source, reference, checks)
+    # Optional profile-specific context is derived from the separately pinned,
+    # fully audited reference proof, never from the migration result itself.
+    proof_kwargs = evidence.proof_context(old_proof) if hasattr(evidence, 'proof_context') else {}
+    rejected = evidence.audit(proof, source, reference, checks, **proof_kwargs)
     checks.need(before['platform'] == after['platform'] == 'windows' and before['activeTaskCount'] == after['activeTaskCount'] == 0
                 and after['generation'] == before['generation'] and after['build'] == before['build']
                 and after['fencedRequests']['context'] == context

@@ -43,8 +43,9 @@ committed edge, индекс/ключи, history sequence и current/readback.
 installation_info без рекурсивного чтения собственных finalization descendants.
 Orphan/partial state, multiple unresolved decisions и Committed lifetime root
 без intent — ошибка, а не свободный installation. Confirmed остаётся историей,
-не live keeper или обещанием текущей сети. Пока нет actual native23 gate, полная
-интеграция retained graph/pending admission не объявляется проверенной на Windows.
+не live keeper или обещанием текущей сети. [Actual retained22→23 copy gate](finalization-migration-2026-10-29.md) подтвердил
+сохранность старого graph и отсутствие новых grants. Pending root decision /
+worker release / Active faults ещё не проверены на Windows.
 
 Library decision API принимает non-Serde/non-Clone FinalizationDecisionPermit,
 но его physical factory пока отсутствует. Только известный успешный commit может
@@ -111,7 +112,7 @@ Evidence `.winbridge/review-2026-10-29/finalization-*`, CLI report
 
 ## Продолжать
 
-1. Проверить retained22→23 на consistent copy actual Main29 archive с старым22
+1. Готово: [retained22→23](finalization-migration-2026-10-29.md) на consistent copy actual Main29 archive с старым22
    refusal, неизменными root/local7/writer/service/controller/lifetime histories
    и отсутствием придуманных finalization rows/custody. Working worker прежний.
 2. Реализовать fresh consuming original-guard factory, authenticated normal-IPC

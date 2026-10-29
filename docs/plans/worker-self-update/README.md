@@ -1,5 +1,19 @@
 # Самообновление: план реализации U0–U4
 
+**Native retained22→23 passed,2026-10-29:** run20261029-202033-a2132bf8,
+task18e1625b-d2bc-44d8-9b0b-949446ab685c succeeded0, producerfcc49dd.
+Actual Windows copy/backup/old22 init+status refusal/cold20 passed;4 result files
+verified twice,34 negative audits +142 reference audits. Native task выполнен
+один раз. Первоначальный reader перепутал view.build (historical compiler record)
+с producer BuildIdentity; исправлен со сверкой всей projection с pinned Main29,
+7/24 portable tests passed. Перезапуск Windows не нужен. Исходный Python runner
+завершён1 на ошибке reader; standalone fixed audit passed, это не worker failure.
+[Результат и продолжение](finalization-migration-2026-10-29.md).Source19/23, root остаётся
+AwaitingController/local7/lifetime Confirmed; новых finalization rows0, live grants0.
+Installed0.2.0/source48/gen946 прежний/active0/errors=null; worker оставить,
+desktop можно закрыть, окон не было. Далее physical factory/V8/worker Active/
+keeper/two generations/U2–U4; public install off.
+
 **Retained22→23 gate подготовлен,2026-10-29:** actual Main29 reference7ca206f→944a39c,
 fixed Finalization22To23, consistent copy/old22 init+status refusal/cold20/no-grants.
 [Сценарий и команда](finalization-migration-2026-10-29.md).23 portable reader tests/MSVC Clippy passed;

@@ -1,17 +1,18 @@
 # Постепенная реализация и расширение
 
-**Native22→23 running,2026-10-29:** run20261029-202033-a2132bf8,
-task18e1625b-d2bc-44d8-9b0b-949446ab685c, producerfcc49dd; installed worker
-исполняет copy-only migration, без test worker/supervisor/окон. Run-info
-`.winbridge/update-preparation/finalization-migration-20261029-202033-a2132bf8/run-info.json`,
-log `.winbridge/review-2026-10-29/finalization-migration-native-run.log`, runner322089/
-tool69943. Native build начат; **не pass**, наблюдать тот же task до terminal/reread,
-не submit повторно. Source ZIP winbridge-20261029T201912Z-fcc49dd-36dd97a6.zip,
-SHA9c69630ffe168e584dfc4b38f01a3d3f2fd5c9d91c24ce846c3833dda81e4d97,
-manifest2d7a419646fdbe4e95d9c5a0da56db6a803a087b4f9190c7c92d3726c72d0f37.
-Reference Main29 frozen7ca206f→944a39c, native cache20261017-061527-f4639971.
-Production controller131887/installed0.2.0/source48/gen946 прежние; worker оставить,
-desktop не нужен, public install off. [Сценарий](plans/worker-self-update/finalization-migration-2026-10-29.md).
+**Native retained22→23 passed,2026-10-29:** run20261029-202033-a2132bf8,
+task18e1625b-d2bc-44d8-9b0b-949446ab685c succeeded0, producerfcc49dd.
+Actual Windows copy/backup/old22 init+status refusal/cold20 passed;4 result files
+verified twice,34 negative audits +142 reference audits. Native task выполнен
+один раз. Первоначальный reader перепутал view.build (historical compiler record)
+с producer BuildIdentity; исправлен со сверкой всей projection с pinned Main29,
+7/24 portable tests passed. Перезапуск Windows не нужен. Исходный Python runner
+завершён1 на ошибке reader; standalone fixed audit passed, это не worker failure.
+[Результат и продолжение](plans/worker-self-update/finalization-migration-2026-10-29.md).Source19/23, root остаётся
+AwaitingController/local7/lifetime Confirmed; новых finalization rows0, live grants0.
+Installed0.2.0/source48/gen946 прежний/active0/errors=null; worker оставить,
+desktop можно закрыть, окон не было. Далее physical factory/V8/worker Active/
+keeper/two generations/U2–U4; public install off.
 
 **Retained22→23 gate подготовлен,2026-10-29:** actual Main29 reference7ca206f→944a39c,
 fixed Finalization22To23, consistent copy/old22 init+status refusal/cold20/no-grants.

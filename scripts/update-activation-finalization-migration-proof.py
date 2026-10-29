@@ -102,7 +102,14 @@ def verify_selection(command, log):
          and re.search(r'^running 1 test\s*$', text, re.MULTILINE), 'Actual22 migration did not run once')
 
 
-def verify(proof, source, reference, checks):
+def proof_context(reference_proof):
+    case, = reference_proof['cases']
+    view = case['coldActivationResident']['view']
+    need(type(view) is dict and view['schemaVersion'] == 20, 'Pinned original cold projection required')
+    return dict(expected_cold_view=copy.deepcopy(view))
+
+
+def verify(proof, source, reference, checks, *, expected_cold_view):
     checks.strict(proof, uuid_session_paths=frozenset({NETWORK_SESSION_PATH}))
     load('finalization_migration_frame_strict', 'update-activation-service-proof.py').strict(proof)
     common = {'schemaVersion', 'kind', 'passed', 'platform', 'build', 'referenceProofSha256', 'referenceReportSha256',
@@ -162,8 +169,14 @@ def verify(proof, source, reference, checks):
     view = proof['coldResident']
     need(set(view) == {'activationResident', 'build', 'driverActive', 'driverError', 'observedAtMs', 'schemaVersion', 'source', 'sourceAppliedFiles', 'update'}
          and view['schemaVersion'] == 20 and type(view['schemaVersion']) is int and view['update'] == root
-         and view['build'] == proof['build'] and view['driverActive'] is False and view['driverError'] is None
+         and view['driverActive'] is False and view['driverError'] is None
          and view['observedAtMs'] >= root['updatedAtMs'], 'Cold resident changed contract/build/root')
+    # view.build is the historical UpdateBuildRecord, NOT the test producer's
+    # BuildIdentity. Freeze every old projection field except observation time.
+    need(type(expected_cold_view) is dict
+         and checks.canonical({k: v for k, v in view.items() if k != 'observedAtMs'})
+         == checks.canonical({k: v for k, v in expected_cold_view.items() if k != 'observedAtMs'}),
+         'Cold projection changed pinned compiler/source/history fields')
     r = view['activationResident']
     need(set(r) == {'phase', 'lifetimeCommandId', 'residentProcess', 'processAlive', 'originalCustodyHeld', 'observation', 'reason'}
          and r['phase'] == 'not_resident' and r['lifetimeCommandId'] == lifetime['command']['commandId']
@@ -171,8 +184,8 @@ def verify(proof, source, reference, checks):
          'Cold read invented custody/liveness/current connection')
 
 
-def audit(proof, source, reference, checks):
-    verify(proof, source, reference, checks)
+def audit(proof, source, reference, checks, *, expected_cold_view):
+    verify(proof, source, reference, checks, expected_cold_view=expected_cold_view)
     changes = [('before/schemaVersion', 21), ('after/schemaVersion', 22), ('after/ownerEpoch', 0),
         ('afterColdObservation/ownerEpoch', 0), ('afterColdObservation/lastSequence', 0), ('backupInfo/ownerEpoch', 0),
         ('gateRows', True), ('gateRows', 1), ('retainedActivation/revision', 6), ('retainedRoot/phase', 'committed'),
@@ -185,7 +198,7 @@ def audit(proof, source, reference, checks):
         ('noFreshFinalizationIntent', False), ('oldLifetimeReceiverRefused', False), ('installedRuntimeApplied', True),
         ('coldResident/activationResident/phase', 'observed'), ('coldResident/activationResident/originalCustodyHeld', True),
         ('coldResident/activationResident/processAlive', True), ('coldResident/schemaVersion', 19), ('coldResident/driverActive', True),
-        ('coldResident/update/phase', 'committed')]
+        ('coldResident/update/phase', 'committed'), ('coldResident/build', dict(proof['build']))]
     for path, replacement in changes:
         changed = copy.deepcopy(proof)
         node = changed
@@ -195,7 +208,7 @@ def audit(proof, source, reference, checks):
         need(checks.canonical(node[parts[-1]]) != checks.canonical(replacement), 'No-op migration mutation: ' + path)
         node[parts[-1]] = replacement
         try:
-            verify(changed, source, reference, checks)
+            verify(changed, source, reference, checks, expected_cold_view=expected_cold_view)
         except (ValueError, KeyError, TypeError):
             continue
         raise ValueError('Finalization migration observer accepted mutation: ' + path)

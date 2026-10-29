@@ -34,18 +34,18 @@ def fixture():
         proof.pop(key)
     proof['before']['schemaVersion'] = proof['backupInfo']['schemaVersion'] = 22
     proof['after']['schemaVersion'] = proof['afterColdObservation']['schemaVersion'] = 23
-    proof['coldResident'] = dict(schemaVersion=20, build=copy.deepcopy(proof['build']), update=copy.deepcopy(root),
+    proof['coldResident'] = dict(schemaVersion=20, build=dict(phase='completed', revision=4, outcome='succeeded', frozenCompiler=True), update=copy.deepcopy(root),
         driverActive=False, driverError=None, observedAtMs=20, source=None, sourceAppliedFiles=0,
         activationResident=dict(phase='not_resident', lifetimeCommandId=saved['command']['commandId'],
             residentProcess=None, processAlive=None, originalCustodyHeld=None, observation=None, reason='No original owner'))
     for value, key in ((physical, 'activationSha256'), (saved, 'lifetimeSha256'), (root, 'rootSha256')):
         reference[key] = hashlib.sha256(checks.canonical(value)).hexdigest()
-    return proof, source, reference
+    return proof, source, reference, dict(expected_cold_view=copy.deepcopy(proof['coldResident']))
 
 
 def reference_fixture():
     meta, report, proof, audit = previous.reference_fixture()
-    p, _, _ = fixture()
+    p, _, _, _ = fixture()
     case, = proof['cases']
     physical, lifetime, root = (p[k] for k in ('retainedActivation', 'retainedLifetime', 'retainedRoot'))
     case['activationWriter']['record'] = physical
@@ -53,16 +53,16 @@ def reference_fixture():
     case['activationLifetime'] = dict(physicalRecord=physical, record=lifetime)
     case['activationResident'] = dict(first=dict(update=root), second=dict(update=root), rootCommitted=False,
         maintenanceReleased=False, privateChannelRead=False)
-    case['coldActivationResident'] = dict(view=dict(update=root))
+    case['coldActivationResident'] = dict(view=copy.deepcopy(p['coldResident']))
     report['kind'] = 'activation_resident_main_native_gate'
     audit.update(kind='main29_independent_audit', profile='worker19-updater22', updaterJournalSchema=22, readyLossMarkersVerified=1)
     return meta, report, proof, audit
 
 
 class FinalizationMigrationEvidenceTests(unittest.TestCase):
-    def test_retained_history_cold_scope_and_all_33_negative_audits(self):
-        proof, source, reference = fixture()
-        self.assertEqual(finalization.audit(proof, source, reference, checks), 33)
+    def test_retained_history_cold_scope_and_all_34_negative_audits(self):
+        proof, source, reference, context = fixture()
+        self.assertEqual(finalization.audit(proof, source, reference, checks, **context), 34)
 
     def test_selection_refuses_skipped_duplicate_old_profile_and_boolean_exit(self):
         name = finalization.TEST
@@ -81,23 +81,23 @@ class FinalizationMigrationEvidenceTests(unittest.TestCase):
 
     def test_correlated_headers_cannot_rebind_installation_scope_or_history(self):
         for field, value in (('installationId', previous.controller.service.old.uid(99)), ('scopeSha256', '0'*64), ('lastSequence', 0)):
-            proof, source, reference = fixture()
+            proof, source, reference, context = fixture()
             for key in ('before', 'after', 'afterColdObservation', 'backupInfo'):
                 proof[key][field] = value
             with self.subTest(field=field), self.assertRaises(ValueError):
-                finalization.verify(proof, source, reference, checks)
+                finalization.verify(proof, source, reference, checks, **context)
 
     def test_cold_read_and_unknown_permissions_never_create_a_grant(self):
         for key in ('startupPermit', 'nonce', 'canFinalize', 'keeperResident', 'releaseMaintenance'):
-            proof, source, reference = fixture()
+            proof, source, reference, context = fixture()
             proof[key] = False
             with self.subTest(key=key), self.assertRaises(ValueError):
-                finalization.verify(proof, source, reference, checks)
+                finalization.verify(proof, source, reference, checks, **context)
         for key, value in (('residentProcess', {}), ('observation', {}), ('lifetimeCommandId', 'another')):
-            proof, source, reference = fixture()
+            proof, source, reference, context = fixture()
             proof['coldResident']['activationResident'][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
-                finalization.verify(proof, source, reference, checks)
+                finalization.verify(proof, source, reference, checks, **context)
 
     def test_only_fully_audited_main29_schema22_archive_may_be_a_reference(self):
         meta, report, proof, audit = reference_fixture()
@@ -125,6 +125,18 @@ class FinalizationMigrationEvidenceTests(unittest.TestCase):
                 a['readyLossMarkersVerified'] = 0
             with self.subTest(mutation=mutation), self.assertRaises(ValueError):
                 finalization.derive_reference(m, r, p, a, checks)
+
+    def test_compiler_record_is_separate_from_producer_build_identity(self):
+        proof, source, reference, context = fixture()
+        self.assertNotEqual(proof['coldResident']['build'], proof['build'])
+        finalization.verify(proof, source, reference, checks, **context)
+        for key in ('build', 'source', 'sourceAppliedFiles'):
+            changed=copy.deepcopy(proof)
+            changed['coldResident'][key]=dict(proof['build']) if key=='build' else 'changed'
+            with self.subTest(key=key), self.assertRaises((ValueError,TypeError)):
+                finalization.verify(changed, source, reference, checks, **context)
+        with self.assertRaises(TypeError):
+            finalization.verify(proof, source, reference, checks)
 
     def test_fixed_profiles_json_and_windows_selection_are_explicit(self):
         self.assertEqual(profiles.get('Finalization22To23')['schemas'], (23, 22, 22))
