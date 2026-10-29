@@ -10,7 +10,12 @@ Active observation, confirmation ledger и permanent keeper ещё вперед�
 Full workspace/update-validation1027/17 ignored, Linux/MSVC all-target Clippy и
 Rust/TS contracts/typecheck/fmt/diff/scaffold338 passed. Исправлены post-accept
 Indeterminate semantics и workflow-test DDL/output race; initial failure сохранён.
-Native26 unit profile `-MailboxGate` подготовлен, результат Windows пока не заявлен.
+Native26 `-MailboxGate` passed: run20261029-234239-b0cb4fc3/task197dceb6,
+8 ready files twice verified; producer6e8dbca. Build98.5s/tests54.3s, installed
+unchanged/active0/errors=null. PhysicalV8Proved/authenticatedActiveProved=false;
+не повторять этот task. Далее consuming physical factory/sender/independent Active
+observation/ledger confirmation, затем permanent keeper. Worker оставить, desktop
+не нужен, окон не было.
 
 **.204/main,2026-10-29: readonly Active observation.**
 [Контракт, ревью и продолжение](plans/worker-self-update/finalization-observation-2026-10-29.md).

@@ -64,6 +64,23 @@ generated contracts/typecheck/fmt/diff/scaffold338 passed. Initial failure log
 отдельный, `physicalV8Proved=false`, `authenticatedActiveProved=false`: successful
 physical delivery/Active observation этот unit gate не доказывает.
 
+## Windows unit26: проверенный результат
+
+Run `20261029-234239-b0cb4fc3`, task
+`197dceb6-5ef6-435b-aabe-10a416c36aa3`, producer6e8dbca, succeeded/exit0.
+Source ZIP `winbridge-20261029T234224Z-6e8dbca-0ba7fc9a.zip`, SHA
+`1ab4523f15370f7693b283648409aac9f5786e7a24b11c74458ab45b3c99677b`.
+Все26 tests passed (6/10/4/2/4);8 ready files проверены дважды по SHA/размеру.
+Report SHA `24049dbc22920a518a34ebf30866b2e70a879e203e98eca6ba39e194988e9c6f`,
+artifact SHA `08aedbb968d1333fb25f80d7d403f5077e1a4be42aa56bfe01a9c1393de7d132`.
+Build98,488ms; test commands10,457/20,159/12,412/3,310/7,919ms. Windows
+free19,318,575,104 before /19,307,634,688 after. No cleanup/runtime changes/windows;
+before/after installed0.2.0/source48/generation946 неизменны, active0/errors=null.
+Audit `.winbridge/finalization-mailbox-review-204/native-audit.json`; requests,
+terminal/before/after/output находятся в подкаталоге run. Новый native unit gate
+не повторять и не переименовывать в положительный physical V8 proof.
+Рабочий worker оставить, desktop не нужен; окон не открывалось.
+
 Production physical factory/sender ещё не подключены; parent config/verification
 pins пока не отпускаются реальным updater. Нужны fresh V7 под исходной custody,
 RootCommitted/ReleasePending, consuming retirement parent pins с сохранением Job,
