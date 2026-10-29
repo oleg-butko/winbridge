@@ -1,5 +1,17 @@
 # Постепенная реализация и расширение
 
+**Main29 Windows passed,2026-10-29:** run20261029-155738-d847446d,
+task2cd973db-9769-4695-b601-9d75344ab0ad, producer7ca206f→target944a39c.
+235 native test executions/54 commands/67 files twice; independent audit и
+readonly reread совпали. [Результат и pins](plans/worker-self-update/main29-native-2026-10-29.md).
+Два authenticated V7 чтения после original expiry подтвердили current session
+того же child/Job/Store; foreign peer/spoof/version отказали, bytes/history прежние.
+Первая попытка772361c4 остаётся failed: test adapter28→20 исправлен и проверен.
+Runtime204 archived; runner/test controller завершены0. Installed0.2.0/source48
+прежний/active0/errors=null; рабочий worker оставить, desktop можно закрыть.
+Далее durable finalization/root/release/Active/permanent keeper/two generations/U2–U4.
+Public install off. Ниже — исторические checkpoint, их running статусы superseded.
+
 **Main29 retry running,2026-10-29:** run20261029-155738-d847446d,
 task2cd973db-9769-4695-b601-9d75344ab0ad, producer7ca206f→target944a39c.
 Run-info `.winbridge/update-preparation/main29-204-20261029-155738-d847446d/run-info.json`,
