@@ -1,5 +1,14 @@
 # Main29: current resident V7 через actual keeper
 
+**Main29 запущен, пока не завершён:** run20261029-151031-f024760d,
+task772361c4-ae8d-4ebe-8a6b-28fbce1df0fb, producerfcee32a→target944a39c.
+Run-info `.winbridge/update-preparation/main29-204-20261029-151031-f024760d/run-info.json`,
+log `.winbridge/review-2026-10-29/resident-main29-run.log`, runner302633/tool session6497.
+Test controller302634/.203:1144/state `/tmp/wb29-3rsanhqa`, production131887 прежний.
+Native supervisor/worker build passed, resident model checks начались. Не повторять
+submit: читать тот же task/context/key до terminal + independent reread.
+Installed0.2.0/source48 прежний; desktop не нужен, working worker оставить.
+
 2026-10-29. Source сценарий готов; **новый Windows gate ещё не запущен**.
 Предыдущие [Main27](main27-native-2026-10-29.md) и
 [Main28](main28-native-2026-10-29.md) terminal, их не повторять. Этот сценарий
@@ -38,6 +47,16 @@ Cold `UpdateJournal::activation_resident_snapshot` читает compact preparat
 содержимого, внешний schema20 — для wire; historical V4/V5/V6 extensions не
 дублируются. Все существующие views1–19 имеют прежние shapes. Live actor патчит
 тот же cold projection только при наличии actual original owner.
+
+## Actual producer running pins
+
+Clean sourcefcee32aedc90963766dd8df3089531857c663c82,
+archive `/mnt/hgfs/shared/WinBridge/sources/winbridge-20261029T150652Z-fcee32a-3ed7bff4.zip`,
+SHA1346a694ba4e27fb6b588b2502e50ece21436d2e42d9bcbe920869219fe1317b,
+manifest749106606a22924e472fba0cc38258bfeb39daf7460220f8e57179af672f74ac.
+UI собран перед export,1070 files, capture clean. Не экспортировать текущий
+последующий documentation commit вместо producer и не повторять этот run.
+Generated source pin `.winbridge/update-preparation/resident-main29-producer-fcee32a.json`.
 
 ## Pins и запуск
 

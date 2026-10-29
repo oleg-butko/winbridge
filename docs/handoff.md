@@ -1,5 +1,14 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Main29 запущен, пока не завершён:** run20261029-151031-f024760d,
+task772361c4-ae8d-4ebe-8a6b-28fbce1df0fb, producerfcee32a→target944a39c.
+Run-info `.winbridge/update-preparation/main29-204-20261029-151031-f024760d/run-info.json`,
+log `.winbridge/review-2026-10-29/resident-main29-run.log`, runner302633/tool session6497.
+Test controller302634/.203:1144/state `/tmp/wb29-3rsanhqa`, production131887 прежний.
+Native supervisor/worker build passed, resident model checks начались. Не повторять
+submit: читать тот же task/context/key до terminal + independent reread.
+Installed0.2.0/source48 прежний; desktop не нужен, working worker оставить.
+
 **Main29 source подготовлен,2026-10-29:** actual original keeper/current V7
 connection после lost Ready/expiry, foreign OS peer/JSON spoof/version refusal,
 unchanged snapshots и cold20 включены в отдельный native gate. Пока **не запускали**.
