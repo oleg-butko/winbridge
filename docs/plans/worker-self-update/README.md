@@ -1,5 +1,13 @@
 # Самообновление: план реализации U0–U4
 
+**Retained22→23 gate подготовлен,2026-10-29:** actual Main29 reference7ca206f→944a39c,
+fixed Finalization22To23, consistent copy/old22 init+status refusal/cold20/no-grants.
+[Сценарий и команда](finalization-migration-2026-10-29.md).23 portable reader tests/MSVC Clippy passed;
+Windows parser/storage preflightdce79220 passed, old22 image прежний,17.8GB free.
+Native migration пока не запускали; далее clean source export/один fenced task/
+independent reread, затем physical factory/V8/Active/keeper/U2–U4. Installed worker
+прежний, desktop не нужен, public install off.
+
 **Finalization foundation source,2026-10-29:** updater23/worker19. Root Committed
 и ReleasePending intent связаны одной SQLite transaction; pending блокирует
 следующий admission, Known-runtime serve отказывает до worker Store. Proposed V8

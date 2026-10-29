@@ -14,6 +14,12 @@ PROFILES = {
         task_prefix='native-main26-204-',
         reference_helper=('update-activation-lifetime-migration-proof.py', 'reference_from_main26'),
         reference_audits=('negativeAudits', 'controllerNegativeAudits', 'nativeMarkerNegativeAudits')),
+    'Finalization22To23': dict(prefix='finalization', schemas=(23, 22, 22),
+        reference_report_kind='activation_resident_main_native_gate',
+        task_prefix='native-main29-204-',
+        reference_helper=('update-activation-finalization-migration-proof.py', 'reference_from_main29'),
+        reference_audits=('negativeAudits', 'controllerNegativeAudits', 'lifetimeNegativeAudits',
+                          'readyLossNegativeAudits', 'residentNegativeAudits', 'nativeMarkerNegativeAudits')),
 }
 
 
