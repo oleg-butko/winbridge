@@ -1,5 +1,18 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Main27 Windows passed,2026-10-29:** merge5cbc7b0, run20261029-000947-c9ad6d6f/
+taskdf6803ac.208 native tests/49 commands/60 files twice/24+27+37+10 negatives;
+terminal succeeded0 и independent reread identical. [Pins, доказательства, далее](plans/worker-self-update/main27-native-2026-10-29.md).
+WIP observation fix подтверждён: same child13156/Store/authority/Job и original
+custody сохраняются после original240s, duplicate/no replay/cold NotResident
+проверены; root AwaitingController/local7, commit/release закрыты. Reader review
+добавил6 coherent key-alias refusals;5 focused Python tests passed. Source
+worker19/updater22/private6/supervisor27/view19. Следом **private Ready loss fault**
+(в Main27 false), затем permanent keeper role/commit/scoped release/two generations/
+U2–U4. Main27 terminal, не replay ради продолжения. Installed0.2.0/gen946f1128
+прежний/active0/errors=null; test controller231033 exited0, runtime204 archived.
+Desktop можно закрыть, рабочий worker оставить; public install off.
+
 **Ревью .203 ветки lifetime-runtime-204,2026-10-28:** commits90fc5b4/2a0bee6/49b6d7b
 проверены вместе с пользовательским WIP. [Разбор и продолжение](analysis/updater-lifetime-runtime-204-review-2026-10-28.md).
 964 workspace tests/17 ignored и45 Python regressions passed; TS/UI/fmt/scaffold,

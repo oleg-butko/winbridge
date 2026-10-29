@@ -1,5 +1,10 @@
 # Lifetime V6: same-child quarantine и независимый normal IPC
 
+**Обновление2026-10-29:** [Main27 Windows gate](main27-native-2026-10-29.md)
+пройден на reviewed merge5cbc7b0:208 native tests/60 files twice, independent
+reread identical. Фикс WIP observation подтверждён; private Ready loss/permanent
+keeper/commit/release ещё впереди. Ниже — исходный source checkpoint.
+
 2026-10-28, Debian .204, ветка `feat/updater-lifetime-runtime-204`, base main94629b2.
 После pull изучены22 новых main commits, в том числе original lifetime admission,
 Main26/OS/retained21→22 evidence. Предыдущий review f069697 уже включён в main.

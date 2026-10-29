@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**Обновление2026-10-29:** [Main27 Windows gate](main27-native-2026-10-29.md)
+пройден на reviewed merge5cbc7b0:208 native tests/60 files twice, independent
+reread identical. Фикс WIP observation подтверждён; private Ready loss/permanent
+keeper/commit/release ещё впереди. Ниже — исходный source checkpoint.
+
 **2026-10-28/.204:** [supervisor27/view19 и Main27](lifetime-actor-2026-10-28.md)
 подключают source entry/readonly reconciliation на исходном owner. Новый native
 gate подготовлен; его результат пока не подтверждён. Keeper role/commit/release

@@ -1,5 +1,12 @@
 # Архитектура WinBridge
 
+2026-10-29: [Main27 supervised quarantine](plans/worker-self-update/main27-native-2026-10-29.md)
+подтверждён на Windows. Тот же child/Store/authority/Job продолжает readonly
+службу после original verification deadline; позднее normal IPC не создаёт
+новый startup grant. Source19/22/private6/actor27/view19; installed runtime
+прежний. Private Ready loss, permanent keeper role, final root commit/scoped
+release и два поколения впереди. Public install off. Ниже — история checkpoint.
+
 2026-10-28, .204: [supervisor27/view19](plans/worker-self-update/lifetime-actor-2026-10-28.md)
 подключён к V6 source runtime: original guard потребляется один раз; subsequent
 Observe читает actual mode и может сохранить поздний факт, не создавая permit.

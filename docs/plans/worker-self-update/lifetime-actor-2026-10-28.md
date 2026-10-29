@@ -1,5 +1,10 @@
 # Lifetime supervisor27/view19 и новый Main27
 
+**Обновление2026-10-29:** [Main27 Windows gate](main27-native-2026-10-29.md)
+пройден на reviewed merge5cbc7b0:208 native tests/60 files twice, independent
+reread identical. Фикс WIP observation подтверждён; private Ready loss/permanent
+keeper/commit/release ещё впереди. Ниже — исходный source checkpoint.
+
 2026-10-28, Debian .204, ветка `feat/updater-lifetime-runtime-204`.
 Продолжение [source V6 runtime](lifetime-runtime-2026-10-28.md), base90fc5b4.
 

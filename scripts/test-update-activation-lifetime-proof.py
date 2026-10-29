@@ -59,7 +59,20 @@ class LifetimeEvidenceTests(unittest.TestCase):
     def test_causal_binding_and_all_negative_audits(self):
         key, count = p.audit_lifetime_case(fixture())
         self.assertEqual(key, uid(20))
-        self.assertEqual(count, 31)
+        self.assertEqual(count, 37)
+
+    def test_coherent_key_aliases_remain_invalid_after_all_hashes_and_copies_are_rebound(self):
+        case = fixture()
+        for alias in p.key_aliases(case):
+            with self.subTest(alias=alias):
+                bad = p.coherent_key_alias(case, alias)
+                command = bad['activationLifetime']['record']['command']
+                receipt = bad['activationLifetime']['record']['state']['receipt']
+                self.assertEqual(command['commandId'], alias)
+                self.assertEqual(receipt['commandId'], alias)
+                self.assertEqual(receipt['commandSha256'], p.digest('winbridge.activation.lifetime-command.v1', command))
+                with self.assertRaisesRegex(ValueError, 'Lifetime key/mode differs'):
+                    p.verify_lifetime(bad)
 
     def test_previous_profiles_remain_frozen(self):
         self.assertEqual(p.profile_schemas(p.PROFILE), (19, 22))

@@ -49,7 +49,10 @@ def verify_lifetime(case):
     need(set(command) == {'schemaVersion', 'commandId', 'mode', 'binding', 'issuedAtMs', 'deadlineAtMs'}
          and command['schemaVersion'] == 1 and command['mode'] == 'supervised_quarantine'
          and str(uuid.UUID(command['commandId'])) == command['commandId']
-         and command['commandId'] not in (prefix['command']['commandId'], receipt['updateId'], receipt['attemptId']), 'Lifetime key/mode differs')
+         and command['commandId'] not in (prefix['command']['commandId'], receipt['updateId'], receipt['attemptId'],
+             b['launchId'], b['updaterOwnerId'], b['compatibility']['generation'], b['compatibility']['context']['journalIncarnation'],
+             case['activationWriter']['writerRecord']['command']['commandId'],
+             case['activationWriter']['serviceRecord']['command']['commandId']), 'Lifetime key/mode differs')
     need(set(b) == {'updateId', 'attemptId', 'launchId', 'updaterOwnerId', 'updaterEpoch', 'rootRevision',
          'controllerCommandId', 'controllerRecordSha256', 'localRecordSha256', 'keeper', 'jobName', 'compatibility', 'authority'}, 'Unknown lifetime binding')
     source = local['intent']['source']
@@ -106,6 +109,32 @@ def verify_lifetime(case):
     return command['commandId']
 
 
+def coherent_key_alias(case, alias):
+    """Rebind all lifetime copies and hashes; local hash mismatch is no defence."""
+    command = case['activationLifetime']['record']['command']
+    old_key = command['commandId']
+    old_hash = digest('winbridge.activation.lifetime-command.v1', command)
+
+    def replace(value, old, new):
+        if isinstance(value, dict):
+            return {k: replace(v, old, new) for k, v in value.items()}
+        if isinstance(value, list):
+            return [replace(v, old, new) for v in value]
+        return new if value == old else value
+
+    bad = replace(case, old_key, alias)
+    new_hash = digest('winbridge.activation.lifetime-command.v1', bad['activationLifetime']['record']['command'])
+    return replace(bad, old_hash, new_hash)
+
+
+def key_aliases(case):
+    b = case['activationLifetime']['record']['command']['binding']
+    return (b['launchId'], b['updaterOwnerId'], b['compatibility']['generation'],
+            b['compatibility']['context']['journalIncarnation'],
+            case['activationWriter']['writerRecord']['command']['commandId'],
+            case['activationWriter']['serviceRecord']['command']['commandId'])
+
+
 def audit_lifetime_case(case):
     key = verify_lifetime(case)
     changes = [('record/command/mode', 'normal'), ('record/command/deadlineAtMs', 0), ('record/revision', True),
@@ -136,7 +165,14 @@ def audit_lifetime_case(case):
         except (ValueError, KeyError, TypeError, IndexError):
             continue
         raise ValueError('Lifetime observer accepted mutation: '+path)
-    return key, len(changes)
+    aliases = key_aliases(case)
+    for alias in aliases:
+        try:
+            verify_lifetime(coherent_key_alias(case, alias))
+        except (ValueError, KeyError, TypeError, IndexError):
+            continue
+        raise ValueError('Lifetime observer accepted coherent command-key alias: '+alias)
+    return key, len(changes) + len(aliases)
 
 
 def audit(proof, source, target, reservation, *, profile=PROFILE):

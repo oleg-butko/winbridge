@@ -106,8 +106,9 @@ Source worker19/updater22/supervisor27/view19/private6.
 Local service и controller используют тот же child/Store/lock/authority; Main26
 проверен на Windows. Actual retained21→22 migration/cold refusal также проверены.
 Lifetime admission, same-child V6 quarantine и independent normal IPC реализованы
-в source. Первый Main27 выявил ошибку последующего чтения; source fix reviewed,
-новый Windows gate ещё впереди. Permanent keeper role, final commit/scoped release
+в source. [Main27](docs/plans/worker-self-update/main27-native-2026-10-29.md)
+проверен на Windows: исправленное чтение, тот же процесс после original deadline,
+дедупликация и cold history подтверждены. Permanent keeper role, final commit/scoped release
 и U2–U4 не завершены.
 Public install выключен; самообновление целиком ещё не готово.
 Installed worker0.2.0/source48c834c и оба controller0.2.0 работают на1143;
