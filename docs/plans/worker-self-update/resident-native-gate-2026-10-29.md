@@ -1,5 +1,14 @@
 # Main29: current resident V7 через actual keeper
 
+**Main29 retry running,2026-10-29:** run20261029-155738-d847446d,
+task2cd973db-9769-4695-b601-9d75344ab0ad, producer7ca206f→target944a39c.
+Run-info `.winbridge/update-preparation/main29-204-20261029-155738-d847446d/run-info.json`,
+log `.winbridge/review-2026-10-29/resident-main29-retry-run.log`, runner304946/tool2998,
+test controller304947/.203:1144/state `/tmp/wb29-506_1vey`. Production131887 прежний.
+Предыдущая попытка772361c4 terminal failed из-за test adapter28→20; cleanup доказан.
+Новый run **не pass**, не повторять submit: читать тот же task до terminal/reread.
+Working0.2.0/source48 прежний, desktop не нужен, worker оставить; public install off.
+
 **Попытка20261029-151031-f024760d terminal FAILED.** Не продолжать/повторять её
 submit и не считать Main29 passed. Предыдущий running checkpoint ниже — история.
 
@@ -90,6 +99,16 @@ Cold `UpdateJournal::activation_resident_snapshot` читает compact preparat
 содержимого, внешний schema20 — для wire; historical V4/V5/V6 extensions не
 дублируются. Все существующие views1–19 имеют прежние shapes. Live actor патчит
 тот же cold projection только при наличии actual original owner.
+
+## Retry producer pins
+
+Clean commit7ca206f88a9e9d789c4009d3d1abb1cfde401a91,
+archive `/mnt/hgfs/shared/WinBridge/sources/winbridge-20261029T155611Z-7ca206f-895de5c2.zip`,
+SHA6bf175b1d57ebbcce5fec5ce0eafe4a3c004bc287aaa89ed46310a9ef54fdd6d,
+manifestdcc13b37be04e45c65886abc3d1eb1db48f953ca431e3959f79ee5fb19596f72,
+1072 files, UI rebuilt/clean export. Source pin
+`.winbridge/update-preparation/resident-main29-producer-7ca206f.json`.
+Target944a39c прежний. Следующий раздел — producer **failed первой попытки**.
 
 ## Actual producer running pins
 

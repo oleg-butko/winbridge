@@ -1,5 +1,14 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Main29 retry running,2026-10-29:** run20261029-155738-d847446d,
+task2cd973db-9769-4695-b601-9d75344ab0ad, producer7ca206f→target944a39c.
+Run-info `.winbridge/update-preparation/main29-204-20261029-155738-d847446d/run-info.json`,
+log `.winbridge/review-2026-10-29/resident-main29-retry-run.log`, runner304946/tool2998,
+test controller304947/.203:1144/state `/tmp/wb29-506_1vey`. Production131887 прежний.
+Предыдущая попытка772361c4 terminal failed из-за test adapter28→20; cleanup доказан.
+Новый run **не pass**, не повторять submit: читать тот же task до terminal/reread.
+Working0.2.0/source48 прежний, desktop не нужен, worker оставить; public install off.
+
 **Main29 завершился failed, не pass,2026-10-29:** run20261029-151031-f024760d/
 task772361c4.231 предварительная native проверка прошла. Same child11644 вошёл
 в lifetime, позднее reconciliation завершилось; первый Internal28 response
