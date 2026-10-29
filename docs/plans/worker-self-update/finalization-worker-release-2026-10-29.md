@@ -90,6 +90,15 @@ Logs/measurement/readonly installed Info:
 17,916,817,408. Очистка не требовалась. Readonly installed Info подтвердил прежние
 source48/build1793126009319459400/gen946/context5a8e и connected/error=null.
 
+Для actual Windows предварительной проверки подготовлен
+`scripts/test-update-worker-release.ps1`: fixed19/23, clean source manifest,
+retained build-cache lock, bundled/offline SQLite,16 тестов в двух группах
+(6 SQL +10 lifetime, включая config FileShare assertions). Build и tests имеют
+отдельные времена/логи; artifact SHA проверяется до/после, report+ready создаются
+без перезаписи. SourceDirectory — новый локальный каталог из точного ZIP;
+рабочие src/runtime и установленный worker сценарий не меняет. Это ограниченный
+native unit gate, не end-to-end V8. На момент подготовки сценарий ещё не запускался.
+
 ## Продолжение без потери контекста
 
 1. Подключить bounded coordinator mailbox к original RunningLocalService;
