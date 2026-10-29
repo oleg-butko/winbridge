@@ -4,7 +4,7 @@ use crate::{
     store::{ActivationJournal, JournalActivationPermit},
     LocalService, Result,
 };
-use std::{path::PathBuf, time::Instant};
+use std::{fs::File, path::PathBuf, time::Instant};
 use winbridge_platform::infrastructure::PinnedProcess;
 use winbridge_protocol::update::*;
 use winbridge_update::{
@@ -14,6 +14,7 @@ use winbridge_update::{
 
 pub(super) struct Receiver {
     pub config: PathBuf,
+    pub config_pin: File,
     pub directory: PathBuf,
     pub writer: ActivationWriterSnapshot,
     pub parent: PinnedProcess,
@@ -27,6 +28,7 @@ impl Receiver {
     pub async fn run(self) -> Result<()> {
         let Self {
             config,
+            config_pin,
             directory,
             writer,
             parent,
@@ -87,6 +89,10 @@ impl Receiver {
         timing.mark("service_state_transferred", None, None);
         let service = LocalService::prepare(prepared, &config, guard, &mut checkpoint)
             .map_err(|e| e.to_string())?;
+        // LocalService now owns its independently checked share-read-only pin.
+        // The initial native receiver must not retain a hidden second pin for
+        // the entire supervised/Active lifetime. No writable gap is introduced.
+        service.retire_receiver_config_pin(config_pin)?;
         timing.mark("worker_initialized", None, None);
         let mut running = service.start().await.map_err(|e| e.to_string())?;
         timing.mark("local_ipc_bound", None, None);

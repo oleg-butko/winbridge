@@ -1,5 +1,15 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Receiver config pin handoff source,2026-10-29:** лишний File из outer native
+receive больше не держится весь срок service: передан V4 receiver и закрыт после
+File-ID check уже удерживаемого LocalService pin. Verification/quarantine по-прежнему
+readonly.7 lifetime tests/2 новых, Linux/MSVC worker all-target Clippy passed;
+Windows FileShare assertions ещё не исполнялись — включить в следующий V8 gate.
+[Ревью и следующие границы](plans/worker-self-update/keeper-finalization-review-2026-10-29.md). Native22→23 ниже остаётся
+frozenfcc49dd; этот runtime refactor в нём не проверялся. Source19/23, V8/Active/
+physical factory/keeper conversion не включены; installed worker прежний,
+worker оставить, desktop не нужен, public install off.
+
 **Native retained22→23 passed,2026-10-29:** run20261029-202033-a2132bf8,
 task18e1625b-d2bc-44d8-9b0b-949446ab685c succeeded0, producerfcc49dd.
 Actual Windows copy/backup/old22 init+status refusal/cold20 passed;4 result files

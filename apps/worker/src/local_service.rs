@@ -270,6 +270,22 @@ impl LocalService {
             _config_pin: pin,
         })
     }
+    /// Retire only the original receiver's duplicate AFTER the same config is
+    /// pinned here. This does not release this service's pin or enable writes.
+    #[cfg(any(windows, test))]
+    pub(crate) fn retire_receiver_config_pin(&self, receiver_pin: File) -> Result<()> {
+        let incoming =
+            winbridge_platform::file_identity(&receiver_pin).map_err(|e| e.to_string())?;
+        let retained =
+            winbridge_platform::file_identity(&self._config_pin).map_err(|e| e.to_string())?;
+        if incoming != retained {
+            return Err(
+                "Receiver config pin differs from retained LocalService config; no handoff".into(),
+            );
+        }
+        drop(receiver_pin);
+        Ok(())
+    }
     pub fn command(&self) -> &WorkerServiceActivationCommand {
         &self.command
     }

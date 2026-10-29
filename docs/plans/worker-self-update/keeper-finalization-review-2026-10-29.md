@@ -1,5 +1,17 @@
 # Следующий keeper/finalization: ревью границ после lifetime
 
+2026-10-29, config pin handoff source: начальный native receiver передаёт свой
+File в V4 Receiver; тот закрывает его только после LocalService::prepare и
+сверки File ID с уже удерживаемым LocalService pin. Ранее первый File оставался
+в outer receive().await на весь срок worker и помешал бы будущему Active config
+save даже после освобождения LocalService pin. В verification/quarantine запись
+по-прежнему закрыта.7 lifetime tests (2 новых) и Linux/MSVC worker all-target
+Clippy/update-validation/-D warnings прошли; Windows FileShare assertions пока
+только скомпилированы, actual execution включить в следующий finalization gate.
+Это source preparation, V8/Active и освобождение последнего service pin не включены.
+Evidence `.winbridge/review-2026-10-29/finalization-pin-*`.
+
+
 2026-10-29, продолжение: [Main29](main29-native-2026-10-29.md) подтвердил readonly
 V7/actor28 и original physical custody. [Ledger23 foundation](finalization-ledger-2026-10-29.md)
 добавляет pure finalization contract, atomic SQL decision и pending startup/admission
@@ -134,3 +146,34 @@ Job limits или запускать новый supervisor из domain стар�
 явная стратегия fresh updater/schema negotiation до U4, чтобы новая сборка не
 зависела от способности старого updater интерпретировать будущую схему.
 Оставшиеся U2 fault matrix, U3 UI/attention и U4 actual installed update обязательны.
+
+## Уточнения перед mutable V8 после native22→23
+
+- RunningLocalService владеет controller task и service config pin; ordinary
+  IPC Worker имеет только Arc. Mutable finalization надо сериализовать через
+  original running coordinator/mailbox, а не пытаться освободить его ресурсы
+  из случайного IPC task. Actual LocalPeer/keeper Pin сохраняются как opaque
+  authority; JSON PID, receipt или cold projection не создают её.
+- Сначала same Store lock, затем mode lock — это текущий порядок lifetime seal.
+  Info уже держит Store. Новый permission gate не должен брать mode lock перед
+  Store в другом пути. Dispatch/admission остаются закрыты до SQL+mode+pins и
+  согласованного readiness control listener; observation не открывает gate.
+- Static origin и dynamic permissions — разные свойства. Не заменять все
+  local_activation.is_some/is_none механически: network manager уже живёт в
+  RunningLocalService, второй network::start создал бы дубликаты; Ctrl+C для
+  background resident и первоначальная initialization имеют отдельную семантику.
+  Info/write/scheduler flags, напротив, должны отражать typed runtime mode.
+- Root Committed/pending23 требует нового receiver scope: старые V5/V6 readers
+  правильно требуют AwaitingController и не должны неявно менять свой контракт.
+  Active watchdog затем не зависит от старого updater epoch/config-file hash:
+  новое update и сохранение настроек с ручным restart — законные изменения.
+- SupervisorPhase::Stopped сейчас связан с завершением coordinator loop. Не
+  выдавать его молча за новую persistent keeper role. При несовместимом изменении
+  durable semantics нужна следующая явная schema и retained-copy/old-reader gate.
+  Minimal next-keeper bootstrap должен быть отделён от будущего journal format,
+  иначе old keeper окажется обязан понимать каждую новую SQLite schema.
+
+Следом actual V8 receiver/effect/observation и original consuming factory,
+actor/current view, root/release/Active native gate с config-save и old unread
+Ready. Затем keeper retirement/authority release и two generations. Public
+install и оставшиеся U2–U4 остаются впереди; installed worker обновлять пока не нужно.

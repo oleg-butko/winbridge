@@ -374,3 +374,88 @@ async fn a_changed_actual_worker_authority_blocks_entry_and_resident_continuatio
         running.close().await.unwrap();
     }
 }
+
+#[test]
+fn receiver_config_pin_handoff_retains_the_real_service_pin_until_service_drop() {
+    let temp = tempfile::tempdir().unwrap();
+    let service = fixture(temp.path());
+    let path = service
+        .worker
+        .config_path
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .clone();
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(1);
+    }
+    let initial = options.open(&path).unwrap();
+    let id = winbridge_platform::file_identity(&initial).unwrap();
+    assert_eq!(
+        winbridge_platform::file_identity(&service._config_pin).unwrap(),
+        id
+    );
+    #[cfg(windows)]
+    assert!(std::fs::OpenOptions::new().write(true).open(&path).is_err());
+    service.retire_receiver_config_pin(initial).unwrap();
+    assert_eq!(
+        winbridge_platform::file_identity(&service._config_pin).unwrap(),
+        id
+    );
+    assert!(matches!(
+        *service
+            .worker
+            .local_activation
+            .as_ref()
+            .unwrap()
+            .lifetime
+            .lock()
+            .unwrap(),
+        ServiceLifetime::Verification
+    ));
+    #[cfg(windows)]
+    assert!(
+        std::fs::OpenOptions::new().write(true).open(&path).is_err(),
+        "Retiring the duplicate must not expose a writable config"
+    );
+    drop(service);
+    assert!(
+        std::fs::OpenOptions::new().write(true).open(&path).is_ok(),
+        "No hidden receiver pin may survive LocalService drop"
+    );
+}
+
+#[test]
+fn receiver_config_pin_handoff_refuses_a_foreign_file_without_releasing_service_pin() {
+    let temp = tempfile::tempdir().unwrap();
+    let service = fixture(temp.path());
+    let path = temp.path().join("foreign-config.json");
+    std::fs::write(&path, b"{}\n").unwrap();
+    let foreign = std::fs::File::open(&path).unwrap();
+    let retained = winbridge_platform::file_identity(&service._config_pin).unwrap();
+    assert_ne!(
+        retained,
+        winbridge_platform::file_identity(&foreign).unwrap()
+    );
+    assert!(service.retire_receiver_config_pin(foreign).is_err());
+    assert_eq!(
+        retained,
+        winbridge_platform::file_identity(&service._config_pin).unwrap()
+    );
+    assert_eq!(
+        service
+            .worker
+            .store()
+            .unwrap()
+            .active_worker_update()
+            .unwrap()
+            .unwrap()
+            .phase,
+        winbridge_protocol::update::WorkerUpdatePhase::Quiesced
+    );
+}

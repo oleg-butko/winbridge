@@ -376,6 +376,7 @@ mod native {
         channel::write(&mut stream, &response, remaining()?).await?;
         service::Receiver {
             config,
+            config_pin,
             directory,
             writer: writer_snapshot,
             parent,
