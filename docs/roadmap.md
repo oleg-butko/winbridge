@@ -1,5 +1,16 @@
 # Постепенная реализация и расширение
 
+**Ревью .203 ветки lifetime-runtime-204,2026-10-28:** commits90fc5b4/2a0bee6/49b6d7b
+проверены вместе с пользовательским WIP. [Разбор и продолжение](analysis/updater-lifetime-runtime-204-review-2026-10-28.md).
+964 workspace tests/17 ignored и45 Python regressions passed; TS/UI/fmt/scaffold,
+Linux/MSVC all-target Clippy и generated contracts прошли. Исходный Main27 run20261028-224638-3e951af3 failed: entry confirmed, но
+позднее наблюдение вызывало V5 Issued-only reader. Fix использует original owned
+lifetime snapshot до/после normal IPC; регрессионный тест passed. Для Windows
+подтверждения нужен один новый Main27 с fixed supervisor, distinct V6 target90fc5b4,
+stable runtime-test-204 и test controller.203:1144. До terminal passed + independent
+reread native V6 не объявлять завершённым. Installed worker прежний; preflight
+PID2532/slot processes0/24GB свободно. Worker оставить, desktop/окон нет.
+
 2026-10-28, .204: [supervisor27/view19](plans/worker-self-update/lifetime-actor-2026-10-28.md)
 подключает original lifetime entry и readonly reconciliation. Source готов к
 новому Main27/19+22; native gate ещё не выполнен. Затем private Ready fault,

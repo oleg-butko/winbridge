@@ -60,9 +60,12 @@ metadata. Рабочий worker PID2532 по точному installed path ос�
 проверками25,597,980,672 bytes; cache cleanup не требовался. Повторно используется
 native cache `20261017-061527-f4639971`, Windows directories не удаляются.
 
-**Actual Main27 ещё не выполнен.** Результат и exact pins будут добавлены после
-одного запуска и независимого перечитывания. Рабочий worker оставить запущенным;
-desktop и тестовые окна не нужны.
+**Первый actual Main27 выполнен с ошибкой**, run20261028-224638-3e951af3:
+entry подтверждён, позднее чтение результата ошибочно требовало V5 Issued.
+В49b6d7b заменён reader на original owned lifetime snapshot до/после normal IPC;
+[ревью .203 и регрессия](../../analysis/updater-lifetime-runtime-204-review-2026-10-28.md)
+подтверждают source fix. Нужен новый terminal Main27 и independent reread; прежний
+failed report сохраняется. Рабочий worker оставить, desktop и тестовые окна не нужны.
 
 ## Следом
 
