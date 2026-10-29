@@ -3,7 +3,17 @@
 2026-10-29. Следующий source шаг после [Main27](main27-native-2026-10-29.md).
 Source worker19/updater22/private6/supervisor27/view19 сохраняются. Новых public
 RPC/support/schema/actor версий нет. Installed worker0.2.0 не меняется.
-**Полный Main28 на Windows пока не выполнен**; ниже — реализация и план gate.
+**Main28 запущен, пока не завершён:** run20261029-091025-be7fc543,
+task393a8003-e229-4b41-93c7-b65eea2fa992. Не повторять submit: читать тот же task.
+Run-info `.winbridge/update-preparation/main28-204-20261029-091025-be7fc543/run-info.json`,
+log `.winbridge/review-2026-10-29/ready-loss-main28-run.log`. Runner PID247139,
+test controller247140 на.203:1144/state `/tmp/wb28-x7geapm4`; production131887
+прежний. До terminal + independent reread gate не объявлять пройденным.
+
+Clean producer0426a1338ac8e2ba4fbec36405fd331d44fceaee,
+ZIP `winbridge-20261029T090948Z-0426a13-1eb6a3ef.zip`,
+SHAe5fb588d41c5f88e1ba460c95650307fd3764e382160bbd1f1c553d07b05e62f.
+Distinct target90fc5b4 с pins из Main27 оставлен прежним.
 
 ## Fault boundary
 
@@ -80,7 +90,7 @@ Negative audits:37 lifetime (включая6 coherent key aliases) +15 Ready-los
 
 ```bash
 python3 scripts/run-update-lifetime-ready-loss-main-native.py \
-  --source-archive <clean-producer.zip> \
+  --source-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261029T090948Z-0426a13-1eb6a3ef.zip \
   --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261028T224438Z-90fc5b4-273ea619.zip \
   --cache-run 20261017-061527-f4639971 \
   --worker17-reference 'K:\VMs\shared\WinBridge\releases\20261026-182213-6cd81f3e\winbridge-worker.exe' \
@@ -127,3 +137,14 @@ permanent keeper role (освободить file/config pins и updater journal 
 удержать original Job/process/channel), final root commit/scoped maintenance
 release, next-update delegation/max2 keepers/two generations и оставшиеся U2–U4.
 Public install off. Рабочий worker оставить; desktop не нужен.
+
+
+Повторное readonly чтение после terminal (не выполняет Windows RPC):
+
+```bash
+python3 scripts/verify-update-lifetime-ready-loss-main-native.py \
+  --profile worker19-updater22 \
+  --run-info .winbridge/update-preparation/main28-204-20261029-091025-be7fc543/run-info.json \
+  --source-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261029T090948Z-0426a13-1eb6a3ef.zip \
+  --target-archive /mnt/hgfs/shared/WinBridge/sources/winbridge-20261028T224438Z-90fc5b4-273ea619.zip
+```

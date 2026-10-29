@@ -1,5 +1,17 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Main28 запущен, ещё не завершён:** run20261029-091025-be7fc543,
+task393a8003-e229-4b41-93c7-b65eea2fa992; clean producer0426a13 → target90fc5b4.
+[Команды, source pins и границы](plans/worker-self-update/lifetime-ready-loss-2026-10-29.md).
+Наблюдать ту же задачу/процесс, не resubmit. Run-info:
+`.winbridge/update-preparation/main28-204-20261029-091025-be7fc543/run-info.json`,
+log `.winbridge/review-2026-10-29/ready-loss-main28-run.log`.
+Runner PID247139, test controller247140 на.203:1144, state `/tmp/wb28-x7geapm4`.
+Production controller131887 и installed worker прежние. Пока нет terminal +
+independent reread, native partial-Ready не объявлять подтверждённым. Worker
+оставить, desktop/окон нет; public install off. В следующем goal turn проверить
+живой runner/task, при terminal проверять сохранённый результат readonly.
+
 **Main28 source подготовлен,2026-10-29:** exact-scope `update-validation` hook
 оставляет private Ready body непрочитанным; original guard/Job/channel/window
 сохраняются. Native fixture ждёт durable Indeterminate и original expiry, затем
