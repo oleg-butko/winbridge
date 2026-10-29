@@ -87,7 +87,7 @@ python3 scripts/run-update-finalization-migration-native.py \
 ```
 
 Сохранить run-info/acceptance и наблюдать тот же Task ID до terminal. Observation
- timeout не даёт права повторно submit. Затем readonly
+timeout не даёт права повторно submit. Затем readonly
 `verify-update-finalization-migration-native.py` с теми же archives и новым
 run-info, без Windows replay. Отдельно обновить этот статус/handoff/roadmap.
 
@@ -130,7 +130,7 @@ actual build/gen/context независимо совпадают. Первона
 новых параметров; fixed new profile требует original projection context.
 
 Portable tests7 в новом reader/24 в четырёх readers passed. Первый unittest
- discover дал0 из-за имён с дефисами; проверен только explicit importlib suite,
+discover дал0 из-за имён с дефисами; проверен только explicit importlib suite,
 0 не посчитан как pass. Fresh installed Info после проверки: source48c834c/
 gen946f1128/context5a8eb173 прежние, active0/errors=null.
 Windows available17654849536→17868443648 bytes; final Debian15987560448/shared
@@ -139,8 +139,11 @@ Windows available17654849536→17868443648 bytes; final Debian15987560448/shared
 Original runner322089/tool69943 terminal exit1 на reader exception; native task
 succeeded0 и raw report.passedtrue. Fixed standalone audit exit0 —
 `.winbridge/review-2026-10-29/finalization-migration-fixed-audit-v2.json`.
-Затем повторить только readonly verifier, сравнить JSON и записать reader
-commit/source SHA в create-only checkpoint. Terminal task18e1625b не submit снова.
+Повторный readonly verifier дал идентичный JSON. Create-only checkpoint
+`verified-after-reader-review.json` в local run directory связывает audit с
+reader commit7b6230c и SHA восьми reader sources; originalRunnerExitCode1 и
+nativeTaskExitCode0 записаны раздельно. Старые actual20→21 и21→22 reread из
+того же shared reader сохранили прежние audits; Windows RPC не выполнялись. Terminal task18e1625b не submit снова.
 Рабочий worker оставить, desktop можно закрыть; тестовых окон не было.
 
 Следующий эффект по плану не сдан: physical factory/V8/Active/keeper/U2–U4.

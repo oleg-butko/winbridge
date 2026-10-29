@@ -3,8 +3,9 @@
 **Native retained22→23 passed,2026-10-29:** run20261029-202033-a2132bf8,
 task18e1625b-d2bc-44d8-9b0b-949446ab685c succeeded0, producerfcc49dd.
 Actual Windows copy/backup/old22 init+status refusal/cold20 passed;4 result files
-verified twice,34 negative audits +142 reference audits. Native task выполнен
-один раз. Первоначальный reader перепутал view.build (historical compiler record)
+verified twice,34 negative audits +142 reference audits; повторное чтение
+идентично, reader7b6230c/SHA pinned в verified-after-reader-review.json.
+Native task выполнен один раз. Первоначальный reader перепутал view.build (historical compiler record)
 с producer BuildIdentity; исправлен со сверкой всей projection с pinned Main29,
 7/24 portable tests passed. Перезапуск Windows не нужен. Исходный Python runner
 завершён1 на ошибке reader; standalone fixed audit passed, это не worker failure.
