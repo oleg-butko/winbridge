@@ -17,6 +17,8 @@ pub mod controller;
 pub(crate) mod controller_probe;
 mod controller_view;
 pub mod lifetime;
+#[cfg(all(feature = "update-validation", any(windows, test)))]
+pub(crate) mod lifetime_ready_loss;
 mod lifetime_view;
 pub(crate) use lifetime_view::view as lifetime_view;
 #[cfg(any(windows, test))]

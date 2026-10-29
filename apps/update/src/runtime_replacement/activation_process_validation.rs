@@ -9,6 +9,10 @@ use std::{
 };
 use winbridge_protocol::update::WorkerShutdownState;
 type Result<T> = std::result::Result<T, String>;
+#[path = "activation_lifetime_ready_loss.rs"]
+mod ready_loss;
+#[cfg(windows)]
+pub(super) use ready_loss::prepare as prepare_lifetime_ready_loss;
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Input {

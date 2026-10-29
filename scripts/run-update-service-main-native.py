@@ -48,10 +48,11 @@ def submit_fenced(native, endpoint, request):
         return json.loads(native.exact(stream, length))
 
 
-def main(controller=False, lifetime=False):
+def main(controller=False, lifetime=False, ready_loss=False):
+    lifetime = lifetime or ready_loss
     controller_gate=controller or lifetime
-    mode='Main27' if lifetime else ('Main26' if controller_gate else 'Main25')
-    namespace='main27-204' if lifetime else ('main26-204' if controller_gate else 'main25-204')
+    mode='Main28' if ready_loss else ('Main27' if lifetime else ('Main26' if controller_gate else 'Main25'))
+    namespace='main28-204' if ready_loss else ('main27-204' if lifetime else ('main26-204' if controller_gate else 'main25-204'))
     parser = argparse.ArgumentParser(description=f'Run one pinned {mode} fixture through the installed worker; never install.')
     parser.add_argument('--source-archive', required=True, type=Path)
     parser.add_argument('--target-archive', required=True, type=Path)
@@ -65,7 +66,7 @@ def main(controller=False, lifetime=False):
     args = parser.parse_args()
     native = load('main25_native', 'validate-workflow-native.py')
     health = load('main25_archive', 'validate-update-health-actor-native.py')
-    checks = load('main_gate_checks', 'update-activation-lifetime-proof.py' if lifetime else ('update-activation-controller-proof.py' if controller_gate else 'update-activation-service-proof.py'))
+    checks = load('main_gate_checks', 'update-activation-lifetime-ready-loss-proof.py' if ready_loss else ('update-activation-lifetime-proof.py' if lifetime else ('update-activation-controller-proof.py' if controller_gate else 'update-activation-service-proof.py')))
     reference = load('main25_references', 'worker-migration-reference.py').reference_for_profile(
         args.profile, args.worker17_reference, args.worker17_reference_sha256)
     source, target = map(health.archive_pin, (args.source_archive, args.target_archive))
@@ -103,9 +104,9 @@ def main(controller=False, lifetime=False):
     instance = namespace+'-' + uuid.uuid4().hex[:12]
     url = 'ws://' + host + ':1144'
     # Keep Unix socket paths short; never change a persistent controller config.
-    state = Path(tempfile.mkdtemp(prefix='wb27-' if lifetime else ('wb26-' if controller_gate else 'wb25-')))
+    state = Path(tempfile.mkdtemp(prefix='wb28-' if ready_loss else ('wb27-' if lifetime else ('wb26-' if controller_gate else 'wb25-'))))
     test_config = state / 'controller.json'
-    write_new(test_config, {'schemaVersion': 1, 'instanceId': instance, 'nodeId': ('main27-debian-'+host.rsplit('.',1)[-1] if lifetime else ('main26-debian-'+host.rsplit('.',1)[-1] if controller_gate else 'main25-debian-204')),
+    write_new(test_config, {'schemaVersion': 1, 'instanceId': instance, 'nodeId': ('main28-debian-'+host.rsplit('.',1)[-1] if ready_loss else ('main27-debian-'+host.rsplit('.',1)[-1] if lifetime else ('main26-debian-'+host.rsplit('.',1)[-1] if controller_gate else 'main25-debian-204'))),
               'stateDirectory': str(state), 'controller': {'listenAddress': host + ':1144', 'workerNodeId': 'shutdown-main-test'}, 'projects': []})
     test_endpoint = state / ('controller-' + instance + '.sock')
     log = (local / 'controller.log').open('x')
@@ -128,7 +129,7 @@ def main(controller=False, lifetime=False):
                     for path in (args.source_archive, args.target_archive)]
         migration_arg = (' -Worker17Reference ' + ps(str(reference))
                          + ' -Worker17ReferenceSha256 ' + ps(args.worker17_reference_sha256)) if reference else ''
-        gate_switch='ActivationLifetimeGate' if lifetime else ('ActivationControllerGate' if controller_gate else 'ActivationServiceGate')
+        gate_switch='ActivationLifetimeReadyLossGate' if ready_loss else ('ActivationLifetimeGate' if lifetime else ('ActivationControllerGate' if controller_gate else 'ActivationServiceGate'))
         script = f'''$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $local={ps(str(work))};$archive={ps(archives[0])};$target={ps(archives[1])}
@@ -206,7 +207,7 @@ exit $LASTEXITCODE
             with (local/'controller-activity.jsonl').open('xb') as saved_activity:
                 saved_activity.write(b''.join(captured.values()));saved_activity.flush();os.fsync(saved_activity.fileno())
             write_new(local/'controller-activity-sources.json',{name:dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()) for name,raw in captured.items()})
-        verifier='verify-update-lifetime-main-native.py' if lifetime else ('verify-update-controller-main-native.py' if controller_gate else 'verify-update-service-main-native.py')
+        verifier='verify-update-lifetime-ready-loss-main-native.py' if ready_loss else ('verify-update-lifetime-main-native.py' if lifetime else ('verify-update-controller-main-native.py' if controller_gate else 'verify-update-service-main-native.py'))
         result = subprocess.run([sys.executable, str(ROOT/'scripts'/verifier), '--profile', args.profile,
                     '--run-info', str(local/'run-info.json'), '--source-archive', str(args.source_archive), '--target-archive', str(args.target_archive)], capture_output=True, text=True)
         (local / 'independent-audit.stdout').write_text(result.stdout)

@@ -1,5 +1,17 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Main28 source подготовлен,2026-10-29:** exact-scope `update-validation` hook
+оставляет private Ready body непрочитанным; original guard/Job/channel/window
+сохраняются. Native fixture ждёт durable Indeterminate и original expiry, затем
+один normal IPC подтверждает тот же command с revision2. [Реализация, проверки, gate](plans/worker-self-update/lifetime-ready-loss-2026-10-29.md).
+969 workspace tests/17 ignored,52 Python tests, Linux/MSVC Clippy/fmt/diff passed.
+Main27 readonly reread unchanged; его normal proof не переименовывается в fault.
+Final PS/storage/slot preflight passed: task52def8ef, slot0/K:22.9GB; installed
+worker прежний/idle. Source19/22/private6/actor27/view19, public install off.
+**Actual Main28 пока не выполнен:** clean export → one native run → independent
+reread, затем permanent keeper/commit/scoped release/two generations/U2–U4.
+Рабочий worker оставить, desktop и окна не нужны. Старые gates terminal, не replay.
+
 **Main27 Windows passed,2026-10-29:** merge5cbc7b0, run20261029-000947-c9ad6d6f/
 taskdf6803ac.208 native tests/49 commands/60 files twice/24+27+37+10 negatives;
 terminal succeeded0 и independent reread identical. [Pins, доказательства, далее](plans/worker-self-update/main27-native-2026-10-29.md).

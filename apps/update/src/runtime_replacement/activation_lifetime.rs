@@ -132,6 +132,8 @@ impl ActivationProcessGuard {
                 .ok_or_else(|| "Original lifetime delivery window expired".to_string())
         };
         let command = &permit.record().command;
+        #[cfg(feature = "update-validation")]
+        let ready_loss = validation::prepare_lifetime_ready_loss(&self.record, command)?;
         let stream = self
             .channel
             .as_mut()
@@ -145,6 +147,12 @@ impl ActivationProcessGuard {
             remaining()?,
         )
         .await?;
+        #[cfg(feature = "update-validation")]
+        if let Some(loss) = ready_loss {
+            loss.interrupt(&self.record, command, stream, deadline)
+                .await?;
+            return Err("Lifetime Ready fault cannot confirm a delivery".into());
+        }
         let ready: channel::LifetimeReady = channel::read(stream, remaining()?).await?;
         channel::validate_lifetime_ready(&ready, command)?;
         timing.mark("private_ready_verified", None, None);

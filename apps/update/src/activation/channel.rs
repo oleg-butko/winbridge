@@ -25,7 +25,7 @@ pub use winbridge_protocol::update::{
     ACTIVATION_STATE_HANDOFF_MARKER as HANDOFF_MARKER,
     ACTIVATION_WRITER_CONTRACT as WRITER_CONTRACT, ACTIVATION_WRITER_MARKER as WRITER_MARKER,
 };
-const MAX_BYTES: usize = 32768;
+pub(crate) const MAX_BYTES: usize = 32768;
 
 pub fn validate_lifetime_command(
     message: &LifetimeCommand,

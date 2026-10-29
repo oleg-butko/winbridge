@@ -34,7 +34,7 @@ def verify_main_selection(command, log):
          and summaries[0].startswith('ok. 1 passed; 0 failed; 0 ignored;'), 'Main27 did not execute exactly once')
 
 
-def verify_lifetime(case):
+def verify_lifetime(case, *, ready_loss=False):
     p, cold = case['activationLifetime'], case['coldActivationLifetime']
     local, prefix = case['activationWriter']['record'], case['activationController']['record']
     controller.typed(p)
@@ -45,7 +45,7 @@ def verify_lifetime(case):
     command, receipt = saved['command'], saved['state']['receipt']
     b = command['binding']
     need(set(saved) == {'schemaVersion', 'revision', 'command', 'state', 'updatedAtMs'} and saved['schemaVersion'] == 1
-         and saved['revision'] == 1 and saved['state']['phase'] == 'confirmed', 'Lifetime causal record differs')
+         and saved['revision'] == (2 if ready_loss else 1) and saved['state']['phase'] == 'confirmed', 'Lifetime causal record differs')
     need(set(command) == {'schemaVersion', 'commandId', 'mode', 'binding', 'issuedAtMs', 'deadlineAtMs'}
          and command['schemaVersion'] == 1 and command['mode'] == 'supervised_quarantine'
          and str(uuid.UUID(command['commandId'])) == command['commandId']
@@ -72,15 +72,21 @@ def verify_lifetime(case):
                     commandSha256=digest('winbridge.activation.lifetime-command.v1', command), keeper=b['keeper'], jobName=b['jobName'],
                     compatibility=dict(b['compatibility'], observedAtMs=receipt['compatibility']['observedAtMs']), authority=b['authority'], mode=command['mode'])
     need(receipt == expected and command['issuedAtMs'] <= receipt['compatibility']['observedAtMs'] < command['deadlineAtMs'], 'Lifetime entry receipt differs/outside original window')
-    need(p['history'] == [dict(schemaVersion=1, revision=0, command=command, state=dict(phase='issued'), updatedAtMs=command['issuedAtMs']), saved]
+    issued = dict(schemaVersion=1, revision=0, command=command, state=dict(phase='issued'), updatedAtMs=command['issuedAtMs'])
+    expected_history = [issued, saved]
+    if ready_loss:
+        unknown = p['readyLoss']['unknownRecord']
+        expected_history = [issued, unknown, saved]
+    need(p['history'] == expected_history
          and saved['updatedAtMs'] >= receipt['compatibility']['observedAtMs'], 'Lifetime skipped/reissued causal history')
+    need(('readyLoss' in p) == ready_loss, 'Main27 cannot claim the separate Ready-loss fault')
     for name in ('entered', 'afterExpiry', 'duplicate'):
         view = p[name]
         v = view['activationLifetime']
         need(view['schemaVersion'] == 19 and view['driverActive'] is False and view['driverError'] is None
              and view['update'] == case['activationController']['confirmed']['update'] and view['update']['phase'] == 'awaiting_controller'
              and v['phase'] == 'observed' and v['durablePhase'] == 'confirmed' and v['commandId'] == command['commandId']
-             and v['attemptId'] == b['attemptId'] and v['revision'] == 1
+             and v['attemptId'] == b['attemptId'] and v['revision'] == saved['revision']
              and v['savedReceipt'] == receipt and v['observedReceipt'] == receipt
              and v['residentProcess'] == b['compatibility']['identity']['process']
              and v['processAlive'] is True and v['originalCustodyHeld'] is True
@@ -98,7 +104,8 @@ def verify_lifetime(case):
          and all(info[k] is False for k in ('maintenanceAvailable', 'workflowAvailable', 'snapshotImportAvailable', 'snapshotDeltaAvailable', 'snapshotResumeAvailable')), 'Lifetime opened dispatch or changed loaded identity')
     need(type(p['savedLifetimeCommandCount']) is int and p['savedLifetimeCommandCount'] == 1
          and all(p[k] is True for k in ('lostLifetimeDispatchAckSentOnce', 'submitRefusedAfterExpiry', 'sameJobVerified'))
-         and all(p[k] is False for k in ('rootCommitted', 'maintenanceReleased', 'privateReadyLossTested'))
+         and all(p[k] is False for k in ('rootCommitted', 'maintenanceReleased'))
+         and p['privateReadyLossTested'] is ready_loss
          and p['physicalRecord'] == local and p['workerBytesAfter'] == case['activationWriter']['workerBytesAfter'], 'Lifetime replayed/mutated worker state or overstated fault coverage')
     v = cold['view']['activationLifetime']
     need(cold['view']['schemaVersion'] == 19 and cold['view']['update'] == p['afterExpiry']['update']
@@ -135,8 +142,8 @@ def key_aliases(case):
             case['activationWriter']['serviceRecord']['command']['commandId'])
 
 
-def audit_lifetime_case(case):
-    key = verify_lifetime(case)
+def audit_lifetime_case(case, *, ready_loss=False):
+    key = verify_lifetime(case, ready_loss=ready_loss)
     changes = [('record/command/mode', 'normal'), ('record/command/deadlineAtMs', 0), ('record/revision', True),
                ('record/command/binding/updaterEpoch', 0), ('record/command/binding/rootRevision', 0),
                ('record/command/binding/controllerRecordSha256', '0'*64), ('record/command/binding/localRecordSha256', '0'*64),
@@ -148,7 +155,7 @@ def audit_lifetime_case(case):
                ('normalObservation/result/observedAtMs', 0), ('normalObservation/lifetimeObservationVersion', True), ('normalInfo/maintenanceAvailable', True),
                ('normalInfo/fencedRequests/legacyMutationsAllowed', True), ('savedLifetimeCommandCount', 2),
                ('savedLifetimeCommandCount', True), ('submitRefusedAfterExpiry', False), ('sameJobVerified', False),
-               ('rootCommitted', True), ('maintenanceReleased', True), ('privateReadyLossTested', True)]
+               ('rootCommitted', True), ('maintenanceReleased', True), ('privateReadyLossTested', not ready_loss)]
     changes = [('activationLifetime/'+p, v) for p, v in changes] + [
         ('coldActivationLifetime/view/activationLifetime/originalCustodyHeld', True),
         ('coldActivationLifetime/automaticColdLaunchCount', 1), ('coldActivationLifetime/noColdLifetimeReplay', False)]
@@ -161,14 +168,14 @@ def audit_lifetime_case(case):
         need(canonical(node[parts[-1]]) != canonical(value), 'No-op lifetime mutation: '+path)
         node[parts[-1]] = value
         try:
-            verify_lifetime(bad)
+            verify_lifetime(bad, ready_loss=ready_loss)
         except (ValueError, KeyError, TypeError, IndexError):
             continue
         raise ValueError('Lifetime observer accepted mutation: '+path)
     aliases = key_aliases(case)
     for alias in aliases:
         try:
-            verify_lifetime(coherent_key_alias(case, alias))
+            verify_lifetime(coherent_key_alias(case, alias), ready_loss=ready_loss)
         except (ValueError, KeyError, TypeError, IndexError):
             continue
         raise ValueError('Lifetime observer accepted coherent command-key alias: '+alias)

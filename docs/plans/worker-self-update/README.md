@@ -1,5 +1,9 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29: [Main28 source partial-Ready gate](lifetime-ready-loss-2026-10-29.md)**
+подготовлен после passed Main27. Native новый fault пока не выполнен; далее
+clean export/run/reread и permanent keeper/commit/release/U2–U4. Public install off.
+
 **Обновление2026-10-29:** [Main27 Windows gate](main27-native-2026-10-29.md)
 пройден на reviewed merge5cbc7b0:208 native tests/60 files twice, independent
 reread identical. Фикс WIP observation подтверждён; private Ready loss/permanent

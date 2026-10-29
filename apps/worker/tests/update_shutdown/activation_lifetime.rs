@@ -43,20 +43,44 @@ fn observe(
         std::thread::sleep(Duration::from_millis(100));
     }
 }
-pub(in super::super) fn execute(root: &FixtureLayout, sup: &SupervisorRecord) -> serde_json::Value {
+pub(in super::super) fn execute(
+    root: &FixtureLayout,
+    sup: &SupervisorRecord,
+    ready_loss: bool,
+) -> serde_json::Value {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let mut q: SupervisorRequest =
         serde_json::from_slice(&fs::read(root.join("supervisor-control.private")).unwrap())
             .unwrap();
     q.contract_version = 27;
     q.action = SupervisorAction::EnterActivationLifetime;
-    // Lose only the public-to-supervisor dispatch ACK, not the private Ready.
-    // No audit before dispatch may consume the remaining entry window.
-    dispatch_once(&rt, sup, &q);
-    q.action = SupervisorAction::ObserveActivationLifetime;
-    let entered = observe(&rt, sup, &q);
     let directory = root.runtime().join("update-state");
     let id = &sup.spec.update_id;
+    if ready_loss {
+        let original = UpdateJournal::inspect_activation(&directory, id)
+            .unwrap()
+            .unwrap();
+        let hash = canonical_record_hash(&original);
+        // Separate create-new input; historical state/writer trace bytes stay frozen.
+        write(
+            &root
+                .runtime()
+                .join("update")
+                .join(id)
+                .join("lifetime-ready-loss-validation.json"),
+            &json!({"schemaVersion":1,"kind":"winbridge_lifetime_ready_body_loss_validation","recordSha256":hash}),
+        );
+    }
+    // Drop the supervisor dispatch ACK. Main28 separately truncates private Ready.
+    // No audit before dispatch may consume the remaining entry window.
+    dispatch_once(&rt, sup, &q);
+    let unknown = if ready_loss {
+        Some(wait_for_unknown(&rt, root, sup, &q))
+    } else {
+        None
+    };
+    q.action = SupervisorAction::ObserveActivationLifetime;
+    let entered = observe(&rt, sup, &q);
     let saved = UpdateJournal::inspect_activation_lifetime(&directory, id)
         .unwrap()
         .unwrap();
@@ -70,7 +94,7 @@ pub(in super::super) fn execute(root: &FixtureLayout, sup: &SupervisorRecord) ->
         .unwrap()
         .unwrap();
     let rows = history(&directory, id);
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), if ready_loss { 3 } else { 2 });
     let child =
         infrastructure::PinnedProcess::live(&receipt.compatibility.identity.process).unwrap();
     child
@@ -186,10 +210,112 @@ pub(in super::super) fn execute(root: &FixtureLayout, sup: &SupervisorRecord) ->
     );
     assert_eq!(journal_bytes(root), bytes);
     assert_eq!(after_expiry.update.phase, UpdatePhase::AwaitingController);
-    json!({"record":saved,"history":rows,"entered":entered,"afterExpiry":after_expiry,"duplicate":duplicate,
+    let mut result = json!({"record":saved,"history":rows,"entered":entered,"afterExpiry":after_expiry,"duplicate":duplicate,
         "normalObservation":normal,"normalInfo":info,"physicalRecord":physical,"workerBytesAfter":bytes,
         "lostLifetimeDispatchAckSentOnce":true,"savedLifetimeCommandCount":1,"submitRefusedAfterExpiry":true,
-        "sameJobVerified":true,"rootCommitted":false,"maintenanceReleased":false,"privateReadyLossTested":false})
+        "sameJobVerified":true,"rootCommitted":false,"maintenanceReleased":false,"privateReadyLossTested":ready_loss});
+    if let Some(unknown) = unknown {
+        result["readyLoss"] = unknown;
+    }
+    result
+}
+
+fn canonical_record_hash(record: &winbridge_update::activation::ActivationRecord) -> String {
+    let mut bytes = b"winbridge.activation.barrier.record.v1\n".to_vec();
+    bytes.extend(
+        winbridge_protocol::canonical_evidence_json(&serde_json::to_value(record).unwrap())
+            .unwrap(),
+    );
+    winbridge_update::sha256(&bytes)
+}
+fn wait_for_unknown(
+    rt: &tokio::runtime::Runtime,
+    root: &FixtureLayout,
+    sup: &SupervisorRecord,
+    q: &SupervisorRequest,
+) -> serde_json::Value {
+    let directory = root.runtime().join("update-state");
+    let id = &sup.spec.update_id;
+    let until = Instant::now() + Duration::from_secs(300);
+    let unknown = loop {
+        if let Some(saved) = UpdateJournal::inspect_activation_lifetime(&directory, id).unwrap() {
+            if matches!(saved.state, ActivationLifetimeState::Indeterminate { .. }) {
+                break saved;
+            }
+            assert!(
+                matches!(saved.state, ActivationLifetimeState::Issued {}),
+                "Fault must not confirm before independent reconciliation"
+            );
+        }
+        assert!(
+            Instant::now() < until,
+            "Observe original uncertainty; never resend"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    let unknown_view = loop {
+        if let Some(v) = call(rt, sup, q) {
+            break v;
+        }
+        assert!(Instant::now() < until);
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    assert!(
+        !unknown_view.driver_active
+            && unknown_view
+                .driver_error
+                .as_deref()
+                .is_some_and(|e| e.contains("Ready body intentionally unread"))
+    );
+    let view = unknown_view.activation_lifetime.as_ref().unwrap();
+    assert_eq!(view.phase, ActivationLifetimePhase::Indeterminate);
+    assert!(
+        view.saved_receipt.is_none()
+            && view.observed_receipt.is_none()
+            && view.observed_at_ms.is_none()
+    );
+    let rows = history(&directory, id);
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[1], unknown);
+    let physical = UpdateJournal::inspect_activation(&directory, id)
+        .unwrap()
+        .unwrap();
+    let child =
+        infrastructure::PinnedProcess::live(&physical.state_owned.as_ref().unwrap().process)
+            .unwrap();
+    let marker_path = root
+        .runtime()
+        .join("update")
+        .join(id)
+        .join("activation-lifetime-ready-body-loss.json");
+    let marker: serde_json::Value =
+        serde_json::from_slice(&fs::read(marker_path).unwrap()).unwrap();
+    assert_eq!(marker["bodyBytesRead"], 0);
+    assert_eq!(marker["readyValidated"], false);
+    assert_eq!(marker["recordSha256"], canonical_record_hash(&physical));
+    let deadline = unknown.command.deadline_at_ms;
+    let bound = Instant::now() + Duration::from_secs(245);
+    while std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+        <= deadline
+    {
+        assert!(
+            Instant::now() < bound,
+            "Fault wait cannot renew execution budget"
+        );
+        child.require_live().unwrap();
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    assert_eq!(
+        UpdateJournal::inspect_activation_lifetime(&directory, id)
+            .unwrap()
+            .unwrap(),
+        unknown
+    );
+    json!({"unknownRecord":unknown,"historyBeforeReconciliation":rows,"unknownView":unknown_view,
+        "marker":marker,"reconciliationStartedAfterOriginalDeadline":true,"privateCommandSentOnce":true})
 }
 
 pub(in super::super) fn after_owned_exit(
