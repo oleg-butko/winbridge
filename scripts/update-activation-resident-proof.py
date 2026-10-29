@@ -45,6 +45,10 @@ def verify_boundaries(commands, files):
          ['resident_connection_v28_cannot_adopt_cold_history_or_change_legacy_views']),
         ('resident-os-peer', 'winbridge-transport', ['--lib','local_peer'], 1,
          ['accepted_named_pipe_authenticates_the_real_client_pid']),
+        ('resident-fixture-reply', 'winbridge-worker', ['--features','bundled-sqlite,update-validation','--test','update_activation_fixture_reply'], 3,
+         ['native_adapter_accepts_a_real_compact_v28_view_and_checks_its_block',
+          'native_adapter_rejects_foreign_schema_scope_and_reported_errors',
+          'native_adapter_never_treats_unknown_contracts_as_successful_busy_replies']),
     ]
     for name, package, args, count, required in definitions:
         selected = [c for c in commands if c['name'] == name]

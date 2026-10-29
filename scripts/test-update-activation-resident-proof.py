@@ -111,7 +111,11 @@ class ResidentProofTests(unittest.TestCase):
             ('resident-v28-mailbox','winbridge-worker',['--features','bundled-sqlite,update-validation','--lib',
                 'update_control::tests::resident_connection_v28_cannot_adopt_cold_history_or_change_legacy_views'],1,
                 ['resident_connection_v28_cannot_adopt_cold_history_or_change_legacy_views']),
-            ('resident-os-peer','winbridge-transport',['--lib','local_peer'],1,['accepted_named_pipe_authenticates_the_real_client_pid'])]
+            ('resident-os-peer','winbridge-transport',['--lib','local_peer'],1,['accepted_named_pipe_authenticates_the_real_client_pid']),
+            ('resident-fixture-reply','winbridge-worker',['--features','bundled-sqlite,update-validation','--test','update_activation_fixture_reply'],3,
+                ['native_adapter_accepts_a_real_compact_v28_view_and_checks_its_block',
+                 'native_adapter_rejects_foreign_schema_scope_and_reported_errors',
+                 'native_adapter_never_treats_unknown_contracts_as_successful_busy_replies'])]
         commands, files = [], {}
         for name, package, args, count, required in definitions:
             arguments = ['test','-p',package]+args+['--locked','--offline','--']
@@ -124,6 +128,7 @@ class ResidentProofTests(unittest.TestCase):
             b'accepted_named_pipe_authenticates_the_real_client_pid', b'peer_pid_comes_from_the_connected_socket_not_its_payload')
         with self.assertRaises(ValueError): p.verify_boundaries(commands,bad)
         with self.assertRaises(ValueError): p.verify_boundaries(commands[:-1],files)
+        with self.assertRaises(ValueError): p.verify_boundaries([c for c in commands if c['name'] != 'resident-os-peer'],files)
         bad = dict(files); bad['resident-model-and-actor.log']=bad['resident-model-and-actor.log'].replace(b'13 passed',b'0 passed')
         with self.assertRaises(ValueError): p.verify_boundaries(commands,bad)
 

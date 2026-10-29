@@ -1,5 +1,18 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**Main29 завершился failed, не pass,2026-10-29:** run20261029-151031-f024760d/
+task772361c4.231 предварительная native проверка прошла. Same child11644 вошёл
+в lifetime, позднее reconciliation завершилось; первый Internal28 response
+отвергнут **native test helper**, в его schema switch отсутствовал28→20.
+V7 outcome не сохранён/не объявлять доказанным. Helper вынесен в общий portable/
+native adapter,3 регрессии/58 Python/Linux+MSVC Clippy passed; retry parser46ab6ada passed.
+Далее clean producer/автоповтор, нового native pass пока нет.
+Cleanup taskc8326230 passed: slot204 processes0/worker EXE absent,18.8GB free;
+failed runtime archived10 entries, installed0.2.0/source48/gen946 прежний/active0/
+errors=null. Test controller302634 и runner302633 отсутствуют, повтор старого
+submit запрещён. [Подробности](plans/worker-self-update/resident-native-gate-2026-10-29.md).
+Рабочий worker оставить, desktop не нужен; public install off.
+
 **Main29 запущен, пока не завершён:** run20261029-151031-f024760d,
 task772361c4-ae8d-4ebe-8a6b-28fbce1df0fb, producerfcee32a→target944a39c.
 Run-info `.winbridge/update-preparation/main29-204-20261029-151031-f024760d/run-info.json`,

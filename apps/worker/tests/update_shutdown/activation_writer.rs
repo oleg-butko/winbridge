@@ -1,5 +1,7 @@
 //! Main24 writer effect on the original child; no normal service or lease release.
 use super::*;
+#[path = "../support/activation_reply.rs"]
+mod activation_reply;
 #[path = "activation_controller.rs"]
 pub(super) mod controller;
 #[path = "activation_lifetime.rs"]
@@ -95,28 +97,7 @@ fn call(
             winbridge_transport::supervisor::CONTROL_TIMEOUT,
         ))
         .unwrap();
-    assert_eq!(r.contract_version, q.contract_version);
-    assert_eq!(r.launch_id, q.launch_id);
-    assert!(
-        r.error.is_none(),
-        "Observe the same attempt, never resend: {:?}",
-        r.error
-    );
-    assert!(r.record.is_none() && r.worker_control.is_none());
-    if let Some(v) = &r.preparation {
-        assert_eq!(
-            v.schema_version,
-            match q.contract_version {
-                24 => 16,
-                25 => 17,
-                26 => 18,
-                27 => 19,
-                _ => panic!("Unknown native activation fixture contract"),
-            }
-        );
-        assert_eq!(v.update.update_id, sup.spec.update_id);
-    }
-    r.preparation
+    activation_reply::validate(&sup.spec.update_id, q, r).unwrap()
 }
 fn dispatch_once(rt: &tokio::runtime::Runtime, sup: &SupervisorRecord, q: &SupervisorRequest) {
     let mut stream = rt

@@ -349,7 +349,8 @@ try {
     $commands=@(
       @{name='resident-model-and-actor';minimum=13;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','resident','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='resident-v28-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::tests::resident_connection_v28_cannot_adopt_cold_history_or_change_legacy_views','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
-      @{name='resident-os-peer';minimum=1;arguments=@('test','-p','winbridge-transport','--lib','local_peer','--locked','--offline','--','--test-threads=1','--nocapture')}
+      @{name='resident-os-peer';minimum=1;arguments=@('test','-p','winbridge-transport','--lib','local_peer','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='resident-fixture-reply';minimum=3;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_activation_fixture_reply','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})

@@ -1,5 +1,48 @@
 # Main29: current resident V7 через actual keeper
 
+**Попытка20261029-151031-f024760d terminal FAILED.** Не продолжать/повторять её
+submit и не считать Main29 passed. Предыдущий running checkpoint ниже — история.
+
+231 предварительная native проверка passed; pipeline дошёл до same child11644,
+Ready64922ms/StateOwned82187ms, saved lifetime Confirmed после original expiry.
+На первом Internal28 ответе test-only `activation_writer::call` panicked:
+`Unknown native activation fixture contract`, потому что switch заканчивался27→19.
+Response прошёл version/launch/error checks, но его content/phase не сохранён:
+это не достаточное доказательство успешного V7. Installed worker не затронут.
+
+Failed task772361c4-ae8d-4ebe-8a6b-28fbce1df0fb/exit1, report.passedfalse;
+original deadline1793288351603. Runtime archive:
+`K:\_proj-26\winbridge\workspaces\snapshot-fixture\workflow-validation\tmp-main29-204-20261029-151031-f024760d\shutdown-main-cases\runtime-archive-5d309495-0ee4-45c5-ba57-71980721a9b9`,
+plan2bba0ed9abe242eac7c0c4c9fffda786f88b5c444119f043cb7a1104d01ac8f3/10 entries.
+Runner302633/controller302634 terminal и отсутствуют; exit code controller в
+failed path отдельно не сохранялся, поэтому не объявлять exited0.
+After info: installed build/gen/context unchanged, active0/errors=null.
+Новый readonly cleanup taskc8326230-5513-4c57-81ed-b9b14473b457 succeeded0:
+slot processes0/worker EXE absent, K:18,840,248,320 bytes. Directories не удалялись.
+
+Fix: shared `tests/support/activation_reply.rs` теперь используется actual native
+caller и portable integration test. Он знает24→16…28→20, проверяет version/launch/
+update/schema и required block, не принимает errors или unknown versions даже
+как None/busy. Три portable regression cases с реальным SQLite cold view20 passed;
+новая группа resident-fixture-reply обязательна в PS и independent reader.
+Проверки original owner, deadline, Job, ledger, actor и V7 receiver не ослаблены.
+Рекомендованный обычный scenario fix/repeat уже авторизован пользователем;
+повторное разрешение не требуется. До repeat подтвердить новые source checks и
+parser SHA, сделать clean commit/export. Target944a39c прежний, нужен новый run.
+
+Fix checks завершены:3 portable actual-adapter tests passed, Linux/MSVC
+workspace/all-target Clippy/update-validation/-D warnings и fmt/scaffold прошли,
+58 Python tests в9 readers passed. Это targeted проверка fixture-only change;
+предыдущий full workspace983 не выдаётся за новый full986 run.
+Mandatory resident-fixture-reply группа теперь запускает эти3 tests на Windows
+перед дорогим pipeline, а reader требует её exact selection/count/cases.
+
+Новый Windows preflight46ab6ada-962e-475e-bef7-bed912b797f5 succeeded0:
+actual PS SHA516e53a0e7dcb28b65d6e5a12d8609f7c11d5ed29f2bfd173edf08468b0e174a,
+parser errors0, slot204 processes0/worker EXE absent, K:18,850,488,320 bytes.
+Working worker прежний, новый run ещё не отправлен. После commit/export можно
+повторить автоматически; failed attempt остаётся самостоятельным failed отчётом.
+
 **Main29 запущен, пока не завершён:** run20261029-151031-f024760d,
 task772361c4-ae8d-4ebe-8a6b-28fbce1df0fb, producerfcee32a→target944a39c.
 Run-info `.winbridge/update-preparation/main29-204-20261029-151031-f024760d/run-info.json`,
