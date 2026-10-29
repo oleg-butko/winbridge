@@ -6,9 +6,12 @@ Retained native release gate .203 перечитан:6+10 tests/5 файлов t
 Новый typed seal потребляет known SQL commit и original readiness, освобождает
 worker config pin, открывает dynamic permissions без нового Store/network.
 Ошибка сохраняет commit/listener owner; saved receipt не даёт Active.1017 full
-workspace tests/17 ignored, Linux Clippy passed. Новый20-test native unit gate
-подготовлен; V8 decoder/mailbox/factory/Active observation/permanent keeper ещё
+workspace tests/17 ignored, Linux/MSVC Clippy passed. Native20 unit gate прошёл:
+run20261029-225125-0899195d/task1ce2b323,6 файлов verified twice, actual cmd/config
+atomic replace подтверждены. PhysicalV8Proved=false. V8 decoder/mailbox/factory/Active observation/permanent keeper ещё
 впереди. Установленный worker и production controllers не менялись.
+
+Следующие записи — исторические checkpoints, их ограничения относятся к тому source.
 
 **Same-Store release/ReleasePending source,2026-10-29:** internal worker transaction
 сохраняет schema19 shutdown history и освобождает exact lease только после readback/

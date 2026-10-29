@@ -3,7 +3,8 @@
 2026-10-29/.204/main: [source Active core](plans/worker-self-update/finalization-active-2026-10-29.md)
 после same-Store release. Dynamic dispatch/Info/queue/scheduler, worker config-pin
 retirement и staged listener readiness реализованы;1017 tests/17 ignored passed.
-Далее20-test native unit gate, bounded V8 mailbox/physical factory/normal Active
+Native20 unit gate passed,6 файлов twice; physicalV8Proved=false. Далее
+bounded V8 mailbox/physical factory/normal Active
 observation, keeper conversion/next-update/two generations/U2–U4. Public install off.
 
 **Same-Store release/ReleasePending source,2026-10-29:** internal worker transaction

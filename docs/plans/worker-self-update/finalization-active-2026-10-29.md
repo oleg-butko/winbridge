@@ -69,7 +69,30 @@ cache cleanup не требовался. Для нового ограничен�
 Он не открывает сеть и UI; test EXE из deps допустим только для этого local-only
 профиля. Artifact SHA по-прежнему проверяется до/после всех test groups.
 
-## Границы и продолжение
+## Windows Active core: результат
+
+Run `20261029-225125-0899195d`, task
+`1ce2b323-5b43-46af-8007-518f2587892e` succeeded/exit0. Producer73063db,
+source ZIP `winbridge-20261029T225010Z-73063db-906288d7.zip`, SHA
+`c9c725c9ce7cc8721f56362acb1d36d359077b865f3d0bfeca0f4fc820b017c6`.
+Все20 тестов (6 SQL/10 lifetime/4 Active) прошли. Ready manifest6 файлов
+перечитан и проверен дважды. Report SHA
+`590f4d80fa5d395d586978755ebbe24ef176e20ef179d091ae256bfad2cc3131`;
+test artifact SHA `f2b7490de2018070f144add115f1bb8183848e75cc7590cd0b0183a6028ede25`.
+Новый Active test реально выполнил cmd.exe после снятия user pause, повторный
+fenced request сохранил task ID. Windows config write и atomic replacement
+после seal прошли. Tests используют synthetic runtime/keeper/readiness metadata;
+`activeCoreProved=true`, **physicalV8Proved=false**.
+
+Build86,437ms; test commands9,944/20,977/11,869ms, bodies8.81/20.93/11.83s.
+Это разделяет compile и исполнение; SHA artifact до/после одинаковый. Windows
+free18,699,644,928 before /18,919,854,080 after; Debian перед native24,860,557,312.
+Никакой cleanup в этой задаче не выполнялся. Installed before/after build/gen
+946f1128 прежние. Desktop/окон не было, рабочий worker оставить запущенным.
+Audit `.winbridge/active-review-1lfhh_mg/native-audit.json`, saved request/acceptance/
+terminal/output в подкаталоге run. Повторять task ради продолжения не нужно.
+
+## Границы и продолжение после native unit gate
 
 Это source Active core/trusted internal API. Mutable V8 decoder/mailbox,
 production physical decision factory и normal-IPC Active observation ещё не
