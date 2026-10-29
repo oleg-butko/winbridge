@@ -1,5 +1,16 @@
 # Finalization: root decision отдельно от рабочего режима worker
 
+Дополнение source,2026-10-29: `inspect_pending_finalization_receiver` читает
+coherent retained snapshot для будущего V8 AFTER root Committed. Сверяет original
+lifetime command/entry, same child/local7/keeper, exact decision, current schema/
+owner/coordinator. Confirmed и пустой cold ledger не допускают новую pending
+transition. Возвращает только Clone data, без OS/liveness/custody/send permit.
+15 finalization tests (2 новых), Linux/MSVC updater all-target Clippy/update-validation/
+-D warnings/fmt прошли. Receiver/effect/factory/Active ещё не подключены; native
+copy22→23 относится к frozenfcc49dd и не тестировал этот новый pending path.
+Evidence `.winbridge/review-2026-10-29/finalization-pending-*`.
+
+
 2026-10-29. Source foundation после [Main29](main29-native-2026-10-29.md).
 Worker journal остаётся19; updater ledger становится23. Это ещё не завершённый
 апдейтер: нет physical factory для finalization, V8 decoder/marker, delivery,

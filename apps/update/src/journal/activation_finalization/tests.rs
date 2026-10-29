@@ -439,3 +439,111 @@ fn schema22_copy_migration_preserves_root_history_and_refuses_live_owner() {
         0
     );
 }
+
+#[test]
+fn pending_receiver_data_require_original_resident_receipt_and_exact_unconfirmed_decision() {
+    let f = fixture();
+    let record = ActivationFinalizationRecord::pending(f.intent.command.clone()).unwrap();
+    let saved = RetainedFinalizationSnapshot {
+        intent: f.intent.clone(),
+        record,
+        lifetime: f.data.snapshot.clone(),
+        shutdown: f.data.shutdown.clone(),
+    };
+    let original = &f.intent.command.binding.lifetime_command;
+    let crate::activation::lifetime::ActivationLifetimeState::Confirmed { receipt: entry } =
+        &saved.lifetime.lifetime.state
+    else {
+        unreachable!()
+    };
+    let actual = &original.binding.compatibility.identity.process;
+    require_resident_prefix(&saved, actual, original, entry, &f.intent.command).unwrap();
+    let mut unknown = saved.clone();
+    unknown.record = unknown
+        .record
+        .indeterminate("ACK unknown".into(), unknown.record.updated_at_ms + 1)
+        .unwrap();
+    require_resident_prefix(&unknown, actual, original, entry, &f.intent.command).unwrap();
+    for mutation in 0..8 {
+        let mut changed = saved.clone();
+        let mut process = actual.clone();
+        let mut old = original.clone();
+        let mut receipt = entry.as_ref().clone();
+        let mut command = f.intent.command.clone();
+        match mutation {
+            0 => process.birth.push('0'),
+            1 => old.command_id = Uuid::new_v4().to_string(),
+            2 => receipt.compatibility.observed_at_ms += 1,
+            3 => command.command_id = Uuid::new_v4().to_string(),
+            4 => {
+                changed
+                    .lifetime
+                    .controller
+                    .local
+                    .created
+                    .as_mut()
+                    .unwrap()
+                    .process
+                    .process_id += 1
+            }
+            5 => changed
+                .lifetime
+                .controller
+                .local
+                .intent
+                .context
+                .supervisor
+                .birth
+                .push('0'),
+            6 => {
+                changed.record = changed
+                    .record
+                    .confirmed(
+                        f.data.receipt.clone(),
+                        &f.data.shutdown,
+                        f.data.receipt.compatibility.observed_at_ms,
+                    )
+                    .unwrap()
+            }
+            _ => changed.intent.command.binding.scope_sha256 = "0".repeat(64),
+        }
+        assert!(
+            require_resident_prefix(&changed, &process, &old, &receipt, &command).is_err(),
+            "{mutation}"
+        );
+    }
+}
+
+#[test]
+fn cold_pending_receiver_cannot_create_intent_or_change_empty_journal_epoch() {
+    let temp = tempfile::tempdir().unwrap();
+    let scope = "a".repeat(64);
+    let mut j = UpdateJournal::open(temp.path(), &scope).unwrap();
+    let before = j.info().unwrap();
+    let f = finalization::test_fixture();
+    let old = &f.command.binding.lifetime_command;
+    let crate::activation::lifetime::ActivationLifetimeState::Confirmed { receipt } =
+        &f.snapshot.lifetime.state
+    else {
+        unreachable!()
+    };
+    assert!(UpdateJournal::inspect_pending_finalization_receiver(
+        temp.path(),
+        &old.binding.compatibility.identity.process,
+        old,
+        receipt,
+        &f.command
+    )
+    .is_err());
+    assert_eq!(j.info().unwrap(), before);
+    assert_eq!(
+        j.connection
+            .query_row(
+                "SELECT count(*) FROM activation_finalization_intents",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+        0
+    );
+}

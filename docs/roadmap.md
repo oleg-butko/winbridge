@@ -1,5 +1,14 @@
 # Постепенная реализация и расширение
 
+**Pending finalization receiver data source,2026-10-29:** отдельный readonly
+scope после root Committed сверяет same resident command/entry/child/keeper,
+current updater owner/coordinator/schema и exact unconfirmed decision. Старые
+V5/V6 admission не меняются; query не создаёт mode/OS custody/send permit.
+15 targeted tests/2 новых, Linux/MSVC updater all-target Clippy passed.
+[Контракт и продолжение](plans/worker-self-update/finalization-ledger-2026-10-29.md).
+Source19/23, V8 handler/physical factory/Active/keeper ещё не включены; working
+worker прежний, desktop не нужен, public install off.
+
 **Receiver config pin handoff source,2026-10-29:** лишний File из outer native
 receive больше не держится весь срок service: передан V4 receiver и закрыт после
 File-ID check уже удерживаемого LocalService pin. Verification/quarantine по-прежнему

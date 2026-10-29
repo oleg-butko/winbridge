@@ -246,10 +246,16 @@ fn ledger(
     current.blocks_next_update(shutdown).map_err(bad)?;
     Ok((intent, current))
 }
-fn read(
-    c: &Connection,
-    id: &str,
-) -> Result<Option<(ActivationFinalizationIntent, ActivationFinalizationRecord)>> {
+/// Data only. Reading this structure never authenticates a process, reopens a
+/// Store or creates a finalization delivery/Active permit.
+#[derive(Clone, Debug)]
+pub struct RetainedFinalizationSnapshot {
+    pub intent: ActivationFinalizationIntent,
+    pub record: ActivationFinalizationRecord,
+    pub lifetime: ActivationLifetimeSnapshot,
+    pub shutdown: crate::shutdown::ShutdownRecord,
+}
+fn snapshot(c: &Connection, id: &str) -> Result<Option<RetainedFinalizationSnapshot>> {
     if schema(c)? < 23 || !presence(c, id)? {
         return Ok(None);
     }
@@ -258,16 +264,125 @@ fn read(
         .ok_or_else(|| bad("Finalization lifetime prefix missing"))?;
     let shutdown =
         shutdown::read(c, id)?.ok_or_else(|| bad("Finalization old-worker exit prefix missing"))?;
-    ledger(
-        c,
-        id,
-        &ActivationLifetimeSnapshot {
-            controller,
-            lifetime,
-        },
-        &shutdown,
-    )
-    .map(Some)
+    let lifetime = ActivationLifetimeSnapshot {
+        controller,
+        lifetime,
+    };
+    let (intent, record) = ledger(c, id, &lifetime, &shutdown)?;
+    Ok(Some(RetainedFinalizationSnapshot {
+        intent,
+        record,
+        lifetime,
+        shutdown,
+    }))
+}
+fn read(
+    c: &Connection,
+    id: &str,
+) -> Result<Option<(ActivationFinalizationIntent, ActivationFinalizationRecord)>> {
+    Ok(snapshot(c, id)?.map(|s| (s.intent, s.record)))
+}
+
+fn require_resident_prefix(
+    saved: &RetainedFinalizationSnapshot,
+    actual: &SupervisorProcess,
+    original: &WorkerLifetimeActivationCommand,
+    entry: &WorkerLifetimeActivationReceipt,
+    requested: &WorkerFinalizationCommand,
+) -> Result<()> {
+    let b = &original.binding;
+    let local = &saved.lifetime.controller.local;
+    let crate::activation::lifetime::ActivationLifetimeState::Confirmed { receipt } =
+        &saved.lifetime.lifetime.state
+    else {
+        return Err(bad(
+            "Pending finalization requires confirmed original lifetime",
+        ));
+    };
+    finalization::validate_command_envelope(requested).map_err(bad)?;
+    crate::activation::lifetime::validate_receipt(entry, original).map_err(bad)?;
+    if saved.intent.command != *requested
+        || saved.record.command != *requested
+        || saved.lifetime.lifetime.command != *original
+        || requested.binding.lifetime_command != *original
+        || receipt.as_ref() != entry
+        || actual != &b.compatibility.identity.process
+        || local.created.as_ref().map(|v| &v.process) != Some(actual)
+        || local.ready.as_ref().map(|v| &v.identity.process) != Some(actual)
+        || local.state_owned.as_ref().map(|v| &v.process) != Some(actual)
+        || local.intent.context.supervisor != b.keeper
+        || matches!(
+            saved.record.state,
+            ActivationFinalizationState::Confirmed { .. }
+        )
+    {
+        return Err(bad(
+            "Pending receiver changed original resident/entry/decision or is already confirmed",
+        ));
+    }
+    Ok(())
+}
+
+impl UpdateJournal {
+    /// Readonly scope for a FUTURE authenticated V8 receiver that ALREADY owns
+    /// the same Supervised/ReleasePending service, actual OS keeper pin and Job.
+    /// The arguments must come from that sealed memory, never from caller JSON.
+    /// Old V5/V6 receiver admission remains frozen at AwaitingController.
+    pub fn inspect_pending_finalization_receiver(
+        directory: &Path,
+        actual: &SupervisorProcess,
+        original: &WorkerLifetimeActivationCommand,
+        entry: &WorkerLifetimeActivationReceipt,
+        requested: &WorkerFinalizationCommand,
+    ) -> Result<RetainedFinalizationSnapshot> {
+        check_files(directory)?;
+        let mut c = connection(&directory.join("updates.sqlite"), true)?;
+        let tx = c.transaction().map_err(storage)?;
+        if schema(&tx)? != UPDATE_SCHEMA_VERSION {
+            return Err(bad(
+                "Pending finalization requires exact current updater schema",
+            ));
+        }
+        let b = &original.binding;
+        let id = &b.update_id;
+        let saved = snapshot(&tx, id)?
+            .ok_or_else(|| bad("No committed finalization intent; a query cannot create it"))?;
+        require_resident_prefix(&saved, actual, original, entry, requested)?;
+        let owner: (i64, String) = tx
+            .query_row(
+                "SELECT epoch,owner FROM installation WHERE singleton=1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .map_err(storage)?;
+        let installation = installation_info(&tx)?;
+        let coordinator = supervisor::read(&tx, &b.launch_id)?;
+        if saved
+            .lifetime
+            .controller
+            .local
+            .intent
+            .context
+            .updater_journal_schema
+            != UPDATE_SCHEMA_VERSION
+            || counter(owner.0)? != b.updater_epoch
+            || owner.1 != b.updater_owner_id
+            || installation.installation_id != requested.binding.installation_id
+            || installation.scope_sha256 != requested.binding.scope_sha256
+            || coordinator.phase != SupervisorPhase::Active
+            || coordinator.spec.update_id != *id
+            || coordinator.spec.launch_id != b.launch_id
+            || coordinator.owner_id.as_ref() != Some(&b.updater_owner_id)
+            || coordinator.owner_epoch != Some(b.updater_epoch)
+            || coordinator.process.as_ref() != Some(&b.keeper)
+        {
+            return Err(bad(
+                "Pending finalization has stale updater owner/coordinator/schema; no adoption",
+            ));
+        }
+        tx.commit().map_err(storage)?;
+        Ok(saved)
+    }
 }
 
 /// Validate every retained decision before allowing another admission. This
