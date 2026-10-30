@@ -62,7 +62,7 @@ write и atomic replacement, foreign peer/JSON PID refusal, настоящую f
 задачу и один внешний эффект после duplicate. Owned test Job затем закрывается;
 cold21 не присваивает себе процесс. Ready files/hash/size проверяются дважды.
 
-**Main30 пока не запускался.** Ни положительный physical V8/Active, ни постоянный
+**Первый Main30 завершился неуспешно до V8; причина и исправление ниже.** Ни положительный physical V8/Active, ни постоянный
 keeper, ни полное самообновление этим документом не объявляются готовыми.
 
 ## Продолжение
@@ -107,3 +107,38 @@ barrier обязан исчезнуть (`info.activeUpdateId=null`), хотя o
 и root Committed сохраняются. Это не retirement supervisor. Новая проверка различает
 эти состояния;3 reader tests/22 negative audits passed. Source/target Windows tasks
 не повторялись, Rust-код snapshots от этой правки reader не меняется.
+
+
+## Первый Main30: причина остановки и исправление
+
+Run20261030-043200-319f3e87/task7cb7211b завершился failed/exit1. Это НЕ новый
+установленный runtime и НЕ успешный physical V8 proof.68 ready files проверены
+дважды, report SHA256 fc42a9243b5ec3ee39164ab35067872ad66460b98a97a9ae6ac0777da1926883.
+Owned test Job закрыт; runtime сохранён в archive-a84cc4c9-fe10-4349-8c42-e39a1079820f
+в case directory. Installed source48/gen946 прежний, active0/errors=null. Окон не было,
+worker оставить работать. Никакого replay этого task или его ключа.
+
+Supervisor timing показывает finalization_prepare: V7 вернулся на11906ms, при этом
+от ORIGINAL capture осталось2399ms из10000. Повторное чтение графа и исторических
+inputs исчерпало остаток:14315ms/remaining0, отказ до Root decision/V8 delivery.
+Отдельный SQL inspection archived DB не выполнялся; не объявлять её rows прочитанными.
+Первый complete gate содержит57 commands/1943.97s, Cargo build685.74s и test bodies
+1169.47s (включая failed Main980.25s). Metadata/move stage118.76s использовал лишь
+916ms measured artifact hashing: эти задержки нельзя приписывать только SHA.
+K free21,662,588,928 before /17,767,862,272 after; Debian перед исправлением18,525,016,064.
+
+Исправление сохраняет ORIGINAL10s и два ПОЛНЫХ custody checkpoints внутри
+commit_activation_finalization — до записи решения и после неё. Предварительные root/
+shutdown и graph загружаются до fresh capture; transaction всё равно заново читает
+и сравнивает полный current graph. Для consuming factory V7 probe выполняет только
+resource/config-pin/actual Job checks, а повторные image hashes/graph checks перенесены
+на уже существующие transaction boundaries. Данные V7 сами не дают grant. Отдельный
+readonly internal28 сохраняет прежние полные pre/post проверки без изменения контракта.
+Hash caching, обновление deadline, ослабление file sharing или cold adoption не добавлены.
+
+Main30 harness теперь печатает изменения phase/error/custody/pins/attempt, ограничивая
+диагностику2048 символами. Terminal failure до V8 не ждёт ещё90 секунд и не вызывает
+другую delivery. Исходный failed report остаётся frozen.431 updater tests/7 ignored
+passed; Linux/MSVC workspace all-target Clippy для core fix и финальный MSVC
+Clippy update_shutdown harness после diagnostics passed; fmt/diff и9 reader
+regressions passed. Далее clean pins и новый отдельный native run.

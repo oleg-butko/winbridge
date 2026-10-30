@@ -9,6 +9,7 @@ fn observe_until_confirmed(
     q: &mut SupervisorRequest,
 ) -> UpdatePreparationView {
     let until = Instant::now() + Duration::from_secs(90);
+    let mut last_diagnostic = String::new();
     loop {
         let reply: std::io::Result<SupervisorResponse> =
             rt.block_on(winbridge_transport::supervisor::call_with_timeout(
@@ -17,25 +18,49 @@ fn observe_until_confirmed(
                 q,
                 winbridge_transport::supervisor::CONTROL_TIMEOUT,
             ));
-        if let Ok(reply) = reply {
-            let view = activation_reply::validate(&sup.spec.update_id, q, reply).unwrap();
-            if let Some(view) = view {
-                assert_eq!(view.schema_version, 21);
-                if !view.driver_active
-                    && view.driver_error.is_none()
-                    && view.activation_finalization.as_ref().unwrap().phase
-                        == ActivationFinalizationPhase::Confirmed
-                {
-                    return view;
+        let diagnostic = match reply {
+            Ok(reply) => match activation_reply::validate(&sup.spec.update_id, q, reply).unwrap() {
+                Some(view) => {
+                    assert_eq!(view.schema_version, 21);
+                    let f = view.activation_finalization.as_ref().unwrap();
+                    let diagnostic = format!(
+                    "phase={:?}; durable={:?}; custody={:?}; pinsRetired={:?}; attempted={:?}; error={:?}; reason={:?}",
+                    f.phase, f.durable_phase, f.original_custody_held,
+                    f.verification_pins_retired, f.delivery_attempted, view.driver_error, f.reason
+                );
+                    assert!(
+                        view.driver_active
+                            || view.driver_error.is_none()
+                            || f.delivery_attempted != Some(false),
+                        "Main30 preparation stopped before V8; no delivery may be retried: {}",
+                        diagnostic.chars().take(2048).collect::<String>()
+                    );
+                    if !view.driver_active
+                        && view.driver_error.is_none()
+                        && f.phase == ActivationFinalizationPhase::Confirmed
+                    {
+                        eprintln!("Main30 original finalization: {diagnostic}");
+                        return view;
+                    }
+                    diagnostic
                 }
+                None => "Original actor operation is busy; observe without resending V8".into(),
+            },
+            Err(error) => {
+                format!("Original actor transport: {error}; observe without resending V8")
             }
+        };
+        let diagnostic: String = diagnostic.chars().take(2048).collect();
+        if diagnostic != last_diagnostic {
+            eprintln!("Main30 original finalization: {diagnostic}");
+            last_diagnostic = diagnostic;
         }
         // Only the first iteration may deliver V8. Every later request reads
         // the actual original owner; timeout never resubmits an effect.
         q.action = SupervisorAction::ObserveActivationFinalization;
         assert!(
             Instant::now() < until,
-            "Original finalization did not confirm; inspect same owner/command"
+            "Original finalization did not confirm; inspect same owner/command: {last_diagnostic}"
         );
         std::thread::sleep(Duration::from_millis(200));
     }

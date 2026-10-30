@@ -6,6 +6,14 @@ use crate::activation::{
 };
 use winbridge_protocol::update::*;
 
+#[derive(Clone, Copy)]
+enum Checkpoints {
+    CompleteReadonly,
+    /// Data capture only; the consuming transaction must fully revalidate
+    /// custody and the graph BEFORE and AFTER writing its decision.
+    FinalizationTransaction,
+}
+
 impl ActivationProcessGuard {
     pub fn resident_query(&self) -> Option<&ActivationResidentQuery> {
         self.resident_query.as_ref()
@@ -48,6 +56,30 @@ impl ActivationProcessGuard {
         s: &SupervisorRecord,
         key: &str,
     ) -> Result<()> {
+        self.observe_resident_current(j, a, s, key, Checkpoints::CompleteReadonly)
+            .await
+            .map(|_| ())
+    }
+
+    pub(super) async fn observe_resident_for_finalization(
+        &mut self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        key: &str,
+    ) -> Result<Box<lifetime::ActivationLifetimeSnapshot>> {
+        self.observe_resident_current(j, a, s, key, Checkpoints::FinalizationTransaction)
+            .await
+    }
+
+    async fn observe_resident_current(
+        &mut self,
+        j: &mut UpdateJournal,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        key: &str,
+        checkpoints: Checkpoints,
+    ) -> Result<Box<lifetime::ActivationLifetimeSnapshot>> {
         self.resident_observation = None;
         self.resident_query = None;
         self.resident_observation_deadline = None;
@@ -88,14 +120,27 @@ impl ActivationProcessGuard {
             command: saved.command.clone(),
         };
         let checkpoint = || {
-            self.require_lifetime_custody(false)?;
+            match checkpoints {
+                Checkpoints::CompleteReadonly => self.require_lifetime_custody(false)?,
+                Checkpoints::FinalizationTransaction => self.require_lifetime_handles()?,
+            }
             live.require_job_membership(&saved.command.binding.job_name)
                 .map_err(|e| e.to_string())?;
-            let current = j
-                .activation_lifetime_owned_current(a, s, &self.files.preparation, &self.record, key)
-                .map_err(|e| e.to_string())?;
-            if current != *snapshot {
-                return Err("Resident original graph changed during readonly observation".into());
+            if matches!(checkpoints, Checkpoints::CompleteReadonly) {
+                let current = j
+                    .activation_lifetime_owned_current(
+                        a,
+                        s,
+                        &self.files.preparation,
+                        &self.record,
+                        key,
+                    )
+                    .map_err(|e| e.to_string())?;
+                if current != *snapshot {
+                    return Err(
+                        "Resident original graph changed during readonly observation".into(),
+                    );
+                }
             }
             Ok(())
         };
@@ -118,6 +163,6 @@ impl ActivationProcessGuard {
                     crate::activation::finalization::MAX_OBSERVATION_AGE_MS,
                 ),
         );
-        Ok(())
+        Ok(snapshot)
     }
 }

@@ -119,26 +119,21 @@ impl ActivationProcessGuard {
             }
         }
         timing.mark("receiver_capabilities_checked", None, None);
-        self.observe_resident(j, a, s, lifetime_key).await?;
-        let deadline = self
-            .resident_observation_deadline
-            .ok_or("Original V7 monotonic capture missing")?;
-        timing.observe_deadline(deadline);
-        timing.mark("fresh_v7_observed", None, None);
-        let graph = j
-            .activation_lifetime_owned_current(
-                a,
-                s,
-                &self.files.preparation,
-                &self.record,
-                lifetime_key,
-            )
-            .map_err(|e| e.to_string())?;
+        // Read ordinary historical inputs BEFORE taking the fresh capture.
+        // The transaction compares them with its own full current snapshot.
         let root = j.get(&s.spec.update_id).map_err(|e| e.to_string())?;
         let shutdown = j
             .shutdown(&s.spec.update_id)
             .map_err(|e| e.to_string())?
             .ok_or("Original shutdown prefix missing")?;
+        let graph = self
+            .observe_resident_for_finalization(j, a, s, lifetime_key)
+            .await?;
+        let deadline = self
+            .resident_observation_deadline
+            .ok_or("Original V7 monotonic capture missing")?;
+        timing.observe_deadline(deadline);
+        timing.mark("fresh_v7_observed", None, None);
         let query = self
             .resident_query
             .as_ref()

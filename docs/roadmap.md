@@ -4,7 +4,8 @@
 подключены к confirmation writer: consuming retirement всех parent pins, одно V8,
 отдельное Active observation, сохранение actual child/Job/readers. Bounded known-seal
 continuation не зависит от duplicate JSON/повторного SQL. Native Main30 запущен
-для source19/23 (task7cb7211b), результат ещё ожидается.
+для source19/23: первый task7cb7211b failed до V8 на capture expiry; исправление
+сохраняет10s/full transaction checkpoints, далее новый отдельный run.
 [Keeper preparation](plans/worker-self-update/keeper-runtime-2026-10-30.md): consuming
 journal close c сохранением connection на ошибке реализован/3 tests passed,
 сам переход роли ещё не подключён. Далее native audit → permanent keeper без updater

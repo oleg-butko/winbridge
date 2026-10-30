@@ -236,6 +236,14 @@ impl ActivationProcessGuard {
     }
 
     pub(super) fn require_lifetime_custody(&self, entry: bool) -> Result<()> {
+        self.require_lifetime_handles()?;
+        self.require_fixed_custody(entry)
+    }
+
+    /// Resource/identity checkpoint only. This never grants an effect: the
+    /// consuming finalization transaction still performs the FULL custody
+    /// checks before and after its writes, within the original capture bound.
+    pub(super) fn require_lifetime_handles(&self) -> Result<()> {
         let expected = self.record.intent.job_name()?;
         let identity = self
             .physical
@@ -258,8 +266,7 @@ impl ActivationProcessGuard {
                     .into(),
             );
         }
-        self.require_lifetime_config_pin()?;
-        self.require_fixed_custody(entry)
+        self.require_lifetime_config_pin().map(|_| ())
     }
 
     fn require_lifetime_config_pin(&self) -> Result<&std::fs::File> {
