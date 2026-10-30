@@ -3,8 +3,11 @@
 2026-10-30/.204/main: [original factory/actor29](plans/worker-self-update/finalization-factory-2026-10-30.md)
 подключены к confirmation writer: consuming retirement всех parent pins, одно V8,
 отдельное Active observation, сохранение actual child/Job/readers. Bounded known-seal
-continuation не зависит от duplicate JSON/повторного SQL. Native Main30 подготовлен
-для source19/23, пока не выполнен. Далее native audit → permanent keeper без updater
+continuation не зависит от duplicate JSON/повторного SQL. Native Main30 запущен
+для source19/23 (task7cb7211b), результат ещё ожидается.
+[Keeper preparation](plans/worker-self-update/keeper-runtime-2026-10-30.md): consuming
+journal close c сохранением connection на ошибке реализован/3 tests passed,
+сам переход роли ещё не подключён. Далее native audit → permanent keeper без updater
 references → max2/two generations и U2–U4. Public install off.
 
 2026-10-29/.204/main: [Active fact writer](plans/worker-self-update/finalization-completion-2026-10-29.md)

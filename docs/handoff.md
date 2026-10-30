@@ -11,7 +11,12 @@ Main30 gate подготовлен, положительного native V8/Activ
 следующее поколение/U2–U4 впереди, install off. Installed worker оставить, desktop
 не нужен.1033 workspace tests/17 ignored, Linux/MSVC all-target Clippy, contracts/
 typecheck/scaffold/fmt/diff,3 adapter и6 Python reader suites passed; build UI passed.
-Следующий шаг: clean distinct exports, один Main30 task.
+Main30 sourcec19e1ec→target8fdcc42 выполняется: task7cb7211b-0b85-4a1c-8327-7e52f7639ab8,
+run20261030-043200-319f3e87; не повторять, читать сохранённый run-info.
+Начат следующий этап: [keeper/close primitive](plans/worker-self-update/keeper-runtime-2026-10-30.md).
+`close_owned` сохраняет actual journal при SQLITE_BUSY/stale owner/live transaction,
+закрывает writer до authority Drop.3 SQLite tests и Linux/MSVC updater all-target
+Clippy passed; runtime keeper conversion/schema24 ещё не подключены.
 
 **.204/main,2026-10-29: writer независимого Active fact реализован.**
 [Контракт/ревью/проверки](plans/worker-self-update/finalization-completion-2026-10-29.md).

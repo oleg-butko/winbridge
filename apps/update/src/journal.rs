@@ -36,6 +36,8 @@ mod build;
 mod build_report;
 mod candidate;
 mod candidate_support;
+mod close;
+pub use close::JournalCloseFailure;
 mod compatible_drain;
 mod drain;
 mod health;
