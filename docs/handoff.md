@@ -1,5 +1,15 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-29: writer независимого Active fact реализован.**
+[Контракт/ревью/проверки](plans/worker-self-update/finalization-completion-2026-10-29.md).
+Source19/23. Fresh non-Serde permit + exact original coordinator/checkpoints →
+один Confirmed append; root/lease не переписываются, duplicate не даёт grant.
+Shared production append заменил test-only SQL. Update package426/7 ignored,
+12 focused finalization tests; Linux/MSVC all-target Clippy/contracts passed.
+Фабрика permit ещё не подключена: далее original consuming factory, parent pins
+retirement, одно V8 delivery + independent observation/этот writer, permanent
+keeper/two generations. Новый native writer/physical V8 proof ещё требуется.
+
 **.204/main,2026-10-29: V8 receiver подключён к исходному координатору.**
 [Ревью, диагностика и границы](plans/worker-self-update/finalization-mailbox-2026-10-29.md).
 Strict normal IPC/OS keeper peer → bounded original RunningLocalService mailbox →

@@ -1,5 +1,10 @@
 # Самообновление: план реализации U0–U4
 
+**2026-10-29/.204/main:** [Active fact writer](finalization-completion-2026-10-29.md)
+записывает independent confirmation по fresh opaque permit, без нового release/
+keeper grant. Update package426/7 ignored и Linux/MSVC Clippy passed. Factory,
+parent pins retirement, physical V8 proof и permanent keeper ещё впереди.
+
 **2026-10-29/.204/main:** [V8 owner mailbox](finalization-mailbox-2026-10-29.md)
 связывает strict normal IPC с тем же Pending/readiness/SQL/Active owner. Queued1,
 accepted survives caller loss, unknown SQL не повторяется. Physical factory,

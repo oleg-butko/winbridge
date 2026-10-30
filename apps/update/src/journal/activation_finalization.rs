@@ -6,6 +6,9 @@ use crate::activation::{
     lifetime::ActivationLifetimeSnapshot,
 };
 use winbridge_protocol::update::*;
+#[path = "activation_finalization_completion.rs"]
+mod completion;
+pub use completion::FinalizationConfirmationPermit;
 
 fn bad(message: impl Into<String>) -> JournalError {
     fail(JournalErrorCode::Corrupt, message)

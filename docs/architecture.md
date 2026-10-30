@@ -1,5 +1,10 @@
 # Архитектура WinBridge
 
+2026-10-29/.204: [finalization confirmation writer](plans/worker-self-update/finalization-completion-2026-10-29.md)
+пишет отдельный Active fact по свежему opaque capture permit под original owner.
+Current/history меняются одной transaction; root/lease неизменны, unknown COMMIT
+не повторяет release. SQL writer не является physical factory или keeper grant.
+
 2026-10-29/.204: [mutable V8 mailbox](plans/worker-self-update/finalization-mailbox-2026-10-29.md)
 передаёт strict OS-authenticated request исходному RunningLocalService. IPC task
 не владеет SQL/режимом: bounded queued1, original coordinator serializes effects,

@@ -199,23 +199,15 @@ fn rows(f: &Fixture) -> [i64; 3] {
     })
 }
 fn persist(f: &mut Fixture, next: &ActivationFinalizationRecord) -> Result<()> {
-    let old = get(f)?;
-    old.advance(next, &f.data.shutdown).map_err(bad)?;
     let tx = f.c.transaction().map_err(storage)?;
-    let raw = encode(next)?;
-    let id = &f.data.root.update_id;
-    one(tx.execute("UPDATE activation_finalization_records SET revision=?1,record=?2 WHERE id=?3 AND revision=?4",params![next.revision as i64,raw,id,old.revision as i64]).map_err(storage)?)?;
-    one(tx
-        .execute(
-            "INSERT INTO activation_finalization_history VALUES(?1,?2,?3)",
-            params![id, next.revision as i64, raw],
-        )
-        .map_err(storage)?)?;
-    if ledger(&tx, id, &f.data.snapshot, &f.data.shutdown)?.1 != *next {
-        return Err(bad("Test append readback differs"));
-    }
+    super::completion::append_record(&tx, &f.a, &f.data.snapshot, &f.data.shutdown, next, || {
+        Ok(())
+    })?;
     tx.commit().map_err(storage)
 }
+
+#[path = "completion_tests.rs"]
+mod completion_tests;
 
 #[test]
 fn root_commit_and_release_pending_are_atomic_but_pending_still_blocks_next_update() {

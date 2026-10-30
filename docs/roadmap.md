@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-29/.204/main: [Active fact writer](plans/worker-self-update/finalization-completion-2026-10-29.md)
+transactionally подтверждает independently observed Active, не меняя root/lease
+и не создавая keeper/release grant. Source19/23; update426 tests/12 focused,
+Linux/MSVC Clippy passed. Далее consuming physical factory/sender и native proof,
+после него permanent keeper/two generations; install off.
+
 2026-10-29/.204/main: [V8 owner mailbox](plans/worker-self-update/finalization-mailbox-2026-10-29.md)
 соединяет normal-IPC decoder с original Pending/readiness/SQL/Active coordinator.
 Bounded delivery, caller-loss semantics, retained uncertain/known commit и phase

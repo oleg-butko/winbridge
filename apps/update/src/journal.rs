@@ -26,8 +26,8 @@ mod activation_controller;
 mod activation_finalization;
 mod activation_lifetime;
 pub use activation_finalization::{
-    ActivationFinalizationIntent, FinalizationDecisionAdmission, FinalizationDecisionPermit,
-    FinalizationReleasePermit, RetainedFinalizationSnapshot,
+    ActivationFinalizationIntent, FinalizationConfirmationPermit, FinalizationDecisionAdmission,
+    FinalizationDecisionPermit, FinalizationReleasePermit, RetainedFinalizationSnapshot,
 };
 mod activation_local;
 mod activation_service;
