@@ -5,7 +5,8 @@
 уникальны; данные связывают прежний Confirmed/keeper с новым root/owner/files.
 Existing/cold read не создают permission; live factory/known-COMMIT ещё не подключены.
 Миграция24→25 создаёт пустую таблицу, сохраняет старые роли/epochs и использует
-consistent backup; фактический Windows copy-only gate подготовлен отдельно.
+consistent backup; actual Windows copy-only gate passed
+(run20261030-170706-bae5c263,4 ready files twice/24 negative audits).
 
 2026-10-30/.204: original keeper runtime source19/24 прошёл Main31 Windows gate
 (run20261030-103611-811af539,73 files twice/19 keeper negative audits). Coordinator

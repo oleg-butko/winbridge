@@ -11,9 +11,13 @@ Immutable reservation и supervisor Intent сохраняются одной SQL
 Проверки:1033 workspace tests/17 ignored (default features),8 focused после последних
 assertions, Linux/MSVC workspace all-target Clippy/fmt/diff passed; Python observers
 13 tests passed, включая24 negative mutations нового migration reader.
-В Windows подготовлен copy-only gate24→25 на архиве Main31 (global epoch3,
-исторический keeper2); исходный runtime/журнал не меняются. Native результат
-ещё не получен. Установленный worker0.2.0/source48 не менялся; после restart
+Windows copy-only gate24→25 passed на архиве Main31 (global epoch3,
+исторический keeper2). Sourceb0947c3,run20261030-170706-bae5c263,taskcf99be54-03ba-4b82-a431-cd0b3bd3cb0f;
+4 ready files twice/24 migration+29 reference negative audits; старый24 init/status
+refused, historical rows/backup/cold view сохранены, bootstrap rows=0.
+Reportd29af8305a867c6a3402893ce71b3bdbf9763d75b6484ddf1b94ec2f2a00fd9b,
+proof8ec9c5990351d3c96901c3908624fd553f2cc75d16c6f4ca10e1470c02d35c01.
+106.854s Cargo включая69s build/34.52s test; installed unchanged. Установленный worker0.2.0/source48 не менялся; после restart
 новый generationf9daa176, обе связи.203/.204 connected, active0/errors=null.
 Desktop не требуется; простой запуск — runtime\winbridge-worker.exe --config
 runtime\winbridge-worker.multi-controller.json serve.

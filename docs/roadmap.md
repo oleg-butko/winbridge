@@ -3,7 +3,7 @@
 2026-10-30/.204: source worker19/updater25 добавляет immutable bootstrap reservation
 и supervisor Intent одной транзакцией; rollback/readback/idempotency проверены.
 Это данные, не разрешение повторного запуска. Actual24→25 retained-copy gate
-подготовлен, результат ещё не получен. Далее known-COMMIT/live factory и keeper
+passed (run20261030-170706-bae5c263,4 files twice/24 negatives), installed unchanged. Далее known-COMMIT/live factory и keeper
 delegation; max2/fresh bridge/mixed schema/два workflow/U2–U4 остаются открытыми.
 
 2026-10-30/.204: Main31/19/24 passed (run20261030-103611-811af539),73 files twice/19 keeper negatives; не replay.

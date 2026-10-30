@@ -213,3 +213,25 @@ Clippy -D warnings, fmt/diff passed. Python migration observers13 tests passed;
 Это последнее — только shape compatibility, не positive Windows migration proof.
 Debian free before full run13,972,213,760bytes, после Clippy10,587,123,712bytes;
 Windows/shared volume15,348,359,168bytes. Ничего в Windows не удалялось.
+
+## Actual24→25 copy-only Windows gate — passed
+
+Sourceb0947c3,run20261030-170706-bae5c263,
+taskcf99be54-03ba-4b82-a431-cd0b3bd3cb0f. Source archive
+winbridge-20261030T170646Z-b0947c3-8cc83ca5.zip,
+SHAadde1e07d3a95d89837f5baddf14aff54ddbc8daeb3ce75e1c580a56023c6520.
+Main31 actual keeper/history и current header3 сохранены; migration backup24
+verified, new25 owner epoch4/cold observation5, historical keeper epoch2 не менялся.
+Old24 init/status reject UnsupportedSchema без изменения copy; исходные journal,
+artifact/manifest и установленный worker не менялись. Bootstrap table пустая,
+cold view не создаёт custody. Это copy migration, не новый bootstrap execution.
+
+4 ready files verified twice;24 migration negatives/29 independently rechecked
+Main31 negatives. Report SHA256
+d29af8305a867c6a3402893ce71b3bdbf9763d75b6484ddf1b94ec2f2a00fd9b;
+proof8ec9c5990351d3c96901c3908624fd553f2cc75d16c6f4ca10e1470c02d35c01.
+Cargo106.854s: build69s/test34.52s. Windows15,250,874,368→15,253,340,160bytes.
+Metadata `.winbridge/update-preparation/bootstrap-migration-20261030-170706-bae5c263/`,
+log `.winbridge/keeper-stage-review-204/bootstrap-migration-native-run.log`.
+No task replay, windows none/desktop unnecessary; installed0.2.0/source48/genf9
+оставить запущенным. Windows directories не удалялись.
