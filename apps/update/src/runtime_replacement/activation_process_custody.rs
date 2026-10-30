@@ -12,6 +12,7 @@ use winbridge_transport::supervisor as ipc;
 #[derive(Default)]
 pub(super) struct Capture {
     pub(super) bytes: Vec<u8>,
+    recent: Vec<u8>,
     pub(super) incomplete: bool,
 }
 pub(super) fn drain(
@@ -32,6 +33,12 @@ pub(super) fn drain(
                         let keep = n.min(65536usize.saturating_sub(state.bytes.len()));
                         state.bytes.extend_from_slice(&chunk[..keep]);
                         state.incomplete |= keep != n;
+                        // Preserve the original bounded prefix for native
+                        // audits AND the latest bytes for a truthful tail.
+                        // Reads are at most4096 bytes; trim before appending.
+                        let discard = (state.recent.len() + n).saturating_sub(4096);
+                        state.recent.drain(..discard);
+                        state.recent.extend_from_slice(&chunk[..n]);
                     }
                     Err(_) => {
                         state.incomplete = true;
@@ -69,13 +76,14 @@ impl ProcessCustody {
                 count > 512,
             )
         }
-        let (stdout, stderr, incomplete) = self.output();
-        let (stdout, cut_out) = tail(&stdout);
-        let (stderr, cut_err) = tail(&stderr);
+        let stdout = self.captures[0].lock().unwrap_or_else(|p| p.into_inner());
+        let stderr = self.captures[1].lock().unwrap_or_else(|p| p.into_inner());
+        let (out, cut_out) = tail(&stdout.recent);
+        let (err, cut_err) = tail(&stderr.recent);
         (
-            stdout,
-            stderr,
-            incomplete || cut_out || cut_err,
+            out,
+            err,
+            stdout.incomplete || stderr.incomplete || cut_out || cut_err,
             self.readers.len() == 2 && self.readers.iter().all(|r| r.is_finished()),
         )
     }
@@ -130,6 +138,7 @@ mod tests {
         let mut owner = ProcessCustody::new();
         let mut gates = vec![];
         let counts = [Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0))];
+        let footers = ["last stdout Привет ✓\n", "last stderr Ошибка ✗\n"];
         for (i, count) in counts.iter().enumerate() {
             let (tx, rx) = mpsc::channel();
             gates.push(tx);
@@ -137,7 +146,13 @@ mod tests {
                 drain(
                     Box::new(Burst {
                         gate: Some(rx),
-                        bytes: Cursor::new(vec![b'a' + i as u8; 1024 * 1024]),
+                        bytes: Cursor::new(
+                            [
+                                vec![b'a' + i as u8; 1024 * 1024],
+                                footers[i].as_bytes().to_vec(),
+                            ]
+                            .concat(),
+                        ),
                         consumed: Arc::clone(count),
                     }),
                     Arc::clone(&owner.captures[i]),
@@ -155,13 +170,21 @@ mod tests {
         for (i, count) in counts.iter().enumerate() {
             assert_eq!(
                 count.load(Ordering::Relaxed),
-                1024 * 1024,
+                1024 * 1024 + footers[i].len(),
                 "A full capture must not backpressure either pipe"
             );
             let data = moved.captures[i].lock().unwrap();
             assert_eq!(data.bytes, vec![b'a' + i as u8; 65536]);
+            assert!(data.recent.len() <= 4096);
             assert!(data.incomplete);
         }
+        let (stdout, stderr, cut, _) = moved.diagnostics();
+        assert!(stdout.ends_with(footers[0]) && stderr.ends_with(footers[1]));
+        assert!(stdout.chars().count() <= 512 && stderr.chars().count() <= 512);
+        assert!(
+            cut,
+            "The prefix was truncated even though latest diagnostics survived"
+        );
     }
     #[test]
     fn read_error_retains_previous_bytes_and_never_reports_complete_output() {

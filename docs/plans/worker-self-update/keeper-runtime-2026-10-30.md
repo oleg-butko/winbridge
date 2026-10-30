@@ -79,3 +79,15 @@ Minimal bootstrap не должен требовать от старого keepe
 schema. Новая updater authority принадлежит новому coordinating actor, старый keeper
 не получает её обратно. Новый публичный install нельзя объявлять готовым до проверки
 двух поколений, U2 fault matrix, U3 UI/attention и U4 installed update.
+
+## Диагностический output перед keeper conversion
+
+Исправлен старый дефект Capture: после первых64KiB diagnostics tail переставал
+обновляться и мог скрыть последнюю ошибку. Теперь первые64KiB остаются для native
+аудита, а отдельные последние4096 bytes дают актуальные хвосты до512 Unicode chars.
+Оба reader по-прежнему дочитывают весь поток; размер состояния ограничен. Весь prefix
+больше не копируется ради короткого status. Усилен существующий concurrent drain
+regression:2MiB+разные Unicode footers, owner move, точные read counts, bounded tails
+и сохранённый prefix.3 portable tests и MSVC updater all-target Clippy passed.
+Это ещё не keeper runtime; source23 и schema/контракты не изменились. Текущий второй
+Main30 использует frozen baf8e3f→e5cdceb, без этого отдельного output fix.

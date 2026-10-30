@@ -15,11 +15,14 @@ typecheck/scaffold/fmt/diff,3 adapter и6 Python reader suites passed; build UI 
 run20261030-043200-319f3e87; не повторять,68 files twice verified, archive сохранён.
 Причина/исправление — в factory doc выше: duplicate checks убраны из capture,
 10s deadline и full transaction checkpoints сохранены.431 updater tests passed;
-далее final checks/clean pins/новый отдельный Main30. Installed прежний/active0/errors=null.
+второй Main30 baf8e3f→e5cdceb принят: taskbb0fc4f8-c4fe-43ac-a587-7786c5e823a3,
+run20261030-051739-2b5177f8; наблюдать тот же task. Installed прежний/active0/errors=null.
 Начат следующий этап: [keeper/close primitive](plans/worker-self-update/keeper-runtime-2026-10-30.md).
 `close_owned` сохраняет actual journal при SQLITE_BUSY/stale owner/live transaction,
 закрывает writer до authority Drop.3 SQLite tests и Linux/MSVC updater all-target
-Clippy passed; runtime keeper conversion/schema24 ещё не подключены.
+Clippy passed; актуальные bounded output tails также исправлены/3 tests passed.
+Runtime keeper conversion/schema24 ещё не подключены. Их разработка изолирована
+в detached `.winbridge/keeper-runtime-204-20261030`; в main пока source23.
 
 **.204/main,2026-10-29: writer независимого Active fact реализован.**
 [Контракт/ревью/проверки](plans/worker-self-update/finalization-completion-2026-10-29.md).
