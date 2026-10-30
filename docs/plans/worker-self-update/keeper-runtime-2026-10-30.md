@@ -30,7 +30,7 @@ Keeper и consuming retirement исходного координатора. На
 capture. Не-Serde permit допускает одну транзакцию: immutable keeper selection и
 supervisor Active→Keeper, active-slot освобождён; root/lease/finalization не меняются.
 Схема24 добавляет только keeper_selections; actual23 copy migration имеет отдельный
-профиль Keeper23To24 и обязательный native gate, ещё не выполненный.
+профиль Keeper23To24; native copy gate прошёл (см. результат выше).
 
 Известный COMMIT даёт opaque KeeperSelectionCommit. Он не означает закрытого writer
 или освобождённой блокировки. Исходный actor передаёт тот же journal, тот же Job,
@@ -69,7 +69,7 @@ consistent copy/backup, старый23 init/status обязаны отказат
 run-update-keeper-main-native.py, profile worker19-updater24. Main31 проверяет actual
 role/close, получение OS-lock новым owner при живом прежнем Job, повтор Retire без SQL,
 Info и одну fenced cmd task/dedup после смены owner epoch,3s CPU sample keeper и
-cleanup/cold view. Gates подготовлены, пока не выполнены. Имена/профили Main25–30
+cleanup/cold view. Migration gate прошёл; Main31 подготовлен, пока не выполнен. Имена/профили Main25–30
 не подменяются; Main30 по умолчанию по-прежнему строго19/23.
 
 После Main31: version-neutral bootstrap следующего coordinating actor вне worker
@@ -168,3 +168,14 @@ regression:2MiB+разные Unicode footers, owner move, точные read coun
 и сохранённый prefix.3 portable tests и MSVC updater all-target Clippy passed.
 Это ещё не keeper runtime; source23 и schema/контракты не изменились. Текущий второй
 Main30 использует frozen baf8e3f→e5cdceb, без этого отдельного output fix.
+
+## Clean pins для первого Main31
+
+Producer `d5a7baba8ebc84131560f41693ce38594e7096b6` (строгий IPC после review),
+archive `winbridge-20261030T103437Z-d5a7bab-38590a2b.zip`, SHA256
+`d9ebb0b2b28474c91a02723d4af341c6e9cd564e297a3105eccd2cbcf3b15493`.
+Оба SDK остаются19/24; target — отдельный следующий doc commit с той же реализацией,
+реальный BuildIdentity/sourceManifest pin, без подмены version. Actual23→24 migration
+осталась отдельным source5460a95 proof (SQL/runtime keeper код одинаков, routing fix
+отдельно проверен). Main31 требует duplicate-field real IPC regression; old Main30
+selector и SDK23 не меняются. Installed runtime остаётся source48/gen946.

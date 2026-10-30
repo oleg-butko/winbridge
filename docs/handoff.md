@@ -18,7 +18,8 @@ proof8ba919baa60efb75aabec7f2d32f9edbfb1f6944fa833f450ec825513151bf22.
 Отдельное ревью исправило JSON Value dispatcher: routing больше не удаляет дубли
 полей до DTO validation, оба контракта читаются из original bounded bytes. Real IPC
 regression1, supervisor20/2 ignored, transport и Linux/MSVC Clippy passed.
-Далее новый Main31 (run-update-keeper-main-native.py,19/24).
+Далее новый Main31 (run-update-keeper-main-native.py,19/24), producerd5a7bab;
+clean source pin зафиксирован в keeper plan.
 До положительных native результатов keeper не объявлять проверенным на Windows.
 Разработка перенесена из detached checkout в main; установленный worker не менялся.
 
