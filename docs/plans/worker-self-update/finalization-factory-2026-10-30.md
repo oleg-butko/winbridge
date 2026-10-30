@@ -101,3 +101,9 @@ Main30 effect ещё не выполнен. Унаследованный residen
 reviewed14, тогда как старый Main29 reader сохраняет default13. Никакие старые
 отчёты/схемы не переименованы. Reader6+3 regressions passed; новая проверка сохраняет
 SHA всех11 Python observer dependencies и Git commit/dirty, проверяя файлы повторно.
+
+Дополнительное ревью Main30 reader: после Confirmed публичный pending admission
+barrier обязан исчезнуть (`info.activeUpdateId=null`), хотя owner/installation/scope
+и root Committed сохраняются. Это не retirement supervisor. Новая проверка различает
+эти состояния;3 reader tests/22 negative audits passed. Source/target Windows tasks
+не повторялись, Rust-код snapshots от этой правки reader не меняется.

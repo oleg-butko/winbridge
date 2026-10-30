@@ -73,7 +73,7 @@ def fixture():
     rejected_obs = dict(finalizationObservationVersion=1,result=dict(kind='rejected'))
     case['activationFinalization'] = dict(first=view(at+3),second=view(at+6),record=saved,intent=dict(command=command,rootBefore=root,query=query,observation=obs),history=history,
         shutdownEncoded=encoded,releasePayload=dict(commandId=command['commandId'],expectedRevision=5,action='release',sourceManifestSha256='b'*64,reason=p.REASON),
-        releaseReceipt=released,updaterBefore=[info,root],updaterAfter=[info,new_root],infoBefore=dict(maintenanceAvailable=True,generation=lb['compatibility']['generation'],fencedRequests=dict(context=lb['compatibility']['context']),build=identity['descriptor']['build']),
+        releaseReceipt=released,updaterBefore=[info,root],updaterAfter=[dict(info,activeUpdateId=None),new_root],infoBefore=dict(maintenanceAvailable=True,generation=lb['compatibility']['generation'],fencedRequests=dict(context=lb['compatibility']['context']),build=identity['descriptor']['build']),
         wrongPeerMutation=rejected,wrongPeerObservation=rejected_obs,pidSpoof=copy.deepcopy(rejected_obs),
         configBefore=dict(fileIdentity='first',sha256='a'*64),configAfter=dict(fileIdentity='second',sha256='b'*64),configWriteSucceeded=True,atomicConfigReplaceSucceeded=True,
         accepted=accepted,duplicate=copy.deepcopy(accepted),task=task,taskEffect='ACTIVE\n',taskEffectLines=1,releaseCommandCount=1,
@@ -90,7 +90,7 @@ def fixture():
 class FinalizationProofTests(unittest.TestCase):
     def test_independent_graph_receipt_real_effect_and_all_negative_audits(self):
         result = p.audit(*fixture())
-        self.assertEqual(result['finalizationNegativeAudits'],21)
+        self.assertEqual(result['finalizationNegativeAudits'],22)
         self.assertFalse(result['permanentKeeperProved'])
 
     def test_exact_profile_never_relabels_main29_or_schema22(self):

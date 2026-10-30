@@ -148,7 +148,8 @@ def verify(proof, source, target, reservation):
          and binding['committedRootRevision'] == new_root['revision'], 'Root not committed exactly once from original revision')
     before_info, after_info = p['updaterBefore'][0], p['updaterAfter'][0]
     need(before_info['schemaVersion'] == after_info['schemaVersion'] == 23
-         and all(before_info[k] == after_info[k] for k in ('installationId','scopeSha256','ownerEpoch','activeUpdateId'))
+         and all(before_info[k] == after_info[k] for k in ('installationId','scopeSha256','ownerEpoch'))
+         and after_info['activeUpdateId'] is None
          and binding['installationId'] == before_info['installationId'] and binding['scopeSha256'] == before_info['scopeSha256']
          and original['binding']['updaterEpoch'] == before_info['ownerEpoch']
          and original['binding']['updateId'] == before_info['activeUpdateId']
@@ -230,6 +231,7 @@ def audit(proof, source, target, reservation, *, profile=PROFILE):
         ('activationFinalization/configWriteSucceeded',False), ('activationFinalization/atomicConfigReplaceSucceeded',False),
         ('activationFinalization/record/revision',1), ('activationFinalization/updaterAfter/1/phase','awaiting_controller'),
         ('activationFinalization/infoBefore/maintenanceAvailable',False),
+        ('activationFinalization/updaterAfter/0/activeUpdateId',proof['cases'][0]['activationFinalization']['updaterBefore'][0]['activeUpdateId']),
         ('activationFinalization/task/exitCode',True), ('activationFinalization/permanentKeeperProved',True),
         ('afterOwnedExit/automaticColdLaunchCount',1), ('afterOwnedExit/originalWorkerExited',False),
         ('afterOwnedExit/view/activationFinalization/originalCustodyHeld',True)]
