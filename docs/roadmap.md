@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: platform dual-existing-Job launch primitive added, exact parent/
+child checks before/after CreateProcess, no breakaway. Linux3 tests/1 ignored и
+Linux/MSVC Clippy passed; новый Windows unit только compiled. Wire one-attempt
+creator/ancestry/ready/handoff ещё не подключены.
+
 2026-10-30/.204: fresh updater helper/config/output pins и consuming bootstrap
 admission добавлены (source19/25,446 updater tests/15 focused, Linux/MSVC Clippy).
 Actual journal directory проверяется независимо от copied headers. Native

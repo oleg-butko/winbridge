@@ -1,5 +1,17 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: query-only dual-Job launch primitive, source19/25.**
+Platform InfrastructureChild::spawn_excluding_jobs проверяет exact current parent,
+два разных EXISTING Job до/после одного CreateProcess. Missing/query error не значит
+outside. Без breakaway/новых Job/limit changes. Возвращает owned child; будущий keeper
+должен detach до start marker/ACK, хранить один attempt и проверить ancestor exit.
+Общий spawn_process extracted без смены existing domain guard.3 Linux tests/1 ignored,
+Linux/MSVC platform all-target Clippy passed. Windows unit
+keeper_launch_requires_two_existing_jobs_and_an_exact_local_parent компилируется,
+ещё не выполнялась; native exclusion/wire creation НЕ объявлены проверенными.
+Два Job — scopes lifetime, не ограничение числа Debian. Installed worker не менялся.
+Далее minimal keeper launch protocol/state и actual one attempt; не повторять file prep.
+
 **.204/main,2026-10-30: fresh helper files + consuming admission в source19/25.**
 [Продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
 FreshUpdater проверяет actual bounded artifact query/clean build/source/target,

@@ -315,6 +315,64 @@ impl InfrastructureChild {
         domain: Option<&ExecutionDomain>,
     ) -> io::Result<Self> {
         require_parent_outside(domain)?;
+        let owner = Self::spawn_process(image, args, cwd, stdout, stderr)?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            if domain
+                .unwrap()
+                .job
+                .contains(owner.child.as_ref().unwrap().as_raw_handle())?
+            {
+                return Err(io::Error::other(
+                    "Infrastructure inherited the worker execution domain",
+                ));
+            }
+        }
+        Ok(owner)
+    }
+    /// Trusted keeper primitive: query two EXISTING Jobs before and after the
+    /// sole CreateProcess call. No breakaway, Job creation or limit changes.
+    #[cfg(windows)]
+    pub fn spawn_excluding_jobs(
+        parent: &PinnedProcess,
+        excluded: [&str; 2],
+        image: &Path,
+        args: &[String],
+        cwd: &Path,
+        outputs: [File; 2],
+    ) -> io::Result<Self> {
+        if parent.identity().process_id != std::process::id()
+            || excluded[0] == excluded[1]
+            || excluded.iter().any(|name| {
+                name.is_empty() || name.len() > 1024 || name.chars().any(char::is_control)
+            })
+        {
+            return Err(io::Error::other(
+                "Keeper parent or excluded Job identities changed",
+            ));
+        }
+        for name in excluded {
+            parent.require_outside_job(name)?;
+        }
+        crate::require_safe_path(cwd)?;
+        crate::require_local_disk(cwd)?;
+        let [stdout, stderr] = outputs;
+        let owner = Self::spawn_process(image, args, cwd, stdout, stderr)?;
+        let child = PinnedProcess::live(&owner.identity)?;
+        for name in excluded {
+            parent.require_outside_job(name)?;
+            child.require_outside_job(name)?;
+        }
+        Ok(owner)
+    }
+    fn spawn_process(
+        image: &Path,
+        args: &[String],
+        cwd: &Path,
+        stdout: File,
+        stderr: File,
+    ) -> io::Result<Self> {
         crate::require_safe_path(image)?;
         crate::require_local_disk(image)?;
         let mut command = Command::new(image);
@@ -343,25 +401,11 @@ impl InfrastructureChild {
                 return Err(e);
             }
         };
-        let owner = Self {
+        Ok(Self {
             child: Some(child),
             identity,
             kill_on_drop: true,
-        };
-        #[cfg(windows)]
-        {
-            use std::os::windows::io::AsRawHandle;
-            if domain
-                .unwrap()
-                .job
-                .contains(owner.child.as_ref().unwrap().as_raw_handle())?
-            {
-                return Err(io::Error::other(
-                    "Infrastructure inherited the worker execution domain",
-                ));
-            }
-        }
-        Ok(owner)
+        })
     }
     pub fn detached(&mut self) {
         self.kill_on_drop = false;
@@ -530,6 +574,107 @@ mod tests {
             assert!(Instant::now() < until);
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+    #[cfg(windows)]
+    #[test]
+    fn keeper_launch_requires_two_existing_jobs_and_an_exact_local_parent() {
+        use std::time::{Duration, Instant};
+        let root = tempfile::tempdir().unwrap();
+        let exe = std::env::current_exe().unwrap();
+        let args = vec![
+            "--exact".into(),
+            "infrastructure::tests::unconfirmed_lifetime_helper".into(),
+            "--ignored".into(),
+            "--test-threads=1".into(),
+        ];
+        let command = winbridge_protocol::ResolvedCommand {
+            executable: exe.to_str().unwrap().into(),
+            arguments: args.clone(),
+            working_directory: root.path().to_str().unwrap().into(),
+            timeout_ms: 10000,
+        };
+        let jobs = [
+            format!(
+                "Local\\WinBridge-Exclude-A-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ),
+            format!(
+                "Local\\WinBridge-Exclude-B-{}",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ),
+        ];
+        let (a, _ao, _ae) = crate::ManagedChild::prepare(&command, Some(&jobs[0])).unwrap();
+        let (b, _bo, _be) = crate::ManagedChild::prepare(&command, Some(&jobs[1])).unwrap();
+        let parent = PinnedProcess::live(&stamp(std::process::id()).unwrap()).unwrap();
+        let foreign = PinnedProcess::live(&stamp(a.id()).unwrap()).unwrap();
+        let mut outputs_id = 0;
+        let mut outputs = || {
+            outputs_id += 1;
+            [
+                File::create(root.path().join(format!("{outputs_id}.out"))).unwrap(),
+                File::create(root.path().join(format!("{outputs_id}.err"))).unwrap(),
+            ]
+        };
+        assert!(InfrastructureChild::spawn_excluding_jobs(
+            &foreign,
+            [&jobs[0], &jobs[1]],
+            &exe,
+            &args,
+            root.path(),
+            outputs()
+        )
+        .is_err());
+        assert!(InfrastructureChild::spawn_excluding_jobs(
+            &parent,
+            [&jobs[0], &jobs[0]],
+            &exe,
+            &args,
+            root.path(),
+            outputs()
+        )
+        .is_err());
+        let missing = format!(
+            "Local\\WinBridge-Missing-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        assert!(InfrastructureChild::spawn_excluding_jobs(
+            &parent,
+            [&jobs[0], &missing],
+            &exe,
+            &args,
+            root.path(),
+            outputs()
+        )
+        .is_err());
+        let child = InfrastructureChild::spawn_excluding_jobs(
+            &parent,
+            [&jobs[0], &jobs[1]],
+            &exe,
+            &args,
+            root.path(),
+            outputs(),
+        )
+        .unwrap();
+        let pin = PinnedProcess::live(&child.identity).unwrap();
+        pin.require_outside_job(&jobs[0]).unwrap();
+        pin.require_outside_job(&jobs[1]).unwrap();
+        drop(child); // Still owned: only the caller may later detach before start.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !pin.exited().unwrap() {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        a.close_unconfirmed();
+        b.close_unconfirmed();
     }
     #[test]
     fn unconfirmed_owned_cleanup_does_not_wait_for_process_lifetime() {

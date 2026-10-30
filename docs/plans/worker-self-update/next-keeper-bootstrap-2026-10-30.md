@@ -468,3 +468,31 @@ log `.winbridge/keeper-stage-review-204/bootstrap-files-native-run.log`.
 Installed worker unchanged; оставить запущенным, desktop не нужен/окон нет.
 Windows directories не удалялись. Следующий effect: actual keeper one-attempt
 launch с query-only outside BOTH Jobs и actual ancestry exit, Spawned/ready/handoff.
+
+## Dual-existing-Job physical launcher
+
+Platform InfrastructureChild::spawn_excluding_jobs получает exact retained local
+parent handle и два разных existing Job names. Parent PID должен быть std::process::id;
+live birth/host/session проверяются PinnedProcess. Оба query-only require_outside_job
+выполняются до OS spawn; после него exact child и тот же parent проверяются снова.
+Missing Job/query error — failure, а не outside. Не вызывает ExecutionDomain::open
+или Job creation из wire identity, не меняет limits/не ставит breakaway. На ошибке
+после CreateProcess owned child очищается; это не разрешение automatic retry.
+
+Existing spawn(domain) сохраняет свой прежний guard и post-check; общий private
+spawn_process содержит прежний Command/create/stamp/owned cleanup. Новый метод
+возвращает kill-on-drop owner, не делает detach сам. Future keeper обязан сохранить
+one-attempt state ДО вызова, detach только после positive boundary checks и ДО
+one-time start/ACK. Никаких public worker update commands этот primitive не добавляет.
+
+Windows unit keeper_launch_requires_two_existing_jobs_and_an_exact_local_parent
+проверяет foreign parent/alias/missing Job rejection, real child outside обеих Jobs,
+owned cleanup/exact exit. Он compiled MSVC, ещё не запускался. Linux infrastructure
+3 tests/1 ignored и Linux/MSVC platform all-target Clippy passed. Logs
+`.winbridge/keeper-stage-review-204/bootstrap-dual-exclusion-tests.log`,
+`bootstrap-dual-exclusion-linux-clippy.log`/`bootstrap-dual-exclusion-final-windows-clippy.log`.
+Native execute/wire launch всё ещё обязательны. Два Job — activation и old task
+scope, не число agents. Главное продолжение: keeper minimal launch envelope/hash,
+actual peer→one retained creation attempt→independent observation/Spawned/ready/handoff.
+Kepr должен хранить predecessor process handle с actual startup и positive exit
+для third generation. Stable future-SDK bridge/max2/full two workflow/U2–U4 не готовы.
