@@ -664,3 +664,36 @@ registered project до source/runtime changes. Затем native actual client 
 и controlled old keeper exit только при known successor + original root exit +
 same Job.empty + finished readers, без idle polling. Two real workflows/max2,
 future-SDK migration/bridge и U2–U4 остаются отдельными gates; install off.
+
+
+### Windows original-handle continuation
+
+Source07941873d4abf618304bfb5622939f77e9714517,
+archive winbridge-20261030T224435Z-0794187-a39fac40.zip,
+SHA394fa6874fc919a90aaaa2df3245fc7af9ee29f431656eaa5fa768dff04f30e5,
+manifest9b43a270a7a45c02869495e2d02f407b4fa7ee680be4fb817c6df66c429feb9b.
+Task3efde89e-958c-44ce-9668-bbade0535cbf/run20261030-224456-f079f929 passed:
+3 ready files twice/25 negative audits. Native helper проверила оба условия:
+expired original3s capture запрещает fresh use; те же original handles остаются
+живыми/in the same Job/outside the same Job для readonly continuation. Marker
+с finished helper/empty Job/readers сохраняет прежний independent audit.
+Reportd81bb95c057b62a10a0d8a680d075b3c4d21ef9cbef6601198efc34d634fc60c,
+proof0a70220d0d3ff27f648faa5de7fbca7a0cc6f3f46e8990df2c3c51e88a9fcc5f.
+
+Scope остаётся OS peer/Job/capture, synthetic role history; unit не вызывает новый
+consuming bootstrap client, его SQL Spawned/owner release или Ready/Handoff.
+keeperRuntimeProved/bootstrapCreationProved=false. Повторять этот task запрещено.
+Task127.391s/Cargo109.137s/test3.38s (3.05s — intentional capture expiry wait).
+Windows15,066,087,424→15,069,876,224bytes; installed source48/genf9 unchanged,
+active0/errors=null. Окон нет/закрывать нечего; установленный worker оставить,
+desktop не требуется. Отчёты/Windows validation directories не удалялись.
+
+Следующий независимый вертикальный участок — controlled old keeper exit. Нужна
+monotonic known-successor confirmation (не потерять её, если successor позже exited),
+positive original root exit по удерживаемому kernel object, same owned Job.empty
+и завершённые readers. Пока root жив, ждать kernel exit + IPC без периодического
+polling. После root exit допустим отдельный drain wait; ready JoinHandle нужно
+удалять, иначе select по completed future создаст новый idle spin. Query/Wait error
+не означает exit. Drop старого keeper не должен убить detached successor.
+После этого — intrinsic worker factory/nonblocking own-mode witness/managed fresh
+helper build и настоящий Native client/два workflow; public install всё ещё off.

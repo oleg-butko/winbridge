@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: native readonly original-handle continuation после3s expiry
+прошла (source0794187,run20261030-224456-f079f929,3 files twice/25 negatives).
+Это peer/Job unit, НЕ client Start/SQL/Ready/full workflow. Далее old keeper
+exit без idle polling + intrinsic Active-worker factory; installed прежний.
+
 2026-10-30/.204: consuming bootstrap client/one Start/readonly Observe и opaque
 original Spawned COMMIT добавлены; owner release/Ready/ConfirmReady/Handoff сохраняют
 original pins и query-only handle.460 updater tests/7 ignored, Linux/MSVC Clippy

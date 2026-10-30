@@ -1,5 +1,22 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: Windows original-handle continuation passed.**
+Source0794187/run20261030-224456-f079f929,
+task3efde89e-958c-44ce-9668-bbade0535cbf. Native exact peer/Job unit прошла:
+expired3s capture отказывает fresh operation, те же retained worker/keeper handles
+проходят readonly check.3 files twice/25 negative audits. Report
+d81bb95c057b62a10a0d8a680d075b3c4d21ef9cbef6601198efc34d634fc60c,
+proof0a70220d0d3ff27f648faa5de7fbca7a0cc6f3f46e8990df2c3c51e88a9fcc5f.
+127.391s task/109.137s Cargo/3.38s test (включая intentional3.05s expiry wait).
+Windows free15,066,087,424→15,069,876,224bytes; installed source48/genf9 unchanged,
+active0/errors=null. Helpers завершены, окон нет/закрывать нечего, worker оставить.
+Scope — real OS peer/Job/capture с synthetic role history; НЕ new client
+Start→SQL→Ready или full updater workflow. Широкие proof flags false.
+API/SQL client сохранён в0794187; результаты не дают права replay этого task.
+Далее controlled old keeper exit после known successor + exact root exit + same
+Job.empty/readers done без idle polling; затем intrinsic Active-worker factory
+и real client handshake. Оба участка нужны до двух native updater workflows.
+
 **.204/main,2026-10-30: consuming bootstrap client/known Spawned COMMIT, source19/25.**
 [API, ревью и дальнейший шаг](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#клиент-original-attempt-и-передача-owner).
 PreparedBootstrap→begin_launch→один borrowed send_start; lost/cancelled reply
