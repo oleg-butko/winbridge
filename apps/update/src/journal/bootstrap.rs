@@ -319,3 +319,36 @@ impl UpdateJournal {
         Ok(r)
     }
 }
+
+#[cfg(test)]
+mod directory_tests {
+    use super::*;
+    #[test]
+    fn matching_copied_headers_do_not_bind_a_writer_to_the_original_runtime() {
+        let root = tempfile::tempdir().unwrap();
+        let scope = "a".repeat(64);
+        let mut original = UpdateJournal::open(&root.path().join("original"), &scope).unwrap();
+        let copy = root.path().join("copy");
+        std::fs::create_dir(&copy).unwrap();
+        {
+            let mut destination = Connection::open(copy.join("updates.sqlite")).unwrap();
+            rusqlite::backup::Backup::new(&original.connection, &mut destination)
+                .unwrap()
+                .run_to_completion(64, std::time::Duration::from_millis(1), None)
+                .unwrap();
+        }
+        let mut copied = UpdateJournal::open(&copy, &scope).unwrap();
+        assert_eq!(original.info().unwrap(), copied.info().unwrap());
+        assert!(copied.require_journal_directory(&copy).is_ok());
+        assert!(original
+            .require_journal_directory(&original.directory)
+            .is_ok());
+        assert_eq!(
+            copied
+                .require_journal_directory(&original.directory)
+                .unwrap_err()
+                .code,
+            JournalErrorCode::PreconditionsChanged
+        );
+    }
+}

@@ -249,3 +249,13 @@ impl BootstrapIntent {
 #[cfg(test)]
 #[path = "bootstrap/tests.rs"]
 pub(crate) mod tests;
+
+#[cfg(any(windows, test))]
+mod files;
+#[cfg(any(windows, test))]
+pub use files::{FreshUpdater, PreparedBootstrapFiles};
+
+#[cfg(windows)]
+mod admission;
+#[cfg(windows)]
+pub use admission::{BootstrapPreparation, BootstrapPreparationFailure, PreparedBootstrap};

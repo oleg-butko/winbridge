@@ -1,5 +1,12 @@
 # Архитектура WinBridge
 
+2026-10-30/.204: fresh helper preparation принимает executable с actual queried
+clean source identity нового snapshot, создаёт fixed helper/config/output pins.
+Consuming admission связывает их с fresh keeper capture и opaque SQL COMMIT;
+физический runtime journal directory проверяется отдельно от scope header.
+Это preparation, не CreateProcess. Worker own-mode callback и keeper creator/
+ancestry/handoff пока не подключены; source19/25, installed worker прежний.
+
 2026-10-30/.204: minimal readonly KeeperProbe1 отделён от legacy keeper-control.
 Original closed Keeper проверяет actual current-child IPC PID и тот же owned Job,
 не открывая SQLite. Client capture хранит exact handles и непродлённый3s deadline;

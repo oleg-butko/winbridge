@@ -376,3 +376,68 @@ one-time start/ACK, independent observation/Spawned receipt и ready handoff. Ol
 Max2 требует живого predecessor handle/positive exit, не PID lookup. После actual
 same-SDK двух workflow — fresh future-SDK bridge/migration gate/U2–U4. Native unit
 этой главы не подменяет ни один из этих оставшихся сценариев.
+
+## Fresh helper files и consuming admission
+
+Source19/25: bootstrap/files.rs добавляет FreshUpdater::from_managed_build. Caller
+предоставляет trusted registered build root; canonical image path должен лежать в
+нём. Actual bounded artifact query проверяет updater role/OS/arch/clean source commit+
+manifest, точный SHA/identity/bytes и полную cleanup query tree. Это stateless managed
+query, не новый coordinating actor. Build-cache source может быть hardlinked; copied
+fixed helper/config/output должны иметь single link. Новый updater не берётся из
+старого installed runtime: copy_new_checked читает pinned fresh image с owner
+checkpoints и создаёт новый update/<id>/supervisor/winbridge-update.exe.
+
+File staging требует accepted Requested0/current owner, actual calling worker stamp,
+loaded worker config hash/domain host/session, correct generation endpoint и actual
+runtime/update-state directory. Последняя проверка не выводится из scope header:
+consistent копия SQLite сохраняет header, но не права писать другой runtime. Новый
+portable regression проверяет эту границу. Configs read-pinned/<=64KiB, fixed local
+paths, baseline source verified до staging. Новый helper directory create-only;
+частичная подготовка сохраняется, не overwrite/replay/cleanup автоматически.
+
+Image/updater config/worker config pins запрещают write/delete; stdout/stderr read
+pins позволяют keeper writer, но не rename/delete. Все пять identity distinct,
+single-link/current paths/hashes проверяются заново. Private token не сериализуется
+в intent, вместо него SHA. PreparedBootstrapFiles создаёт согласованные intent/spec
+с поздним preparedAt, чтобы тяжёлая copy/query не съедала fresh3s observation.
+
+Windows-only admit потребляет этот original object и non-Clone KeeperProbeCapture,
+проверяет own_state до/внутри/после SQL, получает opaque original COMMIT. own_state —
+trusted worker callback, обязан проверять реальную normal mode/domain witness и
+не ждать Store-lock под SQL-lock. Worker integration callback пока отсутствует.
+Failure содержит original file/process pins/known fact, не превращается обратно в
+fresh prepared object; post-COMMIT failure явно сообщает known commit/no coordinator.
+Existing возвращает только historical data. Никакого CreateProcess/нового wire action
+этот участок не добавляет, public update capability остаётся выключенной.
+
+Max2: incoming reservation — данные для будущего actual keeper creator. У current
+keeper должен сохраняться query-only predecessor handle из его coordinating phase;
+physical creator проверяет positive exit до CreateProcess. Client reservation может
+быть prepared без физического ancestor-exit доказательства, но не является spawn
+permit. Не доверять saved PID/boolean из JSON. Это уточнение места physical guard,
+не снятие invariant. Missing handle/query error запрещают создание третьего.
+
+Проверки:446 updater tests/7 ignored,15 focused bootstrap tests, Linux/MSVC updater
+all-target Clippy -D warnings/fmt/diff passed. Python readers9 tests (files/probe/
+exclusion), files observer24 negative mutations. Новый ignored Windows case
+bootstrap::files::native::fresh_helper_and_config_pins_allow_only_the_intended_file_access
+строит real fresh updater, query/copy проверяет при отдельном старом installed
+sentinel; native file sharing/write/replace/output pins retirement. Worker state
+synthetic: это не actual normal-mode/keeper admission/full updater workflow. Перед
+native result не считать эти Windows guarantees подтверждёнными исполнением.
+Driver run-update-bootstrap-files-native.py, readonly verify-update-bootstrap-files-native.py.
+Debian free before package10,258,866,176/after9,515,409,408bytes; Windows/shared
+15,806,816,256bytes. Source schema25 unchanged, Windows directories не удалялись.
+
+Далее сразу основной effect path: minimal keeper launch envelope из этих pins,
+actual original-child auth, fixed paths/args, query-only exclusion BOTH original
+activation Job и old task domain, retained predecessor positive exit/max2. Один
+in-memory creation attempt, detach до start marker/ACK, отдельное Observe после
+unknown. P0 не открывает SQL/future Root. Worker записывает exact Spawned receipt,
+освобождает owner; новый actor получает authority и handoff. Logical worker и physical
+spawner различаются. Затем startup parent-handle переносится до нового Keeper;
+old Keeper выходит по known next ready+old worker exited+same Job empty+readers done.
+Normal direct-in-external-Job worker guard сохраняется. Для same-SDK использовать
+existing supervisor protocol; stable future-SDK ready/worker bridge и migration
+с epoch jump остаются отдельным обязательным gate до U4.

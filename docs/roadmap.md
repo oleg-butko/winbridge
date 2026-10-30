@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: fresh updater helper/config/output pins и consuming bootstrap
+admission добавлены (source19/25,446 updater tests/15 focused, Linux/MSVC Clippy).
+Actual journal directory проверяется независимо от copied headers. Native
+file-sharing unit подготовлена; wire creation/own-worker mode integration/max2
+ещё не готовы. Следующий основной шаг — one-attempt keeper launch и handoff.
+
 2026-10-30/.204: readonly keeper probe1/current-child IPC binding добавлен
 в source19/25.3 portable/23 supervisor tests passed; live capture удерживает exact
 handles/исходный3s deadline, не permission. Native peer/Job unit passed

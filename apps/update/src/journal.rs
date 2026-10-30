@@ -741,6 +741,18 @@ impl UpdateJournal {
         Ok(result)
     }
 
+    #[cfg(any(windows, test))]
+    pub(crate) fn require_journal_directory(&self, expected: &Path) -> Result<()> {
+        check_files(expected)?;
+        winbridge_platform::require_local_disk(expected).map_err(storage)?;
+        if expected.canonicalize().map_err(storage)? != self.directory {
+            return Err(fail(
+                JournalErrorCode::PreconditionsChanged,
+                "Journal handle belongs to another runtime state directory",
+            ));
+        }
+        Ok(())
+    }
     fn check_directory(&self, authority: &UpdateAuthority) -> Result<()> {
         if authority.directory != self.directory {
             return Err(fail(

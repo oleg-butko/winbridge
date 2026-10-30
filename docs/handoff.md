@@ -1,5 +1,21 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: fresh helper files + consuming admission в source19/25.**
+[Продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
+FreshUpdater проверяет actual bounded artifact query/clean build/source/target,
+копирует именно новый exe в fixed update/<id>/supervisor. Config/image pins deny
+write/delete; output pins allow intended writer и deny replacement. Root0/actual
+worker/domain/config и физический journal directory проверяются до staging;
+копия SQLite с совпадающими header не разрешает writes рабочего runtime.
+PreparedBootstrapFiles::admit связывает original pins, fresh keeper capture,
+nonblocking own-state callback и known SQL COMMIT. Ошибка держит исходные ресурсы,
+Existing только data; это ещё не keeper creation eligibility/spawn.
+446 updater tests/7 ignored,15 focused, Linux/MSVC updater all-target Clippy passed;
+Windows file-sharing unit подготовлена, native результата пока нет. Own-mode
+callback пока не подключён к worker, ancestry/one creation/ready handoff впереди.
+Установленный worker не менялся. Далее actual minimal keeper launch, не повторять
+разработку intent/known commit/probe; fresh helper подготовлен этим source участком.
+
 **.204/main,2026-10-30: readonly current-worker→keeper probe1 в source19/25.**
 [Контракт и продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
 Отдельный minimal DTO не содержит будущие SQL models/path/argv/token. Закрытый
