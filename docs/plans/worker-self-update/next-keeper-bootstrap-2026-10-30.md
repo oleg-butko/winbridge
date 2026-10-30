@@ -761,3 +761,56 @@ updater build и реальный client Start→Spawned→owner→Ready/Handoff
 нужны два настоящих workflow/max2, cold/fault matrix и future-SDK bridge/U2–U4.
 Unconfirmed root exit намеренно не даёт новый launch/role adoption; cold restart
 и reconciliation не объявляются реализованными по этой OS fixture.
+
+
+### Windows controlled-exit результат
+
+Sourceb62e8a9feb1e0b3a11beef9d6b4c01ebf5a9c199,
+archive winbridge-20261030T232437Z-b62e8a9-dda9eab5.zip,
+SHAe4007a65f31440740baddc2f9dff0cccf365455bf512d3c50d4fdb99fb7bf36b,
+manifest66553f4387ccf4211da9f046ce7dc246d228fb5d3e5dfaf90230ceefc8d647e0.
+Task528e425a-3d9a-48b6-a376-e78a91bd0e6f/run20261030-232522-2409a4e0 passed;
+8 ready files проверены дважды,40 deliberate mutations rejected. Report
+9cfe1f9263115eb16754e0693dea6e7a6b98fb4f6c4717aa7fbab1d47574e37f,
+proofd8f35f1234161bc5ce982c658ddfc9f86abed12162ad712c5f7d9be03d896630.
+
+Production dual-Job unit выполнила kernel wait: до owned child exit он не завершён,
+после cleanup same object signalled; helper roots exited. Closed-loop unit:
+confirmed keeperPID8896, original worker3752, leaf19324, independent successor22800.
+Root exit при live leaf показал Job.nonempty/readers.pending и retained custody;
+после leaf exit/empty Job/join keeper действительно завершился с exit0, successor
+остался жив до своего отдельного cooperative stop. Unconfirmed keeper22788 удержал
+Job/custody после root24752/leaf3328 exit/EOF; fixture вручную завершила только этот
+owned helper, successor15684 выжил и также был отдельно остановлен. Это исторические
+PIDs завершённых fixture процессов, не текущие PID рабочего worker.
+
+Три idle samples:0ticks за506,029,900ns;0 за505,862,400ns;0 за510,072,900ns.
+Последний sample после completed wait без confirmation проверяет отсутствие
+повторного polling завершённого JoinHandle. Sample относится к этой OS fixture,
+не к универсальной гарантии производительности. Root/readers/exit trace из отдельного
+helper stderr согласован с parent-side retained kernel pins/status snapshots.
+
+Scope остаётся actual production loop/IPC peer/kernel/Job/readers/OS exits при
+synthetic role history и synthetic Ready claim. Здесь нет SQLite retirement/new
+client bootstrap/SQL Spawned/owner handoff или real updater workflow. Reader явно
+сохраняет bootstrapCreationProved/updaterWorkflowProved=false. Широкий end-to-end
+результат не выводить из этих тестов. Task не replay.
+
+Замеры:151.938s task, Cargo commands35.866+97.732=133.598s; test bodies0.17+3.57s.
+Сборка остаётся главным источником длительности этого прогона. Windows свободно
+15,084,474,368→15,075,389,440bytes. Installed source48/genf9 unchanged/active0/errors=null;
+helpers завершены, окон нет/закрывать нечего; worker оставить, desktop не нужен.
+Отчёты и Windows validation directories сохранены.
+
+Следующий участок — trusted intrinsic factory в настоящем Active worker. Сейчас
+launch_update_supervisor_inner по-прежнему отказывает external Job; guard нельзя
+просто снять. LocalServiceScope хранит Arc<ServiceLifetime::Active> с original
+resident keeper pin/activation command/receipt. Новая nomination из readonly
+keeper selection должна совпасть с этой intrinsic scope, actual loaded process,
+context/generation/config и новым peer/Job probe. Saved row остаётся data only.
+Own-state callback на SQL checkpoints должен использовать try-lock/короткий
+snapshot, без ожидания Store/registry lock под updater writer; execution-domain
+witness тоже original, не имя из request. Fresh updater нужен из managed build
+registered project до source/runtime changes. Затем resident original attempt,
+one Start/Observe/known COMMIT/owner release/Ready/Handoff с сохранением failure
+resources. Same SDK сначала; future-SDK bridge/два real workflow/U2–U4 отдельно.

@@ -1,5 +1,25 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: Windows controlled keeper exit gate passed.**
+Sourceb62e8a9/run20261030-232522-2409a4e0,
+task528e425a-3d9a-48b6-a376-e78a91bd0e6f.2 exact units passed: dual-Job/kernel
+wait и production closed-loop fixture с confirmed/unconfirmed successor. Root
+exit при live leaf не закрыл original Job; после empty Job/EOF/join keeper вышел
+естественно и independent successor выжил. Без Ready keeper остался после drain,
+fixture остановила только свой owned keeper; successor снова выжил. Все helpers
+завершены.3 idle samples0 CPU ticks/0.506–0.510s, не универсальный benchmark.
+8 files twice/40 negative audits. Report
+9cfe1f9263115eb16754e0693dea6e7a6b98fb4f6c4717aa7fbab1d47574e37f,
+proofd8f35f1234161bc5ce982c658ddfc9f86abed12162ad712c5f7d9be03d896630.
+151.938s task/133.598s Cargo/test bodies0.17+3.57s. Windows free
+15,084,474,368→15,075,389,440bytes; installed source48/genf9 unchanged/active0/errors=null.
+Окон нет/закрывать нечего; установленный worker оставить, desktop не требуется.
+Scope — actual closed loop/kernel/PIDs/Job/readers/OS exit с synthetic role history
+и synthetic Ready claim, НЕ bootstrap creation/client SQL handoff/full updater.
+Broad proof flags false. Далее intrinsic Active-worker factory с nonblocking
+own-mode witness/managed fresh helper build и actual client handshake/два workflow;
+source19/25 same SDK, future bridge/U2–U4/install off ещё не готовы. Не replay task.
+
 **.204/main,2026-10-30: controlled old keeper exit в source19/25.**
 [Условия, ревью и native scope](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#controlled-old-keeper-exit).
 Closed keeper ждёт original root через SAME retained query/SYNCHRONIZE handle

@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: controlled keeper exit native gate passed (sourceb62e8a9,
+run20261030-232522-2409a4e0): actual loop/Job/readers/OS exit,2 cases, successor
+survived,3 idle samples0 ticks.8 files twice/40 negatives, installed unchanged.
+Synthetic role/Ready history; bootstrap/client/full workflow не proved. Далее
+intrinsic Active-worker factory/managed fresh helper и actual client handshake.
+
 2026-10-30/.204: controlled old keeper exit реализован: known successor + same
 root kernel exit + same Job.empty + joined readers, kernel wait без idle polling.
 Root PID не reopening для exit verdict, wait/query errors retain custody.
