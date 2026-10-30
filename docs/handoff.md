@@ -1,5 +1,27 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: controlled old keeper exit в source19/25.**
+[Условия, ревью и native scope](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#controlled-old-keeper-exit).
+Closed keeper ждёт original root через SAME retained query/SYNCHRONIZE handle
+(kernel wait на blocking thread), без idle polling/SQL/hash. До close writer pin
+связан с actual child/Job. Статус больше не угадывает exit через reopen PID/NotFound;
+original custody остаётся held после root exit, пока Job/readers принадлежат keeper.
+Exit требует monotonic known-successor Ready + positive root exit/reap + same
+Job.empty + завершённые/joined оба reader. Completed wait JoinHandle удаляется
+до следующего select;250ms drain timer включается только после root exit и Ready.
+Ошибки wait/query сохраняют custody/unknown reason, не дают exit. Detached successor
+не получает cleanup права от Drop старого keeper. Root/drain/exit events bounded,
+одинаковые drain flags не повторяются.475 updater/platform tests/8 ignored,
+Linux/MSVC all-target Clippy passed. Новый Windows gate run-update-keeper-exit-native.py
+подготовлен (2 exact units,2 loop cases, idle CPU samples), ещё не выполнялся.
+В нём synthetic role history/Ready claim, но actual loop/PIDs/Job/readers/process
+exit; не actual client/bootstrap/SQL updater workflow.27 Python observer/profile
+tests passed/40 new negative audits;4 retained native reports reverified twice
+после общего profile metadata refactor, старые scopes/selections сохранены.
+Installed worker не менялся; далее новый gate без replay, затем intrinsic Active
+worker factory/managed fresh helper build и настоящий client handshake/два workflow.
+Future SDK/U2–U4/install off остаются незавершёнными.
+
 **.204/main,2026-10-30: Windows original-handle continuation passed.**
 Source0794187/run20261030-224456-f079f929,
 task3efde89e-958c-44ce-9668-bbade0535cbf. Native exact peer/Job unit прошла:

@@ -697,3 +697,67 @@ polling. После root exit допустим отдельный drain wait; re
 не означает exit. Drop старого keeper не должен убить detached successor.
 После этого — intrinsic worker factory/nonblocking own-mode witness/managed fresh
 helper build и настоящий Native client/два workflow; public install всё ещё off.
+
+
+## Controlled old keeper exit
+
+2026-10-30/.204, source worker19/updater25. Старый closed keeper выходит только
+при одновременном выполнении четырёх условий: known original successor Ready,
+positive original root exit, empty same owned Job и finished/joined оба original
+output reader. Пока root жив, loop ждёт IPC и kernel process signal, без timer/SQL/
+hash polling. На root exit completed JoinHandle удаляется; polling завершённого
+future мог бы вызвать новый spin. Drain timer250ms включается только после actual
+root exit и successor confirmation; без неё keeper остаётся resident даже при
+empty Job/EOF. Ошибка wait/query — unknown с сохранением ресурсов, не exit.
+
+`PinnedProcess::wait_for_exit` — блокирующий WaitForSingleObject(INFINITE) на том
+же query/SYNCHRONIZE handle, вынесенный в bounded blocking owner task. Guard pin-ит
+original worker до close writer; custody и watcher разделяют Arc на SAME object.
+Никаких PID lookup после exit. KeeperStatus.worker_alive читает retained kernel
+signal; original_custody_held подтверждает identity/ownership независимо от того,
+жив root или нет. Original Job остаётся owned до final empty observation/Drop.
+
+Known-successor flag монотонный: subsequent Exited у successor не стирает уже
+подтверждённый Ready. Перед exit owned ManagedChild даёт original exit/reap, тот же
+Job даёт positive empty; оба уже finished reader join-ятся без ожидания живого
+процесса. Reader panic помечает output incomplete, факт joined сохраняется после
+удаления JoinHandles. Завершающая проверка Job.empty не отделена await от close.
+Drop detached successor закрывает только query/std child handles, не убивает его.
+
+Логи original_worker_exit_observed/original_keeper_drain_observed/exit и bounded
+unknown reason показывают задержку. Drain flags пишутся при изменении; idle logs
+не добавлены. Изменения не открывают SQLite и не удерживают updater authority/
+config pins в closed keeper. Нет breakaway/изменения Job limits/future-schema read.
+
+Проверки:475 updater/platform tests/8 ignored; existing machine/reader tests усилены
+для monotonic Ready и early-reader-join отказа. Linux/MSVC all-target Clippy passed.
+Windows dual-Job unit усилена: kernel wait не возвращается у live child, после
+owned cleanup завершается на same object, все helper roots exited. Full exit-loop
+unit подготовлена, ещё не выполнена: confirmed successor должен пережить actual
+old keeper OS exit; root exit при live leaf не закрывает Job; unconfirmed successor
+удерживает keeper даже после empty Job/EOF, затем fixture вручную завершает только
+свой owned keeper. Idle samples до root exit и после completed wait без confirmation
+проверяют отсутствие >25% одного CPU на sample. Это диагностический sample, не
+универсальный performance benchmark.
+
+Новая fixture имеет synthetic role history и synthetic Ready claim, но использует
+production closed loop/actual IPC peer/held kernel objects/Job/readers/OS exits.
+Она НЕ доказывает SQL retirement, bootstrap creation, new client handshake или
+полный updater workflow; broad proof flags остаются false. Не включать public install.
+Native input/root/reports фиксируются в отдельном namespace keeper-exit; helpers
+не используют сеть/GUI, installed worker остаётся прежним. Native script выбирает
+ровно production platform dual-Job/wait unit и ignored keeper exit-loop unit.
+
+Runner/verifier используют общий update-lifetime-native-profiles.py: прежние пять
+scopes/counts/switches/meta keys сохранены, mutually exclusive selection проверяется
+до RPC.27 Python reader/profile tests passed,40 deliberate exit proof mutations
+rejected. После refactor4 прежних native reports (probe/files/launch/exclusion)
+проверены дважды без Windows RPC/replay, hashes остались прежними. Новый independent
+reader связывает2 cases/status snapshots/idle samples с production exit trace,
+не путает manual fixture stop с natural exit. Нужен новый isolated Windows run.
+
+Далее intrinsic Active-worker factory/nonblocking own-mode witness, managed fresh
+updater build и реальный client Start→Spawned→owner→Ready/Handoff. После этого
+нужны два настоящих workflow/max2, cold/fault matrix и future-SDK bridge/U2–U4.
+Unconfirmed root exit намеренно не даёт новый launch/role adoption; cold restart
+и reconciliation не объявляются реализованными по этой OS fixture.

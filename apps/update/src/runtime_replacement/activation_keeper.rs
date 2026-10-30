@@ -27,6 +27,7 @@ pub struct CoordinatorRetirement {
 pub struct ActivationKeeperCustody {
     physical: ProcessCustody,
     binding: KeeperBinding,
+    worker: Arc<infrastructure::PinnedProcess>,
     predecessor: KeeperPredecessor,
 }
 /// Query-only predecessor evidence captured by this coordinator while the
@@ -186,7 +187,7 @@ impl CoordinatorRetirement {
     pub fn try_close(
         mut self: Box<Self>,
     ) -> std::result::Result<Box<ActivationKeeperCustody>, Box<Self>> {
-        let checked = (|| -> Result<KeeperBinding> {
+        let checked = (|| -> Result<(KeeperBinding, Arc<infrastructure::PinnedProcess>)> {
             let known = self
                 .known
                 .as_ref()
@@ -214,12 +215,19 @@ impl CoordinatorRetirement {
                 .ok_or("Original writer missing")?
                 .require_known_keeper_selection(authority, known)
                 .map_err(|e| e.to_string())?;
-            binding(
+            let binding = binding(
                 &self.guard,
                 Some(known.selection().sha256().map_err(|e| e.to_string())?),
-            )
+            )?;
+            let worker = Arc::new(
+                infrastructure::PinnedProcess::live(&binding.worker).map_err(|e| e.to_string())?,
+            );
+            worker
+                .require_job_membership(&binding.job_name)
+                .map_err(|e| e.to_string())?;
+            Ok((binding, worker))
         })();
-        let binding = match checked {
+        let (binding, worker) = match checked {
             Ok(v) => v,
             Err(reason) => {
                 self.reason = Some(reason);
@@ -250,6 +258,7 @@ impl CoordinatorRetirement {
         Ok(Box::new(ActivationKeeperCustody {
             physical,
             binding,
+            worker,
             predecessor,
         }))
     }
@@ -307,13 +316,34 @@ impl ActivationKeeperCustody {
     pub(crate) fn probe_test_custody(child: ManagedChild, binding: KeeperBinding) -> Result<Self> {
         let mut physical = ProcessCustody::new();
         physical.child = Some(child);
+        let worker = Arc::new(
+            infrastructure::PinnedProcess::live(&binding.worker).map_err(|e| e.to_string())?,
+        );
         let value = Self {
             physical,
             binding,
+            worker,
             predecessor: KeeperPredecessor(None),
         };
         value.require_physical()?;
         Ok(value)
+    }
+    /// Native exit-loop fixture only: real original Job/readers, synthetic role
+    /// history. This does not execute/attest the SQL retirement path.
+    #[cfg(all(test, windows))]
+    pub(crate) fn exit_test_custody(
+        child: ManagedChild,
+        binding: KeeperBinding,
+        readers: [winbridge_platform::OutputReader; 2],
+    ) -> Result<Self> {
+        let mut custody = Self::probe_test_custody(child, binding)?;
+        for (i, reader) in readers.into_iter().enumerate() {
+            custody
+                .physical
+                .readers
+                .push(drain(reader, Arc::clone(&custody.physical.captures[i]))?);
+        }
+        Ok(custody)
     }
     #[cfg(all(test, windows))]
     pub(crate) fn physical_test_child(&mut self) -> &mut ManagedChild {
@@ -345,7 +375,7 @@ impl ActivationKeeperCustody {
     pub(crate) fn bootstrap_binding(&self) -> &KeeperBinding {
         &self.binding
     }
-    fn require_physical(&self) -> Result<()> {
+    fn require_identity(&self) -> Result<()> {
         let actual = self
             .physical
             .child
@@ -359,19 +389,53 @@ impl ActivationKeeperCustody {
             || actual.host_id != expected.host_id
             || actual.session_id != expected.session_id
             || actual.job_name != self.binding.job_name
+            || self.worker.identity() != expected
         {
             return Err("Keeper original physical identity changed".into());
         }
-        infrastructure::PinnedProcess::live(expected)
-            .and_then(|p| p.require_job_membership(&self.binding.job_name))
+        Ok(())
+    }
+    fn require_physical(&self) -> Result<()> {
+        self.require_identity()?;
+        self.worker
+            .require_job_membership(&self.binding.job_name)
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(windows)]
+    pub(crate) fn worker_exit_pin(&self) -> Arc<infrastructure::PinnedProcess> {
+        Arc::clone(&self.worker)
+    }
+    /// Original object/owned Job/readers only. No saved PID, SQL or new authority.
+    #[cfg(windows)]
+    pub(crate) fn retire_if_drained(&mut self) -> Result<bool> {
+        self.require_identity()?;
+        if !self.worker.exited().map_err(|e| e.to_string())? {
+            return Ok(false);
+        }
+        let child = self
+            .physical
+            .child
+            .as_mut()
+            .ok_or("Original child missing")?;
+        if child.try_wait().map_err(|e| e.to_string())?.is_none()
+            || !child.tree_is_empty().map_err(|e| e.to_string())?
+        {
+            return Ok(false);
+        }
+        if !self.physical.join_finished_readers() {
+            return Ok(false);
+        }
+        // Nothing was respawned, and no await lies between this final positive
+        // observation and closing the original owned Job in Drop.
+        self.physical
+            .child
+            .as_ref()
+            .ok_or("Original Job missing")?
+            .tree_is_empty()
             .map_err(|e| e.to_string())
     }
     pub fn status(&self) -> KeeperStatus {
-        let alive = match infrastructure::PinnedProcess::live(&self.binding.worker) {
-            Ok(_) => Some(true),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(false),
-            Err(_) => None,
-        };
+        let alive = self.worker.exited().ok().map(|exited| !exited);
         let (out, err, cut, done) = self.physical.diagnostics();
         KeeperStatus {
             phase: if alive == Some(false) {
@@ -383,7 +447,7 @@ impl ActivationKeeperCustody {
             role_selection_known: true,
             writer_closed: true,
             authority_released: true,
-            original_custody_held: Some(self.require_physical().is_ok()),
+            original_custody_held: Some(self.require_identity().is_ok()),
             worker_alive: alive,
             job_tree_empty: self
                 .physical

@@ -78,6 +78,7 @@ struct CreationFailure {
 #[derive(Default)]
 struct Machine {
     slot: Option<KeeperLaunchStatus>,
+    successor_confirmed: bool,
 }
 #[cfg(any(windows, test))]
 impl Machine {
@@ -151,6 +152,7 @@ impl Machine {
         }
         let s = self.slot.as_mut().unwrap();
         s.phase = KeeperLaunchPhase::ReadyConfirmed;
+        self.successor_confirmed = true;
         Ok(s.clone())
     }
 }
@@ -178,6 +180,30 @@ pub(super) struct Actor {
 }
 #[cfg(windows)]
 impl Actor {
+    /// Fixture starts a real outside-Job helper, not a real updater coordinator.
+    /// Only native loop tests use this constructor; production still creates
+    /// exclusively through authenticated Start and fixed pinned helper files.
+    #[cfg(test)]
+    pub(super) fn exit_test_actor(
+        mut child: InfrastructureChild,
+        b: &KeeperBinding,
+        t: &KeeperLaunchTicket,
+    ) -> Result<Self> {
+        let pin = infrastructure::PinnedProcess::live(&child.identity).map_err(error)?;
+        pin.require_outside_job(&b.job_name).map_err(error)?;
+        pin.require_outside_job(&t.excluded_job).map_err(error)?;
+        child.detached();
+        let mut machine = Machine::default();
+        machine.start(b, t, now()?, || Ok(child.identity.clone()))?;
+        Ok(Self {
+            machine,
+            child: Some(child),
+            excluded_job: Some(t.excluded_job.clone()),
+        })
+    }
+    pub(super) fn successor_confirmed(&self) -> bool {
+        self.machine.successor_confirmed
+    }
     pub(super) fn handle(
         &mut self,
         r: &SupervisorRecord,

@@ -56,6 +56,7 @@ pub(super) struct ProcessCustody {
     pub(super) channel: Option<ipc::Stream>,
     pub(super) captures: [Arc<Mutex<Capture>>; 2],
     pub(super) readers: Vec<thread::JoinHandle<()>>,
+    readers_joined: bool,
 }
 impl ProcessCustody {
     pub(super) fn output(&self) -> (Vec<u8>, Vec<u8>, bool) {
@@ -84,8 +85,29 @@ impl ProcessCustody {
             out,
             err,
             stdout.incomplete || stderr.incomplete || cut_out || cut_err,
-            self.readers.len() == 2 && self.readers.iter().all(|r| r.is_finished()),
+            self.readers_joined
+                || self.readers.len() == 2 && self.readers.iter().all(|r| r.is_finished()),
         )
+    }
+    /// Called only after root exit and a positive empty Job. Joining already
+    /// finished readers cannot block on a live process or manufacture EOF.
+    pub(super) fn join_finished_readers(&mut self) -> bool {
+        if self.readers_joined {
+            return true;
+        }
+        if self.readers.len() != 2 || !self.readers.iter().all(|r| r.is_finished()) {
+            return false;
+        }
+        for reader in self.readers.drain(..) {
+            if reader.join().is_err() {
+                for capture in &self.captures {
+                    capture.lock().unwrap_or_else(|p| p.into_inner()).incomplete = true;
+                }
+                eprintln!("WinBridge keeper: original output reader panicked; output incomplete");
+            }
+        }
+        self.readers_joined = true;
+        true
     }
     pub(super) fn new() -> Self {
         Self {
@@ -96,6 +118,7 @@ impl ProcessCustody {
                 Arc::new(Mutex::new(Capture::default())),
             ],
             readers: Vec::new(),
+            readers_joined: false,
         }
     }
 }
@@ -161,12 +184,23 @@ mod tests {
             );
         }
         let mut moved = std::hint::black_box(owner);
+        assert!(
+            !moved.join_finished_readers(),
+            "Live pipe readers cannot be joined/retired early"
+        );
         for gate in gates {
             gate.send(()).unwrap();
         }
-        for reader in moved.readers.drain(..) {
-            reader.join().unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !moved.join_finished_readers() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
+        assert!(moved.join_finished_readers(), "Known joins are idempotent");
+        assert!(
+            moved.diagnostics().3,
+            "Retired reader handles remain known finished"
+        );
         for (i, count) in counts.iter().enumerate() {
             assert_eq!(
                 count.load(Ordering::Relaxed),

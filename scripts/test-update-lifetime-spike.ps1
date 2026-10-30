@@ -8,11 +8,12 @@ param(
   [switch]$KeeperProbe,
   [switch]$BootstrapFiles,
   [switch]$KeeperLaunchPrimitives,
+  [switch]$KeeperExit,
   [string]$SourceArchiveName
 )
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
-if(([int][bool]$BootstrapExclusion+[int][bool]$KeeperProbe+[int][bool]$BootstrapFiles+[int][bool]$KeeperLaunchPrimitives) -gt 1){throw 'Choose one native profile'}
+if(([int][bool]$BootstrapExclusion+[int][bool]$KeeperProbe+[int][bool]$BootstrapFiles+[int][bool]$KeeperLaunchPrimitives+[int][bool]$KeeperExit) -gt 1){throw 'Choose one native profile'}
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
 . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
 foreach($path in @($SourceDirectory,$ValidationCacheDirectory,$ReportDirectory)){Assert-SessionDirectory $path}
@@ -25,9 +26,10 @@ if($BootstrapExclusion){$spikeReport.kind='activation_bootstrap_exclusion_native
 if($KeeperProbe){$spikeReport.kind='keeper_probe_native_gate'}
 if($BootstrapFiles){$spikeReport.kind='bootstrap_files_native_gate'}
 if($KeeperLaunchPrimitives){$spikeReport.kind='keeper_launch_primitives_native_gate'}
+if($KeeperExit){$spikeReport.kind='keeper_exit_native_gate'}
 $lease=$null;$location=Get-Location
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_LIFETIME_SPIKE_INPUT
-$oldProbeProof=$env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF;$oldFilesInput=$env:WINBRIDGE_BOOTSTRAP_FILES_INPUT
+$oldProbeProof=$env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF;$oldFilesInput=$env:WINBRIDGE_BOOTSTRAP_FILES_INPUT;$oldExitInput=$env:WINBRIDGE_KEEPER_EXIT_NATIVE_INPUT
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP
 $oldEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
 $casesRoot=Join-Path $work 'cases'
@@ -75,11 +77,20 @@ try {
       @{name='predecessor-exit';updaterExact='runtime_replacement::physical::activation_files::activation_process::finalization::keeper::predecessor_tests::retained_predecessor_handle_rejects_live_missing_and_changed_exit_claims'}
     )
   }
+  if($KeeperExit){
+    $env:WINBRIDGE_KEEPER_EXIT_NATIVE_INPUT=Join-Path $work 'keeper-exit-input.json'
+    Write-NewJson $env:WINBRIDGE_KEEPER_EXIT_NATIVE_INPUT @{root=$casesRoot;proof=(Join-Path $ReportDirectory 'keeper-exit-proof.json')}
+    $spikeCases=@(
+      @{name='dual-job-launch';exact='infrastructure::tests::keeper_launch_requires_two_existing_jobs_and_an_exact_local_parent'},
+      @{name='keeper-exit';keeperExit='supervisor::keeper_control::exit_tests::keeper_exit_waits_for_known_successor_original_job_and_readers'}
+    )
+  }
   foreach($spikeCase in $spikeCases){
     $arguments=@()
-    if(-not $spikeCase.ContainsKey('exact') -and -not $spikeCase.ContainsKey('updaterExact') -and -not $spikeCase.ContainsKey('probe') -and -not $BootstrapFiles){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',('lifetime_spike::'+$spikeCase.test),'--ignored','--test-threads=1','--nocapture')}
+    if(-not $spikeCase.ContainsKey('exact') -and -not $spikeCase.ContainsKey('updaterExact') -and -not $spikeCase.ContainsKey('keeperExit') -and -not $spikeCase.ContainsKey('probe') -and -not $BootstrapFiles){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',('lifetime_spike::'+$spikeCase.test),'--ignored','--test-threads=1','--nocapture')}
     if($spikeCase.ContainsKey('exact')){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',$spikeCase.exact,'--test-threads=1','--nocapture')}
     if($spikeCase.ContainsKey('updaterExact')){$arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','--locked','--offline','--','--exact',$spikeCase.updaterExact,'--test-threads=1','--nocapture')}
+    if($spikeCase.ContainsKey('keeperExit')){$arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','--locked','--offline','--','--exact',$spikeCase.keeperExit,'--ignored','--test-threads=1','--nocapture')}
     if($spikeCase.ContainsKey('probe')){$arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','--locked','--offline','--','--exact',$spikeCase.probe,'--ignored','--test-threads=1','--nocapture')}
     if($spikeCase.ContainsKey('build')){$arguments=@('build','-p','winbridge-update','--features','bundled-sqlite','--bin','winbridge-update','--locked','--offline')}
     if($spikeCase.ContainsKey('files')){$arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','--locked','--offline','--','--exact',$spikeCase.files,'--ignored','--test-threads=1','--nocapture')}
@@ -92,8 +103,9 @@ try {
     $text=Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw
     if(-not $spikeCase.ContainsKey('build') -and $text -notmatch 'test result: ok\. 1 passed; 0 failed; 0 ignored;'){throw 'Exact native experiment was not selected'}
     if($BootstrapFiles -and $spikeCase.ContainsKey('files')){Assert-SessionFile (Join-Path $ReportDirectory 'bootstrap-files-proof.json')}
+    if($spikeCase.ContainsKey('keeperExit')){Assert-SessionFile (Join-Path $ReportDirectory 'keeper-exit-proof.json')}
     if($KeeperProbe){Assert-SessionFile $env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF}
-    if(-not $spikeCase.ContainsKey('exact') -and -not $KeeperProbe -and -not $BootstrapFiles -and -not $KeeperLaunchPrimitives){Assert-SessionFile (Join-Path $casesRoot ($spikeCase.name+'/proof.json'))}
+    if(-not $spikeCase.ContainsKey('exact') -and -not $KeeperProbe -and -not $BootstrapFiles -and -not $KeeperLaunchPrimitives -and -not $KeeperExit){Assert-SessionFile (Join-Path $casesRoot ($spikeCase.name+'/proof.json'))}
   }
   $spikeReport.passed=$true
 } catch {$spikeReport.error=$_.Exception.Message}
@@ -101,7 +113,7 @@ finally {
   Set-Location -LiteralPath $location
   if($lease){$lease.Dispose()}
   $env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_LIFETIME_SPIKE_INPUT=$oldInput
-  $env:TEMP=$oldTemp;$env:TMP=$oldTmp;$env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF=$oldProbeProof;$env:WINBRIDGE_BOOTSTRAP_FILES_INPUT=$oldFilesInput
+  $env:TEMP=$oldTemp;$env:TMP=$oldTmp;$env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF=$oldProbeProof;$env:WINBRIDGE_BOOTSTRAP_FILES_INPUT=$oldFilesInput;$env:WINBRIDGE_KEEPER_EXIT_NATIVE_INPUT=$oldExitInput
   [Console]::OutputEncoding=$oldEncoding;$OutputEncoding=$oldPipelineEncoding
   try { foreach($mode in @('two-generation','keeper-loss')){
     $directory=Join-Path $casesRoot $mode

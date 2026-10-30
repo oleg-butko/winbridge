@@ -78,15 +78,70 @@ impl State {
     }
 }
 #[cfg(windows)]
+#[derive(Default)]
+struct RootExitWatch {
+    armed: bool,
+    exited: bool,
+    task: Option<tokio::task::JoinHandle<std::io::Result<()>>>,
+    failure: Option<String>,
+    last_drain: Option<(Option<bool>, Option<bool>)>,
+}
+#[cfg(windows)]
+impl RootExitWatch {
+    fn fail(&mut self, reason: String) {
+        let reason: String = reason.chars().take(1000).collect();
+        eprintln!(
+            "WinBridge keeper {}",
+            serde_json::json!({"event":"original_keeper_exit_observation_unknown","keeperPid":std::process::id(),"reason":reason})
+        );
+        self.failure = Some(reason);
+    }
+    fn arm(&mut self, state: &State) {
+        if self.armed {
+            return;
+        }
+        if let State::Keeper(custody) = state {
+            let pin = custody.worker_exit_pin();
+            // Dropping original custody closes its Job, so this exact-object
+            // wait also completes if the host itself exits on IPC failure.
+            self.task = Some(tokio::task::spawn_blocking(move || pin.wait_for_exit()));
+            self.armed = true;
+        }
+    }
+    fn status(&self, state: &State) -> KeeperStatus {
+        let mut status = state.status();
+        if self.failure.is_some() {
+            status.reason = self.failure.clone();
+        }
+        status
+    }
+}
+#[cfg(windows)]
 pub(super) async fn run(
-    mut listener: ipc::Listener,
+    listener: ipc::Listener,
     r: SupervisorRecord,
     resources: Box<crate::activation::CoordinatorRetirement>,
     initial: Option<(ipc::Stream, KeeperControlRequest)>,
 ) -> Result<()> {
+    run_state(
+        listener,
+        r,
+        State::Retiring(resources).retry(),
+        keeper_launch::Actor::default(),
+        initial,
+    )
+    .await
+}
+#[cfg(windows)]
+async fn run_state(
+    mut listener: ipc::Listener,
+    r: SupervisorRecord,
+    mut state: State,
+    mut launch: keeper_launch::Actor,
+    initial: Option<(ipc::Stream, KeeperControlRequest)>,
+) -> Result<()> {
     std::hint::black_box(KEEPER_CONTROL_MARKER);
-    let mut state = State::Retiring(resources).retry();
-    let mut launch = keeper_launch::Actor::default();
+    let mut root = RootExitWatch::default();
     let first = state.status();
     eprintln!(
         "WinBridge keeper {}",
@@ -106,7 +161,59 @@ pub(super) async fn run(
         .await;
     }
     loop {
-        let (mut stream, pid) = match listener.accept().await {
+        root.arm(&state);
+        let draining = root.exited && launch.successor_confirmed() && root.failure.is_none();
+        if draining {
+            if let State::Keeper(custody) = &mut state {
+                match custody.retire_if_drained() {
+                    Ok(true) => {
+                        let status = custody.status();
+                        eprintln!(
+                            "WinBridge keeper {}",
+                            serde_json::json!({"event":"original_keeper_exit","keeperPid":std::process::id(),"workerPid":status.binding.as_ref().map(|b|b.worker.process_id),"successorReadyKnown":true,"workerAlive":status.worker_alive,"jobTreeEmpty":status.job_tree_empty,"readersFinished":status.readers_finished,"outputIncomplete":status.output_incomplete})
+                        );
+                        return Ok(()); // Only this original owned Job is closed.
+                    }
+                    Ok(false) => {
+                        let status = custody.status();
+                        let seen = (status.job_tree_empty, status.readers_finished);
+                        if root.last_drain != Some(seen) {
+                            root.last_drain = Some(seen);
+                            eprintln!(
+                                "WinBridge keeper {}",
+                                serde_json::json!({"event":"original_keeper_drain_observed","keeperPid":std::process::id(),"jobTreeEmpty":seen.0,"readersFinished":seen.1})
+                            );
+                        }
+                    }
+                    Err(e) => root.fail(format!(
+                        "Original keeper drain observation unknown; retain custody: {e}"
+                    )),
+                }
+            }
+        }
+        let drain_wait = root.exited && launch.successor_confirmed() && root.failure.is_none();
+        let connection = tokio::select! {
+            connection=listener.accept()=>connection,
+            waited=async {
+                match root.task.as_mut() {
+                    Some(task)=>task.await,
+                    None=>std::future::pending().await,
+                }
+            }=>{
+                root.task.take(); // Never poll a completed JoinHandle again.
+                match waited {
+                    Ok(Ok(()))=>{
+                        root.exited=true;
+                        eprintln!("WinBridge keeper {}",serde_json::json!({"event":"original_worker_exit_observed","keeperPid":std::process::id(),"successorReadyKnown":launch.successor_confirmed()}));
+                    },
+                    Ok(Err(e))=>root.fail(format!("Original root wait unknown; retain custody: {e}")),
+                    Err(e)=>root.fail(format!("Original root wait task failed; retain custody: {e}")),
+                }
+                continue;
+            },
+            _=tokio::time::sleep(Duration::from_millis(250)), if drain_wait=>continue,
+        };
+        let (mut stream, pid) = match connection {
             Ok(v) => v,
             Err(e) if e.kind() == std::io::ErrorKind::ConnectionAborted => {
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -180,7 +287,7 @@ pub(super) async fn run(
                     state = state.retry();
                 }
                 KeeperControlResult::Status {
-                    status: Box::new(state.status()),
+                    status: Box::new(root.status(&state)),
                 }
             }
         };
@@ -225,3 +332,6 @@ impl SupervisorHandle {
         Ok(reply.result)
     }
 }
+
+#[cfg(all(test, windows))]
+mod exit_tests;

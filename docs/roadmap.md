@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: controlled old keeper exit реализован: known successor + same
+root kernel exit + same Job.empty + joined readers, kernel wait без idle polling.
+Root PID не reopening для exit verdict, wait/query errors retain custody.
+475 updater/platform tests/8 ignored и Linux/MSVC Clippy passed; native exit-loop
+gate ещё не запускался. Intrinsic worker factory/managed fresh helper/client
+handshake/два workflows/future SDK/U2–U4 всё ещё впереди; installed unchanged.
+
 2026-10-30/.204: native readonly original-handle continuation после3s expiry
 прошла (source0794187,run20261030-224456-f079f929,3 files twice/25 negatives).
 Это peer/Job unit, НЕ client Start/SQL/Ready/full workflow. Далее old keeper

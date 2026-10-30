@@ -181,6 +181,30 @@ impl PinnedProcess {
             "Exact shutdown process wait requires Windows",
         ))
     }
+    /// Blocking kernel wait on this SAME object. Run on a bounded owner/blocking
+    /// thread, never an executor thread. No PID lookup or polling is performed.
+    pub fn wait_for_exit(&self) -> io::Result<()> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            use windows_sys::Win32::{
+                Foundation::WAIT_OBJECT_0,
+                System::Threading::{WaitForSingleObject, INFINITE},
+            };
+            if unsafe { WaitForSingleObject(self.handle.as_raw_handle(), INFINITE) }
+                == WAIT_OBJECT_0
+            {
+                Ok(())
+            } else {
+                Err(io::Error::last_os_error())
+            }
+        }
+        #[cfg(not(windows))]
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Exact kernel exit wait requires Windows",
+        ))
+    }
 }
 
 pub fn stamp(pid: u32) -> io::Result<ProcessStamp> {
@@ -668,12 +692,24 @@ mod tests {
         let pin = PinnedProcess::live(&child.identity).unwrap();
         pin.require_outside_job(&jobs[0]).unwrap();
         pin.require_outside_job(&jobs[1]).unwrap();
+        let waiting = std::sync::Arc::new(pin);
+        let same = std::sync::Arc::clone(&waiting);
+        let (sent, received) = std::sync::mpsc::channel();
+        let waiter = std::thread::spawn(move || sent.send(same.wait_for_exit()).unwrap());
+        assert!(
+            matches!(
+                received.recv_timeout(Duration::from_millis(60)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ),
+            "Kernel exit wait returned while the original process was still live"
+        );
         drop(child); // Still owned: only the caller may later detach before start.
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while !pin.exited().unwrap() {
-            assert!(Instant::now() < deadline);
-            std::thread::sleep(Duration::from_millis(10));
-        }
+        received
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        waiter.join().unwrap();
+        assert!(waiting.exited().unwrap());
         a.close_unconfirmed();
         b.close_unconfirmed();
         // Both helper roots were suspended throughout and could not create a

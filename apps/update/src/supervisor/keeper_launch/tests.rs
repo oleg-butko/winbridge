@@ -105,18 +105,25 @@ fn ready_confirmation_is_exact_idempotent_and_never_creates() {
     let (b, t) = fixture();
     let mut m = Machine::default();
     let s = m.start(&b, &t, t.prepared_at_ms, || Ok(process())).unwrap();
+    assert!(!m.successor_confirmed);
     let mut wrong = process();
     wrong.birth = "1000".into();
     assert!(m.ready(&t.launch_id, &s.ticket_sha256, &wrong).is_err());
     assert!(m.ready(&t.launch_id, &"0".repeat(64), &process()).is_err());
+    assert!(!m.successor_confirmed);
     let ready = m.ready(&t.launch_id, &s.ticket_sha256, &process()).unwrap();
     assert_eq!(ready.phase, KeeperLaunchPhase::ReadyConfirmed);
+    assert!(m.successor_confirmed);
     assert_eq!(
         m.ready(&t.launch_id, &s.ticket_sha256, &process()).unwrap(),
         ready
     );
     assert_eq!(m.start(&b, &t, u64::MAX, || panic!()).unwrap(), ready);
     m.slot.as_mut().unwrap().phase = KeeperLaunchPhase::Exited;
+    assert!(
+        m.successor_confirmed,
+        "Known readiness is not lost when the successor later exits"
+    );
     assert!(m.ready(&t.launch_id, &s.ticket_sha256, &process()).is_err());
 }
 #[test]
