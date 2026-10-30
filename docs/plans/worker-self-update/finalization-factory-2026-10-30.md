@@ -142,3 +142,13 @@ Main30 harness теперь печатает изменения phase/error/cust
 passed; Linux/MSVC workspace all-target Clippy для core fix и финальный MSVC
 Clippy update_shutdown harness после diagnostics passed; fmt/diff и9 reader
 regressions passed. Далее clean pins и новый отдельный native run.
+
+### Retry source после исправления capture
+
+Source baf8e3f52ecfb45431d2338879d636ed1561619c, dirty=false, built UI,
+`winbridge-20261030T051657Z-baf8e3f-1289b5c5.zip`,
+SHA256 c561de11f91bb8dace7f4d222b0d4fc70e1083485b8f70d0baf2b9800a659a71,
+6,923,013 bytes/1118 files. Следующий documentation-only checkpoint — новый distinct
+ target pin с тем же Rust code. Перед повтором Debian18,521,120,768 /
+Windows(shared)17,760,899,072 bytes free; Windows данные не очищались.
+Первый failed run не повторяется: новый task/new namespace/new pins.
