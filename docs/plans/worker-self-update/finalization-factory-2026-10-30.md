@@ -78,3 +78,12 @@ updater journal/authority references, завершить control actor с явн
 корректной передачи владения, max2 keepers/two generations. Это отдельный этап;
 RootCommitted и Active fact не означают, что updater больше не блокирует следующий
 owner или что выполнены U2–U4. Public installation остаётся выключенной.
+
+### Два clean pins для Main30
+
+Producer c19e1ec2da36b120a0eb601fbeadfd32888b1c13 экспортирован с built UI:
+`winbridge-20261030T043128Z-c19e1ec-4f45aa8b.zip`,
+SHA256 bb2c18d637f0bcf524215d5a594060091d775f7ea59f99a40d776c41155578ad,
+6,913,465 bytes/1116 files, dirty=false. Следующий documentation-only checkpoint
+служит отличающимся target pin; Rust/DTO/runtime code одинаков. Это проверяет
+реальную замену source/target identities, не объявляя новый пользовательский релиз.
