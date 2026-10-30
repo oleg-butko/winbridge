@@ -496,3 +496,67 @@ scope, не число agents. Главное продолжение: keeper min
 actual peer→one retained creation attempt→independent observation/Spawned/ready/handoff.
 Kepr должен хранить predecessor process handle с actual startup и positive exit
 для third generation. Stable future-SDK bridge/max2/full two workflow/U2–U4 не готовы.
+
+## Keeper-launch1: сервер и одна попытка
+
+2026-10-30/.204, source worker19/updater25. Новый independent local envelope
+`KeeperLaunchRequest` содержит original keeper binding и одну из Start/Observe/
+ConfirmReady. Start несёт только новые update/launch IDs, hashes/bytes/file IDs,
+private startup token, excluded Job, historical predecessor identity и исходное
+preparedAt. Пути/argv/runtime/SQL Root из запроса не принимаются: creator использует
+fixed runtime/update/<id>/supervisor/winbridge-update.exe, fixed updater config и
+stdout.log/stderr.log. Debug скрывает token; fingerprint использует его SHA.
+
+Только closed keeper с actual original child/Job допускает creator. Его local
+in-memory slot резервируется до preflight/OS boundary; exact duplicate возвращает
+прежний status даже после истечения budget. Иной payload, известный отказ или
+неопределённый исход не освобождают slot. Статусы Failed/Indeterminate/Exited
+сохраняются; никакого recreate по saved data. Observe/ConfirmReady не создают
+процесс. Обычный coordinator и незавершённый retirement отказывают без SQL effects.
+Все DTO decode идут из original bounded bytes, routing Value не удаляет duplicate
+fields перед typed validation. Реальный IPC test проверяет cold/duplicate/mixed
+frames, неизменность root/supervisor и exclusive owner.
+
+Creator pin-ит fixed image/config и output identities, проверяет predecessor exit,
+actual peer и исходный budget, использует platform spawn_excluding_jobs для двух
+EXISTING Jobs и переводит child в detached до ответа/любого Spawned marker.
+Query/access error остаётся отказом/unknown, limits и breakaway не меняются.
+Created ещё не Ready: worker должен проверить exact process, записать Spawned,
+освободить original owner и получить Ready от того же нового coordinator.
+ConfirmReady принимается только для того же сохранённого process/ticket hash,
+после повторной physical outside проверкой обоих Jobs. Keeper пишет один bounded
+launch event с phase/process/deadline/reason, без token и всего запроса.
+
+Для max2 новый coordinator при incoming bootstrap удерживает query-only kernel
+handle своего previous keeper, пока тот жив; проверяет immutable incoming scope.
+Этот handle переносится через writer retirement в закрытый keeper, не сохраняя
+SQLite, authority, config/image pins. Последующий creator требует exact expected
+identity и positive exited на этом удерживаемом handle. None подходит только для
+первого coordinator без incoming delegation. Missing/reused PID не значит exit.
+Новый Windows unit проверяет живого/завершённого owned predecessor, changed identity
+и отсутствие pin; helper readiness не позволяет принять zero-selected-tests.
+Unit пока compiled-only, не native evidence. Bootstrap startup использует остаток
+исходного preparedAt+10s, с проверками до owner и Ready. Новый процесс не получает
+новые10s; existing ordinary supervisor flow сохраняется.
+
+Проверки:452 updater tests/7 ignored, включая5 machine tests и29 supervisor
+tests/2 ignored с actual local IPC; Linux/MSVC all-target Clippy, generated
+contracts/TypeScript/scaffold passed. Пока НЕ проверены native actual keeper CreateProcess, ancestor gate,
+полный новый child handshake и два updater workflows. Client к server ещё не
+подключён: нужен consuming original PreparedBootstrap, ровно один Start, сохранение
+его ресурсов при unknown, только Observe после потери ответа, exact Spawned/owner
+release/Ready/ConfirmReady. Затем старый keeper должен выйти только после known
+successor, actual original worker exit, same Job.empty и readers finished; idle
+polling добавлять нельзя. Future-SDK journal bridge и worker own-mode integration
+остаются отдельными незавершёнными шагами. Установленный worker не менялся.
+
+
+Отдельный OS-unit profile `run-update-keeper-launch-primitives-native.py` выбирает
+ровно production dual-Job launch unit и exact predecessor handle unit. Новый
+namespace/report kind сохраняет прежние17 observer tests и старые gate selections.
+Reader проверяет exact commands/test names/one passed/no ignored, source/task scope,
+неизменность installed worker и два чтения ready files;12 deliberate mutations
+rejected,3 synthetic reader tests passed. Это тесты системных примитивов, не actual
+keeper bootstrap/client/SQL owner handoff; вывод сохраняет все широкие proof flags
+false. В этом profile нет окон, сети или изменений рабочего runtime. Проверка
+места и retained-cache lease выполняются перед компиляцией на Windows.

@@ -165,6 +165,7 @@ fn activation_view(
 mod activation_files;
 mod finalization_control;
 mod keeper_control;
+mod keeper_launch;
 mod keeper_probe;
 pub use keeper_probe::{observe_original_keeper, KeeperProbeCapture};
 mod resident_control;
@@ -1969,7 +1970,16 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let runtime = local(&cfg.runtime_directory)?;
     let directory = runtime.join("update-state");
     let this = infrastructure::stamp(std::process::id()).map_err(error)?;
-    let deadline = Instant::now() + Duration::from_secs(10);
+    #[cfg(windows)]
+    let incoming = UpdateJournal::inspect_bootstrap(&directory, id).map_err(error)?;
+    #[cfg(windows)]
+    let startup_remaining = match &incoming {
+        Some(b) => keeper_launch::startup_remaining(b.intent.prepared_at_ms, now()?)?,
+        None => Duration::from_secs(10),
+    };
+    #[cfg(not(windows))]
+    let startup_remaining = Duration::from_secs(10);
+    let deadline = Instant::now() + startup_remaining;
     let r = loop {
         let r = UpdateJournal::inspect_supervisor(&directory, id).map_err(error)?;
         if sha256(token.as_bytes()) != r.spec.token_sha256 {
@@ -1987,13 +1997,22 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     };
+    #[cfg(windows)]
+    let predecessor =
+        crate::runtime_replacement::KeeperPredecessor::capture(&directory, &r, incoming.as_ref())?;
     validate_inputs(&r, &directory, true)?;
+    if Instant::now() >= deadline {
+        return Err("Original supervisor startup budget expired before listener/owner".into());
+    }
     if local(&std::env::current_exe().map_err(error)?)? != local(Path::new(&r.spec.image_path))? {
         return Err("Supervisor is not the pinned copied image".into());
     }
     let mut listener = ipc::Listener::bind(&r.spec.endpoint).map_err(error)?;
     let mut journal = UpdateJournal::open(&directory, &installation_scope(&cfg)?).map_err(error)?;
     let owner = loop {
+        if Instant::now() >= deadline {
+            return Err("Original supervisor startup budget expired before ownership".into());
+        }
         match journal.acquire_owner() {
             Ok(a) => break a,
             Err(e) if e.code == JournalErrorCode::OwnerBusy && Instant::now() < deadline => {
@@ -2002,6 +2021,9 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Err(e) => return Err(error(e)),
         }
     };
+    if Instant::now() >= deadline {
+        return Err("Original supervisor startup budget expired before Ready".into());
+    }
     let mut r = journal
         .advance_supervisor(
             &owner,
@@ -2180,7 +2202,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 drop(replacement_signal);
                 drop(files_actor);
                 drop(runtime_reads);
-                let resources = attempt.bind_coordinator(journal, owner, control_authority);
+                let resources =
+                    attempt.bind_coordinator(journal, owner, control_authority, predecessor);
                 return keeper_control::run(listener, r, resources, keeper_reply.take()).await;
             }
             let mut prepared = None;
@@ -2802,6 +2825,15 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(v) => v,
             Err(_) => continue,
         };
+        if value.get("keeperLaunchVersion").is_some() {
+            let q = serde_json::from_slice::<KeeperLaunchRequest>(&bytes).ok();
+            let reply = keeper_launch::rejected(
+                q.as_ref(),
+                "Original keeper custody unavailable; no coordinator creation",
+            );
+            let _ = ipc::write(&mut stream, &reply).await;
+            continue;
+        }
         if value.get("keeperProbeVersion").is_some() {
             let query = serde_json::from_slice::<KeeperProbeRequest>(&bytes).ok();
             // No current original custody in this coordinator loop. Never
@@ -5793,6 +5825,81 @@ mod tests {
             before
         );
         stopped(&mut handle).await;
+    }
+    #[tokio::test]
+    async fn keeper_launch_cold_duplicate_and_mixed_frames_cannot_create_or_retire() {
+        struct Duplicate(serde_json::Value);
+        impl serde::Serialize for Duplicate {
+            fn serialize<S: serde::Serializer>(
+                &self,
+                s: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                use serde::ser::SerializeMap;
+                let object = self.0.as_object().unwrap();
+                let mut map = s.serialize_map(Some(object.len() + 1))?;
+                for (k, v) in object {
+                    map.serialize_entry(k, v)?;
+                }
+                map.serialize_entry("keeperLaunchVersion", &1)?;
+                map.end()
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let mut f = Fixture::new(temp.path());
+        let mut h = f.spawn();
+        h.wait_ready().await.unwrap();
+        h.command(SupervisorAction::Handoff).await.unwrap();
+        let before = UpdateJournal::inspect_supervisor(&f.state(), &f.id).unwrap();
+        let root = f.journal.get(&f.id).unwrap();
+        assert!(
+            memchr::memmem::find(
+                &fs::read(&before.spec.image_path).unwrap(),
+                KEEPER_LAUNCH_MARKER
+            )
+            .is_some(),
+            "Rebuild winbridge-update support binary before testing new keeper-launch IPC"
+        );
+        let q = KeeperLaunchRequest {
+            keeper_launch_version: 1,
+            request_id: uuid::Uuid::new_v4().to_string(),
+            binding: crate::bootstrap::tests::fixture().previous,
+            command: KeeperLaunchCommand::Observe {
+                launch_id: uuid::Uuid::new_v4().to_string(),
+                ticket_sha256: "a".repeat(64),
+            },
+        };
+        let reply: KeeperLaunchResponse =
+            ipc::call(&h.record.spec.endpoint, h.child.identity.process_id, &q)
+                .await
+                .unwrap();
+        assert_eq!(reply.request_id.as_ref(), Some(&q.request_id));
+        assert!(matches!(reply.result, KeeperLaunchResult::Rejected { .. }));
+        let duplicate = Duplicate(serde_json::to_value(&q).unwrap());
+        let reply: KeeperLaunchResponse = ipc::call(
+            &h.record.spec.endpoint,
+            h.child.identity.process_id,
+            &duplicate,
+        )
+        .await
+        .unwrap();
+        assert!(reply.request_id.is_none());
+        assert!(matches!(reply.result, KeeperLaunchResult::Rejected { .. }));
+        let mut mixed = serde_json::to_value(&q).unwrap();
+        mixed["keeperProbeVersion"] = 1.into();
+        let reply: KeeperLaunchResponse =
+            ipc::call(&h.record.spec.endpoint, h.child.identity.process_id, &mixed)
+                .await
+                .unwrap();
+        assert!(reply.request_id.is_none());
+        assert!(matches!(reply.result, KeeperLaunchResult::Rejected { .. }));
+        assert_eq!(
+            UpdateJournal::inspect_supervisor(&f.state(), &f.id).unwrap(),
+            before
+        );
+        assert_eq!(f.journal.get(&f.id).unwrap(), root);
+        assert!(infrastructure::matches(&h.child.identity).unwrap());
+        assert!(matches!(f.journal.acquire_owner(),Err(e) if e.code==JournalErrorCode::OwnerBusy));
+        stopped(&mut h).await;
     }
     #[tokio::test]
     async fn lost_handoff_ack_is_observed_without_replay_or_killing_supervisor() {

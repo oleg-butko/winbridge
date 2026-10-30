@@ -9,6 +9,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        KeeperLaunchFile::decl(&config),
+        KeeperLaunchTicket::decl(&config),
+        KeeperLaunchRequest::decl(&config),
+        KeeperLaunchResponse::decl(&config),
+        KeeperLaunchCommand::decl(&config),
+        KeeperLaunchResult::decl(&config),
+        KeeperLaunchStatus::decl(&config),
+        KeeperLaunchPhase::decl(&config),
         KeeperProbeRequest::decl(&config),
         KeeperProbeResponse::decl(&config),
         KeeperProbeResult::decl(&config),

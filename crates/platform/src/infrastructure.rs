@@ -613,6 +613,7 @@ mod tests {
         let (b, _bo, _be) = crate::ManagedChild::prepare(&command, Some(&jobs[1])).unwrap();
         let parent = PinnedProcess::live(&stamp(std::process::id()).unwrap()).unwrap();
         let foreign = PinnedProcess::live(&stamp(a.id()).unwrap()).unwrap();
+        let second = PinnedProcess::live(&stamp(b.id()).unwrap()).unwrap();
         let mut outputs_id = 0;
         let mut outputs = || {
             outputs_id += 1;
@@ -675,6 +676,18 @@ mod tests {
         }
         a.close_unconfirmed();
         b.close_unconfirmed();
+        // Both helper roots were suspended throughout and could not create a
+        // descendant. Confirm their exact kernel objects exited after Job close.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        for pin in [foreign, second] {
+            while !pin.exited().unwrap() {
+                assert!(
+                    Instant::now() < deadline,
+                    "Excluded Job helper exit unconfirmed"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
     }
     #[test]
     fn unconfirmed_owned_cleanup_does_not_wait_for_process_lifetime() {

@@ -15,7 +15,7 @@ pub use activation_files::{
     ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
     ActivationKeeperAttempt, ActivationKeeperCustody, ActivationLaunchFailure,
     ActivationLifetimePreparation, ActivationProcessGuard, ActivationServicePreparation,
-    CoordinatorRetirement,
+    CoordinatorRetirement, KeeperPredecessor,
 };
 fn exact_names(
     path: &Path,

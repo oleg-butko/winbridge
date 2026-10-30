@@ -1,4 +1,12 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type KeeperLaunchFile = { sha256: string, bytes: number, fileIdentity: string, };
+export type KeeperLaunchTicket = { updateId: string, launchId: string, image: KeeperLaunchFile, config: KeeperLaunchFile, stdoutIdentity: string, stderrIdentity: string, token: string, excludedJob: string, predecessor: SupervisorProcess | null, preparedAtMs: number, };
+export type KeeperLaunchRequest = { keeperLaunchVersion: number, requestId: string, binding: KeeperBinding, command: KeeperLaunchCommand, };
+export type KeeperLaunchResponse = { keeperLaunchVersion: number, requestId: string | null, result: KeeperLaunchResult, };
+export type KeeperLaunchCommand = { "action": "start", ticket: KeeperLaunchTicket, } | { "action": "observe", launchId: string, ticketSha256: string, } | { "action": "confirm_ready", launchId: string, ticketSha256: string, process: SupervisorProcess, };
+export type KeeperLaunchResult = { "kind": "status", status: KeeperLaunchStatus, } | { "kind": "rejected", message: string, };
+export type KeeperLaunchStatus = { launchId: string, ticketSha256: string, phase: KeeperLaunchPhase, process: SupervisorProcess | null, expiresAtMs: number, reason: string | null, };
+export type KeeperLaunchPhase = "preparing" | "created" | "ready_confirmed" | "failed" | "indeterminate" | "exited";
 export type KeeperProbeRequest = { keeperProbeVersion: number, requestId: string, binding: KeeperBinding, };
 export type KeeperProbeResponse = { keeperProbeVersion: number, requestId: string | null, result: KeeperProbeResult, };
 export type KeeperProbeResult = { "kind": "observed", binding: KeeperBinding, observedAtMs: number, } | { "kind": "rejected", message: string, };

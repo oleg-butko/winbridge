@@ -1,5 +1,28 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: keeper-launch1 server/one-attempt state, source19/25.**
+[Подробности и следующий шаг](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#keeper-launch1-сервер-и-одна-попытка).
+Закрытый original keeper принимает fixed helper launch только от своего actual
+Active child по IPC PID/birth/Job/binding. Payload без paths/argv/SQL models;
+private token redacted в Debug. Slot резервируется до OS create, exact duplicate
+только наблюдает, changed/failed/unknown attempt не разрешает новый процесс.
+Create использует dual-existing-Job primitive; detach до ACK/Spawned. Отдельный
+Observe и exact ConfirmReady не создают процесс. Cold/retiring/mixed/duplicate
+frames отклоняются из original bytes без SQL/role adoption.
+Новый координатор удерживает query-only handle предшественника до keeper роли;
+следующая creation требует positive exit именно этого kernel object (max2 guard).
+Delegated startup использует остаток original10s, не новый deadline после spawn.
+452 updater tests/7 ignored passed (включая5 machine и29 supervisor);
+Linux/MSVC all-target Clippy, generated contracts/TypeScript/scaffold passed. Новый Windows predecessor
+unit и dual-Job spawn unit пока только compiled, actual launch native не запускался.
+Новый native OS-unit profile run/verify-update-keeper-launch-primitives-native.py
+выбирает ровно эти2 units; reader3 tests/12 negative audits, прежние17 readers passed.
+Installed worker source48/genf9 прежний, .204 connected/active0/errors=null.
+Далее consuming client из PreparedBootstrap: один Start, Observe после unknown,
+exact Spawned/owner handoff/Ready/ConfirmReady; затем known-successor + original
+worker exit + same Job.empty + readers finished для старого keeper. Own-worker
+integration/future-SDK bridge/два workflow/U2–U4 ещё не готовы; install off.
+
 **.204/main,2026-10-30: query-only dual-Job launch primitive, source19/25.**
 Platform InfrastructureChild::spawn_excluding_jobs проверяет exact current parent,
 два разных EXISTING Job до/после одного CreateProcess. Missing/query error не значит

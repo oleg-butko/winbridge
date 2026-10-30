@@ -86,6 +86,7 @@ pub(super) async fn run(
 ) -> Result<()> {
     std::hint::black_box(KEEPER_CONTROL_MARKER);
     let mut state = State::Retiring(resources).retry();
+    let mut launch = keeper_launch::Actor::default();
     let first = state.status();
     eprintln!(
         "WinBridge keeper {}",
@@ -125,6 +126,18 @@ pub(super) async fn run(
             Ok(v) => v,
             Err(_) => continue,
         };
+        if routing.get("keeperLaunchVersion").is_some() {
+            let q = serde_json::from_slice::<KeeperLaunchRequest>(&bytes).ok();
+            let reply = match (&state, q.as_ref()) {
+                (State::Keeper(c), Some(q)) => launch.handle(&r, c, q, pid),
+                _ => keeper_launch::rejected(
+                    q.as_ref(),
+                    "Original keeper retirement incomplete or invalid launch frame",
+                ),
+            };
+            let _ = ipc::write(&mut stream, &reply).await;
+            continue;
+        }
         if routing.get("keeperProbeVersion").is_some() {
             let q = serde_json::from_slice::<KeeperProbeRequest>(&bytes).ok();
             let reply = match &state {

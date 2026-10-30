@@ -74,7 +74,7 @@ pub use physical::{
     ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
     ActivationKeeperAttempt, ActivationKeeperCustody, ActivationLaunchFailure,
     ActivationLifetimePreparation, ActivationProcessGuard, ActivationServicePreparation,
-    CoordinatorRetirement, RuntimeReplacementFailure, RuntimeReplacementGuard,
+    CoordinatorRetirement, KeeperPredecessor, RuntimeReplacementFailure, RuntimeReplacementGuard,
 };
 pub enum RuntimeReplacementAdmission {
     Fresh(Box<RuntimeReplacementPermit>),

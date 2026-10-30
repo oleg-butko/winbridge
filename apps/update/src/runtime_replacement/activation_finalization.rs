@@ -10,7 +10,9 @@ use winbridge_protocol::update::*;
 
 #[path = "activation_keeper.rs"]
 mod keeper;
-pub use keeper::{ActivationKeeperAttempt, ActivationKeeperCustody, CoordinatorRetirement};
+pub use keeper::{
+    ActivationKeeperAttempt, ActivationKeeperCustody, CoordinatorRetirement, KeeperPredecessor,
+};
 
 #[must_use = "Dropping closes the original managed worker Job"]
 pub struct ActivationFinalizationPreparation {

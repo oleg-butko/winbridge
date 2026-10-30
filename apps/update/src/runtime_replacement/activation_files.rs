@@ -13,7 +13,7 @@ pub use activation_process::{
     ActivationControllerPreparation, ActivationFinalizationFailure, ActivationFinalizationGuard,
     ActivationFinalizationPreparation, ActivationKeeperAttempt, ActivationKeeperCustody,
     ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
-    ActivationServicePreparation, CoordinatorRetirement,
+    ActivationServicePreparation, CoordinatorRetirement, KeeperPredecessor,
 };
 
 /// Only a successful consuming factory can construct this object. Its installed

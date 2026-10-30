@@ -15,6 +15,7 @@ pub struct CoordinatorRetirement {
     // Declaration order requests original Job cleanup before dropping writer
     // or lock if the host itself is abandoned. Drop never claims empty Job.
     guard: Box<ActivationFinalizationGuard>,
+    predecessor: KeeperPredecessor,
     journal: Option<UpdateJournal>,
     authority: Option<Arc<UpdateAuthority>>,
     control_authority: Option<Arc<UpdateAuthority>>,
@@ -26,6 +27,55 @@ pub struct CoordinatorRetirement {
 pub struct ActivationKeeperCustody {
     physical: ProcessCustody,
     binding: KeeperBinding,
+    predecessor: KeeperPredecessor,
+}
+/// Query-only predecessor evidence captured by this coordinator while the
+/// original keeper is still alive. Saved rows alone never prove its exit.
+pub struct KeeperPredecessor(Option<infrastructure::PinnedProcess>);
+impl KeeperPredecessor {
+    #[cfg(windows)]
+    pub(crate) fn capture(
+        directory: &std::path::Path,
+        record: &SupervisorRecord,
+        incoming: Option<&crate::journal::BootstrapReservation>,
+    ) -> Result<Self> {
+        let Some(incoming) = incoming else {
+            return Ok(Self(None));
+        };
+        if incoming.supervisor.spec != record.spec
+            || incoming.intent.previous.worker != record.spec.parent
+        {
+            return Err("Incoming bootstrap changed the coordinator/logical parent".into());
+        }
+        // Keep the exact object open before the old keeper may retire. Never
+        // reopen its PID later and never turn NotFound into proof of exit.
+        let pin = infrastructure::PinnedProcess::live(&incoming.intent.previous.coordinator)
+            .map_err(|e| e.to_string())?;
+        pin.require_outside_job(&incoming.intent.previous.job_name)
+            .map_err(|e| e.to_string())?;
+        if UpdateJournal::inspect_bootstrap(directory, &record.spec.launch_id)
+            .map_err(|e| e.to_string())?
+            .as_ref()
+            != Some(incoming)
+        {
+            return Err("Incoming immutable bootstrap changed during capture".into());
+        }
+        Ok(Self(Some(pin)))
+    }
+    #[cfg(windows)]
+    fn require_exited(&self, expected: Option<&SupervisorProcess>) -> Result<()> {
+        match (&self.0, expected) {
+            (None, None) => Ok(()),
+            (Some(pin), Some(expected)) if pin.identity() == expected => {
+                if pin.exited().map_err(|e| e.to_string())? {
+                    Ok(())
+                } else {
+                    Err("Original predecessor is still alive; another keeper is forbidden".into())
+                }
+            }
+            _ => Err("Original retained predecessor differs; no adoption from saved PID".into()),
+        }
+    }
 }
 impl ActivationFinalizationGuard {
     pub fn prepare_keeper_blocking(
@@ -119,9 +169,11 @@ impl ActivationKeeperAttempt {
         journal: UpdateJournal,
         authority: Arc<UpdateAuthority>,
         control_authority: Arc<UpdateAuthority>,
+        predecessor: KeeperPredecessor,
     ) -> Box<CoordinatorRetirement> {
         Box::new(CoordinatorRetirement {
             guard: self.guard,
+            predecessor,
             journal: Some(journal),
             authority: Some(authority),
             control_authority: Some(control_authority),
@@ -191,9 +243,15 @@ impl CoordinatorRetirement {
         // or guard may retain an uncounted clone across this transition.
         drop(self.authority.take());
         drop(self.control_authority.take());
-        let CoordinatorRetirement { guard, .. } = *self;
+        let CoordinatorRetirement {
+            guard, predecessor, ..
+        } = *self;
         let ActivationFinalizationGuard { physical, .. } = *guard;
-        Ok(Box::new(ActivationKeeperCustody { physical, binding }))
+        Ok(Box::new(ActivationKeeperCustody {
+            physical,
+            binding,
+            predecessor,
+        }))
     }
     pub fn status(&self) -> KeeperStatus {
         let (out, err, cut, done) = self.guard.diagnostics();
@@ -249,7 +307,11 @@ impl ActivationKeeperCustody {
     pub(crate) fn probe_test_custody(child: ManagedChild, binding: KeeperBinding) -> Result<Self> {
         let mut physical = ProcessCustody::new();
         physical.child = Some(child);
-        let value = Self { physical, binding };
+        let value = Self {
+            physical,
+            binding,
+            predecessor: KeeperPredecessor(None),
+        };
         value.require_physical()?;
         Ok(value)
     }
@@ -271,6 +333,13 @@ impl ActivationKeeperCustody {
         infrastructure::PinnedProcess::live(&self.binding.coordinator)
             .and_then(|p| p.require_outside_job(&self.binding.job_name))
             .map_err(|e| e.to_string())
+    }
+    #[cfg(windows)]
+    pub(crate) fn require_predecessor_exited(
+        &self,
+        expected: Option<&SupervisorProcess>,
+    ) -> Result<()> {
+        self.predecessor.require_exited(expected)
     }
     #[cfg(windows)]
     pub(crate) fn bootstrap_binding(&self) -> &KeeperBinding {
@@ -327,5 +396,79 @@ impl ActivationKeeperCustody {
             readers_finished: Some(done),
             reason: None,
         }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod predecessor_tests {
+    use super::*;
+    const HELPER:&str="runtime_replacement::physical::activation_files::activation_process::finalization::keeper::predecessor_tests::predecessor_wait_helper";
+    #[test]
+    #[ignore = "Owned native child, started only by the exact-handle parent test"]
+    fn predecessor_wait_helper() {
+        std::fs::write("predecessor-ready.pending", std::process::id().to_string()).unwrap();
+        std::fs::rename("predecessor-ready.pending", "predecessor-ready").unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(60));
+    }
+    #[test]
+    fn retained_predecessor_handle_rejects_live_missing_and_changed_exit_claims() {
+        let root = tempfile::tempdir().unwrap();
+        let command = winbridge_protocol::ResolvedCommand {
+            executable: std::env::current_exe()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
+            arguments: vec![
+                "--exact".into(),
+                HELPER.into(),
+                "--ignored".into(),
+                "--test-threads=1".into(),
+            ],
+            working_directory: root.path().to_string_lossy().into_owned(),
+            timeout_ms: 15000,
+        };
+        let job = format!("Local\\WinBridge-Ancestor-{}", uuid::Uuid::new_v4());
+        let (mut child, stdout, stderr) = ManagedChild::prepare(&command, Some(&job)).unwrap();
+        let expected = infrastructure::stamp(child.id()).unwrap();
+        let original = KeeperPredecessor(None);
+        assert!(original.require_exited(None).is_ok());
+        assert!(original.require_exited(Some(&expected)).is_err());
+        let held = KeeperPredecessor(Some(
+            infrastructure::PinnedProcess::live(&expected).unwrap(),
+        ));
+        child.resume().unwrap();
+        let ready_deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !root.path().join("predecessor-ready").exists() {
+            assert!(
+                std::time::Instant::now() < ready_deadline,
+                "Exact native helper was not selected"
+            );
+            assert!(
+                child.try_wait().unwrap().is_none(),
+                "Exact helper exited before readiness"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("predecessor-ready")).unwrap(),
+            expected.process_id.to_string()
+        );
+        assert!(held.require_exited(Some(&expected)).is_err());
+        assert!(held.require_exited(None).is_err());
+        let mut foreign = expected.clone();
+        foreign.birth.push('0');
+        assert!(held.require_exited(Some(&foreign)).is_err());
+        child.terminate_tree().unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while child.try_wait().unwrap().is_none() || !child.tree_is_empty().unwrap() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        held.require_exited(Some(&expected)).unwrap();
+        assert!(held.require_exited(Some(&foreign)).is_err());
+        // Reopening a dead/reused PID is deliberately not the authority used by
+        // require_exited: the original kernel object stays held across exit.
+        assert!(held.0.as_ref().unwrap().require_live().is_err());
+        drop((stdout, stderr));
     }
 }

@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: keeper-launch1 server/one-attempt state подключён к closed
+keeper; cold coordinator/retiring отказ, duplicate Start observe-only, unknown
+create без replay. Exact predecessor handle переносится в keeper; positive exit
+не заменяется saved PID. Delegated startup не продлевает original10s.
+452 updater tests/7 ignored, Linux/MSVC Clippy и contracts/TypeScript/scaffold passed;
+actual Windows launch и client/Spawned/Ready handoff ещё впереди. Installed прежний.
+
 2026-10-30/.204: platform dual-existing-Job launch primitive added, exact parent/
 child checks before/after CreateProcess, no breakaway. Linux3 tests/1 ignored и
 Linux/MSVC Clippy passed; новый Windows unit только compiled. Wire one-attempt
