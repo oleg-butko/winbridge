@@ -31,6 +31,14 @@ def main(controller=False, lifetime=False, ready_loss=False, resident=False, fin
     checks = load('main_gate_checks', 'update-activation-finalization-proof.py' if finalization else 'update-activation-resident-proof.py' if resident else 'update-activation-lifetime-ready-loss-proof.py' if ready_loss else ('update-activation-lifetime-proof.py' if lifetime else ('update-activation-controller-proof.py' if controller else 'update-activation-service-proof.py')))
     health = load('service_archive', 'validate-update-health-actor-native.py')
     reader = load('service_reports', 'summarize-update-timings.py')
+    observer_names = (
+        'verify-update-finalization-main-native.py', 'verify-update-service-main-native.py',
+        'update-activation-finalization-proof.py', 'update-activation-resident-proof.py',
+        'update-activation-lifetime-ready-loss-proof.py', 'update-activation-lifetime-proof.py',
+        'update-activation-controller-proof.py', 'update-activation-service-proof.py',
+        'validate-update-health-actor-native.py', 'validate-workflow-native.py', 'summarize-update-timings.py',
+    ) if finalization else ()
+    observer_files = {name: hashlib.sha256((ROOT/'scripts'/name).read_bytes()).hexdigest() for name in observer_names}
     local = args.run_info.resolve().parent
     meta = json.loads(args.run_info.read_text())
     source, target = map(health.archive_pin, (args.source_archive, args.target_archive))
@@ -137,6 +145,13 @@ def main(controller=False, lifetime=False, ready_loss=False, resident=False, fin
                   controllerObservationsSha256=hashlib.sha256(observations_raw).hexdigest(),
                   controllerObservations=len(observations), installedWorkerUnchanged=True,
                   runtimeArchive=report['runtimeArchive'], storage=report['storage'])
+    if finalization:
+        import subprocess
+        checks.need(observer_files == {name: hashlib.sha256((ROOT/'scripts'/name).read_bytes()).hexdigest() for name in observer_names},
+                    'Observer source changed during the independent audit')
+        result.update(observerFiles=observer_files,
+                      observerCommit=subprocess.check_output(['git','-C',str(ROOT),'rev-parse','HEAD'],text=True).strip(),
+                      observerDirty=bool(subprocess.check_output(['git','-C',str(ROOT),'status','--porcelain','--',*['scripts/'+name for name in observer_names]])))
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

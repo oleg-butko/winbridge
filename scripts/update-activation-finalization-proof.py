@@ -42,7 +42,7 @@ def verify_main_selection(command, log):
 
 
 def verify_boundaries(commands, files):
-    resident.verify_boundaries(commands, files)
+    resident.verify_boundaries(commands, files, resident_model_count=14)
     definitions = [
         ('finalization-model-ledger', 'winbridge-update', 'finalization', 24, False),
         ('finalization-v29-mailbox', 'winbridge-worker', 'update_control::tests::finalization_v29_cannot_adopt_saved_data_and_old_views_keep_their_shape', 1, True),

@@ -29,10 +29,10 @@ def verify_main_selection(command, log):
          and summaries[0].startswith('ok. 1 passed; 0 failed; 0 ignored;'), 'Main29 did not execute exactly once')
 
 
-def verify_boundaries(commands, files):
+def verify_boundaries(commands, files, *, resident_model_count=13):
     ready.verify_boundaries(commands, files)
     definitions = [
-        ('resident-model-and-actor', 'winbridge-update', ['--features','bundled-sqlite,update-validation','--lib','resident'], 13,
+        ('resident-model-and-actor', 'winbridge-update', ['--features','bundled-sqlite,update-validation','--lib','resident'], resident_model_count,
          ['resident_completion_binds_the_original_graph_query_and_historical_lifetime',
           'a_cold_actor_cannot_observe_even_with_a_saved_lifetime_key',
           'pending_lifetime_reads_keep_service_started_without_enabling_a_second_start',

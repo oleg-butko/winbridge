@@ -87,3 +87,17 @@ SHA256 bb2c18d637f0bcf524215d5a594060091d775f7ea59f99a40d776c41155578ad,
 6,913,465 bytes/1116 files, dirty=false. Следующий documentation-only checkpoint
 служит отличающимся target pin; Rust/DTO/runtime code одинаков. Это проверяет
 реальную замену source/target identities, не объявляя новый пользовательский релиз.
+
+### Native run начат; reader checkpoint
+
+Task7cb7211b-0b85-4a1c-8327-7e52f7639ab8/run20261030-043200-319f3e87,
+source c19e1ec → target8fdcc42. Первый source ZIP выше; target ZIP
+`winbridge-20261030T043147Z-8fdcc42-0ef25be7.zip`,
+SHA256 911e7c3713feff1d4141d8123f7a11b4f27ff1c5556d5777020fd000ab1dbe5f.
+Повторно не отправлять: наблюдать исходный task/run-info.
+Native finalization24 + v29 mailbox1 + bounded known-seal1 уже passed;
+Main30 effect ещё не выполнен. Унаследованный resident filter теперь включает
+14 tests (добавился pending finalization receiver), поэтому Main30 задаёт явный
+reviewed14, тогда как старый Main29 reader сохраняет default13. Никакие старые
+отчёты/схемы не переименованы. Reader6+3 regressions passed; новая проверка сохраняет
+SHA всех11 Python observer dependencies и Git commit/dirty, проверяя файлы повторно.
