@@ -1,5 +1,17 @@
 # Следующий координатор через исходный keeper
 
+**Native exclusion gate passed:** source5f543f0,
+run20261030-112100-b8658b84/taskb446d8d3-06a8-4023-9912-d079f75e81d1.
+3 exact tests passed: production pin membership/exclusion/exit и два OS helper cases.
+74 ready files twice verified,36 OS-proof negative audits. Report
+ba8de27d5e4d3b50b0c444866a130a8eae6e35d6c2a423ae1fd9bf44de1fac95;
+two-generation proof90d129db6a576bffa41c44a78b50988f76eb1706ba727838384bf54108fd47a6,
+keeper-loss proofc2e5487b1992ce35d4038e58b85c6da2b432e761b1e2e95cd584d1e0ed6c5378.
+Windows14,119,886,848→14,822,199,296bytes; installed worker unchanged.
+Helpers завершены, worker оставить, desktop не нужен/окон нет. Это OS boundary
+proof с реальными helpers, не два полноценных updater workflows; durable bootstrap
+и mixed-version протокол ещё впереди. Не replay ни failed, ни passed task.
+
 2026-10-30/.204. Продолжение [keeper retirement](keeper-runtime-2026-10-30.md).
 Это план и первый platform primitive, не реализованный launch protocol.
 Installed worker source48/gen946 не меняется; public install off.
@@ -97,3 +109,36 @@ Setup исправлен на уникальный named Job. Сам query primi
 не менялись, MSVC platform all-target Clippy passed. Это не положительный native
 proof; требуется новый isolated run/key. Старый task не replay.
 Installed worker unchanged; no windows, Windows directories не удалялись.
+
+## Выбранное направление fresh updater и устойчивого bridge
+
+Первый same-SDK delegation round проверяет lifetime, но не решает будущую schema.
+Рекомендуется запускать свежий updater, построенный из нового pinned snapshot,
+до изменений пользовательского source/runtime. Старый worker может выполнить этот
+stateless build как обычную управляемую задачу, проверить SHA/manifest и frozen
+bootstrap descriptor v1 в своём execution domain. Только после успешного build
+создаются durable update/delegation intent и independent coordinating actor.
+Ошибочный build оставляет работающую установку без изменений.
+
+Old keeper знает только actual current-worker peer, исходный Job и стабильный
+bootstrap envelope: fixed helper location, image/config identities, hashes,
+logical parent/physical spawner, correlation/one attempt. Он не открывает новый
+journal и не проверяет future schema через старую библиотеку. Fresh updater сам
+выполняет проверенную миграцию и получает следующий owner; stable ready/handoff и
+worker-control bridge не должны заставлять old worker читать будущую SQLite.
+Глобальный epoch после migration может увеличиться дважды (migration invalidation
+и new-owner acquisition); нельзя подменять это старым parentEpoch+1 либо переписывать
+исторические owner fields. Ready нужно проверять через versioned live bridge,
+связанный с actual child, preaccepted root и migration result.
+
+Нужен отдельный фиксированный bootstrap query/handshake, а не расширение frozen
+SupervisorSpec или снятие exact-schema guards повсюду. Public updater capability
+пока закрыта. First same-SDK round и native mixed-version migration/control round —
+разные обязательные gates. Старый installed source48 ещё не реализует этот bridge;
+его обновление понадобится перед реальным U4, после изолированных проверок.
+
+Очередность source работы: immutable delegation binding/ledger и known-commit
+permit → actual worker-to-keeper peer/one creation → stable child handoff/ownership
+→ known-empty retirement/max2 → fresh-updater/worker bridge и mixed-version gate
+→ auto workflow/U2 fault matrix/U3 UI/actual installed U4. Только выполненные
+сценарии помечать готовыми; bootstrap effect сейчас не подключён.
