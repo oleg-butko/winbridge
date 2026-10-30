@@ -1,5 +1,18 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: bootstrap intent model, schema всё ещё19/24.**
+[Текущее продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
+Journal-only BootstrapIntent связывает original keeper/новый Requested root/owner/
+source+files и old domain; пять portable tests passed, Linux/MSVC updater Clippy
+passed (последний basename-only test после Clippy). Это данные, не wire/grant.
+Далее durable reservation+supervisor admission/known-COMMIT permit, actual
+worker-to-keeper peer/one creation/stable bridge. Schema25 ещё не создаётся,
+bootstrap mutation/fresh-updater/два полноценных workflow/U2–U4 не готовы.
+Пользователь перезапустил рабочий0.2.0/source48: generationf9daa176, journal
+incarnation5a8eb173 прежний; обе связи.203/.204 connected, primary203, active0/errors=null.
+Простая команда Windows: runtime\winbridge-worker.exe --config
+runtime\winbridge-worker.multi-controller.json serve; encoded PS относится к gates.
+
 **.204/main,2026-10-30: Main31/19/24 Windows passed.**
 Taskb1cfa7b0-57b5-457e-8296-56c7629a2496/run20261030-103611-811af539,
 producerd5a7bab→target830ccb9.73 files twice,19 keeper/10 marker negative audits;

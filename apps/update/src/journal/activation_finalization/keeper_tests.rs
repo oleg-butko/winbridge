@@ -308,3 +308,64 @@ fn schema23_copy_migration_preserves_root_epoch_backup_and_invents_no_keeper() {
     assert_eq!(record(&tx, &saved.update_id).unwrap(), saved);
     assert_eq!(info(&tx).unwrap(), before);
 }
+
+#[test]
+fn bootstrap_data_binds_the_historical_keeper_without_recreating_live_authority() {
+    let (mut f, s, p, at) = setup();
+    let role = selected(&mut f, &s, &p, at).unwrap();
+    let crate::activation::finalization::ActivationFinalizationState::Confirmed { receipt } =
+        &role.finalization.state
+    else {
+        unreachable!()
+    };
+    let b = &role.finalization.command.binding;
+    let old = &b.lifetime_command.binding;
+    let mut intent = crate::bootstrap::tests::fixture();
+    intent.previous = keeper_binding_from_receipt(
+        old.update_id.clone(),
+        old.launch_id.clone(),
+        old.keeper.clone(),
+        old.job_name.clone(),
+        receipt,
+        Some(role.sha256().unwrap()),
+    );
+    intent.update.request.expected.installation_id = b.installation_id.clone();
+    intent.update.request.expected.scope_sha256 = b.scope_sha256.clone();
+    intent.update.request.expected.worker_build_id = receipt
+        .compatibility
+        .identity
+        .descriptor
+        .build
+        .build_id
+        .clone();
+    intent.update.request.expected.worker_config_sha256 =
+        receipt.compatibility.worker_config_sha256.clone();
+    intent.update.request.expected.baseline_manifest_sha256 = b.source_manifest_sha256.clone();
+    intent.parent_epoch = old.updater_epoch + 1;
+    intent.excluded_domain.host_id = old.compatibility.identity.process.host_id.clone();
+    intent.excluded_domain.session_id = old.compatibility.identity.process.session_id;
+    intent.update.accepted_at_ms = at + 1;
+    intent.update.updated_at_ms = at + 1;
+    intent.prepared_at_ms = at + 1;
+    intent.validate_against(&role).unwrap();
+    for fault in 0..6 {
+        let mut changed = intent.clone();
+        match fault {
+            0 => changed.previous.selection_sha256 = Some("0".repeat(64)),
+            1 => changed.update.request.expected.worker_build_id = "foreign".into(),
+            2 => changed.update.request.expected.scope_sha256 = "0".repeat(64),
+            3 => changed.parent_epoch = old.updater_epoch,
+            4 => changed.parent_owner_id = old.updater_owner_id.clone(),
+            _ => {
+                changed.update.accepted_at_ms = at - 1;
+                changed.update.updated_at_ms = at - 1;
+            }
+        }
+        assert!(changed.validate_against(&role).is_err(), "fault {fault}");
+    }
+    // Pure data validation did not allocate a second supervisor or acquire owner.
+    assert_eq!(
+        supervisor::read(&f.c, &s.spec.launch_id).unwrap(),
+        role.selected
+    );
+}

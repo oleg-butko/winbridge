@@ -142,3 +142,33 @@ permit → actual worker-to-keeper peer/one creation → stable child handoff/ow
 → known-empty retirement/max2 → fresh-updater/worker bridge и mixed-version gate
 → auto workflow/U2 fault matrix/U3 UI/actual installed U4. Только выполненные
 сценарии помечать готовыми; bootstrap effect сейчас не подключён.
+
+## Journal-only intent model
+
+`apps/update/src/bootstrap.rs` добавлен без schema bump (source19/24).
+BootstrapIntent — сериализуемые данные будущего ledger, не wire request и не permit.
+Он связывает предыдущий KeeperBinding/selection hash, новый Requested root0,
+logical worker/physical keeper, свежего owner, clean updater build/source pin,
+image/config/output identities и old task domain. Проверяется причинная связь с
+immutable KeeperSelection/Confirmed receipt, текущими installation/scope/build/
+loaded worker config/source baseline и порядком clock/epoch. Updater config и
+worker config — разные файлы, их hashes не приравниваются.
+
+Helper names фиксированы: `update/<updateId>/supervisor/winbridge-update.exe`.
+Payload не содержит произвольные executable/argv/runtime path или plaintext token.
+Canonical intent hash — только ключ данных. validate/deserialize/helper_components
+не создают process/Job/authority; live factory обязана заново проверять actual peer,
+filesystem pins, known COMMIT и отсутствие занятых предыдущих keeper.
+
+5 portable tests passed, включая causal check с настоящими SQLite keeper rows
+(synthetic process metadata),14 malformed bindings и6 historical rebinding/epoch/
+clock cases. Linux/MSVC updater all-target Clippy passed до дополнительной проверки
+opaque archive basename; после неё5 tests/fmt/diff passed. Нативного delegation
+execution/admission, нового journal table или advertised bootstrap capability нет.
+Далее атомарная reservation/supervisor intent, immutable payload/idempotency,
+non-Serde known-commit permit и только затем actual keeper creation/handoff.
+
+2026-10-30 после пользовательского restart установленный worker по-прежнему0.2.0/
+source48c834c, новый generationf9daa176-4125-4ee2-ad0d-aa704f59815b. Обе связи.203/.204
+connected, primary203, journal incarnation5a8eb173 прежний, active0/errors=null.
+Исторические native reports выше правильно фиксируют generation946 до restart.

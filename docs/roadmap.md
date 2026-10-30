@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: journal-only bootstrap intent/causal validation добавлены,
+5 portable tests passed; schema19/24 сохранена. Это не live permission и не новый
+wire command. Далее atomic reservation/known-commit permit и keeper delegation;
+fresh bridge/mixed schema/два workflow/U2–U4 остаются открытыми.
+
 2026-10-30/.204: Main31/19/24 passed (run20261030-103611-811af539),73 files twice/19 keeper negatives; не replay.
 Начат [next keeper bootstrap](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
 exact query-only outside-Job primitive/portable tests/MSVC Clippy готовы;

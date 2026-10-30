@@ -4,6 +4,7 @@ pub mod abort;
 pub mod activation;
 pub mod archive;
 pub mod artifact;
+pub mod bootstrap;
 pub mod build;
 pub mod build_output;
 pub mod build_report;
