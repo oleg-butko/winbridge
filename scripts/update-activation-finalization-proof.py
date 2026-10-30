@@ -46,6 +46,7 @@ def verify_boundaries(commands, files):
     definitions = [
         ('finalization-model-ledger', 'winbridge-update', 'finalization', 24, False),
         ('finalization-v29-mailbox', 'winbridge-worker', 'update_control::tests::finalization_v29_cannot_adopt_saved_data_and_old_views_keep_their_shape', 1, True),
+        ('finalization-reply-budget', 'winbridge-worker', 'local_service::lifetime::finalization_reply_wait_tests::accepted_v8_reply_outlives_generic_ipc_deadline_without_a_second_delivery', 1, True),
         ('finalization-known-seal-bounds', 'winbridge-worker', 'local_service::lifetime::finalization_mailbox::continuation_tests::', 1, False),
     ]
     for name, package, selected, count, exact in definitions:

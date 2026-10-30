@@ -1,5 +1,11 @@
 # Архитектура WinBridge
 
+2026-10-30/.204: [V8 reply wait](plans/worker-self-update/finalization-reply-budget-2026-10-30.md)
+ограничен30s отдельно от framing/прочего IPC original10s. Typed V8 handler проверяет
+OS peer и bounded mailbox до ожидания координатора; accepted work переживает caller
+loss. Validation header-loss hook ждёт настоящий header30s, normal parent сохраняет
+10s/independent observation. Startup240s и V7 capture10s не менялись.
+
 2026-10-30/.204: [original factory и internal29/view21](plans/worker-self-update/finalization-factory-2026-10-30.md)
 потребляют actual ProcessCustody без clone/detach. Fresh V7 original capture admission,
 known decision, parent-pin retirement, single authenticated V8 и independent Active

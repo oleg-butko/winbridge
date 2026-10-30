@@ -5,6 +5,9 @@ use crate::WorkerRuntimeCompatibility;
 use serde::{Deserialize, Serialize};
 
 pub const ACTIVATION_FINALIZATION_CONTRACT: u16 = 8;
+/// Bounded reply observation for an accepted V8 operation. Framing and other
+/// IPC requests keep their existing deadline; caller loss never cancels V8.
+pub const ACTIVATION_FINALIZATION_REPLY_WAIT_MS: u64 = 30_000;
 /// Compatibility name for code that only manipulates the data-only proposal.
 pub const PROPOSED_ACTIVATION_FINALIZATION_CONTRACT: u16 = ACTIVATION_FINALIZATION_CONTRACT;
 pub const ACTIVATION_FINALIZATION_MARKER: &[u8] = b"WINBRIDGE_ACTIVATION_FINALIZATION_V8";

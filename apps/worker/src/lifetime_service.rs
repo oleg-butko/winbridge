@@ -435,3 +435,7 @@ mod finalization_observation_tests;
 #[cfg(test)]
 #[path = "lifetime_service/finalization_mailbox_tests.rs"]
 mod finalization_mailbox_tests;
+
+#[cfg(test)]
+#[path = "lifetime_service/finalization_reply_wait_tests.rs"]
+mod finalization_reply_wait_tests;

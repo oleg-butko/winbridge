@@ -362,6 +362,7 @@ try {
     $commands=@(
       @{name='finalization-model-ledger';minimum=24;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','finalization','--locked','--offline','--','--test-threads=1','--nocapture')},
       @{name='finalization-v29-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::tests::finalization_v29_cannot_adopt_saved_data_and_old_views_keep_their_shape','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
+      @{name='finalization-reply-budget';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','local_service::lifetime::finalization_reply_wait_tests::accepted_v8_reply_outlives_generic_ipc_deadline_without_a_second_delivery','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
       @{name='finalization-known-seal-bounds';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','local_service::lifetime::finalization_mailbox::continuation_tests::','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }

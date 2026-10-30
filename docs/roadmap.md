@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204/main: [V8 reply budget](plans/worker-self-update/finalization-reply-budget-2026-10-30.md)
+отделён от framing/остальных IPC:30s после V8 frame, прежний original10s для других
+requests.1037 workspace tests и Linux/MSVC Clippy passed, real IPC framing/reply
+regression passed. Второй Main30 logged Confirmed Active, но failed на отсутствии
+partial header после timeout; config/task proof ещё нет. Далее новый native run.
+
 2026-10-30/.204/main: [original factory/actor29](plans/worker-self-update/finalization-factory-2026-10-30.md)
 подключены к confirmation writer: consuming retirement всех parent pins, одно V8,
 отдельное Active observation, сохранение actual child/Job/readers. Bounded known-seal

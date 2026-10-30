@@ -1,5 +1,16 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: повторный Main30 дошёл до Active, остановился на header fault assertion.**
+[Разбор и исправление reply budget](plans/worker-self-update/finalization-reply-budget-2026-10-30.md).
+Taskbb0fc4f8/run20261030-051739-2b5177f8 failed,68 files twice verified; не replay.
+Лог actual factory показывает known root/independent Confirmed, но полного proof нет;
+config/task stage не выполнен. V8 server reply wait30s отделён от framing/other IPC10s;
+normal parent10s recovery сохранён, validation ждёт настоящий4-byte header до30s.
+Новая проверка accepted delayed reply идёт через real IPC, без synthetic Active claim.
+1037 workspace tests/17 ignored, Linux/MSVC all-target Clippy/contracts/fmt/diff
+passed; усиленный framing/reply regression1/1 passed (10.23s). Далее clean pins/Main30.
+Installed source48/gen946 healthy/idle, worker оставить; desktop не нужен.
+
 **.204/main,2026-10-30: original finalization factory и actor29 реализованы.**
 [Контракт, ревью и Main30](plans/worker-self-update/finalization-factory-2026-10-30.md).
 Fresh V7/непродлённый capture → known root decision → consuming parent-pin retirement

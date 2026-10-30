@@ -362,6 +362,14 @@ impl ActivationFinalizationGuard {
             finalization_wire::validate_response(&request, &self.shutdown, &value)
         });
         if let Err(reason) = delivered {
+            let diagnostic: String = reason
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(1000)
+                .collect();
+            eprintln!(
+                "Original V8 reply unconfirmed: {diagnostic}; observe Active without resending"
+            );
             self.record_unknown(j, a, s, &format!("V8 result unconfirmed: {reason}"));
         }
         timing.mark("single_delivery_finished_or_unknown", None, None);
@@ -381,34 +389,40 @@ impl ActivationFinalizationGuard {
             == Some("prefix")
         {
             use tokio::io::AsyncReadExt;
-            return tokio::time::timeout(winbridge_transport::IPC_TIMEOUT, async {
-                let mut stream = winbridge_transport::supervisor::connect(endpoint, pid)
+            // The production10s timeout can fire before this deliberately
+            // interrupted reply reaches its header. This validation-only wait
+            // observes one already accepted send; it renews no V7/startup grant.
+            return tokio::time::timeout(
+                std::time::Duration::from_millis(ACTIVATION_FINALIZATION_REPLY_WAIT_MS),
+                async {
+                    let mut stream = winbridge_transport::supervisor::connect(endpoint, pid)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    winbridge_transport::write_frame(
+                        &mut stream,
+                        &serde_json::to_vec(request).map_err(|e| e.to_string())?,
+                    )
                     .await
                     .map_err(|e| e.to_string())?;
-                winbridge_transport::write_frame(
-                    &mut stream,
-                    &serde_json::to_vec(request).map_err(|e| e.to_string())?,
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-                let mut prefix = [0; 4];
-                stream
-                    .read_exact(&mut prefix)
-                    .await
-                    .map_err(|e| e.to_string())?;
-                let length = u32::from_le_bytes(prefix);
-                if length == 0 || length > 1_048_576 {
-                    return Err("Invalid interrupted V8 frame prefix".into());
-                }
-                self.interrupted_reply_prefix = Some(prefix.to_vec());
-                // Actual original PID is authenticated. Discard the unread
-                // body and use a new readonly connection, never resend V8.
-                drop(stream);
-                Err(
-                    "Injected loss after V8 frame prefix; original result unknown, no resend"
-                        .into(),
-                )
-            })
+                    let mut prefix = [0; 4];
+                    stream
+                        .read_exact(&mut prefix)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let length = u32::from_le_bytes(prefix);
+                    if length == 0 || length > 1_048_576 {
+                        return Err("Invalid interrupted V8 frame prefix".into());
+                    }
+                    self.interrupted_reply_prefix = Some(prefix.to_vec());
+                    // Actual original PID is authenticated. Discard the unread
+                    // body and use a new readonly connection, never resend V8.
+                    drop(stream);
+                    Err(
+                        "Injected loss after V8 frame prefix; original result unknown, no resend"
+                            .into(),
+                    )
+                },
+            )
             .await
             .map_err(|_| {
                 "Interrupted V8 observation timed out; delivery outcome unknown".to_string()

@@ -109,7 +109,7 @@ pub(in super::super) fn execute(
     assert_eq!(status.verification_pins_retired, Some(true));
     assert_eq!(status.delivery_attempted, Some(true));
     assert_eq!(
-        status.interrupted_reply_prefix.as_ref().unwrap().len(),
+        status.interrupted_reply_prefix.as_ref().expect("Validation received no V8 header; inspect delivery timing and Indeterminate history").len(),
         4,
         "Actual V8 response must be interrupted, not synthetically accepted"
     );

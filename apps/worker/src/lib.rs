@@ -1562,12 +1562,39 @@ where
     };
     tokio::spawn(async move {
         let _permit = permit;
+        let original_deadline = tokio::time::Instant::now() + winbridge_transport::IPC_TIMEOUT;
+        let bytes = match tokio::time::timeout_at(
+            original_deadline,
+            winbridge_transport::read_frame(&mut stream),
+        )
+        .await
+        {
+            Ok(Ok(bytes)) => bytes,
+            Ok(Err(error)) => {
+                eprintln!("IPC frame read failed: {error}");
+                return;
+            }
+            Err(error) => {
+                eprintln!("IPC connection deadline: {error}");
+                return;
+            }
+        };
+        let finalization_delivery = serde_json::from_slice::<serde_json::Value>(&bytes)
+            .ok()
+            .is_some_and(|v| v.get("finalizationVersion").is_some());
+        // Authentication and bounded admission happen before the V8 handler
+        // waits for its original coordinator. Rejected envelopes/peers never
+        // enter that wait. Every other request retains the ORIGINAL deadline.
+        let reply_deadline = if finalization_delivery {
+            tokio::time::Instant::now()
+                + Duration::from_millis(
+                    winbridge_protocol::update::ACTIVATION_FINALIZATION_REPLY_WAIT_MS,
+                )
+        } else {
+            original_deadline
+        };
         let operation = async {
-            let bytes = winbridge_transport::read_frame(&mut stream).await?;
-            if serde_json::from_slice::<serde_json::Value>(&bytes)
-                .ok()
-                .is_some_and(|v| v.get("finalizationVersion").is_some())
-            {
+            if finalization_delivery {
                 let response = match (
                     serde_json::from_slice::<
                         winbridge_protocol::update::ActivationFinalizationRequest,
@@ -1780,9 +1807,10 @@ where
             }
             winbridge_transport::write_frame(&mut stream, &bytes).await
         };
-        if let Err(error) = tokio::time::timeout(winbridge_transport::IPC_TIMEOUT, operation).await
-        {
-            eprintln!("IPC connection deadline: {error}");
+        match tokio::time::timeout_at(reply_deadline, operation).await {
+            Err(error) => eprintln!("IPC connection deadline: {error}"),
+            Ok(Err(error)) => eprintln!("IPC response failed: {error}"),
+            Ok(Ok(())) => {}
         }
     });
 }

@@ -22,7 +22,7 @@ pub(super) async fn actual_peer() -> LocalPeer {
         server.local_peer().unwrap()
     }
 }
-async fn fixture(root: &Path) -> (RunningLocalService, ActivationFinalizationRequest) {
+pub(super) async fn fixture(root: &Path) -> (RunningLocalService, ActivationFinalizationRequest) {
     let service = super::tests::fixture(root);
     let (mut command, mut receipt) = super::tests::proposal(&service);
     // Synthetic keeper liveness is explicit. Only its PID matches the real
@@ -44,7 +44,7 @@ async fn fixture(root: &Path) -> (RunningLocalService, ActivationFinalizationReq
     };
     (running, request)
 }
-async fn await_queued(running: &RunningLocalService) {
+pub(super) async fn await_queued(running: &RunningLocalService) {
     let until = Instant::now() + Duration::from_secs(3);
     while running.finalization_receiver.as_ref().unwrap().is_empty() {
         assert!(
