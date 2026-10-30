@@ -22,7 +22,7 @@ pub(crate) fn ticket_sha(t: &KeeperLaunchTicket) -> Result<String> {
     Ok(sha256(&bytes))
 }
 #[cfg(any(windows, test))]
-pub(super) fn startup_remaining(prepared: u64, at: u64) -> Result<Duration> {
+pub(crate) fn startup_remaining(prepared: u64, at: u64) -> Result<Duration> {
     let expires = prepared
         .checked_add(KEEPER_LAUNCH_STARTUP_MS)
         .filter(|v| *v <= winbridge_core::update::MAX_UPDATE_COUNTER)
@@ -33,7 +33,7 @@ pub(super) fn startup_remaining(prepared: u64, at: u64) -> Result<Duration> {
     Ok(Duration::from_millis(expires - at))
 }
 #[cfg(any(windows, test))]
-fn validate(t: &KeeperLaunchTicket, b: &KeeperBinding) -> Result<()> {
+pub(crate) fn validate(t: &KeeperLaunchTicket, b: &KeeperBinding) -> Result<()> {
     let ids = [
         &t.update_id,
         &t.launch_id,
@@ -119,7 +119,7 @@ impl Machine {
                 } else {
                     KeeperLaunchPhase::Failed
                 };
-                s.reason = Some(e.reason);
+                s.reason = Some(e.reason.chars().take(1000).collect());
             }
         }
         Ok(s.clone())

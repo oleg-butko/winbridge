@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: consuming bootstrap client/one Start/readonly Observe и opaque
+original Spawned COMMIT добавлены; owner release/Ready/ConfirmReady/Handoff сохраняют
+original pins и query-only handle.460 updater tests/7 ignored, Linux/MSVC Clippy
+passed. Runtime Start→SQL→Ready ещё не proved; own-worker integration/managed fresh
+helper build/old keeper exit/два workflow/future SDK остаются открытыми.
+
 2026-10-30/.204: native keeper launch primitives passed (sourceff3307e,
 run20261030-221011-8c68630d): exact dual-Job spawn/cleanup и retained predecessor
 exit.3 files twice/12 negative audits, installed unchanged. Это OS units;

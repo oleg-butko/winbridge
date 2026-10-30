@@ -133,15 +133,24 @@ impl KeeperProbeCapture {
         if Instant::now() >= self.deadline || std::process::id() != self.binding.worker.process_id {
             return Err("Original keeper observation expired or changed worker process".into());
         }
+        self.require_original_processes()?;
+        if Instant::now() >= self.deadline {
+            return Err("Original keeper observation expired during physical checks".into());
+        }
+        Ok(())
+    }
+    /// Observation of an ALREADY attempted launch only. This never refreshes
+    /// the capture deadline and must not authorize a new Start/admission.
+    pub(crate) fn require_original_processes(&self) -> Result<()> {
+        if std::process::id() != self.binding.worker.process_id {
+            return Err("Original keeper capture belongs to another worker process".into());
+        }
         self.worker
             .require_job_membership(&self.binding.job_name)
             .map_err(error)?;
         self.keeper
             .require_outside_job(&self.binding.job_name)
             .map_err(error)?;
-        if Instant::now() >= self.deadline {
-            return Err("Original keeper observation expired during physical checks".into());
-        }
         Ok(())
     }
 }

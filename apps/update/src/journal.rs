@@ -34,6 +34,8 @@ mod activation_service;
 mod activation_writer;
 mod bootstrap;
 pub use bootstrap::BootstrapReservation;
+#[cfg(windows)]
+pub(crate) use bootstrap::BootstrapSpawnedCommit;
 #[cfg(any(windows, test))]
 pub use bootstrap::{BootstrapReservationAdmission, BootstrapReservationCommit};
 mod build;

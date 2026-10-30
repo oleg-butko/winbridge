@@ -259,3 +259,52 @@ pub use files::{FreshUpdater, PreparedBootstrapFiles};
 mod admission;
 #[cfg(windows)]
 pub use admission::{BootstrapPreparation, BootstrapPreparationFailure, PreparedBootstrap};
+
+#[cfg(any(windows, test))]
+mod launch;
+#[cfg(windows)]
+pub(crate) use launch::BootstrapSpawnedProcess;
+#[cfg(windows)]
+pub use launch::{
+    BootstrapLaunchAttempt, BootstrapLaunchFailure, BootstrapOwnerReleaseFailure, BootstrapSession,
+};
+
+/// Process-wide hash deltas are diagnostics, never freshness/authority evidence.
+#[cfg(windows)]
+struct PhaseTrace {
+    phase: &'static str,
+    launch_id: String,
+    started: std::time::Instant,
+    hashes: [u64; 3],
+    outcome: &'static str,
+}
+#[cfg(windows)]
+impl PhaseTrace {
+    fn new(phase: &'static str, launch_id: &str) -> Self {
+        Self {
+            phase,
+            launch_id: launch_id.into(),
+            started: std::time::Instant::now(),
+            hashes: crate::artifact::hash_counters(),
+            outcome: "interrupted_or_unfinished",
+        }
+    }
+    fn finish(&mut self, success: bool) {
+        self.outcome = if success { "ok" } else { "failed" };
+    }
+}
+#[cfg(windows)]
+impl Drop for PhaseTrace {
+    fn drop(&mut self) {
+        let current = crate::artifact::hash_counters();
+        let delta: Vec<_> = current
+            .into_iter()
+            .zip(self.hashes)
+            .map(|(n, old)| n.wrapping_sub(old))
+            .collect();
+        eprintln!(
+            "WinBridge bootstrap {}",
+            serde_json::json!({"event":"bootstrap_phase","phase":self.phase,"launchId":self.launch_id,"outcome":self.outcome,"elapsedMs":self.started.elapsed().as_millis(),"processHashCallsDelta":delta[0],"processHashBytesDelta":delta[1],"processHashNsDelta":delta[2]})
+        );
+    }
+}

@@ -38,6 +38,7 @@ impl PreparedBootstrapFiles {
         capture: KeeperProbeCapture,
         mut own_state: impl FnMut() -> Result<()>,
     ) -> std::result::Result<BootstrapPreparation, Box<BootstrapPreparationFailure>> {
+        let mut trace = PhaseTrace::new("admission", self.launch_id());
         let mut known = None;
         let result = (|| {
             self.require_current()?;
@@ -66,7 +67,7 @@ impl PreparedBootstrapFiles {
                 BootstrapReservationAdmission::Existing(r) => Ok(Some(r)),
             }
         })();
-        match result {
+        let output = match result {
             Ok(Some(data)) => Ok(BootstrapPreparation::Existing(data)),
             Ok(None) => {
                 let attempt = PreparedBootstrap {
@@ -90,7 +91,9 @@ impl PreparedBootstrapFiles {
                 _capture: capture,
                 _known: known,
             })),
-        }
+        };
+        trace.finish(output.is_ok());
+        output
     }
 }
 impl PreparedBootstrap {

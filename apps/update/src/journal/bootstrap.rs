@@ -157,6 +157,19 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<BootstrapReservati
     })
     .transpose()
 }
+/// Only this writer's successful original Spawned COMMIT creates this fact.
+/// Historical receipts cannot be converted back into it.
+#[cfg(any(windows, test))]
+pub(crate) struct BootstrapSpawnedCommit {
+    record: SupervisorRecord,
+    directory: PathBuf,
+}
+#[cfg(any(windows, test))]
+impl BootstrapSpawnedCommit {
+    pub(crate) fn record(&self) -> &SupervisorRecord {
+        &self.record
+    }
+}
 /// Data-only transaction primitive. The future live factory owns checkpoints
 /// and COMMIT; Existing data can never become another creation permit.
 #[cfg(any(windows, test))]
@@ -240,6 +253,29 @@ pub(super) fn reserve(
     check_authority(c, a)?;
     Ok(ReservationWrite::New(reservation))
 }
+#[cfg(any(windows, test))]
+fn require_original_record(
+    c: &Connection,
+    a: &UpdateAuthority,
+    known: &BootstrapReservationCommit,
+    directory: &Path,
+    expected: &SupervisorRecord,
+) -> Result<()> {
+    check_authority(c, a)?;
+    let intent = &known.reservation.intent;
+    if known.directory != directory
+        || intent.parent_epoch != a.epoch
+        || intent.parent_owner_id != a.owner_id
+        || read(c, &intent.launch_id)?.as_ref() != Some(&known.reservation)
+        || supervisor::read(c, &intent.launch_id)? != *expected
+        || record(c, &intent.update.update_id)? != intent.update
+    {
+        return Err(bad(
+            "Known bootstrap COMMIT changed journal, owner, root or original supervisor record",
+        ));
+    }
+    check_authority(c, a)
+}
 impl UpdateJournal {
     /// Internal writer step for the future consuming live factory. The callback
     /// must retain/check its original OS/file pins; a known SQL commit alone is
@@ -291,22 +327,70 @@ impl UpdateJournal {
         a: &UpdateAuthority,
         known: &BootstrapReservationCommit,
     ) -> Result<()> {
+        self.require_bootstrap_record(a, known, &known.reservation.supervisor)
+    }
+    #[cfg(any(windows, test))]
+    pub(crate) fn require_bootstrap_spawned(
+        &self,
+        a: &UpdateAuthority,
+        known: &BootstrapReservationCommit,
+        spawned: &BootstrapSpawnedCommit,
+    ) -> Result<()> {
+        if spawned.directory != self.directory {
+            return Err(bad("Original Spawned COMMIT changed journal directory"));
+        }
+        self.require_bootstrap_record(a, known, spawned.record())
+    }
+    /// Single original write only. Existing receipts are data, never this fact.
+    #[cfg(any(windows, test))]
+    pub(crate) fn commit_bootstrap_spawned(
+        &mut self,
+        a: &UpdateAuthority,
+        known: &BootstrapReservationCommit,
+        process: &winbridge_protocol::update::SupervisorProcess,
+        mut checkpoint: impl FnMut() -> std::result::Result<(), String>,
+    ) -> Result<Box<BootstrapSpawnedCommit>> {
+        self.check_directory(a)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        require_original_record(
+            &tx,
+            a,
+            known,
+            &self.directory,
+            &known.reservation.supervisor,
+        )?;
+        checkpoint().map_err(bad)?;
+        let old = &known.reservation.supervisor;
+        let mut record = old.clone();
+        record.phase = SupervisorPhase::Spawned;
+        record.revision = 1;
+        record.process = Some(process.clone());
+        record.updated_at_ms = now_ms()?.max(record.updated_at_ms);
+        record.reason="Исходный keeper подтвердил один независимый процесс; ожидается Ready, effects запрещены".into();
+        supervisor::persist(&tx, old, &record)?;
+        checkpoint().map_err(bad)?;
+        check_authority(&tx, a)?;
+        tx.commit().map_err(|e|storage(format!("Original bootstrap Spawned COMMIT unconfirmed; retain owner/process, no replay: {e}")))?;
+        let fact = Box::new(BootstrapSpawnedCommit {
+            record,
+            directory: self.directory.clone(),
+        });
+        self.require_bootstrap_spawned(a, known, &fact)?;
+        Ok(fact)
+    }
+    #[cfg(any(windows, test))]
+    fn require_bootstrap_record(
+        &self,
+        a: &UpdateAuthority,
+        known: &BootstrapReservationCommit,
+        expected: &SupervisorRecord,
+    ) -> Result<()> {
         self.check_directory(a)?;
         let tx = self.connection.unchecked_transaction().map_err(storage)?;
-        check_authority(&tx, a)?;
-        let intent = &known.reservation.intent;
-        if known.directory != self.directory
-            || intent.parent_epoch != a.epoch
-            || intent.parent_owner_id != a.owner_id
-            || read(&tx, &intent.launch_id)?.as_ref() != Some(&known.reservation)
-            || supervisor::read(&tx, &intent.launch_id)? != known.reservation.supervisor
-            || record(&tx, &intent.update.update_id)? != intent.update
-        {
-            return Err(bad(
-                "Known bootstrap COMMIT changed journal, owner, root or original Intent",
-            ));
-        }
-        check_authority(&tx, a)?;
+        require_original_record(&tx, a, known, &self.directory, expected)?;
         tx.commit().map_err(storage)
     }
     /// Readonly historical data. No reservation or live permission is minted.

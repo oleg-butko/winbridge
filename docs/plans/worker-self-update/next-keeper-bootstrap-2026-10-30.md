@@ -592,3 +592,75 @@ existing artifact hash counters: original keeper capture3s включает не
 проверок image/config pins вокруг SQL COMMIT. Нельзя продлевать capture/startup
 после неизвестного исхода либо пересоздавать Start при expiry. Прежде чем менять
 проверки, получить timings/bytes/calls именно настоящего admission/handoff.
+
+
+## Клиент original attempt и передача owner
+
+2026-10-30/.204, same-SDK source19/25. Это внутренний consuming API, ещё не
+подключённый к worker admission/UI или mixed-version journal bridge.
+
+Порядок вызовов:
+
+1. `PreparedBootstrap::begin_launch(j, owner, own_state)` потребляет original
+   files/capture/known reservation; Existing rows не имеют этого метода. Binding
+   и private token проверяются против immutable reservation, paths фиксированы.
+2. `BootstrapLaunchAttempt::send_start(&mut journal, owner, own_state)` проверяет
+   original3s capture и фиксирует start_attempted до первого await/write. Future
+   заимствует resident attempt: timeout/cancellation сохраняют все pins/flag и
+   unconfirmed reason. После unknown — `observe()`, не новый Start. Наблюдение
+   использует original handles, не refresh3s и не SQL writes.
+3. Ответ проверяет version/request/launch/ticket hash/original expiresAt, canonical
+   birth/host/session и exact new process outside обоих existing Jobs. Terminal
+   results не возвращаются в Created. Exited metadata не открывает мёртвый PID и
+   не разрешает handoff. Query failures не считаются outside.
+4. `publish_spawned` имеет один write attempt. Отдельный writer проверяет original
+   root0/Intent/owner/directory внутри IMMEDIATE transaction,2 physical checkpoints,
+   actual COMMIT/readback и выдаёт opaque `BootstrapSpawnedCommit`. Повтор при
+   existing receipt отказывает до callback. Generic advance_supervisor не может
+   заменить original COMMIT фактом из saved data. Ошибка хранит attempt/owner;
+   unconfirmed write не повторяется. Known fact сохраняется до поздних checks.
+5. `release_owner` потребляет именно original known fact после повторной проверки
+   scope/process/files и original preparedAt+10s. При отказе returns retained owner
+   и attempt; новый owner не приобретается от имени старого. При успехе выдаёт
+   `BootstrapSession` и только затем drop original owner-lock.
+6. `wait_ready_and_confirm` требует exact Ready revision2/process/spec/epoch+1 и
+   receipt timestamp до original10s deadline. Та же retained process Arc передаётся
+   в SupervisorHandle, без reopening PID/ownership reconstruction. ConfirmReady
+   идёт старому keeper; unknown reply можно прочитать через `observe_keeper()`.
+7. `handoff` использует прежний one-shot Supervisor API; unknown reply выясняется
+   через `observe_handoff()`. `finish` разрешён только после known Active и live
+   original process, затем снимает original preparation pins. Returned observed
+   handle не убивает независимый coordinator при Drop. Direct owned path сохраняет
+   прежний cleanup/detach; следующие source actions идут через прежние API.
+
+Новый PhaseTrace пишет admission/begin/start/publish/release elapsed и process-wide
+hash calls/bytes/ns deltas. Эти counters могут включать concurrent hash work,
+не заменяют проверки/authority. Прерванная borrowed future оставляет trace outcome
+interrupted_or_unfinished, а команду — unconfirmed, не unsent/success. Token и whole
+wire request не логируются. Capture3s и startup10s не продлеваются.
+
+При ревью исправлены две важные границы: перенос delegated child больше не
+пересоздаёт pin по PID; opaque Spawned COMMIT отделён от generic existing receipt.
+Compile-time проверка actual futures на Send нашла !Sync SQLite reference во
+вложенном async preflight; SQL checks вынесены до I/O future. Runtime/owner/epoch
+проверки ради Send не ослаблялись.
+
+Проверки:460 updater tests/7 ignored,22 bootstrap +1 exact Spawned guard;5 новых
+reply/unknown/terminal/identity tests и3 настоящих SQLite tests. Actual deferred-FK
+COMMIT failure и оба checkpoints откатывают Spawned/receipt без fact, duplicate
+write не rerun checkpoints, owner/directory/current-receipt changes отвергаются.
+Linux/MSVC all-target Clippy и fmt/diff passed, direct supervisor IPC regression
+сохраняется. Windows actual client/admission/Start→Spawned→Ready пока НЕ proved.
+Native probe unit усилена: expired3s capture отклоняет fresh operation, но исходные
+kernel handles остаются пригодны для readonly continuation. Нужен новый isolated
+run для этого изменения, не replay прежнего passed task.
+
+Дальше нужен intrinsic Active-worker factory: candidate historical keeper binding
+может служить только nomination, сверенной с actual loaded activation scope и
+новым authenticated probe, не saved custody. Own-mode callback должен быть
+nonblocking при SQL checkpoints; нельзя брать Store/registry lock с ожиданием под
+journal writer. Fresh updater предварительно строится managed build внутри
+registered project до source/runtime changes. Затем native actual client handshake
+и controlled old keeper exit только при known successor + original root exit +
+same Job.empty + finished readers, без idle polling. Two real workflows/max2,
+future-SDK migration/bridge и U2–U4 остаются отдельными gates; install off.

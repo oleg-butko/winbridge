@@ -308,6 +308,39 @@ impl PreparedBootstrapFiles {
         }
         Ok(())
     }
+    #[cfg(windows)]
+    pub(super) fn launch_id(&self) -> &str {
+        &self.launch_id
+    }
+    #[cfg(windows)]
+    pub(super) fn launch_ticket(
+        &self,
+        reservation: &crate::journal::BootstrapReservation,
+        predecessor: Option<SupervisorProcess>,
+    ) -> Result<KeeperLaunchTicket> {
+        let i = &reservation.intent;
+        let (intent, spec) = self.intent(&i.previous, i.prepared_at_ms)?;
+        if intent != *i || spec != reservation.supervisor.spec {
+            return Err("Original prepared files/token differ from known bootstrap COMMIT".into());
+        }
+        let file = |f: &BootstrapFile| KeeperLaunchFile {
+            sha256: f.sha256.clone(),
+            bytes: f.bytes,
+            file_identity: f.file_identity.clone(),
+        };
+        Ok(KeeperLaunchTicket {
+            update_id: i.update.update_id.clone(),
+            launch_id: i.launch_id.clone(),
+            image: file(&i.image),
+            config: file(&i.config),
+            stdout_identity: i.stdout_identity.clone(),
+            stderr_identity: i.stderr_identity.clone(),
+            token: self.token.clone(),
+            excluded_job: i.excluded_domain.job_name.clone(),
+            predecessor,
+            prepared_at_ms: i.prepared_at_ms,
+        })
+    }
     pub(super) fn intent(
         &self,
         previous: &KeeperBinding,

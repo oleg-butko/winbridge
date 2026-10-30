@@ -1,5 +1,28 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: consuming bootstrap client/known Spawned COMMIT, source19/25.**
+[API, ревью и дальнейший шаг](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#клиент-original-attempt-и-передача-owner).
+PreparedBootstrap→begin_launch→один borrowed send_start; lost/cancelled reply
+оставляет исходную попытку/pins и unconfirmed reason. Observe допускается после
+expiry3s только для attempted exchange, fresh admission/Start по-прежнему требуют
+исходный capture. Responses связываются с launch/hash/deadline/exact process,
+terminal state не регрессирует. Publish Spawned — отдельная atomic original-only
+транзакция с2 physical checkpoints и opaque non-Clone/non-serde COMMIT fact.
+Existing receipt не может заменить этот факт (исправлено при ревью).
+Release owner требует именно этот fact + original files/process; ошибки держат
+owner/attempt. SupervisorHandle различает owned direct child и observed delegated
+pin: та же Arc/query handle, без PID reopen при передаче и без kill on Drop.
+Ready подтверждается в original10s, затем ConfirmReady/readonly ObserveKeeper,
+один Handoff/readonly ObserveHandoff, finish только из known Active. Pins retired
+после known handoff; source effects отдельно, как в прежнем Supervisor API.
+Добавлены phase timings/process-wide hash deltas (диагностика, не authority).
+Исправлен !Send shared SQLite borrow: sync checks до I/O future.460 updater tests/
+7 ignored,23 focused tests, Linux/MSVC all-target Clippy/fmt/diff passed. Native
+client Start→SQL→Ready ещё НЕ выполнялся, intrinsic own-worker integration,
+fresh managed bootstrap build, old keeper exit/max2/two workflow/future SDK/U2–U4
+ещё не готовы. Public install off/installed worker прежний. Следующий Windows
+probe проверит original handles после capture expiry; это не full client proof.
+
 **.204/main,2026-10-30: Windows keeper launch primitives passed.**
 Sourceff3307e,run20261030-221011-8c68630d,
 task4713f975-c011-411d-961d-a4d6b1928281. Два exact OS units прошли:

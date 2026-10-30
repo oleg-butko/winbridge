@@ -165,7 +165,7 @@ fn activation_view(
 mod activation_files;
 mod finalization_control;
 mod keeper_control;
-mod keeper_launch;
+pub(crate) mod keeper_launch;
 mod keeper_probe;
 pub use keeper_probe::{observe_original_keeper, KeeperProbeCapture};
 mod resident_control;
@@ -475,9 +475,42 @@ fn prepare_bound(
         _image: file(&image)?,
     })))
 }
+/// Direct launch owns cleanup; delegated launch only observes the process
+/// already detached by its original keeper. A query pin never grants kill rights.
+struct SupervisorChild {
+    identity: SupervisorProcess,
+    custody: SupervisorChildCustody,
+}
+enum SupervisorChildCustody {
+    Owned(InfrastructureChild),
+    #[cfg(windows)]
+    Observed(Arc<infrastructure::PinnedProcess>),
+}
+impl SupervisorChild {
+    fn owned(child: InfrastructureChild) -> Self {
+        Self {
+            identity: child.identity.clone(),
+            custody: SupervisorChildCustody::Owned(child),
+        }
+    }
+    fn detached(&mut self) {
+        match &mut self.custody {
+            SupervisorChildCustody::Owned(child) => child.detached(),
+            #[cfg(windows)]
+            SupervisorChildCustody::Observed(_) => {}
+        }
+    }
+    fn exited(&mut self) -> std::io::Result<bool> {
+        match &mut self.custody {
+            SupervisorChildCustody::Owned(child) => child.exited(),
+            #[cfg(windows)]
+            SupervisorChildCustody::Observed(pin) => pin.exited(),
+        }
+    }
+}
 pub struct SupervisorHandle {
     pub record: SupervisorRecord,
-    child: InfrastructureChild,
+    child: SupervisorChild,
     directory: PathBuf,
     token: String,
     handoff_sent: bool,
@@ -544,7 +577,7 @@ impl PreparedSupervisor {
         drop(owner); // No inherited owner lock; child must acquire exactly the next epoch.
         Ok(SupervisorHandle {
             record,
-            child,
+            child: SupervisorChild::owned(child),
             directory,
             token: self.token,
             handoff_sent: false,
@@ -552,6 +585,22 @@ impl PreparedSupervisor {
     }
 }
 impl SupervisorHandle {
+    /// Only a consuming original bootstrap session can mint this sealed fact;
+    /// no constructor accepts a saved row/PID or caller-selected token.
+    #[cfg(windows)]
+    pub(crate) fn from_bootstrap(process: crate::bootstrap::BootstrapSpawnedProcess) -> Self {
+        let (record, pin, directory, token) = process.into_parts();
+        Self {
+            child: SupervisorChild {
+                identity: pin.identity().clone(),
+                custody: SupervisorChildCustody::Observed(pin),
+            },
+            record,
+            directory,
+            token,
+            handoff_sent: false,
+        }
+    }
     /// Readonly v6/worker-control-v2 identity. No implicit compatibility upgrade.
     pub async fn runtime_identity(&self) -> Result<winbridge_protocol::LoadedWorkerIdentity> {
         self.runtime_query(false).await?.into_runtime_identity()

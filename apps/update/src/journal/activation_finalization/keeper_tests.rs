@@ -765,3 +765,148 @@ fn known_bootstrap_fact_requires_original_owner_root_and_unstarted_supervisor() 
         );
     }
 }
+
+#[test]
+fn known_spawned_guard_requires_the_original_commit_directory_owner_and_exact_receipt() {
+    use crate::journal::BootstrapReservationAdmission;
+    for fault in 0..3 {
+        let (f, intent, spec) = delegation_setup();
+        let mut journal = UpdateJournal {
+            directory: f.a.directory.clone(),
+            connection: f.c,
+        };
+        let BootstrapReservationAdmission::Committed(known) = journal
+            .commit_bootstrap_reservation(&f.a, intent.clone(), spec, |_, _| Ok(()))
+            .unwrap()
+        else {
+            panic!("Only original COMMIT creates a known bootstrap fact")
+        };
+        let mut process = intent.previous.coordinator.clone();
+        process.process_id += 100;
+        process.birth.push('1');
+        let mut checks = 0;
+        let spawned = journal
+            .commit_bootstrap_spawned(&f.a, &known, &process, || {
+                checks += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(checks, 2);
+        assert_eq!(spawned.record().process.as_ref(), Some(&process));
+        journal
+            .require_bootstrap_spawned(&f.a, &known, &spawned)
+            .unwrap();
+        assert!(
+            journal.require_known_bootstrap(&f.a, &known).is_err(),
+            "Original Intent guard remains strict after Spawned"
+        );
+        assert!(journal
+            .commit_bootstrap_spawned(&f.a, &known, &process, || panic!(
+                "Existing Spawned must not mint another fact"
+            ))
+            .is_err());
+        match fault {
+            0 => journal.directory = journal.directory.join("copied-headers"),
+            1 => {
+                journal
+                    .connection
+                    .execute("UPDATE installation SET epoch=epoch+1", [])
+                    .unwrap();
+            }
+            _ => {
+                journal
+                    .advance_supervisor(
+                        &f.a,
+                        &intent.launch_id,
+                        1,
+                        SupervisorPhase::Indeterminate,
+                        None,
+                        "Independent terminal change",
+                    )
+                    .unwrap();
+            }
+        }
+        assert!(
+            journal
+                .require_bootstrap_spawned(&f.a, &known, &spawned)
+                .is_err(),
+            "fault {fault}"
+        );
+    }
+}
+#[test]
+fn failed_original_spawned_commit_keeps_bootstrap_intent_without_a_fact() {
+    use crate::journal::BootstrapReservationAdmission;
+    let (f, intent, spec) = delegation_setup();
+    let mut journal = UpdateJournal {
+        directory: f.a.directory.clone(),
+        connection: f.c,
+    };
+    let BootstrapReservationAdmission::Committed(known) = journal
+        .commit_bootstrap_reservation(&f.a, intent.clone(), spec, |_, _| Ok(()))
+        .unwrap()
+    else {
+        panic!()
+    };
+    journal.connection.execute_batch(r#"CREATE TABLE spawned_commit_failure(id TEXT REFERENCES updates(id) DEFERRABLE INITIALLY DEFERRED);
+CREATE TRIGGER fail_spawned_commit AFTER INSERT ON supervisor_receipts WHEN NEW.phase='"spawned"' BEGIN INSERT INTO spawned_commit_failure VALUES('missing-root');END;"#).unwrap();
+    let mut checks = 0;
+    let error = journal
+        .commit_bootstrap_spawned(&f.a, &known, &intent.previous.coordinator, || {
+            checks += 1;
+            Ok(())
+        })
+        .err()
+        .expect("Actual COMMIT failure must not mint a fact");
+    assert_eq!(checks, 2);
+    assert!(error.to_string().contains("COMMIT unconfirmed"));
+    assert!(journal.connection.is_autocommit());
+    journal.require_known_bootstrap(&f.a, &known).unwrap();
+    assert_eq!(
+        journal.supervisor(&intent.launch_id).unwrap().phase,
+        SupervisorPhase::Intent
+    );
+    let count: i64 = journal
+        .connection
+        .query_row(
+            "SELECT count(*) FROM supervisor_receipts WHERE launch_id=?1 AND phase=?2",
+            params![intent.launch_id, encode(&SupervisorPhase::Spawned).unwrap()],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 0);
+}
+#[test]
+fn original_spawned_checkpoints_rollback_the_bootstrap_receipt_on_either_failure() {
+    use crate::journal::BootstrapReservationAdmission;
+    for failure in 1..=2 {
+        let (f, intent, spec) = delegation_setup();
+        let mut journal = UpdateJournal {
+            directory: f.a.directory.clone(),
+            connection: f.c,
+        };
+        let BootstrapReservationAdmission::Committed(known) = journal
+            .commit_bootstrap_reservation(&f.a, intent.clone(), spec, |_, _| Ok(()))
+            .unwrap()
+        else {
+            panic!()
+        };
+        let mut checks = 0;
+        assert!(journal
+            .commit_bootstrap_spawned(&f.a, &known, &intent.previous.coordinator, || {
+                checks += 1;
+                if checks == failure {
+                    Err("Physical scope changed".into())
+                } else {
+                    Ok(())
+                }
+            })
+            .is_err());
+        assert_eq!(checks, failure);
+        journal.require_known_bootstrap(&f.a, &known).unwrap();
+        assert_eq!(
+            journal.supervisor(&intent.launch_id).unwrap(),
+            known.reservation().supervisor
+        );
+    }
+}

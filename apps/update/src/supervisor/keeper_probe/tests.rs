@@ -173,6 +173,9 @@ mod native {
         capture.require_current().unwrap();
         tokio::time::sleep(ipc::TIMEOUT + Duration::from_millis(50)).await;
         assert!(capture.require_current().is_err());
+        // Expiry still forbids a NEW admission/Start. It must not prevent an
+        // original attempt's readonly continuation using these exact handles.
+        capture.require_original_processes().unwrap();
         eprintln!(
             "WINBRIDGE_PROBE_CLIENT={}",
             serde_json::json!({"worker":binding.worker,"keeper":binding.coordinator,"changedBindingRejected":true,"duplicateFieldsRejected":true,"exactCaptureObserved":true,"captureExpired":true})
