@@ -71,6 +71,7 @@ mod physical;
 #[cfg(windows)]
 pub use physical::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
+    ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
     ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
     ActivationServicePreparation, RuntimeReplacementFailure, RuntimeReplacementGuard,
 };

@@ -1,5 +1,12 @@
 # Архитектура WinBridge
 
+2026-10-30/.204: [original factory и internal29/view21](plans/worker-self-update/finalization-factory-2026-10-30.md)
+потребляют actual ProcessCustody без clone/detach. Fresh V7 original capture admission,
+known decision, parent-pin retirement, single authenticated V8 и independent Active
+confirmation подключены; cold views не создают физического owner. Known seal retries
+принадлежат original worker coordinator и ограничены3 попытками, без SQL replay.
+Постоянный keeper и отказ от updater authority/journal пока не подключены.
+
 2026-10-29/.204: [finalization confirmation writer](plans/worker-self-update/finalization-completion-2026-10-29.md)
 пишет отдельный Active fact по свежему opaque capture permit под original owner.
 Current/history меняются одной transaction; root/lease неизменны, unknown COMMIT

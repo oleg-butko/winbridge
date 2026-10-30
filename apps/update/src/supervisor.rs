@@ -163,6 +163,7 @@ fn activation_view(
 }
 
 mod activation_files;
+mod finalization_control;
 mod resident_control;
 
 fn local(path: &Path) -> Result<PathBuf> {
@@ -1841,6 +1842,8 @@ impl SupervisorHandle {
                 | SupervisorAction::EnterActivationLifetime
                 | SupervisorAction::ObserveActivationLifetime
                 | SupervisorAction::ObserveResidentConnection
+                | SupervisorAction::FinalizeActivation
+                | SupervisorAction::ObserveActivationFinalization
                 | SupervisorAction::ValidateCandidateHealth
                 | SupervisorAction::ObserveCandidateHealth
                 | SupervisorAction::CaptureRuntimeBaseline
@@ -2081,6 +2084,15 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 crate::activation::ActivationLaunchFailure,
             >,
         ),
+        #[cfg(windows)]
+        FinalizationPreparationFailed(Box<crate::activation::ActivationLaunchFailure>),
+        #[cfg(windows)]
+        Finalization(
+            std::result::Result<
+                Box<crate::activation::ActivationFinalizationGuard>,
+                crate::activation::ActivationFinalizationFailure,
+            >,
+        ),
     }
     type Work = tokio::task::JoinHandle<(UpdateJournal, Arc<UpdateAuthority>, DriverCompletion)>;
     let mut work: Option<Work> = None;
@@ -2096,6 +2108,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut activation_reply: Option<ipc::Stream> = None;
     let mut lifetime_reply: Option<ipc::Stream> = None;
     let mut resident_reply: Option<ipc::Stream> = None;
+    let mut finalization_reply: Option<ipc::Stream> = None;
     let files_actor = activation_files::FilesActor::default();
     #[cfg(windows)]
     let mut files_actor = files_actor;
@@ -2264,6 +2277,12 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 DriverCompletion::ActivationResident(result) => {
                     files_actor.complete_resident(result, &directory, &r.spec.update_id)
                 }
+                #[cfg(windows)]
+                DriverCompletion::FinalizationPreparationFailed(failure) => {
+                    files_actor.fail_finalization_preparation(*failure)
+                }
+                #[cfg(windows)]
+                DriverCompletion::Finalization(result) => files_actor.complete_finalization(result),
                 DriverCompletion::ReplacementDone(outcome) => {
                     #[cfg(windows)]
                     {
@@ -2300,6 +2319,26 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some(mut stream) = finalization_reply.take() {
+                let (preparation, error) = match files_actor.finalization_view(
+                    &directory,
+                    &r.spec.update_id,
+                    false,
+                    driver_error.clone(),
+                ) {
+                    Ok(view) => (Some(view), None),
+                    Err(error) => (None, Some(error)),
+                };
+                let response = SupervisorResponse {
+                    contract_version: 29,
+                    launch_id: r.spec.launch_id.clone(),
+                    record: None,
+                    worker_control: None,
+                    preparation,
+                    error,
+                };
+                let _ = ipc::write(&mut stream, &response).await;
+            }
             if let Some(mut stream) = resident_reply.take() {
                 let snapshot = files_actor.resident_view(
                     &directory,
@@ -3212,6 +3251,96 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             };
             let response = SupervisorResponse {
                 contract_version: 24,
+                launch_id: r.spec.launch_id.clone(),
+                record: None,
+                worker_control: None,
+                preparation,
+                error,
+            };
+            let _ = ipc::write(&mut stream, &response).await;
+            continue;
+        }
+        if matches!(
+            request.action,
+            SupervisorAction::FinalizeActivation | SupervisorAction::ObserveActivationFinalization
+        ) {
+            let observe = request.action == SupervisorAction::ObserveActivationFinalization;
+            let mut dispatch = false;
+            let outcome = (|| -> Result<Option<UpdatePreparationView>> {
+                authorize(&r, &request.token, pid, request.action)?;
+                if request.contract_version != 29
+                    || request.launch_id != r.spec.launch_id
+                    || request.expected_revision != r.revision
+                    || request.worker_command.is_some()
+                    || r.phase != SupervisorPhase::Active
+                    || r.spec.worker.is_none()
+                {
+                    return Err("Finalization requires exact Active bound v29 supervisor".into());
+                }
+                if work.is_some() {
+                    return Ok(None);
+                }
+                if !(if observe {
+                    files_actor.can_observe_finalization()
+                } else {
+                    files_actor.can_finalize()
+                }) {
+                    return files_actor
+                        .finalization_view(
+                            &directory,
+                            &r.spec.update_id,
+                            false,
+                            driver_error.clone(),
+                        )
+                        .map(Some);
+                }
+                dispatch = true;
+                Ok(None)
+            })();
+            if dispatch && outcome.is_ok() {
+                #[cfg(windows)]
+                {
+                    let (mut journal, owner) = idle
+                        .take()
+                        .ok_or("Original finalization journal owner missing")?;
+                    let spec = r.clone();
+                    driver_error = None;
+                    if observe {
+                        let guard = files_actor.take_finalization_observation()?;
+                        work = Some(tokio::task::spawn_blocking(move || {
+                            let result = guard.observe_blocking(&mut journal, &owner, &spec);
+                            (journal, owner, DriverCompletion::Finalization(result))
+                        }));
+                    } else {
+                        let (guard, lifetime, key) = files_actor.take_for_finalization()?;
+                        work = Some(tokio::task::spawn_blocking(move || {
+                            let completion = match guard.prepare_finalization_blocking(
+                                &mut journal,
+                                &owner,
+                                &spec,
+                                &lifetime,
+                                &key,
+                            ) {
+                                Ok(prepared) => DriverCompletion::Finalization(
+                                    prepared.deliver_blocking(&mut journal, &owner, &spec),
+                                ),
+                                Err(failure) => DriverCompletion::FinalizationPreparationFailed(
+                                    Box::new(failure),
+                                ),
+                            };
+                            (journal, owner, completion)
+                        }));
+                    }
+                    finalization_reply = Some(stream);
+                    continue;
+                }
+            }
+            let (preparation, error) = match outcome {
+                Ok(view) => (view, None),
+                Err(error) => (None, Some(error)),
+            };
+            let response = SupervisorResponse {
+                contract_version: 29,
                 launch_id: r.spec.launch_id.clone(),
                 record: None,
                 worker_control: None,
@@ -4850,7 +4979,8 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 | SupervisorAction::ActivateLocalService | SupervisorAction::ObserveLocalService
                 | SupervisorAction::ConnectActivationController | SupervisorAction::ObserveActivationController
                 | SupervisorAction::EnterActivationLifetime | SupervisorAction::ObserveActivationLifetime
-                | SupervisorAction::ObserveResidentConnection => Err("Action needs its separate handler".into()),
+                | SupervisorAction::ObserveResidentConnection | SupervisorAction::FinalizeActivation | SupervisorAction::ObserveActivationFinalization => Err("Action needs its separate handler".into()),
+                SupervisorAction::Stop if files_actor.service_started() => Err("Cannot stop a supervisor retaining the resident worker Job; keeper conversion/confirmed cleanup is required".into()),
                 SupervisorAction::Stop => journal.advance_supervisor(
                     owner, id, request.expected_revision, SupervisorPhase::Stopped, None,
                     "Supervisor остановлен после проверки worker lease; установка runtime не выполнялась",

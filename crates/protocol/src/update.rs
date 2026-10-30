@@ -622,6 +622,9 @@ pub enum SupervisorAction {
     ObserveActivationLifetime,
     /// Internal28: fresh readonly original-resident connection; no finalization.
     ObserveResidentConnection,
+    /// Internal29: original custody only, one finalization and independent read.
+    FinalizeActivation,
+    ObserveActivationFinalization,
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
@@ -721,6 +724,9 @@ pub struct UpdatePreparationView {
     /// Internal28/view20 only. Old replies omit this volatile observation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation_resident: Option<ActivationResidentView>,
+    /// Internal29/view21 only. Saved success and physical custody stay separate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub activation_finalization: Option<ActivationFinalizationView>,
 }
 
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]

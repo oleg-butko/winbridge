@@ -1,5 +1,18 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: original finalization factory и actor29 реализованы.**
+[Контракт, ревью и Main30](plans/worker-self-update/finalization-factory-2026-10-30.md).
+Fresh V7/непродлённый capture → known root decision → consuming parent-pin retirement
+с сохранением исходного ProcessCustody → одно V8 → independent Active → confirmation.
+Cold/duplicates не создают grant; caller loss не отменяет accepted work. Known seal
+продолжает только исходный worker owner, максимум3 раза без повторного SQL.
+Source19/23; internal29/view21 показывает реальные custody/pins/attempt/observation.
+Main30 gate подготовлен, положительного native V8/Active ещё нет; permanent keeper/
+следующее поколение/U2–U4 впереди, install off. Installed worker оставить, desktop
+не нужен.1033 workspace tests/17 ignored, Linux/MSVC all-target Clippy, contracts/
+typecheck/scaffold/fmt/diff,3 adapter и6 Python reader suites passed; build UI passed.
+Следующий шаг: clean distinct exports, один Main30 task.
+
 **.204/main,2026-10-29: writer независимого Active fact реализован.**
 [Контракт/ревью/проверки](plans/worker-self-update/finalization-completion-2026-10-29.md).
 Source19/23. Fresh non-Serde permit + exact original coordinator/checkpoints →

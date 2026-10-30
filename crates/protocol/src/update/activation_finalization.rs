@@ -140,3 +140,43 @@ pub enum ActivationFinalizationObservationResult {
 pub enum WorkerFinalizationMode {
     Active,
 }
+
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivationFinalizationPhase {
+    NotStarted,
+    Finalizing,
+    Unconfirmed,
+    Confirmed,
+    NoOriginalCustody,
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivationFinalizationDurablePhase {
+    ReleasePending,
+    Indeterminate,
+    Confirmed,
+}
+dto! {
+    pub struct ActivationFinalizationView {
+        pub phase: ActivationFinalizationPhase,
+        pub command_id: Option<String>,
+        pub durable_phase: Option<ActivationFinalizationDurablePhase>,
+        pub resident_process: Option<super::SupervisorProcess>,
+        pub process_alive: Option<bool>,
+        pub original_custody_held: Option<bool>,
+        pub verification_pins_retired: Option<bool>,
+        pub delivery_attempted: Option<bool>,
+        pub interrupted_reply_prefix: Option<Vec<u8>>,
+        pub observation: Option<ActivationFinalizationObservation>,
+        pub stdout_tail: String,
+        pub stderr_tail: String,
+        pub output_incomplete: Option<bool>,
+        pub readers_finished: Option<bool>,
+        pub reason: Option<String>,
+    }
+}

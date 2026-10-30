@@ -412,6 +412,8 @@ impl RunningLocalService {
                 }
                 _ = tokio::time::sleep(Duration::from_millis(250)) => {
                     worker.check_local_service_scope()?;
+                    #[cfg(windows)]
+                    self.retry_known_finalization();
                 }
             }
         }

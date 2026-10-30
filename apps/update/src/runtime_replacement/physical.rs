@@ -12,6 +12,7 @@ use winbridge_protocol::update::SupervisorRecord;
 mod activation_files;
 pub use activation_files::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
+    ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
     ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
     ActivationServicePreparation,
 };

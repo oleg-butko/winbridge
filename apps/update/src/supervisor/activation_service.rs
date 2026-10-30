@@ -14,6 +14,10 @@ impl FilesActor {
                     | State::Serviced(_)
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
+                    | State::Finalizing(_)
+                    | State::ObservingFinalization(_)
+                    | State::FinalizationPrepareFailed(_)
+                    | State::FinalizationHeld(_)
             )
         }
         #[cfg(not(windows))]

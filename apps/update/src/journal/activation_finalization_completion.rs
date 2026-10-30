@@ -136,6 +136,33 @@ fn require_coordinator(
 
 #[cfg(windows)]
 impl UpdateJournal {
+    /// Recheck the original known root COMMIT before its one delivery. A saved
+    /// record cannot construct the opaque permit passed to this read.
+    pub fn require_activation_finalization_release(
+        &self,
+        a: &UpdateAuthority,
+        s: &SupervisorRecord,
+        permit: &FinalizationReleasePermit,
+    ) -> Result<RetainedFinalizationSnapshot> {
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        require_coordinator(&tx, a, s, &permit.record.command)?;
+        let saved = snapshot(&tx, &s.spec.update_id)?
+            .ok_or_else(|| bad("Original finalization release scope missing"))?;
+        if saved.record != permit.record
+            || !matches!(
+                saved.record.state,
+                ActivationFinalizationState::ReleasePending {}
+            )
+        {
+            return Err(bad(
+                "Known finalization release changed or was already attempted",
+            ));
+        }
+        require_coordinator(&tx, a, s, &permit.record.command)?;
+        tx.commit().map_err(storage)?;
+        Ok(saved)
+    }
     /// Record a fresh independently authenticated fact under the original
     /// owner. This neither resends V8/release nor converts the process to keeper.
     pub fn confirm_activation_finalization(

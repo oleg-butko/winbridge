@@ -12,6 +12,80 @@ pub(in crate::local_service) struct FinalizationDelivery {
     pub(super) reply: oneshot::Sender<ActivationFinalizationResponse>,
     queued_at: Instant,
 }
+
+#[cfg(all(test, windows))]
+mod continuation_tests {
+    use super::*;
+    #[tokio::test]
+    async fn known_seal_retries_are_bounded_and_never_repeat_sql_or_trust_fixture_metadata() {
+        let root = tempfile::tempdir().unwrap();
+        let (mut running, owner, _) = super::super::active_tests::pending(root.path()).await;
+        let known = super::super::active_tests::commit(&running, &owner);
+        let ready = finalization_service::active::ActiveReadiness::fixture(Arc::clone(&owner));
+        let failure = running
+            .seal_active_commit(known, ready, || {
+                Err("Initial final checkpoint refused".into())
+            })
+            .unwrap_err();
+        let peer = super::super::finalization_mailbox_tests::actual_peer().await;
+        running.finalization_recovery.known = Some(PendingSeal {
+            failure,
+            peer,
+            retries: 0,
+            retry_after: Some(Instant::now()),
+        });
+        for attempt in 1..=3 {
+            running
+                .finalization_recovery
+                .known
+                .as_mut()
+                .unwrap()
+                .retry_after = Some(Instant::now());
+            running.retry_known_finalization();
+            assert!(
+                running.service.worker.activation_read_only(),
+                "No native proof from synthetic metadata"
+            );
+            let pending = running.finalization_recovery.known.as_ref().unwrap();
+            assert_eq!(pending.retries, attempt);
+            let count: i64 = running
+                .service
+                .worker
+                .store()
+                .unwrap()
+                .connection
+                .query_row(
+                    "SELECT count(*) FROM worker_update_commands WHERE key=?1",
+                    [&owner.command.command_id],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(
+                count, 1,
+                "Continuation must only finish the original known seal, never rerun SQL"
+            );
+        }
+        assert!(running
+            .finalization_recovery
+            .known
+            .as_ref()
+            .unwrap()
+            .retry_after
+            .is_none());
+        running.retry_known_finalization();
+        assert_eq!(
+            running
+                .finalization_recovery
+                .known
+                .as_ref()
+                .unwrap()
+                .retries,
+            3
+        );
+        assert!(running.service._config_pin.is_some());
+        running.close().await.unwrap();
+    }
+}
 pub(crate) fn rejected_finalization(
     command_id: Option<String>,
     message: String,
@@ -130,8 +204,15 @@ impl Worker {
 #[cfg(windows)]
 #[derive(Default)]
 pub(in crate::local_service) struct FinalizationRecovery {
-    known: Option<finalization_service::active::ActiveSealFailure>,
+    known: Option<PendingSeal>,
     unconfirmed: Option<finalization_service::active::ActiveReadiness>,
+}
+#[cfg(windows)]
+struct PendingSeal {
+    failure: finalization_service::active::ActiveSealFailure,
+    peer: LocalPeer,
+    retries: u8,
+    retry_after: Option<Instant>,
 }
 #[cfg(windows)]
 enum DeliveryPhase {
@@ -143,7 +224,7 @@ enum DeliveryPhase {
 impl FinalizationRecovery {
     pub(in crate::local_service) async fn close(self) {
         if let Some(value) = self.known {
-            let (_, ready) = value.into_parts();
+            let (_, ready) = value.failure.into_parts();
             ready.close().await;
         }
         if let Some(ready) = self.unconfirmed {
@@ -246,13 +327,7 @@ impl RunningLocalService {
             };
         }
         if matches!(phase, DeliveryPhase::Pending) {
-            // Only retained known COMMIT/readiness can finish the same seal.
-            // Saved/Observed SQL rows and repeated JSON cannot recreate it.
-            let Some(failure) = self.finalization_recovery.known.take() else {
-                return uncertain(key, "Original finalization pending without known COMMIT permit; observe only, no SQL retry".into());
-            };
-            let (commit, ready) = failure.into_parts();
-            return self.finish_delivery_commit(key, commit, ready, &peer);
+            return uncertain(key, "Original finalization remains pending; its retained owner may finish a known seal; duplicate JSON never repeats SQL".into());
         }
         if let Err(message) = self.enter_finalization_pending(request.command, &peer) {
             // It may have sealed Pending before the last checkpoint failed.
@@ -290,7 +365,7 @@ impl RunningLocalService {
             }
         };
         timing.mark("same_store_release_committed", None, None);
-        let response = self.finish_delivery_commit(key, commit, ready, &peer);
+        let response = self.finish_delivery_commit(key, commit, ready, peer, 0);
         timing.mark("active_seal_finished_or_retained", None, None);
         response
     }
@@ -300,9 +375,10 @@ impl RunningLocalService {
         key: String,
         commit: Box<store::activation_finalization::ActivatedReleaseCommit>,
         ready: finalization_service::active::ActiveReadiness,
-        peer: &LocalPeer,
+        peer: LocalPeer,
+        retries: u8,
     ) -> ActivationFinalizationResponse {
-        match self.finish_active_release(commit, ready, peer) {
+        match self.finish_active_release(commit, ready, &peer) {
             Ok(receipt) => ActivationFinalizationResponse {
                 finalization_version: ACTIVATION_FINALIZATION_CONTRACT,
                 command_id: Some(key),
@@ -315,9 +391,48 @@ impl RunningLocalService {
                     "Known SQL COMMIT retained, Active seal not confirmed: {}",
                     failure.reason
                 );
-                self.finalization_recovery.known = Some(failure);
+                let retry_after = [250, 1000, 5000]
+                    .get(retries as usize)
+                    .map(|ms| Instant::now() + Duration::from_millis(*ms));
+                self.finalization_recovery.known = Some(PendingSeal {
+                    failure,
+                    peer,
+                    retries,
+                    retry_after,
+                });
                 uncertain(key, message)
             }
         }
+    }
+    /// Continue the SAME accepted seal with the SAME actual peer/known COMMIT.
+    /// No SQL call, no reconstructed token, and no unbounded idle rehash loop.
+    #[cfg(windows)]
+    pub(super) fn retry_known_finalization(&mut self) {
+        if !self
+            .finalization_recovery
+            .known
+            .as_ref()
+            .is_some_and(|v| v.retry_after.is_some_and(|at| Instant::now() >= at))
+        {
+            return;
+        }
+        let pending = self
+            .finalization_recovery
+            .known
+            .take()
+            .expect("Checked original pending seal");
+        let (commit, ready) = pending.failure.into_parts();
+        let key = commit.command().command_id.clone();
+        let response = self.finish_delivery_commit(
+            key.clone(),
+            commit,
+            ready,
+            pending.peer,
+            pending.retries + 1,
+        );
+        eprintln!(
+            "WinBridge finalization {}",
+            serde_json::json!({"event":"known_seal_continuation","processId":std::process::id(),"commandId":key,"retry":pending.retries+1,"active":matches!(response.result,ActivationFinalizationResult::Active {..})})
+        );
     }
 }

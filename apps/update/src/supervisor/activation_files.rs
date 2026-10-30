@@ -2,6 +2,8 @@
 use super::*;
 #[path = "activation_controller.rs"]
 mod controller;
+#[path = "activation_finalization.rs"]
+mod finalization;
 #[path = "activation_lifetime.rs"]
 mod lifetime;
 #[path = "activation_resident.rs"]
@@ -52,6 +54,14 @@ enum State {
     ServiceUnconfirmed(Box<crate::activation::ActivationProcessGuard>),
     #[cfg(windows)]
     ServiceFailed(Box<crate::activation::ActivationLaunchFailure>),
+    #[cfg(windows)]
+    Finalizing(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
+    ObservingFinalization(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
+    FinalizationPrepareFailed(Box<crate::activation::ActivationLaunchFailure>),
+    #[cfg(windows)]
+    FinalizationHeld(Box<crate::activation::ActivationFinalizationGuard>),
 }
 pub(super) struct FilesActor {
     state: State,
@@ -60,6 +70,7 @@ pub(super) struct FilesActor {
     controller_key: Option<String>,
     lifetime_key: Option<String>,
     resident_error: Option<String>,
+    finalization_key: Option<String>,
 }
 impl Default for FilesActor {
     fn default() -> Self {
@@ -70,6 +81,7 @@ impl Default for FilesActor {
             controller_key: None,
             lifetime_key: None,
             resident_error: None,
+            finalization_key: None,
         }
     }
 }
@@ -142,14 +154,20 @@ impl FilesActor {
             | State::StartingController(r)
             | State::StartingLifetime(r)
             | State::ObservingLifetime(r)
-            | State::ObservingResident(r) => Some(r),
+            | State::ObservingResident(r)
+            | State::Finalizing(r)
+            | State::ObservingFinalization(r) => Some(r),
             #[cfg(windows)]
             State::Written(g)
             | State::WriterUnconfirmed(g)
             | State::Serviced(g)
             | State::ServiceUnconfirmed(g) => Some(g.record()),
             #[cfg(windows)]
-            State::WriterFailed(e) | State::ServiceFailed(e) => Some(e.record()),
+            State::WriterFailed(e)
+            | State::ServiceFailed(e)
+            | State::FinalizationPrepareFailed(e) => Some(e.record()),
+            #[cfg(windows)]
+            State::FinalizationHeld(g) => Some(g.activation()),
         };
         if let Some(record) = record {
             if record.intent.source.update_id != _s.spec.update_id
@@ -800,6 +818,14 @@ impl FilesActor {
                 files.phase = ActivationFilesPhase::Indeterminate;
                 files.held_files = failure.held_files();
                 files.reason = Some(failure.reason.chars().take(1000).collect());
+            }
+            #[cfg(windows)]
+            State::FinalizationPrepareFailed(f) => held_source(files, f.record()),
+            #[cfg(windows)]
+            State::Finalizing(_) | State::ObservingFinalization(_) | State::FinalizationHeld(_) => {
+                files.phase = ActivationFilesPhase::Indeterminate;
+                files.held_files = 0;
+                files.reason=Some("Verification pins are transferring/retired; this legacy view cannot claim a pin count; use internal29 physical status".into());
             }
         }
         Ok(())

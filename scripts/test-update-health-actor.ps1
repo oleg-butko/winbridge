@@ -28,6 +28,7 @@ param(
   [switch]$ActivationLifetimeGate,
   [switch]$ActivationLifetimeReadyLossGate,
   [switch]$ResidentConnectionGate,
+  [switch]$ActivationFinalizationGate,
   [string]$Worker17ReferenceSha256,
   [string]$Worker17Reference,
   [string]$FixtureInstanceId,
@@ -40,6 +41,7 @@ param(
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($ActivationFinalizationGate){if($ResidentConnectionGate -or $ActivationLifetimeReadyLossGate -or $ActivationLifetimeGate -or $ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main30 explicitly'};$ResidentConnectionGate=$true}
 if($ResidentConnectionGate){if($ActivationLifetimeReadyLossGate -or $ActivationLifetimeGate -or $ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main29 explicitly'};$ActivationLifetimeReadyLossGate=$true}
 if($ActivationLifetimeReadyLossGate){if($ActivationLifetimeGate){throw 'Select Main28 explicitly'};$ActivationLifetimeGate=$true}
 if($ActivationLifetimeGate){if($ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main27 explicitly'};$ActivationControllerGate=$true}
@@ -100,7 +102,7 @@ try {
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
   if($ActivationControllerGate){
     # Distinct profiles Main26=19/21 and Main27=19/22, never inferred from proof.
-    $checks=@(@{path='apps/worker/src/store.rs';pattern='(?m)^pub const JOURNAL_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=19},@{path='apps/update/src/journal.rs';pattern='(?m)^pub const UPDATE_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=$(if($ActivationLifetimeGate){22}else{21})})
+    $checks=@(@{path='apps/worker/src/store.rs';pattern='(?m)^pub const JOURNAL_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=19},@{path='apps/update/src/journal.rs';pattern='(?m)^pub const UPDATE_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=$(if($ActivationFinalizationGate){23}elseif($ActivationLifetimeGate){22}else{21})})
     $zip=[IO.Compression.ZipFile]::OpenRead($TargetArchivePath)
     try {
       foreach($check in $checks){
@@ -113,7 +115,7 @@ try {
         }
       }
     }finally{$zip.Dispose()}
-    $report.profile=if($ActivationLifetimeGate){'worker19-updater22'}else{'worker19-updater21'}
+    $report.profile=if($ActivationFinalizationGate){'worker19-updater23'}elseif($ActivationLifetimeGate){'worker19-updater22'}else{'worker19-updater21'}
   }
   if($ActivationPreparationGate -and -not $ActivationServiceGate){
     Assert-SessionFile $MigrationReferenceFile
@@ -196,6 +198,7 @@ try {
     if($ActivationLifetimeGate){$shutdownArguments.activationLifetime=$true;$report.kind='activation_lifetime_main_native_gate'}
     if($ActivationLifetimeReadyLossGate){$shutdownArguments.lifetimeReadyLoss=$true;$report.kind='activation_lifetime_ready_loss_main_native_gate'}
     if($ResidentConnectionGate){$shutdownArguments.residentConnection=$true;$report.kind='activation_resident_main_native_gate'}
+    if($ActivationFinalizationGate){$shutdownArguments.activationFinalization=$true;$report.kind='activation_finalization_main_native_gate'}
     if(-not $ActivationServiceGate){Write-NewJson $shutdownInput $shutdownArguments}
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
@@ -209,6 +212,7 @@ try {
     if($ActivationLifetimeGate){$mainTest='actual_main_enters_same_child_lifetime_and_observes_after_original_deadline_without_replay'}
     if($ActivationLifetimeReadyLossGate){$mainTest='actual_main_reconciles_partial_lifetime_ready_after_original_deadline_without_replay'}
     if($ResidentConnectionGate){$mainTest='actual_main_observes_resident_connection_after_partial_ready_without_replay'}
+    if($ActivationFinalizationGate){$mainTest='actual_main_finalizes_same_worker_after_lost_v8_reply_without_replay'}
     # The Main fixture copies its supervisor from validationUpdater. Building a
     # validation test harness alone does not enable diagnostics in that process.
     $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
@@ -353,6 +357,14 @@ try {
       @{name='resident-fixture-reply';minimum=3;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--test','update_activation_fixture_reply','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($ActivationFinalizationGate){
+    $report.migrationScope='Main30 actual V8/Active confirmation; permanent keeper and next generation remain separate'
+    $commands=@(
+      @{name='finalization-model-ledger';minimum=24;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','finalization','--locked','--offline','--','--test-threads=1','--nocapture')},
+      @{name='finalization-v29-mailbox';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','update_control::tests::finalization_v29_cannot_adopt_saved_data_and_old_views_keep_their_shape','--locked','--offline','--','--exact','--test-threads=1','--nocapture')},
+      @{name='finalization-known-seal-bounds';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','local_service::lifetime::finalization_mailbox::continuation_tests::','--locked','--offline','--','--test-threads=1','--nocapture')}
+    )+$commands
+  }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
@@ -434,6 +446,7 @@ try {
   if($ActivationLifetimeGate){$expectedKind='activation_lifetime_main_native_proof'}
   if($ActivationLifetimeReadyLossGate){$expectedKind='activation_lifetime_ready_loss_main_native_proof'}
   if($ResidentConnectionGate){$expectedKind='activation_resident_main_native_proof'}
+  if($ActivationFinalizationGate){$expectedKind='activation_finalization_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}

@@ -17,17 +17,18 @@ def load(name, path):
     return module
 
 
-def main(controller=False, lifetime=False, ready_loss=False, resident=False):
+def main(controller=False, lifetime=False, ready_loss=False, resident=False, finalization=False):
+    resident = resident or finalization
     ready_loss = ready_loss or resident
     lifetime = lifetime or ready_loss
     controller = controller or lifetime
     parser = argparse.ArgumentParser(description='Readonly native audit; no Windows commands or replay.')
-    parser.add_argument('--profile', choices=(('worker19-updater22',) if lifetime else (('worker19-updater21',) if controller else ('worker17-updater20', 'worker19-updater20'))), default=('worker19-updater22' if lifetime else ('worker19-updater21' if controller else 'worker17-updater20')))
+    parser.add_argument('--profile', choices=(('worker19-updater23',) if finalization else ('worker19-updater22',) if lifetime else (('worker19-updater21',) if controller else ('worker17-updater20', 'worker19-updater20'))), default=('worker19-updater23' if finalization else 'worker19-updater22' if lifetime else ('worker19-updater21' if controller else 'worker17-updater20')))
     parser.add_argument('--run-info', required=True, type=Path)
     parser.add_argument('--source-archive', required=True, type=Path)
     parser.add_argument('--target-archive', required=True, type=Path)
     args = parser.parse_args()
-    checks = load('main_gate_checks', 'update-activation-resident-proof.py' if resident else 'update-activation-lifetime-ready-loss-proof.py' if ready_loss else ('update-activation-lifetime-proof.py' if lifetime else ('update-activation-controller-proof.py' if controller else 'update-activation-service-proof.py')))
+    checks = load('main_gate_checks', 'update-activation-finalization-proof.py' if finalization else 'update-activation-resident-proof.py' if resident else 'update-activation-lifetime-ready-loss-proof.py' if ready_loss else ('update-activation-lifetime-proof.py' if lifetime else ('update-activation-controller-proof.py' if controller else 'update-activation-service-proof.py')))
     health = load('service_archive', 'validate-update-health-actor-native.py')
     reader = load('service_reports', 'summarize-update-timings.py')
     local = args.run_info.resolve().parent
@@ -57,10 +58,10 @@ def main(controller=False, lifetime=False, ready_loss=False, resident=False):
                     and acceptance['outcome']=='responded' and acceptance['response']['kind']=='task'
                     and acceptance['response']['task']['taskId']==task['taskId']
                     and type(task['exitCode']) is int and task['submission']['projectId']=='snapshot-fixture'
-                    and task['submission']['idempotencyKey']==('native-main29-204-' if resident else 'native-main28-204-' if ready_loss else ('native-main27-204-' if lifetime else 'native-main26-204-'))+meta['run'], 'Main26 admission/context/task identity changed')
+                    and task['submission']['idempotencyKey']==('native-main30-204-' if finalization else 'native-main29-204-' if resident else 'native-main28-204-' if ready_loss else ('native-main27-204-' if lifetime else 'native-main26-204-'))+meta['run'], 'Main26 admission/context/task identity changed')
     files = reader.verified_files(Path(meta['reportDirectory']))
     report = json.loads(files['report.json'].decode('utf-8-sig'))
-    checks.need(report['kind'] == ('activation_resident_main_native_gate' if resident else 'activation_lifetime_ready_loss_main_native_gate' if ready_loss else ('activation_lifetime_main_native_gate' if lifetime else ('activation_controller_main_native_gate' if controller else 'activation_service_main_native_gate'))) and report['passed'] is True
+    checks.need(report['kind'] == ('activation_finalization_main_native_gate' if finalization else 'activation_resident_main_native_gate' if resident else 'activation_lifetime_ready_loss_main_native_gate' if ready_loss else ('activation_lifetime_main_native_gate' if lifetime else ('activation_controller_main_native_gate' if controller else 'activation_service_main_native_gate'))) and report['passed'] is True
                 and report['error'] is None and report['sourceCommit'] == source['sourceCommit']
                 and report['sourceArchiveSha256'] == source['archiveSha256'] and report['target'] == target
                 and report['installedRuntimeApplied'] is False and report['windowsOpened'] is False
@@ -84,7 +85,7 @@ def main(controller=False, lifetime=False, ready_loss=False, resident=False):
     proof = json.loads(files['candidate-health-actor-proof.json'].decode('utf-8-sig'))
     result = checks.audit(proof, source, target, report['activationReservation'], profile=args.profile)
     result.update(checks.audit_auxiliary(files, proof, source))
-    if args.profile in ('worker19-updater20','worker19-updater21','worker19-updater22'):
+    if args.profile in ('worker19-updater20','worker19-updater21','worker19-updater22','worker19-updater23'):
         epoch_commands = [c for c in commands if c['name'] == 'service-history-epoch-check']
         checks.need(len(epoch_commands) == 1, 'Missing policy epoch/history corruption regression')
         epoch_log = files[epoch_commands[0]['log']].decode('utf-8-sig')

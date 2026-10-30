@@ -10,12 +10,17 @@ use process_custody::{drain, ProcessCustody};
 #[path = "activation_controller.rs"]
 mod controller;
 pub use controller::ActivationControllerPreparation;
+#[path = "activation_finalization.rs"]
+mod finalization;
 #[path = "activation_lifetime.rs"]
 mod lifetime;
 #[path = "activation_lifetime_observation.rs"]
 mod lifetime_observation;
 #[path = "activation_resident_observation.rs"]
 mod resident_observation;
+pub use finalization::{
+    ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
+};
 pub use lifetime::ActivationLifetimePreparation;
 #[path = "activation_service.rs"]
 mod service;
@@ -40,6 +45,7 @@ pub struct ActivationProcessGuard {
     lifetime_observation: Option<winbridge_protocol::update::ActivationLifetimeObservation>,
     resident_observation: Option<winbridge_protocol::update::ActivationResidentObservation>,
     resident_query: Option<winbridge_protocol::update::ActivationResidentQuery>,
+    resident_observation_deadline: Option<std::time::Instant>,
 }
 /// Retain the same OS resources after error, including an uncertain live child.
 /// No method converts this object into a second creation attempt.
@@ -83,6 +89,9 @@ impl ActivationLaunchFailure {
     }
     pub(crate) fn original_lock_held(&self) -> Option<bool> {
         self.custody.original_lock_held()
+    }
+    pub(crate) fn lifetime_custody_held(&self) -> bool {
+        self.custody.lifetime_custody_held()
     }
 }
 
@@ -135,6 +144,7 @@ impl ActivationProcessGuard {
             lifetime_observation: None,
             resident_observation: None,
             resident_query: None,
+            resident_observation_deadline: None,
         })
     }
     pub(crate) fn resident_process(&self) -> Option<winbridge_protocol::update::SupervisorProcess> {
@@ -197,37 +207,10 @@ impl ActivationProcessGuard {
     }
     /// Bounded diagnostics. The private challenge is never written to stdout.
     pub fn output(&self) -> (Vec<u8>, Vec<u8>, bool) {
-        let stdout = self.physical.captures[0]
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        let stderr = self.physical.captures[1]
-            .lock()
-            .unwrap_or_else(|p| p.into_inner());
-        (
-            stdout.bytes.clone(),
-            stderr.bytes.clone(),
-            stdout.incomplete || stderr.incomplete,
-        )
+        self.physical.output()
     }
     pub(crate) fn diagnostics(&self) -> (String, String, bool, bool) {
-        fn tail(bytes: &[u8]) -> (String, bool) {
-            let text = String::from_utf8_lossy(bytes);
-            let count = text.chars().count();
-            (
-                text.chars().skip(count.saturating_sub(512)).collect(),
-                count > 512,
-            )
-        }
-        let (stdout, stderr, incomplete) = self.output();
-        let (stdout, cut_out) = tail(&stdout);
-        let (stderr, cut_err) = tail(&stderr);
-        (
-            stdout,
-            stderr,
-            incomplete || cut_out || cut_err,
-            self.physical.readers.len() == 2
-                && self.physical.readers.iter().all(|r| r.is_finished()),
-        )
+        self.physical.diagnostics()
     }
     fn at(&self) -> Result<u64> {
         crate::journal::now_ms()

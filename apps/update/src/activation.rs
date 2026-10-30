@@ -20,7 +20,9 @@ pub mod finalization;
 pub mod finalization_observation;
 #[cfg(any(windows, test))]
 pub(crate) mod finalization_probe;
+mod finalization_view;
 pub mod finalization_wire;
+pub(crate) use finalization_view::view as finalization_view;
 pub mod lifetime;
 #[cfg(all(feature = "update-validation", any(windows, test)))]
 pub(crate) mod lifetime_ready_loss;
@@ -123,6 +125,7 @@ pub struct ActivationServiceSnapshot {
 #[cfg(windows)]
 pub use crate::runtime_replacement::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
+    ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
     ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
     ActivationServicePreparation,
 };

@@ -2,7 +2,7 @@
 use super::*;
 use winbridge_transport::local_peer::{LocalPeer, LocalPeerStream};
 
-async fn actual_peer() -> LocalPeer {
+pub(super) async fn actual_peer() -> LocalPeer {
     #[cfg(unix)]
     {
         let (_, accepted) = tokio::net::UnixStream::pair().unwrap();

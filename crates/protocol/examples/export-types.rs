@@ -9,6 +9,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::env::set_var("TS_RS_LARGE_INT", "number");
     let config = Config::from_env();
     let declarations = [
+        ActivationFinalizationView::decl(&config),
+        ActivationFinalizationPhase::decl(&config),
+        ActivationFinalizationDurablePhase::decl(&config),
         ActivationFinalizationRequest::decl(&config),
         ActivationFinalizationResponse::decl(&config),
         ActivationFinalizationResult::decl(&config),

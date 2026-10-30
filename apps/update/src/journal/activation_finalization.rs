@@ -279,7 +279,7 @@ fn snapshot(c: &Connection, id: &str) -> Result<Option<RetainedFinalizationSnaps
         shutdown,
     }))
 }
-fn read(
+pub(super) fn read(
     c: &Connection,
     id: &str,
 ) -> Result<Option<(ActivationFinalizationIntent, ActivationFinalizationRecord)>> {

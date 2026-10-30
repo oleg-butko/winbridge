@@ -23,6 +23,7 @@ impl ActivationProcessGuard {
     ) -> std::result::Result<Box<Self>, ActivationLaunchFailure> {
         self.resident_observation = None;
         self.resident_query = None;
+        self.resident_observation_deadline = None;
         match crate::activation::on_original_io(self, move |mut owner| async move {
             match owner.observe_resident(j, a, s, key).await {
                 Ok(()) => Ok(owner),
@@ -40,13 +41,16 @@ impl ActivationProcessGuard {
         }
     }
 
-    async fn observe_resident(
+    pub(super) async fn observe_resident(
         &mut self,
         j: &mut UpdateJournal,
         a: &UpdateAuthority,
         s: &SupervisorRecord,
         key: &str,
     ) -> Result<()> {
+        self.resident_observation = None;
+        self.resident_query = None;
+        self.resident_observation_deadline = None;
         self.require_lifetime_custody(false)?;
         let snapshot = Box::new(
             j.activation_lifetime_owned_current(a, s, &self.files.preparation, &self.record, key)
@@ -95,18 +99,25 @@ impl ActivationProcessGuard {
             }
             Ok(())
         };
+        let captured = std::time::Instant::now();
         let observed = resident_probe::observe(
             &query,
             receipt,
             &graph.service.command,
             topology,
-            std::time::Instant::now() + winbridge_transport::IPC_TIMEOUT,
+            captured + winbridge_transport::IPC_TIMEOUT,
             checkpoint,
         )
         .await?;
         // No append, new admission, root transition, private read or release.
         self.resident_observation = Some(observed);
         self.resident_query = Some(query);
+        self.resident_observation_deadline = Some(
+            captured
+                + std::time::Duration::from_millis(
+                    crate::activation::finalization::MAX_OBSERVATION_AGE_MS,
+                ),
+        );
         Ok(())
     }
 }

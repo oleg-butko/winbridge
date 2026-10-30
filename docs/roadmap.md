@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204/main: [original factory/actor29](plans/worker-self-update/finalization-factory-2026-10-30.md)
+подключены к confirmation writer: consuming retirement всех parent pins, одно V8,
+отдельное Active observation, сохранение actual child/Job/readers. Bounded known-seal
+continuation не зависит от duplicate JSON/повторного SQL. Native Main30 подготовлен
+для source19/23, пока не выполнен. Далее native audit → permanent keeper без updater
+references → max2/two generations и U2–U4. Public install off.
+
 2026-10-29/.204/main: [Active fact writer](plans/worker-self-update/finalization-completion-2026-10-29.md)
 transactionally подтверждает independently observed Active, не меняя root/lease
 и не создавая keeper/release grant. Source19/23; update426 tests/12 focused,

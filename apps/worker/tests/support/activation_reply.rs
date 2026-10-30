@@ -12,6 +12,7 @@ pub fn validate(
         26 => 18,
         27 => 19,
         28 => 20,
+        29 => 21,
         _ => return Err("Unknown native activation fixture contract; no fallback".into()),
     };
     if response.contract_version != request.contract_version
@@ -31,6 +32,7 @@ pub fn validate(
             26 => view.activation_controller.is_some(),
             27 => view.activation_lifetime.is_some(),
             28 => view.activation_resident.is_some(),
+            29 => view.activation_finalization.is_some(),
             _ => unreachable!(),
         };
         if view.schema_version != schema || view.update.update_id != update_id || !block {

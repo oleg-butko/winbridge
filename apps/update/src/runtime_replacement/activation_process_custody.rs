@@ -51,6 +51,34 @@ pub(super) struct ProcessCustody {
     pub(super) readers: Vec<thread::JoinHandle<()>>,
 }
 impl ProcessCustody {
+    pub(super) fn output(&self) -> (Vec<u8>, Vec<u8>, bool) {
+        let stdout = self.captures[0].lock().unwrap_or_else(|p| p.into_inner());
+        let stderr = self.captures[1].lock().unwrap_or_else(|p| p.into_inner());
+        (
+            stdout.bytes.clone(),
+            stderr.bytes.clone(),
+            stdout.incomplete || stderr.incomplete,
+        )
+    }
+    pub(super) fn diagnostics(&self) -> (String, String, bool, bool) {
+        fn tail(bytes: &[u8]) -> (String, bool) {
+            let text = String::from_utf8_lossy(bytes);
+            let count = text.chars().count();
+            (
+                text.chars().skip(count.saturating_sub(512)).collect(),
+                count > 512,
+            )
+        }
+        let (stdout, stderr, incomplete) = self.output();
+        let (stdout, cut_out) = tail(&stdout);
+        let (stderr, cut_err) = tail(&stderr);
+        (
+            stdout,
+            stderr,
+            incomplete || cut_out || cut_err,
+            self.readers.len() == 2 && self.readers.iter().all(|r| r.is_finished()),
+        )
+    }
     pub(super) fn new() -> Self {
         Self {
             child: None,

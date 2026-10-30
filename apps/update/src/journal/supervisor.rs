@@ -272,6 +272,14 @@ impl UpdateJournal {
     ) -> Result<UpdatePreparationView> {
         Self::preparation_snapshot_inner(directory, id, active, error, 20)
     }
+    pub fn activation_finalization_snapshot(
+        directory: &Path,
+        id: &str,
+        active: bool,
+        error: Option<String>,
+    ) -> Result<UpdatePreparationView> {
+        Self::preparation_snapshot_inner(directory, id, active, error, 21)
+    }
     fn preparation_snapshot_inner(
         directory: &Path,
         id: &str,
@@ -280,7 +288,11 @@ impl UpdateJournal {
         view_schema: u16,
     ) -> Result<UpdatePreparationView> {
         check_files(directory)?;
-        let detailed_schema = if view_schema == 20 { 1 } else { view_schema };
+        let detailed_schema = if matches!(view_schema, 20 | 21) {
+            1
+        } else {
+            view_schema
+        };
         let mut c = connection(&directory.join("updates.sqlite"), true)?;
         if schema(&c)? != UPDATE_SCHEMA_VERSION {
             return Err(fail(
@@ -377,6 +389,15 @@ impl UpdateJournal {
             None
         };
         let view = UpdatePreparationView {
+            activation_finalization: if view_schema == 21 {
+                Some(crate::activation::finalization_view(
+                    super::activation_finalization::read(&tx, id)?
+                        .as_ref()
+                        .map(|(_, r)| r),
+                ))
+            } else {
+                None
+            },
             activation_resident: if view_schema == 20 {
                 Some(ActivationResidentView {
                     phase: ActivationResidentPhase::NotResident,

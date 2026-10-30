@@ -4,6 +4,8 @@ use super::*;
 mod activation_reply;
 #[path = "activation_controller.rs"]
 pub(super) mod controller;
+#[path = "activation_finalization.rs"]
+pub(super) mod finalization;
 #[path = "activation_lifetime.rs"]
 pub(super) mod lifetime;
 #[path = "activation_resident.rs"]

@@ -4,7 +4,7 @@ mod activation_reply;
 use winbridge_protocol::update::*;
 use winbridge_update::journal::UpdateJournal;
 
-fn fixture() -> (SupervisorRequest, SupervisorResponse) {
+fn fixture(version: u16) -> (SupervisorRequest, SupervisorResponse) {
     let root = tempfile::tempdir().unwrap();
     let mut journal = UpdateJournal::open(root.path(), &"a".repeat(64)).unwrap();
     let owner = journal.acquire_owner().unwrap();
@@ -27,19 +27,27 @@ fn fixture() -> (SupervisorRequest, SupervisorResponse) {
         },
     };
     let record = journal.accept(&owner, &request, &request.expected).unwrap();
-    let view =
+    let view = if version == 29 {
+        UpdateJournal::activation_finalization_snapshot(root.path(), &record.update_id, false, None)
+            .unwrap()
+    } else {
         UpdateJournal::activation_resident_snapshot(root.path(), &record.update_id, false, None)
-            .unwrap();
+            .unwrap()
+    };
     let query = SupervisorRequest {
-        contract_version: 28,
+        contract_version: version,
         launch_id: uuid::Uuid::new_v4().to_string(),
         expected_revision: 1,
-        action: SupervisorAction::ObserveResidentConnection,
+        action: if version == 29 {
+            SupervisorAction::ObserveActivationFinalization
+        } else {
+            SupervisorAction::ObserveResidentConnection
+        },
         token: "never-used-for-transport".into(),
         worker_command: None,
     };
     let response = SupervisorResponse {
-        contract_version: 28,
+        contract_version: version,
         launch_id: query.launch_id.clone(),
         record: None,
         worker_control: None,
@@ -51,30 +59,47 @@ fn fixture() -> (SupervisorRequest, SupervisorResponse) {
 
 #[test]
 fn native_adapter_accepts_a_real_compact_v28_view_and_checks_its_block() {
-    let (query, response) = fixture();
-    let id = response
-        .preparation
-        .as_ref()
-        .unwrap()
-        .update
-        .update_id
-        .clone();
-    let view = activation_reply::validate(&id, &query, response.clone())
-        .unwrap()
-        .unwrap();
-    assert_eq!(view.schema_version, 20);
-    assert_eq!(
-        view.activation_resident.unwrap().phase,
-        ActivationResidentPhase::NotResident
-    );
-    let mut missing = response;
-    missing.preparation.as_mut().unwrap().activation_resident = None;
-    assert!(activation_reply::validate(&id, &query, missing).is_err());
+    for version in [28, 29] {
+        let (query, response) = fixture(version);
+        let id = response
+            .preparation
+            .as_ref()
+            .unwrap()
+            .update
+            .update_id
+            .clone();
+        let view = activation_reply::validate(&id, &query, response.clone())
+            .unwrap()
+            .unwrap();
+        assert_eq!(view.schema_version, version - 8);
+        if version == 28 {
+            assert_eq!(
+                view.activation_resident.unwrap().phase,
+                ActivationResidentPhase::NotResident
+            );
+        } else {
+            assert_eq!(
+                view.activation_finalization.unwrap().phase,
+                ActivationFinalizationPhase::NotStarted
+            );
+        }
+        let mut missing = response;
+        if version == 28 {
+            missing.preparation.as_mut().unwrap().activation_resident = None;
+        } else {
+            missing
+                .preparation
+                .as_mut()
+                .unwrap()
+                .activation_finalization = None;
+        }
+        assert!(activation_reply::validate(&id, &query, missing).is_err());
+    }
 }
 
 #[test]
 fn native_adapter_rejects_foreign_schema_scope_and_reported_errors() {
-    let (query, response) = fixture();
+    let (query, response) = fixture(28);
     let id = response
         .preparation
         .as_ref()
@@ -103,7 +128,7 @@ fn native_adapter_rejects_foreign_schema_scope_and_reported_errors() {
 
 #[test]
 fn native_adapter_never_treats_unknown_contracts_as_successful_busy_replies() {
-    let (mut query, mut response) = fixture();
+    let (mut query, mut response) = fixture(28);
     let id = response
         .preparation
         .as_ref()
@@ -112,11 +137,11 @@ fn native_adapter_never_treats_unknown_contracts_as_successful_busy_replies() {
         .update_id
         .clone();
     response.preparation = None;
-    for version in [0, 1, 23, 24, 25, 26, 27, 28, 29, u16::MAX] {
+    for version in [0, 1, 23, 24, 25, 26, 27, 28, 29, 30, u16::MAX] {
         query.contract_version = version;
         response.contract_version = version;
         let result = activation_reply::validate(&id, &query, response.clone());
-        if (24..=28).contains(&version) {
+        if (24..=29).contains(&version) {
             assert!(result.unwrap().is_none());
         } else {
             assert!(
