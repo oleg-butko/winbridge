@@ -3,7 +3,8 @@
 2026-10-30/.204: source19/24 реализует original coordinator→keeper retirement,
 writer close до release authority, минимальный keeper-control1/без idle polling.
 1043 tests/17 ignored и Linux/MSVC Clippy passed. [Контракт/ревью](plans/worker-self-update/keeper-runtime-2026-10-30.md).
-Native actual23→24 migration и Main31 пока не выполнялись. Далее эти gates,
+Native actual23→24 migration passed (run20261030-102602-ed780e0f,4 files twice/22 negatives).
+Main31 пока не выполнялся. Strict duplicate-key rejection обоих IPC сохранён. Далее Main31,
 затем bootstrap next generation/max2 keeper/U2–U4; public install off.
 
 2026-10-30/.204: **Main30 Windows passed** (run20261030-093727-eb1f2df9,

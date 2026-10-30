@@ -1,6 +1,6 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
-**.204/main,2026-10-30: keeper retirement реализован в source19/24; native gates впереди.**
+**.204/main,2026-10-30: keeper retirement в source19/24; native23→24 passed, Main31 впереди.**
 [Ресурсы, ревью гонки, проверки и продолжение](plans/worker-self-update/keeper-runtime-2026-10-30.md).
 Original Confirmed guard → fresh Active → immutable role selection/known COMMIT →
 закрытие того же SQLite writer → release всех authority Arc → тот же Job/readers
@@ -10,8 +10,15 @@ requests отклоняются, idle без SQL/hash polling. Исправле�
 1043 workspace tests/17 ignored,9 focused keeper, Linux/MSVC all-target Clippy,
 contracts/TypeScript/UI/scaffold/fmt/diff и Python observers passed. Native новый путь
 ещё не проверен, bootstrap/max2/two generations/U2–U4 впереди; install off.
-Далее actual23→24 copy gate (run-update-keeper-migration-native.py, reference —
-успешный Main30 ниже), затем новый Main31 (run-update-keeper-main-native.py,19/24).
+Actual23→24 copy gate passed: source5460a95, taskb2bebd4a-d007-4ecd-8020-27861089badb,
+run20261030-102602-ed780e0f.4 files twice,22 migration/32 reference negative audits;
+58.99s build/24.80s test, installed unchanged. Report SHA256
+bcf07a040a22a46c5737269f0fa5605fc39eaec15c23da2490fef5669a35058b,
+proof8ba919baa60efb75aabec7f2d32f9edbfb1f6944fa833f450ec825513151bf22.
+Отдельное ревью исправило JSON Value dispatcher: routing больше не удаляет дубли
+полей до DTO validation, оба контракта читаются из original bounded bytes. Real IPC
+regression1, supervisor20/2 ignored, transport и Linux/MSVC Clippy passed.
+Далее новый Main31 (run-update-keeper-main-native.py,19/24).
 До положительных native результатов keeper не объявлять проверенным на Windows.
 Разработка перенесена из detached checkout в main; установленный worker не менялся.
 

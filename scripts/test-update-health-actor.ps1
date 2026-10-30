@@ -372,6 +372,7 @@ try {
   }
   if($KeeperRetirementGate){
     $report.migrationScope='Main31 actual original keeper retirement and new OS owner; next-generation bootstrap remains separate'
+    $commands=@(@{name='keeper-control-duplicates';minimum=1;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','supervisor::tests::supervisor_dispatch_preserves_duplicate_field_rejection_for_both_wire_contracts','--locked','--offline','--','--exact','--test-threads=1','--nocapture')})+$commands
     $commands=@(@{name='keeper-control-cold';minimum=1;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','supervisor::tests::keeper_control_rejects_cold_unbound_and_malformed_requests_without_retiring','--locked','--offline','--','--exact','--test-threads=1','--nocapture')})+$commands
   }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})

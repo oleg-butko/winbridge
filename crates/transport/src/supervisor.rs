@@ -107,16 +107,21 @@ impl Listener {
         }
     }
 }
-pub async fn read<Q: DeserializeOwned>(stream: &mut Stream) -> io::Result<Q> {
+/// Bounded original frame for a dispatcher. Parse typed requests from THESE
+/// bytes; a routing Value may collapse duplicates and cannot validate a DTO.
+pub async fn read_bytes(stream: &mut Stream) -> io::Result<Vec<u8>> {
     tokio::time::timeout(TIMEOUT, async {
         let bytes = super::read_frame(stream).await?;
         if bytes.len() > 32768 {
             return Err(io::Error::other("Supervisor message exceeds 32 KiB"));
         }
-        serde_json::from_slice(&bytes).map_err(io::Error::other)
+        Ok(bytes)
     })
     .await
     .map_err(|_| io::Error::other("Supervisor read timeout"))?
+}
+pub async fn read<Q: DeserializeOwned>(stream: &mut Stream) -> io::Result<Q> {
+    serde_json::from_slice(&read_bytes(stream).await?).map_err(io::Error::other)
 }
 pub async fn write<R: Serialize>(stream: &mut Stream, response: &R) -> io::Result<()> {
     tokio::time::timeout(

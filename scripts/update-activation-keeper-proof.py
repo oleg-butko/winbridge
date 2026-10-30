@@ -33,6 +33,8 @@ def verify_main_selection(command,log):
 
 def verify_boundaries(commands,files):
     f.verify_boundaries(commands,files,finalization_model_count=29)
+    duplicate,=[c for c in commands if c['name']=='keeper-control-duplicates']
+    need(duplicate['arguments']==['test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','supervisor::tests::supervisor_dispatch_preserves_duplicate_field_rejection_for_both_wire_contracts','--locked','--offline','--','--exact','--test-threads=1','--nocapture'] and 'test result: ok. 1 passed; 0 failed; 0 ignored;' in files[duplicate['log']].decode('utf-8-sig'),'Main31 strict duplicate-key regression missing')
     command,=[c for c in commands if c['name']=='keeper-control-cold']
     need(command['arguments']==['test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','supervisor::tests::keeper_control_rejects_cold_unbound_and_malformed_requests_without_retiring','--locked','--offline','--','--exact','--test-threads=1','--nocapture'],'Main31 cold keeper selection differs')
     need('test result: ok. 1 passed; 0 failed; 0 ignored;' in files[command['log']].decode('utf-8-sig'),'Main31 cold keeper test missing')

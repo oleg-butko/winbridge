@@ -2792,12 +2792,16 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             }
             Err(e) => return Err(error(e)),
         };
-        let value: serde_json::Value = match ipc::read(&mut stream).await {
+        let bytes = match ipc::read_bytes(&mut stream).await {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let value: serde_json::Value = match serde_json::from_slice(&bytes) {
             Ok(v) => v,
             Err(_) => continue,
         };
         if value.get("keeperControlVersion").is_some() {
-            let q: KeeperControlRequest = match serde_json::from_value(value) {
+            let q: KeeperControlRequest = match serde_json::from_slice(&bytes) {
                 Ok(q) => q,
                 Err(_) => {
                     let _ = ipc::write(
@@ -2875,7 +2879,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             let _ = ipc::write(&mut stream, &keeper_control::response(&r, Some(&q), result)).await;
             continue;
         }
-        let request: SupervisorRequest = match serde_json::from_value(value) {
+        let request: SupervisorRequest = match serde_json::from_slice(&bytes) {
             Ok(q) => q,
             Err(_) => continue,
         };
@@ -5647,6 +5651,88 @@ mod tests {
         assert!(infrastructure::matches(&handle.child.identity).unwrap());
         assert!(
             matches!(f.journal.acquire_owner(), Err(e) if e.code == JournalErrorCode::OwnerBusy)
+        );
+        stopped(&mut handle).await;
+    }
+    #[tokio::test]
+    async fn supervisor_dispatch_preserves_duplicate_field_rejection_for_both_wire_contracts() {
+        struct Duplicate(serde_json::Value, &'static str);
+        impl serde::Serialize for Duplicate {
+            fn serialize<S: serde::Serializer>(
+                &self,
+                serializer: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                use serde::ser::SerializeMap;
+                let object = self.0.as_object().unwrap();
+                let mut map = serializer.serialize_map(Some(object.len() + 1))?;
+                for (key, value) in object {
+                    map.serialize_entry(key, value)?;
+                }
+                map.serialize_entry(self.1, &object[self.1])?;
+                map.end()
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let mut f = Fixture::new(temp.path());
+        let mut handle = f.spawn();
+        handle.wait_ready().await.unwrap();
+        handle.command(SupervisorAction::Handoff).await.unwrap();
+        let before = UpdateJournal::inspect_supervisor(&f.state(), &f.id).unwrap();
+        let legacy = SupervisorRequest {
+            contract_version: 1,
+            launch_id: handle.record.spec.launch_id.clone(),
+            expected_revision: handle.record.revision,
+            action: SupervisorAction::Observe,
+            token: handle.token.clone(),
+            worker_command: None,
+        };
+        let valid: SupervisorResponse = ipc::call(
+            &handle.record.spec.endpoint,
+            handle.child.identity.process_id,
+            &legacy,
+        )
+        .await
+        .unwrap();
+        assert_eq!(valid.record.as_ref(), Some(&before));
+        let duplicated = Duplicate(serde_json::to_value(&legacy).unwrap(), "expectedRevision");
+        let bad: std::io::Result<SupervisorResponse> = ipc::call(
+            &handle.record.spec.endpoint,
+            handle.child.identity.process_id,
+            &duplicated,
+        )
+        .await;
+        assert!(
+            bad.is_err(),
+            "Duplicate legacy fields must not become an authorized request"
+        );
+        let keeper = KeeperControlRequest {
+            keeper_control_version: 1,
+            update_id: f.id.clone(),
+            launch_id: before.spec.launch_id.clone(),
+            request_id: uuid::Uuid::new_v4().to_string(),
+            expected_coordinator_revision: before.revision,
+            token: handle.token.clone(),
+            command: KeeperControlCommand::RetireCoordinator,
+        };
+        let duplicated = Duplicate(
+            serde_json::to_value(&keeper).unwrap(),
+            "keeperControlVersion",
+        );
+        let bad: KeeperControlResponse = ipc::call(
+            &handle.record.spec.endpoint,
+            handle.child.identity.process_id,
+            &duplicated,
+        )
+        .await
+        .unwrap();
+        assert!(matches!(bad.result, KeeperControlResult::Rejected { .. }));
+        assert!(
+            bad.request_id.is_none(),
+            "Malformed keeper DTO must fail before authorization/scope handling"
+        );
+        assert_eq!(
+            UpdateJournal::inspect_supervisor(&f.state(), &f.id).unwrap(),
+            before
         );
         stopped(&mut handle).await;
     }

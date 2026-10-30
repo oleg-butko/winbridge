@@ -1,5 +1,24 @@
 # Следующий этап: исходный updater становится постоянным keeper
 
+**Actual23→24 Windows gate passed:** source5460a95,
+taskb2bebd4a-d007-4ecd-8020-27861089badb/run20261030-102602-ed780e0f.
+4 ready files twice verified;22 migration и32 reference negative audits.
+Реальный архив успешного Main30 копируется SQLite Backup API; schema24 сохраняет
+root/все rows, отдельный проверенный23 backup, cold finalization без physical grants,
+старый23 init/status отказывают без записи. Build58.99s/test24.80s. Windows free
+15,206,289,408→15,059,828,736bytes. Reportbcf07a040a22a46c5737269f0fa5605fc39eaec15c23da2490fef5669a35058b,
+proof8ba919baa60efb75aabec7f2d32f9edbfb1f6944fa833f450ec825513151bf22.
+Installed worker не менялся, оставить работающим; desktop не нужен, окон не было.
+Это migration proof, новый runtime keeper ещё не выполнялся. Далее Main31.
+
+**Ревью IPC:** промежуточный serde_json::Value скрывал duplicate fields перед
+типизированным разбором. Диспетчер теперь сохраняет bounded original frame bytes;
+Value служит только routing marker, оба DTO разбираются из исходных bytes. Deadline3s
+и предел32KiB сохранены. Real IPC regression сериализует повторные поля: legacy
+Observe обязан закрыться без ответа, malformed keeper — Rejected до authorization.
+1 regression,20 supervisor tests/2 ignored, transport и Linux/MSVC all-target Clippy
+passed. Main31 отдельно выбирает этот regression; frozen Main30 не расширен.
+
 **Текущий этап,2026-10-30/.204:** source worker19/updater24 реализует выбор
 Keeper и consuming retirement исходного координатора. На Windows новый путь ещё
 не выполнялся; готовность сквозного обновления не заявлена. Main30/19/23 отдельно
