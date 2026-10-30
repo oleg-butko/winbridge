@@ -72,8 +72,9 @@ mod physical;
 pub use physical::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
     ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
-    ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
-    ActivationServicePreparation, RuntimeReplacementFailure, RuntimeReplacementGuard,
+    ActivationKeeperAttempt, ActivationKeeperCustody, ActivationLaunchFailure,
+    ActivationLifetimePreparation, ActivationProcessGuard, ActivationServicePreparation,
+    CoordinatorRetirement, RuntimeReplacementFailure, RuntimeReplacementGuard,
 };
 pub enum RuntimeReplacementAdmission {
     Fresh(Box<RuntimeReplacementPermit>),

@@ -1,5 +1,20 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: keeper retirement реализован в source19/24; native gates впереди.**
+[Ресурсы, ревью гонки, проверки и продолжение](plans/worker-self-update/keeper-runtime-2026-10-30.md).
+Original Confirmed guard → fresh Active → immutable role selection/known COMMIT →
+закрытие того же SQLite writer → release всех authority Arc → тот же Job/readers
+в keeper без SQLite. Failed close сохраняет ресурсы; uncertain commit не replay.
+Minimal keeper-control1 отдельный от frozen SupervisorRequest, cold/malformed/scope
+requests отклоняются, idle без SQL/hash polling. Исправлена гонка commit/driver finish.
+1043 workspace tests/17 ignored,9 focused keeper, Linux/MSVC all-target Clippy,
+contracts/TypeScript/UI/scaffold/fmt/diff и Python observers passed. Native новый путь
+ещё не проверен, bootstrap/max2/two generations/U2–U4 впереди; install off.
+Далее actual23→24 copy gate (run-update-keeper-migration-native.py, reference —
+успешный Main30 ниже), затем новый Main31 (run-update-keeper-main-native.py,19/24).
+До положительных native результатов keeper не объявлять проверенным на Windows.
+Разработка перенесена из detached checkout в main; установленный worker не менялся.
+
 **.204/main,2026-10-30: полный Main30 прошёл на настоящей Windows.**
 Task `fee1efa1-d4b4-416e-8df8-e226ccb20316`, run `20261030-093727-eb1f2df9`,
 source `15d0b98` → target `a2cfa21`, profile worker19/updater23.71 ready files

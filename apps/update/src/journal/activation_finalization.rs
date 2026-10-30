@@ -7,7 +7,7 @@ use crate::activation::{
 };
 use winbridge_protocol::update::*;
 #[path = "activation_finalization_completion.rs"]
-mod completion;
+pub(super) mod completion;
 pub use completion::FinalizationConfirmationPermit;
 
 fn bad(message: impl Into<String>) -> JournalError {
@@ -141,7 +141,7 @@ fn presence(c: &Connection, id: &str) -> Result<bool> {
     }
     Ok(intent)
 }
-fn ledger(
+pub(super) fn ledger(
     c: &Connection,
     id: &str,
     graph: &ActivationLifetimeSnapshot,
@@ -258,7 +258,7 @@ pub struct RetainedFinalizationSnapshot {
     pub lifetime: ActivationLifetimeSnapshot,
     pub shutdown: crate::shutdown::ShutdownRecord,
 }
-fn snapshot(c: &Connection, id: &str) -> Result<Option<RetainedFinalizationSnapshot>> {
+pub(super) fn snapshot(c: &Connection, id: &str) -> Result<Option<RetainedFinalizationSnapshot>> {
     if schema(c)? < 23 || !presence(c, id)? {
         return Ok(None);
     }

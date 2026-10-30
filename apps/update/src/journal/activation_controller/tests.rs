@@ -298,7 +298,7 @@ fn old_twenty() -> (tempfile::TempDir, UpdateJournal, String) {
     let scope = "a".repeat(64);
     let j = UpdateJournal::open(directory.path(), &scope).unwrap();
     // Synthetic, originally empty latest tables only; not actual retained data.
-    j.connection.execute_batch("DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE IF EXISTS activation_lifetime_history;DROP TABLE IF EXISTS activation_lifetime_records;DROP TABLE IF EXISTS activation_lifetime_intents;DROP TABLE activation_controller_history;DROP TABLE activation_controller_records;DROP TABLE activation_controller_intents;PRAGMA user_version=20;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    j.connection.execute_batch("DROP TABLE IF EXISTS keeper_selections;DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE IF EXISTS activation_lifetime_history;DROP TABLE IF EXISTS activation_lifetime_records;DROP TABLE IF EXISTS activation_lifetime_intents;DROP TABLE activation_controller_history;DROP TABLE activation_controller_records;DROP TABLE activation_controller_intents;PRAGMA user_version=20;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     (directory, j, scope)
 }
 #[test]
@@ -328,7 +328,7 @@ fn updater_twenty_to_current_backs_up_retains_root_dedup_and_fences_old_owner() 
     let root = old.accept(&owner, &request, &request.expected).unwrap();
     // Build metadata with its own current SDK first, then form the synthetic
     // old schema. A new SDK must refuse writes on an unmigrated old database.
-    old.connection.execute_batch("DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE IF EXISTS activation_lifetime_history;DROP TABLE IF EXISTS activation_lifetime_records;DROP TABLE IF EXISTS activation_lifetime_intents;DROP TABLE activation_controller_history;DROP TABLE activation_controller_records;DROP TABLE activation_controller_intents;PRAGMA user_version=20;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    old.connection.execute_batch("DROP TABLE IF EXISTS keeper_selections;DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE IF EXISTS activation_lifetime_history;DROP TABLE IF EXISTS activation_lifetime_records;DROP TABLE IF EXISTS activation_lifetime_intents;DROP TABLE activation_controller_history;DROP TABLE activation_controller_records;DROP TABLE activation_controller_intents;PRAGMA user_version=20;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let before = old.info().unwrap();
     assert!(
         UpdateJournal::inspect_activation_controller(directory.path(), &root.update_id)

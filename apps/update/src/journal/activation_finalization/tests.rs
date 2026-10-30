@@ -23,6 +23,7 @@ CREATE UNIQUE INDEX single_active_update ON updates(active) WHERE active=1;
 CREATE TABLE transitions(sequence INTEGER PRIMARY KEY AUTOINCREMENT,update_id TEXT NOT NULL REFERENCES updates(id),revision INTEGER NOT NULL,command_key TEXT,payload TEXT,transition TEXT NOT NULL,record TEXT NOT NULL,UNIQUE(update_id,revision),UNIQUE(update_id,command_key));
 CREATE TABLE activation_lifetime_records(id TEXT PRIMARY KEY);").unwrap();
     migrate(&c).unwrap();
+    super::super::keeper::migrate(&c).unwrap();
     c.execute(
         "INSERT INTO installation VALUES(1,?1,?2,?3,?4)",
         params![
@@ -384,7 +385,7 @@ fn schema22_copy_migration_preserves_root_history_and_refuses_live_owner() {
     };
     let saved = old.accept(&authority, &request, &request.expected).unwrap();
     drop(authority);
-    old.connection.execute_batch("DROP TABLE activation_finalization_history;DROP TABLE activation_finalization_records;DROP TABLE activation_finalization_intents;PRAGMA user_version=22;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    old.connection.execute_batch("DROP TABLE keeper_selections;DROP TABLE activation_finalization_history;DROP TABLE activation_finalization_records;DROP TABLE activation_finalization_intents;PRAGMA user_version=22;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let before = old.info().unwrap();
     let lock = owner_lock(directory.path()).unwrap();
     assert_eq!(
@@ -399,7 +400,7 @@ fn schema22_copy_migration_preserves_root_history_and_refuses_live_owner() {
     drop(old);
     let mut new = UpdateJournal::open(directory.path(), &scope).unwrap();
     let after = new.info().unwrap();
-    assert_eq!(after.schema_version, 23);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.last_sequence, before.last_sequence);
@@ -539,3 +540,6 @@ fn cold_pending_receiver_cannot_create_intent_or_change_empty_journal_epoch() {
         0
     );
 }
+
+#[path = "keeper_tests.rs"]
+mod keeper_tests;

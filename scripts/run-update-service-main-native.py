@@ -48,13 +48,14 @@ def submit_fenced(native, endpoint, request):
         return json.loads(native.exact(stream, length))
 
 
-def main(controller=False, lifetime=False, ready_loss=False, resident=False, finalization=False):
+def main(controller=False, lifetime=False, ready_loss=False, resident=False, finalization=False, keeper=False):
+    finalization = finalization or keeper
     resident = resident or finalization
     ready_loss = ready_loss or resident
     lifetime = lifetime or ready_loss
     controller_gate=controller or lifetime
-    mode='Main30' if finalization else 'Main29' if resident else 'Main28' if ready_loss else ('Main27' if lifetime else ('Main26' if controller_gate else 'Main25'))
-    namespace='main30-204' if finalization else 'main29-204' if resident else 'main28-204' if ready_loss else ('main27-204' if lifetime else ('main26-204' if controller_gate else 'main25-204'))
+    mode='Main31' if keeper else 'Main30' if finalization else 'Main29' if resident else 'Main28' if ready_loss else ('Main27' if lifetime else ('Main26' if controller_gate else 'Main25'))
+    namespace='main31-204' if keeper else 'main30-204' if finalization else 'main29-204' if resident else 'main28-204' if ready_loss else ('main27-204' if lifetime else ('main26-204' if controller_gate else 'main25-204'))
     parser = argparse.ArgumentParser(description=f'Run one pinned {mode} fixture through the installed worker; never install.')
     parser.add_argument('--source-archive', required=True, type=Path)
     parser.add_argument('--target-archive', required=True, type=Path)
@@ -62,13 +63,13 @@ def main(controller=False, lifetime=False, ready_loss=False, resident=False, fin
     parser.add_argument('--worker17-reference-sha256')
     parser.add_argument('--worker17-reference', help='Retained worker17 EXE, independent of the installed worker (absolute K: path)')
     parser.add_argument('--test-runtime-directory', required=True)
-    parser.add_argument('--profile', choices=(('worker19-updater23',) if finalization else ('worker19-updater22',) if lifetime else (('worker19-updater21',) if controller_gate else ('worker17-updater20', 'worker19-updater20'))), default=('worker19-updater23' if finalization else 'worker19-updater22' if lifetime else ('worker19-updater21' if controller_gate else 'worker17-updater20')))
+    parser.add_argument('--profile', choices=(('worker19-updater24',) if keeper else ('worker19-updater23',) if finalization else ('worker19-updater22',) if lifetime else (('worker19-updater21',) if controller_gate else ('worker17-updater20', 'worker19-updater20'))), default=('worker19-updater24' if keeper else 'worker19-updater23' if finalization else 'worker19-updater22' if lifetime else ('worker19-updater21' if controller_gate else 'worker17-updater20')))
     parser.add_argument('--controller-config', required=True, type=Path)
     parser.add_argument('--controller-binary', required=True, type=Path)
     args = parser.parse_args()
     native = load('main25_native', 'validate-workflow-native.py')
     health = load('main25_archive', 'validate-update-health-actor-native.py')
-    checks = load('main_gate_checks', 'update-activation-finalization-proof.py' if finalization else 'update-activation-resident-proof.py' if resident else 'update-activation-lifetime-ready-loss-proof.py' if ready_loss else ('update-activation-lifetime-proof.py' if lifetime else ('update-activation-controller-proof.py' if controller_gate else 'update-activation-service-proof.py')))
+    checks = load('main_gate_checks', 'update-activation-keeper-proof.py' if keeper else 'update-activation-finalization-proof.py' if finalization else 'update-activation-resident-proof.py' if resident else 'update-activation-lifetime-ready-loss-proof.py' if ready_loss else ('update-activation-lifetime-proof.py' if lifetime else ('update-activation-controller-proof.py' if controller_gate else 'update-activation-service-proof.py')))
     reference = load('main25_references', 'worker-migration-reference.py').reference_for_profile(
         args.profile, args.worker17_reference, args.worker17_reference_sha256)
     source, target = map(health.archive_pin, (args.source_archive, args.target_archive))
@@ -106,9 +107,9 @@ def main(controller=False, lifetime=False, ready_loss=False, resident=False, fin
     instance = namespace+'-' + uuid.uuid4().hex[:12]
     url = 'ws://' + host + ':1144'
     # Keep Unix socket paths short; never change a persistent controller config.
-    state = Path(tempfile.mkdtemp(prefix='wb30-' if finalization else 'wb29-' if resident else 'wb28-' if ready_loss else ('wb27-' if lifetime else ('wb26-' if controller_gate else 'wb25-'))))
+    state = Path(tempfile.mkdtemp(prefix='wb31-' if keeper else 'wb30-' if finalization else 'wb29-' if resident else 'wb28-' if ready_loss else ('wb27-' if lifetime else ('wb26-' if controller_gate else 'wb25-'))))
     test_config = state / 'controller.json'
-    write_new(test_config, {'schemaVersion': 1, 'instanceId': instance, 'nodeId': ('main30-debian-'+host.rsplit('.',1)[-1] if finalization else 'main29-debian-'+host.rsplit('.',1)[-1] if resident else 'main28-debian-'+host.rsplit('.',1)[-1] if ready_loss else ('main27-debian-'+host.rsplit('.',1)[-1] if lifetime else ('main26-debian-'+host.rsplit('.',1)[-1] if controller_gate else 'main25-debian-204'))),
+    write_new(test_config, {'schemaVersion': 1, 'instanceId': instance, 'nodeId': ('main31-debian-'+host.rsplit('.',1)[-1] if keeper else 'main30-debian-'+host.rsplit('.',1)[-1] if finalization else 'main29-debian-'+host.rsplit('.',1)[-1] if resident else 'main28-debian-'+host.rsplit('.',1)[-1] if ready_loss else ('main27-debian-'+host.rsplit('.',1)[-1] if lifetime else ('main26-debian-'+host.rsplit('.',1)[-1] if controller_gate else 'main25-debian-204'))),
               'stateDirectory': str(state), 'controller': {'listenAddress': host + ':1144', 'workerNodeId': 'shutdown-main-test'}, 'projects': []})
     test_endpoint = state / ('controller-' + instance + '.sock')
     log = (local / 'controller.log').open('x')
@@ -131,7 +132,7 @@ def main(controller=False, lifetime=False, ready_loss=False, resident=False, fin
                     for path in (args.source_archive, args.target_archive)]
         migration_arg = (' -Worker17Reference ' + ps(str(reference))
                          + ' -Worker17ReferenceSha256 ' + ps(args.worker17_reference_sha256)) if reference else ''
-        gate_switch='ActivationFinalizationGate' if finalization else 'ResidentConnectionGate' if resident else 'ActivationLifetimeReadyLossGate' if ready_loss else ('ActivationLifetimeGate' if lifetime else ('ActivationControllerGate' if controller_gate else 'ActivationServiceGate'))
+        gate_switch='KeeperRetirementGate' if keeper else 'ActivationFinalizationGate' if finalization else 'ResidentConnectionGate' if resident else 'ActivationLifetimeReadyLossGate' if ready_loss else ('ActivationLifetimeGate' if lifetime else ('ActivationControllerGate' if controller_gate else 'ActivationServiceGate'))
         script = f'''$ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 $local={ps(str(work))};$archive={ps(archives[0])};$target={ps(archives[1])}
@@ -209,7 +210,7 @@ exit $LASTEXITCODE
             with (local/'controller-activity.jsonl').open('xb') as saved_activity:
                 saved_activity.write(b''.join(captured.values()));saved_activity.flush();os.fsync(saved_activity.fileno())
             write_new(local/'controller-activity-sources.json',{name:dict(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()) for name,raw in captured.items()})
-        verifier='verify-update-finalization-main-native.py' if finalization else 'verify-update-resident-main-native.py' if resident else 'verify-update-lifetime-ready-loss-main-native.py' if ready_loss else ('verify-update-lifetime-main-native.py' if lifetime else ('verify-update-controller-main-native.py' if controller_gate else 'verify-update-service-main-native.py'))
+        verifier='verify-update-keeper-main-native.py' if keeper else 'verify-update-finalization-main-native.py' if finalization else 'verify-update-resident-main-native.py' if resident else 'verify-update-lifetime-ready-loss-main-native.py' if ready_loss else ('verify-update-lifetime-main-native.py' if lifetime else ('verify-update-controller-main-native.py' if controller_gate else 'verify-update-service-main-native.py'))
         result = subprocess.run([sys.executable, str(ROOT/'scripts'/verifier), '--profile', args.profile,
                     '--run-info', str(local/'run-info.json'), '--source-archive', str(args.source_archive), '--target-archive', str(args.target_archive)], capture_output=True, text=True)
         (local / 'independent-audit.stdout').write_text(result.stdout)

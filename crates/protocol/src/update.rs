@@ -498,6 +498,9 @@ pub enum SupervisorPhase {
     Spawned,
     Ready,
     Active,
+    /// Schema24: the original coordinator selected keeper retirement. This
+    /// historical role alone proves neither live custody nor released locks.
+    Keeper,
     Stopped,
     Indeterminate,
 }
@@ -1168,3 +1171,6 @@ pub use activation_lifetime_view::*;
 
 mod activation_finalization;
 pub use activation_finalization::*;
+
+mod keeper;
+pub use keeper::*;

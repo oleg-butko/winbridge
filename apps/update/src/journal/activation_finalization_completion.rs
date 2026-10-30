@@ -14,7 +14,7 @@ pub struct FinalizationConfirmationPermit {
 }
 
 #[cfg(any(windows, test))]
-pub(super) fn confirmation(
+pub(in crate::journal) fn confirmation(
     old: &ActivationFinalizationRecord,
     shutdown: &crate::shutdown::ShutdownRecord,
     permit: &FinalizationConfirmationPermit,

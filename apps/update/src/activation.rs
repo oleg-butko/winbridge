@@ -126,8 +126,9 @@ pub struct ActivationServiceSnapshot {
 pub use crate::runtime_replacement::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
     ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
-    ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
-    ActivationServicePreparation,
+    ActivationKeeperAttempt, ActivationKeeperCustody, ActivationLaunchFailure,
+    ActivationLifetimePreparation, ActivationProcessGuard, ActivationServicePreparation,
+    CoordinatorRetirement,
 };
 
 pub(crate) fn view(

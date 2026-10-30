@@ -19,7 +19,7 @@ pub(super) fn active(c: &Connection) -> Result<bool> {
     .map_err(storage)
 }
 fn is_active(phase: SupervisorPhase) -> bool {
-    phase != SupervisorPhase::Stopped
+    !matches!(phase, SupervisorPhase::Stopped | SupervisorPhase::Keeper)
 }
 pub(super) fn read(c: &Connection, id: &str) -> Result<SupervisorRecord> {
     let row:Option<(String,String,i64,i64)>=c.query_row("SELECT record,spec,revision,active FROM supervisor_launches WHERE update_id=?1 OR launch_id=?1",[id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional().map_err(storage)?;
@@ -49,13 +49,19 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<SupervisorRecord> {
             .is_some_and(|s| Uuid::parse_str(s).is_err())
         || (matches!(
             r.phase,
-            SupervisorPhase::Ready | SupervisorPhase::Active | SupervisorPhase::Stopped
+            SupervisorPhase::Ready
+                | SupervisorPhase::Active
+                | SupervisorPhase::Keeper
+                | SupervisorPhase::Stopped
         ) && (r.owner_id.is_none() || r.owner_epoch != Some(r.spec.parent_epoch + 1)))
         || !valid_hash(&r.spec.token_sha256, &[64])
         || r.process.is_none()
             && matches!(
                 r.phase,
-                SupervisorPhase::Spawned | SupervisorPhase::Ready | SupervisorPhase::Active
+                SupervisorPhase::Spawned
+                    | SupervisorPhase::Ready
+                    | SupervisorPhase::Active
+                    | SupervisorPhase::Keeper
             )
         || r.reason.len() > 4096
     {
@@ -65,9 +71,16 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<SupervisorRecord> {
         ));
     }
     record(c, &r.spec.update_id)?;
+    if r.phase == SupervisorPhase::Keeper {
+        super::keeper::require_selected_role(c, &r)?;
+    }
     Ok(r)
 }
-fn persist(c: &Connection, old: &SupervisorRecord, next: &SupervisorRecord) -> Result<()> {
+pub(super) fn persist(
+    c: &Connection,
+    old: &SupervisorRecord,
+    next: &SupervisorRecord,
+) -> Result<()> {
     one(c.execute("UPDATE supervisor_launches SET revision=?1,active=?2,record=?3 WHERE launch_id=?4 AND revision=?5",params![next.revision as i64,is_active(next.phase) as i64,encode(next)?,next.spec.launch_id,old.revision as i64]).map_err(storage)?)?;
     one(c
         .execute(

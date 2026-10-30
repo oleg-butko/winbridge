@@ -18,18 +18,18 @@ p = load('finalization_proof', 'update-activation-finalization-proof.py')
 base = load('finalization_fixture_prefix', 'test-update-activation-resident-proof.py')
 
 
-def fixture():
+def fixture(updater_schema=23):
     case = base.fixture()
     def schema(v):
         if isinstance(v, dict):
-            return {k: (23 if k == 'updaterJournalSchema' else schema(x)) for k,x in v.items()}
+            return {k: (updater_schema if k == 'updaterJournalSchema' else schema(x)) for k,x in v.items()}
         if isinstance(v,list): return [schema(x) for x in v]
         return v
     case = schema(case)
     w = case['activationWriter']; local = w['record']; life = case['activationLifetime']['record']; old = life['command']; lb = old['binding']
     identity = local['local']['identity']; identity['image'] = dict(path=r'K:\_proj-26\winbridge\runtime-test-204\winbridge-worker.exe')
     local['ready'] = dict(identity=copy.deepcopy(identity)); local['created']['process'] = local['stateOwned']['process']
-    local['intent']['context'].update(workerJournalSchema=19, updaterJournalSchema=23)
+    local['intent']['context'].update(workerJournalSchema=19, updaterJournalSchema=updater_schema)
     case['replacement'] = dict(record=dict(schemaVersion=1, state=dict(phase='files_moved')))
     local['intent']['source']['replacementSha256'] = p.digest('winbridge.activation.replacement.v1',case['replacement']['record'])
     lb['compatibility']['identity'] = copy.deepcopy(identity)
@@ -49,7 +49,7 @@ def fixture():
     obs['result']['entry'] = copy.deepcopy(entry); obs['result']['frame']['providerBuild'] = identity['descriptor']['build']
     query = dict(residentObservationVersion=7,requestId=obs['requestId'],command=old)
     at = obs['result']['observedAtMs']+1
-    info = dict(schemaVersion=23,installationId=str(uuid.uuid4()),scopeSha256='c'*64,ownerEpoch=lb['updaterEpoch'],activeUpdateId=lb['updateId'])
+    info = dict(schemaVersion=updater_schema,installationId=str(uuid.uuid4()),scopeSha256='c'*64,ownerEpoch=lb['updaterEpoch'],activeUpdateId=lb['updateId'])
     encoded = json.dumps(shutdown,separators=(',',':'),ensure_ascii=False)
     command = dict(schemaVersion=1,commandId=str(uuid.uuid4()),issuedAtMs=at,binding=dict(lifetimeCommand=copy.deepcopy(old),
         lifetimeRecordSha256=p.digest('winbridge.activation.finalization-lifetime.v1',life),shutdownRecordSha256=p.hashlib.sha256(encoded.encode()).hexdigest(),

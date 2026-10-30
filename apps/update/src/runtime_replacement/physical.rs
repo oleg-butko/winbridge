@@ -13,8 +13,9 @@ mod activation_files;
 pub use activation_files::{
     ActivationControllerPreparation, ActivationFilesFailure, ActivationFilesGuard,
     ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
-    ActivationLaunchFailure, ActivationLifetimePreparation, ActivationProcessGuard,
-    ActivationServicePreparation,
+    ActivationKeeperAttempt, ActivationKeeperCustody, ActivationLaunchFailure,
+    ActivationLifetimePreparation, ActivationProcessGuard, ActivationServicePreparation,
+    CoordinatorRetirement,
 };
 fn exact_names(
     path: &Path,

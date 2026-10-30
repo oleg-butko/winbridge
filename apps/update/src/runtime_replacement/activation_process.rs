@@ -20,6 +20,7 @@ mod lifetime_observation;
 mod resident_observation;
 pub use finalization::{
     ActivationFinalizationFailure, ActivationFinalizationGuard, ActivationFinalizationPreparation,
+    ActivationKeeperAttempt, ActivationKeeperCustody, CoordinatorRetirement,
 };
 pub use lifetime::ActivationLifetimePreparation;
 #[path = "activation_service.rs"]

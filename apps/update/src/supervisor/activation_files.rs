@@ -4,6 +4,8 @@ use super::*;
 mod controller;
 #[path = "activation_finalization.rs"]
 mod finalization;
+#[path = "activation_keeper.rs"]
+mod keeper;
 #[path = "activation_lifetime.rs"]
 mod lifetime;
 #[path = "activation_resident.rs"]
@@ -56,6 +58,8 @@ enum State {
     ServiceFailed(Box<crate::activation::ActivationLaunchFailure>),
     #[cfg(windows)]
     Finalizing(Box<crate::activation::ActivationRecord>),
+    #[cfg(windows)]
+    PreparingKeeper(Box<crate::activation::ActivationRecord>),
     #[cfg(windows)]
     ObservingFinalization(Box<crate::activation::ActivationRecord>),
     #[cfg(windows)]
@@ -156,6 +160,7 @@ impl FilesActor {
             | State::ObservingLifetime(r)
             | State::ObservingResident(r)
             | State::Finalizing(r)
+            | State::PreparingKeeper(r)
             | State::ObservingFinalization(r) => Some(r),
             #[cfg(windows)]
             State::Written(g)
@@ -822,7 +827,10 @@ impl FilesActor {
             #[cfg(windows)]
             State::FinalizationPrepareFailed(f) => held_source(files, f.record()),
             #[cfg(windows)]
-            State::Finalizing(_) | State::ObservingFinalization(_) | State::FinalizationHeld(_) => {
+            State::Finalizing(_)
+            | State::ObservingFinalization(_)
+            | State::FinalizationHeld(_)
+            | State::PreparingKeeper(_) => {
                 files.phase = ActivationFilesPhase::Indeterminate;
                 files.held_files = 0;
                 files.reason=Some("Verification pins are transferring/retired; this legacy view cannot claim a pin count; use internal29 physical status".into());

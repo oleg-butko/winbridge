@@ -6,6 +6,8 @@ mod activation_reply;
 pub(super) mod controller;
 #[path = "activation_finalization.rs"]
 pub(super) mod finalization;
+#[path = "activation_keeper.rs"]
+pub(super) mod keeper;
 #[path = "activation_lifetime.rs"]
 pub(super) mod lifetime;
 #[path = "activation_resident.rs"]

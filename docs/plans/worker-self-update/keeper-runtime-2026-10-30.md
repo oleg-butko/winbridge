@@ -1,5 +1,63 @@
 # Следующий этап: исходный updater становится постоянным keeper
 
+**Текущий этап,2026-10-30/.204:** source worker19/updater24 реализует выбор
+Keeper и consuming retirement исходного координатора. На Windows новый путь ещё
+не выполнялся; готовность сквозного обновления не заявлена. Main30/19/23 отдельно
+успешен (run20261030-093727-eb1f2df9); сведения ниже о ранних прогонах исторические.
+
+### Реализованный переход
+
+После уже Confirmed finalization исходный guard получает свежий normal Active
+capture. Не-Serde permit допускает одну транзакцию: immutable keeper selection и
+supervisor Active→Keeper, active-slot освобождён; root/lease/finalization не меняются.
+Схема24 добавляет только keeper_selections; actual23 copy migration имеет отдельный
+профиль Keeper23To24 и обязательный native gate, ещё не выполненный.
+
+Известный COMMIT даёт opaque KeeperSelectionCommit. Он не означает закрытого writer
+или освобождённой блокировки. Исходный actor передаёт тот же journal, тот же Job,
+readers и обе authority Arc в CoordinatorRetirement. Проверяются physical identity,
+original known selection, отсутствие лишних владельцев. Эти две Arc — внутренние
+ссылки writer/control, не ограничение числа Debian-агентов. При close error остаются
+тот же journal, authority и Job; RetryWriterClose повторяет только закрытие известного
+writer. Неизвестный SQL outcome удерживает ресурсы без replay/adoption.
+
+Только успешный consuming close позволяет удалить обе authority Arc и перейти в
+ActivationKeeperCustody. Он содержит ProcessCustody/binding, без SQLite, authority
+или config/image verification pins. Отдельный keeper-control v1 принимает Observe,
+RetireCoordinator (повтор — только observation) и RetryWriterClose. Request не
+содержит path/executable/нового permission; старый SupervisorRequest не расширен.
+Endpoint/nonce/actual IPC server PID проверяются, чужие scope/version/корреляция
+отклоняются. Keeper ждёт listener.accept().await без SQL/hash polling в idle.
+
+При ревью исправлена гонка SQL commit/driver completion: запись Keeper уже могла
+существовать при ещё выполняющемся JoinHandle. Прежний Active-record invariant
+уничтожил бы исходный Job. В PreparingKeeper authority-проверка принадлежит исходной
+транзакции; completed attempt сразу передаётся в keeper loop. Validation-only hold
+после известного COMMIT принудительно открывает этот промежуток в Main31.
+
+### Проверки и продолжение
+
+1043 workspace tests/17 ignored passed;9 focused keeper tests (включая5 SQL и
+реальный IPC с9 отказами), Linux/MSVC all-target Clippy, contracts generation,
+TypeScript/scaffold/UI build/fmt/diff passed. После усиления native task stage
+Windows integration Clippy также passed. Python observers:2 keeper tests/19 negative
+mutations и3 migration tests/22 negative mutations; frozen finalization/resident/
+22→23 migration regressions passed. Synthetic reader tests не являются native proof.
+Перед workspace Debian17,444,675,584/shared15,319,457,792bytes; очистки не было.
+
+Далее выполнить run-update-keeper-migration-native.py (actual Main30 archive23→24,
+consistent copy/backup, старый23 init/status обязаны отказать), затем отдельный
+run-update-keeper-main-native.py, profile worker19-updater24. Main31 проверяет actual
+role/close, получение OS-lock новым owner при живом прежнем Job, повтор Retire без SQL,
+Info и одну fenced cmd task/dedup после смены owner epoch,3s CPU sample keeper и
+cleanup/cold view. Gates подготовлены, пока не выполнены. Имена/профили Main25–30
+не подменяются; Main30 по умолчанию по-прежнему строго19/23.
+
+После Main31: version-neutral bootstrap следующего coordinating actor вне worker
+activation Job, одна admission/max2 keeper, known-empty выход старого; затем U2–U4.
+Public install off, установленный source48/gen946 не менялся. Рабочий worker оставить,
+desktop не нужен. Никаких Windows validation directories не удалено.
+
 2026-10-30, .204/main. План после [Main30/factory](finalization-factory-2026-10-30.md).
 Keeper conversion пока **не реализована**. Начат первый необходимый примитив:
 `UpdateJournal::close_owned` проверяет исходную authority и при ошибке возвращает

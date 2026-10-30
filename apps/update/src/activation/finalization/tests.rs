@@ -46,6 +46,7 @@ pub(crate) fn fixture() -> Fixture {
     intent.binding.owner_epoch = source.owner_epoch;
     intent.binding.worker.process = c.previous_worker.clone();
     intent.binding.worker.context = c.worker_context.clone();
+    intent.binding.worker.config_sha256 = c.worker_config.sha256.clone();
     intent.binding.worker.generation = c.previous_generation.clone();
     intent.binding.loaded_worker.process = c.previous_worker.clone();
     intent.binding.worker_state = c.worker_state.clone();

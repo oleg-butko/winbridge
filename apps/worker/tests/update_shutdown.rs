@@ -85,6 +85,8 @@ struct GateInput {
     #[serde(default)]
     activation_finalization: bool,
     #[serde(default)]
+    keeper_retirement: bool,
+    #[serde(default)]
     runtime: Option<FixtureRuntimePin>,
     #[serde(default)]
     controller_url: Option<String>,
@@ -1441,6 +1443,7 @@ fn case(
     let ready_loss = input.lifetime_ready_loss;
     let resident_connection = input.resident_connection;
     let finalize_activation = input.activation_finalization;
+    let retire_keeper = input.keeper_retirement;
     let worker = root.runtime().join("winbridge-worker.exe");
     let input_path = root.join("input.json");
     // Only the suspended creation inherits these two variables. Restore before
@@ -1459,6 +1462,12 @@ fn case(
         vars.push((
             "WINBRIDGE_FINALIZATION_READY_LOSS_VALIDATE",
             "prefix".into(),
+        ));
+    }
+    if input.keeper_retirement {
+        vars.push((
+            "WINBRIDGE_KEEPER_RETIREMENT_VALIDATE",
+            "hold_known_role".into(),
         ));
     }
     let previous: Vec<_> = vars
@@ -1747,6 +1756,13 @@ fn case(
                                     &proof["activationLifetime"],
                                     &config,
                                 );
+                            if retire_keeper {
+                                proof["activationKeeper"] = activation_writer::keeper::execute(
+                                    &root,
+                                    &sup,
+                                    &proof["activationFinalization"],
+                                );
+                            }
                         }
                     }
                 }
@@ -1797,6 +1813,7 @@ fn case(
     let update_id = proof["root"]["updateId"].as_str().unwrap().to_owned();
     let id = update_id.as_str();
     if input.activation_finalization {
+        let keeper = proof.as_object_mut().unwrap().remove("activationKeeper");
         let finalization = proof
             .as_object_mut()
             .unwrap()
@@ -1814,7 +1831,7 @@ fn case(
         let lifetime = object.remove("activationLifetime").unwrap();
         let resident = object.remove("activationResident").unwrap();
         let replacement = object.remove("runtimeReplacement").unwrap();
-        return json!({"beforeReplacement":proof,"activationWriter":writer,"activationController":controller,"activationLifetime":lifetime,"activationResident":resident,"replacement":replacement,"activationFinalization":finalization,"afterOwnedExit":cold,"ownedJobEmpty":true,"normalMain":true});
+        return json!({"beforeReplacement":proof,"activationWriter":writer,"activationController":controller,"activationLifetime":lifetime,"activationResident":resident,"replacement":replacement,"activationFinalization":finalization,"activationKeeper":keeper,"afterOwnedExit":cold,"ownedJobEmpty":true,"normalMain":true});
     }
     let (view, mut observation_retries) = observe_after_owned_exit(|| {
         UpdateJournal::shutdown_preparation_snapshot(&directory, id, false, None)
@@ -2399,6 +2416,30 @@ fn actual_main_finalizes_same_worker_after_lost_v8_reply_without_replay() {
         path,
     );
 }
+#[test]
+#[ignore = "Explicit Main31 original keeper retirement/OS lock release; no installed update"]
+fn actual_main_retires_coordinator_without_losing_worker_job_or_readers() {
+    let path = PathBuf::from(
+        std::env::var_os("WINBRIDGE_SHUTDOWN_GATE_INPUT").expect("Explicit native gate input"),
+    );
+    assert_eq!(
+        winbridge_update::journal::UPDATE_SCHEMA_VERSION,
+        24,
+        "Use exact Main31 SDK"
+    );
+    let input: GateInput = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    assert!(input.keeper_retirement && input.activation_finalization);
+    run_gate_inner_with_finalization(
+        [true, false, true, true, true, true, true],
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        path,
+    );
+}
 #[allow(clippy::too_many_arguments)]
 fn run_gate_inner_with_finalization(
     requested: [bool; 7],
@@ -2567,6 +2608,6 @@ fn run_gate_inner_with_finalization(
             }
         }
     }
-    let proof = json!({"schemaVersion":1,"kind":if input.activation_finalization {"activation_finalization_main_native_proof"} else if input.resident_connection {"activation_resident_main_native_proof"} else if input.lifetime_ready_loss {"activation_lifetime_ready_loss_main_native_proof"} else if input.activation_lifetime {"activation_lifetime_main_native_proof"} else if input.activation_controller {"activation_controller_main_native_proof"} else if input.activation_service {"activation_service_main_native_proof"} else if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
+    let proof = json!({"schemaVersion":1,"kind":if input.keeper_retirement {"activation_keeper_main_native_proof"} else if input.activation_finalization {"activation_finalization_main_native_proof"} else if input.resident_connection {"activation_resident_main_native_proof"} else if input.lifetime_ready_loss {"activation_lifetime_ready_loss_main_native_proof"} else if input.activation_lifetime {"activation_lifetime_main_native_proof"} else if input.activation_controller {"activation_controller_main_native_proof"} else if input.activation_service {"activation_service_main_native_proof"} else if input.activation_writer {"activation_writer_main_native_proof"} else if input.activation_state {"activation_state_main_native_proof"} else if input.activation_process {"activation_process_main_native_proof"} else if input.activation_files {"activation_files_main_native_proof"} else if input.activation_preparation {"activation_preparation_main_native_proof"} else if input.replacement_faults {"runtime_replacement_faults_native_proof"} else if input.runtime_replacement {"runtime_replacement_main_native_proof"} else if input.preparation_faults {"runtime_preparation_faults_native_proof"} else if input.runtime_preparation {"runtime_preparation_main_native_proof"} else if input.backup_faults {"state_backup_faults_native_proof"} else if input.final_backup {"state_backup_main_native_proof"} else if input.supplemental {"shutdown_main_supplemental_proof"} else {"shutdown_main_native_proof"},"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),"target":input.target,"cases":cases,"normalMain":true,"actualOldRoles":true,"actualCandidateBuild":true,"validationFeature":true,"runtimeApplied":if input.replacement_faults {serde_json::Value::Null} else {json!(input.runtime_replacement)},"installedRuntimeApplied":false,"windowsOpened":false});
     write(&input.root.join("proof.json"), &proof);
 }

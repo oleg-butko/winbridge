@@ -384,7 +384,7 @@ fn old_twenty_one() -> (tempfile::TempDir, UpdateJournal, String) {
     let directory = tempfile::tempdir().unwrap();
     let scope = "a".repeat(64);
     let journal = UpdateJournal::open(directory.path(), &scope).unwrap();
-    journal.connection.execute_batch("DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE activation_lifetime_history;DROP TABLE activation_lifetime_records;DROP TABLE activation_lifetime_intents;PRAGMA user_version=21;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    journal.connection.execute_batch("DROP TABLE IF EXISTS keeper_selections;DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE activation_lifetime_history;DROP TABLE activation_lifetime_records;DROP TABLE activation_lifetime_intents;PRAGMA user_version=21;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     (directory, journal, scope)
 }
 
@@ -413,7 +413,7 @@ fn lifetime_schema_twenty_one_migration_keeps_backup_root_key_history_and_fences
         },
     };
     let root = old.accept(&owner, &request, &request.expected).unwrap();
-    old.connection.execute_batch("DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE activation_lifetime_history;DROP TABLE activation_lifetime_records;DROP TABLE activation_lifetime_intents;PRAGMA user_version=21;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    old.connection.execute_batch("DROP TABLE IF EXISTS keeper_selections;DROP TABLE IF EXISTS activation_finalization_history;DROP TABLE IF EXISTS activation_finalization_records;DROP TABLE IF EXISTS activation_finalization_intents;DROP TABLE activation_lifetime_history;DROP TABLE activation_lifetime_records;DROP TABLE activation_lifetime_intents;PRAGMA user_version=21;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let before = old.info().unwrap();
     let history = root_history(&old.connection, &root.update_id).unwrap();
     assert!(

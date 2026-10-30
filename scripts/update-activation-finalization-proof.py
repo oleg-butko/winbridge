@@ -41,10 +41,10 @@ def verify_main_selection(command, log):
          and summaries[0].startswith('ok. 1 passed; 0 failed; 0 ignored;'), 'Main30 did not execute exactly once')
 
 
-def verify_boundaries(commands, files):
+def verify_boundaries(commands, files, *, finalization_model_count=24):
     resident.verify_boundaries(commands, files, resident_model_count=14)
     definitions = [
-        ('finalization-model-ledger', 'winbridge-update', 'finalization', 24, False),
+        ('finalization-model-ledger', 'winbridge-update', 'finalization', finalization_model_count, False),
         ('finalization-v29-mailbox', 'winbridge-worker', 'update_control::tests::finalization_v29_cannot_adopt_saved_data_and_old_views_keep_their_shape', 1, True),
         ('finalization-reply-budget', 'winbridge-worker', 'local_service::lifetime::finalization_reply_wait_tests::accepted_v8_reply_outlives_generic_ipc_deadline_without_a_second_delivery', 1, True),
         ('finalization-known-seal-bounds', 'winbridge-worker', 'local_service::lifetime::finalization_mailbox::continuation_tests::', 1, False),
@@ -72,10 +72,10 @@ def windows_path(value):
     return PureWindowsPath(value[4:] if value.startswith('\\\\?\\') else value)
 
 
-def verify(proof, source, target, reservation):
+def verify(proof, source, target, reservation, *, updater_schema=23, kind=KIND):
     service.strict(proof)
     controller.typed(proof)
-    need(proof['schemaVersion'] == 1 and proof['kind'] == KIND and proof['platform'] == 'windows' and proof['passed'] is True, 'Not a completed Main30 proof')
+    need(proof['schemaVersion'] == 1 and proof['kind'] == kind and proof['platform'] == 'windows' and proof['passed'] is True, 'Not a completed Main30 proof')
     need(all(proof[k] is True for k in ('normalMain','actualOldRoles','actualCandidateBuild','validationFeature','runtimeApplied'))
          and proof['installedRuntimeApplied'] is False and proof['windowsOpened'] is False, 'Wrong isolated runtime scope')
     need(proof['target'] == target and proof['build']['sourceDirty'] is False
@@ -87,7 +87,7 @@ def verify(proof, source, target, reservation):
     base = case['activationLifetime']['record']
     original, entry = base['command'], base['state']['receipt']
     writer = case['activationWriter']; local = writer['record']; context = local['intent']['context']
-    need(context['workerJournalSchema'] == 19 and context['updaterJournalSchema'] == 23
+    need(context['workerJournalSchema'] == 19 and context['updaterJournalSchema'] == updater_schema
          and context['startupTimeoutMs'] == 240000, 'Main30 source contract/startup window differs')
     runtime = PureWindowsPath(reservation['runtimeDirectory'])
     need(runtime == PureWindowsPath(r'K:\_proj-26\winbridge\runtime-test-204')
@@ -148,7 +148,7 @@ def verify(proof, source, target, reservation):
          and new_root == dict(old_root, phase='committed', revision=old_root['revision']+1, updatedAtMs=command['issuedAtMs'], reason=new_root['reason'])
          and binding['committedRootRevision'] == new_root['revision'], 'Root not committed exactly once from original revision')
     before_info, after_info = p['updaterBefore'][0], p['updaterAfter'][0]
-    need(before_info['schemaVersion'] == after_info['schemaVersion'] == 23
+    need(before_info['schemaVersion'] == after_info['schemaVersion'] == updater_schema
          and all(before_info[k] == after_info[k] for k in ('installationId','scopeSha256','ownerEpoch'))
          and after_info['activeUpdateId'] is None
          and binding['installationId'] == before_info['installationId'] and binding['scopeSha256'] == before_info['scopeSha256']

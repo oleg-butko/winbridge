@@ -15,6 +15,7 @@ impl FilesActor {
                     | State::ServiceUnconfirmed(_)
                     | State::ServiceFailed(_)
                     | State::Finalizing(_)
+                    | State::PreparingKeeper(_)
                     | State::ObservingFinalization(_)
                     | State::FinalizationPrepareFailed(_)
                     | State::FinalizationHeld(_)

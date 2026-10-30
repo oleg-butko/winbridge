@@ -29,6 +29,7 @@ param(
   [switch]$ActivationLifetimeReadyLossGate,
   [switch]$ResidentConnectionGate,
   [switch]$ActivationFinalizationGate,
+  [switch]$KeeperRetirementGate,
   [string]$Worker17ReferenceSha256,
   [string]$Worker17Reference,
   [string]$FixtureInstanceId,
@@ -41,6 +42,7 @@ param(
   [string]$PreviousUpdaterSha256
 )
 $ErrorActionPreference='Stop'
+if($KeeperRetirementGate){if($ActivationFinalizationGate){throw 'Select Main31 explicitly'};$ActivationFinalizationGate=$true}
 if($ActivationFinalizationGate){if($ResidentConnectionGate -or $ActivationLifetimeReadyLossGate -or $ActivationLifetimeGate -or $ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main30 explicitly'};$ResidentConnectionGate=$true}
 if($ResidentConnectionGate){if($ActivationLifetimeReadyLossGate -or $ActivationLifetimeGate -or $ActivationControllerGate -or $ActivationServiceGate){throw 'Select Main29 explicitly'};$ActivationLifetimeReadyLossGate=$true}
 if($ActivationLifetimeReadyLossGate){if($ActivationLifetimeGate){throw 'Select Main28 explicitly'};$ActivationLifetimeGate=$true}
@@ -102,7 +104,7 @@ try {
   $pin=@{archiveName=[IO.Path]::GetFileName($TargetArchivePath);archiveSha256=$TargetArchiveSha256;manifestSha256=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant();sourceCommit=$targetManifest.sourceCommit}
   if($ActivationControllerGate){
     # Distinct profiles Main26=19/21 and Main27=19/22, never inferred from proof.
-    $checks=@(@{path='apps/worker/src/store.rs';pattern='(?m)^pub const JOURNAL_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=19},@{path='apps/update/src/journal.rs';pattern='(?m)^pub const UPDATE_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=$(if($ActivationFinalizationGate){23}elseif($ActivationLifetimeGate){22}else{21})})
+    $checks=@(@{path='apps/worker/src/store.rs';pattern='(?m)^pub const JOURNAL_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=19},@{path='apps/update/src/journal.rs';pattern='(?m)^pub const UPDATE_SCHEMA_VERSION: u32 = ([0-9]+);\r?$';version=$(if($KeeperRetirementGate){24}elseif($ActivationFinalizationGate){23}elseif($ActivationLifetimeGate){22}else{21})})
     $zip=[IO.Compression.ZipFile]::OpenRead($TargetArchivePath)
     try {
       foreach($check in $checks){
@@ -115,7 +117,7 @@ try {
         }
       }
     }finally{$zip.Dispose()}
-    $report.profile=if($ActivationFinalizationGate){'worker19-updater23'}elseif($ActivationLifetimeGate){'worker19-updater22'}else{'worker19-updater21'}
+    $report.profile=if($KeeperRetirementGate){'worker19-updater24'}elseif($ActivationFinalizationGate){'worker19-updater23'}elseif($ActivationLifetimeGate){'worker19-updater22'}else{'worker19-updater21'}
   }
   if($ActivationPreparationGate -and -not $ActivationServiceGate){
     Assert-SessionFile $MigrationReferenceFile
@@ -199,6 +201,7 @@ try {
     if($ActivationLifetimeReadyLossGate){$shutdownArguments.lifetimeReadyLoss=$true;$report.kind='activation_lifetime_ready_loss_main_native_gate'}
     if($ResidentConnectionGate){$shutdownArguments.residentConnection=$true;$report.kind='activation_resident_main_native_gate'}
     if($ActivationFinalizationGate){$shutdownArguments.activationFinalization=$true;$report.kind='activation_finalization_main_native_gate'}
+    if($KeeperRetirementGate){$shutdownArguments.keeperRetirement=$true;$report.kind='activation_keeper_main_native_gate'}
     if(-not $ActivationServiceGate){Write-NewJson $shutdownInput $shutdownArguments}
     $env:WINBRIDGE_SHUTDOWN_GATE_INPUT=$shutdownInput
     $mainTest=if($RuntimeReplacementFaults){'actual_main_preserves_replacement_faults_without_retry'}elseif($RuntimeReplacementGate){'actual_main_and_supervisor_replace_runtime_without_activation'}else{'actual_main_and_supervisor_confirm_exact_shutdown_without_runtime_replacement'}
@@ -213,6 +216,7 @@ try {
     if($ActivationLifetimeReadyLossGate){$mainTest='actual_main_reconciles_partial_lifetime_ready_after_original_deadline_without_replay'}
     if($ResidentConnectionGate){$mainTest='actual_main_observes_resident_connection_after_partial_ready_without_replay'}
     if($ActivationFinalizationGate){$mainTest='actual_main_finalizes_same_worker_after_lost_v8_reply_without_replay'}
+    if($KeeperRetirementGate){$mainTest='actual_main_retires_coordinator_without_losing_worker_job_or_readers'}
     # The Main fixture copies its supervisor from validationUpdater. Building a
     # validation test harness alone does not enable diagnostics in that process.
     $supervisorFeatures=if($ActivationFilesGate){'bundled-sqlite,update-validation'}else{'bundled-sqlite'}
@@ -366,6 +370,10 @@ try {
       @{name='finalization-known-seal-bounds';minimum=1;arguments=@('test','-p','winbridge-worker','--features','bundled-sqlite,update-validation','--lib','local_service::lifetime::finalization_mailbox::continuation_tests::','--locked','--offline','--','--test-threads=1','--nocapture')}
     )+$commands
   }
+  if($KeeperRetirementGate){
+    $report.migrationScope='Main31 actual original keeper retirement and new OS owner; next-generation bootstrap remains separate'
+    $commands=@(@{name='keeper-control-cold';minimum=1;arguments=@('test','-p','winbridge-update','--features','bundled-sqlite,update-validation','--lib','supervisor::tests::keeper_control_rejects_cold_unbound_and_malformed_requests_without_retiring','--locked','--offline','--','--exact','--test-threads=1','--nocapture')})+$commands
+  }
   $commands=@($commands | Where-Object {$_.name -ceq 'health-supervisor-build'})+@($commands | Where-Object {$_.name -ceq 'activation-process-fixture-build'})+@($commands | Where-Object {$_.name -cne 'health-supervisor-build' -and $_.name -cne 'activation-process-fixture-build'})
   if($RuntimePreparationFaults -or $RuntimeReplacementFaults){
     $commands[0].arguments=@('build','-p','winbridge-update','--features','bundled-sqlite,update-validation','--locked','--offline')
@@ -448,6 +456,7 @@ try {
   if($ActivationLifetimeReadyLossGate){$expectedKind='activation_lifetime_ready_loss_main_native_proof'}
   if($ResidentConnectionGate){$expectedKind='activation_resident_main_native_proof'}
   if($ActivationFinalizationGate){$expectedKind='activation_finalization_main_native_proof'}
+  if($KeeperRetirementGate){$expectedKind='activation_keeper_main_native_proof'}
   $expectedCases=if($RuntimeReplacementFaults){4}elseif($RuntimePreparationFaults){3}elseif($FinalStateBackupFaults){4}elseif($FinalStateBackupGate){1}elseif($ShutdownMainSupplemental){2}else{4}
   $expectedRuntimeApplied=if($RuntimeReplacementFaults){$null}else{[bool]$RuntimeReplacementGate}
   if($proof.kind -cne $expectedKind -or $proof.passed -ne $true -or $proof.runtimeApplied -ne $expectedRuntimeApplied -or $proof.windowsOpened -ne $false -or $proof.cases.Count -ne $expectedCases){throw 'Actual health actor proof incomplete'}

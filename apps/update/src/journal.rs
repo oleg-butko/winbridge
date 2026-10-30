@@ -41,6 +41,10 @@ pub use close::JournalCloseFailure;
 mod compatible_drain;
 mod drain;
 mod health;
+mod keeper;
+pub use keeper::{
+    KeeperSelection, KeeperSelectionAdmission, KeeperSelectionCommit, KeeperSelectionPermit,
+};
 mod runtime_baseline;
 mod runtime_preimages;
 mod runtime_preparation;
@@ -51,7 +55,7 @@ mod shutdown;
 mod source;
 mod state_backup;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 23;
+pub const UPDATE_SCHEMA_VERSION: u32 = 24;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -541,6 +545,7 @@ impl UpdateJournal {
             activation_controller::migrate(&tx)?;
             activation_lifetime::migrate(&tx)?;
             activation_finalization::migrate(&tx)?;
+            keeper::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -626,6 +631,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 22 {
                 activation_finalization::migrate(&tx)?;
+            }
+            if schema(&tx)? == 23 {
+                keeper::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(

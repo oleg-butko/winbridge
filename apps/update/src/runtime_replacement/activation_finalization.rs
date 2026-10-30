@@ -8,6 +8,10 @@ use crate::journal::{
 };
 use winbridge_protocol::update::*;
 
+#[path = "activation_keeper.rs"]
+mod keeper;
+pub use keeper::{ActivationKeeperAttempt, ActivationKeeperCustody, CoordinatorRetirement};
+
 #[must_use = "Dropping closes the original managed worker Job"]
 pub struct ActivationFinalizationPreparation {
     owner: Box<ActivationFinalizationGuard>,
@@ -47,6 +51,9 @@ impl std::fmt::Display for ActivationFinalizationFailure {
 }
 impl std::error::Error for ActivationFinalizationFailure {}
 impl ActivationFinalizationFailure {
+    pub(crate) fn custody_record(&self) -> &ActivationRecord {
+        self.custody.activation()
+    }
     pub fn record(&self) -> &model::ActivationFinalizationRecord {
         &self.custody.record
     }

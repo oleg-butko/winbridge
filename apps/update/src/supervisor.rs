@@ -164,6 +164,7 @@ fn activation_view(
 
 mod activation_files;
 mod finalization_control;
+mod keeper_control;
 mod resident_control;
 
 fn local(path: &Path) -> Result<PathBuf> {
@@ -2085,6 +2086,10 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             >,
         ),
         #[cfg(windows)]
+        KeeperPrepared(Box<crate::activation::ActivationKeeperAttempt>),
+        #[cfg(windows)]
+        KeeperPreparationFailed(crate::activation::ActivationFinalizationFailure),
+        #[cfg(windows)]
         FinalizationPreparationFailed(Box<crate::activation::ActivationLaunchFailure>),
         #[cfg(windows)]
         Finalization(
@@ -2109,6 +2114,7 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
     let mut lifetime_reply: Option<ipc::Stream> = None;
     let mut resident_reply: Option<ipc::Stream> = None;
     let mut finalization_reply: Option<ipc::Stream> = None;
+    let mut keeper_reply: Option<(ipc::Stream, KeeperControlRequest)> = None;
     let files_actor = activation_files::FilesActor::default();
     #[cfg(windows)]
     let mut files_actor = files_actor;
@@ -2161,6 +2167,20 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
         }
         if work.as_ref().is_some_and(|w| w.is_finished()) {
             let (journal, owner, outcome) = work.take().unwrap().await.map_err(error)?;
+            #[cfg(windows)]
+            if let DriverCompletion::KeeperPrepared(attempt) = outcome {
+                // No old coordinator frame may retain a writer/authority or
+                // verification owner while the new keeper loop is awaited.
+                drop(activation_preparation);
+                drop(replacement_guard);
+                drop(pending_abort);
+                drop(shutdown_custody);
+                drop(replacement_signal);
+                drop(files_actor);
+                drop(runtime_reads);
+                let resources = attempt.bind_coordinator(journal, owner, control_authority);
+                return keeper_control::run(listener, r, resources, keeper_reply.take()).await;
+            }
             let mut prepared = None;
             let mut backup_permit = None;
             let mut runtime_permit = None;
@@ -2278,6 +2298,14 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                     files_actor.complete_resident(result, &directory, &r.spec.update_id)
                 }
                 #[cfg(windows)]
+                DriverCompletion::KeeperPrepared(_) => {
+                    unreachable!("Keeper transferred before coordinator completion")
+                }
+                #[cfg(windows)]
+                DriverCompletion::KeeperPreparationFailed(failure) => {
+                    files_actor.fail_keeper_preparation(failure)
+                }
+                #[cfg(windows)]
                 DriverCompletion::FinalizationPreparationFailed(failure) => {
                     files_actor.fail_finalization_preparation(*failure)
                 }
@@ -2319,6 +2347,15 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
                 return Err("Preparation supervisor record changed unexpectedly".into());
             }
             idle = Some((journal, owner));
+            if let Some((mut stream, q)) = keeper_reply.take() {
+                let result = KeeperControlResult::Rejected {
+                    message: driver_error.clone().unwrap_or_else(|| {
+                        "Keeper preparation did not produce an original retirement owner".into()
+                    }),
+                };
+                let _ =
+                    ipc::write(&mut stream, &keeper_control::response(&r, Some(&q), result)).await;
+            }
             if let Some(mut stream) = finalization_reply.take() {
                 let (preparation, error) = match files_actor.finalization_view(
                     &directory,
@@ -2715,7 +2752,11 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
         }
         if let Some((journal, owner)) = &idle {
             journal.check_source_authority(owner).map_err(error)?;
-        } else {
+        } else if !files_actor.keeper_preparing() {
+            // The original retirement driver may already have committed Keeper
+            // while its JoinHandle is not yet marked finished. Its transaction
+            // owns all checks. Never kill its original Job by applying the old
+            // coordinator's Active-record comparison in this narrow window.
             let (info, saved, _, current_owner) =
                 UpdateJournal::supervisor_authority_snapshot(&directory, id).map_err(error)?;
             if saved != r
@@ -2751,7 +2792,90 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             }
             Err(e) => return Err(error(e)),
         };
-        let request: SupervisorRequest = match ipc::read(&mut stream).await {
+        let value: serde_json::Value = match ipc::read(&mut stream).await {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if value.get("keeperControlVersion").is_some() {
+            let q: KeeperControlRequest = match serde_json::from_value(value) {
+                Ok(q) => q,
+                Err(_) => {
+                    let _ = ipc::write(
+                        &mut stream,
+                        &keeper_control::response(
+                            &r,
+                            None,
+                            KeeperControlResult::Rejected {
+                                message: "Invalid keeper request; no fallback".into(),
+                            },
+                        ),
+                    )
+                    .await;
+                    continue;
+                }
+            };
+            let mut dispatch = false;
+            let result = (|| -> Result<KeeperControlResult> {
+                keeper_control::validate(&r, &q, pid, false)?;
+                if r.phase != SupervisorPhase::Active || r.spec.worker.is_none() {
+                    return Err(
+                        "Keeper retirement requires the original Active worker-bound coordinator"
+                            .into(),
+                    );
+                }
+                if work.is_some() || !runtime_reads.is_empty() {
+                    return Ok(KeeperControlResult::Busy {
+                        message: "Original coordinator is busy; no second retirement accepted"
+                            .into(),
+                    });
+                }
+                if q.command == KeeperControlCommand::Observe {
+                    return Ok(KeeperControlResult::Status {
+                        status: Box::new(keeper_control::not_selected(driver_error.clone())),
+                    });
+                }
+                if q.command != KeeperControlCommand::RetireCoordinator {
+                    return Err(
+                        "Writer-close retry requires an already selected original retirement owner"
+                            .into(),
+                    );
+                }
+                if pending_abort.is_some() || !files_actor.can_retire_keeper() {
+                    return Err("Keeper retirement requires original confirmed finalization custody and no pending admission".into());
+                }
+                dispatch = true;
+                Ok(KeeperControlResult::Busy {
+                    message: "Original keeper retirement accepted".into(),
+                })
+            })();
+            if dispatch && result.is_ok() {
+                #[cfg(windows)]
+                {
+                    let guard = files_actor.take_for_keeper()?;
+                    let (mut journal, owner) =
+                        idle.take().ok_or("Original keeper journal owner missing")?;
+                    let spec = r.clone();
+                    driver_error = None;
+                    work = Some(tokio::task::spawn_blocking(move || {
+                        let done = match guard.prepare_keeper_blocking(&mut journal, &owner, &spec)
+                        {
+                            Ok(v) => DriverCompletion::KeeperPrepared(Box::new(v)),
+                            Err(e) => DriverCompletion::KeeperPreparationFailed(e),
+                        };
+                        (journal, owner, done)
+                    }));
+                    keeper_reply = Some((stream, q));
+                    continue;
+                }
+            }
+            let result = match result {
+                Ok(v) => v,
+                Err(message) => KeeperControlResult::Rejected { message },
+            };
+            let _ = ipc::write(&mut stream, &keeper_control::response(&r, Some(&q), result)).await;
+            continue;
+        }
+        let request: SupervisorRequest = match serde_json::from_value(value) {
             Ok(q) => q,
             Err(_) => continue,
         };
@@ -5462,6 +5586,67 @@ mod tests {
             UpdateJournal::inspect_activation_lifetime(&f.state(), &f.id)
                 .unwrap()
                 .is_none()
+        );
+        stopped(&mut handle).await;
+    }
+    #[tokio::test]
+    async fn keeper_control_rejects_cold_unbound_and_malformed_requests_without_retiring() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut f = Fixture::new(temp.path());
+        let mut handle = f.spawn();
+        handle.wait_ready().await.unwrap();
+        assert!(matches!(
+            handle
+                .keeper_control(KeeperControlCommand::RetireCoordinator)
+                .await
+                .unwrap(),
+            KeeperControlResult::Rejected { .. }
+        ));
+        handle.command(SupervisorAction::Handoff).await.unwrap();
+        let before = UpdateJournal::inspect_supervisor(&f.state(), &f.id).unwrap();
+        let root = f.journal.get(&f.id).unwrap();
+        let request = KeeperControlRequest {
+            keeper_control_version: 1,
+            update_id: handle.record.spec.update_id.clone(),
+            launch_id: handle.record.spec.launch_id.clone(),
+            request_id: uuid::Uuid::new_v4().to_string(),
+            expected_coordinator_revision: handle.record.revision,
+            token: handle.token.clone(),
+            command: KeeperControlCommand::RetireCoordinator,
+        };
+        for mutation in 0..9 {
+            let mut wire = serde_json::to_value(&request).unwrap();
+            match mutation {
+                0 => {} // Authentic but no original worker/finalization custody.
+                1 => wire["keeperControlVersion"] = 2.into(),
+                2 => wire["updateId"] = uuid::Uuid::new_v4().to_string().into(),
+                3 => wire["launchId"] = uuid::Uuid::new_v4().to_string().into(),
+                4 => wire["requestId"] = "invalid".into(),
+                5 => {
+                    wire["expectedCoordinatorRevision"] =
+                        (request.expected_coordinator_revision + 1).into()
+                }
+                6 => wire["token"] = "0".repeat(64).into(),
+                7 => wire["executable"] = "forbidden.exe".into(),
+                _ => wire["command"] = "adopt_saved_keeper".into(),
+            }
+            let reply: KeeperControlResponse = ipc::call(
+                &handle.record.spec.endpoint,
+                handle.child.identity.process_id,
+                &wire,
+            )
+            .await
+            .unwrap();
+            assert!(matches!(reply.result, KeeperControlResult::Rejected { .. }));
+        }
+        assert_eq!(
+            UpdateJournal::inspect_supervisor(&f.state(), &f.id).unwrap(),
+            before
+        );
+        assert_eq!(f.journal.get(&f.id).unwrap(), root);
+        assert!(infrastructure::matches(&handle.child.identity).unwrap());
+        assert!(
+            matches!(f.journal.acquire_owner(), Err(e) if e.code == JournalErrorCode::OwnerBusy)
         );
         stopped(&mut handle).await;
     }
