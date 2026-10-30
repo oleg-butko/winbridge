@@ -1,6 +1,6 @@
 # Постепенная реализация и расширение
 
-2026-10-30/.204: Main31/19/24 выполняется (run20261030-103611-811af539), не replay.
+2026-10-30/.204: Main31/19/24 passed (run20261030-103611-811af539),73 files twice/19 keeper negatives; не replay.
 Начат [next keeper bootstrap](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
 exact query-only outside-Job primitive/portable tests/MSVC Clippy готовы;
 отдельный native gate подготовлен, не выполнялся. Durable delegation/max2/fresh

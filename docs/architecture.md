@@ -1,5 +1,16 @@
 # Архитектура WinBridge
 
+2026-10-30/.204: original keeper runtime source19/24 прошёл Main31 Windows gate
+(run20261030-103611-811af539,73 files twice/19 keeper negative audits). Coordinator
+transactionally выбирает Keeper, закрывает тот же SQLite writer, освобождает обе
+authority Arc и продолжает держать тот же Job/readers. Новый owner действительно
+получает OS-lock при живом worker; post-retirement task/dedup и idle sample проверены.
+Actual23→24 retained-copy/backup/old-refusal gate также passed. [Контракт и evidence](plans/worker-self-update/keeper-runtime-2026-10-30.md).
+Далее [bootstrap следующего координатора](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
+logical worker/physical keeper, durable one-admission/max2 и version-neutral schema
+negotiation ещё не реализованы. U2–U4/public install остаются открытыми, установленный
+worker source48/gen946 не менялся. Ниже — история этапов.
+
 2026-10-30/.204: [V8 reply wait](plans/worker-self-update/finalization-reply-budget-2026-10-30.md)
 ограничен30s отдельно от framing/прочего IPC original10s. Typed V8 handler проверяет
 OS peer и bounded mailbox до ожидания координатора; accepted work переживает caller

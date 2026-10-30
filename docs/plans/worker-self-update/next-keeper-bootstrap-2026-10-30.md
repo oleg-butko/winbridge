@@ -6,11 +6,11 @@ Installed worker source48/gen946 не меняется; public install off.
 
 ## Текущая граница
 
-Main30/19/23 и actual23→24 copy migration прошли. Main31/19/24 выполняется:
+Main30/19/23 и actual23→24 copy migration прошли. Main31/19/24 passed:
 run20261030-103611-811af539/taskb1cfa7b0-57b5-457e-8296-56c7629a2496,
 producerd5a7bab→target830ccb9. Наблюдать тот же task, не replay.
 Это отдельное доказательство закрытия writer/освобождения authority при живом Job;
-до его результата положительный runtime keeper proof не заявлен.
+73 files twice/19 keeper negative audits. Следующее поколение ещё не проверено.
 
 Production `Worker::launch_supervisor` уже отказывает worker в external Job.
 `InfrastructureChild::spawn` также проверяет собственный execution domain.

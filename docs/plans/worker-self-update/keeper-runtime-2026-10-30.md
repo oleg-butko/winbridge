@@ -1,5 +1,22 @@
 # Следующий этап: исходный updater становится постоянным keeper
 
+**Main31/19/24 Windows passed,2026-10-30:**
+run20261030-103611-811af539/taskb1cfa7b0-57b5-457e-8296-56c7629a2496,
+producerd5a7bab→target830ccb9.73 files verified twice;19 keeper/10 marker negative
+mutations rejected, observer09328f6/dirty=false. KeeperPID1340 удерживал тот же
+workerPID14672/Job после writer close/release authority. Actual new owner epoch2→3,
+duplicate Retire без SQL, ordinary Info и одна post-retirement fenced cmd/dedup.
+CPU keeper:0 ticks100ns за3000ms (один sample, не гарантия нулевого CPU вообще).
+Known role commit/JoinHandle race принудительно проверен350ms validation hold.
+Owned test Job завершён/cold view не создаёт custody,73 immutable report files
+сохранены. Report2c885c1063acfd582b61a176192c4fe66b2367ddf1e4800f5f5a883ba8e48247,
+proofa2626c9dbb25e71cee137edec99ebc5e20f213b15c48a1cf3c48b5a5e29a57b8.
+Archive `tmp-main31-204-20261030-103611-811af539/shutdown-main-cases/runtime-archive-e93407a6-c1ba-4180-b279-fc9485fd5022`.
+60 commands1905.199s, main fixture1014.76s. Windows14,949,834,752→14,254,739,456bytes.
+Installed source48/gen946 unchanged; оставить worker, desktop не нужен/окон нет.
+Этот gate доказывает retirement одного coordinator, не запуск второго поколения.
+Далее next keeper bootstrap/durable delegation/max2/schema negotiation/U2–U4.
+
 **Actual23→24 Windows gate passed:** source5460a95,
 taskb2bebd4a-d007-4ecd-8020-27861089badb/run20261030-102602-ed780e0f.
 4 ready files twice verified;22 migration и32 reference negative audits.

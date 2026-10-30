@@ -1,18 +1,24 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
-**.204/main,2026-10-30: Main31 выполняется, не replay.**
+**.204/main,2026-10-30: Main31/19/24 Windows passed.**
 Taskb1cfa7b0-57b5-457e-8296-56c7629a2496/run20261030-103611-811af539,
-producerd5a7bab→target830ccb9, profile19/24. Наблюдение:
-`.winbridge/keeper-stage-review-204/main31-native-run.log`; run-info в
-`.winbridge/update-preparation/main31-204-20261030-103611-811af539/`.
-Пока actual keeper proof не заявлен. Installed worker оставить, desktop не нужен.
-Параллельно начат [next-keeper bootstrap](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
-query-only exact outside-Job primitive и усиленные OS tests/отдельный native gate.
-Linux3/1 ignored и Linux/MSVC platform Clippy, Python3 selector/8 old reader tests
-passed. Новый primitive на Windows ещё не выполнялся; gate запускать после Main31.
-Bootstrap protocol/durable delegation/max2 ещё не реализованы; source остаётся19/24.
+producerd5a7bab→target830ccb9.73 files twice,19 keeper/10 marker negative audits;
+observer09328f6/dirty=false. Original keeperPID1340 сохранял workerPID14672/тот же
+Job после SQLite close и release обеих authority; другой owner получил OS-lock,
+epoch2→3, без нового release/изменения root. Duplicate Retire только наблюдал;
+post-retirement fenced cmd+duplicate дал одну строку KEEPER. Idle sample3s/0 CPU ticks.
+Actual known-role/driver-finished race принудительно открывался validation hold.
+Report2c885c1063acfd582b61a176192c4fe66b2367ddf1e4800f5f5a883ba8e48247,
+proofa2626c9dbb25e71cee137edec99ebc5e20f213b15c48a1cf3c48b5a5e29a57b8.
+60 commands/1905.199s; main fixture1014.76s. Windows14,949,834,752→14,254,739,456bytes.
+Owned Job закрыт/cold no-original-custody проверен, runtime archive сохранён;
+не replay. Installed source48/gen946 прежний, worker оставить, desktop не нужен/окон нет.
+Далее [next keeper bootstrap](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
+query-only exact outside-Job primitive готов, Linux3/1 ignored и Linux/MSVC platform
+Clippy/Python selectors passed. Отдельный native exclusion gate source09328f6 пока
+не запускался. Bootstrap/durable delegation/max2/mixed schema/U2–U4 ещё впереди.
 
-**.204/main,2026-10-30: keeper retirement в source19/24; native23→24 passed, Main31 впереди.**
+**.204/main,2026-10-30: keeper retirement в source19/24; оба native gates прошли (см. выше).**
 [Ресурсы, ревью гонки, проверки и продолжение](plans/worker-self-update/keeper-runtime-2026-10-30.md).
 Original Confirmed guard → fresh Active → immutable role selection/known COMMIT →
 закрытие того же SQLite writer → release всех authority Arc → тот же Job/readers
@@ -20,8 +26,8 @@ Original Confirmed guard → fresh Active → immutable role selection/known COM
 Minimal keeper-control1 отдельный от frozen SupervisorRequest, cold/malformed/scope
 requests отклоняются, idle без SQL/hash polling. Исправлена гонка commit/driver finish.
 1043 workspace tests/17 ignored,9 focused keeper, Linux/MSVC all-target Clippy,
-contracts/TypeScript/UI/scaffold/fmt/diff и Python observers passed. Native новый путь
-ещё не проверен, bootstrap/max2/two generations/U2–U4 впереди; install off.
+contracts/TypeScript/UI/scaffold/fmt/diff и Python observers passed. Новый runtime keeper проверен Main31 выше; bootstrap/max2/two generations/U2–U4
+впереди; install off.
 Actual23→24 copy gate passed: source5460a95, taskb2bebd4a-d007-4ecd-8020-27861089badb,
 run20261030-102602-ed780e0f.4 files twice,22 migration/32 reference negative audits;
 58.99s build/24.80s test, installed unchanged. Report SHA256
