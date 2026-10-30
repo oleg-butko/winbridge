@@ -476,18 +476,22 @@ fn bootstrap_reservation_and_supervisor_intent_commit_atomically_without_creatio
     let (mut f, intent, spec) = delegation_setup();
     let tx = f.c.transaction().unwrap();
     let mut checks = 0;
-    let saved = crate::journal::bootstrap::reserve(
-        &tx,
-        &f.a,
-        intent.clone(),
-        spec.clone(),
-        |_, ancestor| {
-            assert!(ancestor.is_none());
-            checks += 1;
-            Ok(())
-        },
-    )
-    .unwrap();
+    let crate::journal::bootstrap::ReservationWrite::New(saved) =
+        crate::journal::bootstrap::reserve(
+            &tx,
+            &f.a,
+            intent.clone(),
+            spec.clone(),
+            |_, ancestor| {
+                assert!(ancestor.is_none());
+                checks += 1;
+                Ok(())
+            },
+        )
+        .unwrap()
+    else {
+        panic!("A new transaction must identify its own writes")
+    };
     assert_eq!(checks, 2);
     tx.commit().unwrap();
     assert_eq!(
@@ -508,11 +512,14 @@ fn bootstrap_reservation_and_supervisor_intent_commit_atomically_without_creatio
             .is_none()
     );
     let tx = f.c.transaction().unwrap();
-    let existing =
+    let crate::journal::bootstrap::ReservationWrite::Existing(existing) =
         crate::journal::bootstrap::reserve(&tx, &f.a, intent.clone(), spec.clone(), |_, _| {
             panic!("Existing data must not repeat an effect checkpoint")
         })
-        .unwrap();
+        .unwrap()
+    else {
+        panic!("Existing data must never identify a fresh write")
+    };
     assert_eq!(existing, saved);
     tx.commit().unwrap();
     assert!(f
@@ -592,6 +599,169 @@ fn bootstrap_changed_payload_parent_or_current_root_cannot_get_another_reservati
         let tx = f.c.transaction().unwrap();
         assert!(
             crate::journal::bootstrap::reserve(&tx, &f.a, changed, next, |_, _| Ok(())).is_err()
+        );
+    }
+}
+
+#[test]
+fn known_bootstrap_commit_is_not_recreated_after_caller_loss_or_owner_change() {
+    use crate::journal::bootstrap::BootstrapReservationAdmission;
+    let (f, intent, spec) = delegation_setup();
+    let mut journal = UpdateJournal {
+        directory: f.a.directory.clone(),
+        connection: f.c,
+    };
+    let mut checks = 0;
+    let BootstrapReservationAdmission::Committed(known) = journal
+        .commit_bootstrap_reservation(&f.a, intent.clone(), spec.clone(), |_, _| {
+            checks += 1;
+            Ok(())
+        })
+        .unwrap()
+    else {
+        panic!("Only the original successful COMMIT returns a known fact")
+    };
+    assert_eq!(checks, 2);
+    assert_eq!(known.reservation().intent, intent);
+    journal.require_known_bootstrap(&f.a, &known).unwrap();
+    let saved = known.reservation().clone(); // Serialisable data only.
+    drop(known); // Model a caller losing its only opaque commit result.
+    let BootstrapReservationAdmission::Existing(existing) = journal
+        .commit_bootstrap_reservation(&f.a, intent.clone(), spec.clone(), |_, _| {
+            panic!("A duplicate must not run live admission again")
+        })
+        .unwrap()
+    else {
+        panic!("Saved data must not reconstruct a fresh commit fact")
+    };
+    assert_eq!(*existing, saved);
+    journal
+        .connection
+        .execute("UPDATE installation SET epoch=epoch+1", [])
+        .unwrap();
+    assert_eq!(
+        journal
+            .commit_bootstrap_reservation(&f.a, intent, spec, |_, _| Ok(()))
+            .err()
+            .unwrap()
+            .code,
+        JournalErrorCode::StaleOwner
+    );
+}
+
+#[test]
+fn failed_actual_bootstrap_commit_returns_no_fact_and_rolls_back_both_records() {
+    let (f, intent, spec) = delegation_setup();
+    let mut journal = UpdateJournal {
+        directory: f.a.directory.clone(),
+        connection: f.c,
+    };
+    // A deferred FK error occurs at real SQLite COMMIT, after all reservation
+    // writes/readback/checkpoints succeeded. No fake commit callback is used.
+    journal.connection.execute_batch("CREATE TABLE bootstrap_commit_failure(id TEXT REFERENCES updates(id) DEFERRABLE INITIALLY DEFERRED); CREATE TRIGGER fail_bootstrap_commit AFTER INSERT ON bootstrap_reservations BEGIN INSERT INTO bootstrap_commit_failure VALUES('missing-root');END;").unwrap();
+    let mut checks = 0;
+    let error = journal
+        .commit_bootstrap_reservation(&f.a, intent.clone(), spec.clone(), |_, _| {
+            checks += 1;
+            Ok(())
+        })
+        .err()
+        .expect("Failed COMMIT must not mint an opaque fact");
+    assert_eq!(
+        checks, 2,
+        "Failure must occur after both physical checkpoints"
+    );
+    assert!(error.to_string().contains("COMMIT unconfirmed"));
+    assert!(journal.connection.is_autocommit());
+    assert!(
+        crate::journal::bootstrap::read(&journal.connection, &intent.launch_id)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        matches!(supervisor::read(&journal.connection,&intent.launch_id),Err(e)if e.code==JournalErrorCode::NotFound)
+    );
+    assert!(!supervisor::active(&journal.connection).unwrap());
+    assert_eq!(
+        journal.get(&intent.update.update_id).unwrap(),
+        intent.update
+    );
+}
+
+#[test]
+fn known_bootstrap_fact_requires_original_owner_root_and_unstarted_supervisor() {
+    use crate::journal::BootstrapReservationAdmission;
+    for fault in 0..3 {
+        let (f, intent, spec) = delegation_setup();
+        let mut journal = UpdateJournal {
+            directory: f.a.directory.clone(),
+            connection: f.c,
+        };
+        let BootstrapReservationAdmission::Committed(known) = journal
+            .commit_bootstrap_reservation(&f.a, intent.clone(), spec, |_, _| Ok(()))
+            .unwrap()
+        else {
+            panic!("New reservation must commit")
+        };
+        match fault {
+            0 => {
+                journal
+                    .connection
+                    .execute("UPDATE installation SET epoch=epoch+1", [])
+                    .unwrap();
+            }
+            1 => {
+                let mut next = known.reservation().supervisor.clone();
+                next.phase = SupervisorPhase::Spawned;
+                next.revision += 1;
+                next.updated_at_ms += 1;
+                next.process = Some(intent.previous.coordinator.clone());
+                supervisor::persist(&journal.connection, &known.reservation().supervisor, &next)
+                    .unwrap();
+            }
+            _ => {
+                // Advance only synthetic SQL metadata. This is neither a
+                // baseline admission nor evidence of physical preparation.
+                let mut next = intent.update.clone();
+                next.phase = UpdatePhase::Preparing;
+                next.revision = 1;
+                next.updated_at_ms += 1;
+                let raw = encode(&next).unwrap();
+                let tx = journal.connection.transaction().unwrap();
+                tx.execute(
+                    "UPDATE updates SET phase=?1,revision=1,record=?2 WHERE id=?3",
+                    params![encode(&next.phase).unwrap(), raw, next.update_id],
+                )
+                .unwrap();
+                append_transition(
+                    &tx,
+                    &UpdateTransition {
+                        sequence: 0,
+                        update_id: next.update_id.clone(),
+                        revision: 1,
+                        previous_phase: Some(UpdatePhase::Requested),
+                        phase: next.phase,
+                        occurred_at_ms: next.updated_at_ms,
+                        owner_epoch: f.a.epoch,
+                        owner_id: f.a.owner_id.clone(),
+                        command: None,
+                    },
+                    None,
+                    &raw,
+                )
+                .unwrap();
+                tx.commit().unwrap();
+            }
+        }
+        // Immutable reservation remains readable; it is not an effect permit.
+        assert!(
+            crate::journal::bootstrap::read(&journal.connection, &intent.launch_id)
+                .unwrap()
+                .is_some()
+        );
+        assert!(
+            journal.require_known_bootstrap(&f.a, &known).is_err(),
+            "fault {fault}"
         );
     }
 }

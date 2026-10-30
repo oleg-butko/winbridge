@@ -12,6 +12,29 @@ pub struct BootstrapReservation {
     pub intent: BootstrapIntent,
     pub supervisor: SupervisorRecord,
 }
+/// A fact produced by this writer's successful COMMIT. It is deliberately not
+/// Clone/serde and does not itself grant process creation or physical custody.
+#[cfg(any(windows, test))]
+pub struct BootstrapReservationCommit {
+    reservation: BootstrapReservation,
+    directory: PathBuf,
+}
+#[cfg(any(windows, test))]
+impl BootstrapReservationCommit {
+    pub fn reservation(&self) -> &BootstrapReservation {
+        &self.reservation
+    }
+}
+#[cfg(any(windows, test))]
+pub enum BootstrapReservationAdmission {
+    Committed(Box<BootstrapReservationCommit>),
+    Existing(Box<BootstrapReservation>),
+}
+#[cfg(any(windows, test))]
+pub(super) enum ReservationWrite {
+    New(BootstrapReservation),
+    Existing(BootstrapReservation),
+}
 fn bad(message: impl Into<String>) -> JournalError {
     fail(JournalErrorCode::Corrupt, message)
 }
@@ -147,7 +170,7 @@ pub(super) fn reserve(
         &KeeperSelection,
         Option<&BootstrapReservation>,
     ) -> std::result::Result<(), String>,
-) -> Result<BootstrapReservation> {
+) -> Result<ReservationWrite> {
     check_authority(c, a)?;
     if schema(c)? != UPDATE_SCHEMA_VERSION || schema(c)? < 25 {
         return Err(bad("Bootstrap requires current schema25 or later"));
@@ -180,7 +203,7 @@ pub(super) fn reserve(
                 "Keeper already reserved for another bootstrap payload",
             ));
         }
-        return Ok(old); // Data only; runtime must NOT retry creation from this result.
+        return Ok(ReservationWrite::Existing(old)); // Data only; never retry creation.
     }
     if record(c, &intent.update.update_id)? != intent.update || supervisor::active(c)? {
         return Err(fail(
@@ -215,9 +238,77 @@ pub(super) fn reserve(
     }
     checkpoint(&parent, ancestor.as_ref()).map_err(bad)?;
     check_authority(c, a)?;
-    Ok(reservation)
+    Ok(ReservationWrite::New(reservation))
 }
 impl UpdateJournal {
+    /// Internal writer step for the future consuming live factory. The callback
+    /// must retain/check its original OS/file pins; a known SQL commit alone is
+    /// never a spawn permit. Any error retains that factory's resources and must
+    /// not trigger replay/adoption, including errors after COMMIT was attempted.
+    #[cfg(any(windows, test))]
+    #[allow(dead_code)]
+    pub(crate) fn commit_bootstrap_reservation(
+        &mut self,
+        a: &UpdateAuthority,
+        intent: BootstrapIntent,
+        spec: SupervisorSpec,
+        checkpoint: impl FnMut(
+            &KeeperSelection,
+            Option<&BootstrapReservation>,
+        ) -> std::result::Result<(), String>,
+    ) -> Result<BootstrapReservationAdmission> {
+        self.check_directory(a)?;
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(storage)?;
+        let decision = reserve(&tx, a, intent, spec, checkpoint)?;
+        tx.commit().map_err(|e| {
+            storage(format!(
+                "Bootstrap reservation COMMIT unconfirmed; retain original pins, no replay: {e}"
+            ))
+        })?;
+        self.check_directory(a)?;
+        check_authority(&self.connection, a)?;
+        match decision {
+            ReservationWrite::New(reservation) => {
+                let known = BootstrapReservationCommit {
+                    reservation,
+                    directory: self.directory.clone(),
+                };
+                self.require_known_bootstrap(a, &known)?;
+                Ok(BootstrapReservationAdmission::Committed(Box::new(known)))
+            }
+            ReservationWrite::Existing(reservation) => Ok(BootstrapReservationAdmission::Existing(
+                Box::new(reservation),
+            )),
+        }
+    }
+    #[cfg(any(windows, test))]
+    #[allow(dead_code)]
+    pub(crate) fn require_known_bootstrap(
+        &self,
+        a: &UpdateAuthority,
+        known: &BootstrapReservationCommit,
+    ) -> Result<()> {
+        self.check_directory(a)?;
+        let tx = self.connection.unchecked_transaction().map_err(storage)?;
+        check_authority(&tx, a)?;
+        let intent = &known.reservation.intent;
+        if known.directory != self.directory
+            || intent.parent_epoch != a.epoch
+            || intent.parent_owner_id != a.owner_id
+            || read(&tx, &intent.launch_id)?.as_ref() != Some(&known.reservation)
+            || supervisor::read(&tx, &intent.launch_id)? != known.reservation.supervisor
+            || record(&tx, &intent.update.update_id)? != intent.update
+        {
+            return Err(bad(
+                "Known bootstrap COMMIT changed journal, owner, root or original Intent",
+            ));
+        }
+        check_authority(&tx, a)?;
+        tx.commit().map_err(storage)
+    }
     /// Readonly historical data. No reservation or live permission is minted.
     pub fn inspect_bootstrap(directory: &Path, id: &str) -> Result<Option<BootstrapReservation>> {
         check_files(directory)?;

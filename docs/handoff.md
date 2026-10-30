@@ -1,16 +1,21 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
-**.204/main,2026-10-30: атомарный bootstrap ledger, source worker19/updater25.**
+**.204/main,2026-10-30: bootstrap ledger/known COMMIT fact, source worker19/updater25.**
 [План, границы и продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
 Immutable reservation и supervisor Intent сохраняются одной SQL-транзакцией;
 повтор возвращает только исторические данные, изменённый payload отклоняется.
 Контрольные точки до/после записи и readback откатывают обе части при ошибке.
 Исторический parent keeper сохраняет свой epoch; новый logical worker/owner и
 фиксированные helper/config/output identities привязаны к исходному Confirmed.
-Это ещё не live admission/known-COMMIT permit и не команда создания процесса.
-Проверки:1033 workspace tests/17 ignored (default features),8 focused после последних
-assertions, Linux/MSVC workspace all-target Clippy/fmt/diff passed; Python observers
-13 tests passed, включая24 negative mutations нового migration reader.
+Внутренний writer теперь отделяет non-Clone/non-Serde known-COMMIT fact от
+Existing data. Он проверяет original owner, root0, unstarted Intent и directory/lock;
+это ещё не live admission/spawn permit и не команда создания процесса.
+Ledger baseline:1033 workspace tests/17 ignored (default features), Linux/MSVC
+workspace all-target Clippy passed. После COMMIT wrapper/review:11 focused tests
+и Linux/MSVC updater all-target Clippy/fmt/diff passed; Python observers13 tests
+passed, включая24 negative mutations нового migration reader. Новые COMMIT-fault/
+freshness cases выполнены в Debian; на Windows проверена компиляция, runtime
+wrapper ещё не подключён. Native copy-only gate ниже относится к sourceb0947c3.
 Windows copy-only gate24→25 passed на архиве Main31 (global epoch3,
 исторический keeper2). Sourceb0947c3,run20261030-170706-bae5c263,taskcf99be54-03ba-4b82-a431-cd0b3bd3cb0f;
 4 ready files twice/24 migration+29 reference negative audits; старый24 init/status
@@ -21,7 +26,7 @@ proof8ec9c5990351d3c96901c3908624fd553f2cc75d16c6f4ca10e1470c02d35c01.
 новый generationf9daa176, обе связи.203/.204 connected, active0/errors=null.
 Desktop не требуется; простой запуск — runtime\winbridge-worker.exe --config
 runtime\winbridge-worker.multi-controller.json serve.
-Далее non-Serde known-COMMIT permit/actual peer/files/Job checkpoints, затем
+Далее consuming live factory с этим known fact/actual peer/files/Job checkpoints, затем
 one creation/child handoff/max2/fresh bridge/mixed schema/два workflow/U2–U4.
 
 **.204/main,2026-10-30: Main31/19/24 Windows passed.**

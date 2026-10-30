@@ -3,7 +3,9 @@
 2026-10-30/.204: source worker19/updater25 хранит immutable bootstrap reservation
 в одной транзакции с новым supervisor Intent. Указатели update/launch/previous-launch
 уникальны; данные связывают прежний Confirmed/keeper с новым root/owner/files.
-Existing/cold read не создают permission; live factory/known-COMMIT ещё не подключены.
+Existing/cold read не создают permission. Internal writer возвращает opaque
+known-COMMIT fact только после собственного COMMIT и повторной проверки scope,
+root0/Intent/owner. Actual live factory и создание процесса ещё не подключены.
 Миграция24→25 создаёт пустую таблицу, сохраняет старые роли/epochs и использует
 consistent backup; actual Windows copy-only gate passed
 (run20261030-170706-bae5c263,4 ready files twice/24 negative audits).

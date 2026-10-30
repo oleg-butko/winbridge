@@ -235,3 +235,59 @@ Metadata `.winbridge/update-preparation/bootstrap-migration-20261030-170706-bae5
 log `.winbridge/keeper-stage-review-204/bootstrap-migration-native-run.log`.
 No task replay, windows none/desktop unnecessary; installed0.2.0/source48/genf9
 оставить запущенным. Windows directories не удалялись.
+
+## Known SQL COMMIT fact — следующий source25 участок
+
+Internal `UpdateJournal::commit_bootstrap_reservation` получает итог New/Existing
+в той же Immediate transaction. `BootstrapReservationCommit` (private fields,
+без Clone/serde) создаётся только после собственного успешного COMMIT, проверки
+того же directory/owner-lock и повторного readback. Duplicate/caller loss возвращает
+Existing serialisable data, не восстанавливая original opaque fact и не выполняя
+live checkpoints. Ошибка COMMIT не даёт typed success; будущая consuming factory
+обязана сохранить исходные OS/file pins и не replay/adopt.
+
+Review усиление: require_known_bootstrap проверяет не только immutable payload/
+owner, но и точный Requested root0/исходный unstarted supervisor Intent. Историческая
+reservation остаётся читаемой после progress; known fact нельзя использовать как
+свежую подготовку после Spawned или перехода root в Preparing. Он вообще не является
+разрешением запуска: actual peer/pins/Job exclusion/ancestor-exit/live capture и
+consuming one-attempt factory ещё нужны. Никаких runtime callers/нового wire command
+не подключено, current schema25 не меняется.
+
+Новые portable SQLite проверки: caller теряет typed commit → duplicate только data;
+настоящая deferred-FK ошибка в SQLite COMMIT после обоих checkpoints → ни known fact,
+ни reservation/SupIntent; owner change, SupSpawned и rootPreparing отвергаются при
+сохранённом opaque fact, а history по-прежнему читается. Synthetic process metadata
+не доказывают Windows custody. Positive native24→25 gate выше относится к sourceb0947c3,
+не к исполнению нового внутреннего COMMIT wrapper на Windows.
+
+### Следующая физическая граница: actual current-worker peer
+
+Existing keeper_control::validate использует legacy supervisor authorization:
+первоначальный parent worker из before.spec. Это другой процесс, чем сохранённый
+новый Active worker в KeeperBinding. Нельзя просто ослабить существующий authorize
+или разрешить bootstrap по JSON PID/старому token. Новому минимальному handshake
+нужен actual IPC peer PID, сравнение с original owned child (birth/host/session),
+known original Active binding и свежая проверка реального Job. Retiring state/cold
+rows не заменяют KeeperCustody. Новый contract не должен принимать future
+UpdateRecord/SQLite schema/произвольные path/argv. Оба dispatchers должны проверять
+DTO по original bounded bytes, сохраняя rejection duplicate keys.
+
+Для max2 incoming reservation указывает предшественника, но сохранённого PID
+недостаточно для positive exit. Следующий actor должен удержать полученный при
+живом родителе query-only exact process handle до проверки его exit; missing PID,
+PID reuse и query error не считаются завершением. Такой OS-only predecessor handle
+не равен старым config/image verification pins, которые обязаны освободиться при
+retirement. Продумать его перенос вместе с original physical custody до нового
+Keeper, без SQLite/authority references. Создание вне original activation Job и
+worker task domain по-прежнему проверяется до и после CreateProcess; production
+worker direct-spawn guard остаётся включённым.
+
+Проверки final known-fact участка:11 focused tests passed (1.91s), включая real
+SQLite deferred-FK commit failure и freshness after Sup/root progress; Linux/MSVC
+updater all-target Clippy -D warnings, fmt/diff passed. Это portable SQL tests;
+new wrapper на Windows ещё не исполнялся. На installed worker нет новых task/changes.
+Logs `.winbridge/keeper-stage-review-204/bootstrap-known-commit-freshness-tests.log`
+и `bootstrap-known-commit-final-{linux,windows}-clippy.log`. Debian free10,507,022,336,
+Windows/shared15,253,352,448bytes; без Windows cleanup. До runtime integration нужны
+actual peer handshake/pins/known ancestor exit/one-attempt creator, затем native gate.
