@@ -172,3 +172,44 @@ non-Serde known-commit permit и только затем actual keeper creation/
 source48c834c, новый generationf9daa176-4125-4ee2-ad0d-aa704f59815b. Обе связи.203/.204
 connected, primary203, journal incarnation5a8eb173 прежний, active0/errors=null.
 Исторические native reports выше правильно фиксируют generation946 до restart.
+
+## Atomic reservation — source19/25
+
+Schema25 добавляет immutable `bootstrap_reservations`: update ID, новый launch ID и
+previous launch ID уникальны и связаны внешними ключами. Reservation содержит
+Requested root0/BootstrapIntent и исходный supervisor Intent0. Общая transaction
+primitive сохраняет Intent/receipt/reservation и проверяет readback в одной SQL
+транзакции. Caller владеет COMMIT. Два live checkpoint до/после записи предназначены
+для будущей consuming factory; текущие SQL tests используют synthetic process data.
+Existing exact payload возвращается только как data, без checkpoint/spawn. Changed
+payload/parent/owner/helper path отвергается. Нет сериализуемого creation grant.
+
+Особое ревью: outgoing A→B ищется по previous_launch_id отдельно от incoming
+reservation, создавшей A. Один OR по всем трём полям смешал бы поколения и мешал
+B→C. Read API разрешает только update/child launch; regression сохраняет это правило.
+Будущая factory должна проверить actual pinned предыдущего keeper, а не вывести
+его exit из row. Максимум2 касается поколений, не Debian agents.
+
+Повышение schema не применяется к установленному worker. Новый fixed profile
+Bootstrap24To25 использует actual сохранённый Main31/24, сохраняет original selection
+и весь исторический граф. Current journal header frozen независимо: global epoch3
+после реального нового OS-owner, тогда как selected keeper остался epoch2. Нельзя
+их приравнивать или менять retained records. Новый backup и обе old24 init/status
+refusal проверяются на отдельной consistent SQLite copy; fresh bootstrap rows=0,
+cold view остаётся no-original-custody. Python reader сверяет exact frozen reference,
+rejects24 mutations; синтетические тесты/shape compatibility не являются Windows proof.
+
+Запуск: run-update-bootstrap-migration-native.py; readonly audit:
+verify-update-bootstrap-migration-native.py. Исходный Main31 task не replay.
+До получения native результата migration не объявлять проверенной на Windows.
+Следующий шаг — non-Clone/non-Serde known-COMMIT result, удерживающий actual file/
+process/Job pins и original attempt, затем actual authenticated worker→keeper,
+одна попытка CreateProcess/child independence/стабильный ready handoff.
+
+Проверки перед фиксацией source25:1033 workspace tests/17 ignored (default features),
+8 focused bootstrap после последних assertions, Linux/MSVC workspace all-target
+Clippy -D warnings, fmt/diff passed. Python migration observers13 tests passed;
+новый reader rejects24 mutations и offline проверяет форму actual Main31 records.
+Это последнее — только shape compatibility, не positive Windows migration proof.
+Debian free before full run13,972,213,760bytes, после Clippy10,587,123,712bytes;
+Windows/shared volume15,348,359,168bytes. Ничего в Windows не удалялось.

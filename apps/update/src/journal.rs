@@ -32,6 +32,8 @@ pub use activation_finalization::{
 mod activation_local;
 mod activation_service;
 mod activation_writer;
+mod bootstrap;
+pub use bootstrap::BootstrapReservation;
 mod build;
 mod build_report;
 mod candidate;
@@ -55,7 +57,7 @@ mod shutdown;
 mod source;
 mod state_backup;
 mod supervisor;
-pub const UPDATE_SCHEMA_VERSION: u32 = 24;
+pub const UPDATE_SCHEMA_VERSION: u32 = 25;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Driver {
     Lifecycle,
@@ -546,6 +548,7 @@ impl UpdateJournal {
             activation_lifetime::migrate(&tx)?;
             activation_finalization::migrate(&tx)?;
             keeper::migrate(&tx)?;
+            bootstrap::migrate(&tx)?;
         } else if (1..UPDATE_SCHEMA_VERSION).contains(&schema(&tx)?) {
             if migration_lock.is_none() {
                 return Err(fail(
@@ -634,6 +637,9 @@ impl UpdateJournal {
             }
             if schema(&tx)? == 23 {
                 keeper::migrate(&tx)?;
+            }
+            if schema(&tx)? == 24 {
+                bootstrap::migrate(&tx)?;
             }
             if info(&tx)?.owner_epoch != epoch {
                 return Err(fail(

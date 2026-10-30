@@ -1,17 +1,24 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
-**.204/main,2026-10-30: bootstrap intent model, schema всё ещё19/24.**
-[Текущее продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
-Journal-only BootstrapIntent связывает original keeper/новый Requested root/owner/
-source+files и old domain; пять portable tests passed, Linux/MSVC updater Clippy
-passed (последний basename-only test после Clippy). Это данные, не wire/grant.
-Далее durable reservation+supervisor admission/known-COMMIT permit, actual
-worker-to-keeper peer/one creation/stable bridge. Schema25 ещё не создаётся,
-bootstrap mutation/fresh-updater/два полноценных workflow/U2–U4 не готовы.
-Пользователь перезапустил рабочий0.2.0/source48: generationf9daa176, journal
-incarnation5a8eb173 прежний; обе связи.203/.204 connected, primary203, active0/errors=null.
-Простая команда Windows: runtime\winbridge-worker.exe --config
-runtime\winbridge-worker.multi-controller.json serve; encoded PS относится к gates.
+**.204/main,2026-10-30: атомарный bootstrap ledger, source worker19/updater25.**
+[План, границы и продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
+Immutable reservation и supervisor Intent сохраняются одной SQL-транзакцией;
+повтор возвращает только исторические данные, изменённый payload отклоняется.
+Контрольные точки до/после записи и readback откатывают обе части при ошибке.
+Исторический parent keeper сохраняет свой epoch; новый logical worker/owner и
+фиксированные helper/config/output identities привязаны к исходному Confirmed.
+Это ещё не live admission/known-COMMIT permit и не команда создания процесса.
+Проверки:1033 workspace tests/17 ignored (default features),8 focused после последних
+assertions, Linux/MSVC workspace all-target Clippy/fmt/diff passed; Python observers
+13 tests passed, включая24 negative mutations нового migration reader.
+В Windows подготовлен copy-only gate24→25 на архиве Main31 (global epoch3,
+исторический keeper2); исходный runtime/журнал не меняются. Native результат
+ещё не получен. Установленный worker0.2.0/source48 не менялся; после restart
+новый generationf9daa176, обе связи.203/.204 connected, active0/errors=null.
+Desktop не требуется; простой запуск — runtime\winbridge-worker.exe --config
+runtime\winbridge-worker.multi-controller.json serve.
+Далее non-Serde known-COMMIT permit/actual peer/files/Job checkpoints, затем
+one creation/child handoff/max2/fresh bridge/mixed schema/два workflow/U2–U4.
 
 **.204/main,2026-10-30: Main31/19/24 Windows passed.**
 Taskb1cfa7b0-57b5-457e-8296-56c7629a2496/run20261030-103611-811af539,

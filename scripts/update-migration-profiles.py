@@ -25,6 +25,11 @@ PROFILES = {
         task_prefix='native-main30-204-',
         reference_helper=('update-activation-keeper-migration-proof.py','reference_from_main30'),
         reference_audits=('finalizationNegativeAudits','nativeMarkerNegativeAudits')),
+    'Bootstrap24To25': dict(prefix='bootstrap', schemas=(25,24,24),
+        reference_report_kind='activation_keeper_main_native_gate',
+        task_prefix='native-main31-204-',
+        reference_helper=('update-activation-bootstrap-migration-proof.py','reference_from_main31'),
+        reference_audits=('keeperNegativeAudits','nativeMarkerNegativeAudits')),
 }
 
 

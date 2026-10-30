@@ -24,6 +24,7 @@ CREATE TABLE transitions(sequence INTEGER PRIMARY KEY AUTOINCREMENT,update_id TE
 CREATE TABLE activation_lifetime_records(id TEXT PRIMARY KEY);").unwrap();
     migrate(&c).unwrap();
     super::super::keeper::migrate(&c).unwrap();
+    super::super::bootstrap::migrate(&c).unwrap();
     c.execute(
         "INSERT INTO installation VALUES(1,?1,?2,?3,?4)",
         params![
@@ -385,7 +386,7 @@ fn schema22_copy_migration_preserves_root_history_and_refuses_live_owner() {
     };
     let saved = old.accept(&authority, &request, &request.expected).unwrap();
     drop(authority);
-    old.connection.execute_batch("DROP TABLE keeper_selections;DROP TABLE activation_finalization_history;DROP TABLE activation_finalization_records;DROP TABLE activation_finalization_intents;PRAGMA user_version=22;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+    old.connection.execute_batch("DROP TABLE bootstrap_reservations;DROP TABLE keeper_selections;DROP TABLE activation_finalization_history;DROP TABLE activation_finalization_records;DROP TABLE activation_finalization_intents;PRAGMA user_version=22;PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
     let before = old.info().unwrap();
     let lock = owner_lock(directory.path()).unwrap();
     assert_eq!(

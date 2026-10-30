@@ -263,7 +263,7 @@ fn schema23_copy_migration_preserves_root_epoch_backup_and_invents_no_keeper() {
     let saved = old.accept(&a, &request, &request.expected).unwrap();
     old.connection
         .execute_batch(
-            "DROP TABLE keeper_selections;PRAGMA user_version=23;PRAGMA wal_checkpoint(TRUNCATE);",
+            "DROP TABLE bootstrap_reservations;DROP TABLE keeper_selections;PRAGMA user_version=23;PRAGMA wal_checkpoint(TRUNCATE);",
         )
         .unwrap();
     let before = old.info().unwrap();
@@ -275,7 +275,7 @@ fn schema23_copy_migration_preserves_root_epoch_backup_and_invents_no_keeper() {
     fs2::FileExt::unlock(&a.lock).unwrap();
     let mut new = UpdateJournal::open(root.path(), &scope).unwrap();
     let after = new.info().unwrap();
-    assert_eq!(after.schema_version, 24);
+    assert_eq!(after.schema_version, UPDATE_SCHEMA_VERSION);
     assert_eq!(after.installation_id, before.installation_id);
     assert_eq!(after.owner_epoch, before.owner_epoch + 1);
     assert_eq!(after.last_sequence, before.last_sequence);
@@ -368,4 +368,230 @@ fn bootstrap_data_binds_the_historical_keeper_without_recreating_live_authority(
         supervisor::read(&f.c, &s.spec.launch_id).unwrap(),
         role.selected
     );
+}
+
+fn delegation_setup() -> (Fixture, crate::bootstrap::BootstrapIntent, SupervisorSpec) {
+    let (mut f, s, p, at) = setup();
+    let role = selected(&mut f, &s, &p, at).unwrap();
+    let crate::activation::finalization::ActivationFinalizationState::Confirmed { receipt } =
+        &role.finalization.state
+    else {
+        unreachable!()
+    };
+    let b = &role.finalization.command.binding;
+    let old = &b.lifetime_command.binding;
+    let mut intent = crate::bootstrap::tests::fixture();
+    intent.previous = keeper_binding_from_receipt(
+        old.update_id.clone(),
+        old.launch_id.clone(),
+        old.keeper.clone(),
+        old.job_name.clone(),
+        receipt,
+        Some(role.sha256().unwrap()),
+    );
+    intent.update.request.expected.installation_id = b.installation_id.clone();
+    intent.update.request.expected.scope_sha256 = b.scope_sha256.clone();
+    intent.update.request.expected.worker_build_id = receipt
+        .compatibility
+        .identity
+        .descriptor
+        .build
+        .build_id
+        .clone();
+    intent.update.request.expected.worker_config_sha256 =
+        receipt.compatibility.worker_config_sha256.clone();
+    intent.update.request.expected.baseline_manifest_sha256 = b.source_manifest_sha256.clone();
+    intent.parent_epoch = old.updater_epoch + 1;
+    intent.parent_owner_id = Uuid::new_v4().to_string();
+    intent.excluded_domain.host_id = old.compatibility.identity.process.host_id.clone();
+    intent.excluded_domain.session_id = old.compatibility.identity.process.session_id;
+    intent.update.accepted_at_ms = at + 1;
+    intent.update.updated_at_ms = at + 1;
+    intent.prepared_at_ms = at + 1;
+    f.a.epoch = intent.parent_epoch;
+    f.a.owner_id = intent.parent_owner_id.clone();
+    f.c.execute(
+        "UPDATE installation SET epoch=?1,owner=?2",
+        params![f.a.epoch as i64, f.a.owner_id],
+    )
+    .unwrap();
+    let raw = encode(&intent.update).unwrap();
+    let payload = encode(&intent.update.request).unwrap();
+    f.c.execute(
+        "INSERT INTO updates VALUES(?1,?2,?3,?4,?5,0,1,?6)",
+        params![
+            intent.update.update_id,
+            intent.update.request.idempotency_key,
+            payload,
+            crate::sha256(payload.as_bytes()),
+            encode(&UpdatePhase::Requested).unwrap(),
+            raw
+        ],
+    )
+    .unwrap();
+    append_transition(
+        &f.c,
+        &UpdateTransition {
+            sequence: 0,
+            update_id: intent.update.update_id.clone(),
+            revision: 0,
+            previous_phase: None,
+            phase: UpdatePhase::Requested,
+            occurred_at_ms: at + 1,
+            owner_epoch: f.a.epoch,
+            owner_id: f.a.owner_id.clone(),
+            command: None,
+        },
+        None,
+        &raw,
+    )
+    .unwrap();
+    let mut spec = s.spec;
+    spec.update_id = intent.update.update_id.clone();
+    spec.launch_id = intent.launch_id.clone();
+    spec.parent = intent.previous.worker.clone();
+    spec.parent_epoch = f.a.epoch;
+    spec.parent_owner_id = f.a.owner_id.clone();
+    spec.token_sha256 = intent.token_sha256.clone();
+    spec.image_sha256 = intent.image.sha256.clone();
+    spec.image_identity = intent.image.file_identity.clone();
+    spec.config_sha256 = intent.config.sha256.clone();
+    spec.config_path = format!("{}\\winbridge-update.local.json", spec.runtime_directory);
+    spec.image_path = format!(
+        "{}\\update\\{}\\supervisor\\winbridge-update.exe",
+        spec.runtime_directory, intent.update.update_id
+    );
+    spec.excluded_domain = Some(intent.excluded_domain.job_name.clone());
+    spec.accepted_at_ms = intent.prepared_at_ms;
+    let worker = spec.worker.as_mut().unwrap();
+    worker.process = intent.previous.worker.clone();
+    worker.generation = intent.previous.generation.clone();
+    worker.context = intent.previous.context.clone();
+    worker.build = receipt.compatibility.identity.descriptor.build.clone();
+    worker.config_sha256 = intent.update.request.expected.worker_config_sha256.clone();
+    (f, intent, spec)
+}
+#[test]
+fn bootstrap_reservation_and_supervisor_intent_commit_atomically_without_creation() {
+    let (mut f, intent, spec) = delegation_setup();
+    let tx = f.c.transaction().unwrap();
+    let mut checks = 0;
+    let saved = crate::journal::bootstrap::reserve(
+        &tx,
+        &f.a,
+        intent.clone(),
+        spec.clone(),
+        |_, ancestor| {
+            assert!(ancestor.is_none());
+            checks += 1;
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(checks, 2);
+    tx.commit().unwrap();
+    assert_eq!(
+        crate::journal::bootstrap::read(&f.c, &intent.launch_id).unwrap(),
+        Some(saved.clone())
+    );
+    assert_eq!(
+        supervisor::read(&f.c, &intent.launch_id).unwrap(),
+        saved.supervisor
+    );
+    assert_eq!(saved.supervisor.phase, SupervisorPhase::Intent);
+    assert!(saved.supervisor.process.is_none());
+    // Outgoing A->B must not masquerade as the reservation that created A.
+    // Otherwise a later B->C lookup can confuse generations and block progress.
+    assert!(
+        crate::journal::bootstrap::read(&f.c, &intent.previous.launch_id)
+            .unwrap()
+            .is_none()
+    );
+    let tx = f.c.transaction().unwrap();
+    let existing =
+        crate::journal::bootstrap::reserve(&tx, &f.a, intent.clone(), spec.clone(), |_, _| {
+            panic!("Existing data must not repeat an effect checkpoint")
+        })
+        .unwrap();
+    assert_eq!(existing, saved);
+    tx.commit().unwrap();
+    assert!(f
+        .c
+        .execute("UPDATE bootstrap_reservations SET record=record", [])
+        .is_err());
+    assert!(f
+        .c
+        .execute("DELETE FROM bootstrap_reservations", [])
+        .is_err());
+}
+#[test]
+fn bootstrap_failed_checkpoint_and_ignored_reservation_roll_back_supervisor_too() {
+    for fault in 0..4 {
+        let (mut f, intent, spec) = delegation_setup();
+        if fault == 0 {
+            f.c.execute_batch("CREATE TRIGGER ignore_bootstrap BEFORE INSERT ON bootstrap_reservations BEGIN SELECT RAISE(IGNORE);END;").unwrap();
+        }
+        if fault == 1 {
+            f.c.execute_batch("CREATE TRIGGER ignore_bootstrap_supervisor BEFORE INSERT ON supervisor_receipts BEGIN SELECT RAISE(IGNORE);END;").unwrap();
+        }
+        let tx = f.c.transaction().unwrap();
+        let mut checks = 0;
+        assert!(
+            crate::journal::bootstrap::reserve(&tx, &f.a, intent.clone(), spec, |_, _| {
+                checks += 1;
+                if checks == 2 {
+                    if fault == 2 {
+                        return Err("Original keeper lost after writes".into());
+                    }
+                    if fault == 3 {
+                        tx.execute("UPDATE installation SET epoch=epoch+1", [])
+                            .unwrap();
+                    }
+                }
+                Ok(())
+            })
+            .is_err()
+        );
+        drop(tx);
+        assert!(
+            matches!(supervisor::read(&f.c,&intent.launch_id),Err(e)if e.code==JournalErrorCode::NotFound)
+        );
+        assert!(
+            crate::journal::bootstrap::read(&f.c, &intent.update.update_id)
+                .unwrap()
+                .is_none()
+        );
+        assert!(!supervisor::active(&f.c).unwrap());
+    }
+}
+#[test]
+fn bootstrap_changed_payload_parent_or_current_root_cannot_get_another_reservation() {
+    let (mut f, intent, spec) = delegation_setup();
+    let tx = f.c.transaction().unwrap();
+    crate::journal::bootstrap::reserve(&tx, &f.a, intent.clone(), spec.clone(), |_, _| Ok(()))
+        .unwrap();
+    tx.commit().unwrap();
+    for fault in 0..5 {
+        let mut changed = intent.clone();
+        let mut next = spec.clone();
+        match fault {
+            0 => {
+                changed.token_sha256 = "a".repeat(64);
+                next.token_sha256 = changed.token_sha256.clone();
+            }
+            1 => changed.parent_epoch += 1,
+            2 => changed.previous.selection_sha256 = Some("0".repeat(64)),
+            3 => next.image_path = "K:\\other\\winbridge-update.exe".into(),
+            _ => {
+                changed.update.update_id = Uuid::new_v4().to_string();
+                changed.launch_id = Uuid::new_v4().to_string();
+                next.update_id = changed.update.update_id.clone();
+                next.launch_id = changed.launch_id.clone();
+            }
+        }
+        let tx = f.c.transaction().unwrap();
+        assert!(
+            crate::journal::bootstrap::reserve(&tx, &f.a, changed, next, |_, _| Ok(())).is_err()
+        );
+    }
 }

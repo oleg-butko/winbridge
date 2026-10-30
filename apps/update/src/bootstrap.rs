@@ -91,7 +91,8 @@ impl BootstrapIntent {
                 && self.update.phase == UpdatePhase::Requested
                 && self.update.revision == 0
                 && self.update.request.contract_version == 1
-                && self.update.reason.is_none(),
+                && self.update.reason.is_none()
+                && self.update.updated_at_ms == self.update.accepted_at_ms,
             "Bootstrap needs a new Requested root",
         )?;
         need(
@@ -160,6 +161,16 @@ impl BootstrapIntent {
         self.config.validate()?;
         // config is the UPDATER config, not the loaded worker config. Their hashes
         // are intentionally not equated; live validation pins each fixed file.
+        let files = [
+            &self.image.file_identity,
+            &self.config.file_identity,
+            &self.stdout_identity,
+            &self.stderr_identity,
+        ];
+        need(
+            (0..files.len()).all(|i| ((i + 1)..files.len()).all(|j| files[i] != files[j])),
+            "Bootstrap files alias",
+        )?;
         need(
             hash(&self.token_sha256, 64)
                 && text(&self.stdout_identity, 512)

@@ -192,7 +192,7 @@ CREATE TRIGGER keeper_selection_retained BEFORE DELETE ON keeper_selections BEGI
 PRAGMA user_version=24;
 "#).map_err(storage)
 }
-fn read(c: &Connection, id: &str) -> Result<Option<KeeperSelection>> {
+pub(super) fn read(c: &Connection, id: &str) -> Result<Option<KeeperSelection>> {
     let raw: Option<String> = c
         .query_row(
             "SELECT selection FROM keeper_selections WHERE launch_id=?1 OR update_id=?1",

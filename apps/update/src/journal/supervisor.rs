@@ -118,6 +118,58 @@ pub(super) fn stop_after_abort(c: &Connection, a: &UpdateAuthority, id: &str) ->
     next.reason = "Отмена до установки подтверждена; worker lease освобождена".into();
     persist(c, &old, &next)
 }
+/// Shared transaction primitive; caller owns COMMIT and all physical authority.
+pub(super) fn prepare(
+    c: &Connection,
+    a: &UpdateAuthority,
+    spec: SupervisorSpec,
+) -> Result<SupervisorRecord> {
+    check_authority(c, a)?;
+    if spec.parent_epoch != a.epoch
+        || spec.parent_owner_id != a.owner_id
+        || record(c, &spec.update_id)?.phase != UpdatePhase::Requested
+    {
+        return Err(fail(
+            JournalErrorCode::PreconditionsChanged,
+            "Supervisor needs current owner and Requested",
+        ));
+    }
+    let r = SupervisorRecord {
+        schema_version: 1,
+        updated_at_ms: spec.accepted_at_ms,
+        spec,
+        phase: SupervisorPhase::Intent,
+        revision: 0,
+        process: None,
+        owner_id: None,
+        owner_epoch: None,
+        reason: "Запуск отдельного updater подготовлен; файловые действия не разрешены".into(),
+    };
+    one(c
+        .execute(
+            "INSERT INTO supervisor_launches VALUES(?1,?2,?3,0,1,?4)",
+            params![
+                r.spec.update_id,
+                r.spec.launch_id,
+                encode(&r.spec)?,
+                encode(&r)?
+            ],
+        )
+        .map_err(storage)?)?;
+    one(c
+        .execute(
+            "INSERT INTO supervisor_receipts VALUES(?1,?2,?3)",
+            params![r.spec.launch_id, encode(&r.phase)?, encode(&r)?],
+        )
+        .map_err(storage)?)?;
+    if read(c, &r.spec.launch_id)? != r {
+        return Err(fail(
+            JournalErrorCode::Corrupt,
+            "Supervisor intent readback mismatch",
+        ));
+    }
+    Ok(r)
+}
 impl UpdateJournal {
     pub fn preparation_snapshot(
         directory: &Path,
@@ -595,50 +647,7 @@ impl UpdateJournal {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage)?;
-        check_authority(&tx, a)?;
-        if spec.parent_epoch != a.epoch
-            || spec.parent_owner_id != a.owner_id
-            || record(&tx, &spec.update_id)?.phase != UpdatePhase::Requested
-        {
-            return Err(fail(
-                JournalErrorCode::PreconditionsChanged,
-                "Supervisor needs current owner and Requested",
-            ));
-        }
-        let r = SupervisorRecord {
-            schema_version: 1,
-            updated_at_ms: spec.accepted_at_ms,
-            spec,
-            phase: SupervisorPhase::Intent,
-            revision: 0,
-            process: None,
-            owner_id: None,
-            owner_epoch: None,
-            reason: "Запуск отдельного updater подготовлен; файловые действия не разрешены".into(),
-        };
-        one(tx
-            .execute(
-                "INSERT INTO supervisor_launches VALUES(?1,?2,?3,0,1,?4)",
-                params![
-                    r.spec.update_id,
-                    r.spec.launch_id,
-                    encode(&r.spec)?,
-                    encode(&r)?
-                ],
-            )
-            .map_err(storage)?)?;
-        one(tx
-            .execute(
-                "INSERT INTO supervisor_receipts VALUES(?1,?2,?3)",
-                params![r.spec.launch_id, encode(&r.phase)?, encode(&r)?],
-            )
-            .map_err(storage)?)?;
-        if read(&tx, &r.spec.launch_id)? != r {
-            return Err(fail(
-                JournalErrorCode::Corrupt,
-                "Supervisor intent readback mismatch",
-            ));
-        }
+        let r = prepare(&tx, a, spec)?;
         tx.commit().map_err(storage)?;
         Ok(r)
     }

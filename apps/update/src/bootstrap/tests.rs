@@ -106,7 +106,7 @@ fn fixed_helper_names_and_canonical_hash_are_data_only() {
 }
 #[test]
 fn alias_stale_phase_source_rebind_clock_and_foreign_domain_are_refused() {
-    for fault in 0..14 {
+    for fault in 0..18 {
         let mut value = fixture();
         match fault {
             0 => value.launch_id = value.previous.launch_id.clone(),
@@ -122,7 +122,11 @@ fn alias_stale_phase_source_rebind_clock_and_foreign_domain_are_refused() {
             10 => value.excluded_domain.host_id = "0".repeat(64),
             11 => value.stdout_identity = value.stderr_identity.clone(),
             12 => value.update.request.source.archive_name = "../source.zip".into(),
-            _ => value.image.file_identity = value.config.file_identity.clone(),
+            13 => value.image.file_identity = value.config.file_identity.clone(),
+            14 => value.stdout_identity = value.image.file_identity.clone(),
+            15 => value.stderr_identity = value.config.file_identity.clone(),
+            16 => value.update.updated_at_ms += 1,
+            _ => value.config.file_identity = value.stdout_identity.clone(),
         }
         assert!(value.validate().is_err(), "fault {fault}");
         assert!(

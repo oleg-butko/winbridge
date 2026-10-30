@@ -38,6 +38,8 @@ struct Reference {
     controller_sha256: Option<String>,
     lifetime_sha256: Option<String>,
     finalization_sha256: Option<String>,
+    keeper_sha256: Option<String>,
+    current_journal: Option<UpdateJournalInfo>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -133,6 +135,7 @@ pub enum Profile {
     Lifetime21To22,
     Finalization22To23,
     Keeper23To24,
+    Bootstrap24To25,
 }
 impl Profile {
     fn source_schema(self) -> u32 {
@@ -142,6 +145,7 @@ impl Profile {
             Self::Lifetime21To22 => 21,
             Self::Finalization22To23 => 22,
             Self::Keeper23To24 => 23,
+            Self::Bootstrap24To25 => 24,
         }
     }
     fn target_schema(self) -> u32 {
@@ -170,6 +174,7 @@ impl Profile {
                 "activation_finalization_history",
             ],
             Self::Keeper23To24 => &["keeper_selections"],
+            Self::Bootstrap24To25 => &["bootstrap_reservations"],
         }
     }
     fn kind(self) -> &'static str {
@@ -179,6 +184,7 @@ impl Profile {
             Self::Lifetime21To22 => "activation_schema21_reference",
             Self::Finalization22To23 => "activation_schema22_reference",
             Self::Keeper23To24 => "activation_schema23_reference",
+            Self::Bootstrap24To25 => "activation_schema24_reference",
         }
     }
     fn environment(self) -> &'static str {
@@ -188,6 +194,7 @@ impl Profile {
             Self::Lifetime21To22 => "WINBRIDGE_LIFETIME_MIGRATION_INPUT",
             Self::Finalization22To23 => "WINBRIDGE_FINALIZATION_MIGRATION_INPUT",
             Self::Keeper23To24 => "WINBRIDGE_KEEPER_MIGRATION_INPUT",
+            Self::Bootstrap24To25 => "WINBRIDGE_BOOTSTRAP_MIGRATION_INPUT",
         }
     }
 }
@@ -349,7 +356,7 @@ pub fn run(profile: Profile) {
     }
     let retained_finalization =
         UpdateJournal::inspect_activation_finalization(&source, &r.update_id).unwrap();
-    if profile == Profile::Keeper23To24 {
+    if profile.source_schema() >= 23 {
         let fact = retained_finalization
             .as_ref()
             .expect("Actual23 finalization missing");
@@ -367,6 +374,45 @@ pub fn run(profile: Profile) {
     } else {
         assert!(retained_finalization.is_none() && r.finalization_sha256.is_none());
     }
+    let retained_keeper = if profile == Profile::Bootstrap24To25 {
+        assert_eq!(r.current_journal.as_ref(), Some(&before));
+        let c = Connection::open_with_flags(
+            source.join("updates.sqlite"),
+            OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        let raw: String = c
+            .query_row(
+                "SELECT selection FROM keeper_selections WHERE update_id=?1",
+                [&r.update_id],
+                |v| v.get(0),
+            )
+            .unwrap();
+        let keeper: winbridge_update::journal::KeeperSelection =
+            serde_json::from_str(&raw).unwrap();
+        keeper.validate().unwrap();
+        assert_eq!(
+            UpdateJournal::inspect_supervisor(&source, &keeper.selected.spec.launch_id).unwrap(),
+            keeper.selected
+        );
+        assert!(
+            keeper.selected.owner_epoch.unwrap() < before.owner_epoch,
+            "Main31 acquired a later owner; never relabel the historical keeper epoch"
+        );
+        assert_eq!(
+            r.keeper_sha256,
+            Some(sha256(
+                &winbridge_protocol::canonical_evidence_json(
+                    &serde_json::to_value(&keeper).unwrap()
+                )
+                .unwrap()
+            ))
+        );
+        Some(keeper)
+    } else {
+        assert!(r.keeper_sha256.is_none() && r.current_journal.is_none());
+        None
+    };
     let activation_value = serde_json::to_value(&activation).unwrap();
     assert_eq!(
         sha256(&winbridge_protocol::canonical_evidence_json(&activation_value).unwrap()),
@@ -376,7 +422,7 @@ pub fn run(profile: Profile) {
     let root_value = serde_json::to_value(parent.1.as_ref().unwrap()).unwrap();
     assert_eq!(
         parent.1.as_ref().unwrap().phase,
-        if profile == Profile::Keeper23To24 {
+        if profile.source_schema() >= 23 {
             winbridge_protocol::update::UpdatePhase::Committed
         } else if profile == Profile::Service19To20 {
             winbridge_protocol::update::UpdatePhase::VerifyingLocal
@@ -468,6 +514,12 @@ pub fn run(profile: Profile) {
         UpdateJournal::inspect_activation_finalization(&copy, &r.update_id).unwrap(),
         retained_finalization
     );
+    if let Some(keeper) = &retained_keeper {
+        assert_eq!(
+            UpdateJournal::inspect_supervisor(&copy, &keeper.selected.spec.launch_id).unwrap(),
+            keeper.selected
+        );
+    }
     let rows_after = rows(&inspected, profile);
     assert_eq!(rows_after, rows_before);
     let query = profile
@@ -570,7 +622,7 @@ pub fn run(profile: Profile) {
             "Retained21 metadata must not become a current22 receiver snapshot"
         );
     }
-    let cold_resident = if profile == Profile::Keeper23To24 {
+    let cold_resident = if profile.source_schema() >= 23 {
         assert_eq!(
             UpdateJournal::inspect_activation_finalization(&copy, &r.update_id).unwrap(),
             retained_finalization
@@ -665,6 +717,7 @@ pub fn run(profile: Profile) {
         Profile::Lifetime21To22 => "activation_lifetime_schema_migration_proof",
         Profile::Finalization22To23 => "activation_finalization_schema_migration_proof",
         Profile::Keeper23To24 => "activation_keeper_schema_migration_proof",
+        Profile::Bootstrap24To25 => "activation_bootstrap_schema_migration_proof",
     };
     let mut proof = serde_json::json!({"schemaVersion":1,"kind":proof_kind,"passed":true,"platform":"windows","build":winbridge_protocol::build_identity(),
         "referenceProofSha256":r.proof_sha256,"referenceReportSha256":r.report_sha256,"referenceImage":r.image,"referenceManifestSha256":r.manifest_sha256,
@@ -688,6 +741,16 @@ pub fn run(profile: Profile) {
         proof["oldControllerReceiverRefused"] = true.into();
         proof["retainedService"] = serde_json::to_value(&retained_service).unwrap();
         proof["retainedController"] = serde_json::to_value(&retained_controller).unwrap();
+    } else if profile == Profile::Bootstrap24To25 {
+        proof["oldTwentyFourInitRefused"] = true.into();
+        proof["oldTwentyFourStatusRefused"] = true.into();
+        proof["noFreshBootstrapReservation"] = true.into();
+        proof["retainedService"] = serde_json::to_value(&retained_service).unwrap();
+        proof["retainedController"] = serde_json::to_value(&retained_controller).unwrap();
+        proof["retainedLifetime"] = serde_json::to_value(&retained_lifetime).unwrap();
+        proof["retainedFinalization"] = serde_json::to_value(&retained_finalization).unwrap();
+        proof["retainedKeeper"] = serde_json::to_value(&retained_keeper).unwrap();
+        proof["coldFinalization"] = serde_json::to_value(&cold_resident).unwrap();
     } else if profile == Profile::Keeper23To24 {
         proof["oldTwentyThreeInitRefused"] = true.into();
         proof["oldTwentyThreeStatusRefused"] = true.into();
@@ -725,6 +788,7 @@ fn wrong_fixed_profile_refuses_before_loading_reference_or_touching_runtime() {
         Profile::Lifetime21To22,
         Profile::Finalization22To23,
         Profile::Keeper23To24,
+        Profile::Bootstrap24To25,
     ] {
         if UPDATE_SCHEMA_VERSION != profile.target_schema() {
             let error = std::panic::catch_unwind(|| run(profile))

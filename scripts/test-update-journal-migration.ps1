@@ -3,7 +3,7 @@
 Verify one fixed-profile retained journal migration on a copy; never install or launch a worker.
 #>
 param(
-  [Parameter(Mandatory)][ValidateSet('Service19To20','Controller20To21','Lifetime21To22','Finalization22To23','Keeper23To24')][string]$Profile,
+  [Parameter(Mandatory)][ValidateSet('Service19To20','Controller20To21','Lifetime21To22','Finalization22To23','Keeper23To24','Bootstrap24To25')][string]$Profile,
   [Parameter(Mandatory)][string]$SourceDirectory,
   [Parameter(Mandatory)][string]$SourceArchiveSha256,
   [Parameter(Mandatory)][string]$ReferenceFile,
@@ -19,6 +19,7 @@ $case=switch -Exact ($Profile) {
   'Lifetime21To22' {@{profile='Lifetime21To22';schema=22;referenceKind='activation_schema21_reference';reportKind='activation_lifetime_migration_native_gate';target='activation_lifetime_migration';test='actual_twenty_one_controller_history_survives_twenty_two_and_old_twenty_one_refuses';environment='WINBRIDGE_LIFETIME_MIGRATION_INPUT';prefix='lifetime';proof='activation-lifetime-migration-proof.json'}}
   'Finalization22To23' {@{profile='Finalization22To23';schema=23;referenceKind='activation_schema22_reference';reportKind='activation_finalization_migration_native_gate';target='activation_finalization_migration';test='actual_twenty_two_lifetime_history_survives_twenty_three_and_old_twenty_two_refuses';environment='WINBRIDGE_FINALIZATION_MIGRATION_INPUT';prefix='finalization';proof='activation-finalization-migration-proof.json'}}
   'Keeper23To24' {@{profile='Keeper23To24';schema=24;referenceKind='activation_schema23_reference';reportKind='activation_keeper_migration_native_gate';target='activation_keeper_migration';test='actual_twenty_three_finalization_survives_twenty_four_and_old_twenty_three_refuses';environment='WINBRIDGE_KEEPER_MIGRATION_INPUT';prefix='keeper';proof='activation-keeper-migration-proof.json'}}
+  'Bootstrap24To25' {@{profile='Bootstrap24To25';schema=25;referenceKind='activation_schema24_reference';reportKind='activation_bootstrap_migration_native_gate';target='activation_bootstrap_migration';test='actual_twenty_four_keeper_history_survives_twenty_five_without_bootstrap_adoption';environment='WINBRIDGE_BOOTSTRAP_MIGRATION_INPUT';prefix='bootstrap';proof='activation-bootstrap-migration-proof.json'}}
   default {throw 'Unknown fixed migration profile'}
 }
 $Profile=$case.profile
