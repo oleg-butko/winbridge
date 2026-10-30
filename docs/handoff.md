@@ -11,7 +11,12 @@ PreparedBootstrapFiles::admit связывает original pins, fresh keeper cap
 nonblocking own-state callback и known SQL COMMIT. Ошибка держит исходные ресурсы,
 Existing только data; это ещё не keeper creation eligibility/spawn.
 446 updater tests/7 ignored,15 focused, Linux/MSVC updater all-target Clippy passed;
-Windows file-sharing unit подготовлена, native результата пока нет. Own-mode
+Windows file-sharing unit passed:sourceec0885e,run20261030-213510-ab939497,
+task797e7899-1649-4f65-b749-ad7dbe8ec914.4 ready files twice/24 negative audits.
+Fresh exe queried/copied, config/image writes/replace blocked, output writer allowed,
+pins retired→config write+replace works. Synthetic worker state, no coordinator.
+Reporte903ce75e9a92cada9221cda02e0b775d67c5c8d04d7ce1e9111c8542f0541fe,
+proof6448d09da211f5713465c1cf9d0b1cd6f7296403c8d6234d914d0f64b5682073. Own-mode
 callback пока не подключён к worker, ancestry/one creation/ready handoff впереди.
 Установленный worker не менялся. Далее actual minimal keeper launch, не повторять
 разработку intent/known commit/probe; fresh helper подготовлен этим source участком.

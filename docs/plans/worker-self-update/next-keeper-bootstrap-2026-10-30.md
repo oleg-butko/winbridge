@@ -441,3 +441,30 @@ old Keeper выходит по known next ready+old worker exited+same Job empty
 Normal direct-in-external-Job worker guard сохраняется. Для same-SDK использовать
 existing supervisor protocol; stable future-SDK ready/worker bridge и migration
 с epoch jump остаются отдельным обязательным gate до U4.
+
+## Native fresh-helper file-sharing unit — passed
+
+Sourceec0885e,run20261030-213510-ab939497,
+task797e7899-1649-4f65-b749-ad7dbe8ec914. Original source export создан18:44UTC;
+после возобновления goal actual task отправлен21:35UTC, не replay. Archive
+winbridge-20261030T184417Z-ec0885e-1368cd2d.zip,
+SHA030650bca9895b47d90036903ac8e98a279b86e85b7d16f3065bb11ae86f862e.
+
+Actual clean updater --artifact-info queried, fresh helper SHA equal; отдельный
+old installed sentinel остался неизменным. Exe/updater config/worker config writes
+blocked, updater config atomic replace blocked, intended output append allowed/
+output rename blocked; после Drop pins config write+same replace succeeded. Root0
+unchanged, supervisor/reservation отсутствуют, coordinator не создан. Worker state
+synthetic: liveAdmissionProved=false/bootstrapCreationProved=false. Consuming
+admission/normal-mode/keeper launch не считать проверенными этим unit.
+
+4 ready files verified twice/24 negative audits. Report SHA256
+e903ce75e9a92cada9221cda02e0b775d67c5c8d04d7ce1e9111c8542f0541fe;
+proof6448d09da211f5713465c1cf9d0b1cd6f7296403c8d6234d914d0f64b5682073.
+Cargo build59.710s, selected unit command73.041s (включая compilation).
+Windows15,741,677,568→15,475,306,496bytes. Metadata
+`.winbridge/update-preparation/bootstrap-files-20261030-213510-ab939497/`;
+log `.winbridge/keeper-stage-review-204/bootstrap-files-native-run.log`.
+Installed worker unchanged; оставить запущенным, desktop не нужен/окон нет.
+Windows directories не удалялись. Следующий effect: actual keeper one-attempt
+launch с query-only outside BOTH Jobs и actual ancestry exit, Spawned/ready/handoff.
