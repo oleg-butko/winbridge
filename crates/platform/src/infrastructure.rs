@@ -99,6 +99,25 @@ impl PinnedProcess {
     /// Query-only membership in an existing Job. Never create a Job, retain a
     /// child-side Job handle, alter limits, or infer ownership from its name.
     pub fn require_job_membership(&self, name: &str) -> io::Result<()> {
+        if !self.job_membership(name)? {
+            return Err(io::Error::other(
+                "Pinned process is outside the original activation Job",
+            ));
+        }
+        Ok(())
+    }
+    /// Negative membership in a specific EXISTING Job. This is a live kernel
+    /// observation only, never a spawn grant. Missing/denied Jobs, unsupported
+    /// platforms and process exit remain errors, not evidence of exclusion.
+    pub fn require_outside_job(&self, name: &str) -> io::Result<()> {
+        if self.job_membership(name)? {
+            return Err(io::Error::other(
+                "Pinned process is inside the excluded Job",
+            ));
+        }
+        Ok(())
+    }
+    fn job_membership(&self, name: &str) -> io::Result<bool> {
         self.require_live()?;
         #[cfg(windows)]
         {
@@ -127,13 +146,9 @@ impl PinnedProcess {
             {
                 return Err(io::Error::last_os_error());
             }
-            if member == 0 {
-                return Err(io::Error::other(
-                    "Pinned process is outside the original activation Job",
-                ));
-            }
             drop(job);
-            self.require_live()
+            self.require_live()?;
+            Ok(member != 0)
         }
         #[cfg(not(windows))]
         {
@@ -428,6 +443,11 @@ mod tests {
     #[test]
     fn windows_process_pin_never_claims_exit_on_an_unsupported_platform() {
         assert!(PinnedProcess::live(&stamp(std::process::id()).unwrap()).is_err());
+        let pin = PinnedProcess {
+            identity: stamp(std::process::id()).unwrap(),
+        };
+        assert!(pin.require_outside_job("unsupported").is_err());
+        assert!(pin.require_job_membership("unsupported").is_err());
     }
     #[cfg(windows)]
     #[test]
@@ -460,12 +480,25 @@ mod tests {
         assert!(!pin.exited().unwrap());
         let job = child.identity().unwrap().job_name.clone();
         pin.require_job_membership(&job).unwrap();
+        assert!(pin.require_outside_job(&job).is_err());
         assert!(pin
             .require_job_membership(&format!(
                 "Global\\WinBridge-Missing-{}-{}",
                 identity.process_id, identity.birth
             ))
             .is_err());
+        assert!(pin
+            .require_outside_job(&format!(
+                "Global\\WinBridge-Missing-{}-{}",
+                identity.process_id, identity.birth
+            ))
+            .is_err());
+        for invalid in ["", "invalid\0job"] {
+            assert!(pin.require_outside_job(invalid).is_err());
+        }
+        let parent = PinnedProcess::live(&stamp(std::process::id()).unwrap()).unwrap();
+        parent.require_outside_job(&job).unwrap();
+        assert!(parent.require_job_membership(&job).is_err());
         // Query failure does not alter the original membership or limits.
         pin.require_job_membership(&job).unwrap();
         child.resume().unwrap();
@@ -477,6 +510,10 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         assert!(pin.require_live().is_err());
+        assert!(
+            pin.require_outside_job(&job).is_err(),
+            "An exited pin is not outside-job evidence"
+        );
         assert!(PinnedProcess::live(&identity).is_err());
         while child.try_wait().unwrap().is_none() {
             assert!(Instant::now() < until);

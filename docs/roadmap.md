@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: Main31/19/24 выполняется (run20261030-103611-811af539), не replay.
+Начат [next keeper bootstrap](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
+exact query-only outside-Job primitive/portable tests/MSVC Clippy готовы;
+отдельный native gate подготовлен, не выполнялся. Durable delegation/max2/fresh
+schema negotiation не реализованы, install off; installed worker прежний.
+
 2026-10-30/.204: source19/24 реализует original coordinator→keeper retirement,
 writer close до release authority, минимальный keeper-control1/без idle polling.
 1043 tests/17 ignored и Linux/MSVC Clippy passed. [Контракт/ревью](plans/worker-self-update/keeper-runtime-2026-10-30.md).

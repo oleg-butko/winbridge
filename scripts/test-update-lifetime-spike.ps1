@@ -3,7 +3,8 @@ param(
   [Parameter(Mandatory)][string]$SourceDirectory,
   [Parameter(Mandatory)][string]$SourceArchiveSha256,
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
-  [Parameter(Mandatory)][string]$ReportDirectory
+  [Parameter(Mandatory)][string]$ReportDirectory,
+  [switch]$BootstrapExclusion
 )
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
@@ -15,6 +16,7 @@ $source=[IO.Path]::GetFullPath($SourceDirectory);$work=Split-Path $source -Paren
 if(Test-Path -LiteralPath $ReportDirectory){throw 'Existing lifetime report preserved'}
 New-Item -ItemType Directory -Path $ReportDirectory|Out-Null
 $spikeReport=[ordered]@{schemaVersion=1;kind='activation_lifetime_keeper_native_gate';platform='windows';passed=$false;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;installedRuntimeApplied=$false;windowsOpened=$false;networkStarted=$false;error=$null;commands=@();storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
+if($BootstrapExclusion){$spikeReport.kind='activation_bootstrap_exclusion_native_gate'}
 $lease=$null;$location=Get-Location
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_LIFETIME_SPIKE_INPUT
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP
@@ -46,8 +48,11 @@ try {
     @{name='two-generation';test='resident_keeper_launches_next_updater_outside_old_worker_job_without_breakaway'},
     @{name='keeper-loss';test='keeper_process_loss_kills_waiting_worker_without_recovery_or_limit_changes'}
   )
+  if($BootstrapExclusion){$spikeCases=@(@{name='pinned-process-exclusion';exact='infrastructure::tests::pinned_process_requires_exact_live_identity_and_observes_owned_exit'})+$spikeCases}
   foreach($spikeCase in $spikeCases){
-    $arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',('lifetime_spike::'+$spikeCase.test),'--ignored','--test-threads=1','--nocapture')
+    $arguments=@()
+    if(-not $spikeCase.ContainsKey('exact')){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',('lifetime_spike::'+$spikeCase.test),'--ignored','--test-threads=1','--nocapture')}
+    if($spikeCase.ContainsKey('exact')){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',$spikeCase.exact,'--test-threads=1','--nocapture')}
     $started=[DateTimeOffset]::UtcNow;$log=$spikeCase.name+'.log'
     Write-Output ("Lifetime OS experiment: "+$spikeCase.name+"; installed worker stays active; no windows or networking")
     & cargo @arguments 2>&1|Tee-Object -FilePath (Join-Path $ReportDirectory $log)|Out-Host
@@ -56,7 +61,7 @@ try {
     if($code -ne 0){throw ('Lifetime experiment failed: '+$spikeCase.name+'; preserve original cases')}
     $text=Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw
     if($text -notmatch 'test result: ok\. 1 passed; 0 failed; 0 ignored;'){throw 'Exact native experiment was not selected'}
-    Assert-SessionFile (Join-Path $casesRoot ($spikeCase.name+'/proof.json'))
+    if(-not $spikeCase.ContainsKey('exact')){Assert-SessionFile (Join-Path $casesRoot ($spikeCase.name+'/proof.json'))}
   }
   $spikeReport.passed=$true
 } catch {$spikeReport.error=$_.Exception.Message}

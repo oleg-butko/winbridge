@@ -239,6 +239,13 @@ fn old_keeper(root: &Path, meta: &Value) {
     assert_eq!(requested["requester"], old["process"]);
     let domain =
         ExecutionDomain::open(&serde_json::from_value(old["domain"].clone()).unwrap()).unwrap();
+    // Production query primitive checks the actual spawner before CreateProcess.
+    // The independent test-only member() observations remain the second oracle.
+    let parent = PinnedProcess::live(&own()).unwrap();
+    parent.require_outside_job(&name(meta, "old")).unwrap();
+    parent
+        .require_outside_job(&domain.identity().job_name)
+        .unwrap();
     let cmd = command(root, "new-keeper");
     let mut next = InfrastructureChild::spawn(
         Path::new(&cmd.executable),
@@ -257,6 +264,11 @@ fn old_keeper(root: &Path, meta: &Value) {
         Some(&domain),
     )
     .unwrap();
+    let pinned_next = PinnedProcess::live(&next.identity).unwrap();
+    pinned_next.require_outside_job(&name(meta, "old")).unwrap();
+    pinned_next
+        .require_outside_job(&domain.identity().job_name)
+        .unwrap();
     // The recipient becomes independent BEFORE a command can be accepted.
     // Lost readiness evidence must not revoke an accepted next generation.
     next.detached();

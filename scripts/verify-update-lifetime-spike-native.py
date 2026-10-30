@@ -14,11 +14,13 @@ def load(name,file):
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 
-def verify(run_info,archive):
+def verify(run_info,archive,*,bootstrap=False):
     c=load('keeper_proof','update-lifetime-spike-proof.py')
     health=load('keeper_pin','validate-update-health-actor-native.py')
     reader=load('keeper_ready','summarize-update-timings.py')
     local=run_info.resolve().parent;meta=c.decode(run_info.read_bytes());source=health.archive_pin(archive)
+    namespace='bootstrap-exclusion' if bootstrap else 'lifetime-spike'
+    if bootstrap:c.need(meta.get('bootstrapExclusion') is True,'Explicit bootstrap exclusion profile required')
     c.need(meta['source']==source and re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}',meta['run']),'Saved source/run changed')
     c.need(Path(meta['reportDirectory'])==Path('/mnt/hgfs/shared/WinBridge/workflow-validation')/meta['run']/'result','Wrong report namespace')
     raw=(local/'request.json').read_bytes();c.need(hashlib.sha256(raw).hexdigest()==meta['requestSha256'],'Request changed')
@@ -29,21 +31,25 @@ def verify(run_info,archive):
         and ack['outcome']=='responded' and ack['response']['kind']=='task' and task['taskId']==ack['response']['task']['taskId']
         and task['status']=='succeeded' and type(task['exitCode'])is int and task['exitCode']==0
         and task['submission']==request['request']['request']
-        and task['submission']['idempotencyKey']=='native-lifetime-spike-'+meta['run']
+        and task['submission']['idempotencyKey']=='native-'+namespace+'-'+meta['run']
         and task['submission']['projectId']=='snapshot-fixture','Wrong terminal task/context')
     project=next(p for p in before['projects']if p['id']=='snapshot-fixture')
-    base=str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/('tmp-lifetime-spike-'+meta['run'])/'cases')
+    base=str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/('tmp-'+namespace+'-'+meta['run'])/'cases')
     c.need(meta['windowsBase']==base,'Wrong case namespace')
     files=reader.verified_files(Path(meta['reportDirectory']));report=c.decode(files['report.json'])
-    c.need(report['kind']=='activation_lifetime_keeper_native_gate' and report['passed']is True and report['error']is None
+    c.need(report['kind']==('activation_bootstrap_exclusion_native_gate' if bootstrap else 'activation_lifetime_keeper_native_gate') and report['passed']is True and report['error']is None
         and report['sourceCommit']==source['sourceCommit'] and report['sourceArchiveSha256']==source['archiveSha256']
         and report['sourceManifestSha256']==source['manifestSha256'] and report['platform']=='windows'
         and all(report[k]is False for k in ('runtimeApplied','installedRuntimeApplied','windowsOpened','networkStarted')),'Wrong native report')
-    c.need(len(report['commands'])==2,'Wrong native command count')
-    for command,mode in zip(report['commands'],c.MODES):
+    c.need(len(report['commands'])==(3 if bootstrap else 2),'Wrong native command count')
+    if bootstrap:
+        command=report['commands'][0]
+        load('bootstrap_selector','update-bootstrap-exclusion-proof.py').selection(command,files[command['log']].decode('utf-8-sig'))
+    for command,mode in zip(report['commands'][1:] if bootstrap else report['commands'],c.MODES):
         c.need(command['name']==mode and command['log']==mode+'.log','Wrong command order/log')
         c.selection(command,files[command['log']].decode('utf-8-sig'),mode)
     result=c.audit(files,source,base)
+    if bootstrap:result.update(bootstrapExclusionProved=True,keeperRuntimeProved=False)
     for info in (before,after):c.integer(info['activeTaskCount'])
     c.need(before['build']==after['build'] and before['generation']==after['generation']
         and after['fencedRequests']['context']==context and before['activeTaskCount']==after['activeTaskCount']==0

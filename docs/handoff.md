@@ -1,5 +1,17 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: Main31 выполняется, не replay.**
+Taskb1cfa7b0-57b5-457e-8296-56c7629a2496/run20261030-103611-811af539,
+producerd5a7bab→target830ccb9, profile19/24. Наблюдение:
+`.winbridge/keeper-stage-review-204/main31-native-run.log`; run-info в
+`.winbridge/update-preparation/main31-204-20261030-103611-811af539/`.
+Пока actual keeper proof не заявлен. Installed worker оставить, desktop не нужен.
+Параллельно начат [next-keeper bootstrap](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
+query-only exact outside-Job primitive и усиленные OS tests/отдельный native gate.
+Linux3/1 ignored и Linux/MSVC platform Clippy, Python3 selector/8 old reader tests
+passed. Новый primitive на Windows ещё не выполнялся; gate запускать после Main31.
+Bootstrap protocol/durable delegation/max2 ещё не реализованы; source остаётся19/24.
+
 **.204/main,2026-10-30: keeper retirement в source19/24; native23→24 passed, Main31 впереди.**
 [Ресурсы, ревью гонки, проверки и продолжение](plans/worker-self-update/keeper-runtime-2026-10-30.md).
 Original Confirmed guard → fresh Active → immutable role selection/known COMMIT →

@@ -20,12 +20,13 @@ def load(name,file):
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 
-def main():
+def main(bootstrap=False):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source-archive',required=True,type=Path)
     parser.add_argument('--cache-run',required=True)
     parser.add_argument('--controller-config',required=True,type=Path)
     args=parser.parse_args()
+    namespace="bootstrap-exclusion" if bootstrap else "lifetime-spike"
     checks=load('lifetime_checks','update-lifetime-spike-proof.py')
     native=load('lifetime_rpc','validate-workflow-native.py')
     health=load('lifetime_source','validate-update-health-actor-native.py')
@@ -40,10 +41,10 @@ def main():
                 and not before.get('maintenanceError') and not before.get('journalRecoveryRequired'),'Healthy idle installed worker required')
     project=next(p for p in before['projects'] if p['id']=='snapshot-fixture')
     run=time.strftime('%Y%m%d-%H%M%S',time.gmtime())+'-'+uuid.uuid4().hex[:8]
-    local=ROOT/'.winbridge/update-preparation'/('lifetime-spike-'+run);local.mkdir(parents=True)
+    local=ROOT/'.winbridge/update-preparation'/(namespace+'-'+run);local.mkdir(parents=True)
     report=Path('/mnt/hgfs/shared/WinBridge/workflow-validation')/run
     report.mkdir()
-    work=PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/('tmp-lifetime-spike-'+run)
+    work=PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/('tmp-'+namespace+'-'+run)
     cache=PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/args.cache_run
     archive=PureWindowsPath('K:/VMs/shared')/args.source_archive.resolve().relative_to('/mnt/hgfs/shared')
     peer=PureWindowsPath('K:/VMs/shared/WinBridge/workflow-validation')/run/'result'
@@ -57,18 +58,18 @@ New-Item -ItemType Directory -Path $work|Out-Null
 [IO.File]::Copy($archive,(Join-Path $work 'source.zip'),$false)
 if((Get-FileHash -LiteralPath (Join-Path $work 'source.zip') -Algorithm SHA256).Hash.ToLowerInvariant() -cne {ps(pin['archiveSha256'])}){{throw 'Local archive copy differs before extraction'}}
 Expand-Archive -LiteralPath (Join-Path $work 'source.zip') -DestinationPath $work
-& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $work 'winbridge/scripts/test-update-lifetime-spike.ps1') -SourceDirectory (Join-Path $work 'winbridge') -SourceArchiveSha256 {ps(pin['archiveSha256'])} -ValidationCacheDirectory {ps(str(cache))} -ReportDirectory {ps(str(peer))}
+& pwsh.exe -NoProfile -NonInteractive -File (Join-Path $work 'winbridge/scripts/test-update-lifetime-spike.ps1') -SourceDirectory (Join-Path $work 'winbridge') -SourceArchiveSha256 {ps(pin['archiveSha256'])} -ValidationCacheDirectory {ps(str(cache))} -ReportDirectory {ps(str(peer))}{' -BootstrapExclusion' if bootstrap else ''}
 exit $LASTEXITCODE
 '''
     context=before['fencedRequests']['context']
     submission=dict(protocolVersion=1,requestId=str(uuid.uuid4()),projectId=project['id'],
-        idempotencyKey='native-lifetime-spike-'+run,timeoutMs=900000,
+        idempotencyKey='native-'+namespace+'-'+run,timeoutMs=900000,
         command=dict(kind='direct',executable='pwsh.exe',arguments=['-NoProfile','-NonInteractive','-Command',script],workingDirectory='.'))
     request=dict(requestContractVersion=2,context=context,request=dict(method='submit',request=submission))
     common.write_new(local/'request.json',request);common.write_new(local/'info-before.json',before)
     common.write_new(local/'run-info.json',dict(run=run,source=pin,reportDirectory=str(report/'result'),
         windowsBase=str(work/'cases'),debianFreeBytesBefore=free,
-        requestSha256=hashlib.sha256((local/'request.json').read_bytes()).hexdigest()))
+        requestSha256=hashlib.sha256((local/'request.json').read_bytes()).hexdigest(),**({'bootstrapExclusion':True} if bootstrap else {})))
     # The same saved context/key is the only continuation source on unknown ACK.
     reply=common.submit_fenced(native,ep,request);common.write_new(local/'acceptance.json',reply)
     checks.need(reply.get('requestContractVersion')==2 and reply.get('context')==context
@@ -91,7 +92,7 @@ exit $LASTEXITCODE
     common.write_new(local/'terminal.json',task)
     after=native.call(ep,dict(method='info'))['info'];common.write_new(local/'info-after.json',after)
     checks.need(task['status']=='succeeded' and task['exitCode']==0,'OS spike failed; retain original artifacts and diagnose')
-    result=subprocess.run([sys.executable,str(ROOT/'scripts/verify-update-lifetime-spike-native.py'),
+    result=subprocess.run([sys.executable,str(ROOT/'scripts'/('verify-update-bootstrap-exclusion-native.py' if bootstrap else 'verify-update-lifetime-spike-native.py')),
         '--run-info',str(local/'run-info.json'),'--source-archive',str(args.source_archive)],capture_output=True,text=True)
     (local/'independent-audit.stdout').write_text(result.stdout);(local/'independent-audit.stderr').write_text(result.stderr)
     checks.need(result.returncode==0,'Independent OS spike audit refused; re-read retained evidence, no Windows replay')
