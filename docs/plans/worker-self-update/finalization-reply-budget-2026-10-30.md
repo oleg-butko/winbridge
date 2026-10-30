@@ -50,3 +50,8 @@ Linux/MSVC workspace all-target Clippy/update-validation, contracts/fmt/diff pas
 есть соседний incomplete V8 frame: он закрывается по прежним10s, в то время как
 accepted reply остаётся жив. Усиленный вариант passed:1 test,10.23s, оба IPC условия проверены. До нового native green
 не объявлять config/task/keeper доказанными.
+
+
+Clean producer pin: `15d0b982079a0aecb1ab8cb37ffbcca5cecd7b45`, `winbridge-20261030T093705Z-15d0b98-c743b0f8.zip`,
+SHA256 `866fbcae01113b058440749260bdf390b605b173e9a6a274c80d63a17f13188b`, 6929543 bytes, built UI.
+Следующий documentation-only checkpoint — отдельный target того же кода.
