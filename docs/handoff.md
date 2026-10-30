@@ -15,8 +15,10 @@ Owned Job закрыт/cold no-original-custody проверен, runtime archiv
 не replay. Installed source48/gen946 прежний, worker оставить, desktop не нужен/окон нет.
 Далее [next keeper bootstrap](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md):
 query-only exact outside-Job primitive готов, Linux3/1 ignored и Linux/MSVC platform
-Clippy/Python selectors passed. Отдельный native exclusion gate source09328f6 пока
-не запускался. Bootstrap/durable delegation/max2/mixed schema/U2–U4 ещё впереди.
+Clippy/Python selectors passed. Первый exclusion gate source09328f6 failed: run20261030-111128-d13660f4,
+task473a983b-bb4c-4985-8dae-05f5a2b05aa0,2 files twice. Test создавал unnamed Job,
+затем unwrap-ил отсутствующий recoverable identity; setup исправлен на unique named
+Job, MSVC Clippy passed. Два OS cases не выполнялись; нужен новый run/key, не replay. Bootstrap/durable delegation/max2/mixed schema/U2–U4 ещё впереди.
 
 **.204/main,2026-10-30: keeper retirement в source19/24; оба native gates прошли (см. выше).**
 [Ресурсы, ревью гонки, проверки и продолжение](plans/worker-self-update/keeper-runtime-2026-10-30.md).

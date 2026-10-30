@@ -85,3 +85,15 @@ Same-SDK round не доказывает обновление на будущу�
 на JSON receipt. Новая schema требует consistent retained-copy/backup/old refusal
 proof. Native mixed-version gate обязателен отдельно от двух same-SDK поколений.
 После этого остаются U2 fault matrix, U3 UI/attention и U4 actual installed update.
+
+## Первый exclusion run: исправлен setup exact-pin test
+
+Source09328f6, task473a983b-bb4c-4985-8dae-05f5a2b05aa0,
+run20261030-111128-d13660f4 failed на первом test после0.13s; два OS cases не запускались.
+2 ready files twice verified, report12601e60cdfbf13faafdbaea84467858fdf6ed1a4eb6814d22853711d921244c.
+`ManagedChild::prepare(None)` создаёт unnamed Job и намеренно не выдаёт recoverable
+ProcessIdentity. Existing test затем unwrap-ил её перед membership assertions.
+Setup исправлен на уникальный named Job. Сам query primitive и строгие проверки
+не менялись, MSVC platform all-target Clippy passed. Это не положительный native
+proof; требуется новый isolated run/key. Старый task не replay.
+Installed worker unchanged; no windows, Windows directories не удалялись.

@@ -464,7 +464,18 @@ mod tests {
             working_directory: root.path().to_str().unwrap().into(),
             timeout_ms: 10000,
         };
-        let (mut child, _out, _err) = crate::ManagedChild::prepare(&command, None).unwrap();
+        // Membership needs a known existing Job name. prepare(None) creates an
+        // unnamed Job and intentionally exposes no recoverable ProcessIdentity.
+        let job_name = format!(
+            "Global\\WinBridge-ProcessPinTest-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let (mut child, _out, _err) =
+            crate::ManagedChild::prepare(&command, Some(&job_name)).unwrap();
         let identity = stamp(child.id()).unwrap();
         for field in ["birth", "host", "session"] {
             let mut wrong = identity.clone();
