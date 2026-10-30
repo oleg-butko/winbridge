@@ -55,3 +55,17 @@ accepted reply остаётся жив. Усиленный вариант passed
 Clean producer pin: `15d0b982079a0aecb1ab8cb37ffbcca5cecd7b45`, `winbridge-20261030T093705Z-15d0b98-c743b0f8.zip`,
 SHA256 `866fbcae01113b058440749260bdf390b605b173e9a6a274c80d63a17f13188b`, 6929543 bytes, built UI.
 Следующий documentation-only checkpoint — отдельный target того же кода.
+
+## Подтверждение на Windows
+
+Третий Main30, taskfee1efa1-d4b4-416e-8df8-e226ccb20316/run20261030-093727-eb1f2df9,
+source15d0b98→targeta2cfa21, passed.71 files twice verified;22 finalization и10
+marker negative audits. Независимый observer commita2cfa21/dirty=false проверил
+настоящий прерванный4-byte V8 header, независимый Confirmed, released lease ровно
+один раз, запись и atomic replace config, один cmd effect при повторе fenced task.
+Main fixture922.86s, Cargo0.97s. Windows16,444,260,352→15,310,610,432bytes.
+Report d0c843cbf6dae5ad83bfb59d5849af0e8b77b9f69ab5aeec51fdb2f12e3b06e5,
+proof996219371cfb035d160d83e6a559ff6143a792ac050e36ca2cb0da1daaa462d3.
+Job cleanup/cold no-original-custody проверены. Это положительный factory/V8/Active
+proof19/23; permanent keeper и bootstrap не заявлены. Installed worker не менялся,
+оставить работающим; desktop не нужен, окон не было. Не повторять этот task.

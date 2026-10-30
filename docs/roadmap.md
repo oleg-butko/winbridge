@@ -1,5 +1,11 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: **Main30 Windows passed** (run20261030-093727-eb1f2df9,
+source15d0b98→targeta2cfa21,19/23).71 files twice;22 finalization/10 marker
+negative audits. Actual V8/lost ACK → independent Active → config write/atomic
+replace → одна fenced task/duplicate подтверждены. Cold view не создаёт custody.
+Permanent keeper/next generation/U2–U4 остаются открытыми; installed runtime прежний.
+
 2026-10-30/.204/main: [V8 reply budget](plans/worker-self-update/finalization-reply-budget-2026-10-30.md)
 отделён от framing/остальных IPC:30s после V8 frame, прежний original10s для других
 requests.1037 workspace tests и Linux/MSVC Clippy passed, real IPC framing/reply

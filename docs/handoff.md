@@ -1,5 +1,22 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: полный Main30 прошёл на настоящей Windows.**
+Task `fee1efa1-d4b4-416e-8df8-e226ccb20316`, run `20261030-093727-eb1f2df9`,
+source `15d0b98` → target `a2cfa21`, profile worker19/updater23.71 ready files
+проверен дважды независимым reader;22 finalization и10 marker negative audits.
+Подтверждены настоящее V8/header loss, independent Active, один release, снятие
+config pins (write+atomic replace) и одна fenced task при duplicate submission.
+Оригинальный Job завершён и cold view не создаёт custody. Report SHA256
+`d0c843cbf6dae5ad83bfb59d5849af0e8b77b9f69ab5aeec51fdb2f12e3b06e5`, proof
+`996219371cfb035d160d83e6a559ff6143a792ac050e36ca2cb0da1daaa462d3`.
+58 commands; Main fixture922.86s (Cargo0.97s), рабочий runtime не менялся.
+Архив: `tmp-main30-204-20261030-093727-eb1f2df9/shutdown-main-cases/runtime-archive-002c7342-3838-4a97-afee-00d80ffc48ab`.
+Windows free16,444,260,352→15,310,610,432bytes. Установленный worker source48/gen946
+без ошибок; оставить работающим, desktop не нужен, тестовых окон нет.
+Это завершает factory/V8/Active gate; permanent keeper/следующее поколение/U2–U4
+всё ещё впереди. Keeper24 в detached checkout остаётся незавершённой разработкой.
+Предыдущие записи ниже — история этапов, а не текущая таблица готовности.
+
 **.204/main,2026-10-30: повторный Main30 дошёл до Active, остановился на header fault assertion.**
 [Разбор и исправление reply budget](plans/worker-self-update/finalization-reply-budget-2026-10-30.md).
 Taskbb0fc4f8/run20261030-051739-2b5177f8 failed,68 files twice verified; не replay.
