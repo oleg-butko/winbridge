@@ -165,6 +165,8 @@ fn activation_view(
 mod activation_files;
 mod finalization_control;
 mod keeper_control;
+mod keeper_probe;
+pub use keeper_probe::{observe_original_keeper, KeeperProbeCapture};
 mod resident_control;
 
 fn local(path: &Path) -> Result<PathBuf> {
@@ -2800,6 +2802,16 @@ async fn run_inner(config_path: &Path, id: &str, token: &str) -> Result<()> {
             Ok(v) => v,
             Err(_) => continue,
         };
+        if value.get("keeperProbeVersion").is_some() {
+            let query = serde_json::from_slice::<KeeperProbeRequest>(&bytes).ok();
+            // No current original custody in this coordinator loop. Never
+            // adopt SQL rows or begin retirement in response to a probe.
+            let reply = keeper_probe::respond(None, query.as_ref(), pid, |_, _| {
+                Err("Original keeper custody unavailable".into())
+            });
+            let _ = ipc::write(&mut stream, &reply).await;
+            continue;
+        }
         if value.get("keeperControlVersion").is_some() {
             let q: KeeperControlRequest = match serde_json::from_slice(&bytes) {
                 Ok(q) => q,
@@ -5730,6 +5742,52 @@ mod tests {
             bad.request_id.is_none(),
             "Malformed keeper DTO must fail before authorization/scope handling"
         );
+        let root_before = f.journal.get(&f.id).unwrap();
+        let helper = fs::read(&before.spec.image_path).unwrap();
+        assert!(memchr::memmem::find(&helper, KEEPER_PROBE_MARKER).is_some(),
+            "Stale supervisor fixture has no keeper-probe decoder; run cargo build -p winbridge-update --bin winbridge-update --locked before these IPC tests");
+        let probe = KeeperProbeRequest {
+            keeper_probe_version: 1,
+            request_id: uuid::Uuid::new_v4().to_string(),
+            binding: crate::bootstrap::tests::fixture().previous,
+        };
+        let reply: KeeperProbeResponse = ipc::call(
+            &handle.record.spec.endpoint,
+            handle.child.identity.process_id,
+            &probe,
+        )
+        .await
+        .unwrap();
+        assert_eq!(reply.request_id.as_ref(), Some(&probe.request_id));
+        assert!(
+            matches!(reply.result, KeeperProbeResult::Rejected { ref message }
+            if message.contains("custody is unavailable"))
+        );
+        let duplicated = Duplicate(serde_json::to_value(&probe).unwrap(), "requestId");
+        let reply: KeeperProbeResponse = ipc::call(
+            &handle.record.spec.endpoint,
+            handle.child.identity.process_id,
+            &duplicated,
+        )
+        .await
+        .unwrap();
+        assert!(
+            reply.request_id.is_none(),
+            "Probe duplicates must fail in the typed decoder"
+        );
+        assert!(matches!(reply.result, KeeperProbeResult::Rejected { .. }));
+        let mut mixed = serde_json::to_value(&probe).unwrap();
+        mixed["keeperControlVersion"] = 1.into();
+        let reply: KeeperProbeResponse = ipc::call(
+            &handle.record.spec.endpoint,
+            handle.child.identity.process_id,
+            &mixed,
+        )
+        .await
+        .unwrap();
+        assert!(reply.request_id.is_none());
+        assert!(matches!(reply.result, KeeperProbeResult::Rejected { .. }));
+        assert_eq!(f.journal.get(&f.id).unwrap(), root_before);
         assert_eq!(
             UpdateJournal::inspect_supervisor(&f.state(), &f.id).unwrap(),
             before

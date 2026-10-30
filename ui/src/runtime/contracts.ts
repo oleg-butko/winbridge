@@ -1,4 +1,7 @@
 // Generated from crates/protocol by npm run generate:contracts. Do not edit.
+export type KeeperProbeRequest = { keeperProbeVersion: number, requestId: string, binding: KeeperBinding, };
+export type KeeperProbeResponse = { keeperProbeVersion: number, requestId: string | null, result: KeeperProbeResult, };
+export type KeeperProbeResult = { "kind": "observed", binding: KeeperBinding, observedAtMs: number, } | { "kind": "rejected", message: string, };
 export type KeeperControlRequest = { keeperControlVersion: number, updateId: string, launchId: string, requestId: string, expectedCoordinatorRevision: number, token: string, command: KeeperControlCommand, };
 export type KeeperControlResponse = { keeperControlVersion: number, updateId: string, launchId: string, requestId: string | null, result: KeeperControlResult, };
 export type KeeperControlCommand = "retire_coordinator" | "observe" | "retry_writer_close";

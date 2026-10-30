@@ -2,6 +2,9 @@
 use super::{SupervisorProcess, WorkerFinalizationReceipt};
 use serde::{Deserialize, Serialize};
 pub const KEEPER_CONTROL_CONTRACT: u16 = 1;
+/// Read-only current-worker handshake, independent of updater journal formats.
+pub const KEEPER_PROBE_CONTRACT: u16 = 1;
+pub const KEEPER_PROBE_MARKER: &[u8] = b"WINBRIDGE_KEEPER_PROBE_V1";
 pub const KEEPER_CONTROL_MARKER: &[u8] = b"WINBRIDGE_KEEPER_CONTROL_V1";
 pub fn keeper_control_marker_pattern() -> Vec<u8> {
     format!(
@@ -18,6 +21,16 @@ macro_rules! dto {($($item:item)*)=>{$(
  $item
 )*};}
 dto! {
+ pub struct KeeperProbeRequest {
+    pub keeper_probe_version:u16,
+    pub request_id:String,
+    pub binding:KeeperBinding,
+ }
+ pub struct KeeperProbeResponse {
+    pub keeper_probe_version:u16,
+    pub request_id:Option<String>,
+    pub result:KeeperProbeResult,
+ }
  pub struct KeeperControlRequest {
     pub keeper_control_version:u16,
     pub update_id:String,
@@ -62,6 +75,24 @@ dto! {
     pub readers_finished:Option<bool>,
     pub reason:Option<String>,
  }
+}
+#[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "typescript", derive(ts_rs::TS))]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum KeeperProbeResult {
+    Observed {
+        binding: Box<KeeperBinding>,
+        observed_at_ms: u64,
+    },
+    Rejected {
+        message: String,
+    },
 }
 #[cfg_attr(feature = "jsonschema", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "typescript", derive(ts_rs::TS))]

@@ -4,10 +4,12 @@ param(
   [Parameter(Mandatory)][string]$SourceArchiveSha256,
   [Parameter(Mandatory)][string]$ValidationCacheDirectory,
   [Parameter(Mandatory)][string]$ReportDirectory,
-  [switch]$BootstrapExclusion
+  [switch]$BootstrapExclusion,
+  [switch]$KeeperProbe
 )
 $ErrorActionPreference='Stop';Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
+if($BootstrapExclusion -and $KeeperProbe){throw 'Choose one native profile'}
 . (Join-Path $PSScriptRoot 'session-runtime.ps1')
 . (Join-Path $PSScriptRoot 'lib/build-cache.ps1')
 foreach($path in @($SourceDirectory,$ValidationCacheDirectory,$ReportDirectory)){Assert-SessionDirectory $path}
@@ -17,8 +19,10 @@ if(Test-Path -LiteralPath $ReportDirectory){throw 'Existing lifetime report pres
 New-Item -ItemType Directory -Path $ReportDirectory|Out-Null
 $spikeReport=[ordered]@{schemaVersion=1;kind='activation_lifetime_keeper_native_gate';platform='windows';passed=$false;sourceArchiveSha256=$SourceArchiveSha256;runtimeApplied=$false;installedRuntimeApplied=$false;windowsOpened=$false;networkStarted=$false;error=$null;commands=@();storage=@{availableBytesBefore=[IO.DriveInfo]::new([IO.Path]::GetPathRoot($source)).AvailableFreeSpace}}
 if($BootstrapExclusion){$spikeReport.kind='activation_bootstrap_exclusion_native_gate'}
+if($KeeperProbe){$spikeReport.kind='keeper_probe_native_gate'}
 $lease=$null;$location=Get-Location
 $oldTarget=$env:CARGO_TARGET_DIR;$oldIncremental=$env:CARGO_INCREMENTAL;$oldInput=$env:WINBRIDGE_LIFETIME_SPIKE_INPUT
+$oldProbeProof=$env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF
 $oldTemp=$env:TEMP;$oldTmp=$env:TMP
 $oldEncoding=[Console]::OutputEncoding;$oldPipelineEncoding=$OutputEncoding
 $casesRoot=Join-Path $work 'cases'
@@ -49,10 +53,15 @@ try {
     @{name='keeper-loss';test='keeper_process_loss_kills_waiting_worker_without_recovery_or_limit_changes'}
   )
   if($BootstrapExclusion){$spikeCases=@(@{name='pinned-process-exclusion';exact='infrastructure::tests::pinned_process_requires_exact_live_identity_and_observes_owned_exit'})+$spikeCases}
+  if($KeeperProbe){
+    $spikeCases=@(@{name='keeper-probe';probe='supervisor::keeper_probe::tests::native::original_child_probe_uses_real_peer_and_exact_handles'})
+    $env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF=Join-Path $ReportDirectory 'keeper-probe-proof.json'
+  }
   foreach($spikeCase in $spikeCases){
     $arguments=@()
-    if(-not $spikeCase.ContainsKey('exact')){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',('lifetime_spike::'+$spikeCase.test),'--ignored','--test-threads=1','--nocapture')}
+    if(-not $spikeCase.ContainsKey('exact') -and -not $spikeCase.ContainsKey('probe')){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',('lifetime_spike::'+$spikeCase.test),'--ignored','--test-threads=1','--nocapture')}
     if($spikeCase.ContainsKey('exact')){$arguments=@('test','-p','winbridge-platform','--lib','--locked','--offline','--','--exact',$spikeCase.exact,'--test-threads=1','--nocapture')}
+    if($spikeCase.ContainsKey('probe')){$arguments=@('test','-p','winbridge-update','--features','bundled-sqlite','--lib','--locked','--offline','--','--exact',$spikeCase.probe,'--ignored','--test-threads=1','--nocapture')}
     $started=[DateTimeOffset]::UtcNow;$log=$spikeCase.name+'.log'
     Write-Output ("Lifetime OS experiment: "+$spikeCase.name+"; installed worker stays active; no windows or networking")
     & cargo @arguments 2>&1|Tee-Object -FilePath (Join-Path $ReportDirectory $log)|Out-Host
@@ -61,7 +70,8 @@ try {
     if($code -ne 0){throw ('Lifetime experiment failed: '+$spikeCase.name+'; preserve original cases')}
     $text=Get-Content -LiteralPath (Join-Path $ReportDirectory $log) -Raw
     if($text -notmatch 'test result: ok\. 1 passed; 0 failed; 0 ignored;'){throw 'Exact native experiment was not selected'}
-    if(-not $spikeCase.ContainsKey('exact')){Assert-SessionFile (Join-Path $casesRoot ($spikeCase.name+'/proof.json'))}
+    if($KeeperProbe){Assert-SessionFile $env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF}
+    if(-not $spikeCase.ContainsKey('exact') -and -not $KeeperProbe){Assert-SessionFile (Join-Path $casesRoot ($spikeCase.name+'/proof.json'))}
   }
   $spikeReport.passed=$true
 } catch {$spikeReport.error=$_.Exception.Message}
@@ -69,7 +79,7 @@ finally {
   Set-Location -LiteralPath $location
   if($lease){$lease.Dispose()}
   $env:CARGO_TARGET_DIR=$oldTarget;$env:CARGO_INCREMENTAL=$oldIncremental;$env:WINBRIDGE_LIFETIME_SPIKE_INPUT=$oldInput
-  $env:TEMP=$oldTemp;$env:TMP=$oldTmp
+  $env:TEMP=$oldTemp;$env:TMP=$oldTmp;$env:WINBRIDGE_KEEPER_PROBE_NATIVE_PROOF=$oldProbeProof
   [Console]::OutputEncoding=$oldEncoding;$OutputEncoding=$oldPipelineEncoding
   try { foreach($mode in @('two-generation','keeper-loss')){
     $directory=Join-Path $casesRoot $mode

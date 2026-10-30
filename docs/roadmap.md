@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: readonly keeper probe1/current-child IPC binding добавлен
+в source19/25.3 portable/23 supervisor tests passed; live capture удерживает exact
+handles/исходный3s deadline, не permission. Native peer/Job unit подготовлена,
+результат ещё не получен. Далее consuming factory/one create/ready handoff/max2.
+
 2026-10-30/.204: source worker19/updater25 добавляет immutable bootstrap reservation
 и supervisor Intent одной транзакцией; rollback/readback/idempotency проверены.
 Это данные, не разрешение повторного запуска. Actual24→25 retained-copy gate

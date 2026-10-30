@@ -291,3 +291,52 @@ Logs `.winbridge/keeper-stage-review-204/bootstrap-known-commit-freshness-tests.
 и `bootstrap-known-commit-final-{linux,windows}-clippy.log`. Debian free10,507,022,336,
 Windows/shared15,253,352,448bytes; без Windows cleanup. До runtime integration нужны
 actual peer handshake/pins/known ancestor exit/one-attempt creator, затем native gate.
+
+## Readonly current-worker probe1
+
+Новый version-neutral KeeperProbeRequest/Response/Result находится в protocol,
+TypeScript генерируется оттуда же. DTO имеет только version/request UUID/immutable
+KeeperBinding. Binding v1 для wire заморожен; новые будущие Root/SQL models в него
+не добавлять. No token/path/argv/exec or SQL schema. Legacy keeper-control остаётся
+для old logical parent, probe — только actual newly activated original child.
+
+Closed keeper host использует original bounded frame, typed decode сохраняет
+rejection duplicate fields. В Retiring/cold actor probe не запускает закрытие writer
+и не восстанавливает custody. Positive response требует exact in-memory binding,
+actual IPC peer PID, original ManagedChild identity/Job, live birth/host/session и
+keeper outside original activation Job. Он не открывает SQLite и не даёт spawn.
+
+Client observe_original_keeper проверяет, что сам вызывающий процесс является
+исходным worker, подтверждает actual IPC server PID, response correlation/binding/
+clock и сохраняет query-only worker/keeper handles. Deadline3s отсчитывается ДО
+подготовки/обмена и не обновляется ответом. require_current повторяет handle/Job/
+clock checks. Capture non-Clone/non-Serde, не восстанавливается из JSON. Он ещё не
+проверяет current worker mode/config/source pins/старый task domain или ancestor
+exit — это обязанности consuming factory. Не считать observation готовностью к
+creation или доказательством отсутствия другого обновления.
+
+Portable dispatcher tests3 и supervisor23/2 ignored прошли, включая real IPC cold,
+duplicate и mixed-contract rejection/root unchanged. Первый run увидел старый
+support updater binary, EOF; rebuilt helper исправил fixture. Marker диагностика
+сообщает cargo build -p winbridge-update --bin winbridge-update --locked при отсутствии
+нового decoder. Marker — только feature diagnostic, не подмена source attestation.
+
+Подготовлена ignored Windows unit
+supervisor::keeper_probe::tests::native::original_child_probe_uses_real_peer_and_exact_handles.
+Два actual process, отдельный named Job, IPC peer mismatch, changed binding,
+duplicate decode, exact live capture и expiration. Read stdout/stderr concurrent;
+child exited/owned Job empty проверяются. Test-only custody constructor использует
+synthetic role history: unit не доказывает SQL retirement/normal Active/full updater
+workflow и не создаёт bootstrap coordinator. Protocol roles и handles настоящие.
+Parent OS process trace сверяется отдельно от result JSON,25 negative audits reader.
+Driver run-update-keeper-probe-native.py, readonly verify-update-keeper-probe-native.py.
+Пока native результата нет. Final1039 workspace tests/17 ignored, Linux/MSVC
+workspace all-target Clippy -D warnings, contracts/TypeScript/UI/scaffold/fmt/diff
+passed. Python6 tests passed (probe/exclusion readers); новый audit25 mutations. Installed worker не
+обновлялся, public install/bootstrap action не включены. После unit — actual consuming
+factory/known SQL fact+fresh probe+filesystem/domain/ancestor guards, one create/ready.
+
+Логи final `.winbridge/keeper-stage-review-204/keeper-probe-workspace-tests.log`,
+`keeper-probe-final-{linux,windows}-clippy.log`, `keeper-probe-final-contract-check.log`.
+Debian free перед full check10,592,751,616bytes, после10,261,741,568bytes;
+Windows/shared15,259,041,792bytes. Windows cleanup не выполнялся.

@@ -243,6 +243,39 @@ fn binding(
     ))
 }
 impl ActivationKeeperCustody {
+    /// Native OS/IPC unit fixture only. This does NOT prove the SQL retirement
+    /// path; production can construct custody only by consuming its real guard.
+    #[cfg(all(test, windows))]
+    pub(crate) fn probe_test_custody(child: ManagedChild, binding: KeeperBinding) -> Result<Self> {
+        let mut physical = ProcessCustody::new();
+        physical.child = Some(child);
+        let value = Self { physical, binding };
+        value.require_physical()?;
+        Ok(value)
+    }
+    #[cfg(all(test, windows))]
+    pub(crate) fn physical_test_child(&mut self) -> &mut ManagedChild {
+        self.physical
+            .child
+            .as_mut()
+            .expect("Native fixture retains its original child")
+    }
+    /// Authorize the newly activated ORIGINAL child, not the old supervisor's
+    /// logical parent. No JSON PID, saved row or previous token grants this.
+    #[cfg(windows)]
+    pub(crate) fn require_bootstrap_peer(&self, pid: u32, expected: &KeeperBinding) -> Result<()> {
+        if pid != self.binding.worker.process_id || expected != &self.binding {
+            return Err("Keeper probe requires its actual original Active child".into());
+        }
+        self.require_physical()?;
+        infrastructure::PinnedProcess::live(&self.binding.coordinator)
+            .and_then(|p| p.require_outside_job(&self.binding.job_name))
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(windows)]
+    pub(crate) fn bootstrap_binding(&self) -> &KeeperBinding {
+        &self.binding
+    }
     fn require_physical(&self) -> Result<()> {
         let actual = self
             .physical

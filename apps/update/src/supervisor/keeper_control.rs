@@ -117,7 +117,31 @@ pub(super) async fn run(
                 ))
             }
         };
-        let q: KeeperControlRequest = match ipc::read(&mut stream).await {
+        let bytes = match ipc::read_bytes(&mut stream).await {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let routing: serde_json::Value = match serde_json::from_slice(&bytes) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if routing.get("keeperProbeVersion").is_some() {
+            let q = serde_json::from_slice::<KeeperProbeRequest>(&bytes).ok();
+            let reply = match &state {
+                State::Keeper(v) => keeper_probe::respond(
+                    Some(v.bootstrap_binding()),
+                    q.as_ref(),
+                    pid,
+                    |pid, binding| v.require_bootstrap_peer(pid, binding),
+                ),
+                State::Retiring(_) => keeper_probe::respond(None, q.as_ref(), pid, |_, _| {
+                    Err("Original keeper retirement incomplete".into())
+                }),
+            };
+            let _ = ipc::write(&mut stream, &reply).await;
+            continue;
+        }
+        let q: KeeperControlRequest = match serde_json::from_slice(&bytes) {
             Ok(v) => v,
             Err(_) => {
                 let _ = ipc::write(

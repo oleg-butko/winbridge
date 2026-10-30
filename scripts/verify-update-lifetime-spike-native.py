@@ -14,12 +14,14 @@ def load(name,file):
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 
-def verify(run_info,archive,*,bootstrap=False):
-    c=load('keeper_proof','update-lifetime-spike-proof.py')
+def verify(run_info,archive,*,bootstrap=False,keeper_probe=False):
+    if bootstrap and keeper_probe:raise ValueError("Choose one native profile")
+    c=load('keeper_proof','update-keeper-probe-proof.py' if keeper_probe else 'update-lifetime-spike-proof.py')
     health=load('keeper_pin','validate-update-health-actor-native.py')
     reader=load('keeper_ready','summarize-update-timings.py')
     local=run_info.resolve().parent;meta=c.decode(run_info.read_bytes());source=health.archive_pin(archive)
-    namespace='bootstrap-exclusion' if bootstrap else 'lifetime-spike'
+    namespace='keeper-probe' if keeper_probe else ('bootstrap-exclusion' if bootstrap else 'lifetime-spike')
+    if keeper_probe:c.need(meta.get('keeperProbe') is True,'Explicit keeper probe profile required')
     if bootstrap:c.need(meta.get('bootstrapExclusion') is True,'Explicit bootstrap exclusion profile required')
     c.need(meta['source']==source and re.fullmatch(r'\d{8}-\d{6}-[0-9a-f]{8}',meta['run']),'Saved source/run changed')
     c.need(Path(meta['reportDirectory'])==Path('/mnt/hgfs/shared/WinBridge/workflow-validation')/meta['run']/'result','Wrong report namespace')
@@ -37,15 +39,17 @@ def verify(run_info,archive,*,bootstrap=False):
     base=str(PureWindowsPath(project['workspaceRoot'])/'workflow-validation'/('tmp-'+namespace+'-'+meta['run'])/'cases')
     c.need(meta['windowsBase']==base,'Wrong case namespace')
     files=reader.verified_files(Path(meta['reportDirectory']));report=c.decode(files['report.json'])
-    c.need(report['kind']==('activation_bootstrap_exclusion_native_gate' if bootstrap else 'activation_lifetime_keeper_native_gate') and report['passed']is True and report['error']is None
+    c.need(report['kind']==('keeper_probe_native_gate' if keeper_probe else ('activation_bootstrap_exclusion_native_gate' if bootstrap else 'activation_lifetime_keeper_native_gate')) and report['passed']is True and report['error']is None
         and report['sourceCommit']==source['sourceCommit'] and report['sourceArchiveSha256']==source['archiveSha256']
         and report['sourceManifestSha256']==source['manifestSha256'] and report['platform']=='windows'
         and all(report[k]is False for k in ('runtimeApplied','installedRuntimeApplied','windowsOpened','networkStarted')),'Wrong native report')
-    c.need(len(report['commands'])==(3 if bootstrap else 2),'Wrong native command count')
+    c.need(len(report['commands'])==(1 if keeper_probe else (3 if bootstrap else 2)),'Wrong native command count')
     if bootstrap:
         command=report['commands'][0]
         load('bootstrap_selector','update-bootstrap-exclusion-proof.py').selection(command,files[command['log']].decode('utf-8-sig'))
-    for command,mode in zip(report['commands'][1:] if bootstrap else report['commands'],c.MODES):
+    if keeper_probe:
+        c.selection(report['commands'][0],files['keeper-probe.log'].decode('utf-8-sig'))
+    for command,mode in zip(report['commands'][1:] if bootstrap else report['commands'],() if keeper_probe else c.MODES):
         c.need(command['name']==mode and command['log']==mode+'.log','Wrong command order/log')
         c.selection(command,files[command['log']].decode('utf-8-sig'),mode)
     result=c.audit(files,source,base)

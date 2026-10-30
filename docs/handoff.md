@@ -1,5 +1,22 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: readonly current-worker→keeper probe1 в source19/25.**
+[Контракт и продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
+Отдельный minimal DTO не содержит будущие SQL models/path/argv/token. Закрытый
+Keeper принимает probe только от actual original child по IPC PID, original
+binding/birth/host/session и реальному Job; Retiring/cold/mixed/duplicate requests
+отклоняются без SQL/retirement/retry. Legacy keeper-control authorization сохранён.
+Client удерживает exact worker/keeper handles и исходный3s deadline; это observation,
+не spawn permit. Factory/one creation/max2/mixed-version bridge всё ещё впереди.
+Portable3 tests/23 supervisor tests passed (2 ignored), real IPC включает cold/
+duplicate/mixed-protocol rejection без изменения root/role. Первый IPC run использовал
+старый support binary и дал EOF; после rebuild passed, добавлена marker диагностика.
+Проверки final:1039 workspace tests/17 ignored, Linux/MSVC workspace all-target
+Clippy, contracts/TypeScript/UI/scaffold/fmt/diff passed. Python readers6 tests passed,
+новый reader25 negatives + отдельный process-trace binding. Native peer/Job unit готова.
+У этой unit synthetic role history: она не подменяет Main31 или два workflow.
+Native результат пока не получен. Installed source48/genf9 не менялся, desktop не нужен.
+
 **.204/main,2026-10-30: bootstrap ledger/known COMMIT fact, source worker19/updater25.**
 [План, границы и продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
 Immutable reservation и supervisor Intent сохраняются одной SQL-транзакцией;
