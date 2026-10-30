@@ -1,5 +1,22 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main,2026-10-30: Windows keeper launch primitives passed.**
+Sourceff3307e,run20261030-221011-8c68630d,
+task4713f975-c011-411d-961d-a4d6b1928281. Два exact OS units прошли:
+production spawn вне2 EXISTING Jobs с exact parent и positive cleanup всех helpers;
+retained predecessor handle отклоняет live/missing/changed claims и подтверждает
+actual exit того же kernel object.3 files verified twice/12 negative audits.
+Report0245f0a4c13bd2e7db230f5117a5144e606c06924ab6ff0551123111a0cfb26c.
+146.052s task:131.214s два Cargo commands; сами tests0.10+0.39s. Основное время
+этого прогона — сборка/подготовка, не выполнение тестов. Windows free
+15,214,280,704→15,215,120,384 bytes, installed source48/genf9 unchanged/active0/error=null.
+Окон нет/закрывать нечего, установленный worker оставить; desktop не требуется.
+Это OS units, НЕ full delegated keeper workflow/admission/SQL handoff: все широкие
+proof flags false. Следующий шаг тот же: consuming client/Spawned/Ready/owner
+handoff, затем controlled old keeper exit; не повторять уже passed OS units без
+новых изменений/ошибок. Source zip winbridge-20261030T220946Z-ff3307e-bdd42bdd.zip,
+SHA8ab6fd0e0d89069420c709c0ef6847ce895a1856a6a179c42d8f22a11d546312.
+
 **.204/main,2026-10-30: keeper-launch1 server/one-attempt state, source19/25.**
 [Подробности и следующий шаг](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#keeper-launch1-сервер-и-одна-попытка).
 Закрытый original keeper принимает fixed helper launch только от своего actual

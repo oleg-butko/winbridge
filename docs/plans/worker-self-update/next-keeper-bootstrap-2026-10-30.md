@@ -560,3 +560,35 @@ rejected,3 synthetic reader tests passed. Это тесты системных �
 keeper bootstrap/client/SQL owner handoff; вывод сохраняет все широкие proof flags
 false. В этом profile нет окон, сети или изменений рабочего runtime. Проверка
 места и retained-cache lease выполняются перед компиляцией на Windows.
+
+
+### Windows OS-unit результат
+
+Sourceff3307efe1f5b1e7204fc3f463f2d5d776bbdb38,
+archive winbridge-20261030T220946Z-ff3307e-bdd42bdd.zip,
+SHA8ab6fd0e0d89069420c709c0ef6847ce895a1856a6a179c42d8f22a11d546312,
+manifestc1a82d5c369405250a574d5c92d81c93c56c3804f54fff68dbe07cbbcf10531b.
+Task4713f975-c011-411d-961d-a4d6b1928281/run20261030-221011-8c68630d passed;
+3 report/log files проверены дважды,12 negative audits отвергнуты. Report
+0245f0a4c13bd2e7db230f5117a5144e606c06924ab6ff0551123111a0cfb26c.
+
+Оба production OS primitives действительно выполнены на Windows: exact local
+parent/two existing Jobs/one create/positive helper exits; retained ancestor handle
+live→exited с отказом для changed/missing identity. Это не actual closed-keeper
+Start request/SQL Spawned/Ready и не два updater workflows. Reader сохраняет
+bootstrapCreationProved/keeperRuntimeProved/liveAdmissionProved=false. Task не replay.
+
+Замеры: task146.052s; Cargo commands33.604s и97.610s, tests0.10s и0.39s. Таким
+образом131.214s внутри Cargo, из них только0.49s в test bodies;14.838s вне Cargo
+включают snapshot extraction/verification/reporting и process wrappers. Логи Cargo
+показывают пересборку workspace crates при сохранённых сторонних dependencies.
+Не следует относить всё это время к медленному тестовому сценарию.
+Windows свободно15,214,280,704→15,215,120,384bytes. Installed worker source48/genf9
+не изменился/active0/errors=null. Helpers завершены, окон нет, desktop не нужен,
+рабочий worker оставить. Отчёты и Windows validation directories сохраняются.
+
+При следующем consuming client отдельно измерить full file revalidation через
+existing artifact hash counters: original keeper capture3s включает несколько
+проверок image/config pins вокруг SQL COMMIT. Нельзя продлевать capture/startup
+после неизвестного исхода либо пересоздавать Start при expiry. Прежде чем менять
+проверки, получить timings/bytes/calls именно настоящего admission/handoff.

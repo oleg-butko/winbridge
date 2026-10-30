@@ -1,5 +1,10 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: native keeper launch primitives passed (sourceff3307e,
+run20261030-221011-8c68630d): exact dual-Job spawn/cleanup и retained predecessor
+exit.3 files twice/12 negative audits, installed unchanged. Это OS units;
+full bootstrap/admission/Ready handoff ещё не proved. Далее consuming client.
+
 2026-10-30/.204: keeper-launch1 server/one-attempt state подключён к closed
 keeper; cold coordinator/retiring отказ, duplicate Start observe-only, unknown
 create без replay. Exact predecessor handle переносится в keeper; positive exit
