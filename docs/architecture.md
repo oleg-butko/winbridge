@@ -4,7 +4,9 @@
 Original closed Keeper проверяет actual current-child IPC PID и тот же owned Job,
 не открывая SQLite. Client capture хранит exact handles и непродлённый3s deadline;
 original scope/generation/selection hash проверяются по сохранённому binding.
-Это наблюдение, не launch grant. Source19/25; physical consuming factory ещё нужна.
+Это наблюдение, не launch grant. Native OS peer/Job/capture unit passed
+(run20261030-175345-e76446dd; synthetic role history), installed unchanged.
+Source19/25; physical consuming factory ещё нужна.
 
 2026-10-30/.204: source worker19/updater25 хранит immutable bootstrap reservation
 в одной транзакции с новым supervisor Intent. Указатели update/launch/previous-launch

@@ -340,3 +340,39 @@ factory/known SQL fact+fresh probe+filesystem/domain/ancestor guards, one create
 `keeper-probe-final-{linux,windows}-clippy.log`, `keeper-probe-final-contract-check.log`.
 Debian free перед full check10,592,751,616bytes, после10,261,741,568bytes;
 Windows/shared15,259,041,792bytes. Windows cleanup не выполнялся.
+
+## Native current-child peer/Job/capture unit — passed
+
+Source785b6e7,task5c0e520b-c366-4ebf-a1b6-51c7537799b1,
+run20261030-175345-e76446dd. Archive
+winbridge-20261030T175319Z-785b6e7-c1f8b81d.zip,
+SHA90a7fb0efe2a373f1f03e8375293634fe42407316528e13f1c27a70e6e9367e7.
+Actual parent18924/worker helper20468, exact birth/host/session/Job/IPC peer checks.
+Wrong OS peer и changed binding/duplicate frame rejected; ровно один Observed,
+retained capture истёк, child exit0, owned Job positive empty, readers joined.
+Оба PID исторические helper processes, не установленный worker. Native role history
+synthetic; new coordinator/SQL retirement/full normal-Active workflow не выполнялись.
+keeperRuntimeProved=false/bootstrapCreationProved=false — эти границы сохранены.
+
+3 ready files twice verified,25 negative audits, включая correlated process rebinding
+отдельно от immutable server OS trace. Report SHA256
+fa4c6c7fb1f936f512967e0429324ba5be778521323d97d1c9daac5cde9fec77;
+prooff6716170fd7d4897a838e5b323906f9c0afc29e61ec7d8057dcea8654c75cf62.
+Cargo105.322s, actual unit3.48s. Windows15,144,202,240→15,805,829,120bytes;
+Windows directories не удалялись. Installed source48/genf9 unchanged/healthy/idle,
+оставить запущенным; desktop не нужен, тестовых окон нет. Task/key не replay.
+Metadata `.winbridge/update-preparation/keeper-probe-20261030-175345-e76446dd/`,
+log `.winbridge/keeper-stage-review-204/keeper-probe-native-run.log`.
+
+Следующий основной шаг: consuming physical factory связывает freshly built/pinned
+updater helper/config/output files, worker's own live normal state/domain, known
+bootstrap SQL COMMIT и fresh original keeper capture. Helper build должен совпадать
+с новым requested source; existing supervisor::prepare копирует установленный
+старый updater, поэтому использовать его без изменения здесь нельзя. Фиксированный
+helper directory уже задан intent. Затем version-neutral delegation message только
+от actual original child, один CreateProcess с original startup budget, detach до
+one-time start/ACK, independent observation/Spawned receipt и ready handoff. Old keeper
+не читает SQL/future Root. Current worker direct-in-external-Job guard сохраняется.
+Max2 требует живого predecessor handle/positive exit, не PID lookup. После actual
+same-SDK двух workflow — fresh future-SDK bridge/migration gate/U2–U4. Native unit
+этой главы не подменяет ни один из этих оставшихся сценариев.

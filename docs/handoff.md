@@ -15,7 +15,13 @@ duplicate/mixed-protocol rejection без изменения root/role. Перв
 Clippy, contracts/TypeScript/UI/scaffold/fmt/diff passed. Python readers6 tests passed,
 новый reader25 negatives + отдельный process-trace binding. Native peer/Job unit готова.
 У этой unit synthetic role history: она не подменяет Main31 или два workflow.
-Native результат пока не получен. Installed source48/genf9 не менялся, desktop не нужен.
+Windows peer/Job unit passed:source785b6e7,run20261030-175345-e76446dd,
+task5c0e520b-c366-4ebf-a1b6-51c7537799b1.3 files twice/25 negative audits; real
+parent18924/child20468 (оба test helpers уже завершены), capture expired/Job empty.
+Reportfa4c6c7fb1f936f512967e0429324ba5be778521323d97d1c9daac5cde9fec77,
+prooff6716170fd7d4897a838e5b323906f9c0afc29e61ec7d8057dcea8654c75cf62.
+Scope остаётся OS unit/synthetic role history, не полный keeper/bootstrap workflow.
+Installed source48/genf9 не менялся; worker оставить, desktop не нужен/окон нет.
 
 **.204/main,2026-10-30: bootstrap ledger/known COMMIT fact, source worker19/updater25.**
 [План, границы и продолжение](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md).
