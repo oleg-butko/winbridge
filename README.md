@@ -99,17 +99,17 @@ Windows worker **0.1.1 выпущен**: снижена нагрузка CPU в 
 Сетевые тесты используют постоянный каталог `runtime-test` и ждут разрешения
 файервола до 15 минут; рабочая версия устанавливается отдельно в `runtime`.
 
-Актуальная точка updater: [Main26/controller gate](docs/plans/worker-self-update/main26-native-2026-10-28.md),
-[lifetime runtime/review](docs/analysis/updater-lifetime-runtime-204-review-2026-10-28.md)
+Актуальная точка updater: [bootstrap следующего координатора](docs/plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md),
+[keeper retirement/Main31](docs/plans/worker-self-update/keeper-runtime-2026-10-30.md)
 и [план U0–U4](docs/plans/worker-self-update/README.md).
-Source worker19/updater22/supervisor27/view19/private6.
-Local service и controller используют тот же child/Store/lock/authority; Main26
-проверен на Windows. Actual retained21→22 migration/cold refusal также проверены.
-Lifetime admission, same-child V6 quarantine и independent normal IPC реализованы
-в source. [Main27](docs/plans/worker-self-update/main27-native-2026-10-29.md)
-проверен на Windows: исправленное чтение, тот же процесс после original deadline,
-дедупликация и cold history подтверждены. Permanent keeper role, final commit/scoped release
-и U2–U4 не завершены.
+Source worker19/updater25. Finalization/release/Active и продолжение исходного keeper
+после закрытия SQLite writer подтверждены на Windows. Keeper сохраняет тот же
+child/Job/readers; новый owner действительно получает OS-lock при живом worker.
+Trusted Rust driver следующего bootstrap соединён с Active scope, registration и
+original Start/Observe/Spawned/owner release/Ready/Handoff API; проверены Linux tests
+и Windows compilation. Сам новый client handshake на Windows, managed build/trigger
+в Active coordinator, два полных updater workflow и future-SDK bridge ещё впереди.
+U2–U4 не завершены.
 Public install выключен; самообновление целиком ещё не готово.
 Installed worker0.2.0/source48c834c и оба controller0.2.0 работают на1143;
 этот source checkpoint рабочие binaries не заменяет.

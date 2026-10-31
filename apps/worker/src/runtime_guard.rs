@@ -16,6 +16,26 @@ pub struct RuntimeGuard {
 }
 impl RuntimeGuard {
     #[cfg(windows)]
+    pub(crate) fn require_update_location(
+        &self,
+        config: &Path,
+        directory: &Path,
+        scope: &str,
+    ) -> Result<()> {
+        let runtime = Path::new(&self.identity.image.path)
+            .parent()
+            .ok_or("Loaded runtime directory missing")?;
+        if config != runtime.join("winbridge-update.local.json")
+            || directory != runtime.join("update-state")
+            || scope != self.pin.observation().manifest.scope_sha256
+        {
+            return Err(
+                "Bootstrap registration points outside the actual loaded installation".into(),
+            );
+        }
+        Ok(())
+    }
+    #[cfg(windows)]
     pub(crate) fn resident_updater_source(&self) -> Result<(PathBuf, String)> {
         self.revalidate()?;
         let updater = self

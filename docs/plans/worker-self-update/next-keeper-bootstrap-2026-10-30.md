@@ -874,3 +874,65 @@ owner/files/attempt, а не вызывать повторный Start или н
 `active-bootstrap-windows-validation-clippy.log`, `active-bootstrap-scaffold.log`.
 Более ранние Windows compile attempts с тем же префиксом содержат исправленные
 ошибки Box comparison/Clippy; итоговыми являются указанные validation logs.
+
+## Trusted Worker bootstrap driver
+
+2026-10-30, .204. `Worker::prepare_next_update_supervisor` — trusted Rust entry,
+принимающий уже проверенный `FreshUpdater` от managed build. Он не принимает paths/
+argv из команды и не меняет legacy external-Job guard. Historical request сначала
+возвращается без новой admission; после получения owner-lock lookup повторяется,
+чтобы root, появившийся между двумя наблюдениями, остался data only.
+
+`WorkerBootstrap` удерживает actual Active scope и тот же Registration через
+`RegistrationLease`. Ready, original Arc, worker binding и fixed config/journal
+paths относятся именно к pinned loaded installation. Settings read использует
+try-lock config path, проверяет exact saved SHA/active config и updater config SHA;
+named-resource scheduling по-прежнему запрещает grant. Scope/registration callbacks
+не ждут Worker mutex под updater SQL. Одновременно только один bootstrap driver;
+это ограничение обновления worker, а не числа Debian controllers.
+
+Factory сохраняет открытый journal и полученный owner в объекте до accept/staging.
+Ошибки/unknown возвращают этот же объект через `WorkerBootstrapFailure::into_original`,
+не вызывают accept повторно. `observe_root` возвращает данные, не восстанавливает
+permit. Files готовятся до capture, реальный domain guard отпускается до callbacks.
+Все I/O методы borrow original owner. Admit начинает один probe; dropped future
+оставляет files/owner/slot и unconfirmed reason, не разрешает fresh capture. После
+admission сохраняются исходные known COMMIT и low-level attempt. Start один;
+Observe продолжает его после3s без обновления deadline. SQL Spawned и Handoff
+используют прежние one-attempt guards. Готовность выясняется в том же session.
+
+Owner release при ревью усилен. `BootstrapLaunchAttempt::release_owner` теперь
+потребляет journal: known Spawned/physical checks → `close_owned` → final created
+process/original10s check → drop OS-lock. Close error возвращает тот же journal,
+owner и attempt. После успешного close и позднего отказа journal=None — это
+положительно закрытый writer, не потерянная connection. `WorkerBootstrap` хранит
+такой attempt в `Closed`; owner-lock остаётся, доступны Observe/readonly root,
+Start/Spawned/release-owner из этого state невозможны. Writable journal не открывается
+повторно, grant не продлевается. Drop order освобождает slot после journal/owner/
+attempt. Передача известного Active handle выполняется через consuming finish.
+
+`worker_bootstrap_checkpoint` выводит on-demand elapsedMs, activeMs и
+bindingAndConfigMs без token/command payload. Это объяснит, какую часть original
+budget съедают physical hashes/config checks. Low-level bootstrap traces уже дают
+process-wide hash deltas. Нового фонового таймера или idle SQL polling нет.
+
+Проверки:550 Linux lib tests (388 updater+162 worker),7 ignored;6 focused bootstrap
+tests; Linux/MSVC all-target Clippy с `update-validation`, fmt/diff passed. Два новых
+portable tests используют реальные configs/registration/Store locks; supervisor не
+запускают. Они проверяют slot lifetime, nonblocking settings под Store, changed bytes,
+потерю registration и readonly config rejection. Windows compile дополнительно
+проверяет Send всех шести borrowed async операций driver. Новый factory/client и
+post-close expiry branch нативно ещё не исполнены. Это не proof второго workflow.
+Перед проверками Debian free9,443,758,080bytes, после9,442,836,480bytes; новых Windows
+build/run не было. Логи `.winbridge/keeper-stage-review-204/bootstrap-driver-*`:
+`package-tests.log`, `linux-clippy.log`, `windows-final.log`, `focused-checked.log`.
+Ранние focused logs содержат исправленные path/fixture-teardown ошибки.
+
+Следующий вертикальный сценарий: получить fresh helper из managed build зарегистрированного
+проекта и вызывать driver внутри actual Active W1, только после confirmed retirement
+его P0. Обычный внешний тестовый процесс не может заменить intrinsic Worker Arc.
+Для isolated native gate нужен compile-feature-only validation trigger у владельца
+`RunningLocalService`, который держит original driver между запросами и после caller
+loss. На первом этапе один Start→Spawned→close/owner release→Ready→ConfirmReady→Handoff;
+затем full second updater workflow и проверки max2/predecessor exit/keeper loss.
+Сначала same SDK; version-neutral future bridge/U2–U4/public install всё ещё впереди.

@@ -35,6 +35,8 @@ mod update_control;
 #[cfg(feature = "update-validation")]
 pub use update_control::validation as update_validation;
 pub use update_control::WorkerSupervisorLaunch;
+#[cfg(windows)]
+pub use update_control::{WorkerBootstrap, WorkerBootstrapFailure, WorkerBootstrapPreparation};
 mod workflows;
 use fs2::FileExt;
 use std::{

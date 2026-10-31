@@ -41,11 +41,19 @@ pub struct BootstrapLaunchFailure {
 pub struct BootstrapOwnerReleaseFailure {
     pub reason: String,
     attempt: Box<BootstrapLaunchAttempt>,
+    journal: Option<UpdateJournal>,
     owner: UpdateAuthority,
 }
 impl BootstrapOwnerReleaseFailure {
-    pub fn into_parts(self) -> (Box<BootstrapLaunchAttempt>, UpdateAuthority, String) {
-        (self.attempt, self.owner, self.reason)
+    pub fn into_parts(
+        self,
+    ) -> (
+        Box<BootstrapLaunchAttempt>,
+        Option<UpdateJournal>,
+        UpdateAuthority,
+        String,
+    ) {
+        (self.attempt, self.journal, self.owner, self.reason)
     }
 }
 /// Minted only after the original Spawned COMMIT and final physical checks.
@@ -270,7 +278,7 @@ impl BootstrapLaunchAttempt {
     }
     pub fn release_owner(
         self: Box<Self>,
-        j: &UpdateJournal,
+        j: UpdateJournal,
         owner: UpdateAuthority,
         mut own_state: impl FnMut() -> Result<()>,
     ) -> std::result::Result<Box<BootstrapSession>, Box<BootstrapOwnerReleaseFailure>> {
@@ -294,6 +302,37 @@ impl BootstrapLaunchAttempt {
                 reason,
                 attempt: self,
                 owner,
+                journal: Some(j),
+            }));
+        }
+        // A new coordinator may migrate/open the journal as soon as the lock
+        // becomes available. Positively close this writer before releasing it;
+        // close failure must preserve both original connection and authority.
+        if let Err(failure) = j.close_owned(&owner) {
+            let (journal, error) = failure.into_parts();
+            trace.finish(false);
+            return Err(Box::new(BootstrapOwnerReleaseFailure {
+                reason: format!(
+                    "Bootstrap writer close failed; retain original owner/attempt: {error}"
+                ),
+                attempt: self,
+                owner,
+                journal: Some(journal),
+            }));
+        }
+        // Close may include slow filesystem I/O. It must not silently extend
+        // the original startup grant. A post-close refusal keeps the OS lock
+        // and original attempt without reopening a writable connection.
+        let final_check = self.require_created().and_then(|()| {
+            startup_remaining(self.exchange.ticket.prepared_at_ms, clock()?).map(|_| ())
+        });
+        if let Err(reason) = final_check {
+            trace.finish(false);
+            return Err(Box::new(BootstrapOwnerReleaseFailure {
+                reason: format!("Bootstrap writer closed but owner release refused; retain original closed attempt: {reason}"),
+                attempt: self,
+                owner,
+                journal: None,
             }));
         }
         let attempt = self;

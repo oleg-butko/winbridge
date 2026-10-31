@@ -1,7 +1,11 @@
 //! Trusted worker launcher and a separate supervisor-only local channel.
 //! No network/CLI/MCP route enables this module. Runtime replacement is absent.
 use crate::{Result, Worker};
+#[cfg(any(windows, test))]
+mod bootstrap;
 mod shutdown;
+#[cfg(windows)]
+pub use bootstrap::{WorkerBootstrap, WorkerBootstrapFailure, WorkerBootstrapPreparation};
 #[cfg(feature = "update-validation")]
 pub mod validation;
 use std::{
@@ -882,6 +886,8 @@ fn shutdown_validation_delivery(reg: &Registration, command: &WorkerUpdateContro
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[path = "bootstrap_control_cases.rs"]
+    mod bootstrap;
     #[path = "health_control_cases.rs"]
     mod health;
     #[path = "runtime_control_cases.rs"]

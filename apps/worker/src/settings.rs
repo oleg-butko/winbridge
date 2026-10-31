@@ -83,6 +83,19 @@ impl Worker {
             )?,
         )
     }
+    /// Updater SQL callbacks must not wait for a settings writer that may be
+    /// waiting for Store. File/JSON checks are the same as the regular reader.
+    #[cfg(any(windows, test))]
+    pub(crate) fn try_runtime_settings(&self) -> Result<RuntimeSettings> {
+        let path = self
+            .config_path
+            .try_lock()
+            .map_err(|_| "Bootstrap config path busy/poisoned")?;
+        self.settings_at(
+            path.as_ref()
+                .ok_or("Bootstrap worker config path missing")?,
+        )
+    }
     pub fn save_runtime_settings(&self, request: &SaveRuntimeSettings) -> Result<SettingsSaved> {
         // Serialize config writes with update admission/quiescence, including filesystem IO.
         let store = self.store()?;

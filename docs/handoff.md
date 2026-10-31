@@ -1,5 +1,31 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main, 2026-10-30: trusted Worker bootstrap driver соединён в source19/25.**
+`Worker::prepare_next_update_supervisor` принимает verified `FreshUpdater` от
+managed build и возвращает оригинальный `WorkerBootstrap`. Он удерживает Active
+scope, тот же Registration/launch slot, updater journal/owner, files и attempt.
+Ready/config/policy checkpoints используют try-lock; registration binding и fixed
+config/journal paths сверяются с actual loaded installation. После owner-lock
+повторно проверяется duplicate request, чтобы historical root не стал новым grant.
+Files готовятся до единственного keeper probe; domain lock отпускается до own-state
+callbacks. Borrowed admit/Start/Observe/Spawned/owner release/Ready/Handoff не теряют
+оригинальный объект при отмене ожидания. Probe/admission failures остаются retained;
+новый capture/SQL replay/Start автоматически не создаются. Historical — только data.
+При ревью усилен owner release: known Spawned→positive close SAME SQLite writer→
+ещё раз live created process/original10s→drop owner. Close failure возвращает тот же
+journal/owner/attempt; после успешного close и позднего отказа сохраняются owner и
+`Closed` attempt, writable journal не открывается заново. Из Closed доступны только
+readonly observations, mutable методы не принимают этот state. Launch slot отпускается
+после journal/owner/attempt fields. On-demand checkpoint diagnostics разделяют Active
+и binding/config latency; idle polling/новых budget нет.
+550 Linux lib tests/7 ignored, Linux/MSVC all-target Clippy с `update-validation`,
+fmt/diff passed; Windows future Send assertions compiled. Новый driver/close-expiry
+branch ещё НЕ исполнены на Windows. Это trusted Rust API, не public install и не
+новая mailbox операция RunningLocalService. Далее managed build и isolated validation
+trigger внутри настоящего Active W1 после confirmed P0 retirement, actual client
+Start→SQL→Ready/Handoff, затем два real workflow. [Детали и логи](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#trusted-worker-bootstrap-driver).
+Installed worker остаётся прежним; Windows build/run в этом checkpoint не отправлялся.
+
 **.204/main, 2026-10-30: intrinsic Active bootstrap scope в source19/25.**
 `Worker::active_worker_bootstrap` создаёт opaque Rust owner только из настоящего
 sealed Active. Он удерживает тот же Worker, Arc Active, RuntimeGuard, execution

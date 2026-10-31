@@ -125,6 +125,29 @@ impl Worker {
 }
 #[cfg(windows)]
 impl ActiveWorkerBootstrap {
+    /// Immutable correlation only. The caller separately checks this scope's
+    /// liveness and the current registration/configuration at each checkpoint.
+    pub(crate) fn require_worker_binding(
+        &self,
+        binding: &SupervisorWorkerBinding,
+        config: &Path,
+        directory: &Path,
+        scope: &str,
+    ) -> Result<()> {
+        let c = &self.mode.active.receipt.compatibility;
+        if binding.context != c.context
+            || binding.generation != c.generation
+            || binding.process != c.identity.process
+            || binding.build != c.identity.descriptor.build
+            || binding.config_sha256 != c.worker_config_sha256
+        {
+            return Err(
+                "Bootstrap registration differs from original Active worker binding".into(),
+            );
+        }
+        self.runtime
+            .require_update_location(config, directory, scope)
+    }
     /// Nonblocking Worker-lock checkpoint, safe to use in updater SQL callbacks.
     /// Physical file/kernel checks remain necessary; this is not a time budget.
     pub fn require_current(&self) -> Result<()> {

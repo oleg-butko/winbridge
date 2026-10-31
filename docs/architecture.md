@@ -1,5 +1,16 @@
 # Архитектура WinBridge
 
+2026-10-30/.204: trusted `Worker::prepare_next_update_supervisor` соединяет original
+Active scope, pinned Registration/config/installation, updater owner и files с
+consuming bootstrap client. Borrowed I/O сохраняет original object/launch slot при
+caller loss; SQL/pins/failure resources не восстанавливаются из history. После
+known Spawned writer закрывается до owner release. Close failure удерживает тот же
+journal; post-close expiry оставляет owner и Closed attempt, без writable reopen.
+550 Linux lib tests/7 ignored и Linux/MSVC all-target Clippy passed, native client
+ещё не исполнен. Далее managed build/изолированный trigger в actual Active worker
+после keeper retirement и два workflow. Source19/25, public install off; installed
+worker не менялся. Следующие записи сохраняют историю предыдущих checkpoint.
+
 2026-10-30/.204: fresh helper preparation принимает executable с actual queried
 clean source identity нового snapshot, создаёт fixed helper/config/output pins.
 Consuming admission связывает их с fresh keeper capture и opaque SQL COMMIT;

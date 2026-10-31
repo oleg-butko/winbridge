@@ -1,5 +1,13 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: trusted Worker bootstrap driver соединяет intrinsic Active,
+current Registration/config/policy, files, one probe/admission и original client
+Start/Observe/Spawned/owner release/Ready/Handoff. Writer положительно закрывается
+до owner-lock release; post-close expiry удерживает original owner/Closed attempt.
+550 Linux lib tests/7 ignored и Linux/MSVC all-target Clippy passed. Native client
+ещё не запускался; managed build/Active coordinator trigger и два workflow впереди.
+Public install off, source19/25/installed worker unchanged.
+
 2026-10-30/.204: intrinsic Active bootstrap scope добавлен. Он удерживает original
 Active/Worker/runtime/process/domain, использует nonblocking Store→mode checkpoints
 и связывает readonly keeper selection с actual authenticated probe. Это preparation,
