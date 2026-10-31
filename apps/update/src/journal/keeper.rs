@@ -208,6 +208,32 @@ pub(super) fn read(c: &Connection, id: &str) -> Result<Option<KeeperSelection>> 
     })
     .transpose()
 }
+impl UpdateJournal {
+    /// Consistent readonly historical nomination, not live keeper custody or
+    /// an admission permit. May be read after another owner advanced the epoch.
+    /// Never opens a writer, migrates the journal or acquires its owner lock.
+    pub fn inspect_keeper_selection(directory: &Path, id: &str) -> Result<Option<KeeperSelection>> {
+        check_files(directory)?;
+        let mut c = connection(&directory.join("updates.sqlite"), true)?;
+        let tx = c.transaction().map_err(storage)?;
+        if schema(&tx)? < 24 {
+            return Err(fail(
+                JournalErrorCode::UnsupportedSchema,
+                "Keeper selection inspection requires schema24 or newer",
+            ));
+        }
+        let value = read(&tx, id)?;
+        if let Some(selection) = &value {
+            if supervisor::read(&tx, &selection.selected.spec.launch_id)? != selection.selected {
+                return Err(bad(
+                    "Keeper nomination detached from its current selected role",
+                ));
+            }
+        }
+        tx.commit().map_err(storage)?;
+        Ok(value)
+    }
+}
 /// Avoid recursively loading the original graph through supervisor::read.
 /// This is an immutable historical-role check, never physical admission.
 pub(super) fn require_selected_role(c: &Connection, r: &SupervisorRecord) -> Result<()> {

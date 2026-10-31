@@ -23,6 +23,8 @@ mod retention;
 pub mod runtime_guard;
 mod scheduler_diagnostics;
 mod startup;
+#[cfg(windows)]
+pub use local_service::ActiveWorkerBootstrap;
 pub use local_service::{LocalService, LocalServiceFailure, RunningLocalService};
 mod settings;
 pub mod shutdown_inspection;

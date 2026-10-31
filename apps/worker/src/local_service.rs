@@ -13,6 +13,8 @@ mod controller;
 use controller::ControllerStartup;
 #[path = "lifetime_service.rs"]
 mod lifetime;
+#[cfg(windows)]
+pub use lifetime::ActiveWorkerBootstrap;
 pub(crate) use lifetime::{
     rejected_finalization, rejected_finalization_observation, rejected_lifetime, rejected_resident,
     ServiceLifetime,

@@ -1,5 +1,12 @@
 # Постепенная реализация и расширение
 
+2026-10-30/.204: intrinsic Active bootstrap scope добавлен. Он удерживает original
+Active/Worker/runtime/process/domain, использует nonblocking Store→mode checkpoints
+и связывает readonly keeper selection с actual authenticated probe. Это preparation,
+не полный launch driver; managed fresh build/current registration/config checks и
+original client attempt/failure ownership ещё нужно подключить. Windows compile
+не является runtime gate; installed worker не менялся, public install off.
+
 2026-10-30/.204: controlled keeper exit native gate passed (sourceb62e8a9,
 run20261030-232522-2409a4e0): actual loop/Job/readers/OS exit,2 cases, successor
 survived,3 idle samples0 ticks.8 files twice/40 negatives, installed unchanged.

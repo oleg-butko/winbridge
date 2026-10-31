@@ -33,8 +33,13 @@ pub(crate) struct PendingLifetime {
     resident: Arc<ResidentLifetime>,
     command: WorkerFinalizationCommand,
 }
+#[cfg(any(windows, test))]
+#[path = "active_bootstrap.rs"]
+mod active_bootstrap;
 #[path = "finalization_service.rs"]
 mod finalization_service;
+#[cfg(windows)]
+pub use active_bootstrap::ActiveWorkerBootstrap;
 pub(crate) struct ResidentLifetime {
     command: WorkerLifetimeActivationCommand,
     receipt: WorkerLifetimeActivationReceipt,

@@ -141,6 +141,48 @@ fn selected_keeper_releases_only_the_coordinator_slot_and_is_immutable_history()
         .is_err());
 }
 #[test]
+fn readonly_keeper_nomination_survives_next_owner_without_adopting_it() {
+    let (mut f, s, p, at) = setup();
+    let selection = selected(&mut f, &s, &p, at).unwrap();
+    // A later owner does not rewrite the historical keeper's selected epoch.
+    f.c.execute(
+        "UPDATE installation SET epoch=epoch+1,owner=?1",
+        [uuid::Uuid::new_v4().to_string()],
+    )
+    .unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("updates.sqlite");
+    let mut c = Connection::open(&path).unwrap();
+    rusqlite::backup::Backup::new(&f.c, &mut c)
+        .unwrap()
+        .run_to_completion(64, Duration::from_millis(1), None)
+        .unwrap();
+    let before = installation_info(&c).unwrap();
+    for id in [&s.spec.update_id, &s.spec.launch_id] {
+        assert_eq!(
+            UpdateJournal::inspect_keeper_selection(directory.path(), id).unwrap(),
+            Some(selection.clone())
+        );
+    }
+    assert!(UpdateJournal::inspect_keeper_selection(
+        directory.path(),
+        &uuid::Uuid::new_v4().to_string()
+    )
+    .unwrap()
+    .is_none());
+    assert_eq!(installation_info(&c).unwrap(), before);
+    // A format that predates keeper selection must be refused, never migrated
+    // by this readonly route, even when a copied table happens to exist.
+    c.pragma_update(None, "user_version", 23).unwrap();
+    assert_eq!(
+        UpdateJournal::inspect_keeper_selection(directory.path(), &s.spec.launch_id)
+            .unwrap_err()
+            .code,
+        JournalErrorCode::UnsupportedSchema
+    );
+    assert_eq!(schema(&c).unwrap(), 23);
+}
+#[test]
 fn failed_last_checkpoint_or_ignored_selection_never_retires_the_coordinator() {
     for fault in 0..4 {
         let (mut f, s, p, at) = setup();

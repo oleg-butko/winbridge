@@ -814,3 +814,63 @@ witness тоже original, не имя из request. Fresh updater нужен и
 registered project до source/runtime changes. Затем resident original attempt,
 one Start/Observe/known COMMIT/owner release/Ready/Handoff с сохранением failure
 resources. Same SDK сначала; future-SDK bridge/два real workflow/U2–U4 отдельно.
+
+## Intrinsic Active bootstrap scope
+
+2026-10-30, .204. В source19/25 добавлен trusted Rust entry
+`Worker::active_worker_bootstrap`. `ActiveWorkerBootstrap` удерживает actual Worker,
+исходный Arc sealed Active, loaded RuntimeGuard и собственный query/SYNCHRONIZE
+handle текущего worker; domain берётся из реального execution-domain owner.
+Конструктора из SQL/receipt/JSON нет. Legacy launcher и его external-Job refusal
+не менялись; новый scope сам не даёт права создавать процесс.
+
+Проверки Worker mutex используют только try-lock. Store→mode сохраняет общий
+порядок, занятость или poisoning сразу дают отказ. Сверяются original Arc, Store
+authority/header fingerprint, context/generation, instance custody, recovery/stop,
+native keeper pin и actual loaded worker/process/domain. Native checkpoint проверяет
+membership в original activation Job и exclusion из существующего task domain;
+keeper должен быть вне original activation Job. Он не требует пустого Job или
+отсутствия работающих задач: это проверяется позднее при drain. Исходное verification
+окно после Active не используется заново.
+
+`UpdateJournal::inspect_keeper_selection` читает selected role, immutable receipts,
+committed root и finalization из одной readonly transaction. Новая updater authority
+может иметь следующий epoch; исторический keeper при этом сохраняет свой. Reader
+не открывает writer/owner lock и не мигрирует старую схему. `observe_keeper` берёт
+только fixed journal рядом с pinned loaded runtime, сверяет nomination с sealed
+Active и installation, затем вызывает настоящий authenticated original keeper probe.
+Только этот IPC exchange создаёт bounded capture; финальная проверка не продлевает
+original3s. Ошибки остаются отказом/неподтверждённым наблюдением без создания процесса.
+
+Portable tests проверяют actual Store/seal/locks при synthetic keeper metadata:
+Verification/Pending/сохранённый SQL release не открывают Active; одинаковая копия
+Arc не подменяет original owner; running work допустим после прежнего deadline;
+потеря keeper, recovery/stop, иной authority и contended mutex отклоняются.
+Отдельный SQLite test использует consistent backup и проверяет чтение старого keeper
+после нового owner epoch, отсутствие изменений и refusal schema23 без migration.
+Это не native proof нового factory или client handshake.
+
+Следующий шаг — соединить этот scope с current ready Registration и config/policy
+checkpoints (также try-lock под updater SQL), fresh updater из managed build и
+original consuming admission/attempt. Failure/unknown должны удерживать исходные
+owner/files/attempt, а не вызывать повторный Start или новый capture после expiry.
+Затем actual Windows Start→Spawned→owner release→Ready→ConfirmReady→Handoff и два
+реальных workflow. Future SDK bridge/U2–U4/public install остаются незавершёнными.
+
+Проверки этого checkpoint:
+
+- Default lib tests:378 updater +151 worker =529 passed,7 ignored.
+- С `update-validation`:388 updater +160 worker =548 passed,7 ignored.
+  Сборка73s, сами lib suites40.22s и25.88s. Это Linux, не Windows gate.
+- Linux/MSVC all-target Clippy с `update-validation` passed; Windows compile
+  дополнительно проверяет Send у future `observe_keeper`. Он здесь не исполнялся.
+- `cargo fmt --all -- --check`, `git diff --check`, scaffold343 Markdown passed.
+- Debian free перед проверками9,476,878,336bytes, после9,449,320,448bytes;
+  Windows build/run не отправлялся, installed runtime не изменялся.
+
+Логи сохранены локально в `.winbridge/keeper-stage-review-204/`:
+`active-bootstrap-package-tests.log`, `active-bootstrap-validation-tests.log`,
+`active-bootstrap-linux-validation-clippy.log`,
+`active-bootstrap-windows-validation-clippy.log`, `active-bootstrap-scaffold.log`.
+Более ранние Windows compile attempts с тем же префиксом содержат исправленные
+ошибки Box comparison/Clippy; итоговыми являются указанные validation logs.

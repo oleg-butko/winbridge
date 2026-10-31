@@ -1,5 +1,28 @@
 # Продолжение апдейтера — worker0.2.0 установлен, два Debian подключены
 
+**.204/main, 2026-10-30: intrinsic Active bootstrap scope в source19/25.**
+`Worker::active_worker_bootstrap` создаёт opaque Rust owner только из настоящего
+sealed Active. Он удерживает тот же Worker, Arc Active, RuntimeGuard, execution
+domain identity и exact query/SYNCHRONIZE process handle. Checkpoints используют
+Store→mode try-lock, проверяют actual authority/fingerprint/context/generation,
+instance custody, keeper pin и Windows Job membership/exclusion. Занятые/poisoned
+mutex, stop/recovery и подмена Arc даже с равными данными дают отказ без ожидания
+Worker mutex под updater SQL. Работающие задачи допустимы; старый V6 deadline
+не становится ограничением Active. Legacy external-Job refusal не изменён.
+`observe_keeper` читает immutable selection из fixed installed update-state одним
+readonly SQLite snapshot, сравнивает с intrinsic Active/installation и выполняет
+настоящий keeper probe. История не создаёт capture; original3s не продлевается.
+Проверки:529 обычных lib tests и548 с `update-validation` passed (по7 ignored),
+Linux/MSVC all-target Clippy с validation feature, fmt/diff/scaffold passed.
+Новая Windows Send-проверка compiled; native factory ещё не запускался.
+Проверки и оставшаяся граница — [в плане](plans/worker-self-update/next-keeper-bootstrap-2026-10-30.md#intrinsic-active-bootstrap-scope).
+Это own-mode/preparation scope, ещё НЕ полный trusted launch driver: registration/
+current config policy, managed fresh helper build, original attempt/failure owner
+и Start→Spawned→Ready→Handoff предстоит соединить с ним. Нового Windows runtime
+gate этого участка нет; installed worker не менялся. Последняя readonly проверка:
+source48/genf9, обе .203/.204 connected, active0/recovery/maintenance errors=null.
+Desktop не нужен, новых окон нет, установленный worker оставить запущенным.
+
 **.204/main,2026-10-30: Windows controlled keeper exit gate passed.**
 Sourceb62e8a9/run20261030-232522-2409a4e0,
 task528e425a-3d9a-48b6-a376-e78a91bd0e6f.2 exact units passed: dual-Job/kernel
